@@ -16,6 +16,7 @@ echo "========================================" >> daily_picks.log
 
 # Fetch latest odds
 /usr/local/bin/python3 fetch_espn_odds.py >> daily_picks.log 2>&1
+/usr/local/bin/python3 fetch_core_api_odds.py >> daily_picks.log 2>&1
 
 # Update schedules
 /usr/local/bin/python3 update_all_schedules.py >> daily_picks.log 2>&1
