@@ -2875,8 +2875,13 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 {% set m = overall_stats[m_key] %}
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:12px;text-align:center;{% if m_key=='ensemble' %}border:2px solid #fbbf24;grid-column:span 4;{% endif %}">
                     <div style="font-size:0.85em;opacity:0.8;margin-bottom:4px;">{{ m_label }}</div>
+                    {% if m.total > 0 %}
                     <div style="font-size:{% if m_key=='ensemble' %}2.5em{% else %}1.7em{% endif %};font-weight:bold;color:{% if m.accuracy>=55 %}#10b981{% elif m.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ m.accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.85;">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                    {% else %}
+                    <div style="font-size:{% if m_key=='ensemble' %}2.5em{% else %}1.7em{% endif %};font-weight:bold;color:#94a3b8;">N/A</div>
+                    <div style="font-size:0.85em;opacity:0.85;">N/A</div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -2917,20 +2922,44 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div id="date-{{ date }}" class="date-section">
             <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#10b981;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
 
-            {% set g2_ok  = date_data.games|selectattr('glicko2_correct')|list|length %}
-            {% set ts_ok  = date_data.games|selectattr('trueskill_correct')|list|length %}
-            {% set elo_ok = date_data.games|selectattr('elo_correct')|list|length %}
-            {% set xgb_ok = date_data.games|selectattr('xgb_correct')|list|length %}
-            {% set ens_ok = date_data.games|selectattr('ens_correct')|list|length %}
-            {% set day_n  = date_data.games|length %}
-            {% set best   = [g2_ok,ts_ok,elo_ok,xgb_ok,ens_ok]|max %}
+            {% set ns = namespace(
+                g2_ok=0, g2_total=0,
+                ts_ok=0, ts_total=0,
+                elo_ok=0, elo_total=0,
+                xgb_ok=0, xgb_total=0,
+                ens_ok=0, ens_total=0
+            ) %}
+            {% for g in date_data.games %}
+                {% if g.glicko2_correct is not none %}{% set ns.g2_total = ns.g2_total + 1 %}{% if g.glicko2_correct %}{% set ns.g2_ok = ns.g2_ok + 1 %}{% endif %}{% endif %}
+                {% if g.trueskill_correct is not none %}{% set ns.ts_total = ns.ts_total + 1 %}{% if g.trueskill_correct %}{% set ns.ts_ok = ns.ts_ok + 1 %}{% endif %}{% endif %}
+                {% if g.elo_correct is not none %}{% set ns.elo_total = ns.elo_total + 1 %}{% if g.elo_correct %}{% set ns.elo_ok = ns.elo_ok + 1 %}{% endif %}{% endif %}
+                {% if g.xgb_correct is not none %}{% set ns.xgb_total = ns.xgb_total + 1 %}{% if g.xgb_correct %}{% set ns.xgb_ok = ns.xgb_ok + 1 %}{% endif %}{% endif %}
+                {% if g.ens_correct is not none %}{% set ns.ens_total = ns.ens_total + 1 %}{% if g.ens_correct %}{% set ns.ens_ok = ns.ens_ok + 1 %}{% endif %}{% endif %}
+            {% endfor %}
+            {% set g2_pct  = (ns.g2_ok  / ns.g2_total  * 100) if ns.g2_total  > 0 else none %}
+            {% set ts_pct  = (ns.ts_ok  / ns.ts_total  * 100) if ns.ts_total  > 0 else none %}
+            {% set elo_pct = (ns.elo_ok / ns.elo_total * 100) if ns.elo_total > 0 else none %}
+            {% set xgb_pct = (ns.xgb_ok / ns.xgb_total * 100) if ns.xgb_total > 0 else none %}
+            {% set ens_pct = (ns.ens_ok / ns.ens_total * 100) if ns.ens_total > 0 else none %}
+            {% set best = [
+                g2_pct if g2_pct is not none else -1,
+                ts_pct if ts_pct is not none else -1,
+                elo_pct if elo_pct is not none else -1,
+                xgb_pct if xgb_pct is not none else -1,
+                ens_pct if ens_pct is not none else -1
+            ]|max %}
 
             <div class="daily-models">
-                {% for lbl,val in [('⭐ Grinder2',g2_ok),('🎯 Takedown',ts_ok),('📊 Edge',elo_ok),('🤖 XSharp',xgb_ok),('🏆 Consensus',ens_ok)] %}
-                <div class="daily-model-card {% if val==best %}best{% endif %}">
+                {% for lbl,ok,total,pct in [('⭐ Grinder2',ns.g2_ok,ns.g2_total,g2_pct),('🎯 Takedown',ns.ts_ok,ns.ts_total,ts_pct),('📊 Edge',ns.elo_ok,ns.elo_total,elo_pct),('🤖 XSharp',ns.xgb_ok,ns.xgb_total,xgb_pct),('🏆 Consensus',ns.ens_ok,ns.ens_total,ens_pct)] %}
+                <div class="daily-model-card {% if pct is not none and pct==best %}best{% endif %}">
                     <div class="model-label">{{ lbl }}</div>
-                    <div class="model-accuracy">{{ (val/day_n*100)|round(1) if day_n>0 else 0 }}%</div>
-                    <div class="model-record">{{ val }}-{{ day_n-val }}</div>
+                    {% if total > 0 %}
+                    <div class="model-accuracy">{{ pct|round(1) }}%</div>
+                    <div class="model-record">{{ ok }}-{{ total-ok }}</div>
+                    {% else %}
+                    <div class="model-accuracy" style="color:#94a3b8;">N/A</div>
+                    <div class="model-record">N/A</div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
