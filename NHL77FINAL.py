@@ -691,7 +691,6 @@ def update_espn_scores(sport):
         
         conn.commit()
         conn.close()
-        
         if updates_count > 0:
             logger.info(f"Successfully updated {updates_count} {sport} game scores.")
         else:
@@ -1717,15 +1716,20 @@ def calculate_nhl_weekly_performance():
     """Calculate NHL model performance week by week
     
     Uses data from database since NHL doesn't have a simple API like nfl_data_py.
-    Groups games by week number extracted from game_date.
+    Returns a consistent sample of the most recent fully-graded games so every
+    model is compared over the same set.
     """
     try:
         from datetime import datetime, timedelta
         conn = get_db_connection()
-        
-        # Get completed NHL games through yesterday only
+
+        # Build the NHL results page from a consistent recent sample.
+        target_games = 200
+        candidate_games = 320
+
+        # Get recent completed NHL games through yesterday only.
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        
+
         games = conn.execute('''
             SELECT g.game_date, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
@@ -1737,30 +1741,20 @@ def calculate_nhl_weekly_performance():
               AND g.season = 2025 
               AND g.home_score IS NOT NULL
               AND date(g.game_date) <= ?
-            ORDER BY g.game_date
-        ''', (yesterday,)).fetchall()
-        
+            ORDER BY g.game_date DESC
+            LIMIT ?
+        ''', (yesterday, candidate_games)).fetchall()
         conn.close()
         
         if not games:
             return None
-        
-        # Group games by week (calculate week number from first game)
-        first_game_date = parse_date(games[0]['game_date'])
-        season_start = first_game_date if first_game_date else datetime(2025, 10, 7)
-        
         weekly_results = {}
-        
+        included_games = 0
         for game in games:
-            # Parse game date
             game_date = parse_date(game['game_date'])
             if not game_date:
                 continue
-            
-            # Calculate week number (1-indexed)
-            days_since_start = (game_date - season_start).days
-            week = (days_since_start // 7) + 1
-            
+
             # Extract stored predictions first (fast path)
             elo_prob = float(game['elo_home_prob']) if game['elo_home_prob'] is not None else None
             xgb_prob = (
@@ -1778,38 +1772,36 @@ def calculate_nhl_weekly_performance():
                 continue
             if elo_prob is None:
                 elo_prob = meta_prob if meta_prob is not None else xgb_prob
-
-            # Compute v2 predictions with strict limits to prevent timeouts.
+            # Compute v2 predictions for the selected recent window only.
             # Only compute for recent games where v2 data matters most.
             glicko2_prob = None
             trueskill_prob = None
-            
-            # Time-bounded v2 inference: only compute for games in last 30 days
-            # and stop if we're taking too long (prevent worker starvation)
-            days_old = (datetime.now() - game_date).days
-            if days_old <= 30:
-                try:
-                    v2 = get_v2_prediction('NHL', game['home_team_id'], game['away_team_id'], game['game_date'])
-                    glicko2_prob = v2.get('glicko2_prob') if v2 else None
-                    trueskill_prob = v2.get('trueskill_prob') if v2 else None
-                except Exception:
-                    pass
+            v2 = None
+            try:
+                v2 = get_v2_prediction('NHL', game['home_team_id'], game['away_team_id'], game['game_date'])
+                glicko2_prob = v2.get('glicko2_prob') if v2 else None
+                trueskill_prob = v2.get('trueskill_prob') if v2 else None
+            except Exception:
+                pass
 
+            if xgb_prob is None and v2:
+                xgb_prob = v2.get('xgboost_prob', xgb_prob)
             if xgb_prob is None:
                 xgb_prob = elo_prob
-            # Only include glicko2/trueskill in ensemble if we actually have them
             if meta_prob is None:
-                if glicko2_prob is not None or trueskill_prob is not None:
-                    meta_prob = _compute_ensemble_prob(
-                        glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob
-                    )
-                else:
-                    meta_prob = elo_prob
+                meta_prob = _compute_ensemble_prob(
+                    glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob
+                )
+
+            # Require full model availability so every card uses the same sample.
+            if any(prob is None for prob in [glicko2_prob, trueskill_prob, elo_prob, xgb_prob, meta_prob]):
+                continue
 
             actual_home_win = game['home_score'] > game['away_score']
+            bucket = game['game_date'].split()[0]
 
-            if week not in weekly_results:
-                weekly_results[week] = {
+            if bucket not in weekly_results:
+                weekly_results[bucket] = {
                     'glicko2':   {'correct': 0, 'total': 0},
                     'trueskill': {'correct': 0, 'total': 0},
                     'elo':       {'correct': 0, 'total': 0},
@@ -1823,25 +1815,22 @@ def calculate_nhl_weekly_performance():
             elo_correct       = (elo_prob       > 0.5) == actual_home_win
             xgb_correct       = (xgb_prob       > 0.5) == actual_home_win
             meta_correct      = (meta_prob      > 0.5) == actual_home_win
+            weekly_results[bucket]['elo']['total'] += 1
+            if elo_correct: weekly_results[bucket]['elo']['correct'] += 1
 
-            weekly_results[week]['elo']['total'] += 1
-            if elo_correct: weekly_results[week]['elo']['correct'] += 1
+            weekly_results[bucket]['xgboost']['total'] += 1
+            if xgb_correct: weekly_results[bucket]['xgboost']['correct'] += 1
 
-            weekly_results[week]['xgboost']['total'] += 1
-            if xgb_correct: weekly_results[week]['xgboost']['correct'] += 1
+            weekly_results[bucket]['ensemble']['total'] += 1
+            if meta_correct: weekly_results[bucket]['ensemble']['correct'] += 1
 
-            weekly_results[week]['ensemble']['total'] += 1
-            if meta_correct: weekly_results[week]['ensemble']['correct'] += 1
+            weekly_results[bucket]['glicko2']['total'] += 1
+            if glicko2_correct: weekly_results[bucket]['glicko2']['correct'] += 1
 
-            if glicko2_correct is not None:
-                weekly_results[week]['glicko2']['total'] += 1
-                if glicko2_correct: weekly_results[week]['glicko2']['correct'] += 1
+            weekly_results[bucket]['trueskill']['total'] += 1
+            if trueskill_correct: weekly_results[bucket]['trueskill']['correct'] += 1
 
-            if trueskill_correct is not None:
-                weekly_results[week]['trueskill']['total'] += 1
-                if trueskill_correct: weekly_results[week]['trueskill']['correct'] += 1
-
-            weekly_results[week]['games'].append({
+            weekly_results[bucket]['games'].append({
                 'date':             game['game_date'].split()[0],
                 'away':             game['away_team_id'],
                 'home':             game['home_team_id'],
@@ -1858,6 +1847,9 @@ def calculate_nhl_weekly_performance():
                 'xgb_correct':       xgb_correct,
                 'ens_correct':       meta_correct,
             })
+            included_games += 1
+            if included_games >= target_games:
+                break
 
         for week in weekly_results:
             for model in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
@@ -1865,9 +1857,7 @@ def calculate_nhl_weekly_performance():
                 weekly_results[week][model]['accuracy'] = (
                     round(weekly_results[week][model]['correct'] / total * 100, 1) if total > 0 else 0.0
                 )
-        
         return weekly_results
-        
     except Exception as e:
         logger.error(f"Error calculating NHL weekly performance: {e}")
         return None
@@ -2139,8 +2129,11 @@ def _ou_stats(daily_results, sport):
 
 
 def compute_overall_stats_from_daily(daily_results):
-    """Compute per-model totals from a daily_results dict (used by DAILY_RESULTS_TEMPLATE)."""
-    # Track each model independently so missing data for one doesn't affect others
+    """Compute per-model totals from a daily_results dict (used by DAILY_RESULTS_TEMPLATE).
+    
+    All models show stats over the SAME games - only games where ALL models
+    have predictions are counted. This ensures fair comparison.
+    """
     model_configs = [
         ('glicko2',   'glicko2_correct', 'glicko2_prob'),
         ('trueskill', 'trueskill_correct', 'trueskill_prob'),
@@ -2152,17 +2145,22 @@ def compute_overall_stats_from_daily(daily_results):
     
     for date_data in daily_results.values():
         for game in date_data.get('games', []):
+            # Only count games where ALL models have probability data
+            # This ensures fair comparison across all models
+            all_models_have_data = all(
+                game.get(prob_key) is not None 
+                for _, _, prob_key in model_configs
+            )
+            
+            if not all_models_have_data:
+                continue  # Skip games where any model is missing data
+            
+            # Now count this game for ALL models (fair comparison)
             for model_name, correct_key, prob_key in model_configs:
-                # Count this game for this model if it has ANY probability data
-                prob_val = game.get(prob_key)
                 correct_val = game.get(correct_key)
-                
-                # If there's a probability, count it (even if correct is None/False)
-                if prob_val is not None:
-                    overall[model_name]['total'] += 1
-                    # Use truthy check (not strict is True) to handle both bool and int 1/0
-                    if correct_val:
-                        overall[model_name]['correct'] += 1
+                overall[model_name]['total'] += 1
+                if correct_val:
+                    overall[model_name]['correct'] += 1
     
     for model_name, _, _ in model_configs:
         t = overall[model_name]['total']
@@ -2890,19 +2888,27 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set roi = (units_won / ens.total * 100)|round(1) if ens.total > 0 else 0 %}
 
         <!-- ── Overall Moneyline Performance ── -->
+        {% set any_model = overall_stats.ensemble %}
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;">
-            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 Moneyline Record &mdash; {{ ens.total }} Games</h2>
+            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">
+                🏆 Moneyline Record — {{ any_model.total if any_model.total > 0 else '—' }} Games
+            </h2>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
                 {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
                 {% set m = overall_stats[m_key] %}
-                <div style="background: rgba(255,255,255,0.07); border-radius: 9px; padding: 12px; text-align: center; {% if m_key=='ensemble' %}border: 2px solid #fbbf24; grid-column: span 4;{% endif %}">
-                    <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 4px;">{{ m_label }}</div>
-                    <div style="font-size: {% if m_key=='ensemble' %}2.5em{% else %}1.7em{% endif %}; font-weight: bold; color: {% if m.total>0 %}{% if m.accuracy>=55 %}#10b981{% elif m.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %}{% else %}#94a3b8{% endif %};">
-                        {% if m.total > 0 %}{{ m.accuracy }}%{% else %}—{% endif %}
+                <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:12px;text-align:center;{% if m_key=='ensemble' %}border:2px solid #fbbf24;grid-column:span 4;{% endif %}">
+                    <div style="font-size:0.85em;opacity:0.8;margin-bottom:4px;">{{ m_label }}</div>
+                    {% if m.total > 0 %}
+                    <div style="font-size:{% if m_key=='ensemble' %}2.2em{% else %}1.5em{% endif %};font-weight:bold;color:{% if m.accuracy>=55 %}#10b981{% elif m.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %};">
+                        {{ m.accuracy }}%
                     </div>
-                    <div style="font-size: 0.85em; opacity: 0.85;">
-                        {% if m.total > 0 %}{{ m.correct }}-{{ m.total - m.correct }}{% else %}no data{% endif %}
+                    <div style="font-size:0.85em;opacity:0.85;">
+                        {{ m.correct }}-{{ m.total - m.correct }}
                     </div>
+                    {% else %}
+                    <div style="font-size:{% if m_key=='ensemble' %}2.2em{% else %}1.5em{% endif %};font-weight:bold;color:#94a3b8;">—</div>
+                    <div style="font-size:0.85em;opacity:0.6;">no graded games</div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -3837,9 +3843,11 @@ def sport_results(sport):
                         date_key = game['date']
                         daily_results[date_key]['games'].append(game)
                 
-                # Filter to only show dates up to yesterday
+                # Filter to only show recent dates up to yesterday.
+                # Keep overall stats from all games, but render fewer date sections
+                # so the page stays fast and doesn't block production workers.
                 yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-                sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)
+                sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
@@ -3874,9 +3882,9 @@ def sport_results(sport):
                     date_key = game['date']
                     daily_results[date_key]['games'].append(game)
             
-            # Filter to only show dates up to yesterday
+            # Render recent dates only to keep response size manageable.
             yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-            sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)
+            sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
             
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
@@ -4501,9 +4509,9 @@ def sport_spread_total_results(sport):
     latest_db_line_date = latest_db_line_date_row['max_date'] if latest_db_line_date_row else None
     # Use recent completed games so spread/total performance reflects current line availability.
     lookback_days_map = {
-        'NCAAB': 14,
-        'NBA': 45,
-        'NHL': 45,
+        'NCAAB': 7,
+        'NBA': 7,
+        'NHL': 7,
         'NCAAF': 120,
         'NFL': 120,
         'MLB': 120,
@@ -4565,20 +4573,21 @@ def sport_spread_total_results(sport):
     live_lines_by_game = {}
     live_line_fetch_attempted = 0
     live_line_fetch_success = 0
-    # IMPORTANT: keep this small so one request can never monopolize a worker.
-    live_fetch_cap = 20 if sport in ['NHL', 'NBA'] else (30 if sport == 'NCAAB' else 15)
-    live_recent_days = 3 if sport in ['NHL', 'NBA'] else (7 if sport == 'NCAAB' else 3)
+    # IMPORTANT: keep this tiny so one request can never monopolize a worker.
+    # Bulk backfills belong in scheduled ingestion scripts, not live web requests.
+    live_fetch_cap = 3 if sport in ['NHL', 'NBA'] else (5 if sport == 'NCAAB' else 2)
+    live_recent_days = 2 if sport in ['NHL', 'NBA'] else (3 if sport == 'NCAAB' else 2)
     latest_line_dt = parse_date(str(latest_db_line_date)) if latest_db_line_date else None
     db_line_is_stale = latest_line_dt is None or latest_line_dt < (datetime.now() - timedelta(days=7))
     coverage_is_poor = pre_missing_ratio >= 0.50
     # Do not widen request-time fallback windows aggressively in web requests;
     # bulk backfills should happen via scheduled odds ingestion scripts.
     if db_line_is_stale and coverage_is_poor:
-        live_fetch_cap = max(live_fetch_cap, 25)
-        live_recent_days = max(live_recent_days, 5)
+        live_fetch_cap = max(live_fetch_cap, 3)
+        live_recent_days = max(live_recent_days, 2)
     live_recent_cutoff = datetime.now() - timedelta(days=live_recent_days)
     live_fetch_start_ts = _time.time()
-    live_fetch_time_budget_sec = 6.0
+    live_fetch_time_budget_sec = 1.5
 
     for game in completed_games:
         if (_time.time() - live_fetch_start_ts) > live_fetch_time_budget_sec:
