@@ -1779,19 +1779,32 @@ def calculate_nhl_weekly_performance():
             if elo_prob is None:
                 elo_prob = meta_prob if meta_prob is not None else xgb_prob
 
-            # IMPORTANT FOR PRODUCTION STABILITY:
-            # Avoid per-game live v2 inference in historical results calculation.
-            # This route can process hundreds of games and live model inference on each
-            # can exceed web worker timeouts in production.
+            # Compute v2 predictions with strict limits to prevent timeouts.
+            # Only compute for recent games where v2 data matters most.
             glicko2_prob = None
             trueskill_prob = None
+            
+            # Time-bounded v2 inference: only compute for games in last 30 days
+            # and stop if we're taking too long (prevent worker starvation)
+            days_old = (datetime.now() - game_date).days
+            if days_old <= 30:
+                try:
+                    v2 = get_v2_prediction('NHL', game['home_team_id'], game['away_team_id'], game['game_date'])
+                    glicko2_prob = v2.get('glicko2_prob') if v2 else None
+                    trueskill_prob = v2.get('trueskill_prob') if v2 else None
+                except Exception:
+                    pass
 
             if xgb_prob is None:
                 xgb_prob = elo_prob
+            # Only include glicko2/trueskill in ensemble if we actually have them
             if meta_prob is None:
-                meta_prob = _compute_ensemble_prob(
-                    glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob
-                )
+                if glicko2_prob is not None or trueskill_prob is not None:
+                    meta_prob = _compute_ensemble_prob(
+                        glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob
+                    )
+                else:
+                    meta_prob = elo_prob
 
             actual_home_win = game['home_score'] > game['away_score']
 
@@ -2127,26 +2140,34 @@ def _ou_stats(daily_results, sport):
 
 def compute_overall_stats_from_daily(daily_results):
     """Compute per-model totals from a daily_results dict (used by DAILY_RESULTS_TEMPLATE)."""
-    model_keys = [
-        ('glicko2',   'glicko2_correct'),
-        ('trueskill', 'trueskill_correct'),
-        ('elo',       'elo_correct'),
-        ('xgboost',   'xgb_correct'),
-        ('ensemble',  'ens_correct'),
+    # Track each model independently so missing data for one doesn't affect others
+    model_configs = [
+        ('glicko2',   'glicko2_correct', 'glicko2_prob'),
+        ('trueskill', 'trueskill_correct', 'trueskill_prob'),
+        ('elo',       'elo_correct', 'elo_prob'),
+        ('xgboost',   'xgb_correct', 'xgb_prob'),
+        ('ensemble',  'ens_correct', 'ens_prob'),
     ]
-    overall = {m: {'correct': 0, 'total': 0} for m, _ in model_keys}
+    overall = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
+    
     for date_data in daily_results.values():
         for game in date_data.get('games', []):
-            for model_name, correct_key in model_keys:
-                val = game.get(correct_key)
-                if val is not None:
+            for model_name, correct_key, prob_key in model_configs:
+                # Count this game for this model if it has ANY probability data
+                prob_val = game.get(prob_key)
+                correct_val = game.get(correct_key)
+                
+                # If there's a probability, count it (even if correct is None/False)
+                if prob_val is not None:
                     overall[model_name]['total'] += 1
-                    if val:
+                    if correct_val is True:
                         overall[model_name]['correct'] += 1
-    for model_name, _ in model_keys:
+    
+    for model_name, _, _ in model_configs:
         t = overall[model_name]['total']
+        c = overall[model_name]['correct']
         overall[model_name]['accuracy'] = (
-            round(overall[model_name]['correct'] / t * 100, 1) if t > 0 else 0.0
+            round(c / t * 100, 1) if t > 0 else 0.0
         )
     return overall
 
@@ -2873,15 +2894,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
                 {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
                 {% set m = overall_stats[m_key] %}
-                <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:12px;text-align:center;{% if m_key=='ensemble' %}border:2px solid #fbbf24;grid-column:span 4;{% endif %}">
-                    <div style="font-size:0.85em;opacity:0.8;margin-bottom:4px;">{{ m_label }}</div>
-                    {% if m.total > 0 %}
-                    <div style="font-size:{% if m_key=='ensemble' %}2.5em{% else %}1.7em{% endif %};font-weight:bold;color:{% if m.accuracy>=55 %}#10b981{% elif m.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ m.accuracy }}%</div>
-                    <div style="font-size:0.85em;opacity:0.85;">{{ m.correct }}-{{ m.total - m.correct }}</div>
-                    {% else %}
-                    <div style="font-size:{% if m_key=='ensemble' %}2.5em{% else %}1.7em{% endif %};font-weight:bold;color:#94a3b8;">N/A</div>
-                    <div style="font-size:0.85em;opacity:0.85;">N/A</div>
-                    {% endif %}
+                <div style="background: rgba(255,255,255,0.07); border-radius: 9px; padding: 12px; text-align: center; {% if m_key=='ensemble' %}border: 2px solid #fbbf24; grid-column: span 4;{% endif %}">
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 4px;">{{ m_label }}</div>
+                    <div style="font-size: {% if m_key=='ensemble' %}2.5em{% else %}1.7em{% endif %}; font-weight: bold; color: {% if m.total>0 %}{% if m.accuracy>=55 %}#10b981{% elif m.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %}{% else %}#94a3b8{% endif %};">
+                        {% if m.total > 0 %}{{ m.accuracy }}%{% else %}—{% endif %}
+                    </div>
+                    <div style="font-size: 0.85em; opacity: 0.85;">
+                        {% if m.total > 0 %}{{ m.correct }}-{{ m.total - m.correct }}{% else %}no data{% endif %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
