@@ -4458,6 +4458,14 @@ def sport_spread_total_results(sport):
     """Spread & total results — XSharp only, graded against market spread/total lines."""
     if sport not in SPORTS:
         return "Sport not found", 404
+    cache_key = f'{sport}_spread_total_results_html'
+    cache_ttl = min(_SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), 180)
+    cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
+    if isinstance(cached_page, dict):
+        cached_ts = cached_page.get('ts')
+        cached_html = cached_page.get('html')
+        if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+            return cached_html
 
     from collections import defaultdict
 
@@ -4536,20 +4544,24 @@ def sport_spread_total_results(sport):
     live_lines_by_game = {}
     live_line_fetch_attempted = 0
     live_line_fetch_success = 0
-    live_fetch_cap = 120 if sport == 'NCAAB' else 60
-    live_recent_days = 14 if sport == 'NCAAB' else 3
+    # IMPORTANT: keep this small so one request can never monopolize a worker.
+    live_fetch_cap = 20 if sport in ['NHL', 'NBA'] else (30 if sport == 'NCAAB' else 15)
+    live_recent_days = 3 if sport in ['NHL', 'NBA'] else (7 if sport == 'NCAAB' else 3)
     latest_line_dt = parse_date(str(latest_db_line_date)) if latest_db_line_date else None
     db_line_is_stale = latest_line_dt is None or latest_line_dt < (datetime.now() - timedelta(days=7))
     coverage_is_poor = pre_missing_ratio >= 0.50
-    # Outage protection:
-    # if DB lines are stale or coverage is mostly missing, widen fallback window
-    # so the page self-heals by backfilling current lookback scope.
-    if db_line_is_stale or coverage_is_poor:
-        live_recent_days = lookback_days
-        live_fetch_cap = min(2000, max(200, int(len(completed_games) * 0.9)))
+    # Do not widen request-time fallback windows aggressively in web requests;
+    # bulk backfills should happen via scheduled odds ingestion scripts.
+    if db_line_is_stale and coverage_is_poor:
+        live_fetch_cap = max(live_fetch_cap, 25)
+        live_recent_days = max(live_recent_days, 5)
     live_recent_cutoff = datetime.now() - timedelta(days=live_recent_days)
+    live_fetch_start_ts = _time.time()
+    live_fetch_time_budget_sec = 6.0
 
     for game in completed_games:
+        if (_time.time() - live_fetch_start_ts) > live_fetch_time_budget_sec:
+            break
         if live_line_fetch_attempted >= live_fetch_cap:
             break
         if game['market_spread'] is not None and game['market_total'] is not None:
@@ -4812,7 +4824,7 @@ def sport_spread_total_results(sport):
     sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)
     today_date = datetime.now().strftime('%Y-%m-%d')
 
-    return render_template_string(
+    rendered = render_template_string(
         SPREAD_TOTAL_RESULTS_TEMPLATE,
         page=sport,
         sport=sport,
@@ -4842,6 +4854,8 @@ def sport_spread_total_results(sport):
         spread_pass_count=spread_pass_count,
         total_pass_count=total_pass_count
     )
+    _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+    return rendered
 
 @app.route('/sport/<sport>/ats')
 def sport_ats_picks(sport):
