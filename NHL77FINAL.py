@@ -2160,7 +2160,8 @@ def compute_overall_stats_from_daily(daily_results):
                 # If there's a probability, count it (even if correct is None/False)
                 if prob_val is not None:
                     overall[model_name]['total'] += 1
-                    if correct_val is True:
+                    # Use truthy check (not strict is True) to handle both bool and int 1/0
+                    if correct_val:
                         overall[model_name]['correct'] += 1
     
     for model_name, _, _ in model_configs:
