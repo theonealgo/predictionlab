@@ -2578,12 +2578,23 @@ BASE_TEMPLATE = """
             align-items: center;
         }
         .logo {
-            font-size: 1.8em;
-            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+        .logo-img {
+            height: 36px;
+            width: auto;
+            display: block;
+        }
+        .logo-text {
+            font-size: 1.4em;
+            font-weight: 800;
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-decoration: none;
+            letter-spacing: 0.3px;
         }
         .hamburger {
             display: flex;
@@ -2641,6 +2652,24 @@ BASE_TEMPLATE = """
             margin: 0 auto;
             padding: 30px;
         }
+        .footer {
+            border-top: 1px solid rgba(255,255,255,0.12);
+            padding: 26px 30px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.85em;
+        }
+        .footer a {
+            color: #cbd5e1;
+            text-decoration: none;
+        }
+        .footer a:hover { color: #fbbf24; }
+        .footer-logo {
+            font-weight: 800;
+            font-size: 1.05em;
+            margin-bottom: 8px;
+            display: block;
+        }
         @media (max-width: 768px) {
             .nav-links {
                 left: 0;
@@ -2666,7 +2695,10 @@ BASE_TEMPLATE = """
 <body>
     <div class="navbar">
         <div class="navbar-content">
-            <a href="/" class="logo">🎯 underdogs.bet</a>
+            <a href="/" class="logo">
+                <img src="/static/underdogs-logo.png" alt="underdogs.bet" class="logo-img" onerror="this.style.display='none';">
+                <span class="logo-text">underdogs.bet</span>
+            </a>
             <div class="hamburger" onclick="toggleMenu()">
                 <span></span>
                 <span></span>
@@ -2688,6 +2720,21 @@ BASE_TEMPLATE = """
     
     <div class="container">
         {% block content %}{% endblock %}
+    </div>
+    <div class="footer">
+        <span class="footer-logo">underdogs.bet</span>
+        <p>AI-powered sports predictions — free forever.</p>
+        <p style="margin-top:10px;">
+            <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
+            <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
+            <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
+            <a href="/sport/NFL/predictions">NFL</a> &nbsp;·&nbsp;
+            <a href="/sport/NCAAB/predictions">NCAAB</a> &nbsp;·&nbsp;
+            <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
+            <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
+            <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
+        </p>
+        <p style="margin-top:10px;opacity:.7;">© 2025 underdogs.bet</p>
     </div>
     
     <script>
@@ -3691,12 +3738,23 @@ def landing_page():
             align-items: center;
         }
         .logo {
-            font-size: 1.8em;
-            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+        .logo-img {
+            height: 36px;
+            width: auto;
+            display: block;
+        }
+        .logo-text {
+            font-size: 1.4em;
+            font-weight: 800;
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-decoration: none;
+            letter-spacing: 0.3px;
         }
         .hamburger {
             display: flex;
@@ -3965,7 +4023,10 @@ def landing_page():
 <!-- Navbar -->
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo">🎯 underdogs.bet</a>
+        <a href="/" class="logo">
+            <img src="/static/underdogs-logo.png" alt="underdogs.bet" class="logo-img" onerror="this.style.display='none';">
+            <span class="logo-text">underdogs.bet</span>
+        </a>
         <div class="hamburger" onclick="toggleMenu()">
             <span></span>
             <span></span>
