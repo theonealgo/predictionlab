@@ -2618,12 +2618,17 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 g['market_spread'] = ms
                 g['market_total'] = mt
                 # Display-ready strings for the unified table
+                g['spread_pick_label'] = None
                 if sp_disp in ('HOME', 'AWAY') and ms is not None:
                     g['spread_line_display'] = f"{ms:+.1f}" if sp_disp == 'HOME' else f"{-ms:+.1f}"
+                    pick_team = h if sp_disp == 'HOME' else a
+                    g['spread_pick_label'] = f"{pick_team} {g['spread_line_display']}"
                 else:
                     g['spread_line_display'] = None
+                g['total_pick_label'] = None
                 if tp_disp in ('OVER', 'UNDER') and mt is not None:
                     g['total_line_display'] = f"{tp_disp.title()} {mt:.1f}"
+                    g['total_pick_label'] = g['total_line_display']
                 else:
                     g['total_line_display'] = None
 
@@ -3509,12 +3514,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 </div>
                 {% if spread_total_stats is defined and spread_total_stats %}
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">📈 Spread (XSharp)</div>
                     <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.spread_pct>=52 %}#10b981{% elif spread_total_stats.spread_pct>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ spread_total_stats.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.spread_covered }}/{{ spread_total_stats.spread_graded }}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎲 O/U Total</div>
+                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎲 O/U (XSharp)</div>
                     <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.total_pct>=52 %}#10b981{% elif spread_total_stats.total_pct>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ spread_total_stats.total_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.total_correct }}/{{ spread_total_stats.total_graded }}</div>
                 </div>
@@ -3590,8 +3595,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <td style="color:#94a3b8;">{{ game.away_score + game.home_score }}</td>
                     <td class="col-ml" style="font-size:0.82em;">{{ game.ens_prob }}%</td>
                     <td class="col-ml">{% if game.ens_correct is not none %}{% if game.ens_correct %}<span class="prob-correct">✅</span>{% else %}<span class="prob-wrong">❌</span>{% endif %}{% else %}<span class="prob-na">—</span>{% endif %}</td>
-                    <td class="col-spread">{% if game.spread_correct is not none %}{% if game.spread_correct %}<span class="prob-correct">✅ ({{ game.spread_line_display }})</span>{% else %}<span class="prob-wrong">❌ ({{ game.spread_line_display }})</span>{% endif %}{% elif game.spread_line_display %}<span class="prob-na">{{ game.spread_pick }} ({{ game.spread_line_display }})</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
-                    <td class="col-total">{% if game.total_correct is not none %}{% if game.total_correct %}<span class="prob-correct">✅ {{ game.total_line_display }}</span>{% else %}<span class="prob-wrong">❌ {{ game.total_line_display }}</span>{% endif %}{% elif game.total_line_display %}<span class="prob-na">{{ game.total_line_display }}</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
+                    <td class="col-spread">{% if game.spread_correct is not none %}{% if game.spread_correct %}<span class="prob-correct">✅ {{ game.spread_pick_label }}</span>{% else %}<span class="prob-wrong">❌ {{ game.spread_pick_label }}</span>{% endif %}{% elif game.spread_pick_label %}<span class="prob-na">{{ game.spread_pick_label }}</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
+                    <td class="col-total">{% if game.total_correct is not none %}{% if game.total_correct %}<span class="prob-correct">✅ {{ game.total_pick_label }}</span>{% else %}<span class="prob-wrong">❌ {{ game.total_pick_label }}</span>{% endif %}{% elif game.total_pick_label %}<span class="prob-na">{{ game.total_pick_label }}</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
                 </tr>
                 <tr id="details-{{ date }}-{{ loop.index0 }}" class="details-row">
                     <td colspan="7">
@@ -3626,12 +3631,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                                     <div class="details-val">{{ game.market_total if game.market_total is not none else 'N/A' }}</div>
                                 </div>
                                 <div class="details-item">
-                                    <div class="details-label">Model Spread</div>
-                                    <div class="details-val">{{ game.spread_pick if game.spread_pick is not none else 'N/A' }}{% if game.spread_line_display %} ({{ game.spread_line_display }}){% endif %}</div>
+                                    <div class="details-label">Model Spread Pick</div>
+                                    <div class="details-val">{{ game.spread_pick_label if game.spread_pick_label is not none else 'N/A' }}</div>
                                 </div>
                                 <div class="details-item">
-                                    <div class="details-label">Model O/U</div>
-                                    <div class="details-val">{{ game.total_pick if game.total_pick is not none else 'N/A' }}{% if game.total_line_display %} ({{ game.total_line_display }}){% endif %}</div>
+                                    <div class="details-label">Model O/U Pick</div>
+                                    <div class="details-val">{{ game.total_pick_label if game.total_pick_label is not none else 'N/A' }}</div>
                                 </div>
                             </div>
                         </div>
