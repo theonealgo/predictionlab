@@ -2442,7 +2442,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
         st_cov = st_gr = tt_cor = tt_gr = 0
         live_attempts = 0
-        live_cap = 60 if sport == 'NBA' else 5
+        live_cap = 10 if sport == 'NBA' else 5
         for dd in daily_results.values():
             for g in dd.get('games', []):
                 h, a = g['home'], g['away']
@@ -2490,6 +2490,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 # Live fallback for missing market lines (recent games only)
                 if (ms is None or mt is None) and live_attempts < live_cap and gd:
                     try:
+                        if sport == 'NBA':
+                            gd_dt = parse_date(gd)
+                            if gd_dt and abs((datetime.now() - gd_dt).days) > 3:
+                                raise Exception("skip live fetch for older NBA dates")
                         live_attempts += 1
                         live_line = _fetch_live_market_line(sport, gid, gd, h, a)
                         if live_line:
