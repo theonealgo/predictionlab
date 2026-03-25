@@ -326,6 +326,7 @@ SPORTS = {
     'MLB': {'name': 'MLB', 'icon': '⚾', 'color': '#9333ea'},
     'NCAAF': {'name': 'NCAA Football', 'icon': '🏟️', 'color': '#ea580c'},
     'NCAAB': {'name': 'NCAA Basketball', 'icon': '🎓', 'color': '#0891b2'},
+    'WNBA': {'name': 'WNBA', 'icon': '🏀', 'color': '#f97316'},
 }
 
 # ── Public-facing model brand names ───────────────────────────────────────────
@@ -2477,10 +2478,27 @@ def compute_overall_stats_from_weekly(weekly_results):
 
 BASE_TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}underdogs.bet{% endblock %}</title>
+    {% if page_title is defined and page_title %}{% set _meta_title = page_title %}
+    {% elif sport_info is defined %}{% set _meta_title = sport_info.name ~ ' — underdogs.bet' %}
+    {% else %}{% set _meta_title = 'underdogs.bet' %}{% endif %}
+    {% if page_description is defined and page_description %}{% set _meta_desc = page_description %}
+    {% elif sport_info is defined %}{% set _meta_desc = sport_info.name ~ ' predictions, results, spreads, and totals powered by AI.' %}
+    {% else %}{% set _meta_desc = 'AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAF, and WNBA.' %}{% endif %}
+    <title>{{ _meta_title }}</title>
+    <meta name="description" content="{{ _meta_desc }}">
+    <meta property="og:title" content="{{ _meta_title }}">
+    <meta property="og:description" content="{{ _meta_desc }}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:site_name" content="underdogs.bet">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ _meta_title }}">
+    <meta name="twitter:description" content="{{ _meta_desc }}">
+    <link rel="canonical" href="{{ request.url }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -2604,6 +2622,8 @@ BASE_TEMPLATE = """
                 <a href="/sport/MLB/predictions" class="{{ 'active' if page == 'MLB' else '' }}">⚾ MLB</a>
                 <a href="/sport/NFL/predictions" class="{{ 'active' if page == 'NFL' else '' }}">🏈 NFL</a>
                 <a href="/sport/NCAAB/predictions" class="{{ 'active' if page == 'NCAAB' else '' }}">🎓 NCAAB</a>
+                <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
+                <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
                 <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
             </div>
         </div>
@@ -3571,6 +3591,15 @@ def landing_page():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>underdogs.bet — Free AI Sports Predictions</title>
     <meta name="description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB and more. 5-model ensemble powered by machine learning.">
+    <meta property="og:title" content="underdogs.bet — Free AI Sports Predictions">
+    <meta property="og:description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAF and WNBA. 5-model ensemble powered by machine learning.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:site_name" content="underdogs.bet">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="underdogs.bet — Free AI Sports Predictions">
+    <meta name="twitter:description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAF and WNBA.">
+    <link rel="canonical" href="{{ request.url }}">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         :root{
@@ -3588,30 +3617,70 @@ def landing_page():
         }
 
         /* ── Navbar ── */
-        nav{
-            position:sticky;top:0;z-index:100;
-            background:rgba(15,23,42,0.95);
-            backdrop-filter:blur(12px);
-            border-bottom:1px solid var(--border);
-            padding:14px 30px;
-            display:flex;align-items:center;justify-content:space-between;
+        .navbar {
+            background: rgba(15, 23, 42, 0.95);
+            padding: 15px 30px;
+            border-bottom: 2px solid #334155;
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
-        .nav-logo{
-            font-size:1.5em;font-weight:800;
-            background:linear-gradient(135deg,var(--gold),var(--gold2));
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-            text-decoration:none;
+        .navbar-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .nav-right{display:flex;gap:20px;align-items:center;}
-        .nav-link{color:#94a3b8;text-decoration:none;font-size:0.9em;font-weight:500;transition:color .2s;}
-        .nav-link:hover{color:var(--gold);}
-        .nav-donate{
-            background:linear-gradient(135deg,var(--gold),var(--gold2));
-            color:#000;font-weight:700;font-size:0.85em;
-            padding:8px 18px;border-radius:20px;
-            text-decoration:none;transition:opacity .2s;white-space:nowrap;
+        .logo {
+            font-size: 1.8em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-decoration: none;
         }
-        .nav-donate:hover{opacity:.85;}
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            cursor: pointer;
+            gap: 5px;
+        }
+        .hamburger span {
+            width: 25px;
+            height: 3px;
+            background: #fbbf24;
+            border-radius: 2px;
+            transition: 0.3s;
+        }
+        .nav-links {
+            display: flex;
+            gap: 25px;
+        }
+        .nav-links a {
+            color: #cbd5e1;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+            white-space: nowrap;
+        }
+        .nav-links a:hover {
+            color: #fbbf24;
+        }
+        .nav-links a.active {
+            color: #fbbf24;
+        }
+        .nav-donate-btn {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #000 !important;
+            font-weight: 700 !important;
+            padding: 7px 16px;
+            border-radius: 20px;
+            transition: opacity 0.2s !important;
+            white-space: nowrap;
+        }
+        .nav-donate-btn:hover { opacity: 0.85; color: #000 !important; }
 
         /* ── Hero ── */
         .hero{
@@ -3800,27 +3869,57 @@ def landing_page():
         /* ── Responsive ── */
         @media(max-width:640px){
             .hero{padding:60px 20px 40px;}
-            nav{padding:12px 18px;}
             .free-banner{flex-direction:column;}
             .donate-card{padding:36px 24px;}
             .stat-item{min-width:110px;padding:20px 12px;}
             .stats-bar{border-left:none;border-right:none;}
-            .nav-right .nav-link{display:none;}
+        }
+        @media (max-width: 768px) {
+            .hamburger { display: flex; }
+            .nav-links {
+                position: absolute;
+                top: 70px;
+                left: 0;
+                right: 0;
+                background: rgba(15, 23, 42, 0.98);
+                flex-direction: column;
+                gap: 0;
+                padding: 20px;
+                border-bottom: 2px solid #334155;
+                display: none;
+            }
+            .nav-links.active { display: flex; }
+            .nav-links a {
+                padding: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
         }
     </style>
 </head>
 <body>
 
 <!-- Navbar -->
-<nav>
-    <a href="/" class="nav-logo">🎯 underdogs.bet</a>
-    <div class="nav-right">
-        <a href="/sport/NHL/predictions" class="nav-link">🏒 NHL</a>
-        <a href="/sport/NBA/predictions" class="nav-link">🏀 NBA</a>
-        <a href="/sport/MLB/predictions" class="nav-link">⚾ MLB</a>
-        <a href="{{ stripe_url }}" target="_blank" class="nav-donate">💛 Support Us</a>
+<div class="navbar">
+    <div class="navbar-content">
+        <a href="/" class="logo">🎯 underdogs.bet</a>
+        <div class="hamburger" onclick="toggleMenu()">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div class="nav-links" id="navLinks">
+            <a href="/" class="active">Home</a>
+            <a href="/sport/NHL/predictions">🏒 NHL</a>
+            <a href="/sport/NBA/predictions">🏀 NBA</a>
+            <a href="/sport/MLB/predictions">⚾ MLB</a>
+            <a href="/sport/NFL/predictions">🏈 NFL</a>
+            <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
+            <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
+            <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+            <a href="{{ stripe_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
+        </div>
     </div>
-</nav>
+</div>
 
 <!-- Hero -->
 <div class="hero">
@@ -3852,7 +3951,7 @@ def landing_page():
 <!-- Stats bar -->
 <div class="stats-bar">
     <div class="stat-item">
-        <div class="stat-num">6</div>
+        <div class="stat-num">7</div>
         <div class="stat-label">Sports Covered</div>
     </div>
     <div class="stat-item">
@@ -3979,10 +4078,36 @@ def landing_page():
         <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
         <a href="/sport/NFL/predictions">NFL</a> &nbsp;·&nbsp;
         <a href="/sport/NCAAB/predictions">NCAAB</a> &nbsp;·&nbsp;
+        <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
+        <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
         <a href="{{ stripe_url }}" target="_blank">💛 Donate</a>
     </p>
     <p style="margin-top:12px;opacity:.5;">© 2025 underdogs.bet · underdogsbetemail@gmail.com</p>
 </div>
+
+<script>
+    function toggleMenu() {
+        const navLinks = document.getElementById('navLinks');
+        if (navLinks) navLinks.classList.toggle('active');
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        const navLinks = document.getElementById('navLinks');
+        if (!navLinks) return;
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function() {
+                navLinks.classList.remove('active');
+            });
+        });
+    });
+    document.addEventListener('click', function(event) {
+        const navLinks = document.getElementById('navLinks');
+        const navbar = document.querySelector('.navbar');
+        if (!navLinks || !navbar) return;
+        if (!navbar.contains(event.target)) {
+            navLinks.classList.remove('active');
+        }
+    });
+</script>
 
 </body>
 </html>
@@ -4142,38 +4267,45 @@ def sport_results(sport):
                 return f"<h1>N/A — NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
-            update_nba_scores()
-            weekly_results = calculate_nba_weekly_performance()
-            logger.info(f"NBA weekly_results: {weekly_results is not None}, weeks: {list(weekly_results.keys()) if weekly_results else 'None'}")
-            if not weekly_results:
-                return "<h1>No NBA results data available yet. Check back after more games are played.</h1>"
-            
-            # Regroup by date instead of week
-            from collections import defaultdict
-            daily_results = defaultdict(lambda: {'games': []})
-            today_date = datetime.now().strftime('%Y-%m-%d')
-            
-            for week, week_data in weekly_results.items():
-                for game in week_data['games']:
-                    date_key = game['date']
-                    daily_results[date_key]['games'].append(game)
-            
-            # Render recent dates only to keep response size manageable.
-            yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-            sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-            
-            overall_stats = compute_overall_stats_from_daily(daily_results)
-            _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
-            _st_stats = _compute_spread_total_for_daily(sport, daily_results)
-            return render_template_string(
-                DAILY_RESULTS_TEMPLATE,
-                page=sport, sport=sport, sport_info=SPORTS[sport],
-                daily_results=daily_results, sorted_dates=sorted_dates,
-                today_date=today_date, overall_stats=overall_stats,
-                total_over=_ov, total_under=_un, total_games_ou=_gou,
-                avg_total=_avg, ou_bench=_bench,
-                spread_total_stats=_st_stats
-            )
+            try:
+                update_nba_scores()
+            except Exception as e:
+                logger.error(f"NBA score sync failed (continuing with existing data): {e}")
+            try:
+                weekly_results = calculate_nba_weekly_performance()
+                logger.info(f"NBA weekly_results: {weekly_results is not None}, weeks: {list(weekly_results.keys()) if weekly_results else 'None'}")
+                if not weekly_results:
+                    return "<h1>N/A — NBA results could not be loaded because no completed NBA games were available for grading yet.</h1>"
+                
+                # Regroup by date instead of week
+                from collections import defaultdict
+                daily_results = defaultdict(lambda: {'games': []})
+                today_date = datetime.now().strftime('%Y-%m-%d')
+                
+                for week, week_data in weekly_results.items():
+                    for game in week_data['games']:
+                        date_key = game['date']
+                        daily_results[date_key]['games'].append(game)
+                
+                # Render recent dates only to keep response size manageable.
+                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
+                
+                overall_stats = compute_overall_stats_from_daily(daily_results)
+                _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
+                _st_stats = _compute_spread_total_for_daily(sport, daily_results)
+                return render_template_string(
+                    DAILY_RESULTS_TEMPLATE,
+                    page=sport, sport=sport, sport_info=SPORTS[sport],
+                    daily_results=daily_results, sorted_dates=sorted_dates,
+                    today_date=today_date, overall_stats=overall_stats,
+                    total_over=_ov, total_under=_un, total_games_ou=_gou,
+                    avg_total=_avg, ou_bench=_bench,
+                    spread_total_stats=_st_stats
+                )
+            except Exception as e:
+                logger.error(f"Error processing NBA results: {e}")
+                return f"<h1>N/A — NBA results page failed to render because of a processing error: {str(e)}</h1>"
 
         # Handle NCAAB
         if sport in ['NCAAB', 'NCAAF', 'MLB', 'WNBA']:

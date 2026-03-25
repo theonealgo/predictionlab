@@ -1,17 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ sport_info.name }} Predictions - underdogs.bet</title>
+    {% set _meta_title = sport_info.name ~ ' Predictions — underdogs.bet' %}
+    {% set _meta_desc = sport_info.name ~ ' predictions, spreads, totals, and model insights powered by AI.' %}
+    <title>{{ _meta_title }}</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ _meta_desc }}">
+    <meta property="og:title" content="{{ _meta_title }}">
+    <meta property="og:description" content="{{ _meta_desc }}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:site_name" content="underdogs.bet">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ _meta_title }}">
+    <meta name="twitter:description" content="{{ _meta_desc }}">
+    <link rel="canonical" href="{{ request.url }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: white; padding: 16px;
+            color: white;
         }
-        .container { max-width: 1400px; margin: 0 auto; }
+        .navbar {
+            background: rgba(15, 23, 42, 0.95);
+            padding: 15px 30px;
+            border-bottom: 2px solid #334155;
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .navbar-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 1.8em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-decoration: none;
+        }
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            cursor: pointer;
+            gap: 5px;
+        }
+        .hamburger span {
+            width: 25px;
+            height: 3px;
+            background: #fbbf24;
+            border-radius: 2px;
+            transition: 0.3s;
+        }
+        .nav-links {
+            display: flex;
+            gap: 25px;
+        }
+        .nav-links a {
+            color: #cbd5e1;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+            white-space: nowrap;
+        }
+        .nav-links a:hover { color: #fbbf24; }
+        .nav-links a.active { color: #fbbf24; }
+        .nav-donate-btn {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #000 !important;
+            font-weight: 700 !important;
+            padding: 7px 16px;
+            border-radius: 20px;
+            transition: opacity 0.2s !important;
+            white-space: nowrap;
+        }
+        .nav-donate-btn:hover { opacity: 0.85; color: #000 !important; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px; }
         .header { text-align:center; margin-bottom:18px; padding:16px; background:rgba(255,255,255,0.05); border-radius:12px; }
         h1 { font-size:1.9em; }
         .section-tabs { display:flex; gap:8px; margin-bottom:16px; justify-content:center; flex-wrap:wrap; }
@@ -74,14 +146,52 @@
         .injury-list { display:flex; flex-wrap:wrap; gap:6px; }
         .injury-pill { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.72em; font-weight:600; }
         .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fde68a; }
+        @media (max-width: 768px) {
+            .hamburger { display: flex; }
+            .nav-links {
+                position: absolute;
+                top: 70px;
+                left: 0;
+                right: 0;
+                background: rgba(15, 23, 42, 0.98);
+                flex-direction: column;
+                gap: 0;
+                padding: 20px;
+                border-bottom: 2px solid #334155;
+                display: none;
+            }
+            .nav-links.active { display: flex; }
+            .nav-links a {
+                padding: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            .container { padding: 20px 15px; }
+        }
     </style>
 </head>
 <body>
-<div class="container">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <a href="/" style="display:inline-block;padding:7px 16px;background:rgba(255,255,255,0.1);border-radius:7px;text-decoration:none;color:white;font-weight:600;">← Home</a>
-        <a href="{{ stripe_donation_url }}" target="_blank" style="display:inline-block;padding:7px 18px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:7px;text-decoration:none;color:#0f172a;font-weight:700;font-size:0.9em;">💛 Donate</a>
+<div class="navbar">
+    <div class="navbar-content">
+        <a href="/" class="logo">🎯 underdogs.bet</a>
+        <div class="hamburger" onclick="toggleMenu()">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div class="nav-links" id="navLinks">
+            <a href="/" class="{{ 'active' if page == 'home' else '' }}">Home</a>
+            <a href="/sport/NHL/predictions" class="{{ 'active' if page == 'NHL' else '' }}">🏒 NHL</a>
+            <a href="/sport/NBA/predictions" class="{{ 'active' if page == 'NBA' else '' }}">🏀 NBA</a>
+            <a href="/sport/MLB/predictions" class="{{ 'active' if page == 'MLB' else '' }}">⚾ MLB</a>
+            <a href="/sport/NFL/predictions" class="{{ 'active' if page == 'NFL' else '' }}">🏈 NFL</a>
+            <a href="/sport/NCAAB/predictions" class="{{ 'active' if page == 'NCAAB' else '' }}">🎓 NCAAB</a>
+            <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
+            <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
+            <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
+        </div>
     </div>
+</div>
+<div class="container">
 
     <div class="header">
         <h1>{{ sport_info.icon }} {{ sport_info.name }} — Predictions</h1>
@@ -207,6 +317,27 @@
 </div>
 
 <script>
+    function toggleMenu() {
+        const navLinks = document.getElementById('navLinks');
+        if (navLinks) navLinks.classList.toggle('active');
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        const navLinks = document.getElementById('navLinks');
+        if (!navLinks) return;
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function() {
+                navLinks.classList.remove('active');
+            });
+        });
+    });
+    document.addEventListener('click', function(event) {
+        const navLinks = document.getElementById('navLinks');
+        const navbar = document.querySelector('.navbar');
+        if (!navLinks || !navbar) return;
+        if (!navbar.contains(event.target)) {
+            navLinks.classList.remove('active');
+        }
+    });
     const allDates = {{ sorted_dates|tojson }};
     const today = '{{ today_date }}';
     let currentWeekStart = 0, activeDate = today;
