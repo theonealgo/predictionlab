@@ -115,6 +115,57 @@ def _normalize_team_key(team_name: str) -> str:
     txt = alias_map.get(txt, txt)
     return txt
 
+_TEAM_ALIAS_BY_SPORT = {
+    'NBA': {
+        'atl': 'atlantahawks',
+        'bos': 'bostonceltics',
+        'bkn': 'brooklynnets',
+        'brk': 'brooklynnets',
+        'cha': 'charlottehornets',
+        'cho': 'charlottehornets',
+        'chi': 'chicagobulls',
+        'cle': 'clevelandcavaliers',
+        'dal': 'dallasmavericks',
+        'den': 'denvernuggets',
+        'det': 'detroitpistons',
+        'gsw': 'goldenstatewarriors',
+        'gs': 'goldenstatewarriors',
+        'hou': 'houstonrockets',
+        'ind': 'indianapacers',
+        'lac': 'losangelesclippers',
+        'lal': 'losangeleslakers',
+        'mem': 'memphisgrizzlies',
+        'mia': 'miamiheat',
+        'mil': 'milwaukeebucks',
+        'min': 'minnesotatimberwolves',
+        'nop': 'neworleanspelicans',
+        'no': 'neworleanspelicans',
+        'nyk': 'newyorkknicks',
+        'okc': 'oklahomacitythunder',
+        'orl': 'orlandomagic',
+        'phi': 'philadelphia76ers',
+        'phl': 'philadelphia76ers',
+        'pho': 'phoenixsuns',
+        'phx': 'phoenixsuns',
+        'por': 'portlandtrailblazers',
+        'sac': 'sacramentokings',
+        'sas': 'sanantoniospurs',
+        'sa': 'sanantoniospurs',
+        'tor': 'torontoraptors',
+        'uta': 'utahjazz',
+        'was': 'washingtonwizards',
+        'wsh': 'washingtonwizards',
+    }
+}
+
+
+def _normalize_team_key_for_sport(sport: str, team_name: str) -> str:
+    key = _normalize_team_key(team_name)
+    if not key or not sport:
+        return key
+    alias_map = _TEAM_ALIAS_BY_SPORT.get(sport, {})
+    return alias_map.get(key, key)
+
 
 def _resolve_espn_event_id_by_matchup(sport: str, game_date: str, home_team: str, away_team: str):
     """
@@ -965,12 +1016,13 @@ def _get_xgb_spread_model(sport):
         return None
     # Need completed games from DB and team stats
     try:
-        sp = _score_predictor_instance(sport)
-        if not sp:
-            return None
-        team_stats = sp.team_stats_cache.get(
-            f"{sport}_{__import__('datetime').datetime.now().strftime('%Y-%m-%d')}", {}
-        )
+        team_stats = _build_team_stats_from_db(sport) or {}
+        if not team_stats:
+            sp = _score_predictor_instance(sport)
+            if sp:
+                team_stats = sp.team_stats_cache.get(
+                    f"{sport}_{__import__('datetime').datetime.now().strftime('%Y-%m-%d')}", {}
+                ) or {}
         conn = get_db_connection()
         rows = conn.execute(
             'SELECT home_team_id, away_team_id, home_score, away_score, game_date '
@@ -2232,7 +2284,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
             return None
 
         conn = get_db_connection()
-        _line_map = {}
+        _line_by_key = {}
         _line_by_id = {}
         try:
             cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
@@ -2244,37 +2296,26 @@ def _compute_spread_total_for_daily(sport, daily_results):
         try:
             if has_extra:
                 rows = conn.execute('''
-                    SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
-                           COALESCE(bl1.spread, bl2.spread) AS mkt_spread,
-                           COALESCE(bl1.total, bl2.total) AS mkt_total
-                    FROM games g
-                    LEFT JOIN (
-                        SELECT game_id, MAX(spread) AS spread, MAX(total) AS total
-                        FROM betting_lines WHERE sport=? GROUP BY game_id
-                    ) bl1 ON bl1.game_id = g.game_id
-                    LEFT JOIN (
-                        SELECT date(game_date) AS gd, home_team, away_team,
-                               MAX(spread) AS spread, MAX(total) AS total
-                        FROM betting_lines WHERE sport=?
-                        GROUP BY date(game_date), home_team, away_team
-                    ) bl2 ON bl2.gd = date(g.game_date)
-                          AND bl2.home_team = g.home_team_id
-                          AND bl2.away_team = g.away_team_id
-                    WHERE g.sport=? AND g.home_score IS NOT NULL
-                ''', (sport, sport, sport)).fetchall()
+                    SELECT game_id, game_date, home_team, away_team, spread, total, fetched_at
+                    FROM betting_lines
+                    WHERE sport=?
+                    ORDER BY fetched_at DESC
+                ''', (sport,)).fetchall()
             else:
                 rows = conn.execute('''
-                    SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
-                           bl.spread AS mkt_spread, bl.total AS mkt_total
-                    FROM games g
-                    LEFT JOIN betting_lines bl ON bl.game_id = g.game_id
-                    WHERE g.sport=? AND g.home_score IS NOT NULL
-                ''', (sport,)).fetchall()
+                    SELECT game_id, spread, total
+                    FROM betting_lines
+                ''').fetchall()
             for r in rows:
-                key = ((r['game_date'] or '')[:10], r['home_team_id'], r['away_team_id'])
-                _line_map[key] = {'spread': r['mkt_spread'], 'total': r['mkt_total']}
                 if r['game_id']:
-                    _line_by_id[str(r['game_id'])] = {'spread': r['mkt_spread'], 'total': r['mkt_total']}
+                    _line_by_id[str(r['game_id'])] = {'spread': r['spread'], 'total': r['total']}
+                if has_extra:
+                    gd = (r['game_date'] or '')[:10]
+                    hk = _normalize_team_key_for_sport(sport, r['home_team'])
+                    ak = _normalize_team_key_for_sport(sport, r['away_team'])
+                    key = (gd, hk, ak)
+                    if gd and hk and ak and key not in _line_by_key:
+                        _line_by_key[key] = {'spread': r['spread'], 'total': r['total']}
         except Exception:
             pass
 
@@ -2309,7 +2350,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 except Exception:
                     xs = xt = None
 
-                ml = _line_by_id.get(gid) or _line_map.get((gd, h, a), {})
+                hk = _normalize_team_key_for_sport(sport, h)
+                ak = _normalize_team_key_for_sport(sport, a)
+                ml = _line_by_id.get(gid) or _line_by_key.get((gd, hk, ak), {})
                 try:
                     ms = float(ml['spread']) if ml.get('spread') is not None else None
                 except Exception:
@@ -2532,7 +2575,7 @@ BASE_TEMPLATE = """
             text-decoration: none;
         }
         .hamburger {
-            display: none;
+            display: flex;
             flex-direction: column;
             cursor: pointer;
             gap: 5px;
@@ -2545,9 +2588,20 @@ BASE_TEMPLATE = """
             transition: 0.3s;
         }
         .nav-links {
-            display: flex;
-            gap: 25px;
+            position: absolute;
+            top: 70px;
+            right: 30px;
+            background: rgba(15, 23, 42, 0.98);
+            flex-direction: column;
+            gap: 0;
+            padding: 14px;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            display: none;
+            min-width: 220px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.35);
         }
+        .nav-links.active { display: flex; }
         .nav-links a {
             color: #cbd5e1;
             text-decoration: none;
@@ -2577,23 +2631,15 @@ BASE_TEMPLATE = """
             padding: 30px;
         }
         @media (max-width: 768px) {
-            .hamburger {
-                display: flex;
-            }
             .nav-links {
-                position: absolute;
-                top: 70px;
                 left: 0;
                 right: 0;
-                background: rgba(15, 23, 42, 0.98);
-                flex-direction: column;
-                gap: 0;
+                top: 70px;
                 padding: 20px;
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
                 border-bottom: 2px solid #334155;
-                display: none;
-            }
-            .nav-links.active {
-                display: flex;
             }
             .nav-links a {
                 padding: 12px;
@@ -3642,7 +3688,7 @@ def landing_page():
             text-decoration: none;
         }
         .hamburger {
-            display: none;
+            display: flex;
             flex-direction: column;
             cursor: pointer;
             gap: 5px;
@@ -3655,9 +3701,20 @@ def landing_page():
             transition: 0.3s;
         }
         .nav-links {
-            display: flex;
-            gap: 25px;
+            position: absolute;
+            top: 70px;
+            right: 30px;
+            background: rgba(15, 23, 42, 0.98);
+            flex-direction: column;
+            gap: 0;
+            padding: 14px;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            display: none;
+            min-width: 220px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.35);
         }
+        .nav-links.active { display: flex; }
         .nav-links a {
             color: #cbd5e1;
             text-decoration: none;
@@ -3875,20 +3932,16 @@ def landing_page():
             .stats-bar{border-left:none;border-right:none;}
         }
         @media (max-width: 768px) {
-            .hamburger { display: flex; }
             .nav-links {
-                position: absolute;
-                top: 70px;
                 left: 0;
                 right: 0;
-                background: rgba(15, 23, 42, 0.98);
-                flex-direction: column;
-                gap: 0;
+                top: 70px;
                 padding: 20px;
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
                 border-bottom: 2px solid #334155;
-                display: none;
             }
-            .nav-links.active { display: flex; }
             .nav-links a {
                 padding: 12px;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
