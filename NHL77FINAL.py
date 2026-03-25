@@ -340,6 +340,72 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
         logger.debug(f"[{sport}] cache market lines failed: {_e}")
 
 
+def _cache_market_lines_for_results(sport, daily_results, limit=20):
+    if sport != 'NBA' or not daily_results:
+        return
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        attempts = 0
+        for dd in daily_results.values():
+            for g in dd.get('games', []):
+                if attempts >= limit:
+                    break
+                gid = g.get('game_id')
+                gd = g.get('date')
+                if not gid or not gd:
+                    continue
+                try:
+                    cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
+                    has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+                    if has_extra:
+                        existing = cur.execute(
+                            "SELECT spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
+                            (sport, gid)
+                        ).fetchone()
+                    else:
+                        existing = cur.execute(
+                            "SELECT spread, total FROM betting_lines WHERE game_id=? LIMIT 1",
+                            (gid,)
+                        ).fetchone()
+                    if existing and (existing['spread'] is not None or existing['total'] is not None):
+                        continue
+                except Exception:
+                    pass
+                try:
+                    gd_dt = parse_date(gd)
+                    if gd_dt and abs((datetime.now() - gd_dt).days) > 3:
+                        continue
+                except Exception:
+                    pass
+                line = _fetch_live_market_line(
+                    sport,
+                    gid,
+                    gd,
+                    g.get('home'),
+                    g.get('away')
+                )
+                attempts += 1
+                if line and (line.get('spread') is not None or line.get('total') is not None):
+                    _upsert_betting_line(
+                        conn,
+                        sport,
+                        gid,
+                        gd,
+                        g.get('home'),
+                        g.get('away'),
+                        line.get('spread'),
+                        line.get('total'),
+                        line.get('source')
+                    )
+            if attempts >= limit:
+                break
+        conn.commit()
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[{sport}] cache market results failed: {_e}")
+
+
 def _fetch_live_market_line(
     sport: str,
     game_id: str,
@@ -2501,6 +2567,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
                                 ms = live_line.get('spread')
                             if mt is None:
                                 mt = live_line.get('total')
+                            if sport == 'NBA' and (ms is not None or mt is not None):
+                                try:
+                                    _conn_line = get_db_connection()
+                                    _upsert_betting_line(_conn_line, sport, gid, gd, h, a, ms, mt, live_line.get('source'))
+                                    _conn_line.commit()
+                                    _conn_line.close()
+                                except Exception:
+                                    pass
                     except Exception:
                         pass
 
@@ -4592,6 +4666,7 @@ def sport_results(sport):
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
+                _cache_market_lines_for_results(sport, daily_results, limit=20)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 return render_template_string(
                     DAILY_RESULTS_TEMPLATE,
