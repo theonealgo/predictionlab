@@ -3105,6 +3105,13 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .prob-correct { color:#10b981; font-weight:bold; }
     .prob-wrong { color:#ef4444; }
     .prob-na { color:#64748b; font-size:0.85em; }
+    .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+    @media(max-width:900px){ .model-grid { grid-template-columns:repeat(3,1fr); } }
+    .model-card { background:rgba(255,255,255,0.06); border-radius:10px; padding:12px; text-align:center; }
+    .model-card.highlight { border:2px solid #fbbf24; }
+    .model-label { font-size:0.78em; opacity:0.8; margin-bottom:4px; }
+    .model-acc { font-size:1.4em; font-weight:700; color:#10b981; }
+    .model-rec { font-size:0.82em; opacity:0.85; }
     """
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} — Results</h1>
@@ -3154,6 +3161,23 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             </div>
         </div>
 
+
+        <!-- ── Model Records ── -->
+        <div class="model-grid">
+            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
+            {% set m = overall_stats[m_key] %}
+            <div class="model-card {% if m_key == 'ensemble' %}highlight{% endif %}">
+                <div class="model-label">{{ m_label }}</div>
+                {% if m.total > 0 %}
+                <div class="model-acc">{{ m.accuracy }}%</div>
+                <div class="model-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                {% else %}
+                <div class="model-acc" style="color:#94a3b8;">—</div>
+                <div class="model-rec">no graded games</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
         <!-- ── Type Toggle ── -->
         <div class="type-toggle">
             <button class="toggle-btn active" onclick="filterCols('all',this)">ALL</button>

@@ -64,6 +64,16 @@
         .injury-bar { padding:4px 12px 6px; display:flex; flex-wrap:wrap; gap:5px; background:rgba(239,68,68,0.06); border-top:1px solid rgba(239,68,68,0.15); }
         .injury-tag { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.71em; font-weight:600; }
         .injury-tag.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fde68a; }
+        /* Analysis toggle */
+        .analysis-toggle { padding:6px 12px; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#a78bfa; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+        .analysis-toggle:hover { color:#c4b5fd; }
+        .analysis-panel { display:none; padding:8px 12px 12px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(15,23,42,0.6); }
+        .analysis-panel.open { display:block; }
+        .analysis-title { font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#94a3b8; margin-bottom:6px; }
+        .analysis-empty { font-size:0.78em; color:#94a3b8; }
+        .injury-list { display:flex; flex-wrap:wrap; gap:6px; }
+        .injury-pill { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.72em; font-weight:600; }
+        .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fde68a; }
     </style>
 </head>
 <body>
@@ -129,17 +139,6 @@
                             <div class="ensemble-badge">SHARP CONSENSUS {{ pred.ensemble_prob }}%</div>
                         </div>
                     </div>
-                    {# Injury bar — full width, outside flex row #}
-                    {% if not is_final and (pred.away_injuries or pred.home_injuries) %}
-                    <div class="injury-bar">
-                        {% for inj in pred.away_injuries %}
-                        <span class="injury-tag {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.away_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
-                        {% endfor %}
-                        {% for inj in pred.home_injuries %}
-                        <span class="injury-tag {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.home_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
                     {% if not is_final and (pred.xgb_spread is not none or pred.naive_spread is not none) %}
                     <div class="score-footer">
                         {% if pred.xgb_spread is not none %}
@@ -180,6 +179,23 @@
                         {% endif %}
                     </div>
                     {% endif %}
+                    {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
+                    <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
+                    <div id="{{ analysis_id }}" class="analysis-panel">
+                        <div class="analysis-title">Injuries</div>
+                        {% if pred.away_injuries or pred.home_injuries %}
+                        <div class="injury-list">
+                            {% for inj in pred.away_injuries %}
+                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.away_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
+                            {% endfor %}
+                            {% for inj in pred.home_injuries %}
+                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.home_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="analysis-empty">No injuries reported.</div>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -205,6 +221,13 @@
         document.querySelectorAll('.date-section').forEach(s=>s.classList.remove('visible'));
         const sec=document.getElementById('date-'+date);
         if(sec){sec.classList.add('visible');activeDate=date;}
+    }
+    function toggleAnalysis(id, el) {
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        panel.classList.toggle('open');
+        const open = panel.classList.contains('open');
+        if (el) el.textContent = open ? 'Analysis ▴' : 'Analysis ▾';
     }
     function renderDateBubbles() {
         const c=document.getElementById('dateBubbles'); c.innerHTML='';
