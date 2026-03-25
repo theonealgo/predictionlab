@@ -2280,8 +2280,12 @@ def _compute_spread_total_for_daily(sport, daily_results):
     Returns aggregate stats dict or None if the XGB model is unavailable."""
     try:
         _xgb = _get_xgb_spread_model(sport)
+        _sp = None
         if not _xgb:
-            return None
+            if sport == 'NBA':
+                _sp = _score_predictor_instance(sport)
+            if not _sp:
+                return None
 
         conn = get_db_connection()
         _line_by_key = {}
@@ -2335,7 +2339,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
         st_cov = st_gr = tt_cor = tt_gr = 0
         live_attempts = 0
-        live_cap = 5
+        live_cap = 60 if sport == 'NBA' else 5
         for dd in daily_results.values():
             for g in dd.get('games', []):
                 h, a = g['home'], g['away']
@@ -2344,9 +2348,16 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 hs, as_ = g['home_score'], g['away_score']
 
                 try:
-                    xp = _xgb.predict(h, a)
-                    xs = round(float(xp[2]), 1) if xp and xp[2] is not None else None
-                    xt = round(float(xp[3]), 1) if xp and xp[3] is not None else None
+                    if _xgb:
+                        xp = _xgb.predict(h, a)
+                        xs = round(float(xp[2]), 1) if xp and xp[2] is not None else None
+                        xt = round(float(xp[3]), 1) if xp and xp[3] is not None else None
+                    elif _sp:
+                        nh, na, ns, nt = _sp.predict_score(h, a, sport)
+                        xs = round(float(ns), 1) if ns is not None else None
+                        xt = round(float(nt), 1) if nt is not None else None
+                    else:
+                        xs = xt = None
                 except Exception:
                     xs = xt = None
 
