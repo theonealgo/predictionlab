@@ -3468,22 +3468,31 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .date-section { display:none; background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
     .date-header { color:#fbbf24; font-size:1.3em; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid rgba(255,255,255,0.2); }
-    .games-table { width:100%; border-collapse:collapse; font-size:0.88em; display:block; overflow-x:auto; }
-    .games-table th { background:rgba(255,255,255,0.1); padding:9px 10px; text-align:center; font-weight:bold; color:#fbbf24; border-bottom:2px solid rgba(255,255,255,0.2); white-space:nowrap; }
-    .games-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.08); white-space:nowrap; text-align:center; }
-    .games-table th:first-child, .games-table td:first-child { text-align:left; }
-    .games-table tr:hover { background:rgba(255,255,255,0.05); }
-    .prob-correct { color:#10b981; font-weight:bold; }
-    .prob-wrong { color:#ef4444; }
-    .prob-na { color:#64748b; font-size:0.85em; }
-    .game-row { cursor: pointer; }
-    .details-row { display:none; }
-    .details-row.visible { display: table-row; }
-    .details-panel { background: rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px; margin:6px 0; }
-    .details-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
-    .details-item { background: rgba(255,255,255,0.06); border-radius:8px; padding:10px; font-size:0.82em; }
-    .details-label { color:#94a3b8; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
-    .details-val { font-weight:600; margin-top:4px; }
+    .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:16px; }
+    .result-card { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; overflow:hidden; transition:border-color 0.2s; }
+    .result-card:hover { border-color:#fbbf24; }
+    .result-status { padding:6px 14px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#10b981; background:rgba(16,185,129,0.12); }
+    .result-body { display:flex; padding:12px 14px; gap:12px; }
+    .teams-section { flex:1; min-width:0; }
+    .team-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+    .team-row:last-child { border-bottom:none; }
+    .team-name { font-size:0.95em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .team-name.winner { font-weight:700; }
+    .score-box { font-size:1.05em; font-weight:700; color:#fbbf24; margin-left:8px; }
+    .model-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:170px; max-width:200px; display:flex; flex-direction:column; gap:4px; }
+    .panel-title { font-size:0.66em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
+    .model-row { display:flex; justify-content:space-between; font-size:0.82em; padding:2px 0; }
+    .model-lbl { opacity:0.85; }
+    .model-right { display:flex; align-items:center; gap:6px; }
+    .model-val { font-weight:600; }
+    .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#10b981; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
+    .result-footer { border-top:1px solid rgba(255,255,255,0.07); padding:8px 12px; display:flex; gap:14px; flex-wrap:wrap; background:rgba(0,0,0,0.18); }
+    .sf-item { display:flex; flex-direction:column; gap:1px; }
+    .sf-label { color:#94a3b8; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
+    .sf-val { font-weight:600; font-size:0.85em; color:#e2e8f0; }
+    .pick-ok { color:#10b981; font-weight:700; }
+    .pick-no { color:#ef4444; font-weight:700; }
+    .section-ml, .section-spread, .section-total { display:block; }
     .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
     @media(max-width:900px){ .model-grid { grid-template-columns:repeat(3,1fr); } }
     .model-card { background:rgba(255,255,255,0.06); border-radius:10px; padding:12px; text-align:center; }
@@ -3559,10 +3568,10 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         <!-- ── Type Toggle ── -->
         <div class="type-toggle">
-            <button class="toggle-btn active" onclick="filterCols('all',this)">ALL</button>
-            <button class="toggle-btn" onclick="filterCols('ml',this)">Moneyline</button>
-            <button class="toggle-btn" onclick="filterCols('spread',this)">Spread</button>
-            <button class="toggle-btn" onclick="filterCols('total',this)">Total</button>
+            <button class="toggle-btn active" onclick="filterSections('all',this)">ALL</button>
+            <button class="toggle-btn" onclick="filterSections('ml',this)">Moneyline</button>
+            <button class="toggle-btn" onclick="filterSections('spread',this)">Spread</button>
+            <button class="toggle-btn" onclick="filterSections('total',this)">Total</button>
         </div>
 
         <!-- ── Date Slider ── -->
@@ -3577,74 +3586,89 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div id="date-{{ date }}" class="date-section">
             <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#10b981;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
 
-            <table class="games-table">
-                <thead><tr>
-                    <th>Matchup</th>
-                    <th>Score</th>
-                    <th>Total</th>
-                    <th class="col-ml">Consensus ML%</th>
-                    <th class="col-ml">ML</th>
-                    <th class="col-spread">Spread</th>
-                    <th class="col-total">O/U</th>
-                </tr></thead>
-                <tbody>
+            <div class="results-grid">
                 {% for game in date_data.games %}
-                <tr class="game-row" onclick="toggleDetails('details-{{ date }}-{{ loop.index0 }}')">
-                    <td style="text-align:left;">{{ game.away }} @ <strong>{{ game.home }}</strong></td>
-                    <td><strong>{{ game.away_score }}-{{ game.home_score }}</strong></td>
-                    <td style="color:#94a3b8;">{{ game.away_score + game.home_score }}</td>
-                    <td class="col-ml" style="font-size:0.82em;">{{ game.ens_prob }}%</td>
-                    <td class="col-ml">{% if game.ens_correct is not none %}{% if game.ens_correct %}<span class="prob-correct">✅</span>{% else %}<span class="prob-wrong">❌</span>{% endif %}{% else %}<span class="prob-na">—</span>{% endif %}</td>
-                    <td class="col-spread">{% if game.spread_correct is not none %}{% if game.spread_correct %}<span class="prob-correct">✅ {{ game.spread_pick_label }}</span>{% else %}<span class="prob-wrong">❌ {{ game.spread_pick_label }}</span>{% endif %}{% elif game.spread_pick_label %}<span class="prob-na">{{ game.spread_pick_label }}</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
-                    <td class="col-total">{% if game.total_correct is not none %}{% if game.total_correct %}<span class="prob-correct">✅ {{ game.total_pick_label }}</span>{% else %}<span class="prob-wrong">❌ {{ game.total_pick_label }}</span>{% endif %}{% elif game.total_pick_label %}<span class="prob-na">{{ game.total_pick_label }}</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
-                </tr>
-                <tr id="details-{{ date }}-{{ loop.index0 }}" class="details-row">
-                    <td colspan="7">
-                        <div class="details-panel">
-                            <div class="details-grid">
-                                <div class="details-item">
-                                    <div class="details-label">Grinder2</div>
-                                    <div class="details-val">{{ game.glicko2_prob if game.glicko2_prob is not none else 'N/A' }}{% if game.glicko2_prob is not none %}%{% endif %}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">Takedown</div>
-                                    <div class="details-val">{{ game.trueskill_prob if game.trueskill_prob is not none else 'N/A' }}{% if game.trueskill_prob is not none %}%{% endif %}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">Edge</div>
-                                    <div class="details-val">{{ game.elo_prob if game.elo_prob is not none else 'N/A' }}{% if game.elo_prob is not none %}%{% endif %}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">XSharp</div>
-                                    <div class="details-val">{{ game.xgb_prob if game.xgb_prob is not none else 'N/A' }}{% if game.xgb_prob is not none %}%{% endif %}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">Consensus</div>
-                                    <div class="details-val">{{ game.ens_prob if game.ens_prob is not none else 'N/A' }}{% if game.ens_prob is not none %}%{% endif %}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">Market Spread</div>
-                                    <div class="details-val">{{ game.market_spread if game.market_spread is not none else 'N/A' }}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">Market Total</div>
-                                    <div class="details-val">{{ game.market_total if game.market_total is not none else 'N/A' }}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">Model Spread Pick</div>
-                                    <div class="details-val">{{ game.spread_pick_label if game.spread_pick_label is not none else 'N/A' }}</div>
-                                </div>
-                                <div class="details-item">
-                                    <div class="details-label">Model O/U Pick</div>
-                                    <div class="details-val">{{ game.total_pick_label if game.total_pick_label is not none else 'N/A' }}</div>
-                                </div>
+                {% set home_wins = game.home_score > game.away_score %}
+                {% set away_wins = game.away_score > game.home_score %}
+                {% set actual_spread = (game.home_score - game.away_score) %}
+                {% set actual_total = (game.home_score + game.away_score) %}
+                <div class="result-card">
+                    <div class="result-status">FINAL</div>
+                    <div class="result-body">
+                        <div class="teams-section">
+                            <div class="team-row">
+                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ game.away }}</span>
+                                <span class="score-box">{{ game.away_score }}</span>
+                            </div>
+                            <div class="team-row">
+                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ game.home }}</span>
+                                <span class="score-box">{{ game.home_score }}</span>
                             </div>
                         </div>
-                    </td>
-                </tr>
+                        <div class="model-panel section-ml">
+                            <div class="panel-title">Moneyline Models</div>
+                            <div class="model-row">
+                                <span class="model-lbl" style="color:#60a5fa;">Grinder2</span>
+                                <span class="model-right">
+                                    <span class="model-val">{{ game.glicko2_prob if game.glicko2_prob is not none else 'N/A' }}{% if game.glicko2_prob is not none %}%{% endif %}</span>
+                                    {% if game.glicko2_correct is not none %}<span class="{{ 'pick-ok' if game.glicko2_correct else 'pick-no' }}">{{ '✅' if game.glicko2_correct else '❌' }}</span>{% endif %}
+                                </span>
+                            </div>
+                            <div class="model-row">
+                                <span class="model-lbl" style="color:#a78bfa;">Takedown</span>
+                                <span class="model-right">
+                                    <span class="model-val">{{ game.trueskill_prob if game.trueskill_prob is not none else 'N/A' }}{% if game.trueskill_prob is not none %}%{% endif %}</span>
+                                    {% if game.trueskill_correct is not none %}<span class="{{ 'pick-ok' if game.trueskill_correct else 'pick-no' }}">{{ '✅' if game.trueskill_correct else '❌' }}</span>{% endif %}
+                                </span>
+                            </div>
+                            <div class="model-row">
+                                <span class="model-lbl" style="color:#34d399;">Edge</span>
+                                <span class="model-right">
+                                    <span class="model-val">{{ game.elo_prob if game.elo_prob is not none else 'N/A' }}{% if game.elo_prob is not none %}%{% endif %}</span>
+                                    {% if game.elo_correct is not none %}<span class="{{ 'pick-ok' if game.elo_correct else 'pick-no' }}">{{ '✅' if game.elo_correct else '❌' }}</span>{% endif %}
+                                </span>
+                            </div>
+                            <div class="model-row">
+                                <span class="model-lbl" style="color:#f87171;">XSharp</span>
+                                <span class="model-right">
+                                    <span class="model-val">{{ game.xgb_prob if game.xgb_prob is not none else 'N/A' }}{% if game.xgb_prob is not none %}%{% endif %}</span>
+                                    {% if game.xgb_correct is not none %}<span class="{{ 'pick-ok' if game.xgb_correct else 'pick-no' }}">{{ '✅' if game.xgb_correct else '❌' }}</span>{% endif %}
+                                </span>
+                            </div>
+                            <div class="ensemble-badge">CONSENSUS {{ game.ens_prob }}% {% if game.ens_correct is not none %}<span class="{{ 'pick-ok' if game.ens_correct else 'pick-no' }}">{{ '✅' if game.ens_correct else '❌' }}</span>{% endif %}</div>
+                        </div>
+                    </div>
+                    <div class="result-footer section-spread">
+                        <div class="sf-item">
+                            <span class="sf-label">Model Spread Pick</span>
+                            <span class="sf-val">{% if game.spread_pick_label %}{{ game.spread_pick_label }}{% else %}N/A{% endif %} {% if game.spread_correct is not none %}<span class="{{ 'pick-ok' if game.spread_correct else 'pick-no' }}">{{ '✅' if game.spread_correct else '❌' }}</span>{% endif %}</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">Market Spread</span>
+                            <span class="sf-val">{% if game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}{% else %}N/A{% endif %}</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">Actual Spread</span>
+                            <span class="sf-val">{{ "%+.1f"|format(actual_spread) }}</span>
+                        </div>
+                    </div>
+                    <div class="result-footer section-total">
+                        <div class="sf-item">
+                            <span class="sf-label">Model O/U Pick</span>
+                            <span class="sf-val">{% if game.total_pick_label %}{{ game.total_pick_label }}{% else %}N/A{% endif %} {% if game.total_correct is not none %}<span class="{{ 'pick-ok' if game.total_correct else 'pick-no' }}">{{ '✅' if game.total_correct else '❌' }}</span>{% endif %}</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">Market Total</span>
+                            <span class="sf-val">{% if game.market_total is not none %}{{ "%.1f"|format(game.market_total) }}{% else %}N/A{% endif %}</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">Actual Total</span>
+                            <span class="sf-val">{{ "%.1f"|format(actual_total) }}</span>
+                        </div>
+                    </div>
+                </div>
                 {% endfor %}
-                </tbody>
-            </table>
+            </div>
         </div>
         {% endfor %}
 
@@ -3652,17 +3676,13 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <div style="text-align:center;padding:60px;opacity:0.7;">No results data available yet.</div>
     {% endif %}
 <script>
-    /* ── Column filter toggle ── */
-    function filterCols(mode, btn) {
+    /* ── Section filter toggle ── */
+    function filterSections(mode, btn) {
         document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        document.querySelectorAll('.col-ml,.col-spread,.col-total').forEach(el => {
-            el.style.display = (mode === 'all' || el.classList.contains('col-' + mode)) ? '' : 'none';
+        document.querySelectorAll('.section-ml,.section-spread,.section-total').forEach(el => {
+            el.style.display = (mode === 'all' || el.classList.contains('section-' + mode)) ? '' : 'none';
         });
-    }
-    function toggleDetails(id) {
-        const row = document.getElementById(id);
-        if (row) row.classList.toggle('visible');
     }
     /* ── Date slider ── */
     const allDates = {{ sorted_dates|reverse|list|tojson }};
