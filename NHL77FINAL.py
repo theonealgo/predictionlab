@@ -1841,7 +1841,7 @@ def calculate_nhl_weekly_performance():
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
         games = conn.execute('''
-            SELECT g.game_date, g.home_team_id, g.away_team_id,
+            SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
                    p.elo_home_prob, p.xgboost_home_prob, p.meta_home_prob
             FROM games g
@@ -1941,6 +1941,7 @@ def calculate_nhl_weekly_performance():
             if trueskill_correct: weekly_results[bucket]['trueskill']['correct'] += 1
 
             weekly_results[bucket]['games'].append({
+                'game_id':         game['game_id'],
                 'date':             game['game_date'].split()[0],
                 'away':             game['away_team_id'],
                 'home':             game['home_team_id'],
@@ -2000,7 +2001,7 @@ def calculate_nba_weekly_performance():
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
         games = conn.execute('''
-            SELECT g.game_date, g.home_team_id, g.away_team_id,
+            SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
                    p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
             FROM games g
@@ -2088,6 +2089,7 @@ def calculate_nba_weekly_performance():
                         weekly_results[week][model]['correct'] += 1
 
             weekly_results[week]['games'].append({
+                'game_id':         game['game_id'],
                 'date':             game['game_date'].split()[0],
                 'away':             away_team,
                 'home':             home_team,
@@ -2230,38 +2232,73 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
         conn = get_db_connection()
         _line_map = {}
+        _line_by_id = {}
         try:
-            rows = conn.execute('''
-                SELECT g.game_date, g.home_team_id, g.away_team_id,
-                       COALESCE(bl1.spread, bl2.spread) AS mkt_spread,
-                       COALESCE(bl1.total, bl2.total) AS mkt_total
-                FROM games g
-                LEFT JOIN (
-                    SELECT game_id, MAX(spread) AS spread, MAX(total) AS total
-                    FROM betting_lines WHERE sport=? GROUP BY game_id
-                ) bl1 ON bl1.game_id = g.game_id
-                LEFT JOIN (
-                    SELECT date(game_date) AS gd, home_team, away_team,
-                           MAX(spread) AS spread, MAX(total) AS total
-                    FROM betting_lines WHERE sport=?
-                    GROUP BY date(game_date), home_team, away_team
-                ) bl2 ON bl2.gd = date(g.game_date)
-                      AND bl2.home_team = g.home_team_id
-                      AND bl2.away_team = g.away_team_id
-                WHERE g.sport=? AND g.home_score IS NOT NULL
-            ''', (sport, sport, sport)).fetchall()
+            cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
+            has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+        except Exception:
+            cols = []
+            has_extra = False
+
+        try:
+            if has_extra:
+                rows = conn.execute('''
+                    SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
+                           COALESCE(bl1.spread, bl2.spread) AS mkt_spread,
+                           COALESCE(bl1.total, bl2.total) AS mkt_total
+                    FROM games g
+                    LEFT JOIN (
+                        SELECT game_id, MAX(spread) AS spread, MAX(total) AS total
+                        FROM betting_lines WHERE sport=? GROUP BY game_id
+                    ) bl1 ON bl1.game_id = g.game_id
+                    LEFT JOIN (
+                        SELECT date(game_date) AS gd, home_team, away_team,
+                               MAX(spread) AS spread, MAX(total) AS total
+                        FROM betting_lines WHERE sport=?
+                        GROUP BY date(game_date), home_team, away_team
+                    ) bl2 ON bl2.gd = date(g.game_date)
+                          AND bl2.home_team = g.home_team_id
+                          AND bl2.away_team = g.away_team_id
+                    WHERE g.sport=? AND g.home_score IS NOT NULL
+                ''', (sport, sport, sport)).fetchall()
+            else:
+                rows = conn.execute('''
+                    SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
+                           bl.spread AS mkt_spread, bl.total AS mkt_total
+                    FROM games g
+                    LEFT JOIN betting_lines bl ON bl.game_id = g.game_id
+                    WHERE g.sport=? AND g.home_score IS NOT NULL
+                ''', (sport,)).fetchall()
             for r in rows:
-                k = ((r['game_date'] or '')[:10], r['home_team_id'], r['away_team_id'])
-                _line_map[k] = {'spread': r['mkt_spread'], 'total': r['mkt_total']}
+                key = ((r['game_date'] or '')[:10], r['home_team_id'], r['away_team_id'])
+                _line_map[key] = {'spread': r['mkt_spread'], 'total': r['mkt_total']}
+                if r['game_id']:
+                    _line_by_id[str(r['game_id'])] = {'spread': r['mkt_spread'], 'total': r['mkt_total']}
+        except Exception:
+            pass
+
+        # Betting odds fallback (game_id may be stored as numeric or text)
+        try:
+            odds_rows = conn.execute('SELECT game_id, spread, total FROM betting_odds').fetchall()
+            for r in odds_rows:
+                if r['game_id'] is None:
+                    continue
+                _line_by_id[str(r['game_id'])] = {
+                    'spread': r['spread'],
+                    'total': r['total'],
+                }
         except Exception:
             pass
         conn.close()
 
         st_cov = st_gr = tt_cor = tt_gr = 0
+        live_attempts = 0
+        live_cap = 5
         for dd in daily_results.values():
             for g in dd.get('games', []):
                 h, a = g['home'], g['away']
                 gd = g['date']
+                gid = str(g.get('game_id') or '')
                 hs, as_ = g['home_score'], g['away_score']
 
                 try:
@@ -2271,7 +2308,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 except Exception:
                     xs = xt = None
 
-                ml = _line_map.get((gd, h, a), {})
+                ml = _line_by_id.get(gid) or _line_map.get((gd, h, a), {})
                 try:
                     ms = float(ml['spread']) if ml.get('spread') is not None else None
                 except Exception:
@@ -2280,6 +2317,19 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     mt = float(ml['total']) if ml.get('total') is not None else None
                 except Exception:
                     mt = None
+
+                # Live fallback for missing market lines (recent games only)
+                if (ms is None or mt is None) and live_attempts < live_cap and gd:
+                    try:
+                        live_attempts += 1
+                        live_line = _fetch_live_market_line(sport, gid, gd, h, a)
+                        if live_line:
+                            if ms is None:
+                                ms = live_line.get('spread')
+                            if mt is None:
+                                mt = live_line.get('total')
+                    except Exception:
+                        pass
 
                 am = hs - as_
                 at = hs + as_
@@ -3129,7 +3179,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 {{ ens.total }} Games Graded</h2>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎯 Moneyline (Consensus)</div>
                     <div style="font-size:2em;font-weight:bold;color:{% if ens.accuracy>=55 %}#10b981{% elif ens.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ ens.accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.85;">{{ ens.correct }}-{{ ens.total - ens.correct }}</div>
                 </div>
@@ -3203,7 +3253,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <th>Matchup</th>
                     <th>Score</th>
                     <th>Total</th>
-                    <th class="col-ml">Consensus</th>
+                    <th class="col-ml">Consensus ML%</th>
                     <th class="col-ml">ML</th>
                     <th class="col-spread">Spread</th>
                     <th class="col-total">O/U</th>
@@ -4174,6 +4224,7 @@ def sport_results(sport):
                     ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
 
                 game_info = {
+                    'game_id':         game['game_id'],
                     'date':             game_date or 'Unknown',
                     'home':             home_team,
                     'away':             away_team,
