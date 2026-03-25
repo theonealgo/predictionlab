@@ -280,7 +280,7 @@ def _fetch_live_market_line(
     sport_slug, league_slug = sport_path
     for event_id in event_candidates:
         odds_url = (
-            f"http://sports.core.api.espn.com/v2/sports/{sport_slug}/leagues/{league_slug}/"
+            f"https://sports.core.api.espn.com/v2/sports/{sport_slug}/leagues/{league_slug}/"
             f"events/{event_id}/competitions/{event_id}/odds"
         )
 
@@ -2353,6 +2353,17 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 hk = _normalize_team_key_for_sport(sport, h)
                 ak = _normalize_team_key_for_sport(sport, a)
                 ml = _line_by_id.get(gid) or _line_by_key.get((gd, hk, ak), {})
+                if (not ml) and sport == 'NBA' and gd:
+                    try:
+                        _dt = parse_date(gd)
+                    except Exception:
+                        _dt = None
+                    if _dt:
+                        for _offset in (-1, 1):
+                            alt = (_dt + timedelta(days=_offset)).strftime('%Y-%m-%d')
+                            ml = _line_by_key.get((alt, hk, ak), {})
+                            if ml:
+                                break
                 try:
                     ms = float(ml['spread']) if ml.get('spread') is not None else None
                 except Exception:
