@@ -238,6 +238,108 @@ def _resolve_espn_event_id_by_matchup(sport: str, game_date: str, home_team: str
     return None
 
 
+def _upsert_betting_line(conn, sport, game_id, game_date, home_team, away_team, spread, total, source=None):
+    try:
+        cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
+    except Exception:
+        cols = []
+    has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+    now_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cur = conn.cursor()
+    try:
+        if has_extra:
+            existing = cur.execute(
+                "SELECT id, spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
+                (sport, game_id)
+            ).fetchone()
+            if existing:
+                cur.execute(
+                    "UPDATE betting_lines SET spread=COALESCE(spread, ?), total=COALESCE(total, ?), fetched_at=? WHERE id=?",
+                    (spread, total, now_ts, existing['id'])
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO betting_lines (sport, game_id, game_date, home_team, away_team, spread, total, source, fetched_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (sport, game_id, game_date, home_team, away_team, spread, total, source or 'live', now_ts)
+                )
+        else:
+            existing = cur.execute(
+                "SELECT id, spread, total FROM betting_lines WHERE game_id=? LIMIT 1",
+                (game_id,)
+            ).fetchone()
+            if existing:
+                cur.execute(
+                    "UPDATE betting_lines SET spread=COALESCE(spread, ?), total=COALESCE(total, ?) WHERE id=?",
+                    (spread, total, existing['id'])
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO betting_lines (game_id, spread, total) VALUES (?,?,?)",
+                    (game_id, spread, total)
+                )
+    except Exception as _e:
+        logger.debug(f"[betting_lines] upsert failed: {_e}")
+
+
+def _cache_market_lines_for_predictions(sport, predictions, limit=20):
+    if sport != 'NBA' or not predictions:
+        return
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        attempts = 0
+        for pred in predictions:
+            if pred.get('home_score') is not None:
+                continue
+            game_id = pred.get('game_id')
+            if not game_id:
+                continue
+            if attempts >= limit:
+                break
+            try:
+                cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
+                has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+                if has_extra:
+                    existing = cur.execute(
+                        "SELECT spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
+                        (sport, game_id)
+                    ).fetchone()
+                else:
+                    existing = cur.execute(
+                        "SELECT spread, total FROM betting_lines WHERE game_id=? LIMIT 1",
+                        (game_id,)
+                    ).fetchone()
+                if existing and (existing['spread'] is not None or existing['total'] is not None):
+                    continue
+            except Exception:
+                pass
+            line = _fetch_live_market_line(
+                sport,
+                game_id,
+                pred.get('game_date'),
+                pred.get('home_team_id'),
+                pred.get('away_team_id')
+            )
+            attempts += 1
+            if line and (line.get('spread') is not None or line.get('total') is not None):
+                _upsert_betting_line(
+                    conn,
+                    sport,
+                    game_id,
+                    pred.get('game_date'),
+                    pred.get('home_team_id'),
+                    pred.get('away_team_id'),
+                    line.get('spread'),
+                    line.get('total'),
+                    line.get('source')
+                )
+        conn.commit()
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[{sport}] cache market lines failed: {_e}")
+
+
 def _fetch_live_market_line(
     sport: str,
     game_id: str,
@@ -1690,6 +1792,7 @@ def get_upcoming_predictions(sport, days=365):
     
     # For NBA: Save newly generated predictions to database so Results page can use them
     if sport == 'NBA':
+        _cache_market_lines_for_predictions(sport, predictions, limit=20)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
@@ -3290,6 +3393,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .prob-correct { color:#10b981; font-weight:bold; }
     .prob-wrong { color:#ef4444; }
     .prob-na { color:#64748b; font-size:0.85em; }
+    .game-row { cursor: pointer; }
+    .details-row { display:none; }
+    .details-row.visible { display: table-row; }
+    .details-panel { background: rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px; margin:6px 0; }
+    .details-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+    .details-item { background: rgba(255,255,255,0.06); border-radius:8px; padding:10px; font-size:0.82em; }
+    .details-label { color:#94a3b8; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
+    .details-val { font-weight:600; margin-top:4px; }
     .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
     @media(max-width:900px){ .model-grid { grid-template-columns:repeat(3,1fr); } }
     .model-card { background:rgba(255,255,255,0.06); border-radius:10px; padding:12px; text-align:center; }
@@ -3395,7 +3506,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 </tr></thead>
                 <tbody>
                 {% for game in date_data.games %}
-                <tr>
+                <tr class="game-row" onclick="toggleDetails('details-{{ date }}-{{ loop.index0 }}')">
                     <td style="text-align:left;">{{ game.away }} @ <strong>{{ game.home }}</strong></td>
                     <td><strong>{{ game.away_score }}-{{ game.home_score }}</strong></td>
                     <td style="color:#94a3b8;">{{ game.away_score + game.home_score }}</td>
@@ -3403,6 +3514,50 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <td class="col-ml">{% if game.ens_correct is not none %}{% if game.ens_correct %}<span class="prob-correct">✅</span>{% else %}<span class="prob-wrong">❌</span>{% endif %}{% else %}<span class="prob-na">—</span>{% endif %}</td>
                     <td class="col-spread">{% if game.spread_correct is not none %}{% if game.spread_correct %}<span class="prob-correct">✅ ({{ game.spread_line_display }})</span>{% else %}<span class="prob-wrong">❌ ({{ game.spread_line_display }})</span>{% endif %}{% elif game.spread_line_display %}<span class="prob-na">{{ game.spread_pick }} ({{ game.spread_line_display }})</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
                     <td class="col-total">{% if game.total_correct is not none %}{% if game.total_correct %}<span class="prob-correct">✅ {{ game.total_line_display }}</span>{% else %}<span class="prob-wrong">❌ {{ game.total_line_display }}</span>{% endif %}{% elif game.total_line_display %}<span class="prob-na">{{ game.total_line_display }}</span>{% else %}<span class="prob-na">—</span>{% endif %}</td>
+                </tr>
+                <tr id="details-{{ date }}-{{ loop.index0 }}" class="details-row">
+                    <td colspan="7">
+                        <div class="details-panel">
+                            <div class="details-grid">
+                                <div class="details-item">
+                                    <div class="details-label">Grinder2</div>
+                                    <div class="details-val">{{ game.glicko2_prob if game.glicko2_prob is not none else 'N/A' }}{% if game.glicko2_prob is not none %}%{% endif %}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">Takedown</div>
+                                    <div class="details-val">{{ game.trueskill_prob if game.trueskill_prob is not none else 'N/A' }}{% if game.trueskill_prob is not none %}%{% endif %}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">Edge</div>
+                                    <div class="details-val">{{ game.elo_prob if game.elo_prob is not none else 'N/A' }}{% if game.elo_prob is not none %}%{% endif %}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">XSharp</div>
+                                    <div class="details-val">{{ game.xgb_prob if game.xgb_prob is not none else 'N/A' }}{% if game.xgb_prob is not none %}%{% endif %}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">Consensus</div>
+                                    <div class="details-val">{{ game.ens_prob if game.ens_prob is not none else 'N/A' }}{% if game.ens_prob is not none %}%{% endif %}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">Market Spread</div>
+                                    <div class="details-val">{{ game.market_spread if game.market_spread is not none else 'N/A' }}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">Market Total</div>
+                                    <div class="details-val">{{ game.market_total if game.market_total is not none else 'N/A' }}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">Model Spread</div>
+                                    <div class="details-val">{{ game.spread_pick if game.spread_pick is not none else 'N/A' }}{% if game.spread_line_display %} ({{ game.spread_line_display }}){% endif %}</div>
+                                </div>
+                                <div class="details-item">
+                                    <div class="details-label">Model O/U</div>
+                                    <div class="details-val">{{ game.total_pick if game.total_pick is not none else 'N/A' }}{% if game.total_line_display %} ({{ game.total_line_display }}){% endif %}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -3421,6 +3576,10 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         document.querySelectorAll('.col-ml,.col-spread,.col-total').forEach(el => {
             el.style.display = (mode === 'all' || el.classList.contains('col-' + mode)) ? '' : 'none';
         });
+    }
+    function toggleDetails(id) {
+        const row = document.getElementById(id);
+        if (row) row.classList.toggle('visible');
     }
     /* ── Date slider ── */
     const allDates = {{ sorted_dates|reverse|list|tojson }};
