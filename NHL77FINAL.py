@@ -321,6 +321,8 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
                 pred.get('home_team_id'),
                 pred.get('away_team_id')
             )
+            _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+            return rendered
             attempts += 1
             if line and (line.get('spread') is not None or line.get('total') is not None):
                 _upsert_betting_line(
@@ -2706,6 +2708,48 @@ def compute_overall_stats_from_daily(daily_results):
     return overall
 
 
+def compute_daily_model_tally(daily_results, target_date):
+    """Compute per-model correct/total for a single date."""
+    if not daily_results or not target_date:
+        return None
+    day_bucket = daily_results.get(target_date)
+    if not day_bucket or not day_bucket.get('games'):
+        return None
+    model_configs = [
+        ('glicko2',   'glicko2_correct', 'glicko2_prob'),
+        ('trueskill', 'trueskill_correct', 'trueskill_prob'),
+        ('elo',       'elo_correct', 'elo_prob'),
+        ('xgboost',   'xgb_correct', 'xgb_prob'),
+        ('ensemble',  'ens_correct', 'ens_prob'),
+    ]
+    tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
+    for game in day_bucket.get('games', []):
+        for model_name, correct_key, prob_key in model_configs:
+            if game.get(prob_key) is None:
+                continue
+            tally[model_name]['total'] += 1
+            if game.get(correct_key):
+                tally[model_name]['correct'] += 1
+    for model_name, _, _ in model_configs:
+        t = tally[model_name]['total']
+        c = tally[model_name]['correct']
+        tally[model_name]['accuracy'] = round(c / t * 100, 1) if t > 0 else 0.0
+    tally['games'] = len(day_bucket.get('games', []))
+    return tally
+
+
+def compute_daily_model_tally_from_weekly(weekly_results, target_date):
+    """Compute per-model tally for a date using weekly_results structure (NFL)."""
+    if not weekly_results or not target_date:
+        return None
+    daily_results = {target_date: {'games': []}}
+    for week_data in weekly_results.values():
+        for game in week_data.get('games', []):
+            if game.get('date') == target_date:
+                daily_results[target_date]['games'].append(game)
+    return compute_daily_model_tally(daily_results, target_date)
+
+
 def compute_overall_stats_from_weekly(weekly_results):
     """Compute per-model totals from a weekly_results dict (used by NFL_WEEKLY_RESULTS_TEMPLATE)."""
     models = ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']
@@ -2798,6 +2842,13 @@ BASE_TEMPLATE = """
             flex-direction: column;
             cursor: pointer;
             gap: 5px;
+            padding: 6px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .hamburger:hover {
+            background: rgba(255, 255, 255, 0.14);
         }
         .hamburger span {
             width: 25px;
@@ -2827,6 +2878,30 @@ BASE_TEMPLATE = """
             font-weight: 500;
             transition: color 0.3s;
             white-space: nowrap;
+        }
+        .nav-section-title {
+            font-size: 0.65em;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #64748b;
+            padding: 6px 8px;
+        }
+        .nav-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 6px 0;
+        }
+        .nav-section-title {
+            font-size: 0.65em;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #64748b;
+            padding: 6px 8px;
+        }
+        .nav-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 6px 0;
         }
         .nav-links a:hover {
             color: #fbbf24;
@@ -2903,6 +2978,7 @@ BASE_TEMPLATE = """
             </div>
             <div class="nav-links" id="navLinks">
                 <a href="/" class="{{ 'active' if page == 'home' else '' }}">Home</a>
+                <div class="nav-section-title">Predictions</div>
                 <a href="/sport/NHL/predictions" class="{{ 'active' if page == 'NHL' else '' }}">🏒 NHL</a>
                 <a href="/sport/NBA/predictions" class="{{ 'active' if page == 'NBA' else '' }}">🏀 NBA</a>
                 <a href="/sport/MLB/predictions" class="{{ 'active' if page == 'MLB' else '' }}">⚾ MLB</a>
@@ -2910,6 +2986,15 @@ BASE_TEMPLATE = """
                 <a href="/sport/NCAAB/predictions" class="{{ 'active' if page == 'NCAAB' else '' }}">🎓 NCAAB</a>
                 <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
                 <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
+                <div class="nav-divider"></div>
+                <div class="nav-section-title">Results</div>
+                <a href="/sport/NHL/results">🏒 NHL Results</a>
+                <a href="/sport/NBA/results">🏀 NBA Results</a>
+                <a href="/sport/MLB/results">⚾ MLB Results</a>
+                <a href="/sport/NFL/results">🏈 NFL Results</a>
+                <a href="/sport/NCAAB/results">🎓 NCAAB Results</a>
+                <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
+                <a href="/sport/WNBA/results">🏀 WNBA Results</a>
                 <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
             </div>
         </div>
@@ -3042,6 +3127,78 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
             ❌ No value bets found for today<br>
             <span style="opacity: 0.7; font-size: 0.9em;">Market is efficiently priced or no games available</span>
         </div>
+        {% endif %}
+    </div>
+""")
+
+# ============================================================================
+# TRAFFIC DASHBOARD TEMPLATE
+# ============================================================================
+
+TRAFFIC_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+    .page-title { font-size: 2.2em; margin-bottom: 20px; text-align: center; }
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
+    .stat-card { background:rgba(255,255,255,0.08); border-radius:10px; padding:14px; text-align:center; border:1px solid rgba(255,255,255,0.12); }
+    .stat-label { font-size:0.8em; opacity:0.8; margin-bottom:6px; }
+    .stat-value { font-size:1.8em; font-weight:800; color:#fbbf24; }
+    .table-card { background:rgba(255,255,255,0.06); border-radius:12px; padding:16px; border:1px solid rgba(255,255,255,0.1); margin-bottom:16px; }
+    table { width:100%; border-collapse: collapse; font-size:0.9em; }
+    th { text-align:left; padding:10px; border-bottom:1px solid rgba(255,255,255,0.15); color:#fbbf24; }
+    td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.08); }
+    .no-data { text-align:center; padding:40px 12px; opacity:0.75; }
+    """
+).replace('{% block content %}{% endblock %}', """
+    <h1 class="page-title">📈 Site Traffic</h1>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Today</div>
+            <div class="stat-value">{{ today_visits }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Last 7 Days</div>
+            <div class="stat-value">{{ week_visits }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total</div>
+            <div class="stat-value">{{ total_visits }}</div>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <h2 style="margin-bottom:10px;">Top Endpoints</h2>
+        {% if top_endpoints %}
+        <table>
+            <thead>
+                <tr><th>Endpoint</th><th>Visits</th></tr>
+            </thead>
+            <tbody>
+                {% for row in top_endpoints %}
+                <tr><td>{{ row.endpoint }}</td><td>{{ row.count }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-data">N/A — no endpoint visits recorded yet.</div>
+        {% endif %}
+    </div>
+
+    <div class="table-card">
+        <h2 style="margin-bottom:10px;">Daily Visits (Last 14 Days)</h2>
+        {% if daily_visits %}
+        <table>
+            <thead>
+                <tr><th>Date</th><th>Visits</th></tr>
+            </thead>
+            <tbody>
+                {% for row in daily_visits %}
+                <tr><td>{{ row.date }}</td><td>{{ row.count }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-data">N/A — no daily visit data available yet.</div>
         {% endif %}
     </div>
 """)
@@ -3500,6 +3657,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .model-label { font-size:0.78em; opacity:0.8; margin-bottom:4px; }
     .model-acc { font-size:1.4em; font-weight:700; color:#10b981; }
     .model-rec { font-size:0.82em; opacity:0.85; }
+    .daily-tally { background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:16px; margin-bottom:16px; }
+    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.15em; color:#fbbf24; }
+    .daily-tally-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+    .daily-tally-card { background:rgba(255,255,255,0.06); border-radius:8px; padding:10px; text-align:center; }
+    .daily-tally-card.highlight { border:2px solid #fbbf24; }
+    .daily-model { font-size:0.78em; opacity:0.85; margin-bottom:4px; }
+    .daily-acc { font-size:1.35em; font-weight:700; }
+    .daily-rec { font-size:0.8em; opacity:0.8; }
     """
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} — Results</h1>
@@ -3511,6 +3676,32 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set ens = overall_stats.ensemble %}
         {% set units_won = (ens.correct * 0.91) - (ens.total - ens.correct) %}
         {% set roi = (units_won / ens.total * 100)|round(1) if ens.total > 0 else 0 %}
+
+        <!-- ── Daily Tally ── -->
+        {% if daily_tally %}
+        <div class="daily-tally">
+            <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+            <div class="daily-tally-grid">
+                {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
+                {% set m = daily_tally[m_key] %}
+                <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
+                    <div class="daily-model">{{ m_label }}</div>
+                    {% if m.total > 0 %}
+                    <div class="daily-acc">{{ m.accuracy }}%</div>
+                    <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                    {% else %}
+                    <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                    <div class="daily-rec">no graded games</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="daily-tally" style="text-align:center;">
+            <strong>N/A</strong> — no graded games for {{ daily_tally_date }}.
+        </div>
+        {% endif %}
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;">
@@ -3789,6 +3980,14 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         border: 2px solid #10b981;
         background: rgba(16, 185, 129, 0.1);
     }
+    .daily-tally { background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:16px; margin-bottom:20px; }
+    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.2em; color:#fbbf24; }
+    .daily-tally-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+    .daily-tally-card { background:rgba(255,255,255,0.06); border-radius:8px; padding:10px; text-align:center; }
+    .daily-tally-card.highlight { border:2px solid #fbbf24; }
+    .daily-model { font-size:0.78em; opacity:0.85; margin-bottom:4px; }
+    .daily-acc { font-size:1.35em; font-weight:700; }
+    .daily-rec { font-size:0.8em; opacity:0.8; }
     .model-label {
         font-size: 0.9em;
         opacity: 0.8;
@@ -3855,6 +4054,30 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
     </div>
     
+    {% if daily_tally %}
+    <div class="daily-tally">
+        <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+        <div class="daily-tally-grid">
+            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+            {% set m = daily_tally[m_key] %}
+            <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
+                <div class="daily-model">{{ m_label }}</div>
+                {% if m.total > 0 %}
+                <div class="daily-acc">{{ m.accuracy }}%</div>
+                <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                {% else %}
+                <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                <div class="daily-rec">no graded games</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="daily-tally" style="text-align:center;">
+        <strong>N/A</strong> — no graded games for {{ daily_tally_date }}.
+    </div>
+    {% endif %}
     {% if weekly_results and overall_stats %}
         {% set ens = overall_stats.ensemble %}
         {% set units_won = (ens.correct * 0.91) - (ens.total - ens.correct) %}
@@ -4034,6 +4257,13 @@ def landing_page():
             flex-direction: column;
             cursor: pointer;
             gap: 5px;
+            padding: 6px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .hamburger:hover {
+            background: rgba(255, 255, 255, 0.14);
         }
         .hamburger span {
             width: 25px;
@@ -4307,6 +4537,7 @@ def landing_page():
         </div>
         <div class="nav-links" id="navLinks">
             <a href="/" class="active">Home</a>
+            <div class="nav-section-title">Predictions</div>
             <a href="/sport/NHL/predictions">🏒 NHL</a>
             <a href="/sport/NBA/predictions">🏀 NBA</a>
             <a href="/sport/MLB/predictions">⚾ MLB</a>
@@ -4314,6 +4545,15 @@ def landing_page():
             <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
             <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
             <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+            <div class="nav-divider"></div>
+            <div class="nav-section-title">Results</div>
+            <a href="/sport/NHL/results">🏒 NHL Results</a>
+            <a href="/sport/NBA/results">🏀 NBA Results</a>
+            <a href="/sport/MLB/results">⚾ MLB Results</a>
+            <a href="/sport/NFL/results">🏈 NFL Results</a>
+            <a href="/sport/NCAAB/results">🎓 NCAAB Results</a>
+            <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
+            <a href="/sport/WNBA/results">🏀 WNBA Results</a>
             <a href="{{ stripe_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
         </div>
     </div>
@@ -4592,13 +4832,19 @@ def sport_results(sport):
             update_nfl_scores()
             weekly_results = calculate_nfl_weekly_performance()
             overall_stats = compute_overall_stats_from_weekly(weekly_results) if weekly_results else {}
+            daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+            daily_tally = compute_daily_model_tally_from_weekly(weekly_results, daily_tally_date) if weekly_results else None
+            daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
             return render_template_string(
                 NFL_WEEKLY_RESULTS_TEMPLATE,
                 page=sport,
                 sport=sport,
                 sport_info=SPORTS[sport],
                 weekly_results=weekly_results,
-                overall_stats=overall_stats
+                overall_stats=overall_stats,
+                daily_tally=daily_tally,
+                daily_tally_date=daily_tally_date,
+                daily_tally_games=daily_tally_games
             )
         
         if sport == 'NHL':
@@ -4648,6 +4894,9 @@ def sport_results(sport):
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
+                daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
+                daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
 
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
@@ -4656,7 +4905,10 @@ def sport_results(sport):
                     today_date=today_date, overall_stats=overall_stats,
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
                     avg_total=_avg, ou_bench=_bench,
-                    spread_total_stats=_st_stats
+                    spread_total_stats=_st_stats,
+                    daily_tally=daily_tally,
+                    daily_tally_date=daily_tally_date,
+                    daily_tally_games=daily_tally_games
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
@@ -4665,6 +4917,14 @@ def sport_results(sport):
                 return f"<h1>N/A — NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
+            cache_key = f'{sport}_daily_results_html'
+            cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
+            cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
+            if isinstance(cached_page, dict):
+                cached_ts = cached_page.get('ts')
+                cached_html = cached_page.get('html')
+                if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+                    return cached_html
             try:
                 update_nba_scores()
             except Exception as e:
@@ -4693,21 +4953,37 @@ def sport_results(sport):
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _cache_market_lines_for_results(sport, daily_results, limit=20)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
-                return render_template_string(
+                daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
+                daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
+                rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
                     page=sport, sport=sport, sport_info=SPORTS[sport],
                     daily_results=daily_results, sorted_dates=sorted_dates,
                     today_date=today_date, overall_stats=overall_stats,
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
                     avg_total=_avg, ou_bench=_bench,
-                    spread_total_stats=_st_stats
+                    spread_total_stats=_st_stats,
+                    daily_tally=daily_tally,
+                    daily_tally_date=daily_tally_date,
+                    daily_tally_games=daily_tally_games
                 )
+                _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+                return rendered
             except Exception as e:
                 logger.error(f"Error processing NBA results: {e}")
                 return f"<h1>N/A — NBA results page failed to render because of a processing error: {str(e)}</h1>"
 
         # Handle NCAAB
         if sport in ['NCAAB', 'NCAAF', 'MLB', 'WNBA']:
+            cache_key = f'{sport}_daily_results_html'
+            cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
+            cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
+            if isinstance(cached_page, dict):
+                cached_ts = cached_page.get('ts')
+                cached_html = cached_page.get('html')
+                if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+                    return cached_html
             # Update scores first
             update_espn_scores(sport)
             
@@ -4779,16 +5055,24 @@ def sport_results(sport):
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
+            daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+            daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
+            daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
 
-            return render_template_string(
+            rendered = render_template_string(
                 DAILY_RESULTS_TEMPLATE,
                 page=sport, sport=sport, sport_info=SPORTS[sport],
                 daily_results=daily_results, sorted_dates=sorted_dates,
                 today_date=today_date, overall_stats=overall_stats,
                 total_over=_ov, total_under=_un, total_games_ou=_gou,
                 avg_total=_avg, ou_bench=_bench,
-                spread_total_stats=_st_stats
+                spread_total_stats=_st_stats,
+                daily_tally=daily_tally,
+                daily_tally_date=daily_tally_date,
+                daily_tally_games=daily_tally_games
             )
+            _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+            return rendered
         
         performance = calculate_model_performance(sport)
         return render_template_string(
@@ -5198,6 +5482,56 @@ def sport_ats_picks(sport):
         ats_records=ats_records.head(10).to_dict('records') if not ats_records.empty else [],
         ou_records=ou_records.head(10).to_dict('records') if not ou_records.empty else []
     )
+
+@app.route('/admin/traffic')
+def admin_traffic():
+    """Simple traffic dashboard for site visits."""
+    try:
+        conn = get_db_connection()
+        today = datetime.now().strftime('%Y-%m-%d')
+        week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+
+        today_visits = conn.execute(
+            'SELECT COUNT(*) FROM site_visits WHERE visit_date = ?',
+            (today,)
+        ).fetchone()[0]
+        week_visits = conn.execute(
+            'SELECT COUNT(*) FROM site_visits WHERE visit_date >= ?',
+            (week_ago,)
+        ).fetchone()[0]
+        total_visits = conn.execute('SELECT COUNT(*) FROM site_visits').fetchone()[0]
+
+        top_endpoints_rows = conn.execute('''
+            SELECT endpoint, COUNT(*) as count
+            FROM site_visits
+            GROUP BY endpoint
+            ORDER BY count DESC
+            LIMIT 15
+        ''').fetchall()
+        daily_rows = conn.execute('''
+            SELECT visit_date as date, COUNT(*) as count
+            FROM site_visits
+            GROUP BY visit_date
+            ORDER BY visit_date DESC
+            LIMIT 14
+        ''').fetchall()
+        conn.close()
+
+        top_endpoints = [{'endpoint': r['endpoint'], 'count': r['count']} for r in top_endpoints_rows]
+        daily_visits = [{'date': r['date'], 'count': r['count']} for r in daily_rows]
+
+        return render_template_string(
+            TRAFFIC_TEMPLATE,
+            page='traffic',
+            today_visits=today_visits,
+            week_visits=week_visits,
+            total_visits=total_visits,
+            top_endpoints=top_endpoints,
+            daily_visits=daily_visits
+        )
+    except Exception as e:
+        logger.error(f"Error loading traffic dashboard: {e}")
+        return "<h1>N/A — traffic dashboard failed to load because the stats could not be read.</h1>"
 
 # ============================================================================
 # API ENDPOINTS FOR FRONTEND INTEGRATION

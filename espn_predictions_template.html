@@ -23,6 +23,7 @@
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: white;
         }
+        .hamburger:hover { background: rgba(255, 255, 255, 0.14); }
         .navbar {
             background: rgba(15, 23, 42, 0.95);
             padding: 15px 30px;
@@ -63,6 +64,10 @@
             flex-direction: column;
             cursor: pointer;
             gap: 5px;
+            padding: 6px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
         }
         .hamburger span {
             width: 25px;
@@ -95,6 +100,18 @@
         }
         .nav-links a:hover { color: #fbbf24; }
         .nav-links a.active { color: #fbbf24; }
+        .nav-section-title {
+            font-size: 0.65em;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #64748b;
+            padding: 6px 8px;
+        }
+        .nav-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 6px 0;
+        }
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             color: #000 !important;
@@ -216,6 +233,7 @@
         </div>
         <div class="nav-links" id="navLinks">
             <a href="/" class="{{ 'active' if page == 'home' else '' }}">Home</a>
+            <div class="nav-section-title">Predictions</div>
             <a href="/sport/NHL/predictions" class="{{ 'active' if page == 'NHL' else '' }}">🏒 NHL</a>
             <a href="/sport/NBA/predictions" class="{{ 'active' if page == 'NBA' else '' }}">🏀 NBA</a>
             <a href="/sport/MLB/predictions" class="{{ 'active' if page == 'MLB' else '' }}">⚾ MLB</a>
@@ -223,23 +241,17 @@
             <a href="/sport/NCAAB/predictions" class="{{ 'active' if page == 'NCAAB' else '' }}">🎓 NCAAB</a>
             <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
             <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
+            <div class="nav-divider"></div>
+            <div class="nav-section-title">Results</div>
+            <a href="/sport/NHL/results">🏒 NHL Results</a>
+            <a href="/sport/NBA/results">🏀 NBA Results</a>
+            <a href="/sport/MLB/results">⚾ MLB Results</a>
+            <a href="/sport/NFL/results">🏈 NFL Results</a>
+            <a href="/sport/NCAAB/results">🎓 NCAAB Results</a>
+            <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
+            <a href="/sport/WNBA/results">🏀 WNBA Results</a>
             <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
         </div>
-    </div>
-    <div class="footer">
-        <span class="footer-logo">underdogs.bet</span>
-        <p>AI-powered sports predictions — free forever.</p>
-        <p style="margin-top:10px;">
-            <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
-            <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
-            <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
-            <a href="/sport/NFL/predictions">NFL</a> &nbsp;·&nbsp;
-            <a href="/sport/NCAAB/predictions">NCAAB</a> &nbsp;·&nbsp;
-            <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
-            <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
-            <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
-        </p>
-        <p style="margin-top:10px;opacity:.7;">© 2025 underdogs.bet</p>
     </div>
 </div>
 <div class="container">
@@ -365,6 +377,21 @@
     {% else %}
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
     {% endif %}
+</div>
+<div class="footer">
+    <span class="footer-logo">underdogs.bet</span>
+    <p>AI-powered sports predictions — free forever.</p>
+    <p style="margin-top:10px;">
+        <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
+        <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
+        <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
+        <a href="/sport/NFL/predictions">NFL</a> &nbsp;·&nbsp;
+        <a href="/sport/NCAAB/predictions">NCAAB</a> &nbsp;·&nbsp;
+        <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
+        <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
+        <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
+    </p>
+    <p style="margin-top:10px;opacity:.7;">© 2025 underdogs.bet</p>
 </div>
 
 <script>
