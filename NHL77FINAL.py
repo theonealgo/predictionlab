@@ -283,7 +283,7 @@ def _upsert_betting_line(conn, sport, game_id, game_date, home_team, away_team, 
 
 
 def _cache_market_lines_for_predictions(sport, predictions, limit=20):
-    if sport != 'NBA' or not predictions:
+    if sport not in ['NBA', 'MLB'] or not predictions:
         return
     try:
         conn = get_db_connection()
@@ -343,7 +343,7 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
 
 
 def _cache_market_lines_for_results(sport, daily_results, limit=20):
-    if sport != 'NBA' or not daily_results:
+    if sport not in ['NBA', 'MLB'] or not daily_results:
         return
     try:
         conn = get_db_connection()
@@ -376,7 +376,7 @@ def _cache_market_lines_for_results(sport, daily_results, limit=20):
                     pass
                 try:
                     gd_dt = parse_date(gd)
-                    if gd_dt and abs((datetime.now() - gd_dt).days) > 3:
+                    if gd_dt and sport in ['NBA', 'MLB'] and abs((datetime.now() - gd_dt).days) > 3:
                         continue
                 except Exception:
                     pass
@@ -1858,8 +1858,8 @@ def get_upcoming_predictions(sport, days=365):
 
             predictions.append(game_dict)
     
-    # For NBA: Save newly generated predictions to database so Results page can use them
-    if sport == 'NBA':
+    # For NBA/MLB: Save newly generated predictions to database so Results page can use them
+    if sport in ['NBA', 'MLB']:
         _cache_market_lines_for_predictions(sport, predictions, limit=20)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
@@ -2453,7 +2453,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
         _xgb = _get_xgb_spread_model(sport)
         _sp = None
         if not _xgb:
-            if sport == 'NBA':
+            if sport in ['NBA', 'MLB']:
                 _sp = _score_predictor_instance(sport)
             if not _sp:
                 return None
@@ -2584,55 +2584,136 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 at = hs + as_
 
                 sp_disp = sp_ok = None
-                if xs is not None and ms is not None:
-                    dm = xs + ms
-                    da = am + ms
-                    if abs(dm) < 1e-9:
-                        sp_disp = 'PUSH'
-                    elif abs(da) < 1e-9:
-                        sp_disp = 'HOME' if dm > 0 else 'AWAY'
-                    else:
-                        m_side = 'HOME' if dm > 0 else 'AWAY'
-                        a_side = 'HOME' if da > 0 else 'AWAY'
-                        sp_disp = m_side
-                        sp_ok = (m_side == a_side)
-                        st_gr += 1
-                        if sp_ok:
-                            st_cov += 1
-
                 tp_disp = tp_ok = None
-                if xt is not None and mt is not None:
-                    if abs(xt - mt) < 1e-9:
-                        tp_disp = 'PUSH'
+                g['market_spread_reason'] = None
+                g['market_total_reason'] = None
+                g['spread_pick_reason'] = None
+                g['total_pick_reason'] = None
+
+                if sport == 'MLB':
+                    run_line = 1.5
+                    g['market_spread_label'] = "Run Line ±1.5"
+                    g['market_spread'] = None
+
+                    if xs is None:
+                        g['spread_pick_reason'] = "model score unavailable"
                     else:
-                        tp_disp = 'OVER' if xt > mt else 'UNDER'
-                        if abs(at - mt) >= 1e-9:
-                            aou = 'OVER' if at > mt else 'UNDER'
-                            tp_ok = (tp_disp == aou)
-                            tt_gr += 1
-                            if tp_ok:
-                                tt_cor += 1
+                        if xs >= run_line:
+                            pick_team = h
+                            pick_line = -run_line
+                        elif xs <= -run_line:
+                            pick_team = a
+                            pick_line = -run_line
+                        else:
+                            pick_team = a if xs > 0 else h
+                            pick_line = run_line
+                        sp_disp = 'HOME' if pick_team == h else 'AWAY'
+                        g['spread_pick_label'] = f"{pick_team} {pick_line:+.1f}"
+                        if hs is not None and as_ is not None:
+                            if pick_team == h:
+                                if pick_line < 0:
+                                    sp_ok = am > run_line
+                                else:
+                                    sp_ok = am >= -run_line
+                            else:
+                                if pick_line < 0:
+                                    sp_ok = am < -run_line
+                                else:
+                                    sp_ok = am <= run_line
+                            st_gr += 1
+                            if sp_ok:
+                                st_cov += 1
+
+                    if mt is None and xt is not None:
+                        mt = xt
+                        g['market_total_reason'] = "XSharp total (fallback)"
+                        g['market_total'] = mt
+                        g['total_pick_label'] = f"XSharp {mt:.1f}"
+                        g['total_pick_reason'] = "fallback line"
+                    else:
+                        g['market_total'] = mt
+                        if mt is None:
+                            g['market_total_reason'] = "no sportsbook total line found"
+                            g['total_pick_reason'] = "no sportsbook total line"
+                        elif xt is None:
+                            g['total_pick_reason'] = "model score unavailable"
+                        else:
+                            if abs(xt - mt) < 1e-9:
+                                tp_disp = 'PUSH'
+                            else:
+                                tp_disp = 'OVER' if xt > mt else 'UNDER'
+                                if abs(at - mt) >= 1e-9:
+                                    aou = 'OVER' if at > mt else 'UNDER'
+                                    tp_ok = (tp_disp == aou)
+                                    tt_gr += 1
+                                    if tp_ok:
+                                        tt_cor += 1
+                            if tp_disp in ('OVER', 'UNDER'):
+                                g['total_pick_label'] = f"{tp_disp.title()} {mt:.1f}"
+                            elif tp_disp == 'PUSH':
+                                g['total_pick_label'] = "PUSH"
+
+                else:
+                    g['market_spread'] = ms
+                    g['market_total'] = mt
+                    if ms is None:
+                        g['market_spread_reason'] = "no sportsbook spread line found"
+                    if mt is None:
+                        g['market_total_reason'] = "no sportsbook total line found"
+
+                    if xs is not None and ms is not None:
+                        dm = xs + ms
+                        da = am + ms
+                        if abs(dm) < 1e-9:
+                            sp_disp = 'PUSH'
+                        elif abs(da) < 1e-9:
+                            sp_disp = 'HOME' if dm > 0 else 'AWAY'
+                        else:
+                            m_side = 'HOME' if dm > 0 else 'AWAY'
+                            a_side = 'HOME' if da > 0 else 'AWAY'
+                            sp_disp = m_side
+                            sp_ok = (m_side == a_side)
+                            st_gr += 1
+                            if sp_ok:
+                                st_cov += 1
+                    elif xs is None:
+                        g['spread_pick_reason'] = "model score unavailable"
+
+                    if xt is not None and mt is not None:
+                        if abs(xt - mt) < 1e-9:
+                            tp_disp = 'PUSH'
+                        else:
+                            tp_disp = 'OVER' if xt > mt else 'UNDER'
+                            if abs(at - mt) >= 1e-9:
+                                aou = 'OVER' if at > mt else 'UNDER'
+                                tp_ok = (tp_disp == aou)
+                                tt_gr += 1
+                                if tp_ok:
+                                    tt_cor += 1
+                    elif xt is None:
+                        g['total_pick_reason'] = "model score unavailable"
+
+                    # Display-ready strings for the unified table
+                    g['spread_pick_label'] = None
+                    if sp_disp in ('HOME', 'AWAY') and ms is not None:
+                        g['spread_line_display'] = f"{ms:+.1f}" if sp_disp == 'HOME' else f"{-ms:+.1f}"
+                        pick_team = h if sp_disp == 'HOME' else a
+                        g['spread_pick_label'] = f"{pick_team} {g['spread_line_display']}"
+                    else:
+                        g['spread_line_display'] = None
+                    g['total_pick_label'] = None
+                    if tp_disp in ('OVER', 'UNDER') and mt is not None:
+                        g['total_line_display'] = f"{tp_disp.title()} {mt:.1f}"
+                        g['total_pick_label'] = g['total_line_display']
+                    elif tp_disp == 'PUSH':
+                        g['total_pick_label'] = "PUSH"
+                    else:
+                        g['total_line_display'] = None
 
                 g['spread_pick'] = sp_disp
                 g['spread_correct'] = sp_ok
                 g['total_pick'] = tp_disp
                 g['total_correct'] = tp_ok
-                g['market_spread'] = ms
-                g['market_total'] = mt
-                # Display-ready strings for the unified table
-                g['spread_pick_label'] = None
-                if sp_disp in ('HOME', 'AWAY') and ms is not None:
-                    g['spread_line_display'] = f"{ms:+.1f}" if sp_disp == 'HOME' else f"{-ms:+.1f}"
-                    pick_team = h if sp_disp == 'HOME' else a
-                    g['spread_pick_label'] = f"{pick_team} {g['spread_line_display']}"
-                else:
-                    g['spread_line_display'] = None
-                g['total_pick_label'] = None
-                if tp_disp in ('OVER', 'UNDER') and mt is not None:
-                    g['total_line_display'] = f"{tp_disp.title()} {mt:.1f}"
-                    g['total_pick_label'] = g['total_line_display']
-                else:
-                    g['total_line_display'] = None
 
         return {
             'spread_covered': st_cov,
@@ -3832,11 +3913,21 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="result-footer section-spread">
                         <div class="sf-item">
                             <span class="sf-label">Model Spread Pick</span>
-                            <span class="sf-val">{% if game.spread_pick_label %}{{ game.spread_pick_label }}{% else %}N/A{% endif %} {% if game.spread_correct is not none %}<span class="{{ 'pick-ok' if game.spread_correct else 'pick-no' }}">{{ '✅' if game.spread_correct else '❌' }}</span>{% endif %}</span>
+                            <span class="sf-val">
+                                {% if game.spread_pick_label %}{{ game.spread_pick_label }}
+                                {% elif game.spread_pick_reason is defined and game.spread_pick_reason %}N/A ({{ game.spread_pick_reason }})
+                                {% else %}N/A{% endif %}
+                                {% if game.spread_correct is not none %}<span class="{{ 'pick-ok' if game.spread_correct else 'pick-no' }}">{{ '✅' if game.spread_correct else '❌' }}</span>{% endif %}
+                            </span>
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">Market Spread</span>
-                            <span class="sf-val">{% if game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}{% else %}N/A{% endif %}</span>
+                            <span class="sf-val">
+                                {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
+                                {% elif game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
+                                {% elif game.market_spread_reason is defined and game.market_spread_reason %}N/A ({{ game.market_spread_reason }})
+                                {% else %}N/A{% endif %}
+                            </span>
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">Actual Spread</span>
@@ -3846,11 +3937,20 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="result-footer section-total">
                         <div class="sf-item">
                             <span class="sf-label">Model O/U Pick</span>
-                            <span class="sf-val">{% if game.total_pick_label %}{{ game.total_pick_label }}{% else %}N/A{% endif %} {% if game.total_correct is not none %}<span class="{{ 'pick-ok' if game.total_correct else 'pick-no' }}">{{ '✅' if game.total_correct else '❌' }}</span>{% endif %}</span>
+                            <span class="sf-val">
+                                {% if game.total_pick_label %}{{ game.total_pick_label }}
+                                {% elif game.total_pick_reason is defined and game.total_pick_reason %}N/A ({{ game.total_pick_reason }})
+                                {% else %}N/A{% endif %}
+                                {% if game.total_correct is not none %}<span class="{{ 'pick-ok' if game.total_correct else 'pick-no' }}">{{ '✅' if game.total_correct else '❌' }}</span>{% endif %}
+                            </span>
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">Market Total</span>
-                            <span class="sf-val">{% if game.market_total is not none %}{{ "%.1f"|format(game.market_total) }}{% else %}N/A{% endif %}</span>
+                            <span class="sf-val">
+                                {% if game.market_total is not none %}{{ "%.1f"|format(game.market_total) }}
+                                {% elif game.market_total_reason is defined and game.market_total_reason %}N/A ({{ game.market_total_reason }})
+                                {% else %}N/A{% endif %}
+                            </span>
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">Actual Total</span>
@@ -5054,6 +5154,7 @@ def sport_results(sport):
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
+            _cache_market_lines_for_results(sport, daily_results, limit=20)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
