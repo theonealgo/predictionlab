@@ -724,13 +724,20 @@ DATABASE = _os.path.join(_DATA_DIR, 'sports_predictions_original.db')
 # Absolute path to this file's directory — used for template loading
 _BASE_DIR = _os.path.dirname(_os.path.abspath(__file__))
 ODDS_ENGINE_URL = _os.environ.get('ODDS_ENGINE_URL')
+_TRAFFIC_TZ = 'America/New_York'
+
+def _traffic_now():
+    try:
+        return datetime.now(ZoneInfo(_TRAFFIC_TZ))
+    except Exception:
+        return datetime.now()
 
 def log_site_visit(endpoint):
     """Track site visits for analytics"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        visit_date = datetime.now().strftime('%Y-%m-%d')
+        visit_date = _traffic_now().strftime('%Y-%m-%d')
         ip_address = request.remote_addr if request else None
         user_agent = request.headers.get('User-Agent') if request else None
         
@@ -6043,15 +6050,16 @@ def admin_traffic():
     """Simple traffic dashboard for site visits."""
     try:
         conn = get_db_connection()
-        today = datetime.now().strftime('%Y-%m-%d')
-        week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        today_dt = _traffic_now()
+        today = today_dt.strftime('%Y-%m-%d')
+        week_ago = (today_dt - timedelta(days=6)).strftime('%Y-%m-%d')
 
         today_visits = conn.execute(
-            'SELECT COUNT(*) FROM site_visits WHERE visit_date = ?',
+            'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) = date(?)',
             (today,)
         ).fetchone()[0]
         week_visits = conn.execute(
-            'SELECT COUNT(*) FROM site_visits WHERE visit_date >= ?',
+            'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) >= date(?)',
             (week_ago,)
         ).fetchone()[0]
         total_visits = conn.execute('SELECT COUNT(*) FROM site_visits').fetchone()[0]
@@ -6064,21 +6072,23 @@ def admin_traffic():
             LIMIT 15
         ''').fetchall()
         daily_rows = conn.execute('''
-            SELECT visit_date as date, COUNT(*) as count
-            FROM site_visits
-            GROUP BY visit_date
-            ORDER BY visit_date DESC
-            LIMIT 90
-        ''').fetchall()
+            WITH RECURSIVE dates(d) AS (
+                SELECT date(?)
+                UNION ALL
+                SELECT date(d, '-1 day')
+                FROM dates
+                WHERE d > date(?, '-13 day')
+            )
+            SELECT d as date, COALESCE(COUNT(v.id), 0) as count
+            FROM dates
+            LEFT JOIN site_visits v ON date(v.visit_date) = d
+            GROUP BY d
+            ORDER BY d DESC
+        ''', (today, today)).fetchall()
         conn.close()
 
         top_endpoints = [{'endpoint': r['endpoint'], 'count': r['count']} for r in top_endpoints_rows]
-        daily_map = {r['date']: r['count'] for r in daily_rows if r['date']}
-        days_back = 30
-        daily_visits = []
-        for offset in range(days_back):
-            day = (datetime.now() - timedelta(days=offset)).strftime('%Y-%m-%d')
-            daily_visits.append({'date': day, 'count': daily_map.get(day, 0)})
+        daily_visits = [{'date': r['date'], 'count': r['count']} for r in daily_rows if r['date']]
 
         return render_template_string(
             TRAFFIC_TEMPLATE,
@@ -6140,15 +6150,16 @@ def api_get_traffic_stats():
         conn = get_db_connection()
         
         # Get today's visits
-        today = datetime.now().strftime('%Y-%m-%d')
+        today_dt = _traffic_now()
+        today = today_dt.strftime('%Y-%m-%d')
         today_visits = conn.execute('''
-            SELECT COUNT(*) FROM site_visits WHERE visit_date = ?
+            SELECT COUNT(*) FROM site_visits WHERE date(visit_date) = date(?)
         ''', (today,)).fetchone()[0]
         
         # Get last 7 days
-        week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        week_ago = (today_dt - timedelta(days=6)).strftime('%Y-%m-%d')
         week_visits = conn.execute('''
-            SELECT COUNT(*) FROM site_visits WHERE visit_date >= ?
+            SELECT COUNT(*) FROM site_visits WHERE date(visit_date) >= date(?)
         ''', (week_ago,)).fetchone()[0]
         
         # Get total visits
