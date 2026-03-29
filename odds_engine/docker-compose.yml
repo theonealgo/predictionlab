@@ -1,0 +1,50 @@
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: odds
+      POSTGRES_PASSWORD: odds
+      POSTGRES_DB: odds_engine
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6380:6379"
+
+  model:
+    build:
+      context: ./model
+    environment:
+      PORT: 7001
+    ports:
+      - "7001:7001"
+
+  api:
+    build:
+      context: ./api
+    environment:
+      PORT: 7000
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: odds
+      PGPASSWORD: odds
+      PGDATABASE: odds_engine
+      REDIS_URL: redis://redis:6379
+      MODEL_URL: http://model:7001/predict
+      VIG: "0.04"
+      MONTE_CARLO_RUNS: "10000"
+    ports:
+      - "7000:7000"
+    depends_on:
+      - postgres
+      - redis
+      - model
+
+volumes:
+  postgres_data:
