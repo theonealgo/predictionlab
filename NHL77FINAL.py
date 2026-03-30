@@ -2197,6 +2197,42 @@ def get_upcoming_predictions(sport, days=365):
     
     # Split into completed (for Elo training) and all (for predictions)
     completed_games = [g for d, g in all_games_with_dates if g.get('home_score') is not None]
+    if sport == 'SOCCER':
+        try:
+            conn_hist = get_db_connection()
+            rows = conn_hist.execute(
+                'SELECT game_id, home_team_id, away_team_id, home_score, away_score, game_date '
+                'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL',
+                (sport,)
+            ).fetchall()
+            conn_hist.close()
+            history = [dict(r) for r in rows]
+            if history:
+                existing_ids = {g.get('game_id') for g in completed_games if g.get('game_id')}
+                for g in history:
+                    gid = g.get('game_id')
+                    if gid and gid in existing_ids:
+                        continue
+                    completed_games.append(g)
+        except Exception as _se:
+            logger.debug(f"[SOCCER] history load failed: {_se}")
+    soccer_history_count = None
+    if sport == 'SOCCER':
+        try:
+            conn_hist = get_db_connection()
+            rows = conn_hist.execute(
+                'SELECT home_team_id, away_team_id, home_score, away_score, game_date '
+                'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL',
+                (sport,)
+            ).fetchall()
+            conn_hist.close()
+            history = [dict(r) for r in rows]
+            if history:
+                completed_games = completed_games + history
+            soccer_history_count = len(history)
+        except Exception as _se:
+            logger.debug(f"[SOCCER] history load failed: {_se}")
+            soccer_history_count = 0
 
     # ── NHL: inject team stats directly from completed API games ─────────────
     # The ESPN /teams endpoint doesn't expose NHL goals-per-game stats, and the
@@ -5261,6 +5297,7 @@ def landing_page():
             font-size:2.2em;font-weight:900;
             background:linear-gradient(135deg,var(--gold),var(--gold2));
             -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+            white-space:normal;line-height:1.15;word-break:break-word;
         }
         .stat-label{font-size:.8em;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-top:4px;}
 
@@ -5926,21 +5963,27 @@ def sport_results(sport):
         # Handle NCAAB
         if sport in ['NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA', 'SOCCER']:
             selected_league = None
+            selected_slug = None
             if sport == 'SOCCER':
                 selected_slug = request.args.get('league')
                 selected_league = _soccer_league_from_slug(selected_slug)
-                if not selected_league:
-                    selected_league = SOCCER_LEAGUE_ORDER[0] if SOCCER_LEAGUE_ORDER else None
+                if not selected_league and selected_slug:
+                    selected_league = None
             cache_key = f'{sport}_daily_results_html'
-            if sport == 'SOCCER' and selected_league:
-                cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
+            skip_cache = False
+            if sport == 'SOCCER':
+                if selected_league:
+                    cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
+                if not selected_slug:
+                    skip_cache = True
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
-            cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
-            if isinstance(cached_page, dict):
-                cached_ts = cached_page.get('ts')
-                cached_html = cached_page.get('html')
-                if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
-                    return cached_html
+            if not skip_cache:
+                cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
+                if isinstance(cached_page, dict):
+                    cached_ts = cached_page.get('ts')
+                    cached_html = cached_page.get('html')
+                    if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+                        return cached_html
             # Update scores first
             update_espn_scores(sport)
             
@@ -5955,6 +5998,18 @@ def sport_results(sport):
                 LIMIT 100
             ''', (sport, sport)).fetchall()
             conn.close()
+            if sport == 'SOCCER' and not selected_slug:
+                league_counts = {}
+                for game in completed_games:
+                    league_name = _canonical_soccer_league_name(game['league']) or game['league']
+                    if league_name and league_name in SOCCER_LEAGUE_ORDER:
+                        league_counts[league_name] = league_counts.get(league_name, 0) + 1
+                if league_counts:
+                    selected_league = next((lg for lg in SOCCER_LEAGUE_ORDER if league_counts.get(lg)), None)
+                if not selected_league:
+                    selected_league = SOCCER_LEAGUE_ORDER[0] if SOCCER_LEAGUE_ORDER else None
+                if selected_league:
+                    cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
             
             if not completed_games:
                 # Show message for offseason sports
