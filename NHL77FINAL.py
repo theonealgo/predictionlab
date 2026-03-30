@@ -795,11 +795,14 @@ _SOCCER_LEAGUE_CANONICAL = {
     'fa cup': 'FA Cup',
     'english fa cup': 'FA Cup',
     'carabao cup': 'EFL Cup',
+    'english carabao cup': 'EFL Cup',
+    'english league cup': 'EFL Cup',
     'efl cup': 'EFL Cup',
     'league cup': 'EFL Cup',
     'eng.2': 'EFL Championship',
     'efl championship': 'EFL Championship',
     'league championship': 'EFL Championship',
+    'english league championship': 'EFL Championship',
     'uefa champions league': 'UEFA Champions League',
     'champions league': 'UEFA Champions League',
     'uefa champions league qualifiers': 'UEFA Champions League',
@@ -815,6 +818,8 @@ _SOCCER_LEAGUE_CANONICAL = {
     'laliga': 'Spanish LaLiga',
     'la liga': 'Spanish LaLiga',
     'esp.1': 'Spanish LaLiga',
+    'spanish laliga 2': 'Spanish Segunda División',
+    'spanish laliga2': 'Spanish Segunda División',
     'segunda división': 'Spanish Segunda División',
     'segunda division': 'Spanish Segunda División',
     'la liga 2': 'Spanish Segunda División',
@@ -834,6 +839,10 @@ _SOCCER_LEAGUE_CANONICAL = {
     'fifa world cup qualifiers': 'FIFA World Cup Qualifiers (UEFA)',
     'world cup qualifiers': 'FIFA World Cup Qualifiers (UEFA)',
     'uefa world cup qualifiers': 'FIFA World Cup Qualifiers (UEFA)',
+    'fifa world cup qualifying - uefa': 'FIFA World Cup Qualifiers (UEFA)',
+    'fifa world cup qualifying - conmebol': 'FIFA World Cup Qualifiers (CONMEBOL)',
+    'fifa world cup qualifying - caf': 'FIFA World Cup Qualifiers (CAF)',
+    'fifa world cup qualifying - concacaf': 'FIFA World Cup Qualifiers (CONCACAF)',
     'conmebol world cup qualifiers': 'FIFA World Cup Qualifiers (CONMEBOL)',
     'caf world cup qualifiers': 'FIFA World Cup Qualifiers (CAF)',
     'concacaf world cup qualifiers': 'FIFA World Cup Qualifiers (CONCACAF)',
@@ -849,6 +858,31 @@ _SOCCER_LEAGUE_CANONICAL = {
     'leagues cup': 'Leagues Cup',
     'usl championship': 'USL Championship',
     'usa.2': 'USL Championship',
+}
+
+SOCCER_LEAGUE_ENDPOINTS = {
+    'English Premier League': 'eng.1',
+    'FA Cup': 'eng.fa',
+    'EFL Cup': 'eng.league_cup',
+    'EFL Championship': 'eng.2',
+    'UEFA Champions League': 'uefa.champions',
+    'UEFA Europa League': 'uefa.europa',
+    'UEFA Europa Conference League': 'uefa.europa.conf',
+    'Spanish LaLiga': 'esp.1',
+    'Spanish Segunda División': 'esp.2',
+    'German Bundesliga': 'ger.1',
+    'Italian Serie A': 'ita.1',
+    'French Ligue 1': 'fra.1',
+    'FIFA World Cup': 'fifa.world',
+    'FIFA World Cup Qualifiers (UEFA)': 'fifa.worldq.uefa',
+    'FIFA World Cup Qualifiers (CONMEBOL)': 'fifa.worldq.conmebol',
+    'FIFA World Cup Qualifiers (CAF)': 'fifa.worldq.caf',
+    'FIFA World Cup Qualifiers (CONCACAF)': 'fifa.worldq.concacaf',
+    'Major League Soccer': 'usa.1',
+    'Liga MX': 'mex.1',
+    'CONCACAF Champions Cup': 'concacaf.champions',
+    'Leagues Cup': 'concacaf.leagues.cup',
+    'USL Championship': None,
 }
 
 def _canonical_soccer_league_name(league_name: str):
@@ -1157,6 +1191,99 @@ def update_espn_scores(sport):
         'SOCCER': 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard',
     }
     
+    if sport == 'SOCCER':
+        try:
+            logger.info("Fetching SOCCER scores from ESPN league endpoints...")
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            updates_count = 0
+
+            for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
+                if not league_code:
+                    continue
+                url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard"
+                try:
+                    response = requests.get(url, timeout=10)
+                    response.raise_for_status()
+                    data = response.json()
+                except Exception as e:
+                    logger.debug(f"Error fetching SOCCER league {league_code}: {e}")
+                    continue
+
+                league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
+                league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
+                events = data.get('events', []) if isinstance(data, dict) else []
+
+                for event in events:
+                    competition = event.get('competitions', [{}])[0]
+                    competitors = competition.get('competitors', [])
+                    if len(competitors) != 2:
+                        continue
+                    status_info = event.get('status', {}).get('type', {})
+                    status_name = status_info.get('name', '')
+                    if not status_name.startswith('STATUS_FINAL'):
+                        continue
+
+                    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+                    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+                    if not home or not away:
+                        continue
+
+                    home_team = home.get('team', {}).get('displayName', '')
+                    away_team = away.get('team', {}).get('displayName', '')
+                    try:
+                        home_score = int(home.get('score', 0))
+                        away_score = int(away.get('score', 0))
+                    except Exception:
+                        continue
+
+                    event_dt = event.get('date', '')
+                    game_date = _espn_event_date_to_local(event_dt) or datetime.now().strftime('%Y-%m-%d')
+                    event_id = event.get('id', '')
+                    game_id = f"{sport}_{league_code}_{event_id}"
+
+                    existing = cursor.execute(
+                        "SELECT 1 FROM games WHERE game_id = ? AND sport = ?",
+                        (game_id, sport)
+                    ).fetchone()
+
+                    if existing:
+                        cursor.execute(
+                            """
+                            UPDATE games
+                            SET home_score = ?, away_score = ?, status = 'final'
+                            WHERE sport = ?
+                              AND game_id = ?
+                              AND (home_score IS NULL OR home_score != ?)
+                            """,
+                            (home_score, away_score, sport, game_id, home_score)
+                        )
+                    else:
+                        try:
+                            cursor.execute(
+                                """
+                                INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
+                                """,
+                                (sport, league_name or sport, game_id, 2025, game_date, home_team, away_team, home_score, away_score)
+                            )
+                            logger.info(f"Inserted new {sport} game: {away_team} @ {home_team} ({game_date})")
+                        except Exception as insert_error:
+                            logger.error(f"Error inserting {sport} game {game_id}: {insert_error}")
+
+                    if cursor.rowcount > 0:
+                        updates_count += 1
+
+            conn.commit()
+            conn.close()
+            if updates_count > 0:
+                logger.info(f"Successfully updated {updates_count} {sport} game scores.")
+            else:
+                logger.info(f"No {sport} score updates needed.")
+        except Exception as e:
+            logger.error(f"An error occurred while updating {sport} scores: {e}")
+        return
+
     if sport not in ESPN_ENDPOINTS:
         logger.warning(f"No ESPN endpoint for {sport}")
         return
@@ -1697,7 +1824,90 @@ def get_upcoming_predictions(sport, days=365):
             logger.error(f"Error fetching NHL games from ESPN API: {e}")
             all_games_with_dates = []
     
-    elif sport in ['NBA', 'NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA', 'SOCCER']:
+    elif sport == 'SOCCER':
+        api_games = []
+        for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
+            if not league_code:
+                continue
+            url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard"
+            try:
+                data = _cached_get(url)
+            except Exception as e:
+                logger.debug(f"Error fetching SOCCER league {league_code}: {e}")
+                continue
+            league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
+            league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
+            events = data.get('events', []) if isinstance(data, dict) else []
+
+            for event in events:
+                competition = event.get('competitions', [{}])[0]
+                competitors = competition.get('competitors', [])
+
+                if len(competitors) != 2:
+                    continue
+
+                home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+                away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+
+                if not home or not away:
+                    continue
+
+                home_team = home.get('team', {}).get('displayName', '')
+                away_team = away.get('team', {}).get('displayName', '')
+                event_id = event.get('id', '')
+
+                status_info = event.get('status', {}).get('type', {})
+                status_name = status_info.get('name', '')
+
+                home_score = None
+                away_score = None
+                if status_name.startswith('STATUS_FINAL'):
+                    try:
+                        home_score = int(home.get('score', 0))
+                        away_score = int(away.get('score', 0))
+                    except Exception:
+                        pass
+
+                event_dt = event.get('date', '')
+                game_date = _espn_event_date_to_local(event_dt) or datetime.now().strftime('%Y-%m-%d')
+                api_games.append({
+                    'game_id': f"{sport}_{league_code}_{event_id}",
+                    'home_team_id': home_team,
+                    'away_team_id': away_team,
+                    'game_date': game_date,
+                    'home_score': home_score,
+                    'away_score': away_score,
+                    'league': league_name,
+                })
+
+        # Enrich with stored predictions from database
+        conn = get_db_connection()
+        for game in api_games:
+            pred = conn.execute('''
+                SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability
+                FROM predictions WHERE game_id = ? AND sport = ?
+            ''', (game['game_id'], sport)).fetchone()
+            if pred:
+                game['stored_elo_prob'] = pred['elo_home_prob']
+                game['stored_xgb_prob'] = pred['xgboost_home_prob']
+                game['stored_ensemble_prob'] = pred['win_probability']
+        conn.close()
+
+        # Build dates list
+        all_games_with_dates = [(parse_date(g['game_date']), g) for g in api_games if parse_date(g['game_date'])]
+        all_games_with_dates.sort(key=lambda x: x[0])
+
+        # Remove duplicates (same matchup on same date)
+        seen = set()
+        unique_games = []
+        for date, game in all_games_with_dates:
+            key = (date.strftime('%Y-%m-%d'), game['home_team_id'], game['away_team_id'])
+            if key not in seen:
+                seen.add(key)
+                unique_games.append((date, game))
+        all_games_with_dates = unique_games
+
+    elif sport in ['NBA', 'NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA']:
         # Load from ESPN API and database
         ESPN_ENDPOINTS = {
             'NBA': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
@@ -1706,7 +1916,6 @@ def get_upcoming_predictions(sport, days=365):
             'NCAAB': 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard',
             'NCAAW': 'https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/scoreboard',
             'NCAAF': 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard',
-            'SOCCER': 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard',
         }
         
         api_games = []
@@ -2249,8 +2458,8 @@ def get_upcoming_predictions(sport, days=365):
 
             predictions.append(game_dict)
     
-    # For NBA/MLB/NCAAW: Save newly generated predictions to database so Results page can use them
-    if sport in ['NBA', 'MLB', 'NCAAW']:
+    # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
+    if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
         _cache_market_lines_for_predictions(sport, predictions, limit=20)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
@@ -4183,8 +4392,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% endif %}
         {% set ens = overall_stats.ensemble %}
-        {% set units_won = overall_units %}
-        {% set roi = overall_roi %}
 
         <!-- ── Daily Tally ── -->
         {% if daily_tally %}
@@ -4239,29 +4446,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div style="font-size:0.8em;opacity:0.8;">🎲 O/U</div><div style="font-size:1.5em;color:#94a3b8;">—</div></div>
                 {% endif %}
             </div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;border-top:1px solid rgba(255,255,255,0.12);padding-top:12px;">
-                <div><div style="font-size:0.8em;opacity:0.75;">Units (engine odds)</div>
-                    {% if units_won is not none %}
-                    <div style="font-size:1.6em;font-weight:bold;color:{% if units_won>=0 %}#fbbf24{% else %}#ef4444{% endif %};">{{ "+" if units_won>0 else "" }}{{ units_won|round(2) }}u</div>
-                    {% else %}
-                    <div style="font-size:1.1em;color:#94a3b8;">N/A ({{ overall_units_reason }})</div>
-                    {% endif %}
-                </div>
-                <div><div style="font-size:0.8em;opacity:0.75;">ROI</div>
-                    {% if roi is not none %}
-                    <div style="font-size:1.6em;font-weight:bold;color:{% if roi>=0 %}#fbbf24{% else %}#ef4444{% endif %};">{{ "+" if roi>0 else "" }}{{ roi }}%</div>
-                    {% else %}
-                    <div style="font-size:1.1em;color:#94a3b8;">N/A ({{ overall_units_reason }})</div>
-                    {% endif %}
-                </div>
-                <div><div style="font-size:0.8em;opacity:0.75;">$100/game P&amp;L</div>
-                    {% if units_won is not none %}
-                    <div style="font-size:1.6em;font-weight:bold;color:{% if units_won>=0 %}#fbbf24{% else %}#ef4444{% endif %};">{{ "+" if units_won>0 else "" }}${{ (units_won*100)|round(0) }}</div>
-                    {% else %}
-                    <div style="font-size:1.1em;color:#94a3b8;">N/A ({{ overall_units_reason }})</div>
-                    {% endif %}
-                </div>
-            </div>
+            <div style="border-top:1px solid rgba(255,255,255,0.12);padding-top:12px;"></div>
         </div>
 
 
@@ -4274,14 +4459,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 {% if m.total > 0 %}
                 <div class="model-acc">{{ m.accuracy }}%</div>
                 <div class="model-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
-                {% if model_profit is defined and model_profit[m_key] is defined %}
-                    {% set mp = model_profit[m_key] %}
-                    {% if mp.units is not none %}
-                    <div class="model-rec">Profit {{ "+" if mp.units>0 else "" }}{{ mp.units }}u · ROI {{ mp.roi }}%</div>
-                    {% else %}
-                    <div class="model-rec" style="color:#94a3b8;">N/A ({{ mp.reason }})</div>
-                    {% endif %}
-                {% endif %}
                 {% else %}
                 <div class="model-acc" style="color:#94a3b8;">—</div>
                 <div class="model-rec">no graded games</div>
@@ -4665,8 +4842,6 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     {% endif %}
     {% if weekly_results and overall_stats %}
         {% set ens = overall_stats.ensemble %}
-        {% set units_won = overall_units %}
-        {% set roi = overall_roi %}
         <!-- Overall per-model performance -->
         <div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px solid #10b981; border-radius: 15px; padding: 25px; margin-bottom: 25px;">
             <h2 style="text-align: center; margin: 0 0 20px 0; font-size: 1.8em;">🏆 Overall Model Performance &mdash; {{ ens.total }} Games</h2>
@@ -4677,40 +4852,10 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div style="font-size: 0.9em; opacity: 0.8; margin-bottom: 4px;">{{ m_label }}</div>
                     <div style="font-size: {% if m_key == 'ensemble' %}2.8em{% else %}1.9em{% endif %}; font-weight: bold; color: {% if m.accuracy >= 55 %}#10b981{% elif m.accuracy >= 50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ m.accuracy }}%</div>
                     <div style="font-size: 0.9em; opacity: 0.85;">{{ m.correct }}-{{ m.total - m.correct }}</div>
-                    {% if model_profit is defined and model_profit[m_key] is defined %}
-                        {% set mp = model_profit[m_key] %}
-                        {% if mp.units is not none %}
-                        <div style="font-size: 0.85em; opacity: 0.85;">Profit {{ "+" if mp.units>0 else "" }}{{ mp.units }}u · ROI {{ mp.roi }}%</div>
-                        {% else %}
-                        <div style="font-size: 0.85em; opacity: 0.7; color:#94a3b8;">N/A ({{ mp.reason }})</div>
-                        {% endif %}
-                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 15px;">
-                <div><div style="font-size: 0.85em; opacity: 0.8;">Units (engine odds)</div>
-                    {% if units_won is not none %}
-                    <div style="font-size: 1.8em; font-weight: bold; color: {% if units_won >= 0 %}#fbbf24{% else %}#ef4444{% endif %};">{{ "+" if units_won > 0 else "" }}{{ units_won|round(2) }}u</div>
-                    {% else %}
-                    <div style="font-size: 1.1em; color:#94a3b8;">N/A ({{ overall_units_reason }})</div>
-                    {% endif %}
-                </div>
-                <div><div style="font-size: 0.85em; opacity: 0.8;">ROI</div>
-                    {% if roi is not none %}
-                    <div style="font-size: 1.8em; font-weight: bold; color: {% if roi >= 0 %}#fbbf24{% else %}#ef4444{% endif %};">{{ "+" if roi > 0 else "" }}{{ roi }}%</div>
-                    {% else %}
-                    <div style="font-size: 1.1em; color:#94a3b8;">N/A ({{ overall_units_reason }})</div>
-                    {% endif %}
-                </div>
-                <div><div style="font-size: 0.85em; opacity: 0.8;">$100/unit P&amp;L</div>
-                    {% if units_won is not none %}
-                    <div style="font-size: 1.8em; font-weight: bold; color: {% if units_won >= 0 %}#fbbf24{% else %}#ef4444{% endif %};">{{ "+" if units_won > 0 else "" }}${{ (units_won * 100)|round(0) }}</div>
-                    {% else %}
-                    <div style="font-size: 1.1em; color:#94a3b8;">N/A ({{ overall_units_reason }})</div>
-                    {% endif %}
-                </div>
-            </div>
+            <div style="border-top: 1px solid rgba(255,255,255,0.15); padding-top: 15px;"></div>
         </div>
         {% for week_num in weekly_results|dictsort(reverse=true) %}
         {% set week_data = weekly_results[week_num[0]] %}
@@ -4839,6 +4984,19 @@ def landing_page():
     nhl_accuracy = get_landing_accuracy('NHL')
     nfl_accuracy = get_landing_accuracy('NFL')
     nba_accuracy = get_landing_accuracy('NBA')
+    games_graded = 0
+    predictions_logged = 0
+    try:
+        _conn = get_db_connection()
+        games_graded = _conn.execute(
+            "SELECT COUNT(*) FROM games WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
+        ).fetchone()[0]
+        predictions_logged = _conn.execute(
+            "SELECT COUNT(*) FROM predictions"
+        ).fetchone()[0]
+        _conn.close()
+    except Exception as _e:
+        logger.debug(f"Landing stats query failed: {_e}")
     today = datetime.now()
     landing_sports = []
     for sport_key in _LANDING_SPORT_ORDER:
@@ -5290,13 +5448,13 @@ def landing_page():
         <div class="stat-label">AI Models</div>
     </div>
     <div class="stat-item">
-        <div class="stat-num">{{ nhl_accuracy }}%</div>
-        <div class="stat-label">NHL Accuracy</div>
+        <div class="stat-num">{{ games_graded }}</div>
+        <div class="stat-label">Games Graded</div>
     </div>
-  <div class="stat-item">
-    <div class="stat-num">68.5%</div>
-    <div class="stat-label">NBA Accuracy</div>
-</div>
+    <div class="stat-item">
+        <div class="stat-num">{{ predictions_logged }}</div>
+        <div class="stat-label">Predictions Logged</div>
+    </div>
     <div class="stat-item">
         <div class="stat-num">FREE</div>
         <div class="stat-label">Forever</div>
@@ -5434,6 +5592,7 @@ def landing_page():
 </body>
 </html>
     """, nhl_accuracy=nhl_accuracy, nfl_accuracy=nfl_accuracy, nba_accuracy=nba_accuracy,
+         games_graded=games_graded, predictions_logged=predictions_logged,
          stripe_url=STRIPE_DONATION_URL, landing_sports=landing_sports, sports_covered=sports_covered)
 
 @app.route('/robots.txt')
@@ -5483,18 +5642,19 @@ def sport_predictions(sport):
         )
 
     soccer_leagues = None
-    if sport == 'SOCCER' and predictions:
+    if sport == 'SOCCER':
         filtered = []
         leagues = []
         for pred in predictions:
-            league_name = _canonical_soccer_league_name(pred.get('league'))
-            if not league_name:
+            league_raw = pred.get('league')
+            league_name = _canonical_soccer_league_name(league_raw) or league_raw
+            if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                 continue
             pred['league'] = league_name
             leagues.append(league_name)
             filtered.append(pred)
         predictions = filtered
-        soccer_leagues = _ordered_soccer_leagues(leagues)
+        soccer_leagues = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
     
     # Group predictions by date for NHL/NBA, by week for NFL
     from collections import defaultdict
@@ -5558,12 +5718,6 @@ def sport_results(sport):
             daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
             daily_tally = compute_daily_model_tally_from_weekly(weekly_results, daily_tally_date) if weekly_results else None
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
-            profit_daily = _daily_results_from_weekly(weekly_results)
-            _attach_engine_odds_to_daily_results(sport, profit_daily, limit=40)
-            model_profit = _compute_model_profit(profit_daily)
-            overall_units = model_profit.get('ensemble', {}).get('units')
-            overall_roi = model_profit.get('ensemble', {}).get('roi')
-            overall_units_reason = model_profit.get('ensemble', {}).get('reason')
             return render_template_string(
                 NFL_WEEKLY_RESULTS_TEMPLATE,
                 page=sport,
@@ -5573,11 +5727,7 @@ def sport_results(sport):
                 overall_stats=overall_stats,
                 daily_tally=daily_tally,
                 daily_tally_date=daily_tally_date,
-                daily_tally_games=daily_tally_games,
-                model_profit=model_profit,
-                overall_units=overall_units,
-                overall_roi=overall_roi,
-                overall_units_reason=overall_units_reason
+                daily_tally_games=daily_tally_games
             )
         
         if sport == 'NHL':
@@ -5624,11 +5774,6 @@ def sport_results(sport):
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
-                _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
-                model_profit = _compute_model_profit(daily_results)
-                overall_units = model_profit.get('ensemble', {}).get('units')
-                overall_roi = model_profit.get('ensemble', {}).get('roi')
-                overall_units_reason = model_profit.get('ensemble', {}).get('reason')
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
@@ -5646,11 +5791,7 @@ def sport_results(sport):
                     spread_total_stats=_st_stats,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
-                    daily_tally_games=daily_tally_games,
-                    model_profit=model_profit,
-                    overall_units=overall_units,
-                    overall_roi=overall_roi,
-                    overall_units_reason=overall_units_reason
+                    daily_tally_games=daily_tally_games
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
@@ -5692,11 +5833,6 @@ def sport_results(sport):
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
-                _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
-                model_profit = _compute_model_profit(daily_results)
-                overall_units = model_profit.get('ensemble', {}).get('units')
-                overall_roi = model_profit.get('ensemble', {}).get('roi')
-                overall_units_reason = model_profit.get('ensemble', {}).get('reason')
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _cache_market_lines_for_results(sport, daily_results, limit=20)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
@@ -5713,11 +5849,7 @@ def sport_results(sport):
                     spread_total_stats=_st_stats,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
-                    daily_tally_games=daily_tally_games,
-                    model_profit=model_profit,
-                    overall_units=overall_units,
-                    overall_roi=overall_roi,
-                    overall_units_reason=overall_units_reason
+                    daily_tally_games=daily_tally_games
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
@@ -5773,8 +5905,8 @@ def sport_results(sport):
                 game_date  = game['game_date'][:10] if game['game_date'] else None
                 league_name = game.get('league') if isinstance(game, dict) else game['league']
                 if sport == 'SOCCER':
-                    league_name = _canonical_soccer_league_name(league_name)
-                    if not league_name:
+                    league_name = _canonical_soccer_league_name(league_name) or league_name
+                    if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                         continue
 
                 # Stored DB probs
@@ -5816,11 +5948,6 @@ def sport_results(sport):
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
             overall_stats = compute_overall_stats_from_daily(daily_results)
-            _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
-            model_profit = _compute_model_profit(daily_results)
-            overall_units = model_profit.get('ensemble', {}).get('units')
-            overall_roi = model_profit.get('ensemble', {}).get('roi')
-            overall_units_reason = model_profit.get('ensemble', {}).get('reason')
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _cache_market_lines_for_results(sport, daily_results, limit=20)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
@@ -5832,12 +5959,13 @@ def sport_results(sport):
                 leagues = []
                 for dd in daily_results.values():
                     for g in dd.get('games', []):
-                        league_name = _canonical_soccer_league_name(g.get('league')) or g.get('league')
-                        if not league_name:
+                        league_raw = g.get('league')
+                        league_name = _canonical_soccer_league_name(league_raw) or league_raw
+                        if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                             continue
                         g['league'] = league_name
                         leagues.append(league_name)
-                soccer_leagues = _ordered_soccer_leagues(leagues)
+                soccer_leagues = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
 
             rendered = render_template_string(
                 DAILY_RESULTS_TEMPLATE,
@@ -5850,10 +5978,6 @@ def sport_results(sport):
                 daily_tally=daily_tally,
                 daily_tally_date=daily_tally_date,
                 daily_tally_games=daily_tally_games,
-                model_profit=model_profit,
-                overall_units=overall_units,
-                overall_roi=overall_roi,
-                overall_units_reason=overall_units_reason,
                 soccer_leagues=soccer_leagues
             )
             _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
