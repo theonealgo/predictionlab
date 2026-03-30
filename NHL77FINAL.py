@@ -5440,24 +5440,24 @@ def landing_page():
 <!-- Stats bar -->
 <div class="stats-bar">
     <div class="stat-item">
-        <div class="stat-num">{{ sports_covered }}</div>
+        <div class="stat-num">9</div>
         <div class="stat-label">Sports Covered</div>
     </div>
     <div class="stat-item">
-        <div class="stat-num">5</div>
-        <div class="stat-label">AI Models</div>
+        <div class="stat-num">All Predictions Tracked</div>
+        <div class="stat-label"></div>
     </div>
     <div class="stat-item">
-        <div class="stat-num">{{ games_graded }}</div>
-        <div class="stat-label">Games Graded</div>
+        <div class="stat-num">69%</div>
+        <div class="stat-label">NBA Win Rate</div>
     </div>
     <div class="stat-item">
-        <div class="stat-num">{{ predictions_logged }}</div>
-        <div class="stat-label">Predictions Logged</div>
+        <div class="stat-num">Verified Results Daily</div>
+        <div class="stat-label"></div>
     </div>
     <div class="stat-item">
-        <div class="stat-num">FREE</div>
-        <div class="stat-label">Forever</div>
+        <div class="stat-num">Always Free</div>
+        <div class="stat-label"></div>
     </div>
 </div>
 
