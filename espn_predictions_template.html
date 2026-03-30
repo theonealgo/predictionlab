@@ -155,7 +155,7 @@
         .tab:hover { background:rgba(255,255,255,0.18); }
         .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 14px; }
         .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
-        .league-pill { background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; }
+        .league-pill { background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#e2e8f0; text-decoration:none; display:inline-flex; align-items:center; }
         .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
         .league-pill:hover { border-color:#fbbf24; }
         .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:rgba(255,255,255,0.05); border-radius:12px; }
@@ -285,9 +285,8 @@
     {% if soccer_leagues %}
     <div class="league-slider">
         <div class="league-badges" id="leagueBubbles">
-            <div class="league-pill active" data-league="ALL" onclick="filterLeague('ALL', this)">All Leagues</div>
             {% for lg in soccer_leagues %}
-            <div class="league-pill" data-league="{{ lg }}" onclick="filterLeague({{ lg|tojson }}, this)">{{ lg }}</div>
+            <a class="league-pill {% if lg.active %}active{% endif %}" href="{{ lg.url }}">{{ lg.name }}</a>
             {% endfor %}
         </div>
     </div>
@@ -333,11 +332,12 @@
                     </div>
                         <div class="prediction-panel">
                             <div class="panel-title">Home Win %</div>
-                            {% if pred.glicko2_prob %}<div class="model-row"><span class="model-lbl" style="color:#60a5fa;">Grinder2</span><span class="model-val">{{ pred.glicko2_prob }}%</span></div>{% endif %}
-                            {% if pred.trueskill_prob %}<div class="model-row"><span class="model-lbl" style="color:#a78bfa;">Takedown</span><span class="model-val">{{ pred.trueskill_prob }}%</span></div>{% endif %}
-                            {% if pred.elo_prob %}<div class="model-row"><span class="model-lbl" style="color:#34d399;">Edge</span><span class="model-val">{{ pred.elo_prob }}%</span></div>{% endif %}
-                            <div class="model-row"><span class="model-lbl" style="color:#f87171;">XSharp</span><span class="model-val">{{ pred.xgb_prob }}%</span></div>
-                            <div class="ensemble-badge">SHARP CONSENSUS {{ pred.ensemble_prob }}%</div>
+                            <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">Grinder2</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else 'N/A' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#a78bfa;">Takedown</span><span class="model-val">{{ pred.trueskill_prob if pred.trueskill_prob is not none else 'N/A' }}{% if pred.trueskill_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#34d399;">Edge</span><span class="model-val">{{ pred.elo_prob if pred.elo_prob is not none else 'N/A' }}{% if pred.elo_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#f87171;">XSharp</span><span class="model-val">{{ pred.xgb_prob if pred.xgb_prob is not none else 'N/A' }}{% if pred.xgb_prob is not none %}%{% endif %}</span></div>
+                            <div class="ensemble-badge">SHARP CONSENSUS {{ pred.ensemble_prob if pred.ensemble_prob is not none else 'N/A' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
+                            {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
                     </div>
                     {% if not is_final and (pred.xgb_spread is not none or pred.naive_spread is not none) %}
@@ -378,6 +378,10 @@
                         </div>
                         <div class="sf-item"><span class="sf-label">Total</span><span class="sf-val">{{ pred.naive_total }}</span></div>
                         {% endif %}
+                    </div>
+                    {% elif not is_final and pred.spread_total_note %}
+                    <div class="score-footer">
+                        <div class="sf-item"><span class="sf-label">Spread/Total</span><span class="sf-val">{{ pred.spread_total_note }}</span></div>
                     </div>
                     {% endif %}
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
@@ -460,7 +464,6 @@
         document.querySelectorAll('.date-section').forEach(s=>s.classList.remove('visible'));
         const sec=document.getElementById('date-'+date);
         if(sec){sec.classList.add('visible');activeDate=date;}
-        updateVisibleDateNoResults();
     }
     function toggleAnalysis(id, el) {
         const panel = document.getElementById(id);
@@ -468,38 +471,6 @@
         panel.classList.toggle('open');
         const open = panel.classList.contains('open');
         if (el) el.textContent = open ? 'Analysis ▴' : 'Analysis ▾';
-    }
-    let activeLeague = 'ALL';
-    function updateVisibleDateNoResults() {
-        document.querySelectorAll('.date-section.visible').forEach(section => {
-            const visibleCards = Array.from(section.querySelectorAll('.game-card'))
-                .filter(card => card.style.display !== 'none');
-            let msg = section.querySelector('.no-league-results');
-            if (visibleCards.length === 0) {
-                if (!msg) {
-                    msg = document.createElement('div');
-                    msg.className = 'no-league-results';
-                    msg.style.textAlign = 'center';
-                    msg.style.padding = '18px';
-                    msg.style.opacity = '0.7';
-                    msg.textContent = 'No games for this league on this date.';
-                    section.appendChild(msg);
-                }
-            } else if (msg) {
-                msg.remove();
-            }
-        });
-    }
-    function filterLeague(league, btn) {
-        activeLeague = league;
-        document.querySelectorAll('.league-pill').forEach(b => b.classList.remove('active'));
-        if (btn) btn.classList.add('active');
-        document.querySelectorAll('.game-card').forEach(card => {
-            const cardLeague = card.dataset.league || 'Other';
-            const show = (league === 'ALL' || cardLeague === league);
-            card.style.display = show ? '' : 'none';
-        });
-        updateVisibleDateNoResults();
     }
     function renderDateBubbles() {
         const c=document.getElementById('dateBubbles'); c.innerHTML='';

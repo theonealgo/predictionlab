@@ -912,6 +912,20 @@ def _ordered_soccer_leagues(leagues):
     extras = sorted(league_set - set(SOCCER_LEAGUE_ORDER))
     return ordered + extras
 
+def _soccer_league_slug(name: str) -> str:
+    if not name:
+        return ''
+    import re as _re
+    slug = _re.sub(r'[^a-z0-9]+', '-', name.strip().lower())
+    return slug.strip('-')
+
+SOCCER_LEAGUE_SLUGS = {_soccer_league_slug(n): n for n in SOCCER_LEAGUE_ORDER}
+
+def _soccer_league_from_slug(slug: str):
+    if not slug:
+        return None
+    return SOCCER_LEAGUE_SLUGS.get(slug.strip().lower())
+
 # ── Public-facing model brand names ───────────────────────────────────────────
 # Maps internal identifiers → user-facing names shown in UI / API responses.
 # Internal variables, files, and training logic are UNCHANGED.
@@ -1505,6 +1519,38 @@ def parse_date(date_str):
             return datetime.strptime(date_only, '%d/%m/%Y')
     except:
         return None
+
+def _to_float_safe(val, default=None):
+    if val is None:
+        return default
+    if isinstance(val, (float, int)):
+        return float(val)
+    if isinstance(val, bytes):
+        try:
+            return float(val)
+        except Exception:
+            try:
+                import struct
+                if len(val) == 8:
+                    return struct.unpack('d', val)[0]
+                if len(val) == 4:
+                    return struct.unpack('f', val)[0]
+            except Exception:
+                return default
+    try:
+        return float(val)
+    except Exception:
+        return default
+
+def _to_date_str(val):
+    if not val:
+        return None
+    if isinstance(val, bytes):
+        try:
+            val = val.decode('utf-8', errors='ignore')
+        except Exception:
+            return None
+    return str(val)
 
 def _espn_event_date_to_local(date_str, tz_name='America/New_York'):
     """Convert ESPN event ISO date (UTC) to local game date string."""
@@ -2365,8 +2411,16 @@ def get_upcoming_predictions(sport, days=365):
             game_dict['v2_expected_away'] = game.get('v2_expected_away')
             
             # Individual model probabilities - ALWAYS pass through
-            game_dict['glicko2_prob'] = round(game.get('glicko2_prob', 0) * 100, 1) if game.get('glicko2_prob') else None
-            game_dict['trueskill_prob'] = round(game.get('trueskill_prob', 0) * 100, 1) if game.get('trueskill_prob') else None
+            _g2 = game.get('glicko2_prob')
+            _ts = game.get('trueskill_prob')
+            game_dict['glicko2_prob'] = round(_g2 * 100, 1) if _g2 is not None else None
+            game_dict['trueskill_prob'] = round(_ts * 100, 1) if _ts is not None else None
+            if sport == 'SOCCER' and (game_dict['glicko2_prob'] is None or game_dict['trueskill_prob'] is None):
+                game_dict['model_data_note'] = (
+                    "N/A — Grinder2/Takedown require the v2 soccer model, which isn't available yet."
+                )
+            else:
+                game_dict['model_data_note'] = None
 
             # ── Spread / Total predictions ───────────────────────────────────
             # Naive formula (ScorePredictor) and XGBoost model
@@ -2384,42 +2438,64 @@ def get_upcoming_predictions(sport, days=365):
             game_dict['puck_line_dog_prob'] = None
             game_dict['puck_line_tag']      = None
             game_dict['puck_line_fav_side'] = None
+            game_dict['spread_total_note']  = None
 
             if game_dict.get('home_score') is None:  # upcoming game only
-                try:
-                    from score_predictor import ScorePredictor
-                    _sp = _score_predictor_instance(sport)
-                    if _sp:
-                        nh, na, ns, nt = _sp.predict_score(
-                            game_dict.get('home_team_id', ''),
-                            game_dict.get('away_team_id', ''),
-                            sport,
-                        )
-                        if nh is not None:
-                            game_dict['naive_home_score'] = nh
-                            game_dict['naive_away_score'] = na
-                            game_dict['naive_spread'] = ns
-                            game_dict['naive_total'] = nt
-                except Exception as _e:
-                    logger.debug(f"ScorePredictor error: {_e}")
-
-                # Fallback to Vegas-style predictor if naive stats are still missing
-                if game_dict.get('naive_spread') is None:
+                if sport == 'SOCCER':
                     try:
-                        from vegas_score_predictor import VegasScorePredictor
-                        _vsp = VegasScorePredictor(db_path=DATABASE)
-                        vh, va, vs, vt = _vsp.predict_score_vegas_method(
-                            game_dict.get('home_team_id', ''),
-                            game_dict.get('away_team_id', ''),
-                            sport
+                        _sp = _score_predictor_instance(sport)
+                        if _sp:
+                            nh, na, ns, nt = _sp.predict_score(
+                                game_dict.get('home_team_id', ''),
+                                game_dict.get('away_team_id', ''),
+                                sport,
+                            )
+                            if nh is not None:
+                                game_dict['naive_home_score'] = nh
+                                game_dict['naive_away_score'] = na
+                                game_dict['naive_spread'] = ns
+                                game_dict['naive_total'] = nt
+                    except Exception as _e:
+                        logger.debug(f"ScorePredictor error: {_e}")
+                    if game_dict.get('naive_spread') is None:
+                        game_dict['spread_total_note'] = (
+                            "N/A — soccer spread/total requires team scoring rates; data not ready yet."
                         )
-                        if vh is not None:
-                            game_dict['naive_home_score'] = vh
-                            game_dict['naive_away_score'] = va
-                            game_dict['naive_spread'] = vs
-                            game_dict['naive_total'] = vt
-                    except Exception as _ve:
-                        logger.debug(f"VegasScorePredictor error: {_ve}")
+                else:
+                    try:
+                        from score_predictor import ScorePredictor
+                        _sp = _score_predictor_instance(sport)
+                        if _sp:
+                            nh, na, ns, nt = _sp.predict_score(
+                                game_dict.get('home_team_id', ''),
+                                game_dict.get('away_team_id', ''),
+                                sport,
+                            )
+                            if nh is not None:
+                                game_dict['naive_home_score'] = nh
+                                game_dict['naive_away_score'] = na
+                                game_dict['naive_spread'] = ns
+                                game_dict['naive_total'] = nt
+                    except Exception as _e:
+                        logger.debug(f"ScorePredictor error: {_e}")
+
+                    # Fallback to Vegas-style predictor if naive stats are still missing
+                    if game_dict.get('naive_spread') is None:
+                        try:
+                            from vegas_score_predictor import VegasScorePredictor
+                            _vsp = VegasScorePredictor(db_path=DATABASE)
+                            vh, va, vs, vt = _vsp.predict_score_vegas_method(
+                                game_dict.get('home_team_id', ''),
+                                game_dict.get('away_team_id', ''),
+                                sport
+                            )
+                            if vh is not None:
+                                game_dict['naive_home_score'] = vh
+                                game_dict['naive_away_score'] = va
+                                game_dict['naive_spread'] = vs
+                                game_dict['naive_total'] = vt
+                        except Exception as _ve:
+                            logger.debug(f"VegasScorePredictor error: {_ve}")
 
                 try:
                     _xm = _get_xgb_spread_model(sport)
@@ -2482,7 +2558,7 @@ def get_upcoming_predictions(sport, days=365):
                                 elo_home_prob, xgboost_home_prob, win_probability, locked
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                         ''', (
-                            pred['game_id'], sport, sport, pred['game_date'],
+                            pred['game_id'], sport, pred.get('league') or sport, pred['game_date'],
                             pred['home_team_id'], pred['away_team_id'],
                             pred['elo_prob'] / 100.0,
                             pred['xgb_prob'] / 100.0,
@@ -4316,7 +4392,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .toggle-btn:hover { border-color:#8b5cf6; }
     .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 16px; }
     .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
-    .league-pill { background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; }
+    .league-pill { background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#e2e8f0; text-decoration:none; display:inline-flex; align-items:center; }
     .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
     .league-pill:hover { border-color:#fbbf24; }
     /* Date navigation */
@@ -4384,9 +4460,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% if soccer_leagues %}
         <div class="league-slider">
             <div class="league-badges" id="leagueBubbles">
-                <div class="league-pill active" data-league="ALL" onclick="filterLeague('ALL', this)">All Leagues</div>
                 {% for lg in soccer_leagues %}
-                <div class="league-pill" data-league="{{ lg }}" onclick="filterLeague({{ lg|tojson }}, this)">{{ lg }}</div>
+                <a class="league-pill {% if lg.active %}active{% endif %}" href="{{ lg.url }}">{{ lg.name }}</a>
                 {% endfor %}
             </div>
         </div>
@@ -4536,6 +4611,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                                 </span>
                             </div>
                             <div class="ensemble-badge">CONSENSUS {{ game.ens_prob }}% {% if game.ens_correct is not none %}<span class="{{ 'pick-ok' if game.ens_correct else 'pick-no' }}">{{ '✅' if game.ens_correct else '❌' }}</span>{% endif %}</div>
+                            {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ game.model_data_note }}</div>{% endif %}
                         </div>
                     </div>
                     <div class="result-footer section-spread">
@@ -4603,39 +4679,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             el.style.display = (mode === 'all' || el.classList.contains('section-' + mode)) ? '' : 'none';
         });
     }
-    /* ── League filter ── */
-    let activeLeague = 'ALL';
-    function updateVisibleDateNoResults() {
-        document.querySelectorAll('.date-section.visible').forEach(section => {
-            const visibleCards = Array.from(section.querySelectorAll('.result-card'))
-                .filter(card => card.style.display !== 'none');
-            let msg = section.querySelector('.no-league-results');
-            if (visibleCards.length === 0) {
-                if (!msg) {
-                    msg = document.createElement('div');
-                    msg.className = 'no-league-results';
-                    msg.style.textAlign = 'center';
-                    msg.style.padding = '20px';
-                    msg.style.opacity = '0.7';
-                    msg.textContent = 'No results for this league on this date.';
-                    section.appendChild(msg);
-                }
-            } else if (msg) {
-                msg.remove();
-            }
-        });
-    }
-    function filterLeague(league, btn) {
-        activeLeague = league;
-        document.querySelectorAll('.league-pill').forEach(b => b.classList.remove('active'));
-        if (btn) btn.classList.add('active');
-        document.querySelectorAll('.result-card').forEach(card => {
-            const cardLeague = card.dataset.league || 'Other';
-            const show = (league === 'ALL' || cardLeague === league);
-            card.style.display = show ? '' : 'none';
-        });
-        updateVisibleDateNoResults();
-    }
     /* ── Date slider ── */
     const allDates = {{ sorted_dates|reverse|list|tojson }};
     const today = '{{ today_date }}';
@@ -4651,7 +4694,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         document.querySelectorAll('.date-section').forEach(s=>s.classList.remove('visible'));
         const sec=document.getElementById('date-'+date);
         if(sec){sec.classList.add('visible');activeDate=date;}
-        updateVisibleDateNoResults();
     }
     function renderBubbles() {
         const c=document.getElementById('dateBubbles'); c.innerHTML='';
@@ -5624,6 +5666,14 @@ def sport_home(sport):
         <script>window.location.href = '/sport/{sport}/predictions';</script>
     """)
 
+@app.route('/sport/SOCCER/predictions/<league_slug>')
+def soccer_predictions_league(league_slug):
+    return redirect(url_for('sport_predictions', sport='SOCCER', league=league_slug))
+
+@app.route('/sport/SOCCER/results/<league_slug>')
+def soccer_results_league(league_slug):
+    return redirect(url_for('sport_results', sport='SOCCER', league=league_slug))
+
 @app.route('/sport/<sport>/predictions')
 def sport_predictions(sport):
     """Show upcoming predictions for a sport"""
@@ -5642,7 +5692,9 @@ def sport_predictions(sport):
         )
 
     soccer_leagues = None
+    selected_league = None
     if sport == 'SOCCER':
+        selected_slug = request.args.get('league')
         filtered = []
         leagues = []
         for pred in predictions:
@@ -5653,8 +5705,22 @@ def sport_predictions(sport):
             pred['league'] = league_name
             leagues.append(league_name)
             filtered.append(pred)
+        soccer_league_list = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
+        selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
+        if not selected_league and soccer_league_list:
+            selected_league = soccer_league_list[0]
+        if selected_league:
+            filtered = [p for p in filtered if p.get('league') == selected_league]
         predictions = filtered
-        soccer_leagues = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
+        soccer_leagues = [
+            {
+                'name': lg,
+                'slug': _soccer_league_slug(lg),
+                'active': lg == selected_league,
+                'url': f"/sport/{sport}/predictions?league={_soccer_league_slug(lg)}",
+            }
+            for lg in soccer_league_list
+        ]
     
     # Group predictions by date for NHL/NBA, by week for NFL
     from collections import defaultdict
@@ -5859,7 +5925,15 @@ def sport_results(sport):
 
         # Handle NCAAB
         if sport in ['NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA', 'SOCCER']:
+            selected_league = None
+            if sport == 'SOCCER':
+                selected_slug = request.args.get('league')
+                selected_league = _soccer_league_from_slug(selected_slug)
+                if not selected_league:
+                    selected_league = SOCCER_LEAGUE_ORDER[0] if SOCCER_LEAGUE_ORDER else None
             cache_key = f'{sport}_daily_results_html'
+            if sport == 'SOCCER' and selected_league:
+                cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
@@ -5902,17 +5976,24 @@ def sport_results(sport):
                     home_won = None
                 home_team = game['home_team_id']
                 away_team = game['away_team_id']
-                game_date  = game['game_date'][:10] if game['game_date'] else None
+                _raw_date = _to_date_str(game['game_date'])
+                game_date = _raw_date[:10] if _raw_date else None
                 league_name = game.get('league') if isinstance(game, dict) else game['league']
                 if sport == 'SOCCER':
                     league_name = _canonical_soccer_league_name(league_name) or league_name
                     if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                         continue
+                    if selected_league and league_name != selected_league:
+                        continue
 
                 # Stored DB probs
-                elo_prob  = float(game['elo_home_prob']       or 0.5)
-                xgb_prob  = float(game['xgboost_home_prob']   or game['elo_home_prob'] or 0.5)
-                ens_prob  = float(game['win_probability']      or game['elo_home_prob'] or 0.5)
+                elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                xgb_prob = _to_float_safe(game['xgboost_home_prob'])
+                if xgb_prob is None:
+                    xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                ens_prob = _to_float_safe(game['win_probability'])
+                if ens_prob is None:
+                    ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
 
                 # V2 model predictions (Glicko-2, TrueSkill)
                 v2 = get_v2_prediction(sport, home_team, away_team, game_date)
@@ -5922,6 +6003,9 @@ def sport_results(sport):
                     xgb_prob = v2.get('xgboost_prob', xgb_prob)
                     ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
 
+                model_note = None
+                if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
+                    model_note = "N/A — Grinder2/Takedown require the v2 soccer model."
                 game_info = {
                     'game_id':         game['game_id'],
                     'date':             game_date or 'Unknown',
@@ -5943,6 +6027,7 @@ def sport_results(sport):
                     'xgb_correct':       (xgb_prob  > 0.5) == home_won if home_won is not None else None,
                     'ens_correct':       (ens_prob  > 0.5) == home_won if home_won is not None else None,
                     'skip_grading':      True if home_won is None else False,
+                    'model_data_note':   model_note,
                 }
                 daily_results[game_info['date']]['games'].append(game_info)
 
@@ -5956,16 +6041,15 @@ def sport_results(sport):
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
             soccer_leagues = None
             if sport == 'SOCCER':
-                leagues = []
-                for dd in daily_results.values():
-                    for g in dd.get('games', []):
-                        league_raw = g.get('league')
-                        league_name = _canonical_soccer_league_name(league_raw) or league_raw
-                        if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
-                            continue
-                        g['league'] = league_name
-                        leagues.append(league_name)
-                soccer_leagues = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
+                soccer_leagues = [
+                    {
+                        'name': lg,
+                        'slug': _soccer_league_slug(lg),
+                        'active': lg == selected_league,
+                        'url': f"/sport/{sport}/results?league={_soccer_league_slug(lg)}",
+                    }
+                    for lg in SOCCER_LEAGUE_ORDER
+                ]
 
             rendered = render_template_string(
                 DAILY_RESULTS_TEMPLATE,
