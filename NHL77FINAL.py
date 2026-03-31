@@ -5593,7 +5593,15 @@ def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
             SELECT g.home_score, g.away_score, g.home_team_id, g.away_team_id, g.game_date,
                    p.win_probability
             FROM games g
-            LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+            LEFT JOIN predictions p ON p.sport = ?
+                AND (
+                    p.game_id = g.game_id
+                    OR (
+                        date(p.game_date) = date(g.game_date)
+                        AND p.home_team_id = g.home_team_id
+                        AND p.away_team_id = g.away_team_id
+                    )
+                )
             WHERE g.sport = ?
               AND g.home_score IS NOT NULL
               AND g.away_score IS NOT NULL
