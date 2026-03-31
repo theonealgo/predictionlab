@@ -5590,8 +5590,8 @@ def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
     try:
         conn = get_db_connection()
         rows = conn.execute('''
-            SELECT g.home_score, g.away_score,
-                   p.win_probability, p.elo_home_prob, p.xgboost_home_prob
+            SELECT g.home_score, g.away_score, g.home_team_id, g.away_team_id, g.game_date,
+                   p.win_probability
             FROM games g
             LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
             WHERE g.sport = ?
@@ -5616,9 +5616,9 @@ def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
             continue
         prob = row['win_probability']
         if prob is None:
-            prob = row['elo_home_prob']
-        if prob is None:
-            prob = row['xgboost_home_prob']
+            v2 = get_v2_prediction(sport, row['home_team_id'], row['away_team_id'], row['game_date'])
+            if v2:
+                prob = v2.get('home_prob')
         if prob is None:
             missing_preds += 1
             continue
@@ -6418,6 +6418,21 @@ def sport_predictions(sport):
             f"N/A — {sport} predictions could not be loaded because an upstream data/model dependency failed. "
             "Please refresh in a minute."
         )
+
+    for pred in predictions:
+        for _k in (
+            'market_spread',
+            'market_total',
+            'home_moneyline',
+            'away_moneyline',
+            'spread_price_home',
+            'spread_price_away',
+            'total_over_price',
+            'total_under_price',
+            'odds_reason',
+        ):
+            if _k not in pred:
+                pred[_k] = None
 
     soccer_leagues = None
     selected_league = None
