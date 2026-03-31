@@ -5656,20 +5656,37 @@ STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
 GA_CREDENTIALS_JSON = _os.environ.get('GA_CREDENTIALS_JSON')
+GA_OAUTH_CLIENT_ID = _os.environ.get('GA_OAUTH_CLIENT_ID')
+GA_OAUTH_CLIENT_SECRET = _os.environ.get('GA_OAUTH_CLIENT_SECRET')
+GA_OAUTH_REFRESH_TOKEN = _os.environ.get('GA_OAUTH_REFRESH_TOKEN')
 
 def _fetch_ga_traffic():
     if not GA_PROPERTY_ID:
         return None, "N/A — GA_PROPERTY_ID not configured."
-    if not GA_CREDENTIALS_JSON:
-        return None, "N/A — GA_CREDENTIALS_JSON not configured."
     try:
         from google.analytics.data_v1beta import BetaAnalyticsDataClient
         from google.analytics.data_v1beta.types import DateRange, Dimension, Metric, OrderBy
         from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
     except Exception:
         return None, "N/A — Google Analytics client libraries not installed."
     try:
-        creds = service_account.Credentials.from_service_account_file(GA_CREDENTIALS_JSON)
+        creds = None
+        if GA_CREDENTIALS_JSON:
+            creds = service_account.Credentials.from_service_account_file(GA_CREDENTIALS_JSON)
+        elif GA_OAUTH_CLIENT_ID and GA_OAUTH_CLIENT_SECRET and GA_OAUTH_REFRESH_TOKEN:
+            creds = Credentials(
+                None,
+                refresh_token=GA_OAUTH_REFRESH_TOKEN,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=GA_OAUTH_CLIENT_ID,
+                client_secret=GA_OAUTH_CLIENT_SECRET,
+                scopes=["https://www.googleapis.com/auth/analytics.readonly"],
+            )
+            creds.refresh(Request())
+        if not creds:
+            return None, "N/A — GA credentials not configured."
         client = BetaAnalyticsDataClient(credentials=creds)
     except Exception:
         return None, "N/A — failed to load GA credentials."
