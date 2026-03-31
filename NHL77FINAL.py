@@ -3730,10 +3730,11 @@ BASE_TEMPLATE = """
             min-height: 100vh;
         }
         .navbar {
-            background: rgba(15, 23, 42, 0.95);
-            padding: 15px 30px;
-            border-bottom: 2px solid #334155;
-            backdrop-filter: blur(10px);
+            background: rgba(7, 10, 20, 0.94);
+            padding: 14px 28px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            backdrop-filter: blur(12px);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -3769,34 +3770,34 @@ BASE_TEMPLATE = """
             flex-direction: column;
             cursor: pointer;
             gap: 5px;
-            padding: 6px;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 7px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
         .hamburger:hover {
-            background: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.12);
         }
         .hamburger span {
-            width: 25px;
-            height: 3px;
+            width: 24px;
+            height: 2px;
             background: #fbbf24;
             border-radius: 2px;
             transition: 0.3s;
         }
         .nav-links {
             position: absolute;
-            top: 70px;
-            right: 30px;
-            background: rgba(15, 23, 42, 0.98);
+            top: 64px;
+            right: 22px;
+            background: rgba(7, 10, 20, 0.98);
             flex-direction: column;
-            gap: 0;
-            padding: 14px;
-            border: 1px solid #334155;
-            border-radius: 12px;
+            gap: 2px;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
             display: none;
-            min-width: 220px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+            min-width: 200px;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
         }
         .nav-links.active { display: flex; }
         .nav-links a {
@@ -3806,18 +3807,8 @@ BASE_TEMPLATE = """
             transition: color 0.3s;
             white-space: nowrap;
         }
-        .nav-section-title {
-            font-size: 0.65em;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            color: #64748b;
-            padding: 6px 8px;
-        }
-        .nav-divider {
-            height: 1px;
-            background: rgba(255, 255, 255, 0.1);
-            margin: 6px 0;
-        }
+        .nav-section-title { display: none; }
+        .nav-divider { display: none; }
         .nav-section-title {
             font-size: 0.65em;
             text-transform: uppercase;
@@ -3839,13 +3830,13 @@ BASE_TEMPLATE = """
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             color: #000 !important;
-            font-weight: 700 !important;
-            padding: 7px 16px;
-            border-radius: 20px;
+            font-weight: 800 !important;
+            padding: 8px 14px;
+            border-radius: 10px;
             transition: opacity 0.2s !important;
             white-space: nowrap;
         }
-        .nav-donate-btn:hover { opacity: 0.85; color: #000 !important; }
+        .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -3905,7 +3896,6 @@ BASE_TEMPLATE = """
             </div>
             <div class="nav-links" id="navLinks">
                 <a href="/" class="{{ 'active' if page == 'home' else '' }}">Home</a>
-                <div class="nav-section-title">Predictions</div>
                 <a href="/sport/NHL/predictions" class="{{ 'active' if page == 'NHL' else '' }}">🏒 NHL</a>
                 <a href="/sport/NBA/predictions" class="{{ 'active' if page == 'NBA' else '' }}">🏀 NBA</a>
                 <a href="/sport/MLB/predictions" class="{{ 'active' if page == 'MLB' else '' }}">⚾ MLB</a>
@@ -3916,19 +3906,6 @@ BASE_TEMPLATE = """
                 <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
                 {% if soccer_enabled %}
                 <a href="/sport/SOCCER/predictions" class="{{ 'active' if page == 'SOCCER' else '' }}">⚽ Soccer</a>
-                {% endif %}
-                <div class="nav-divider"></div>
-                <div class="nav-section-title">Results</div>
-                <a href="/sport/NHL/results">🏒 NHL Results</a>
-                <a href="/sport/NBA/results">🏀 NBA Results</a>
-                <a href="/sport/MLB/results">⚾ MLB Results</a>
-                <a href="/sport/NFL/results">🏈 NFL Results</a>
-                <a href="/sport/NCAAB/results">🎓 NCAAB Results</a>
-                <a href="/sport/NCAAW/results">🏀 NCAAW Results</a>
-                <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
-                <a href="/sport/WNBA/results">🏀 WNBA Results</a>
-                {% if soccer_enabled %}
-                <a href="/sport/SOCCER/results">⚽ Soccer Results</a>
                 {% endif %}
                 <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
             </div>
@@ -5287,10 +5264,11 @@ def landing_page():
 
         /* ── Navbar ── */
         .navbar {
-            background: rgba(15, 23, 42, 0.95);
-            padding: 15px 30px;
-            border-bottom: 2px solid #334155;
-            backdrop-filter: blur(10px);
+            background: rgba(7, 10, 20, 0.94);
+            padding: 14px 28px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            backdrop-filter: blur(12px);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -5326,59 +5304,60 @@ def landing_page():
             flex-direction: column;
             cursor: pointer;
             gap: 5px;
-            padding: 6px;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 7px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
         .hamburger:hover {
-            background: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.12);
         }
         .hamburger span {
-            width: 25px;
-            height: 3px;
+            width: 24px;
+            height: 2px;
             background: #fbbf24;
             border-radius: 2px;
             transition: 0.3s;
         }
         .nav-links {
             position: absolute;
-            top: 70px;
-            right: 30px;
-            background: rgba(15, 23, 42, 0.98);
+            top: 64px;
+            right: 22px;
+            background: rgba(7, 10, 20, 0.98);
             flex-direction: column;
-            gap: 0;
-            padding: 14px;
-            border: 1px solid #334155;
-            border-radius: 12px;
+            gap: 2px;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
             display: none;
-            min-width: 220px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+            min-width: 200px;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
         }
         .nav-links.active { display: flex; }
         .nav-links a {
             color: #cbd5e1;
             text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s;
+            font-weight: 600;
+            font-size: 0.88em;
+            transition: all 0.2s;
             white-space: nowrap;
+            padding: 8px 10px;
+            border-radius: 8px;
         }
-        .nav-links a:hover {
-            color: #fbbf24;
-        }
-        .nav-links a.active {
-            color: #fbbf24;
-        }
+        .nav-links a:hover { color: #fbbf24; background: rgba(255,255,255,0.08); }
+        .nav-links a.active { color: #fbbf24; background: rgba(251,191,36,0.12); }
+        .nav-section-title { display: none; }
+        .nav-divider { display: none; }
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             color: #000 !important;
-            font-weight: 700 !important;
-            padding: 7px 16px;
-            border-radius: 20px;
+            font-weight: 800 !important;
+            padding: 8px 14px;
+            border-radius: 10px;
             transition: opacity 0.2s !important;
             white-space: nowrap;
         }
-        .nav-donate-btn:hover { opacity: 0.85; color: #000 !important; }
+        .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
 
         /* ── Hero ── */
         .hero{
@@ -5615,7 +5594,6 @@ def landing_page():
         </div>
         <div class="nav-links" id="navLinks">
             <a href="/" class="active">Home</a>
-            <div class="nav-section-title">Predictions</div>
             <a href="/sport/NHL/predictions">🏒 NHL</a>
             <a href="/sport/NBA/predictions">🏀 NBA</a>
             <a href="/sport/MLB/predictions">⚾ MLB</a>
@@ -5626,19 +5604,6 @@ def landing_page():
             <a href="/sport/WNBA/predictions">🏀 WNBA</a>
             {% if soccer_enabled %}
             <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
-            {% endif %}
-            <div class="nav-divider"></div>
-            <div class="nav-section-title">Results</div>
-            <a href="/sport/NHL/results">🏒 NHL Results</a>
-            <a href="/sport/NBA/results">🏀 NBA Results</a>
-            <a href="/sport/MLB/results">⚾ MLB Results</a>
-            <a href="/sport/NFL/results">🏈 NFL Results</a>
-            <a href="/sport/NCAAB/results">🎓 NCAAB Results</a>
-            <a href="/sport/NCAAW/results">🏀 NCAAW Results</a>
-            <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
-            <a href="/sport/WNBA/results">🏀 WNBA Results</a>
-            {% if soccer_enabled %}
-            <a href="/sport/SOCCER/results">⚽ Soccer Results</a>
             {% endif %}
             <a href="{{ stripe_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
         </div>
