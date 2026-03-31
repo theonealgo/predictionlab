@@ -360,7 +360,7 @@ def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
     if not ODDS_ENGINE_URL:
         for dd in daily_results.values():
             for g in dd.get('games', []):
-                g['odds_reason'] = "N/A — odds engine URL not configured."
+                g['odds_reason'] = "Odds engine unavailable."
         return
     try:
         conn = get_db_connection()
@@ -433,8 +433,6 @@ def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
     if not predictions:
         return
     if not ODDS_ENGINE_URL:
-        for pred in predictions:
-            pred['odds_reason'] = "N/A — odds engine URL not configured."
         return
     try:
         conn = get_db_connection()
@@ -475,7 +473,7 @@ def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
                         odds,
                     )
             else:
-                pred['odds_reason'] = reason
+                pred['odds_reason'] = None
         conn.commit()
         conn.close()
     except Exception as _e:
@@ -528,6 +526,103 @@ def _daily_results_from_weekly(weekly_results):
         for game in week_data.get('games', []):
             date_key = game.get('date') or 'Unknown'
             daily_results[date_key]['games'].append(game)
+    return daily_results
+
+def _banner_daily_results_for_range(sport, start_dt, end_dt):
+    if sport == 'NFL':
+        weekly_results = calculate_nfl_weekly_performance()
+        return _daily_results_from_weekly(weekly_results) if weekly_results else None
+    if sport == 'NHL':
+        weekly_results = calculate_nhl_weekly_performance()
+        return _daily_results_from_weekly(weekly_results) if weekly_results else None
+    if sport == 'NBA':
+        weekly_results = calculate_nba_weekly_performance()
+        return _daily_results_from_weekly(weekly_results) if weekly_results else None
+
+    try:
+        conn = get_db_connection()
+        rows = conn.execute('''
+            SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+            FROM games g
+            LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+            WHERE g.sport = ?
+              AND g.home_score IS NOT NULL
+              AND g.away_score IS NOT NULL
+              AND date(g.game_date) BETWEEN ? AND ?
+            ORDER BY g.game_date DESC
+        ''', (
+            sport,
+            sport,
+            start_dt.strftime('%Y-%m-%d'),
+            end_dt.strftime('%Y-%m-%d'),
+        )).fetchall()
+        conn.close()
+    except Exception:
+        return None
+
+    if not rows:
+        return None
+
+    from collections import defaultdict
+    daily_results = defaultdict(lambda: {'games': []})
+    for game in rows:
+        home_score = _to_float_safe(game['home_score'])
+        away_score = _to_float_safe(game['away_score'])
+        if home_score is None or away_score is None:
+            continue
+        home_won = home_score > away_score
+        is_draw = False
+        if sport == 'SOCCER' and abs(home_score - away_score) < 1e-9:
+            is_draw = True
+            home_won = None
+        home_team = game['home_team_id']
+        away_team = game['away_team_id']
+        _raw_date = _to_date_str(game['game_date'])
+        game_date = _raw_date[:10] if _raw_date else None
+        league_name = game.get('league') if isinstance(game, dict) else game['league']
+        if sport == 'SOCCER':
+            league_name = _canonical_soccer_league_name(league_name) or league_name
+            if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
+                continue
+
+        elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+        xgb_prob = _to_float_safe(game['xgboost_home_prob'])
+        if xgb_prob is None:
+            xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+        ens_prob = _to_float_safe(game['win_probability'])
+        if ens_prob is None:
+            ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+
+        v2 = get_v2_prediction(sport, home_team, away_team, game_date) if sport != 'SOCCER' else None
+        glicko2_prob = v2.get('glicko2_prob') if v2 else None
+        trueskill_prob = v2.get('trueskill_prob') if v2 else None
+        if v2:
+            xgb_prob = v2.get('xgboost_prob', xgb_prob)
+            ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
+
+        game_info = {
+            'game_id':         game['game_id'],
+            'date':             game_date or 'Unknown',
+            'home':             home_team,
+            'away':             away_team,
+            'league':           league_name or sport,
+            'home_score':       int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
+            'away_score':       int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
+            'home_win':         home_won,
+            'is_draw':          is_draw,
+            'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
+            'trueskill_prob':   round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
+            'elo_prob':         round(elo_prob  * 100, 1),
+            'xgb_prob':         round(xgb_prob  * 100, 1),
+            'ens_prob':         round(ens_prob  * 100, 1),
+            'glicko2_correct':   (glicko2_prob   > 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
+            'trueskill_correct': (trueskill_prob > 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
+            'elo_correct':       (elo_prob  > 0.5) == home_won if home_won is not None else None,
+            'xgb_correct':       (xgb_prob  > 0.5) == home_won if home_won is not None else None,
+            'ens_correct':       (ens_prob  > 0.5) == home_won if ens_prob is not None and home_won is not None else None,
+            'skip_grading':      True if home_won is None else False,
+        }
+        daily_results[game_info['date']]['games'].append(game_info)
     return daily_results
 
 
@@ -1201,7 +1296,7 @@ def update_nfl_scores():
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
                     """, ('NFL', 'NFL', game_id, 2025, game_date, home_team, away_team, game['home_score'], game['away_score']))
                     inserts_count += 1
-                    logger.info(f"Inserted new NFL game: {away_team} @ {home_team} (Week {game.get('week', 'N/A')})")
+                    logger.info(f"Inserted new NFL game: {away_team} @ {home_team} (Week {game.get('week', '?')})")
                 except Exception as insert_error:
                     logger.error(f"Error inserting NFL game {game_id}: {insert_error}")
 
@@ -2529,7 +2624,7 @@ def get_upcoming_predictions(sport, days=365):
                 elif soccer_bundle:
                     soccer_note = soccer_bundle.reason
                 else:
-                    soccer_note = "N/A — soccer models are unavailable."
+                    soccer_note = "Soccer models are unavailable."
 
             v2_pred = None
             if sport != 'SOCCER':
@@ -2671,7 +2766,7 @@ def get_upcoming_predictions(sport, days=365):
             if sport == 'SOCCER':
                 if game_dict['glicko2_prob'] is None or game_dict['trueskill_prob'] is None:
                     game_dict['model_data_note'] = soccer_note or (
-                        "N/A — soccer model outputs are unavailable for this matchup."
+                        "Soccer model outputs are unavailable for this matchup."
                     )
                 else:
                     game_dict['model_data_note'] = None
@@ -2724,7 +2819,7 @@ def get_upcoming_predictions(sport, days=365):
                             logger.debug(f"ScorePredictor error: {_e}")
                     if game_dict.get('naive_spread') is None:
                         game_dict['spread_total_note'] = soccer_note or (
-                            "N/A — soccer spread/total requires team scoring rates; data not ready yet."
+                            "Soccer spread/total requires team scoring rates; data not ready yet."
                         )
                 else:
                     try:
@@ -3380,7 +3475,7 @@ def calculate_model_performance(sport):
     valid_dates = [d for d in dates if d is not None]
     performance['date_range'] = (
         f"{min(valid_dates).strftime('%d/%m/%Y')} - {max(valid_dates).strftime('%d/%m/%Y')}"
-        if valid_dates else 'N/A'
+        if valid_dates else '—'
     )
     performance['total_games'] = len(results_data)
     return performance
@@ -3942,17 +4037,17 @@ def compute_roi_for_range(daily_results, start_date=None, end_date=None):
             entry["roi_pct"] = round((entry["units_won"] / entry["units_risked"]) * 100, 2)
         else:
             if entry["graded"] == 0:
-                entry["reason"] = "N/A — no graded bets in range."
+                entry["reason"] = "No graded bets in range."
             elif entry["missing_odds"] > 0:
-                entry["reason"] = "N/A — odds missing for graded bets."
+                entry["reason"] = "Odds missing for graded bets."
     return summary
 
 def build_roi_cards(roi_daily, roi_weekly, roi_total):
     def _format_entry(entry):
         if not entry:
-            return {"roi": "N/A", "detail": "N/A"}
+            return {"roi": "—", "detail": "—"}
         if entry.get("roi_pct") is None:
-            return {"roi": "N/A", "detail": entry.get("reason") or "N/A"}
+            return {"roi": "—", "detail": entry.get("reason") or "—"}
         units = entry.get("units_won", 0.0)
         wins = entry.get("wins", 0)
         losses = entry.get("losses", 0)
@@ -4428,7 +4523,7 @@ TRAFFIC_TEMPLATE = BASE_TEMPLATE.replace(
             </tbody>
         </table>
         {% else %}
-        <div class="no-data">N/A — no endpoint visits recorded yet.</div>
+        <div class="no-data">No endpoint visits recorded yet.</div>
         {% endif %}
     </div>
 
@@ -4446,7 +4541,7 @@ TRAFFIC_TEMPLATE = BASE_TEMPLATE.replace(
             </tbody>
         </table>
         {% else %}
-        <div class="no-data">N/A — no daily visit data available yet.</div>
+        <div class="no-data">No daily visit data available yet.</div>
         {% endif %}
     </div>
 """)
@@ -4810,19 +4905,19 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <!-- Rating-Based Models -->
             <div class="model-card" style="border-color: #1e40af;">
                 <div class="model-name" style="color: #60a5fa;">📊 Grinder2</div>
-                <div class="model-accuracy">{{ performance.glicko2.accuracy if performance.glicko2 else 'N/A' }}{% if performance.glicko2 %}%{% endif %}</div>
+                <div class="model-accuracy">{{ performance.glicko2.accuracy if performance.glicko2 else '—' }}{% if performance.glicko2 %}%{% endif %}</div>
                 <div class="model-record">{% if performance.glicko2 %}{{ performance.glicko2.correct }}-{{ performance.glicko2.total - performance.glicko2.correct }}{% else %}No data{% endif %}</div>
             </div>
             
             <div class="model-card" style="border-color: #7c3aed;">
                 <div class="model-name" style="color: #a78bfa;">🎯 Takedown</div>
-                <div class="model-accuracy">{{ performance.trueskill.accuracy if performance.trueskill else 'N/A' }}{% if performance.trueskill %}%{% endif %}</div>
+                <div class="model-accuracy">{{ performance.trueskill.accuracy if performance.trueskill else '—' }}{% if performance.trueskill %}%{% endif %}</div>
                 <div class="model-record">{% if performance.trueskill %}{{ performance.trueskill.correct }}-{{ performance.trueskill.total - performance.trueskill.correct }}{% else %}No data{% endif %}</div>
             </div>
             
             <div class="model-card" style="border-color: #059669;">
                 <div class="model-name" style="color: #34d399;">📊 Edge</div>
-                <div class="model-accuracy">{{ performance.elo.accuracy if performance.elo else 'N/A' }}{% if performance.elo %}%{% endif %}</div>
+                <div class="model-accuracy">{{ performance.elo.accuracy if performance.elo else '—' }}{% if performance.elo %}%{% endif %}</div>
                 <div class="model-record">{% if performance.elo %}{{ performance.elo.correct }}-{{ performance.elo.total - performance.elo.correct }}{% else %}No data{% endif %}</div>
             </div>
             
@@ -4965,7 +5060,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="daily-acc">{{ m.accuracy }}%</div>
                     <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                     {% else %}
-                    <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                    <div class="daily-acc" style="color:#94a3b8;">—</div>
                     <div class="daily-rec">no graded games</div>
                     {% endif %}
                 </div>
@@ -4974,7 +5069,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% else %}
         <div class="daily-tally" style="text-align:center;">
-            <strong>N/A</strong> — no graded games for {{ daily_tally_date }}.
+            No graded games for {{ daily_tally_date }}.
         </div>
         {% endif %}
 
@@ -4991,7 +5086,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="daily-acc">{{ m.accuracy }}%</div>
                     <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                     {% else %}
-                    <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                    <div class="daily-acc" style="color:#94a3b8;">—</div>
                     <div class="daily-rec">no graded games</div>
                     {% endif %}
                 </div>
@@ -5000,27 +5095,10 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% else %}
         <div class="daily-tally" style="text-align:center;">
-            <strong>N/A</strong> — no graded games for last 7 days.
+            No graded games for last 7 days.
         </div>
         {% endif %}
 
-        <!-- ── ROI Summary ── -->
-        {% if roi_cards %}
-        <div class="daily-tally">
-            <h2>ROI (1u) — Moneyline / Spread / Total</h2>
-            <div class="daily-tally-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
-                {% for r_label, r_key in [('Moneyline','moneyline'),('Spread','spread'),('Total','total')] %}
-                {% set r = roi_cards[r_key] %}
-                <div class="daily-tally-card">
-                    <div class="daily-model">{{ r_label }}</div>
-                    <div class="daily-rec">Last Night: {{ r.daily.roi }} · {{ r.daily.detail }}</div>
-                    <div class="daily-rec">Last 7 Days: {{ r.weekly.roi }} · {{ r.weekly.detail }}</div>
-                    <div class="daily-rec">Season: {{ r.total.roi }} · {{ r.total.detail }}</div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;">
@@ -5113,28 +5191,28 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <div class="model-row">
                                 <span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span>
                                 <span class="model-right">
-                                    <span class="model-val">{{ game.glicko2_prob if game.glicko2_prob is not none else 'N/A' }}{% if game.glicko2_prob is not none %}%{% endif %}</span>
+                                    <span class="model-val">{{ game.glicko2_prob if game.glicko2_prob is not none else '—' }}{% if game.glicko2_prob is not none %}%{% endif %}</span>
                                     {% if game.glicko2_correct is not none %}<span class="{{ 'pick-ok' if game.glicko2_correct else 'pick-no' }}">{{ '✅' if game.glicko2_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
                             <div class="model-row">
                                 <span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span>
                                 <span class="model-right">
-                                    <span class="model-val">{{ game.trueskill_prob if game.trueskill_prob is not none else 'N/A' }}{% if game.trueskill_prob is not none %}%{% endif %}</span>
+                                    <span class="model-val">{{ game.trueskill_prob if game.trueskill_prob is not none else '—' }}{% if game.trueskill_prob is not none %}%{% endif %}</span>
                                     {% if game.trueskill_correct is not none %}<span class="{{ 'pick-ok' if game.trueskill_correct else 'pick-no' }}">{{ '✅' if game.trueskill_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
                             <div class="model-row">
                                 <span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span>
                                 <span class="model-right">
-                                    <span class="model-val">{{ game.elo_prob if game.elo_prob is not none else 'N/A' }}{% if game.elo_prob is not none %}%{% endif %}</span>
+                                    <span class="model-val">{{ game.elo_prob if game.elo_prob is not none else '—' }}{% if game.elo_prob is not none %}%{% endif %}</span>
                                     {% if game.elo_correct is not none %}<span class="{{ 'pick-ok' if game.elo_correct else 'pick-no' }}">{{ '✅' if game.elo_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
                             <div class="model-row">
                                 <span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span>
                                 <span class="model-right">
-                                    <span class="model-val">{{ game.xgb_prob if game.xgb_prob is not none else 'N/A' }}{% if game.xgb_prob is not none %}%{% endif %}</span>
+                                    <span class="model-val">{{ game.xgb_prob if game.xgb_prob is not none else '—' }}{% if game.xgb_prob is not none %}%{% endif %}</span>
                                     {% if game.xgb_correct is not none %}<span class="{{ 'pick-ok' if game.xgb_correct else 'pick-no' }}">{{ '✅' if game.xgb_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
@@ -5147,8 +5225,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">Model Spread Pick</span>
                             <span class="sf-val">
                                 {% if game.spread_pick_label %}{{ game.spread_pick_label }}
-                                {% elif game.spread_pick_reason is defined and game.spread_pick_reason %}N/A ({{ game.spread_pick_reason }})
-                                {% else %}N/A{% endif %}
+                                {% elif game.spread_pick_reason is defined and game.spread_pick_reason %}{{ game.spread_pick_reason }}
+                                {% else %}—{% endif %}
                                 {% if game.spread_correct is not none %}<span class="{{ 'pick-ok' if game.spread_correct else 'pick-no' }}">{{ '✅' if game.spread_correct else '❌' }}</span>{% endif %}
                             </span>
                         </div>
@@ -5157,8 +5235,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-val">
                                 {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
                                 {% elif game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
-                                {% elif game.market_spread_reason is defined and game.market_spread_reason %}N/A ({{ game.market_spread_reason }})
-                                {% else %}N/A{% endif %}
+                                {% elif game.market_spread_reason is defined and game.market_spread_reason %}{{ game.market_spread_reason }}
+                                {% else %}—{% endif %}
                             </span>
                         </div>
                         <div class="sf-item">
@@ -5171,8 +5249,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">Model O/U Pick</span>
                             <span class="sf-val">
                                 {% if game.total_pick_label %}{{ game.total_pick_label }}
-                                {% elif game.total_pick_reason is defined and game.total_pick_reason %}N/A ({{ game.total_pick_reason }})
-                                {% else %}N/A{% endif %}
+                                {% elif game.total_pick_reason is defined and game.total_pick_reason %}{{ game.total_pick_reason }}
+                                {% else %}—{% endif %}
                                 {% if game.total_correct is not none %}<span class="{{ 'pick-ok' if game.total_correct else 'pick-no' }}">{{ '✅' if game.total_correct else '❌' }}</span>{% endif %}
                             </span>
                         </div>
@@ -5180,8 +5258,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">Market Total</span>
                             <span class="sf-val">
                                 {% if game.market_total is not none %}{{ "%.1f"|format(game.market_total) }}
-                                {% elif game.market_total_reason is defined and game.market_total_reason %}N/A ({{ game.market_total_reason }})
-                                {% else %}N/A{% endif %}
+                                {% elif game.market_total_reason is defined and game.market_total_reason %}{{ game.market_total_reason }}
+                                {% else %}—{% endif %}
                             </span>
                         </div>
                         <div class="sf-item">
@@ -5398,7 +5476,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-acc">{{ m.accuracy }}%</div>
                 <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                 {% else %}
-                <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                <div class="daily-acc" style="color:#94a3b8;">—</div>
                 <div class="daily-rec">no graded games</div>
                 {% endif %}
             </div>
@@ -5407,7 +5485,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     </div>
     {% else %}
     <div class="daily-tally" style="text-align:center;">
-        <strong>N/A</strong> — no graded games for {{ daily_tally_date }}.
+        No graded games for {{ daily_tally_date }}.
     </div>
     {% endif %}
     {% if weekly_tally %}
@@ -5422,7 +5500,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-acc">{{ m.accuracy }}%</div>
                 <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                 {% else %}
-                <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                <div class="daily-acc" style="color:#94a3b8;">—</div>
                 <div class="daily-rec">no graded games</div>
                 {% endif %}
             </div>
@@ -5431,23 +5509,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     </div>
     {% else %}
     <div class="daily-tally" style="text-align:center;">
-        <strong>N/A</strong> — no graded games for last 7 days.
-    </div>
-    {% endif %}
-    {% if roi_cards %}
-    <div class="daily-tally">
-        <h2>ROI (1u) — Moneyline / Spread / Total</h2>
-        <div class="daily-tally-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
-            {% for r_label, r_key in [('Moneyline','moneyline'),('Spread','spread'),('Total','total')] %}
-            {% set r = roi_cards[r_key] %}
-            <div class="daily-tally-card">
-                <div class="daily-model">{{ r_label }}</div>
-                <div class="daily-rec">Last Night: {{ r.daily.roi }} · {{ r.daily.detail }}</div>
-                <div class="daily-rec">Last 7 Days: {{ r.weekly.roi }} · {{ r.weekly.detail }}</div>
-                <div class="daily-rec">Season: {{ r.total.roi }} · {{ r.total.detail }}</div>
-            </div>
-            {% endfor %}
-        </div>
+        No graded games for last 7 days.
     </div>
     {% endif %}
     {% if weekly_results and overall_stats %}
@@ -5500,11 +5562,11 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="{% if game.home_score > game.away_score %}winner{% else %}loser{% endif %}">{{ game.home }}</span>
                         </td>
                         <td class="score">{{ game.away_score }} - {{ game.home_score }}</td>
-                        <td class="{% if game.glicko2_correct %}prob-correct{% elif game.glicko2_correct == false %}prob-wrong{% endif %}">{% if game.glicko2_correct is not none %}{% if game.glicko2_correct %}✅{% else %}❌{% endif %} {{ game.glicko2_prob }}%{% else %}N/A{% endif %}</td>
-                        <td class="{% if game.trueskill_correct %}prob-correct{% elif game.trueskill_correct == false %}prob-wrong{% endif %}">{% if game.trueskill_correct is not none %}{% if game.trueskill_correct %}✅{% else %}❌{% endif %} {{ game.trueskill_prob }}%{% else %}N/A{% endif %}</td>
-                        <td class="{% if game.elo_correct %}prob-correct{% elif game.elo_correct == false %}prob-wrong{% endif %}">{% if game.elo_correct is not none %}{% if game.elo_correct %}✅{% else %}❌{% endif %} {{ game.elo_prob }}%{% else %}N/A{% endif %}</td>
-                        <td class="{% if game.xgb_correct %}prob-correct{% elif game.xgb_correct == false %}prob-wrong{% endif %}">{% if game.xgb_correct is not none %}{% if game.xgb_correct %}✅{% else %}❌{% endif %} {{ game.xgb_prob }}%{% else %}N/A{% endif %}</td>
-                        <td class="{% if game.ens_correct %}prob-correct{% elif game.ens_correct == false %}prob-wrong{% endif %}">{% if game.ens_correct is not none %}{% if game.ens_correct %}✅{% else %}❌{% endif %} {{ game.ens_prob }}%{% else %}N/A{% endif %}</td>
+                        <td class="{% if game.glicko2_correct %}prob-correct{% elif game.glicko2_correct == false %}prob-wrong{% endif %}">{% if game.glicko2_correct is not none %}{% if game.glicko2_correct %}✅{% else %}❌{% endif %} {{ game.glicko2_prob }}%{% else %}—{% endif %}</td>
+                        <td class="{% if game.trueskill_correct %}prob-correct{% elif game.trueskill_correct == false %}prob-wrong{% endif %}">{% if game.trueskill_correct is not none %}{% if game.trueskill_correct %}✅{% else %}❌{% endif %} {{ game.trueskill_prob }}%{% else %}—{% endif %}</td>
+                        <td class="{% if game.elo_correct %}prob-correct{% elif game.elo_correct == false %}prob-wrong{% endif %}">{% if game.elo_correct is not none %}{% if game.elo_correct %}✅{% else %}❌{% endif %} {{ game.elo_prob }}%{% else %}—{% endif %}</td>
+                        <td class="{% if game.xgb_correct %}prob-correct{% elif game.xgb_correct == false %}prob-wrong{% endif %}">{% if game.xgb_correct is not none %}{% if game.xgb_correct %}✅{% else %}❌{% endif %} {{ game.xgb_prob }}%{% else %}—{% endif %}</td>
+                        <td class="{% if game.ens_correct %}prob-correct{% elif game.ens_correct == false %}prob-wrong{% endif %}">{% if game.ens_correct is not none %}{% if game.ens_correct %}✅{% else %}❌{% endif %} {{ game.ens_prob }}%{% else %}—{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -5587,69 +5649,58 @@ def get_season_status(sport, today=None):
 def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
     sport_info = SPORTS.get(sport, {'name': sport})
     sport_name = sport_info.get('name', sport)
-    try:
-        conn = get_db_connection()
-        rows = conn.execute('''
-            SELECT g.home_score, g.away_score, g.home_team_id, g.away_team_id, g.game_date,
-                   p.win_probability
-            FROM games g
-            LEFT JOIN predictions p ON p.sport = ?
-                AND (
-                    p.game_id = g.game_id
-                    OR (
-                        date(p.game_date) = date(g.game_date)
-                        AND p.home_team_id = g.home_team_id
-                        AND p.away_team_id = g.away_team_id
-                    )
-                )
-            WHERE g.sport = ?
-              AND g.home_score IS NOT NULL
-              AND g.away_score IS NOT NULL
-              AND date(g.game_date) BETWEEN ? AND ?
-        ''', (sport, sport, start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'))).fetchall()
-        conn.close()
-    except Exception as _e:
-        return None
-    total_games = 0
-    graded = 0
-    correct = 0
-    missing_preds = 0
-    for row in rows:
-        total_games += 1
-        home_score = row['home_score']
-        away_score = row['away_score']
-        if home_score is None or away_score is None:
+    daily_results = _banner_daily_results_for_range(sport, start_dt, end_dt)
+    if not daily_results:
+        return None, None
+    weekly_tally = compute_model_tally_for_range(daily_results, start_dt, end_dt)
+    if not weekly_tally:
+        return None, None
+    model_labels = [
+        ('glicko2', 'Grinder2'),
+        ('trueskill', 'Takedown'),
+        ('elo', 'Edge'),
+        ('xgboost', 'XSharp'),
+        ('ensemble', 'Consensus'),
+    ]
+    best_key = None
+    best_label = None
+    best_acc = None
+    best_total = 0
+    best_correct = 0
+    for key, label in model_labels:
+        data = weekly_tally.get(key) or {}
+        total = data.get('total', 0)
+        correct = data.get('correct', 0)
+        if total <= 0:
             continue
-        if home_score == away_score:
+        acc = data.get('accuracy')
+        if acc is None:
+            acc = round((correct / total) * 100, 1) if total > 0 else None
+        if acc is None:
             continue
-        prob = row['win_probability']
-        if prob is None:
-            v2 = get_v2_prediction(sport, row['home_team_id'], row['away_team_id'], row['game_date'])
-            if v2:
-                prob = v2.get('home_prob')
-        if prob is None:
-            missing_preds += 1
-            continue
-        actual_home_win = home_score > away_score
-        graded += 1
-        if (prob > 0.5) == actual_home_win:
-            correct += 1
-    if graded == 0:
-        return None
-    accuracy = round((correct / graded) * 100, 1)
-    return f"{sport_name} consensus ML (last 7 days): {accuracy}% ({correct}-{graded - correct})"
+        if best_acc is None or acc > best_acc or (acc == best_acc and total > best_total):
+            best_key = key
+            best_label = label
+            best_acc = acc
+            best_total = total
+            best_correct = correct
+    if best_acc is None:
+        return None, None
+    msg = f"{sport_name} {best_label}: {best_acc}% ({best_correct}-{best_total - best_correct})"
+    return msg, best_acc
 
-def _build_weekly_banner_messages(sport_keys, days=7):
+def _build_weekly_banner_messages(sport_keys, days=7, max_items=4):
     if not sport_keys:
         return []
     end_dt = datetime.now() - timedelta(days=1)
     start_dt = end_dt - timedelta(days=max(days, 1) - 1)
-    messages = []
+    ranked = []
     for key in sport_keys:
-        msg = _weekly_banner_message_for_sport(key, start_dt, end_dt)
-        if msg:
-            messages.append(msg)
-    return messages
+        msg, acc = _weekly_banner_message_for_sport(key, start_dt, end_dt)
+        if msg and acc is not None:
+            ranked.append((acc, msg))
+    ranked.sort(key=lambda x: x[0], reverse=True)
+    return [msg for _, msg in ranked[:max_items]]
 
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
@@ -5662,7 +5713,7 @@ GA_OAUTH_REFRESH_TOKEN = _os.environ.get('GA_OAUTH_REFRESH_TOKEN')
 
 def _fetch_ga_traffic():
     if not GA_PROPERTY_ID:
-        return None, "N/A — GA_PROPERTY_ID not configured."
+        return None, "GA_PROPERTY_ID not configured."
     try:
         from google.analytics.data_v1beta import BetaAnalyticsDataClient
         from google.analytics.data_v1beta.types import DateRange, Dimension, Metric, OrderBy
@@ -5670,7 +5721,7 @@ def _fetch_ga_traffic():
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
     except Exception:
-        return None, "N/A — Google Analytics client libraries not installed."
+        return None, "Google Analytics client libraries not installed."
     try:
         creds = None
         if GA_CREDENTIALS_JSON:
@@ -5686,10 +5737,10 @@ def _fetch_ga_traffic():
             )
             creds.refresh(Request())
         if not creds:
-            return None, "N/A — GA credentials not configured."
+            return None, "GA credentials not configured."
         client = BetaAnalyticsDataClient(credentials=creds)
     except Exception:
-        return None, "N/A — failed to load GA credentials."
+        return None, "Failed to load GA credentials."
 
     property_path = f"properties/{GA_PROPERTY_ID}"
     today_dt = _traffic_now()
@@ -5743,7 +5794,7 @@ def _fetch_ga_traffic():
             'daily_visits': sorted(daily_visits, key=lambda x: x['date'], reverse=True),
         }, None
     except Exception:
-        return None, "N/A — failed to fetch Google Analytics data."
+        return None, "Failed to fetch Google Analytics data."
 
 @app.route('/')
 def landing_page():
@@ -5782,10 +5833,8 @@ def landing_page():
             'is_live': is_live,
         })
     sports_covered = len(landing_sports)
-    preferred = [s['key'] for s in landing_sports if s.get('is_live') and s['key'] in ('NBA', 'MLB')]
-    fallback = [s['key'] for s in landing_sports if s.get('is_live') and s['key'] not in ('NBA', 'MLB')]
-    banner_sports = preferred + fallback
-    weekly_banner_messages = _build_weekly_banner_messages(banner_sports[:2])
+    banner_sports = [s['key'] for s in landing_sports]
+    weekly_banner_messages = _build_weekly_banner_messages(banner_sports, max_items=4)
 
     return render_template_string("""
 <!DOCTYPE html>
@@ -5991,34 +6040,42 @@ def landing_page():
 
         /* ── Weekly banner ── */
         .weekly-banner{
-            margin:-10px auto 10px;
-            max-width:980px;
-            background:rgba(255,255,255,0.05);
-            border:1px solid var(--border);
-            border-radius:14px;
-            padding:16px 20px;
+            margin:-8px auto 18px;
+            max-width:1200px;
+            width:100%;
+            background:linear-gradient(90deg,rgba(15,23,42,0.95),rgba(30,41,59,0.95));
+            border:1px solid rgba(251,191,36,0.35);
+            border-radius:16px;
+            padding:14px 18px;
             display:flex;
             flex-direction:column;
-            gap:6px;
+            gap:10px;
             align-items:center;
             text-align:center;
+            box-shadow:0 8px 24px rgba(0,0,0,0.25);
         }
         .weekly-banner-label{
-            font-size:0.72em;
+            font-size:0.7em;
             text-transform:uppercase;
-            letter-spacing:0.6px;
-            color:#94a3b8;
-            font-weight:700;
-        }
-        .weekly-banner-text{
-            font-size:1.1em;
-            font-weight:700;
+            letter-spacing:0.7px;
             color:#fbbf24;
-            min-height:1.6em;
+            font-weight:800;
         }
-        .weekly-banner-text.fade{
-            opacity:0.15;
-            transition:opacity 0.35s ease;
+        .weekly-banner-lines{
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px 14px;
+            justify-content:center;
+        }
+        .weekly-banner-line{
+            background:rgba(255,255,255,0.06);
+            border:1px solid rgba(255,255,255,0.12);
+            border-radius:999px;
+            padding:6px 14px;
+            font-size:0.95em;
+            font-weight:700;
+            color:#e2e8f0;
+            white-space:nowrap;
         }
 
         /* ── Free banner ── */
@@ -6228,8 +6285,12 @@ def landing_page():
 <!-- Weekly banner -->
 {% if weekly_banner_messages %}
 <div class="weekly-banner">
-    <div class="weekly-banner-label">Weekly Results (Last 7 Days)</div>
-    <div class="weekly-banner-text" id="weeklyBannerText">{{ weekly_banner_messages[0] }}</div>
+    <div class="weekly-banner-label">Top Weekly Records (Last 7 Days)</div>
+    <div class="weekly-banner-lines">
+        {% for msg in weekly_banner_messages %}
+        <div class="weekly-banner-line">{{ msg }}</div>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 
@@ -6359,23 +6420,8 @@ def landing_page():
         const step = scroller.clientWidth * 0.8;
         scroller.scrollBy({ left: direction * step, behavior: 'smooth' });
     }
-    const weeklyMessages = {{ weekly_banner_messages|tojson }};
-    let weeklyIndex = 0;
-    function rotateWeeklyBanner() {
-        const el = document.getElementById('weeklyBannerText');
-        if (!el || !weeklyMessages.length) return;
-        el.classList.add('fade');
-        setTimeout(() => {
-            el.textContent = weeklyMessages[weeklyIndex];
-            weeklyIndex = (weeklyIndex + 1) % weeklyMessages.length;
-            el.classList.remove('fade');
-        }, 200);
-    }
     document.addEventListener('DOMContentLoaded', function() {
-        rotateWeeklyBanner();
-        if (weeklyMessages.length > 1) {
-            setInterval(rotateWeeklyBanner, 4500);
-        }
+        // banner is static list now
     });
 </script>
 
@@ -6440,7 +6486,7 @@ def sport_predictions(sport):
         logger.error(f"Error loading {sport} predictions: {e}")
         predictions = []
         prediction_error = (
-            f"N/A — {sport} predictions could not be loaded because an upstream data/model dependency failed. "
+            f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
             "Please refresh in a minute."
         )
 
@@ -6605,7 +6651,7 @@ def sport_results(sport):
             weekly_results = calculate_nhl_weekly_performance()
             
             if not weekly_results:
-                return "<h1>N/A — NHL results could not be loaded because no completed NHL games were available for grading yet.</h1>"
+                return "<h1>NHL results could not be loaded because no completed NHL games were available for grading yet.</h1>"
             
             # Regroup by date instead of week
             from collections import defaultdict
@@ -6662,7 +6708,7 @@ def sport_results(sport):
                 return rendered
             except Exception as e:
                 logger.error(f"Error processing NHL results: {e}")
-                return f"<h1>N/A — NHL results page failed to render because of a processing error: {str(e)}</h1>"
+                return f"<h1>NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
             cache_key = f'{sport}_daily_results_html'
@@ -6681,7 +6727,7 @@ def sport_results(sport):
                 weekly_results = calculate_nba_weekly_performance()
                 logger.info(f"NBA weekly_results: {weekly_results is not None}, weeks: {list(weekly_results.keys()) if weekly_results else 'None'}")
                 if not weekly_results:
-                    return "<h1>N/A — NBA results could not be loaded because no completed NBA games were available for grading yet.</h1>"
+                    return "<h1>NBA results could not be loaded because no completed NBA games were available for grading yet.</h1>"
                 
                 # Regroup by date instead of week
                 from collections import defaultdict
@@ -6734,7 +6780,7 @@ def sport_results(sport):
                 return rendered
             except Exception as e:
                 logger.error(f"Error processing NBA results: {e}")
-                return f"<h1>N/A — NBA results page failed to render because of a processing error: {str(e)}</h1>"
+                return f"<h1>NBA results page failed to render because of a processing error: {str(e)}</h1>"
 
         # Handle NCAAB
         if sport in ['NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA', 'SOCCER']:
@@ -6854,7 +6900,7 @@ def sport_results(sport):
                         xgb_prob = v2.get('xgboost_prob', xgb_prob)
                         ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
                     if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
-                        model_note = model_note or "N/A — soccer model outputs are unavailable for this matchup."
+                        model_note = model_note or "Soccer model outputs are unavailable for this matchup."
                 game_info = {
                     'game_id':         game['game_id'],
                     'date':             game_date or 'Unknown',
@@ -6941,7 +6987,7 @@ def sport_results(sport):
     except Exception as e:
         logger.exception(f"Error loading /sport/{sport}/results: {e}")
         return (
-            f"<h1>N/A — {sport} moneyline results are temporarily unavailable because the server hit an internal processing error.</h1>"
+            f"<h1>{sport} moneyline results are temporarily unavailable because the server hit an internal processing error.</h1>"
             f"<p>Please refresh in 30-60 seconds. If it persists, the latest server traceback is now logged for diagnosis.</p>"
         ), 200
 
@@ -7122,8 +7168,10 @@ def admin_traffic():
     try:
         ga_data, ga_error = _fetch_ga_traffic()
         traffic_source = None
+        traffic_error = None
         if ga_data:
             traffic_source = "Google Analytics"
+            traffic_error = ga_error
             today_visits = ga_data['today_visits']
             week_visits = ga_data['week_visits']
             total_visits = ga_data['total_visits']
@@ -7181,11 +7229,11 @@ def admin_traffic():
             top_endpoints=top_endpoints,
             daily_visits=daily_visits,
             traffic_source=traffic_source,
-            traffic_error=ga_error
+            traffic_error=traffic_error
         )
     except Exception as e:
         logger.error(f"Error loading traffic dashboard: {e}")
-        return "<h1>N/A — traffic dashboard failed to load because the stats could not be read.</h1>"
+        return "<h1>Traffic dashboard failed to load because the stats could not be read.</h1>"
 
 # ============================================================================
 # API ENDPOINTS FOR FRONTEND INTEGRATION

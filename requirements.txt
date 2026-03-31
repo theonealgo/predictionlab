@@ -22,3 +22,5 @@ colorama
 tqdm
 openpyxl
 schedule
+google-analytics-data
+google-auth

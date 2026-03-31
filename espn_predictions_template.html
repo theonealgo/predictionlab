@@ -331,11 +331,11 @@
                     </div>
                         <div class="prediction-panel">
                             <div class="panel-title">Home Win %</div>
-                            <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else 'N/A' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
-                            <div class="model-row"><span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span><span class="model-val">{{ pred.trueskill_prob if pred.trueskill_prob is not none else 'N/A' }}{% if pred.trueskill_prob is not none %}%{% endif %}</span></div>
-                            <div class="model-row"><span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span><span class="model-val">{{ pred.elo_prob if pred.elo_prob is not none else 'N/A' }}{% if pred.elo_prob is not none %}%{% endif %}</span></div>
-                            <div class="model-row"><span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span><span class="model-val">{{ pred.xgb_prob if pred.xgb_prob is not none else 'N/A' }}{% if pred.xgb_prob is not none %}%{% endif %}</span></div>
-                            <div class="ensemble-badge">{{ label_ensemble|upper }} {{ pred.ensemble_prob if pred.ensemble_prob is not none else 'N/A' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
+                            <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else '—' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span><span class="model-val">{{ pred.trueskill_prob if pred.trueskill_prob is not none else '—' }}{% if pred.trueskill_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span><span class="model-val">{{ pred.elo_prob if pred.elo_prob is not none else '—' }}{% if pred.elo_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span><span class="model-val">{{ pred.xgb_prob if pred.xgb_prob is not none else '—' }}{% if pred.xgb_prob is not none %}%{% endif %}</span></div>
+                            <div class="ensemble-badge">{{ label_ensemble|upper }} {{ pred.ensemble_prob if pred.ensemble_prob is not none else '—' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
                             {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
                     </div>
@@ -377,36 +377,6 @@
                         </div>
                         <div class="sf-item"><span class="sf-label">Total</span><span class="sf-val">{{ pred.naive_total }}</span></div>
                         {% endif %}
-                    </div>
-                    {% elif not is_final and pred.spread_total_note %}
-                    <div class="score-footer">
-                        <div class="sf-item"><span class="sf-label">Spread/Total</span><span class="sf-val">{{ pred.spread_total_note }}</span></div>
-                    </div>
-                    {% endif %}
-                    {% if not is_final and (pred.get('home_moneyline') is not none or pred.get('away_moneyline') is not none or pred.get('spread_price_home') is not none or pred.get('total_over_price') is not none) %}
-                    <div class="score-footer">
-                        <div class="sf-item">
-                            <span class="sf-label">Book ML</span>
-                            <span class="sf-val">{{ pred.away_team_id[:10] }} {{ pred.get('away_moneyline') if pred.get('away_moneyline') is not none else 'N/A' }} / {{ pred.home_team_id[:10] }} {{ pred.get('home_moneyline') if pred.get('home_moneyline') is not none else 'N/A' }}</span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">Book Spread</span>
-                            <span class="sf-val">
-                                {% if pred.get('market_spread') is not none %}{{ "%+.1f"|format(pred.get('market_spread')) }}{% else %}N/A{% endif %}
-                                {% if pred.get('spread_price_home') is not none %} (H {{ pred.get('spread_price_home') }} / A {{ pred.get('spread_price_away') }}){% endif %}
-                            </span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">Book Total</span>
-                            <span class="sf-val">
-                                {% if pred.get('market_total') is not none %}{{ "%.1f"|format(pred.get('market_total')) }}{% else %}N/A{% endif %}
-                                {% if pred.get('total_over_price') is not none %} (O {{ pred.get('total_over_price') }} / U {{ pred.get('total_under_price') }}){% endif %}
-                            </span>
-                        </div>
-                    </div>
-                    {% elif not is_final and pred.get('odds_reason') %}
-                    <div class="score-footer">
-                        <div class="sf-item"><span class="sf-label">Odds</span><span class="sf-val">{{ pred.get('odds_reason') }}</span></div>
                     </div>
                     {% endif %}
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
