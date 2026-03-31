@@ -80,6 +80,12 @@ _SOCCER_MODEL_CACHE: dict = {}
 _SOCCER_MODEL_TTL = 900
 _LANDING_BANNER_CACHE = {'ts': 0, 'messages': []}
 _LANDING_BANNER_TTL = 900
+_MANUAL_BANNER_ITEMS = [
+    {'label': '⭐ Grinder2', 'pct': '83.3%', 'record': '40-8'},
+    {'label': '🎲 NBA O/U (XSharp)', 'pct': '82.6%', 'record': '247/299'},
+    {'label': 'MLB 🎯 Moneyline (Consensus)', 'pct': '60.0%', 'record': '60-40'},
+    {'label': 'NHL 📊 Edge', 'pct': '56.5%', 'record': '113-87'},
+]
 
 
 def _cached_get(url: str, timeout: int = 10):
@@ -4489,7 +4495,12 @@ TRAFFIC_TEMPLATE = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">📈 Site Traffic</h1>
     {% if traffic_source %}
-    <div style="text-align:center;opacity:0.7;margin-bottom:14px;">Source: {{ traffic_source }}</div>
+    <div style="text-align:center;opacity:0.7;margin-bottom:10px;">Source: {{ traffic_source }}</div>
+    {% endif %}
+    {% if traffic_ga_url %}
+    <div style="text-align:center;margin-bottom:14px;">
+        <a href="{{ traffic_ga_url }}" target="_blank" style="display:inline-block;padding:8px 14px;border-radius:8px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.5);color:#fbbf24;text-decoration:none;font-weight:700;">Open Google Analytics</a>
+    </div>
     {% endif %}
     {% if traffic_error %}
     <div class="table-card" style="border-color:rgba(239,68,68,0.4);color:#fecaca;">
@@ -5849,7 +5860,7 @@ def landing_page():
         })
     sports_covered = len(landing_sports)
     banner_sports = [s['key'] for s in landing_sports]
-    weekly_banner_messages = _get_cached_weekly_banner_messages(banner_sports, max_items=4)
+    weekly_banner_messages = list(_MANUAL_BANNER_ITEMS)
 
     return render_template_string("""
 <!DOCTYPE html>
@@ -6068,6 +6079,7 @@ def landing_page():
             align-items:center;
             text-align:center;
             box-shadow:0 8px 24px rgba(0,0,0,0.25);
+            overflow:hidden;
         }
         .weekly-banner-label{
             font-size:0.7em;
@@ -6077,10 +6089,8 @@ def landing_page():
             font-weight:800;
         }
         .weekly-banner-lines{
-            display:flex;
-            flex-wrap:wrap;
-            gap:10px 14px;
-            justify-content:center;
+            width:100%;
+            overflow:hidden;
         }
         .weekly-banner-line{
             background:rgba(255,255,255,0.06);
@@ -6091,6 +6101,9 @@ def landing_page():
             font-weight:700;
             color:#e2e8f0;
             white-space:nowrap;
+            display:flex;
+            gap:10px;
+            align-items:center;
         }
 
         /* ── Free banner ── */
@@ -6300,11 +6313,24 @@ def landing_page():
 <!-- Weekly banner -->
 {% if weekly_banner_messages %}
 <div class="weekly-banner">
-    <div class="weekly-banner-label">Top Weekly Records (Last 7 Days)</div>
+    <div class="weekly-banner-label">Featured Model Records</div>
     <div class="weekly-banner-lines">
-        {% for msg in weekly_banner_messages %}
-        <div class="weekly-banner-line">{{ msg }}</div>
-        {% endfor %}
+        <div class="weekly-banner-track">
+            {% for item in weekly_banner_messages %}
+            <div class="weekly-banner-line">
+                <span class="wb-title">{{ item.label }}</span>
+                <span class="wb-pct">{{ item.pct }}</span>
+                <span class="wb-rec">{{ item.record }}</span>
+            </div>
+            {% endfor %}
+            {% for item in weekly_banner_messages %}
+            <div class="weekly-banner-line">
+                <span class="wb-title">{{ item.label }}</span>
+                <span class="wb-pct">{{ item.pct }}</span>
+                <span class="wb-rec">{{ item.record }}</span>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 {% endif %}
@@ -7182,10 +7208,13 @@ def admin_traffic():
     """Simple traffic dashboard for site visits."""
     try:
         ga_data, ga_error = _fetch_ga_traffic()
-        traffic_source = None
+        traffic_source = "Google Analytics"
         traffic_error = None
+        traffic_ga_url = (
+            f"https://analytics.google.com/analytics/web/#/p{GA_PROPERTY_ID}/reports/overview"
+            if GA_PROPERTY_ID else None
+        )
         if ga_data:
-            traffic_source = "Google Analytics"
             traffic_error = ga_error
             today_visits = ga_data['today_visits']
             week_visits = ga_data['week_visits']
@@ -7193,47 +7222,12 @@ def admin_traffic():
             top_endpoints = ga_data['top_endpoints']
             daily_visits = ga_data['daily_visits']
         else:
-            traffic_source = "Local tracker (site_visits)"
-            conn = get_db_connection()
-            today_dt = _traffic_now()
-            today = today_dt.strftime('%Y-%m-%d')
-            week_ago = (today_dt - timedelta(days=6)).strftime('%Y-%m-%d')
-
-            today_visits = conn.execute(
-                'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) = date(?)',
-                (today,)
-            ).fetchone()[0]
-            week_visits = conn.execute(
-                'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) >= date(?)',
-                (week_ago,)
-            ).fetchone()[0]
-            total_visits = conn.execute('SELECT COUNT(*) FROM site_visits').fetchone()[0]
-
-            top_endpoints_rows = conn.execute('''
-                SELECT endpoint, COUNT(*) as count
-                FROM site_visits
-                GROUP BY endpoint
-                ORDER BY count DESC
-                LIMIT 15
-            ''').fetchall()
-            daily_rows = conn.execute('''
-                WITH RECURSIVE dates(d) AS (
-                    SELECT date(?)
-                    UNION ALL
-                    SELECT date(d, '-1 day')
-                    FROM dates
-                    WHERE d > date(?, '-13 day')
-                )
-                SELECT d as date, COALESCE(COUNT(v.id), 0) as count
-                FROM dates
-                LEFT JOIN site_visits v ON date(v.visit_date) = d
-                GROUP BY d
-                ORDER BY d DESC
-            ''', (today, today)).fetchall()
-            conn.close()
-
-            top_endpoints = [{'endpoint': r['endpoint'], 'count': r['count']} for r in top_endpoints_rows]
-            daily_visits = [{'date': r['date'], 'count': r['count']} for r in daily_rows if r['date']]
+            traffic_error = ga_error or "Google Analytics data is not available."
+            today_visits = "N/A"
+            week_visits = "N/A"
+            total_visits = "N/A"
+            top_endpoints = []
+            daily_visits = []
 
         return render_template_string(
             TRAFFIC_TEMPLATE,
@@ -7244,7 +7238,8 @@ def admin_traffic():
             top_endpoints=top_endpoints,
             daily_visits=daily_visits,
             traffic_source=traffic_source,
-            traffic_error=traffic_error
+            traffic_error=traffic_error,
+            traffic_ga_url=traffic_ga_url,
         )
     except Exception as e:
         logger.error(f"Error loading traffic dashboard: {e}")
