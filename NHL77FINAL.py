@@ -4378,6 +4378,14 @@ TRAFFIC_TEMPLATE = BASE_TEMPLATE.replace(
     """
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">📈 Site Traffic</h1>
+    {% if traffic_source %}
+    <div style="text-align:center;opacity:0.7;margin-bottom:14px;">Source: {{ traffic_source }}</div>
+    {% endif %}
+    {% if traffic_error %}
+    <div class="table-card" style="border-color:rgba(239,68,68,0.4);color:#fecaca;">
+        {{ traffic_error }}
+    </div>
+    {% endif %}
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-label">Today</div>
@@ -4394,7 +4402,7 @@ TRAFFIC_TEMPLATE = BASE_TEMPLATE.replace(
     </div>
 
     <div class="table-card">
-        <h2 style="margin-bottom:10px;">Top Endpoints</h2>
+        <h2 style="margin-bottom:10px;">Top Pages</h2>
         {% if top_endpoints %}
         <table>
             <thead>
@@ -5625,6 +5633,79 @@ def _build_weekly_banner_messages(sport_keys, days=7):
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID')
+GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID')
+GA_CREDENTIALS_JSON = _os.environ.get('GA_CREDENTIALS_JSON')
+
+def _fetch_ga_traffic():
+    if not GA_PROPERTY_ID:
+        return None, "N/A — GA_PROPERTY_ID not configured."
+    if not GA_CREDENTIALS_JSON:
+        return None, "N/A — GA_CREDENTIALS_JSON not configured."
+    try:
+        from google.analytics.data_v1beta import BetaAnalyticsDataClient
+        from google.analytics.data_v1beta.types import DateRange, Dimension, Metric, OrderBy
+        from google.oauth2 import service_account
+    except Exception:
+        return None, "N/A — Google Analytics client libraries not installed."
+    try:
+        creds = service_account.Credentials.from_service_account_file(GA_CREDENTIALS_JSON)
+        client = BetaAnalyticsDataClient(credentials=creds)
+    except Exception:
+        return None, "N/A — failed to load GA credentials."
+
+    property_path = f"properties/{GA_PROPERTY_ID}"
+    today_dt = _traffic_now()
+    today_str = today_dt.strftime('%Y-%m-%d')
+    start_14 = (today_dt - timedelta(days=13)).strftime('%Y-%m-%d')
+    start_7 = (today_dt - timedelta(days=6)).strftime('%Y-%m-%d')
+
+    try:
+        daily_report = client.run_report(
+            property=property_path,
+            date_ranges=[DateRange(start_date=start_14, end_date=today_str)],
+            dimensions=[Dimension(name="date")],
+            metrics=[Metric(name="sessions")],
+            order_bys=[OrderBy(dimension=OrderBy.DimensionOrderBy(dimension_name="date"))],
+        )
+        daily_visits = []
+        for row in daily_report.rows:
+            raw_date = row.dimension_values[0].value
+            date_fmt = f"{raw_date[0:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+            count = int(row.metric_values[0].value or 0)
+            daily_visits.append({'date': date_fmt, 'count': count})
+        today_visits = next((d['count'] for d in daily_visits if d['date'] == today_str), 0)
+        week_visits = sum(d['count'] for d in daily_visits if d['date'] >= start_7)
+
+        total_report = client.run_report(
+            property=property_path,
+            date_ranges=[DateRange(start_date="2005-01-01", end_date=today_str)],
+            metrics=[Metric(name="sessions")],
+        )
+        total_visits = int(total_report.rows[0].metric_values[0].value) if total_report.rows else 0
+
+        top_report = client.run_report(
+            property=property_path,
+            date_ranges=[DateRange(start_date=start_14, end_date=today_str)],
+            dimensions=[Dimension(name="pagePath")],
+            metrics=[Metric(name="sessions")],
+            order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)],
+            limit=15,
+        )
+        top_endpoints = []
+        for row in top_report.rows:
+            path = row.dimension_values[0].value
+            count = int(row.metric_values[0].value or 0)
+            top_endpoints.append({'endpoint': path, 'count': count})
+
+        return {
+            'today_visits': today_visits,
+            'week_visits': week_visits,
+            'total_visits': total_visits,
+            'top_endpoints': top_endpoints,
+            'daily_visits': sorted(daily_visits, key=lambda x: x['date'], reverse=True),
+        }, None
+    except Exception:
+        return None, "N/A — failed to fetch Google Analytics data."
 
 @app.route('/')
 def landing_page():
@@ -6983,46 +7064,57 @@ def sport_ats_picks(sport):
 def admin_traffic():
     """Simple traffic dashboard for site visits."""
     try:
-        conn = get_db_connection()
-        today_dt = _traffic_now()
-        today = today_dt.strftime('%Y-%m-%d')
-        week_ago = (today_dt - timedelta(days=6)).strftime('%Y-%m-%d')
+        ga_data, ga_error = _fetch_ga_traffic()
+        traffic_source = None
+        if ga_data:
+            traffic_source = "Google Analytics"
+            today_visits = ga_data['today_visits']
+            week_visits = ga_data['week_visits']
+            total_visits = ga_data['total_visits']
+            top_endpoints = ga_data['top_endpoints']
+            daily_visits = ga_data['daily_visits']
+        else:
+            traffic_source = "Local tracker (site_visits)"
+            conn = get_db_connection()
+            today_dt = _traffic_now()
+            today = today_dt.strftime('%Y-%m-%d')
+            week_ago = (today_dt - timedelta(days=6)).strftime('%Y-%m-%d')
 
-        today_visits = conn.execute(
-            'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) = date(?)',
-            (today,)
-        ).fetchone()[0]
-        week_visits = conn.execute(
-            'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) >= date(?)',
-            (week_ago,)
-        ).fetchone()[0]
-        total_visits = conn.execute('SELECT COUNT(*) FROM site_visits').fetchone()[0]
+            today_visits = conn.execute(
+                'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) = date(?)',
+                (today,)
+            ).fetchone()[0]
+            week_visits = conn.execute(
+                'SELECT COUNT(*) FROM site_visits WHERE date(visit_date) >= date(?)',
+                (week_ago,)
+            ).fetchone()[0]
+            total_visits = conn.execute('SELECT COUNT(*) FROM site_visits').fetchone()[0]
 
-        top_endpoints_rows = conn.execute('''
-            SELECT endpoint, COUNT(*) as count
-            FROM site_visits
-            GROUP BY endpoint
-            ORDER BY count DESC
-            LIMIT 15
-        ''').fetchall()
-        daily_rows = conn.execute('''
-            WITH RECURSIVE dates(d) AS (
-                SELECT date(?)
-                UNION ALL
-                SELECT date(d, '-1 day')
+            top_endpoints_rows = conn.execute('''
+                SELECT endpoint, COUNT(*) as count
+                FROM site_visits
+                GROUP BY endpoint
+                ORDER BY count DESC
+                LIMIT 15
+            ''').fetchall()
+            daily_rows = conn.execute('''
+                WITH RECURSIVE dates(d) AS (
+                    SELECT date(?)
+                    UNION ALL
+                    SELECT date(d, '-1 day')
+                    FROM dates
+                    WHERE d > date(?, '-13 day')
+                )
+                SELECT d as date, COALESCE(COUNT(v.id), 0) as count
                 FROM dates
-                WHERE d > date(?, '-13 day')
-            )
-            SELECT d as date, COALESCE(COUNT(v.id), 0) as count
-            FROM dates
-            LEFT JOIN site_visits v ON date(v.visit_date) = d
-            GROUP BY d
-            ORDER BY d DESC
-        ''', (today, today)).fetchall()
-        conn.close()
+                LEFT JOIN site_visits v ON date(v.visit_date) = d
+                GROUP BY d
+                ORDER BY d DESC
+            ''', (today, today)).fetchall()
+            conn.close()
 
-        top_endpoints = [{'endpoint': r['endpoint'], 'count': r['count']} for r in top_endpoints_rows]
-        daily_visits = [{'date': r['date'], 'count': r['count']} for r in daily_rows if r['date']]
+            top_endpoints = [{'endpoint': r['endpoint'], 'count': r['count']} for r in top_endpoints_rows]
+            daily_visits = [{'date': r['date'], 'count': r['count']} for r in daily_rows if r['date']]
 
         return render_template_string(
             TRAFFIC_TEMPLATE,
@@ -7031,7 +7123,9 @@ def admin_traffic():
             week_visits=week_visits,
             total_visits=total_visits,
             top_endpoints=top_endpoints,
-            daily_visits=daily_visits
+            daily_visits=daily_visits,
+            traffic_source=traffic_source,
+            traffic_error=ga_error
         )
     except Exception as e:
         logger.error(f"Error loading traffic dashboard: {e}")

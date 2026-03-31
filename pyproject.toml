@@ -34,6 +34,8 @@ dependencies = [
     "catboost>=1.2.8",
     "lightgbm>=4.6.0",
     "nhlpy>=0.3.0",
+    "google-analytics-data>=0.18.6",
+    "google-auth>=2.40.0",
 ]
 
 [tool.setuptools]
