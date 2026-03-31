@@ -630,10 +630,6 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             'ens_correct':       (ens_prob  > 0.5) == home_won if ens_prob is not None and home_won is not None else None,
             'skip_grading':      True if home_won is None else False,
         }
-        @keyframes weekly-marquee{
-            0%{transform:translateX(0);}
-            100%{transform:translateX(-50%);}
-        }
         daily_results[game_info['date']]['games'].append(game_info)
     return daily_results
 
@@ -6101,6 +6097,10 @@ def landing_page():
             gap:10px;
             align-items:center;
             flex:0 0 auto;
+        }
+        @keyframes weekly-marquee{
+            0%{transform:translateX(0);}
+            100%{transform:translateX(-50%);}
         }
 
         /* ── Free banner ── */
