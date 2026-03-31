@@ -2624,6 +2624,19 @@ def get_upcoming_predictions(sport, days=365):
             
             # Add predictions to game dict
             game_dict = dict(game)
+            for _k in (
+                'market_spread',
+                'market_total',
+                'home_moneyline',
+                'away_moneyline',
+                'spread_price_home',
+                'spread_price_away',
+                'total_over_price',
+                'total_under_price',
+                'odds_reason',
+            ):
+                if _k not in game_dict:
+                    game_dict[_k] = None
             game_dict['elo_prob'] = round(elo_prob * 100, 1)
             game_dict['xgb_prob'] = round(xgb_prob * 100, 1)
             game_dict['ensemble_prob'] = round(ensemble_prob * 100, 1)
