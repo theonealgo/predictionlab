@@ -21,6 +21,7 @@ from nba_sportsdata_api import NBASportsDataAPI
 from nhl_api import NHLAPI
 from value_predictor import ValuePredictor
 from ats_system import ATSSystem
+from soccer_models import build_soccer_model_bundle
 
 # V2 PREDICTION SYSTEM - Upgraded architecture
 import os as _os_v2
@@ -75,6 +76,8 @@ _SPORT_RESULTS_TTL_BY_SPORT = {
     'WNBA': 300,
     'SOCCER': 300,
 }
+_SOCCER_MODEL_CACHE: dict = {}
+_SOCCER_MODEL_TTL = 900
 
 
 def _cached_get(url: str, timeout: int = 10):
@@ -706,7 +709,11 @@ CORS(app, origins=[
 @app.context_processor
 def inject_globals():
     """Make stripe_donation_url available in every template automatically."""
-    return {'stripe_donation_url': STRIPE_DONATION_URL}
+    return {
+        'stripe_donation_url': STRIPE_DONATION_URL,
+        'soccer_enabled': SOCCER_ENABLED,
+        'ga_tracking_id': GA_TRACKING_ID,
+    }
 
 @app.after_request
 def add_header(response):
@@ -761,6 +768,7 @@ SPORTS = {
     'WNBA': {'name': 'WNBA', 'icon': '🏀', 'color': '#f97316'},
     'SOCCER': {'name': 'Soccer', 'icon': '⚽', 'color': '#22c55e'},
 }
+SOCCER_ENABLED = False
 
 # Curated soccer leagues (ESPN metadata → canonical display names)
 SOCCER_LEAGUE_ORDER = [
@@ -926,6 +934,35 @@ def _soccer_league_from_slug(slug: str):
         return None
     return SOCCER_LEAGUE_SLUGS.get(slug.strip().lower())
 
+def _get_soccer_model_bundle(completed_games, league_name=None):
+    league_key = _soccer_league_slug(league_name) if league_name else 'all'
+    cache_key = f"soccer_bundle_{league_key}"
+    now_ts = _time.time()
+    cached = _SOCCER_MODEL_CACHE.get(cache_key)
+    if cached and (now_ts - cached.get('ts', 0)) < _SOCCER_MODEL_TTL:
+        return cached.get('bundle')
+    def _val(game, key):
+        if isinstance(game, dict):
+            return game.get(key)
+        try:
+            return game[key]
+        except Exception:
+            return None
+
+    filtered = []
+    for game in completed_games:
+        league_raw = _val(game, 'league')
+        league = _canonical_soccer_league_name(league_raw) or league_raw
+        if league_name and league != league_name:
+            continue
+        if _val(game, 'home_score') is None or _val(game, 'away_score') is None:
+            continue
+        filtered.append(game if isinstance(game, dict) else dict(game))
+
+    bundle = build_soccer_model_bundle(filtered, league_name=league_name)
+    _SOCCER_MODEL_CACHE[cache_key] = {'ts': now_ts, 'bundle': bundle}
+    return bundle
+
 # ── Public-facing model brand names ───────────────────────────────────────────
 # Maps internal identifiers → user-facing names shown in UI / API responses.
 # Internal variables, files, and training logic are UNCHANGED.
@@ -935,6 +972,13 @@ MODEL_DISPLAY_NAMES = {
     'elo':       'Edge',
     'xgboost':   'XSharp',
     'ensemble':  'Sharp Consensus',
+}
+SOCCER_MODEL_LABELS = {
+    'glicko2': 'Poisson xG',
+    'trueskill': 'Markov Chain',
+    'elo': 'Soccer Elo',
+    'xgboost': 'Poisson Reg',
+    'ensemble': 'Soccer Ensemble',
 }
 
 import nfl_data_py as nfl
@@ -1211,82 +1255,103 @@ def update_espn_scores(sport):
             conn = get_db_connection()
             cursor = conn.cursor()
             updates_count = 0
+            request_count = 0
 
-            for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
-                if not league_code:
-                    continue
-                url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard"
-                try:
-                    response = requests.get(url, timeout=10)
-                    response.raise_for_status()
-                    data = response.json()
-                except Exception as e:
-                    logger.debug(f"Error fetching SOCCER league {league_code}: {e}")
-                    continue
+            try:
+                completed_count = conn.execute(
+                    "SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                    (sport,)
+                ).fetchone()[0]
+            except Exception:
+                completed_count = 0
 
-                league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
-                league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
-                events = data.get('events', []) if isinstance(data, dict) else []
+            days_back = 14 if completed_count < 50 else 3
+            max_requests = 140 if completed_count < 50 else 50
+            today = datetime.now()
 
-                for event in events:
-                    competition = event.get('competitions', [{}])[0]
-                    competitors = competition.get('competitors', [])
-                    if len(competitors) != 2:
+            for days_offset in range(days_back):
+                if request_count >= max_requests:
+                    break
+                date_str = (today - timedelta(days=days_offset)).strftime('%Y%m%d')
+                for league_label in SOCCER_LEAGUE_ORDER:
+                    if request_count >= max_requests:
+                        break
+                    league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_label)
+                    if not league_code:
                         continue
-                    status_info = event.get('status', {}).get('type', {})
-                    status_name = status_info.get('name', '')
-                    if not status_name.startswith('STATUS_FINAL'):
-                        continue
-
-                    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
-                    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
-                    if not home or not away:
-                        continue
-
-                    home_team = home.get('team', {}).get('displayName', '')
-                    away_team = away.get('team', {}).get('displayName', '')
+                    url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={date_str}"
+                    request_count += 1
                     try:
-                        home_score = int(home.get('score', 0))
-                        away_score = int(away.get('score', 0))
-                    except Exception:
+                        response = requests.get(url, timeout=10)
+                        response.raise_for_status()
+                        data = response.json()
+                    except Exception as e:
+                        logger.debug(f"Error fetching SOCCER league {league_code} for {date_str}: {e}")
                         continue
 
-                    event_dt = event.get('date', '')
-                    game_date = _espn_event_date_to_local(event_dt) or datetime.now().strftime('%Y-%m-%d')
-                    event_id = event.get('id', '')
-                    game_id = f"{sport}_{league_code}_{event_id}"
+                    league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
+                    league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
+                    events = data.get('events', []) if isinstance(data, dict) else []
 
-                    existing = cursor.execute(
-                        "SELECT 1 FROM games WHERE game_id = ? AND sport = ?",
-                        (game_id, sport)
-                    ).fetchone()
+                    for event in events:
+                        competition = event.get('competitions', [{}])[0]
+                        competitors = competition.get('competitors', [])
+                        if len(competitors) != 2:
+                            continue
+                        status_info = event.get('status', {}).get('type', {})
+                        status_name = status_info.get('name', '')
+                        if not status_name.startswith('STATUS_FINAL'):
+                            continue
 
-                    if existing:
-                        cursor.execute(
-                            """
-                            UPDATE games
-                            SET home_score = ?, away_score = ?, status = 'final'
-                            WHERE sport = ?
-                              AND game_id = ?
-                              AND (home_score IS NULL OR home_score != ?)
-                            """,
-                            (home_score, away_score, sport, game_id, home_score)
-                        )
-                    else:
+                        home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+                        away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+                        if not home or not away:
+                            continue
+
+                        home_team = home.get('team', {}).get('displayName', '')
+                        away_team = away.get('team', {}).get('displayName', '')
                         try:
+                            home_score = int(home.get('score', 0))
+                            away_score = int(away.get('score', 0))
+                        except Exception:
+                            continue
+
+                        event_dt = event.get('date', '')
+                        game_date = _espn_event_date_to_local(event_dt) or (today - timedelta(days=days_offset)).strftime('%Y-%m-%d')
+                        event_id = event.get('id', '')
+                        game_id = f"{sport}_{league_code}_{event_id}"
+
+                        existing = cursor.execute(
+                            "SELECT 1 FROM games WHERE game_id = ? AND sport = ?",
+                            (game_id, sport)
+                        ).fetchone()
+
+                        if existing:
                             cursor.execute(
                                 """
-                                INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
+                                UPDATE games
+                                SET home_score = ?, away_score = ?, status = 'final'
+                                WHERE sport = ?
+                                  AND game_id = ?
+                                  AND (home_score IS NULL OR home_score != ?)
                                 """,
-                                (sport, league_name or sport, game_id, 2025, game_date, home_team, away_team, home_score, away_score)
+                                (home_score, away_score, sport, game_id, home_score)
                             )
-                            logger.info(f"Inserted new {sport} game: {away_team} @ {home_team} ({game_date})")
-                        except Exception as insert_error:
-                            logger.error(f"Error inserting {sport} game {game_id}: {insert_error}")
+                        else:
+                            try:
+                                cursor.execute(
+                                    """
+                                    INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
+                                    """,
+                                    (sport, league_name or sport, game_id, 2025, game_date, home_team, away_team, home_score, away_score)
+                                )
+                                logger.info(f"Inserted new {sport} game: {away_team} @ {home_team} ({game_date})")
+                            except Exception as insert_error:
+                                logger.error(f"Error inserting {sport} game {game_id}: {insert_error}")
 
-                    if cursor.rowcount > 0:
-                        updates_count += 1
+                        if cursor.rowcount > 0:
+                            updates_count += 1
 
             conn.commit()
             conn.close()
@@ -2341,16 +2406,47 @@ def get_upcoming_predictions(sport, days=365):
         # Show games from season start up to one month from today
         if game_date >= season_start and game_date <= future_cutoff:
             # ============================================================
-            # V2 PREDICTION SYSTEM - ALWAYS try v2 first when available
+            # SOCCER MODELS + V2 PREDICTION SYSTEM
             # ============================================================
-            v2_pred = get_v2_prediction(
-                    sport, 
-                    game.get('home_team_id') or game.get('home_team_name'),
-                    game.get('away_team_id') or game.get('away_team_name'),
-                    game.get('game_date')
-                )
-                
-            if v2_pred:
+            soccer_pred = None
+            soccer_note = None
+            if sport == 'SOCCER':
+                soccer_league = _canonical_soccer_league_name(game.get('league')) or game.get('league')
+                soccer_bundle = _get_soccer_model_bundle(completed_games, soccer_league)
+                if soccer_bundle and getattr(soccer_bundle, 'ready', False):
+                    soccer_pred = soccer_bundle.predict(
+                        game.get('home_team_id') or game.get('home_team_name'),
+                        game.get('away_team_id') or game.get('away_team_name'),
+                    )
+                elif soccer_bundle:
+                    soccer_note = soccer_bundle.reason
+                else:
+                    soccer_note = "N/A — soccer models are unavailable."
+
+            v2_pred = None
+            if sport != 'SOCCER':
+                v2_pred = get_v2_prediction(
+                        sport, 
+                        game.get('home_team_id') or game.get('home_team_name'),
+                        game.get('away_team_id') or game.get('away_team_name'),
+                        game.get('game_date')
+                    )
+
+            if soccer_pred:
+                elo_prob = soccer_pred.get('elo_prob')
+                xgb_prob = soccer_pred.get('poisson_reg_prob')
+                ensemble_prob = soccer_pred.get('ensemble_prob')
+                if xgb_prob is None:
+                    xgb_prob = elo_prob
+                if ensemble_prob is None:
+                    ensemble_prob = elo_prob
+                game['glicko2_prob'] = soccer_pred.get('poisson_xg_prob')
+                game['trueskill_prob'] = soccer_pred.get('markov_prob')
+                game['v2_expected_home'] = soccer_pred.get('expected_home_score')
+                game['v2_expected_away'] = soccer_pred.get('expected_away_score')
+                game['is_v2'] = True
+                game['soccer_model_note'] = soccer_note
+            elif v2_pred:
                 # Use actual stored Elo prob from DB; fall back to Elo rating computation
                 stored_elo = game.get('stored_elo_prob')
                 if stored_elo is not None:
@@ -2451,10 +2547,13 @@ def get_upcoming_predictions(sport, days=365):
             _ts = game.get('trueskill_prob')
             game_dict['glicko2_prob'] = round(_g2 * 100, 1) if _g2 is not None else None
             game_dict['trueskill_prob'] = round(_ts * 100, 1) if _ts is not None else None
-            if sport == 'SOCCER' and (game_dict['glicko2_prob'] is None or game_dict['trueskill_prob'] is None):
-                game_dict['model_data_note'] = (
-                    "N/A — Grinder2/Takedown require the v2 soccer model, which isn't available yet."
-                )
+            if sport == 'SOCCER':
+                if game_dict['glicko2_prob'] is None or game_dict['trueskill_prob'] is None:
+                    game_dict['model_data_note'] = soccer_note or (
+                        "N/A — soccer model outputs are unavailable for this matchup."
+                    )
+                else:
+                    game_dict['model_data_note'] = None
             else:
                 game_dict['model_data_note'] = None
 
@@ -2478,23 +2577,32 @@ def get_upcoming_predictions(sport, days=365):
 
             if game_dict.get('home_score') is None:  # upcoming game only
                 if sport == 'SOCCER':
-                    try:
-                        _sp = _score_predictor_instance(sport)
-                        if _sp:
-                            nh, na, ns, nt = _sp.predict_score(
-                                game_dict.get('home_team_id', ''),
-                                game_dict.get('away_team_id', ''),
-                                sport,
-                            )
-                            if nh is not None:
-                                game_dict['naive_home_score'] = nh
-                                game_dict['naive_away_score'] = na
-                                game_dict['naive_spread'] = ns
-                                game_dict['naive_total'] = nt
-                    except Exception as _e:
-                        logger.debug(f"ScorePredictor error: {_e}")
+                    if soccer_pred and soccer_pred.get('expected_home_score') is not None:
+                        exp_home = soccer_pred.get('expected_home_score')
+                        exp_away = soccer_pred.get('expected_away_score')
+                        if exp_home is not None and exp_away is not None:
+                            game_dict['naive_home_score'] = round(exp_home, 2)
+                            game_dict['naive_away_score'] = round(exp_away, 2)
+                            game_dict['naive_spread'] = round(exp_home - exp_away, 2)
+                            game_dict['naive_total'] = round(exp_home + exp_away, 2)
                     if game_dict.get('naive_spread') is None:
-                        game_dict['spread_total_note'] = (
+                        try:
+                            _sp = _score_predictor_instance(sport)
+                            if _sp:
+                                nh, na, ns, nt = _sp.predict_score(
+                                    game_dict.get('home_team_id', ''),
+                                    game_dict.get('away_team_id', ''),
+                                    sport,
+                                )
+                                if nh is not None:
+                                    game_dict['naive_home_score'] = nh
+                                    game_dict['naive_away_score'] = na
+                                    game_dict['naive_spread'] = ns
+                                    game_dict['naive_total'] = nt
+                        except Exception as _e:
+                            logger.debug(f"ScorePredictor error: {_e}")
+                    if game_dict.get('naive_spread') is None:
+                        game_dict['spread_total_note'] = soccer_note or (
                             "N/A — soccer spread/total requires team scoring rates; data not ready yet."
                         )
                 else:
@@ -3592,6 +3700,16 @@ BASE_TEMPLATE = """
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <link rel="canonical" href="{{ request.url }}">
+    {% if ga_tracking_id %}
+    <!-- Google Analytics gtag.js snippet -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ ga_tracking_id }}');
+    </script>
+    {% endif %}
     {% if sport_info is defined %}
     <script type="application/ld+json">
     {
@@ -3796,7 +3914,9 @@ BASE_TEMPLATE = """
                 <a href="/sport/NCAAW/predictions" class="{{ 'active' if page == 'NCAAW' else '' }}">🏀 NCAAW</a>
                 <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
                 <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
+                {% if soccer_enabled %}
                 <a href="/sport/SOCCER/predictions" class="{{ 'active' if page == 'SOCCER' else '' }}">⚽ Soccer</a>
+                {% endif %}
                 <div class="nav-divider"></div>
                 <div class="nav-section-title">Results</div>
                 <a href="/sport/NHL/results">🏒 NHL Results</a>
@@ -3807,7 +3927,9 @@ BASE_TEMPLATE = """
                 <a href="/sport/NCAAW/results">🏀 NCAAW Results</a>
                 <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
                 <a href="/sport/WNBA/results">🏀 WNBA Results</a>
+                {% if soccer_enabled %}
                 <a href="/sport/SOCCER/results">⚽ Soccer Results</a>
+                {% endif %}
                 <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
             </div>
         </div>
@@ -3828,7 +3950,9 @@ BASE_TEMPLATE = """
             <a href="/sport/NCAAW/predictions">NCAAW</a> &nbsp;·&nbsp;
             <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
             <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
+            {% if soccer_enabled %}
             <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
+            {% endif %}
             <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
         </p>
         <p style="margin-top:10px;opacity:.7;">© 2025 underdogs.bet</p>
@@ -4492,6 +4616,21 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
     </div>
+        {% if sport == 'SOCCER' %}
+        {% set model_cards = [('⚽ Poisson xG','glicko2'),('🧠 Markov Chain','trueskill'),('📊 Soccer Elo','elo'),('🧮 Poisson Reg','xgboost'),('🏆 Soccer Ensemble','ensemble')] %}
+        {% set label_glicko2 = 'Poisson xG' %}
+        {% set label_trueskill = 'Markov Chain' %}
+        {% set label_elo = 'Soccer Elo' %}
+        {% set label_xgb = 'Poisson Reg' %}
+        {% set label_ensemble = 'Soccer Ensemble' %}
+        {% else %}
+        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
+        {% set label_glicko2 = 'Grinder2' %}
+        {% set label_trueskill = 'Takedown' %}
+        {% set label_elo = 'Edge' %}
+        {% set label_xgb = 'XSharp' %}
+        {% set label_ensemble = 'Consensus' %}
+        {% endif %}
         {% if daily_results and overall_stats %}
         {% if soccer_leagues %}
         <div class="league-slider">
@@ -4509,7 +4648,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="daily-tally">
             <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
             <div class="daily-tally-grid">
-                {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
+                {% for m_label, m_key in model_cards %}
                 {% set m = daily_tally[m_key] %}
                 <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                     <div class="daily-model">{{ m_label }}</div>
@@ -4563,7 +4702,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── Model Records ── -->
         <div class="model-grid">
-            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
+            {% for m_label, m_key in model_cards %}
             {% set m = overall_stats[m_key] %}
             <div class="model-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                 <div class="model-label">{{ m_label }}</div>
@@ -4619,34 +4758,34 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                         <div class="model-panel section-ml">
                             <div class="panel-title">Moneyline Models</div>
                             <div class="model-row">
-                                <span class="model-lbl" style="color:#60a5fa;">Grinder2</span>
+                                <span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span>
                                 <span class="model-right">
                                     <span class="model-val">{{ game.glicko2_prob if game.glicko2_prob is not none else 'N/A' }}{% if game.glicko2_prob is not none %}%{% endif %}</span>
                                     {% if game.glicko2_correct is not none %}<span class="{{ 'pick-ok' if game.glicko2_correct else 'pick-no' }}">{{ '✅' if game.glicko2_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
                             <div class="model-row">
-                                <span class="model-lbl" style="color:#a78bfa;">Takedown</span>
+                                <span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span>
                                 <span class="model-right">
                                     <span class="model-val">{{ game.trueskill_prob if game.trueskill_prob is not none else 'N/A' }}{% if game.trueskill_prob is not none %}%{% endif %}</span>
                                     {% if game.trueskill_correct is not none %}<span class="{{ 'pick-ok' if game.trueskill_correct else 'pick-no' }}">{{ '✅' if game.trueskill_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
                             <div class="model-row">
-                                <span class="model-lbl" style="color:#34d399;">Edge</span>
+                                <span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span>
                                 <span class="model-right">
                                     <span class="model-val">{{ game.elo_prob if game.elo_prob is not none else 'N/A' }}{% if game.elo_prob is not none %}%{% endif %}</span>
                                     {% if game.elo_correct is not none %}<span class="{{ 'pick-ok' if game.elo_correct else 'pick-no' }}">{{ '✅' if game.elo_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
                             <div class="model-row">
-                                <span class="model-lbl" style="color:#f87171;">XSharp</span>
+                                <span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span>
                                 <span class="model-right">
                                     <span class="model-val">{{ game.xgb_prob if game.xgb_prob is not none else 'N/A' }}{% if game.xgb_prob is not none %}%{% endif %}</span>
                                     {% if game.xgb_correct is not none %}<span class="{{ 'pick-ok' if game.xgb_correct else 'pick-no' }}">{{ '✅' if game.xgb_correct else '❌' }}</span>{% endif %}
                                 </span>
                             </div>
-                            <div class="ensemble-badge">CONSENSUS {{ game.ens_prob }}% {% if game.ens_correct is not none %}<span class="{{ 'pick-ok' if game.ens_correct else 'pick-no' }}">{{ '✅' if game.ens_correct else '❌' }}</span>{% endif %}</div>
+                            <div class="ensemble-badge">{{ label_ensemble|upper }} {{ game.ens_prob }}% {% if game.ens_correct is not none %}<span class="{{ 'pick-ok' if game.ens_correct else 'pick-no' }}">{{ '✅' if game.ens_correct else '❌' }}</span>{% endif %}</div>
                             {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ game.model_data_note }}</div>{% endif %}
                         </div>
                     </div>
@@ -5054,6 +5193,7 @@ def get_season_status(sport, today=None):
 
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
+GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID')
 
 @app.route('/')
 def landing_page():
@@ -5078,6 +5218,8 @@ def landing_page():
     today = datetime.now()
     landing_sports = []
     for sport_key in _LANDING_SPORT_ORDER:
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
         info = SPORTS.get(sport_key)
         if not info:
             continue
@@ -5108,6 +5250,16 @@ def landing_page():
     <meta name="twitter:title" content="underdogs.bet — Free AI Sports Predictions">
     <meta name="twitter:description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA and Soccer.">
     <link rel="canonical" href="{{ request.url }}">
+    {% if ga_tracking_id %}
+    <!-- Google Analytics gtag.js snippet -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ ga_tracking_id }}');
+    </script>
+    {% endif %}
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -5472,7 +5624,9 @@ def landing_page():
             <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
             <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
             <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+            {% if soccer_enabled %}
             <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
+            {% endif %}
             <div class="nav-divider"></div>
             <div class="nav-section-title">Results</div>
             <a href="/sport/NHL/results">🏒 NHL Results</a>
@@ -5483,7 +5637,9 @@ def landing_page():
             <a href="/sport/NCAAW/results">🏀 NCAAW Results</a>
             <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
             <a href="/sport/WNBA/results">🏀 WNBA Results</a>
+            {% if soccer_enabled %}
             <a href="/sport/SOCCER/results">⚽ Soccer Results</a>
+            {% endif %}
             <a href="{{ stripe_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
         </div>
     </div>
@@ -5519,7 +5675,7 @@ def landing_page():
 <!-- Stats bar -->
 <div class="stats-bar">
     <div class="stat-item">
-        <div class="stat-num">9</div>
+        <div class="stat-num">{{ sports_covered }}</div>
         <div class="stat-label">Sports Covered</div>
     </div>
     <div class="stat-item">
@@ -5687,6 +5843,8 @@ def sitemap_xml():
     today = datetime.now().strftime('%Y-%m-%d')
     urls = [f"{base_url}/"]
     for sport in SPORTS.keys():
+        if sport == 'SOCCER' and not SOCCER_ENABLED:
+            continue
         urls.append(f"{base_url}/sport/{sport}/predictions")
         urls.append(f"{base_url}/sport/{sport}/results")
     urlset = "\n".join(
@@ -5717,6 +5875,8 @@ def sport_predictions(sport):
     log_site_visit(f'/sport/{sport}/predictions')
     if sport not in SPORTS:
         return "Sport not found", 404
+    if sport == 'SOCCER' and not SOCCER_ENABLED:
+        return "Soccer predictions are temporarily hidden while data loads.", 404
     prediction_error = None
     try:
         predictions = get_upcoming_predictions(sport)
@@ -5813,6 +5973,8 @@ def sport_results(sport):
     try:
         if sport not in SPORTS:
             return "Sport not found", 404
+        if sport == 'SOCCER' and not SOCCER_ENABLED:
+            return "Soccer results are temporarily hidden while data loads.", 404
         
         if sport == 'NFL':
             update_nfl_scores()
@@ -6010,6 +6172,9 @@ def sport_results(sport):
                     selected_league = SOCCER_LEAGUE_ORDER[0] if SOCCER_LEAGUE_ORDER else None
                 if selected_league:
                     cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
+            soccer_bundle = None
+            if sport == 'SOCCER':
+                soccer_bundle = _get_soccer_model_bundle(completed_games, selected_league)
             
             if not completed_games:
                 # Show message for offseason sports
@@ -6050,17 +6215,28 @@ def sport_results(sport):
                 if ens_prob is None:
                     ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
 
-                # V2 model predictions (Glicko-2, TrueSkill)
-                v2 = get_v2_prediction(sport, home_team, away_team, game_date)
-                glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
-                trueskill_prob = v2.get('trueskill_prob') if v2 else None
-                if v2:
-                    xgb_prob = v2.get('xgboost_prob', xgb_prob)
-                    ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
-
+                soccer_pred = None
                 model_note = None
-                if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
-                    model_note = "N/A — Grinder2/Takedown require the v2 soccer model."
+                if sport == 'SOCCER' and soccer_bundle and getattr(soccer_bundle, 'ready', False):
+                    soccer_pred = soccer_bundle.predict(home_team, away_team)
+                elif sport == 'SOCCER' and soccer_bundle:
+                    model_note = soccer_bundle.reason
+
+                if soccer_pred:
+                    glicko2_prob = soccer_pred.get('poisson_xg_prob')
+                    trueskill_prob = soccer_pred.get('markov_prob')
+                    elo_prob = soccer_pred.get('elo_prob') or elo_prob
+                    xgb_prob = soccer_pred.get('poisson_reg_prob') or xgb_prob or elo_prob
+                    ens_prob = soccer_pred.get('ensemble_prob') or ens_prob or elo_prob
+                else:
+                    v2 = get_v2_prediction(sport, home_team, away_team, game_date) if sport != 'SOCCER' else None
+                    glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
+                    trueskill_prob = v2.get('trueskill_prob') if v2 else None
+                    if v2:
+                        xgb_prob = v2.get('xgboost_prob', xgb_prob)
+                        ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
+                    if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
+                        model_note = model_note or "N/A — soccer model outputs are unavailable for this matchup."
                 game_info = {
                     'game_id':         game['game_id'],
                     'date':             game_date or 'Unknown',

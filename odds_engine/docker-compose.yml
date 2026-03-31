@@ -40,7 +40,7 @@ services:
       VIG: "0.04"
       MONTE_CARLO_RUNS: "10000"
     ports:
-      - "7000:7000"
+      - "7002:7000"
     depends_on:
       - postgres
       - redis

@@ -16,6 +16,16 @@
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <link rel="canonical" href="{{ request.url }}">
+    {% if ga_tracking_id %}
+    <!-- Google Analytics gtag.js snippet -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ ga_tracking_id }}');
+    </script>
+    {% endif %}
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -256,7 +266,9 @@
             <a href="/sport/NCAAW/predictions" class="{{ 'active' if page == 'NCAAW' else '' }}">🏀 NCAAW</a>
             <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
             <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
+            {% if soccer_enabled %}
             <a href="/sport/SOCCER/predictions" class="{{ 'active' if page == 'SOCCER' else '' }}">⚽ Soccer</a>
+            {% endif %}
             <div class="nav-divider"></div>
             <div class="nav-section-title">Results</div>
             <a href="/sport/NHL/results">🏒 NHL Results</a>
@@ -267,7 +279,9 @@
             <a href="/sport/NCAAW/results">🏀 NCAAW Results</a>
             <a href="/sport/NCAAF/results">🏟️ NCAAF Results</a>
             <a href="/sport/WNBA/results">🏀 WNBA Results</a>
+            {% if soccer_enabled %}
             <a href="/sport/SOCCER/results">⚽ Soccer Results</a>
+            {% endif %}
             <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
         </div>
     </div>
@@ -282,6 +296,11 @@
         <a href="/sport/{{ sport }}/predictions" class="tab active">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results"     class="tab">🎯 Results</a>
     </div>
+    {% set label_glicko2 = 'Poisson xG' if sport == 'SOCCER' else 'Grinder2' %}
+    {% set label_trueskill = 'Markov Chain' if sport == 'SOCCER' else 'Takedown' %}
+    {% set label_elo = 'Soccer Elo' if sport == 'SOCCER' else 'Edge' %}
+    {% set label_xgb = 'Poisson Reg' if sport == 'SOCCER' else 'XSharp' %}
+    {% set label_ensemble = 'Soccer Ensemble' if sport == 'SOCCER' else 'Sharp Consensus' %}
     {% if soccer_leagues %}
     <div class="league-slider">
         <div class="league-badges" id="leagueBubbles">
@@ -332,11 +351,11 @@
                     </div>
                         <div class="prediction-panel">
                             <div class="panel-title">Home Win %</div>
-                            <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">Grinder2</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else 'N/A' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
-                            <div class="model-row"><span class="model-lbl" style="color:#a78bfa;">Takedown</span><span class="model-val">{{ pred.trueskill_prob if pred.trueskill_prob is not none else 'N/A' }}{% if pred.trueskill_prob is not none %}%{% endif %}</span></div>
-                            <div class="model-row"><span class="model-lbl" style="color:#34d399;">Edge</span><span class="model-val">{{ pred.elo_prob if pred.elo_prob is not none else 'N/A' }}{% if pred.elo_prob is not none %}%{% endif %}</span></div>
-                            <div class="model-row"><span class="model-lbl" style="color:#f87171;">XSharp</span><span class="model-val">{{ pred.xgb_prob if pred.xgb_prob is not none else 'N/A' }}{% if pred.xgb_prob is not none %}%{% endif %}</span></div>
-                            <div class="ensemble-badge">SHARP CONSENSUS {{ pred.ensemble_prob if pred.ensemble_prob is not none else 'N/A' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
+                            <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else 'N/A' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span><span class="model-val">{{ pred.trueskill_prob if pred.trueskill_prob is not none else 'N/A' }}{% if pred.trueskill_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span><span class="model-val">{{ pred.elo_prob if pred.elo_prob is not none else 'N/A' }}{% if pred.elo_prob is not none %}%{% endif %}</span></div>
+                            <div class="model-row"><span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span><span class="model-val">{{ pred.xgb_prob if pred.xgb_prob is not none else 'N/A' }}{% if pred.xgb_prob is not none %}%{% endif %}</span></div>
+                            <div class="ensemble-badge">{{ label_ensemble|upper }} {{ pred.ensemble_prob if pred.ensemble_prob is not none else 'N/A' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
                             {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
                     </div>
@@ -422,7 +441,9 @@
         <a href="/sport/NCAAW/predictions">NCAAW</a> &nbsp;·&nbsp;
         <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
         <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
+        {% if soccer_enabled %}
         <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
+        {% endif %}
         <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
     </p>
     <p style="margin-top:10px;opacity:.7;">© 2025 underdogs.bet</p>
