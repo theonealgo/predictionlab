@@ -383,6 +383,32 @@
                         <div class="sf-item"><span class="sf-label">Spread/Total</span><span class="sf-val">{{ pred.spread_total_note }}</span></div>
                     </div>
                     {% endif %}
+                    {% if not is_final and (pred.home_moneyline is not none or pred.away_moneyline is not none or pred.spread_price_home is not none or pred.total_over_price is not none) %}
+                    <div class="score-footer">
+                        <div class="sf-item">
+                            <span class="sf-label">Book ML</span>
+                            <span class="sf-val">{{ pred.away_team_id[:10] }} {{ pred.away_moneyline if pred.away_moneyline is not none else 'N/A' }} / {{ pred.home_team_id[:10] }} {{ pred.home_moneyline if pred.home_moneyline is not none else 'N/A' }}</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">Book Spread</span>
+                            <span class="sf-val">
+                                {% if pred.market_spread is not none %}{{ "%+.1f"|format(pred.market_spread) }}{% else %}N/A{% endif %}
+                                {% if pred.spread_price_home is not none %} (H {{ pred.spread_price_home }} / A {{ pred.spread_price_away }}){% endif %}
+                            </span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">Book Total</span>
+                            <span class="sf-val">
+                                {% if pred.market_total is not none %}{{ "%.1f"|format(pred.market_total) }}{% else %}N/A{% endif %}
+                                {% if pred.total_over_price is not none %} (O {{ pred.total_over_price }} / U {{ pred.total_under_price }}){% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% elif not is_final and pred.odds_reason %}
+                    <div class="score-footer">
+                        <div class="sf-item"><span class="sf-label">Odds</span><span class="sf-val">{{ pred.odds_reason }}</span></div>
+                    </div>
+                    {% endif %}
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
                     <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
                     <div id="{{ analysis_id }}" class="analysis-panel">

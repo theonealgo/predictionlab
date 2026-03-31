@@ -306,13 +306,19 @@ def _upsert_engine_odds(
         if existing:
             cur.execute(
                 """UPDATE engine_odds
-                   SET home_moneyline=?, away_moneyline=?, spread=?, total=?, source=?, created_at=?
+                   SET home_moneyline=?, away_moneyline=?, spread=?, total=?,
+                       spread_price_home=?, spread_price_away=?, total_over_price=?, total_under_price=?,
+                       source=?, created_at=?
                    WHERE id=?""",
                 (
                     odds.get('moneyline_home'),
                     odds.get('moneyline_away'),
                     odds.get('spread'),
                     odds.get('total'),
+                    odds.get('spread_price_home'),
+                    odds.get('spread_price_away'),
+                    odds.get('total_over_price'),
+                    odds.get('total_under_price'),
                     odds.get('source', 'engine'),
                     now_ts,
                     existing['id'],
@@ -322,8 +328,10 @@ def _upsert_engine_odds(
             cur.execute(
                 """INSERT INTO engine_odds
                    (sport, game_id, game_date, home_team, away_team,
-                    home_moneyline, away_moneyline, spread, total, source, created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    home_moneyline, away_moneyline, spread, total,
+                    spread_price_home, spread_price_away, total_over_price, total_under_price,
+                    source, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     sport,
                     game_id,
@@ -334,6 +342,10 @@ def _upsert_engine_odds(
                     odds.get('moneyline_away'),
                     odds.get('spread'),
                     odds.get('total'),
+                    odds.get('spread_price_home'),
+                    odds.get('spread_price_away'),
+                    odds.get('total_over_price'),
+                    odds.get('total_under_price'),
                     odds.get('source', 'engine'),
                     now_ts,
                 )
@@ -344,6 +356,11 @@ def _upsert_engine_odds(
 
 def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
     if not daily_results:
+        return
+    if not ODDS_ENGINE_URL:
+        for dd in daily_results.values():
+            for g in dd.get('games', []):
+                g['odds_reason'] = "N/A — odds engine URL not configured."
         return
     try:
         conn = get_db_connection()
@@ -357,13 +374,21 @@ def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
                 if not gid:
                     continue
                 existing = cur.execute(
-                    "SELECT home_moneyline, away_moneyline, spread, total, source FROM engine_odds WHERE sport=? AND game_id=?",
+                    "SELECT home_moneyline, away_moneyline, spread, total, spread_price_home, spread_price_away, total_over_price, total_under_price, source FROM engine_odds WHERE sport=? AND game_id=?",
                     (sport, gid)
                 ).fetchone()
                 if existing:
                     g['home_moneyline'] = existing['home_moneyline']
                     g['away_moneyline'] = existing['away_moneyline']
+                    g['spread_price_home'] = existing['spread_price_home']
+                    g['spread_price_away'] = existing['spread_price_away']
+                    g['total_over_price'] = existing['total_over_price']
+                    g['total_under_price'] = existing['total_under_price']
                     g['odds_source'] = existing['source']
+                    if g.get('market_spread') is None and existing['spread'] is not None:
+                        g['market_spread'] = existing['spread']
+                    if g.get('market_total') is None and existing['total'] is not None:
+                        g['market_total'] = existing['total']
                     continue
                 odds, reason = _fetch_engine_odds(
                     sport,
@@ -376,7 +401,16 @@ def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
                 if odds:
                     g['home_moneyline'] = odds.get('moneyline_home')
                     g['away_moneyline'] = odds.get('moneyline_away')
+                    g['spread_price_home'] = odds.get('spread_price_home')
+                    g['spread_price_away'] = odds.get('spread_price_away')
+                    g['total_over_price'] = odds.get('total_over_price')
+                    g['total_under_price'] = odds.get('total_under_price')
+                    if g.get('market_spread') is None and odds.get('spread') is not None:
+                        g['market_spread'] = odds.get('spread')
+                    if g.get('market_total') is None and odds.get('total') is not None:
+                        g['market_total'] = odds.get('total')
                     g['odds_source'] = odds.get('source', 'engine')
+                    g['odds_reason'] = None
                     _upsert_engine_odds(
                         conn,
                         sport,
@@ -390,6 +424,58 @@ def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
                     g['odds_reason'] = reason
             if attempts >= limit:
                 break
+        conn.commit()
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[{sport}] engine odds attach failed: {_e}")
+
+def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
+    if not predictions:
+        return
+    if not ODDS_ENGINE_URL:
+        for pred in predictions:
+            pred['odds_reason'] = "N/A — odds engine URL not configured."
+        return
+    try:
+        conn = get_db_connection()
+        attempts = 0
+        for pred in predictions:
+            if attempts >= limit:
+                break
+            if pred.get('home_score') is not None:
+                continue
+            gid = pred.get('game_id')
+            odds, reason = _fetch_engine_odds(
+                sport,
+                gid,
+                pred.get('game_date'),
+                pred.get('home_team_id'),
+                pred.get('away_team_id'),
+            )
+            attempts += 1
+            if odds:
+                pred['home_moneyline'] = odds.get('moneyline_home')
+                pred['away_moneyline'] = odds.get('moneyline_away')
+                pred['market_spread'] = odds.get('spread')
+                pred['market_total'] = odds.get('total')
+                pred['spread_price_home'] = odds.get('spread_price_home')
+                pred['spread_price_away'] = odds.get('spread_price_away')
+                pred['total_over_price'] = odds.get('total_over_price')
+                pred['total_under_price'] = odds.get('total_under_price')
+                pred['odds_source'] = odds.get('source', 'engine')
+                pred['odds_reason'] = None
+                if gid:
+                    _upsert_engine_odds(
+                        conn,
+                        sport,
+                        gid,
+                        pred.get('game_date'),
+                        pred.get('home_team_id'),
+                        pred.get('away_team_id'),
+                        odds,
+                    )
+            else:
+                pred['odds_reason'] = reason
         conn.commit()
         conn.close()
     except Exception as _e:
@@ -1532,7 +1618,10 @@ def init_db():
             sport TEXT, league TEXT, game_id TEXT,
             game_date TEXT, home_team TEXT, away_team TEXT,
             home_moneyline REAL, away_moneyline REAL,
-            spread REAL, total REAL, source TEXT,
+            spread REAL, total REAL,
+            spread_price_home REAL, spread_price_away REAL,
+            total_over_price REAL, total_under_price REAL,
+            source TEXT,
             created_at TEXT
         );
         CREATE TABLE IF NOT EXISTS game_goalies (
@@ -1563,10 +1652,29 @@ def init_db():
     conn.close()
     logger.info("Database tables initialised.")
 
+def _ensure_engine_odds_columns():
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info('engine_odds')").fetchall()]
+        missing = {
+            'spread_price_home': 'REAL',
+            'spread_price_away': 'REAL',
+            'total_over_price': 'REAL',
+            'total_under_price': 'REAL',
+        }
+        for col, col_type in missing.items():
+            if col not in cols:
+                conn.execute(f"ALTER TABLE engine_odds ADD COLUMN {col} {col_type}")
+        conn.commit()
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[engine_odds] column ensure failed: {_e}")
+
 
 # Run on every startup — creates tables if missing, no-op if they exist
 try:
     init_db()
+    _ensure_engine_odds_columns()
 except Exception as _dbe:
     logger.warning(f"init_db failed: {_dbe}")
 
@@ -2678,6 +2786,8 @@ def get_upcoming_predictions(sport, days=365):
 
             predictions.append(game_dict)
     
+    _attach_engine_odds_to_predictions(sport, predictions, limit=40)
+
     # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
         _cache_market_lines_for_predictions(sport, predictions, limit=20)
@@ -3355,6 +3465,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
                 hk = _normalize_team_key_for_sport(sport, h)
                 ak = _normalize_team_key_for_sport(sport, a)
+                ms = g.get('market_spread')
+                mt = g.get('market_total')
                 ml = _line_by_id.get(gid) or _line_by_key.get((gd, hk, ak), {})
                 if (not ml) and sport == 'NBA' and gd:
                     try:
@@ -3367,14 +3479,16 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             ml = _line_by_key.get((alt, hk, ak), {})
                             if ml:
                                 break
-                try:
-                    ms = float(ml['spread']) if ml.get('spread') is not None else None
-                except Exception:
-                    ms = None
-                try:
-                    mt = float(ml['total']) if ml.get('total') is not None else None
-                except Exception:
-                    mt = None
+                if ms is None:
+                    try:
+                        ms = float(ml['spread']) if ml.get('spread') is not None else None
+                    except Exception:
+                        ms = None
+                if mt is None:
+                    try:
+                        mt = float(ml['total']) if ml.get('total') is not None else None
+                    except Exception:
+                        mt = None
 
                 # Live fallback for missing market lines (recent games only)
                 if (ms is None or mt is None) and live_attempts < live_cap and gd:
@@ -3654,6 +3768,203 @@ def compute_daily_model_tally_from_weekly(weekly_results, target_date):
             if game.get('date') == target_date:
                 daily_results[target_date]['games'].append(game)
     return compute_daily_model_tally(daily_results, target_date)
+
+
+def _date_in_range(date_str, start_date, end_date):
+    try:
+        d = parse_date(date_str)
+    except Exception:
+        d = None
+    if not d:
+        return False
+    if start_date and d < start_date:
+        return False
+    if end_date and d > end_date:
+        return False
+    return True
+
+def compute_model_tally_for_range(daily_results, start_date=None, end_date=None):
+    model_configs = [
+        ('glicko2',   'glicko2_correct', 'glicko2_prob'),
+        ('trueskill', 'trueskill_correct', 'trueskill_prob'),
+        ('elo',       'elo_correct', 'elo_prob'),
+        ('xgboost',   'xgb_correct', 'xgb_prob'),
+        ('ensemble',  'ens_correct', 'ens_prob'),
+    ]
+    tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
+    total_games = 0
+    for date_key, day_data in daily_results.items():
+        if not _date_in_range(date_key, start_date, end_date):
+            continue
+        total_games += len(day_data.get('games', []))
+        for game in day_data.get('games', []):
+            if game.get('skip_grading'):
+                continue
+            for model_name, correct_key, prob_key in model_configs:
+                if game.get(prob_key) is None:
+                    continue
+                tally[model_name]['total'] += 1
+                if game.get(correct_key):
+                    tally[model_name]['correct'] += 1
+    for model_name, _, _ in model_configs:
+        t = tally[model_name]['total']
+        c = tally[model_name]['correct']
+        tally[model_name]['accuracy'] = round(c / t * 100, 1) if t > 0 else 0.0
+    tally['games'] = total_games
+    return tally
+
+
+def _roi_entry():
+    return {
+        "wins": 0,
+        "losses": 0,
+        "pushes": 0,
+        "units_won": 0.0,
+        "units_risked": 0,
+        "graded": 0,
+        "missing_odds": 0,
+        "roi_pct": None,
+        "reason": None,
+    }
+
+def compute_roi_for_range(daily_results, start_date=None, end_date=None):
+    summary = {
+        "moneyline": _roi_entry(),
+        "spread": _roi_entry(),
+        "total": _roi_entry(),
+    }
+    for date_key, day_data in daily_results.items():
+        if not _date_in_range(date_key, start_date, end_date):
+            continue
+        for g in day_data.get("games", []):
+            if g.get("skip_grading"):
+                continue
+            home_score = g.get("home_score")
+            away_score = g.get("away_score")
+            if home_score is None or away_score is None:
+                continue
+
+            # Moneyline ROI based on ensemble win prob
+            ens_prob = g.get("ens_prob")
+            if ens_prob is not None:
+                pick_home = ens_prob >= 50
+                home_win = home_score > away_score
+                if home_score == away_score:
+                    home_win = None
+                odds = g.get("home_moneyline") if pick_home else g.get("away_moneyline")
+                entry = summary["moneyline"]
+                if home_win is None:
+                    entry["pushes"] += 1
+                elif odds is None:
+                    entry["missing_odds"] += 1
+                else:
+                    units = _american_units(odds)
+                    if units is None:
+                        entry["missing_odds"] += 1
+                    else:
+                        entry["units_risked"] += 1
+                        entry["graded"] += 1
+                        if (pick_home and home_win) or ((not pick_home) and (not home_win)):
+                            entry["wins"] += 1
+                            entry["units_won"] += units
+                        else:
+                            entry["losses"] += 1
+                            entry["units_won"] -= 1
+
+            # Spread ROI based on xSharp pick/grade
+            spread_pick = g.get("spread_pick")
+            spread_correct = g.get("spread_correct")
+            if spread_pick and spread_pick != "PUSH" and spread_correct is not None:
+                entry = summary["spread"]
+                if spread_pick == "HOME":
+                    odds = g.get("spread_price_home")
+                else:
+                    odds = g.get("spread_price_away")
+                if odds is None:
+                    entry["missing_odds"] += 1
+                else:
+                    units = _american_units(odds)
+                    if units is None:
+                        entry["missing_odds"] += 1
+                    else:
+                        entry["units_risked"] += 1
+                        entry["graded"] += 1
+                        if spread_correct is True:
+                            entry["wins"] += 1
+                            entry["units_won"] += units
+                        else:
+                            entry["losses"] += 1
+                            entry["units_won"] -= 1
+            elif spread_pick == "PUSH":
+                summary["spread"]["pushes"] += 1
+
+            # Total ROI based on xSharp pick/grade
+            total_pick = g.get("total_pick")
+            total_correct = g.get("total_correct")
+            if total_pick and total_pick != "PUSH" and total_correct is not None:
+                entry = summary["total"]
+                if total_pick == "OVER":
+                    odds = g.get("total_over_price")
+                else:
+                    odds = g.get("total_under_price")
+                if odds is None:
+                    entry["missing_odds"] += 1
+                else:
+                    units = _american_units(odds)
+                    if units is None:
+                        entry["missing_odds"] += 1
+                    else:
+                        entry["units_risked"] += 1
+                        entry["graded"] += 1
+                        if total_correct is True:
+                            entry["wins"] += 1
+                            entry["units_won"] += units
+                        else:
+                            entry["losses"] += 1
+                            entry["units_won"] -= 1
+            elif total_pick == "PUSH":
+                summary["total"]["pushes"] += 1
+    for entry in summary.values():
+        if entry["units_risked"] > 0:
+            entry["roi_pct"] = round((entry["units_won"] / entry["units_risked"]) * 100, 2)
+        else:
+            if entry["graded"] == 0:
+                entry["reason"] = "N/A — no graded bets in range."
+            elif entry["missing_odds"] > 0:
+                entry["reason"] = "N/A — odds missing for graded bets."
+    return summary
+
+def build_roi_cards(roi_daily, roi_weekly, roi_total):
+    def _format_entry(entry):
+        if not entry:
+            return {"roi": "N/A", "detail": "N/A"}
+        if entry.get("roi_pct") is None:
+            return {"roi": "N/A", "detail": entry.get("reason") or "N/A"}
+        units = entry.get("units_won", 0.0)
+        wins = entry.get("wins", 0)
+        losses = entry.get("losses", 0)
+        pushes = entry.get("pushes", 0)
+        return {
+            "roi": f"{entry['roi_pct']}%",
+            "detail": f"{wins}-{losses}-{pushes}, {units:+.2f}u",
+        }
+    return {
+        "moneyline": {
+            "daily": _format_entry(roi_daily.get("moneyline") if roi_daily else None),
+            "weekly": _format_entry(roi_weekly.get("moneyline") if roi_weekly else None),
+            "total": _format_entry(roi_total.get("moneyline") if roi_total else None),
+        },
+        "spread": {
+            "daily": _format_entry(roi_daily.get("spread") if roi_daily else None),
+            "weekly": _format_entry(roi_weekly.get("spread") if roi_weekly else None),
+            "total": _format_entry(roi_total.get("spread") if roi_total else None),
+        },
+        "total": {
+            "daily": _format_entry(roi_daily.get("total") if roi_daily else None),
+            "weekly": _format_entry(roi_weekly.get("total") if roi_weekly else None),
+            "total": _format_entry(roi_total.get("total") if roi_total else None),
+        },
+    }
 
 
 def compute_overall_stats_from_weekly(weekly_results):
@@ -4646,6 +4957,50 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% endif %}
 
+        <!-- ── Last 7 Days Tally ── -->
+        {% if weekly_tally %}
+        <div class="daily-tally">
+            <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+            <div class="daily-tally-grid">
+                {% for m_label, m_key in model_cards %}
+                {% set m = weekly_tally[m_key] %}
+                <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
+                    <div class="daily-model">{{ m_label }}</div>
+                    {% if m.total > 0 %}
+                    <div class="daily-acc">{{ m.accuracy }}%</div>
+                    <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                    {% else %}
+                    <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                    <div class="daily-rec">no graded games</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="daily-tally" style="text-align:center;">
+            <strong>N/A</strong> — no graded games for last 7 days.
+        </div>
+        {% endif %}
+
+        <!-- ── ROI Summary ── -->
+        {% if roi_cards %}
+        <div class="daily-tally">
+            <h2>ROI (1u) — Moneyline / Spread / Total</h2>
+            <div class="daily-tally-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+                {% for r_label, r_key in [('Moneyline','moneyline'),('Spread','spread'),('Total','total')] %}
+                {% set r = roi_cards[r_key] %}
+                <div class="daily-tally-card">
+                    <div class="daily-model">{{ r_label }}</div>
+                    <div class="daily-rec">Last Night: {{ r.daily.roi }} · {{ r.daily.detail }}</div>
+                    <div class="daily-rec">Last 7 Days: {{ r.weekly.roi }} · {{ r.weekly.detail }}</div>
+                    <div class="daily-rec">Season: {{ r.total.roi }} · {{ r.total.detail }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- ── Combined Stats Banner ── -->
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;">
             <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 {{ ens.total }} Games Graded</h2>
@@ -5034,6 +5389,46 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <strong>N/A</strong> — no graded games for {{ daily_tally_date }}.
     </div>
     {% endif %}
+    {% if weekly_tally %}
+    <div class="daily-tally">
+        <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+        <div class="daily-tally-grid">
+            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+            {% set m = weekly_tally[m_key] %}
+            <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
+                <div class="daily-model">{{ m_label }}</div>
+                {% if m.total > 0 %}
+                <div class="daily-acc">{{ m.accuracy }}%</div>
+                <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                {% else %}
+                <div class="daily-acc" style="color:#94a3b8;">N/A</div>
+                <div class="daily-rec">no graded games</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="daily-tally" style="text-align:center;">
+        <strong>N/A</strong> — no graded games for last 7 days.
+    </div>
+    {% endif %}
+    {% if roi_cards %}
+    <div class="daily-tally">
+        <h2>ROI (1u) — Moneyline / Spread / Total</h2>
+        <div class="daily-tally-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+            {% for r_label, r_key in [('Moneyline','moneyline'),('Spread','spread'),('Total','total')] %}
+            {% set r = roi_cards[r_key] %}
+            <div class="daily-tally-card">
+                <div class="daily-model">{{ r_label }}</div>
+                <div class="daily-rec">Last Night: {{ r.daily.roi }} · {{ r.daily.detail }}</div>
+                <div class="daily-rec">Last 7 Days: {{ r.weekly.roi }} · {{ r.weekly.detail }}</div>
+                <div class="daily-rec">Season: {{ r.total.roi }} · {{ r.total.detail }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
     {% if weekly_results and overall_stats %}
         {% set ens = overall_stats.ensemble %}
         <!-- Overall per-model performance -->
@@ -5168,6 +5563,69 @@ def get_season_status(sport, today=None):
     days_until = (next_start - today).days
     return ('Starting Soon' if days_until <= 60 else 'Offseason'), False
 
+def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
+    sport_info = SPORTS.get(sport, {'name': sport})
+    sport_name = sport_info.get('name', sport)
+    try:
+        conn = get_db_connection()
+        rows = conn.execute('''
+            SELECT g.home_score, g.away_score,
+                   p.win_probability, p.elo_home_prob, p.xgboost_home_prob
+            FROM games g
+            LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+            WHERE g.sport = ?
+              AND g.home_score IS NOT NULL
+              AND g.away_score IS NOT NULL
+              AND date(g.game_date) BETWEEN ? AND ?
+        ''', (sport, sport, start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'))).fetchall()
+        conn.close()
+    except Exception as _e:
+        return f"{sport_name} last 7 days: N/A — data unavailable."
+    total_games = 0
+    graded = 0
+    correct = 0
+    missing_preds = 0
+    for row in rows:
+        total_games += 1
+        home_score = row['home_score']
+        away_score = row['away_score']
+        if home_score is None or away_score is None:
+            continue
+        if home_score == away_score:
+            continue
+        prob = row['win_probability']
+        if prob is None:
+            prob = row['elo_home_prob']
+        if prob is None:
+            prob = row['xgboost_home_prob']
+        if prob is None:
+            missing_preds += 1
+            continue
+        actual_home_win = home_score > away_score
+        graded += 1
+        if (prob > 0.5) == actual_home_win:
+            correct += 1
+    if graded == 0:
+        if total_games == 0:
+            reason = "N/A — no completed games in last 7 days."
+        elif missing_preds >= total_games:
+            reason = "N/A — no stored predictions for completed games."
+        else:
+            reason = "N/A — no graded games in last 7 days."
+        return f"{sport_name} last 7 days: {reason}"
+    accuracy = round((correct / graded) * 100, 1)
+    return f"{sport_name} last 7 days: {accuracy}% ({correct}-{graded - correct})"
+
+def _build_weekly_banner_messages(sport_keys, days=7):
+    if not sport_keys:
+        return ["N/A — no sports available for weekly results."]
+    end_dt = datetime.now() - timedelta(days=1)
+    start_dt = end_dt - timedelta(days=max(days, 1) - 1)
+    messages = []
+    for key in sport_keys:
+        messages.append(_weekly_banner_message_for_sport(key, start_dt, end_dt))
+    return messages
+
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID')
@@ -5209,6 +5667,7 @@ def landing_page():
             'is_live': is_live,
         })
     sports_covered = len(landing_sports)
+    weekly_banner_messages = _build_weekly_banner_messages([s['key'] for s in landing_sports])
 
     return render_template_string("""
 <!DOCTYPE html>
@@ -5412,25 +5871,37 @@ def landing_page():
         }
         .btn-donate-hero:hover{transform:translateY(-2px);box-shadow:0 6px 28px rgba(251,191,36,.45);}
 
-        /* ── Stats bar ── */
-        .stats-bar{
-            display:flex;justify-content:center;flex-wrap:wrap;
-            gap:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
-            background:rgba(255,255,255,0.03);
+        /* ── Weekly banner ── */
+        .weekly-banner{
+            margin:-10px auto 10px;
+            max-width:980px;
+            background:rgba(255,255,255,0.05);
+            border:1px solid var(--border);
+            border-radius:14px;
+            padding:16px 20px;
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            align-items:center;
+            text-align:center;
         }
-        .stat-item{
-            flex:1;min-width:140px;max-width:220px;
-            text-align:center;padding:28px 20px;
-            border-right:1px solid var(--border);
+        .weekly-banner-label{
+            font-size:0.72em;
+            text-transform:uppercase;
+            letter-spacing:0.6px;
+            color:#94a3b8;
+            font-weight:700;
         }
-        .stat-item:last-child{border-right:none;}
-        .stat-num{
-            font-size:2.2em;font-weight:900;
-            background:linear-gradient(135deg,var(--gold),var(--gold2));
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-            white-space:normal;line-height:1.15;word-break:break-word;
+        .weekly-banner-text{
+            font-size:1.1em;
+            font-weight:700;
+            color:#fbbf24;
+            min-height:1.6em;
         }
-        .stat-label{font-size:.8em;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-top:4px;}
+        .weekly-banner-text.fade{
+            opacity:0.15;
+            transition:opacity 0.35s ease;
+        }
 
         /* ── Free banner ── */
         .free-banner{
@@ -5557,8 +6028,7 @@ def landing_page():
             .hero{padding:60px 20px 40px;}
             .free-banner{flex-direction:column;}
             .donate-card{padding:36px 24px;}
-            .stat-item{min-width:110px;padding:20px 12px;}
-            .stats-bar{border-left:none;border-right:none;}
+            .weekly-banner{margin:0 16px;}
         }
         @media (max-width: 768px) {
             .nav-links {
@@ -5637,28 +6107,10 @@ def landing_page():
     </div>
 </div>
 
-<!-- Stats bar -->
-<div class="stats-bar">
-    <div class="stat-item">
-        <div class="stat-num">{{ sports_covered }}</div>
-        <div class="stat-label">Sports Covered</div>
-    </div>
-    <div class="stat-item">
-        <div class="stat-num">All Predictions Tracked</div>
-        <div class="stat-label"></div>
-    </div>
-    <div class="stat-item">
-        <div class="stat-num">69%</div>
-        <div class="stat-label">NBA Win Rate</div>
-    </div>
-    <div class="stat-item">
-        <div class="stat-num">Verified Results Daily</div>
-        <div class="stat-label"></div>
-    </div>
-    <div class="stat-item">
-        <div class="stat-num">Always Free</div>
-        <div class="stat-label"></div>
-    </div>
+<!-- Weekly banner -->
+<div class="weekly-banner">
+    <div class="weekly-banner-label">Weekly Results (Last 7 Days)</div>
+    <div class="weekly-banner-text" id="weeklyBannerText">{{ weekly_banner_messages[0] if weekly_banner_messages else 'N/A — weekly results unavailable.' }}</div>
 </div>
 
 <!-- Sports grid -->
@@ -5787,13 +6239,32 @@ def landing_page():
         const step = scroller.clientWidth * 0.8;
         scroller.scrollBy({ left: direction * step, behavior: 'smooth' });
     }
+    const weeklyMessages = {{ weekly_banner_messages|tojson }};
+    let weeklyIndex = 0;
+    function rotateWeeklyBanner() {
+        const el = document.getElementById('weeklyBannerText');
+        if (!el || !weeklyMessages.length) return;
+        el.classList.add('fade');
+        setTimeout(() => {
+            el.textContent = weeklyMessages[weeklyIndex];
+            weeklyIndex = (weeklyIndex + 1) % weeklyMessages.length;
+            el.classList.remove('fade');
+        }, 200);
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        rotateWeeklyBanner();
+        if (weeklyMessages.length > 1) {
+            setInterval(rotateWeeklyBanner, 4500);
+        }
+    });
 </script>
 
 </body>
 </html>
     """, nhl_accuracy=nhl_accuracy, nfl_accuracy=nfl_accuracy, nba_accuracy=nba_accuracy,
          games_graded=games_graded, predictions_logged=predictions_logged,
-         stripe_url=STRIPE_DONATION_URL, landing_sports=landing_sports, sports_covered=sports_covered)
+         stripe_url=STRIPE_DONATION_URL, landing_sports=landing_sports,
+         sports_covered=sports_covered, weekly_banner_messages=weekly_banner_messages)
 
 @app.route('/robots.txt')
 def robots_txt():
@@ -5945,9 +6416,20 @@ def sport_results(sport):
             update_nfl_scores()
             weekly_results = calculate_nfl_weekly_performance()
             overall_stats = compute_overall_stats_from_weekly(weekly_results) if weekly_results else {}
-            daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+            yesterday_dt = datetime.now() - timedelta(days=1)
+            daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
             daily_tally = compute_daily_model_tally_from_weekly(weekly_results, daily_tally_date) if weekly_results else None
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
+            daily_results = _daily_results_from_weekly(weekly_results) if weekly_results else {}
+            _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
+            weekly_start_dt = yesterday_dt - timedelta(days=6)
+            weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt) if daily_results else None
+            weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+            weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+            roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt) if daily_results else None
+            roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt) if daily_results else None
+            roi_total = compute_roi_for_range(daily_results, None, None) if daily_results else None
+            roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total) if daily_results else None
             return render_template_string(
                 NFL_WEEKLY_RESULTS_TEMPLATE,
                 page=sport,
@@ -5957,7 +6439,11 @@ def sport_results(sport):
                 overall_stats=overall_stats,
                 daily_tally=daily_tally,
                 daily_tally_date=daily_tally_date,
-                daily_tally_games=daily_tally_games
+                daily_tally_games=daily_tally_games,
+                weekly_tally=weekly_tally,
+                weekly_tally_date_range=weekly_tally_date_range,
+                weekly_tally_games=weekly_tally_games,
+                roi_cards=roi_cards
             )
         
         if sport == 'NHL':
@@ -6000,16 +6486,26 @@ def sport_results(sport):
                 # Filter to only show recent dates up to yesterday.
                 # Keep overall stats from all games, but render fewer date sections
                 # so the page stays fast and doesn't block production workers.
-                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                yesterday_dt = datetime.now() - timedelta(days=1)
+                yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
+                _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
-                daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                daily_tally_date = yesterday
                 daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
                 daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
+                weekly_start_dt = yesterday_dt - timedelta(days=6)
+                weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+                weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+                roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
+                roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                roi_total = compute_roi_for_range(daily_results, None, None)
+                roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
 
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
@@ -6021,7 +6517,11 @@ def sport_results(sport):
                     spread_total_stats=_st_stats,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
-                    daily_tally_games=daily_tally_games
+                    daily_tally_games=daily_tally_games,
+                    weekly_tally=weekly_tally,
+                    weekly_tally_date_range=weekly_tally_date_range,
+                    weekly_tally_games=weekly_tally_games,
+                    roi_cards=roi_cards
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
@@ -6059,16 +6559,26 @@ def sport_results(sport):
                         daily_results[date_key]['games'].append(game)
                 
                 # Render recent dates only to keep response size manageable.
-                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                yesterday_dt = datetime.now() - timedelta(days=1)
+                yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _cache_market_lines_for_results(sport, daily_results, limit=20)
+                _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
-                daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                daily_tally_date = yesterday
                 daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
                 daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
+                weekly_start_dt = yesterday_dt - timedelta(days=6)
+                weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+                weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+                roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
+                roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                roi_total = compute_roi_for_range(daily_results, None, None)
+                roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
                     page=sport, sport=sport, sport_info=SPORTS[sport],
@@ -6079,7 +6589,11 @@ def sport_results(sport):
                     spread_total_stats=_st_stats,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
-                    daily_tally_games=daily_tally_games
+                    daily_tally_games=daily_tally_games,
+                    weekly_tally=weekly_tally,
+                    weekly_tally_date_range=weekly_tally_date_range,
+                    weekly_tally_games=weekly_tally_games,
+                    roi_cards=roi_cards
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
@@ -6235,10 +6749,20 @@ def sport_results(sport):
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _cache_market_lines_for_results(sport, daily_results, limit=20)
+            _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
-            daily_tally_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+            yesterday_dt = datetime.now() - timedelta(days=1)
+            daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
+            weekly_start_dt = yesterday_dt - timedelta(days=6)
+            weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
+            weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+            weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+            roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
+            roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+            roi_total = compute_roi_for_range(daily_results, None, None)
+            roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
             soccer_leagues = None
             if sport == 'SOCCER':
                 soccer_leagues = [
@@ -6262,6 +6786,10 @@ def sport_results(sport):
                 daily_tally=daily_tally,
                 daily_tally_date=daily_tally_date,
                 daily_tally_games=daily_tally_games,
+                weekly_tally=weekly_tally,
+                weekly_tally_date_range=weekly_tally_date_range,
+                weekly_tally_games=weekly_tally_games,
+                roi_cards=roi_cards,
                 soccer_leagues=soccer_leagues
             )
             _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
