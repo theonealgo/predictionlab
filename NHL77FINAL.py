@@ -5757,7 +5757,10 @@ def landing_page():
             'is_live': is_live,
         })
     sports_covered = len(landing_sports)
-    weekly_banner_messages = _build_weekly_banner_messages([s['key'] for s in landing_sports if s.get('is_live')])
+    preferred = [s['key'] for s in landing_sports if s.get('is_live') and s['key'] in ('NBA', 'MLB')]
+    fallback = [s['key'] for s in landing_sports if s.get('is_live') and s['key'] not in ('NBA', 'MLB')]
+    banner_sports = preferred + fallback
+    weekly_banner_messages = _build_weekly_banner_messages(banner_sports[:2])
 
     return render_template_string("""
 <!DOCTYPE html>
