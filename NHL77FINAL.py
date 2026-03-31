@@ -78,6 +78,8 @@ _SPORT_RESULTS_TTL_BY_SPORT = {
 }
 _SOCCER_MODEL_CACHE: dict = {}
 _SOCCER_MODEL_TTL = 900
+_LANDING_BANNER_CACHE = {'ts': 0, 'messages': []}
+_LANDING_BANNER_TTL = 900
 
 
 def _cached_get(url: str, timeout: int = 10):
@@ -5702,6 +5704,19 @@ def _build_weekly_banner_messages(sport_keys, days=7, max_items=4):
     ranked.sort(key=lambda x: x[0], reverse=True)
     return [msg for _, msg in ranked[:max_items]]
 
+def _get_cached_weekly_banner_messages(sport_keys, days=7, max_items=4):
+    now_ts = _time.time()
+    cached = _LANDING_BANNER_CACHE
+    if cached and (now_ts - cached.get('ts', 0)) < _LANDING_BANNER_TTL:
+        return cached.get('messages', [])
+    try:
+        messages = _build_weekly_banner_messages(sport_keys, days=days, max_items=max_items)
+    except Exception as _e:
+        logger.debug(f"Weekly banner build failed: {_e}")
+        return cached.get('messages', [])
+    _LANDING_BANNER_CACHE.update({'ts': now_ts, 'messages': messages})
+    return messages
+
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
@@ -5834,7 +5849,7 @@ def landing_page():
         })
     sports_covered = len(landing_sports)
     banner_sports = [s['key'] for s in landing_sports]
-    weekly_banner_messages = _build_weekly_banner_messages(banner_sports, max_items=4)
+    weekly_banner_messages = _get_cached_weekly_banner_messages(banner_sports, max_items=4)
 
     return render_template_string("""
 <!DOCTYPE html>
