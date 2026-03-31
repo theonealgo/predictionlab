@@ -5580,7 +5580,7 @@ def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
         ''', (sport, sport, start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'))).fetchall()
         conn.close()
     except Exception as _e:
-        return f"{sport_name} last 7 days: N/A — data unavailable."
+        return None
     total_games = 0
     graded = 0
     correct = 0
@@ -5606,24 +5606,20 @@ def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
         if (prob > 0.5) == actual_home_win:
             correct += 1
     if graded == 0:
-        if total_games == 0:
-            reason = "N/A — no completed games in last 7 days."
-        elif missing_preds >= total_games:
-            reason = "N/A — no stored predictions for completed games."
-        else:
-            reason = "N/A — no graded games in last 7 days."
-        return f"{sport_name} last 7 days: {reason}"
+        return None
     accuracy = round((correct / graded) * 100, 1)
-    return f"{sport_name} last 7 days: {accuracy}% ({correct}-{graded - correct})"
+    return f"{sport_name} consensus ML (last 7 days): {accuracy}% ({correct}-{graded - correct})"
 
 def _build_weekly_banner_messages(sport_keys, days=7):
     if not sport_keys:
-        return ["N/A — no sports available for weekly results."]
+        return []
     end_dt = datetime.now() - timedelta(days=1)
     start_dt = end_dt - timedelta(days=max(days, 1) - 1)
     messages = []
     for key in sport_keys:
-        messages.append(_weekly_banner_message_for_sport(key, start_dt, end_dt))
+        msg = _weekly_banner_message_for_sport(key, start_dt, end_dt)
+        if msg:
+            messages.append(msg)
     return messages
 
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
@@ -5667,7 +5663,7 @@ def landing_page():
             'is_live': is_live,
         })
     sports_covered = len(landing_sports)
-    weekly_banner_messages = _build_weekly_banner_messages([s['key'] for s in landing_sports])
+    weekly_banner_messages = _build_weekly_banner_messages([s['key'] for s in landing_sports if s.get('is_live')])
 
     return render_template_string("""
 <!DOCTYPE html>
@@ -6108,10 +6104,12 @@ def landing_page():
 </div>
 
 <!-- Weekly banner -->
+{% if weekly_banner_messages %}
 <div class="weekly-banner">
     <div class="weekly-banner-label">Weekly Results (Last 7 Days)</div>
-    <div class="weekly-banner-text" id="weeklyBannerText">{{ weekly_banner_messages[0] if weekly_banner_messages else 'N/A — weekly results unavailable.' }}</div>
+    <div class="weekly-banner-text" id="weeklyBannerText">{{ weekly_banner_messages[0] }}</div>
 </div>
+{% endif %}
 
 <!-- Sports grid -->
 <div class="section">
