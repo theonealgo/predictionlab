@@ -5653,7 +5653,7 @@ def _build_weekly_banner_messages(sport_keys, days=7):
 
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
-GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID')
+GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID')
 GA_CREDENTIALS_JSON = _os.environ.get('GA_CREDENTIALS_JSON')
 
