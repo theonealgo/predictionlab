@@ -630,6 +630,10 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             'ens_correct':       (ens_prob  > 0.5) == home_won if ens_prob is not None and home_won is not None else None,
             'skip_grading':      True if home_won is None else False,
         }
+        @keyframes weekly-marquee{
+            0%{transform:translateX(0);}
+            100%{transform:translateX(-50%);}
+        }
         daily_results[game_info['date']]['games'].append(game_info)
     return daily_results
 
@@ -4180,17 +4184,9 @@ BASE_TEMPLATE = """
             text-decoration: none;
         }
         .logo-img {
-            height: 36px;
+            height: 44px;
             width: auto;
             display: block;
-        }
-        .logo-text {
-            font-size: 1.4em;
-            font-weight: 800;
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: 0.3px;
         }
         .hamburger {
             display: flex;
@@ -4313,8 +4309,7 @@ BASE_TEMPLATE = """
     <div class="navbar">
         <div class="navbar-content">
             <a href="/" class="logo">
-                <img src="/static/underdogs-logo.png" alt="underdogs.bet" class="logo-img" onerror="this.style.display='none';">
-                <span class="logo-text">underdogs.bet</span>
+                <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="logo-img">
             </a>
             <div class="hamburger" onclick="toggleMenu()">
                 <span></span>
@@ -5939,17 +5934,9 @@ def landing_page():
             text-decoration: none;
         }
         .logo-img {
-            height: 36px;
+            height: 44px;
             width: auto;
             display: block;
-        }
-        .logo-text {
-            font-size: 1.4em;
-            font-weight: 800;
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: 0.3px;
         }
         .hamburger {
             display: flex;
@@ -6092,6 +6079,15 @@ def landing_page():
             width:100%;
             overflow:hidden;
         }
+        .weekly-banner-track{
+            display:inline-flex;
+            align-items:center;
+            gap:12px;
+            width:max-content;
+            white-space:nowrap;
+            will-change:transform;
+            animation:weekly-marquee 26s linear infinite;
+        }
         .weekly-banner-line{
             background:rgba(255,255,255,0.06);
             border:1px solid rgba(255,255,255,0.12);
@@ -6104,6 +6100,7 @@ def landing_page():
             display:flex;
             gap:10px;
             align-items:center;
+            flex:0 0 auto;
         }
 
         /* ── Free banner ── */
@@ -6257,8 +6254,7 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo">
-            <img src="/static/underdogs-logo.png" alt="underdogs.bet" class="logo-img" onerror="this.style.display='none';">
-            <span class="logo-text">underdogs.bet</span>
+            <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="logo-img">
         </a>
         <div class="hamburger" onclick="toggleMenu()">
             <span></span>
