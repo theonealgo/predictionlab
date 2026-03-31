@@ -6154,9 +6154,13 @@ def sport_results(sport):
             today_date = datetime.now().strftime('%Y-%m-%d')
             
             for game in completed_games:
-                home_won = game['home_score'] > game['away_score'] if game['home_score'] is not None and game['away_score'] is not None else None
+                home_score = _to_float_safe(game['home_score'])
+                away_score = _to_float_safe(game['away_score'])
+                if home_score is None or away_score is None:
+                    continue
+                home_won = home_score > away_score
                 is_draw = False
-                if sport == 'SOCCER' and game['home_score'] == game['away_score']:
+                if sport == 'SOCCER' and abs(home_score - away_score) < 1e-9:
                     is_draw = True
                     home_won = None
                 home_team = game['home_team_id']
@@ -6208,8 +6212,8 @@ def sport_results(sport):
                     'home':             home_team,
                     'away':             away_team,
                     'league':           league_name or sport,
-                    'home_score':       game['home_score'],
-                    'away_score':       game['away_score'],
+                    'home_score':       int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
+                    'away_score':       int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
                     'home_win':         home_won,
                     'is_draw':          is_draw,
                     'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
