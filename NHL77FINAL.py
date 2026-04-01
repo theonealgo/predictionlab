@@ -630,6 +630,12 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             'ens_correct':       (ens_prob  > 0.5) == home_won if ens_prob is not None and home_won is not None else None,
             'skip_grading':      True if home_won is None else False,
         }
+        @media(max-width:420px){
+            .footer-links{
+                grid-template-columns:1fr;
+                max-width:280px;
+            }
+        }
         daily_results[game_info['date']]['games'].append(game_info)
     return daily_results
 
@@ -4280,7 +4286,15 @@ BASE_TEMPLATE = """
             text-decoration: none;
         }
         .footer a:hover { text-decoration: underline; }
-        .footer-links { margin-top: 10px; }
+        .footer-links {
+            margin: 14px auto 0;
+            max-width: 720px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(140px, 1fr));
+            gap: 8px 16px;
+            justify-items: center;
+        }
+        .footer-links a { display: inline-block; }
         .footer-contact { margin-top: 10px; }
         .footer-social {
             margin-top: 10px;
@@ -4331,6 +4345,16 @@ BASE_TEMPLATE = """
             .container {
                 padding: 20px 15px;
             }
+            .footer-links {
+                grid-template-columns: repeat(2, minmax(140px, 1fr));
+                max-width: 480px;
+            }
+        }
+        @media (max-width: 480px) {
+            .footer-links {
+                grid-template-columns: 1fr;
+                max-width: 280px;
+            }
         }
         {% block extra_styles %}{% endblock %}
     </style>
@@ -4369,21 +4393,21 @@ BASE_TEMPLATE = """
     </div>
     <div class="footer">
         <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
-        <p class="footer-links">
-            <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
-            <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
-            <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
-            <a href="/sport/NFL/predictions">NFL</a> &nbsp;·&nbsp;
-            <a href="/sport/NCAAB/predictions">NCAAB</a> &nbsp;·&nbsp;
-            <a href="/sport/NCAAW/predictions">NCAAW</a> &nbsp;·&nbsp;
-            <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
-            <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
-            <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
-            <a href="/tutorial">Tutorial</a> &nbsp;·&nbsp;
-            <a href="/privacy">Privacy</a> &nbsp;·&nbsp;
-            <a href="/terms">Terms of Use</a> &nbsp;·&nbsp;
+        <div class="footer-links">
+            <a href="/sport/NHL/predictions">NHL</a>
+            <a href="/sport/NBA/predictions">NBA</a>
+            <a href="/sport/MLB/predictions">MLB</a>
+            <a href="/sport/NFL/predictions">NFL</a>
+            <a href="/sport/NCAAB/predictions">NCAAB</a>
+            <a href="/sport/NCAAW/predictions">NCAAW</a>
+            <a href="/sport/NCAAF/predictions">NCAAF</a>
+            <a href="/sport/WNBA/predictions">WNBA</a>
+            <a href="/sport/SOCCER/predictions">Soccer</a>
+            <a href="/tutorial">Tutorial</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms of Use</a>
             <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
-        </p>
+        </div>
         <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
         {% if social_links %}
         <div class="footer-social">
@@ -6315,12 +6339,12 @@ def landing_page():
             background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.1));
             border:1px solid rgba(16,185,129,.35);
             border-radius:16px;padding:28px 36px;
-            display:flex;gap:20px;align-items:flex-start;
+            display:flex;gap:12px;align-items:center;justify-content:center;
+            flex-direction:column;text-align:center;
         }
-        .free-icon{font-size:2.2em;flex-shrink:0;}
+        .free-icon{font-size:2.2em;display:inline-flex;align-items:center;justify-content:center;}
         .free-title{font-size:1.15em;font-weight:800;color:#fff;margin-bottom:6px;}
-        .free-body{font-size:.93em;color:#fff;line-height:1.6;}
-        .free-list{margin:8px 0 12px 18px;color:#fff;line-height:1.6;}
+        .free-body{font-size:.93em;color:#fff;line-height:1.6;max-width:620px;}
 
         /* ── Sports grid ── */
         .section{padding:70px 30px;max-width:1200px;margin:0 auto;}
@@ -6445,7 +6469,15 @@ def landing_page():
         }
         .footer a{color:#fff;text-decoration:none;}
         .footer a:hover{text-decoration:underline;}
-        .footer-links{margin-top:10px;}
+        .footer-links{
+            margin:14px auto 0;
+            max-width:720px;
+            display:grid;
+            grid-template-columns:repeat(3,minmax(140px,1fr));
+            gap:8px 16px;
+            justify-items:center;
+        }
+        .footer-links a{display:inline-block;}
         .footer-contact{margin-top:10px;}
         .footer-social{
             margin-top:10px;
@@ -6485,6 +6517,16 @@ def landing_page():
             .free-banner{flex-direction:column;}
             .donate-card{padding:36px 24px;}
             .weekly-banner{margin:0 16px;}
+            .footer-links{
+                grid-template-columns:repeat(2,minmax(140px,1fr));
+                max-width:480px;
+            }
+        }
+        @media(max-width:420px){
+            .footer-links{
+                grid-template-columns:1fr;
+                max-width:280px;
+            }
         }
         @media (max-width: 768px) {
             .nav-links {
@@ -6547,17 +6589,11 @@ def landing_page():
 
     <!-- Free banner -->
     <div class="free-banner" style="margin-top:48px;">
-        <div class="free-icon">🆓</div>
         <div>
             <div class="free-title">100% Free Sports Picks — No Paywalls, Ever</div>
+            <div class="free-icon">🆓</div>
             <div class="free-body">
-                underdogs.bet is completely free:
-                <ul class="free-list">
-                    <li>No subscriptions</li>
-                    <li>No locked picks</li>
-                    <li>No “premium” upsells</li>
-                </ul>
-                We’re built for bettors who want data-driven predictions, not hype.
+                underdogs.bet is completely free. We’re built for bettors who want data-driven predictions, not hype.
                 If you find value in our AI picks, you can support the platform—but everything stays free.
             </div>
         </div>
@@ -6597,7 +6633,6 @@ def landing_page():
 <div class="section">
     <h2 class="section-title">Today’s Free Sports Picks</h2>
     <p class="section-sub">Get daily betting predictions and odds insights for NBA · NHL · MLB · NFL · NCAAB · NCAAF · WNBA · Soccer. Live picks updated every day.</p>
-    <h2 class="section-title secondary">Betting Predictions by Sport</h2>
     <div class="sport-slider">
         <div class="slider-arrow" onclick="scrollSports(-1)">‹</div>
         <div class="sport-badges" id="sportBubbles">
@@ -6680,21 +6715,21 @@ def landing_page():
 <!-- Footer -->
 <div class="footer">
     <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
-    <p class="footer-links">
-        <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
-        <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
-        <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
-        <a href="/sport/NFL/predictions">NFL</a> &nbsp;·&nbsp;
-        <a href="/sport/NCAAB/predictions">NCAAB</a> &nbsp;·&nbsp;
-        <a href="/sport/NCAAW/predictions">NCAAW</a> &nbsp;·&nbsp;
-        <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
-        <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
-        <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
-        <a href="/tutorial">Tutorial</a> &nbsp;·&nbsp;
-        <a href="/privacy">Privacy</a> &nbsp;·&nbsp;
-        <a href="/terms">Terms of Use</a> &nbsp;·&nbsp;
+    <div class="footer-links">
+        <a href="/sport/NHL/predictions">NHL</a>
+        <a href="/sport/NBA/predictions">NBA</a>
+        <a href="/sport/MLB/predictions">MLB</a>
+        <a href="/sport/NFL/predictions">NFL</a>
+        <a href="/sport/NCAAB/predictions">NCAAB</a>
+        <a href="/sport/NCAAW/predictions">NCAAW</a>
+        <a href="/sport/NCAAF/predictions">NCAAF</a>
+        <a href="/sport/WNBA/predictions">WNBA</a>
+        <a href="/sport/SOCCER/predictions">Soccer</a>
+        <a href="/tutorial">Tutorial</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms of Use</a>
         <a href="{{ stripe_url }}" target="_blank">💛 Donate</a>
-    </p>
+    </div>
     <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
     {% if social_links %}
     <div class="footer-social">
