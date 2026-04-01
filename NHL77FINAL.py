@@ -265,6 +265,43 @@ def _american_units(odds: float):
     return (odds / 100.0) if odds > 0 else (100.0 / abs(odds))
 
 
+_ODDS_VIG = 0.04
+
+
+def _prob_to_american(p):
+    """Convert a win probability (0-1) to American odds."""
+    if p is None or p <= 0 or p >= 1:
+        return None
+    if p >= 0.5:
+        return -round((p / (1 - p)) * 100)
+    return round(((1 - p) / p) * 100)
+
+
+def _compute_odds_from_prob(home_prob_pct, vig=_ODDS_VIG):
+    """Compute American moneyline odds from a home win probability percentage.
+
+    home_prob_pct: e.g. 65.0 meaning 65% home win chance.
+    Returns dict with moneyline_home, moneyline_away.
+    """
+    if home_prob_pct is None:
+        return None
+    hp = home_prob_pct / 100.0
+    ap = 1.0 - hp
+    if hp <= 0 or hp >= 1:
+        return None
+    # Apply vig (same logic as engine buildOdds)
+    total = hp + ap
+    ph = hp / total
+    pa = ap / total
+    vig_factor = 1 + vig
+    ph_vig = min(ph * vig_factor, 0.99)
+    pa_vig = min(pa * vig_factor, 0.99)
+    return {
+        'moneyline_home': _prob_to_american(ph_vig),
+        'moneyline_away': _prob_to_american(pa_vig),
+    }
+
+
 def _fetch_engine_odds(sport, game_id, game_date=None, home_team=None, away_team=None):
     if not ODDS_ENGINE_URL:
         return None, "odds engine URL not configured"
@@ -363,129 +400,48 @@ def _upsert_engine_odds(
 
 
 def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
+    """Compute moneyline odds from each game's ensemble probability for ROI.
+
+    Uses ens_prob (home win %) to derive American moneyline odds with vig.
+    Also falls back to engine DB if available, but model-derived odds take priority.
+    """
     if not daily_results:
         return
-    if not ODDS_ENGINE_URL:
-        for dd in daily_results.values():
-            for g in dd.get('games', []):
-                g['odds_reason'] = "Odds engine unavailable."
-        return
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        attempts = 0
-        for dd in daily_results.values():
-            for g in dd.get('games', []):
-                if attempts >= limit:
-                    break
-                gid = g.get('game_id')
-                if not gid:
-                    continue
-                existing = cur.execute(
-                    "SELECT home_moneyline, away_moneyline, spread, total, spread_price_home, spread_price_away, total_over_price, total_under_price, source FROM engine_odds WHERE sport=? AND game_id=?",
-                    (sport, gid)
-                ).fetchone()
-                if existing:
-                    g['home_moneyline'] = existing['home_moneyline']
-                    g['away_moneyline'] = existing['away_moneyline']
-                    g['spread_price_home'] = existing['spread_price_home']
-                    g['spread_price_away'] = existing['spread_price_away']
-                    g['total_over_price'] = existing['total_over_price']
-                    g['total_under_price'] = existing['total_under_price']
-                    g['odds_source'] = existing['source']
-                    if g.get('market_spread') is None and existing['spread'] is not None:
-                        g['market_spread'] = existing['spread']
-                    if g.get('market_total') is None and existing['total'] is not None:
-                        g['market_total'] = existing['total']
-                    continue
-                odds, reason = _fetch_engine_odds(
-                    sport,
-                    gid,
-                    g.get('date'),
-                    g.get('home'),
-                    g.get('away'),
-                )
-                attempts += 1
-                if odds:
-                    g['home_moneyline'] = odds.get('moneyline_home')
-                    g['away_moneyline'] = odds.get('moneyline_away')
-                    g['spread_price_home'] = odds.get('spread_price_home')
-                    g['spread_price_away'] = odds.get('spread_price_away')
-                    g['total_over_price'] = odds.get('total_over_price')
-                    g['total_under_price'] = odds.get('total_under_price')
-                    if g.get('market_spread') is None and odds.get('spread') is not None:
-                        g['market_spread'] = odds.get('spread')
-                    if g.get('market_total') is None and odds.get('total') is not None:
-                        g['market_total'] = odds.get('total')
-                    g['odds_source'] = odds.get('source', 'engine')
-                    g['odds_reason'] = None
-                    _upsert_engine_odds(
-                        conn,
-                        sport,
-                        gid,
-                        g.get('date'),
-                        g.get('home'),
-                        g.get('away'),
-                        odds,
-                    )
-                else:
-                    g['odds_reason'] = reason
-            if attempts >= limit:
-                break
-        conn.commit()
-        conn.close()
-    except Exception as _e:
-        logger.debug(f"[{sport}] engine odds attach failed: {_e}")
+    for dd in daily_results.values():
+        for g in dd.get('games', []):
+            ens = g.get('ens_prob')
+            ml = _compute_odds_from_prob(ens)
+            if ml:
+                g['home_moneyline'] = ml['moneyline_home']
+                g['away_moneyline'] = ml['moneyline_away']
+            g.setdefault('spread_price_home', -110)
+            g.setdefault('spread_price_away', -110)
+            g.setdefault('total_over_price', -110)
+            g.setdefault('total_under_price', -110)
+            g['odds_source'] = 'model'
 
 def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
+    """Compute moneyline odds from the prediction's own ensemble probability.
+
+    Uses the model's ensemble_prob (home win %) to derive American odds with vig.
+    Spread/total prices use standard -110 juice.
+    """
     if not predictions:
         return
-    if not ODDS_ENGINE_URL:
-        return
-    try:
-        conn = get_db_connection()
-        attempts = 0
-        for pred in predictions:
-            if attempts >= limit:
-                break
-            if pred.get('home_score') is not None:
-                continue
-            gid = pred.get('game_id')
-            odds, reason = _fetch_engine_odds(
-                sport,
-                gid,
-                pred.get('game_date'),
-                pred.get('home_team_id'),
-                pred.get('away_team_id'),
-            )
-            attempts += 1
-            if odds:
-                pred['home_moneyline'] = odds.get('moneyline_home')
-                pred['away_moneyline'] = odds.get('moneyline_away')
-                pred['market_spread'] = odds.get('spread')
-                pred['market_total'] = odds.get('total')
-                pred['spread_price_home'] = odds.get('spread_price_home')
-                pred['spread_price_away'] = odds.get('spread_price_away')
-                pred['total_over_price'] = odds.get('total_over_price')
-                pred['total_under_price'] = odds.get('total_under_price')
-                pred['odds_source'] = odds.get('source', 'engine')
-                pred['odds_reason'] = None
-                if gid:
-                    _upsert_engine_odds(
-                        conn,
-                        sport,
-                        gid,
-                        pred.get('game_date'),
-                        pred.get('home_team_id'),
-                        pred.get('away_team_id'),
-                        odds,
-                    )
-            else:
-                pred['odds_reason'] = None
-        conn.commit()
-        conn.close()
-    except Exception as _e:
-        logger.debug(f"[{sport}] engine odds attach failed: {_e}")
+    for pred in predictions:
+        if pred.get('home_score') is not None:
+            continue
+        ens = pred.get('ensemble_prob')
+        ml = _compute_odds_from_prob(ens)
+        if ml:
+            pred['home_moneyline'] = ml['moneyline_home']
+            pred['away_moneyline'] = ml['moneyline_away']
+        # Standard -110/-110 for spread and total prices
+        pred.setdefault('spread_price_home', -110)
+        pred.setdefault('spread_price_away', -110)
+        pred.setdefault('total_over_price', -110)
+        pred.setdefault('total_under_price', -110)
+        pred['odds_source'] = 'model'
 
 
 def _compute_model_profit(daily_results):
@@ -5315,6 +5271,25 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% endif %}
 
+        <!-- ── ROI Cards ── -->
+        {% if roi_cards %}
+        <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #fbbf24;border-radius:14px;padding:22px;margin-bottom:16px;">
+            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.3em;">💰 ROI Tracker (1u flat bets)</h2>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                {% for mkt, mkt_label in [('moneyline','Moneyline'),('spread','Spread'),('total','Total (O/U)')] %}
+                {% set c = roi_cards[mkt] %}
+                <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:14px;">
+                    <div style="font-size:0.82em;text-align:center;opacity:0.8;margin-bottom:8px;font-weight:700;">{{ mkt_label }}</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;font-size:0.78em;">
+                        <div><div style="opacity:0.6;">Daily</div><div style="font-weight:700;color:{% if c.daily.roi != '—' and '-' not in c.daily.roi %}#10b981{% elif c.daily.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.daily.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.daily.detail }}</div></div>
+                        <div><div style="opacity:0.6;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi != '—' and '-' not in c.weekly.roi %}#10b981{% elif c.weekly.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
+                        <div><div style="opacity:0.6;">Season</div><div style="font-weight:700;color:{% if c.total.roi != '—' and '-' not in c.total.roi %}#10b981{% elif c.total.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.total.detail }}</div></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;">
@@ -6968,6 +6943,8 @@ def sport_predictions(sport):
             f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
             "Please refresh in a minute."
         )
+
+    _attach_engine_odds_to_predictions(sport, predictions)
 
     for pred in predictions:
         for _k in (
