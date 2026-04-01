@@ -900,6 +900,8 @@ def inject_globals():
     """Make stripe_donation_url available in every template automatically."""
     return {
         'stripe_donation_url': STRIPE_DONATION_URL,
+        'contact_email': CONTACT_EMAIL,
+        'social_links': SOCIAL_LINKS,
         'soccer_enabled': SOCCER_ENABLED,
         'ga_tracking_id': GA_TRACKING_ID,
     }
@@ -4116,16 +4118,21 @@ BASE_TEMPLATE = """
     {% if page_description is defined and page_description %}{% set _meta_desc = page_description %}
     {% elif sport_info is defined %}{% set _meta_desc = sport_info.name ~ ' predictions, results, spreads, and totals powered by AI.' %}
     {% else %}{% set _meta_desc = 'AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA, and Soccer.' %}{% endif %}
+    {% if page_image is defined and page_image %}{% set _meta_image = page_image %}
+    {% else %}{% set _meta_image = request.url_root.rstrip('/') ~ '/static/IMG_3179.PNG' %}{% endif %}
     <title>{{ _meta_title }}</title>
     <meta name="description" content="{{ _meta_desc }}">
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:image" content="{{ request.url_root.rstrip('/') }}/static/IMG_3179.PNG">
+    <meta property="og:image" content="{{ _meta_image }}">
     <meta property="og:site_name" content="underdogs.bet">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
+    <meta name="twitter:image" content="{{ _meta_image }}">
     <link rel="canonical" href="{{ request.url }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
@@ -4159,7 +4166,7 @@ BASE_TEMPLATE = """
         .navbar {
             background: rgba(7, 10, 20, 0.94);
             padding: 14px 28px;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
+            border-bottom: none;
             box-shadow: 0 10px 30px rgba(0,0,0,0.35);
             backdrop-filter: blur(12px);
             position: sticky;
@@ -4180,7 +4187,7 @@ BASE_TEMPLATE = """
             text-decoration: none;
         }
         .logo-img {
-            height: 44px;
+            height: 64px;
             width: auto;
             display: block;
         }
@@ -4262,7 +4269,7 @@ BASE_TEMPLATE = """
             padding: 30px;
         }
         .footer {
-            border-top: 1px solid rgba(255,255,255,0.12);
+            border-top: none;
             padding: 26px 30px;
             text-align: center;
             color: #94a3b8;
@@ -4274,11 +4281,21 @@ BASE_TEMPLATE = """
         }
         .footer a:hover { color: #fbbf24; }
         .footer-logo {
-            font-weight: 800;
-            font-size: 1.05em;
-            margin-bottom: 8px;
+            height: 46px;
+            width: auto;
+            margin: 0 auto 12px;
             display: block;
         }
+        .footer-links { margin-top: 10px; }
+        .footer-contact { margin-top: 10px; }
+        .footer-social {
+            margin-top: 10px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .footer-copy { margin-top: 12px; opacity: 0.7; }
         @media (max-width: 768px) {
             .nav-links {
                 left: 0;
@@ -4334,9 +4351,9 @@ BASE_TEMPLATE = """
         {% block content %}{% endblock %}
     </div>
     <div class="footer">
-        <span class="footer-logo">underdogs.bet</span>
+        <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo">
         <p>AI-powered sports predictions — free forever.</p>
-        <p style="margin-top:10px;">
+        <p class="footer-links">
             <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
             <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
             <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
@@ -4348,9 +4365,18 @@ BASE_TEMPLATE = """
             {% if soccer_enabled %}
             <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
             {% endif %}
+            <a href="/tutorial">Tutorial</a> &nbsp;·&nbsp;
             <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
         </p>
-        <p style="margin-top:10px;opacity:.7;">© 2025 underdogs.bet</p>
+        <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+        {% if social_links %}
+        <div class="footer-social">
+            {% for link in social_links %}
+            <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <p class="footer-copy">© 2025</p>
     </div>
     
     <script>
@@ -4385,6 +4411,123 @@ BASE_TEMPLATE = """
 </body>
 </html>
 """
+
+TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+        .tutorial-wrap{max-width:900px;margin:0 auto;padding:20px 0 60px;}
+        .tutorial-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;margin-bottom:18px;}
+        .tutorial-card h1{font-size:2em;margin-bottom:8px;}
+        .tutorial-card h2{font-size:1.35em;margin:6px 0 8px;}
+        .tutorial-card p{color:#cbd5e1;line-height:1.7;}
+        .tutorial-card ul{margin:8px 0 0 20px;color:#cbd5e1;line-height:1.7;}
+    """
+).replace('{% block content %}{% endblock %}', """
+    <div class="tutorial-wrap">
+        <div class="tutorial-card">
+            <h1>📊 How to Use This Page</h1>
+            <p>This page shows model predictions for upcoming games. Here’s how to read each section and understand what the numbers mean.</p>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>🏒 Game Matchup Row</h2>
+            <p>Each row represents a single game:</p>
+            <ul>
+                <li>Left team = Away team</li>
+                <li>Right team = Home team</li>
+                <li>The arrow (▶) separates the matchup</li>
+            </ul>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>📈 Home Win %</h2>
+            <p>This section shows the predicted win probability for the HOME team from different models.</p>
+            <p><strong>How to read it:</strong></p>
+            <ul>
+                <li>Each model gives its own percentage</li>
+                <li>The Sharp Consensus is the combined average</li>
+            </ul>
+            <p><strong>What it means:</strong></p>
+            <ul>
+                <li>Higher % → stronger prediction for the home team</li>
+                <li>Lower % → stronger prediction for the away team</li>
+            </ul>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>🎯 Predicted Score (XSharp Score)</h2>
+            <p>This is the model’s projected final score for the game.</p>
+            <p><strong>How to read it:</strong></p>
+            <ul>
+                <li>Format: Away Score – Home Score</li>
+                <li>Example: 2.8 – 3.1 means:</li>
+                <li>Away team: 2.8 goals/points</li>
+                <li>Home team: 3.1 goals/points</li>
+            </ul>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>📉 Puck Line / Spread</h2>
+            <p>This section shows probabilities for each team covering the spread:</p>
+            <ul>
+                <li>Favorite side (e.g., -1.5)</li>
+                <li>Underdog side (e.g., +1.5)</li>
+            </ul>
+            <p><strong>How to read it:</strong></p>
+            <ul>
+                <li>Each side has a percentage</li>
+                <li>“STRONG” highlights the higher-probability side</li>
+            </ul>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>📊 Totals</h2>
+            <p>You’ll see two projected totals:</p>
+            <ul>
+                <li>XSharp Total</li>
+                <li>Our Total</li>
+            </ul>
+            <p><strong>What it means:</strong></p>
+            <ul>
+                <li>These are predicted combined scores for both teams</li>
+                <li>They can be compared with sportsbook totals to understand differences</li>
+            </ul>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>🧩 Putting It Together</h2>
+            <p>Each game gives you:</p>
+            <ul>
+                <li>Win probabilities (Home Win %)</li>
+                <li>Projected score (XSharp Score)</li>
+                <li>Spread probabilities (Puck Line)</li>
+                <li>Total projections (Totals)</li>
+            </ul>
+            <p>These are meant to give a data-driven view of the matchup based on model outputs.</p>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>📅 Navigation</h2>
+            <p>At the top of the page, you can:</p>
+            <ul>
+                <li>Switch between different dates</li>
+                <li>View past results or upcoming games</li>
+            </ul>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>✅ Summary</h2>
+            <ul>
+                <li>Home Win % → probability for the home team</li>
+                <li>Score → predicted outcome</li>
+                <li>Spread → likelihood of covering</li>
+                <li>Totals → expected combined score</li>
+            </ul>
+            <p>Everything updates per game, per day, across all supported sports.</p>
+            <p>If you need deeper features (filters, best bets, edge indicators), those can be added on top of this structure.</p>
+        </div>
+    </div>
+""")
 
 # ============================================================================
 # VALUE BETTING TEMPLATE (NHL only)
@@ -5721,6 +5864,15 @@ def _get_cached_weekly_banner_messages(sport_keys, days=7, max_items=4):
 
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
+CONTACT_EMAIL = 'underdogsbetemail@gmail.com'
+SOCIAL_LINKS = [
+    {'label': 'X', 'url': 'https://x.com/underdogs_bet'},
+    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet'},
+    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet'},
+    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet'},
+    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet'},
+    {'label': 'Discord', 'url': 'https://discord.gg/underdogs.bet'},
+]
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
 GA_CREDENTIALS_JSON = _os.environ.get('GA_CREDENTIALS_JSON')
@@ -5869,6 +6021,7 @@ def landing_page():
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="underdogs.bet — Free AI Sports Predictions">
     <meta name="twitter:description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA and Soccer.">
+    <meta name="twitter:image" content="{{ request.url_root.rstrip('/') }}/static/IMG_3179.PNG">
     <link rel="canonical" href="{{ request.url }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
@@ -6163,8 +6316,8 @@ def landing_page():
         /* ── How it works ── */
         .how-section{
             background:rgba(255,255,255,.02);
-            border-top:1px solid var(--border);
-            border-bottom:1px solid var(--border);
+            border-top:none;
+            border-bottom:none;
         }
         .steps-grid{
             display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;
@@ -6188,11 +6341,28 @@ def landing_page():
             text-align:center;
         }
         .donate-card{
-            background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(245,158,11,.07));
-            border:1px solid rgba(251,191,36,.35);
+            background:rgba(7,10,20,0.85);
+            border:1px solid rgba(251,191,36,.25);
             border-radius:20px;padding:48px 40px;
+            position:relative;
+            overflow:hidden;
         }
-        .donate-icon{font-size:3em;margin-bottom:16px;}
+        .donate-card::before{
+            content:'';
+            position:absolute;
+            inset:0;
+            background:url('/static/IMG_3179.PNG') center/cover no-repeat;
+            opacity:0.28;
+            z-index:0;
+        }
+        .donate-card::after{
+            content:'';
+            position:absolute;
+            inset:0;
+            background:rgba(7,10,20,0.4);
+            z-index:0;
+        }
+        .donate-card > *{position:relative;z-index:1;}
         .donate-title{font-size:1.8em;font-weight:900;margin-bottom:12px;}
         .donate-body{color:#94a3b8;font-size:.97em;line-height:1.7;margin-bottom:28px;max-width:520px;margin-left:auto;margin-right:auto;}
         .btn-stripe{
@@ -6208,7 +6378,7 @@ def landing_page():
 
         /* ── Footer ── */
         .footer{
-            border-top:1px solid var(--border);
+            border-top:none;
             padding:36px 30px;
             text-align:center;
             color:#334155;
@@ -6217,11 +6387,21 @@ def landing_page():
         .footer a{color:#475569;text-decoration:none;}
         .footer a:hover{color:var(--gold);}
         .footer-logo{
-            font-size:1.3em;font-weight:800;
-            background:linear-gradient(135deg,var(--gold),var(--gold2));
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-            margin-bottom:10px;display:block;
+            height:46px;
+            width:auto;
+            margin:0 auto 12px;
+            display:block;
         }
+        .footer-links{margin-top:10px;}
+        .footer-contact{margin-top:10px;}
+        .footer-social{
+            margin-top:10px;
+            display:flex;
+            gap:12px;
+            justify-content:center;
+            flex-wrap:wrap;
+        }
+        .footer-copy{margin-top:12px;opacity:.5;}
 
         /* ── Responsive ── */
         @media(max-width:640px){
@@ -6394,7 +6574,6 @@ def landing_page():
 <div class="section">
     <div class="donate-section">
         <div class="donate-card">
-            <div class="donate-icon">💛</div>
             <div class="donate-title">Support underdogs.bet</div>
             <div class="donate-body">
                 This site is 100% free and always will be. We never charge for picks or lock content behind a paywall.
@@ -6412,9 +6591,9 @@ def landing_page():
 
 <!-- Footer -->
 <div class="footer">
-    <span class="footer-logo">🎯 underdogs.bet</span>
+    <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo">
     <p>AI-powered sports predictions — free forever.</p>
-    <p style="margin-top:10px;">
+    <p class="footer-links">
         <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
         <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
         <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
@@ -6424,9 +6603,18 @@ def landing_page():
         <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
         <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
         <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
+        <a href="/tutorial">Tutorial</a> &nbsp;·&nbsp;
         <a href="{{ stripe_url }}" target="_blank">💛 Donate</a>
     </p>
-    <p style="margin-top:12px;opacity:.5;">© 2025 underdogs.bet · underdogsbetemail@gmail.com</p>
+    <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+    {% if social_links %}
+    <div class="footer-social">
+        {% for link in social_links %}
+        <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <p class="footer-copy">© 2025</p>
 </div>
 
 <script>
@@ -6486,6 +6674,7 @@ def sitemap_xml():
             continue
         urls.append(f"{base_url}/sport/{sport}/predictions")
         urls.append(f"{base_url}/sport/{sport}/results")
+    urls.append(f"{base_url}/tutorial")
     urlset = "\n".join(
         f"<url><loc>{url}</loc><lastmod>{today}</lastmod><changefreq>daily</changefreq></url>"
         for url in urls
@@ -6499,6 +6688,15 @@ def sport_home(sport):
     return render_template_string(f"""
         <script>window.location.href = '/sport/{sport}/predictions';</script>
     """)
+
+@app.route('/tutorial')
+def tutorial_page():
+    return render_template_string(
+        TUTORIAL_TEMPLATE,
+        page='tutorial',
+        page_title='How to Use This Page',
+        page_description='Learn how to read model predictions, scores, spreads, and totals on the picks pages.'
+    )
 
 @app.route('/sport/SOCCER/predictions/<league_slug>')
 def soccer_predictions_league(league_slug):
