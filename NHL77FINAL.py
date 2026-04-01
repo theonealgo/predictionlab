@@ -6333,13 +6333,6 @@ def landing_page():
             margin-top:22px;
         }
         .section-sub{text-align:center;color:#fff;font-size:.93em;margin-bottom:40px;}
-        .seo-badges{
-            text-align:center;
-            color:#fff;
-            font-weight:700;
-            letter-spacing:.4px;
-            margin:0 auto 16px;
-        }
         .sport-slider{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 32px;}
         .slider-arrow{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.6);color:#fff;font-size:1.3em;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;user-select:none;flex-shrink:0;}
         .slider-arrow:hover{background:rgba(255,255,255,0.25);transform:scale(1.08);}
@@ -6570,6 +6563,10 @@ def landing_page():
         </div>
     </div>
 </div>
+<div class="section" style="padding-top:20px;padding-bottom:20px;">
+    <h2 class="section-title">Model Performance &amp; Results</h2>
+    <p class="section-sub">All results are tracked, transparent, and updated daily.</p>
+</div>
 
 <!-- Weekly banner -->
 {% if weekly_banner_messages %}
@@ -6625,11 +6622,6 @@ def landing_page():
         {% endfor %}
     </div>
 </div>
-<div class="seo-badges">NHL · NBA · MLB · NFL · NCAAB · NCAAW · NCAAF · WNBA · Soccer</div>
-
-<div class="section" style="padding-top:20px;padding-bottom:20px;">
-    <h2 class="section-title">Model Performance &amp; Results</h2>
-    <p class="section-sub">All results are tracked, transparent, and updated daily.</p>
 </div>
 
 <!-- How it works -->
