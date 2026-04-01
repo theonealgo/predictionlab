@@ -4431,6 +4431,7 @@ BASE_TEMPLATE = """
                     <li><a class="footer-link" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a></li>
                     <li><a class="footer-link" href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a></li>
                     <li><a class="footer-link" href="https://tiktok.com/@underdogs.bet" target="_blank" rel="noopener">TikTok</a></li>
+                <li><a class="footer-link" href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a></li>
                 </ul>
             </nav>
         </div>
@@ -6136,7 +6137,6 @@ def landing_page():
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
             background: #0f172a url('/static/IMG_3179.PNG') center center / cover no-repeat;
-            background-attachment: fixed;
             color:#fff;
             min-height:100vh;
             overflow-x:hidden;
@@ -6545,6 +6545,9 @@ def landing_page():
             .donate-card{padding:36px 24px;}
             .weekly-banner{margin:0 16px;}
         }
+        @media (min-width: 769px) {
+            body{background-attachment:fixed;}
+        }
         @media (max-width: 768px) {
             body{background-attachment:scroll;}
         }
@@ -6770,6 +6773,7 @@ def landing_page():
                 <li><a class="footer-link" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a></li>
                 <li><a class="footer-link" href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a></li>
                 <li><a class="footer-link" href="https://tiktok.com/@underdogs.bet" target="_blank" rel="noopener">TikTok</a></li>
+                <li><a class="footer-link" href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a></li>
             </ul>
         </nav>
     </div>
