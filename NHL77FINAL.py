@@ -6,7 +6,7 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
 """
 
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response
+from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response
 from flask_cors import CORS
 import sqlite3
 import pandas as pd
@@ -4227,7 +4227,7 @@ BASE_TEMPLATE = """
         }
         .nav-links.active { display: flex; }
         .nav-links a {
-            color: #cbd5e1;
+            color: #fff;
             text-decoration: none;
             font-weight: 500;
             transition: color 0.3s;
@@ -4248,21 +4248,21 @@ BASE_TEMPLATE = """
             margin: 6px 0;
         }
         .nav-links a:hover {
-            color: #fbbf24;
+            color: #fff;
         }
         .nav-links a.active {
-            color: #fbbf24;
+            color: #fff;
         }
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            color: #000 !important;
+            color: #fff !important;
             font-weight: 800 !important;
             padding: 8px 14px;
             border-radius: 10px;
             transition: opacity 0.2s !important;
             white-space: nowrap;
         }
-        .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
+        .nav-donate-btn:hover { opacity: 0.9; color: #fff !important; }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -4346,7 +4346,6 @@ BASE_TEMPLATE = """
     </div>
     <div class="footer">
         <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
-        <p>Daily predictions for: NBA · NHL · MLB · NFL · College Basketball · College Football · Soccer · WNBA</p>
         <p class="footer-links">
             <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
             <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
@@ -4358,6 +4357,8 @@ BASE_TEMPLATE = """
             <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
             <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
             <a href="/tutorial">Tutorial</a> &nbsp;·&nbsp;
+            <a href="/privacy">Privacy</a> &nbsp;·&nbsp;
+            <a href="/terms">Terms of Use</a> &nbsp;·&nbsp;
             <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
         </p>
         <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
@@ -6151,20 +6152,20 @@ def landing_page():
             padding: 8px 10px;
             border-radius: 8px;
         }
-        .nav-links a:hover { color: #fbbf24; background: rgba(255,255,255,0.08); }
-        .nav-links a.active { color: #fbbf24; background: rgba(251,191,36,0.12); }
+        .nav-links a:hover { color: #fff; background: rgba(255,255,255,0.08); }
+        .nav-links a.active { color: #fff; background: rgba(255,255,255,0.12); }
         .nav-section-title { display: none; }
         .nav-divider { display: none; }
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            color: #000 !important;
+            color: #fff !important;
             font-weight: 800 !important;
             padding: 8px 14px;
             border-radius: 10px;
             transition: opacity 0.2s !important;
             white-space: nowrap;
         }
-        .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
+        .nav-donate-btn:hover { opacity: 0.9; color: #fff !important; }
 
         /* ── Hero ── */
         .hero{
@@ -6181,9 +6182,9 @@ def landing_page():
         }
         .hero-badge{
             display:inline-flex;align-items:center;gap:8px;
-            background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);
-            color:var(--green);font-size:.82em;font-weight:700;
-            padding:6px 16px;border-radius:20px;margin-bottom:24px;
+            background:rgba(16,185,129,.15);border:1px solid rgba(255,255,255,.35);
+            color:#fff;font-size:.82em;font-weight:700;
+            padding:6px 16px;border-radius:20px;margin-top:18px;
             letter-spacing:.5px;
         }
         .hero h1{
@@ -6191,8 +6192,7 @@ def landing_page():
             font-weight:900;
             line-height:1.1;
             margin-bottom:18px;
-            background:linear-gradient(135deg,#fff 40%,var(--gold));
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+            color:#fff;
         }
         .hero-sub{
             font-size:clamp(1em,2.5vw,1.3em);
@@ -6212,7 +6212,7 @@ def landing_page():
         .btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 28px rgba(99,102,241,.5);}
         .btn-donate-hero{
             background:linear-gradient(135deg,var(--gold),var(--gold2));
-            color:#000;font-weight:700;font-size:1em;
+            color:#fff;font-weight:700;font-size:1em;
             padding:14px 32px;border-radius:10px;
             text-decoration:none;transition:transform .2s,box-shadow .2s;
             box-shadow:0 4px 20px rgba(251,191,36,.3);
@@ -6240,7 +6240,7 @@ def landing_page():
             font-size:0.7em;
             text-transform:uppercase;
             letter-spacing:0.7px;
-            color:#fbbf24;
+            color:#fff;
             font-weight:800;
         }
         .weekly-banner-lines{
@@ -6263,7 +6263,7 @@ def landing_page():
             padding:6px 14px;
             font-size:0.95em;
             font-weight:700;
-            color:#e2e8f0;
+            color:#fff;
             white-space:nowrap;
             display:flex;
             gap:10px;
@@ -6284,7 +6284,7 @@ def landing_page():
             display:flex;gap:20px;align-items:flex-start;
         }
         .free-icon{font-size:2.2em;flex-shrink:0;}
-        .free-title{font-size:1.15em;font-weight:800;color:var(--green);margin-bottom:6px;}
+        .free-title{font-size:1.15em;font-weight:800;color:#fff;margin-bottom:6px;}
         .free-body{font-size:.93em;color:#fff;line-height:1.6;}
         .free-list{margin:8px 0 12px 18px;color:#fff;line-height:1.6;}
 
@@ -6300,8 +6300,8 @@ def landing_page():
         }
         .section-sub{text-align:center;color:#fff;font-size:.93em;margin-bottom:40px;}
         .sport-slider{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 32px;}
-        .slider-arrow{background:rgba(251,191,36,0.2);border:2px solid var(--gold);color:var(--gold);font-size:1.3em;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;user-select:none;flex-shrink:0;}
-        .slider-arrow:hover{background:rgba(251,191,36,0.4);transform:scale(1.08);}
+        .slider-arrow{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.6);color:#fff;font-size:1.3em;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;user-select:none;flex-shrink:0;}
+        .slider-arrow:hover{background:rgba(255,255,255,0.25);transform:scale(1.08);}
         .sport-badges{display:flex;gap:8px;overflow-x:auto;padding:4px;max-width:860px;scroll-behavior:smooth;}
         .sport-pill{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;text-decoration:none;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);color:#fff;font-size:.82em;font-weight:700;white-space:nowrap;transition:all .2s;}
         .sport-pill:hover{border-color:var(--gold);color:#fff;}
@@ -6393,7 +6393,7 @@ def landing_page():
         .btn-stripe{
             display:inline-flex;align-items:center;gap:10px;
             background:linear-gradient(135deg,var(--gold),var(--gold2));
-            color:#000;font-weight:800;font-size:1.05em;
+            color:#fff;font-weight:800;font-size:1.05em;
             padding:16px 40px;border-radius:12px;
             text-decoration:none;transition:transform .2s,box-shadow .2s;
             box-shadow:0 4px 20px rgba(251,191,36,.35);
@@ -6480,12 +6480,12 @@ def landing_page():
 
 <!-- Hero -->
 <div class="hero">
-    <div class="hero-badge">🆓 100% Free Sports Picks &nbsp;·&nbsp; No Paywalls</div>
     <h1>Free AI Sports Picks &amp; Betting Predictions</h1>
     <p class="hero-sub">
         underdogs.bet delivers free daily sports picks and AI betting predictions using a 5-model system — Grinder2, Takedown, Edge, XSharp &amp; Sharp Consensus.
         <br>We analyze every NBA, NHL, MLB game and more to find high-value betting opportunities so you don’t have to.
     </p>
+    <div class="hero-badge">🆓 100% Free Sports Picks &nbsp;·&nbsp; No Paywalls</div>
     <div class="hero-ctas">
         <a href="/sport/NHL/predictions" class="btn-primary">👉 View Today’s Picks</a>
         <a href="/sport/NHL/results" class="btn-donate-hero">👉 See Model Performance</a>
@@ -6626,7 +6626,6 @@ def landing_page():
 <!-- Footer -->
 <div class="footer">
     <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
-    <p>Daily predictions for: NBA · NHL · MLB · NFL · College Basketball · College Football · Soccer · WNBA</p>
     <p class="footer-links">
         <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
         <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
@@ -6638,6 +6637,8 @@ def landing_page():
         <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
         <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
         <a href="/tutorial">Tutorial</a> &nbsp;·&nbsp;
+        <a href="/privacy">Privacy</a> &nbsp;·&nbsp;
+        <a href="/terms">Terms of Use</a> &nbsp;·&nbsp;
         <a href="{{ stripe_url }}" target="_blank">💛 Donate</a>
     </p>
     <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
@@ -6708,6 +6709,8 @@ def sitemap_xml():
         urls.append(f"{base_url}/sport/{sport}/predictions")
         urls.append(f"{base_url}/sport/{sport}/results")
     urls.append(f"{base_url}/tutorial")
+    urls.append(f"{base_url}/privacy")
+    urls.append(f"{base_url}/terms")
     urlset = "\n".join(
         f"<url><loc>{url}</loc><lastmod>{today}</lastmod><changefreq>daily</changefreq></url>"
         for url in urls
@@ -6730,6 +6733,14 @@ def tutorial_page():
         page_title='How to Use This Page',
         page_description='Learn how to read model predictions, scores, spreads, and totals on the picks pages.'
     )
+
+@app.route('/privacy')
+def privacy_page():
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def terms_page():
+    return render_template('terms.html')
 
 @app.route('/sport/SOCCER/predictions/<league_slug>')
 def soccer_predictions_league(league_slug):
