@@ -6550,10 +6550,8 @@ def landing_page():
         }
         @media (max-width: 768px) {
             body{
+                background:#0f172a;
                 background-attachment:scroll;
-                background-size:contain;
-                background-position:center top;
-                background-repeat:no-repeat;
             }
         }
         @media (max-width: 768px) {
