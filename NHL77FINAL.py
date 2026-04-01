@@ -630,12 +630,6 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             'ens_correct':       (ens_prob  > 0.5) == home_won if ens_prob is not None and home_won is not None else None,
             'skip_grading':      True if home_won is None else False,
         }
-        @media(max-width:420px){
-            .footer-links{
-                grid-template-columns:1fr;
-                max-width:280px;
-            }
-        }
         daily_results[game_info['date']]['games'].append(game_info)
     return daily_results
 
@@ -4274,48 +4268,57 @@ BASE_TEMPLATE = """
             margin: 0 auto;
             padding: 30px;
         }
-        .footer {
-            border-top: none;
-            padding: 26px 30px;
-            text-align: center;
-            color: #fff;
-            font-size: 0.85em;
+        .site-footer {
+            background: rgba(7, 10, 20, 0.95);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 34px 30px 40px;
+            color: #e2e8f0;
         }
-        .footer a {
+        .footer-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 28px;
+        }
+        .footer-brand {
+            font-size: 1.1em;
+            font-weight: 800;
             color: #fff;
+            margin-bottom: 6px;
+        }
+        .footer-subtitle {
+            color: #cbd5e1;
+            font-size: 0.92em;
+            margin-bottom: 12px;
+        }
+        .footer-email a {
+            color: #e2e8f0;
             text-decoration: none;
         }
-        .footer a:hover { text-decoration: underline; }
-        .footer-links {
-            margin: 14px auto 0;
-            max-width: 720px;
-            display: grid;
-            grid-template-columns: repeat(3, minmax(140px, 1fr));
-            gap: 8px 16px;
-            justify-items: center;
+        .footer-heading {
+            color: #fff;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            margin-bottom: 10px;
         }
-        .footer-links a { display: inline-block; }
-        .footer-contact { margin-top: 10px; }
-        .footer-social {
-            margin-top: 10px;
+        .footer-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
             display: flex;
-            gap: 12px;
-            justify-content: center;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 8px;
         }
-        .footer-social a {
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+        .footer-link {
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: color 0.2s, transform 0.2s;
         }
-        .footer-social a:hover { background: rgba(255, 255, 255, 0.18); }
-        .footer-social svg { width: 18px; height: 18px; fill: currentColor; }
+        .footer-link:hover {
+            color: #fff;
+            transform: translateX(2px);
+        }
         .sr-only {
             position: absolute;
             width: 1px;
@@ -4326,6 +4329,16 @@ BASE_TEMPLATE = """
             clip: rect(0, 0, 0, 0);
             white-space: nowrap;
             border: 0;
+        }
+        @media (max-width: 900px) {
+            .footer-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 560px) {
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
         }
         @media (max-width: 768px) {
             .nav-links {
@@ -4344,16 +4357,6 @@ BASE_TEMPLATE = """
             }
             .container {
                 padding: 20px 15px;
-            }
-            .footer-links {
-                grid-template-columns: repeat(2, minmax(140px, 1fr));
-                max-width: 480px;
-            }
-        }
-        @media (max-width: 480px) {
-            .footer-links {
-                grid-template-columns: 1fr;
-                max-width: 280px;
             }
         }
         {% block extra_styles %}{% endblock %}
@@ -4391,35 +4394,47 @@ BASE_TEMPLATE = """
     <div class="container">
         {% block content %}{% endblock %}
     </div>
-    <div class="footer">
-        <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
-        <div class="footer-links">
-            <a href="/sport/NHL/predictions">NHL</a>
-            <a href="/sport/NBA/predictions">NBA</a>
-            <a href="/sport/MLB/predictions">MLB</a>
-            <a href="/sport/NFL/predictions">NFL</a>
-            <a href="/sport/NCAAB/predictions">NCAAB</a>
-            <a href="/sport/NCAAW/predictions">NCAAW</a>
-            <a href="/sport/NCAAF/predictions">NCAAF</a>
-            <a href="/sport/WNBA/predictions">WNBA</a>
-            <a href="/sport/SOCCER/predictions">Soccer</a>
-            <a href="/tutorial">Tutorial</a>
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms of Use</a>
-            <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-col">
+                <div class="footer-brand">underdogs.bet</div>
+                <div class="footer-subtitle">Free AI Sports Picks &amp; Betting Predictions</div>
+                <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
+            </div>
+            <nav class="footer-col" aria-label="Sports">
+                <div class="footer-heading">Sports</div>
+                <ul class="footer-list">
+                    <li><a class="footer-link" href="/nhl">NHL</a></li>
+                    <li><a class="footer-link" href="/nba">NBA</a></li>
+                    <li><a class="footer-link" href="/mlb">MLB</a></li>
+                    <li><a class="footer-link" href="/nfl">NFL</a></li>
+                    <li><a class="footer-link" href="/ncaab">NCAAB</a></li>
+                    <li><a class="footer-link" href="/ncaaw">NCAAW</a></li>
+                    <li><a class="footer-link" href="/ncaaf">NCAAF</a></li>
+                    <li><a class="footer-link" href="/wnba">WNBA</a></li>
+                    <li><a class="footer-link" href="/soccer">Soccer</a></li>
+                </ul>
+            </nav>
+            <nav class="footer-col" aria-label="Resources">
+                <div class="footer-heading">Resources</div>
+                <ul class="footer-list">
+                    <li><a class="footer-link" href="/tutorial">Tutorial</a></li>
+                    <li><a class="footer-link" href="/privacy">Privacy</a></li>
+                    <li><a class="footer-link" href="/terms">Terms of Use</a></li>
+                    <li><a class="footer-link" href="/donate">Donate</a></li>
+                </ul>
+            </nav>
+            <nav class="footer-col" aria-label="Socials">
+                <div class="footer-heading">Socials</div>
+                <ul class="footer-list">
+                    <li><a class="footer-link" href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X</a></li>
+                    <li><a class="footer-link" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a></li>
+                    <li><a class="footer-link" href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a></li>
+                    <li><a class="footer-link" href="https://tiktok.com/@underdogs.bet" target="_blank" rel="noopener">TikTok</a></li>
+                </ul>
+            </nav>
         </div>
-        <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
-        {% if social_links %}
-        <div class="footer-social">
-            {% for link in social_links %}
-            <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}">
-                {{ link.icon | safe }}
-                <span class="sr-only">{{ link.label }}</span>
-            </a>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </div>
+    </footer>
     
     <script>
         function toggleMenu() {
@@ -6120,7 +6135,8 @@ def landing_page():
         }
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-            background: #0f172a url('/static/IMG_3179.PNG') center center / cover no-repeat fixed;
+            background: #0f172a url('/static/IMG_3179.PNG') center center / cover no-repeat;
+            background-attachment: fixed;
             color:#fff;
             min-height:100vh;
             overflow-x:hidden;
@@ -6460,73 +6476,77 @@ def landing_page():
         .donate-note{font-size:.78em;color:#fff;margin-top:14px;}
 
         /* ── Footer ── */
-        .footer{
-            border-top:none;
-            padding:36px 30px;
-            text-align:center;
-            color:#fff;
-            font-size:.85em;
+        .site-footer{
+            background:rgba(7,10,20,0.95);
+            border-top:1px solid rgba(255,255,255,0.08);
+            padding:40px 30px 46px;
+            color:#e2e8f0;
         }
-        .footer a{color:#fff;text-decoration:none;}
-        .footer a:hover{text-decoration:underline;}
-        .footer-links{
-            margin:14px auto 0;
-            max-width:720px;
+        .footer-grid{
+            max-width:1200px;
+            margin:0 auto;
             display:grid;
-            grid-template-columns:repeat(3,minmax(140px,1fr));
-            gap:8px 16px;
-            justify-items:center;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:28px;
         }
-        .footer-links a{display:inline-block;}
-        .footer-contact{margin-top:10px;}
-        .footer-social{
-            margin-top:10px;
-            display:flex;
-            gap:12px;
-            justify-content:center;
-            flex-wrap:wrap;
+        .footer-brand{
+            font-size:1.1em;
+            font-weight:800;
+            color:#fff;
+            margin-bottom:6px;
         }
-        .footer-social a{
-            font-weight:600;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            width:32px;
-            height:32px;
-            border-radius:50%;
-            background:rgba(255,255,255,0.08);
-            border:1px solid rgba(255,255,255,0.15);
+        .footer-subtitle{
+            color:#cbd5e1;
+            font-size:.92em;
+            margin-bottom:12px;
         }
-        .footer-social a:hover{background:rgba(255,255,255,0.18);}
-        .footer-social svg{width:18px;height:18px;fill:currentColor;}
-        .sr-only{
-            position:absolute;
-            width:1px;
-            height:1px;
+        .footer-email a{
+            color:#e2e8f0;
+            text-decoration:none;
+        }
+        .footer-heading{
+            color:#fff;
+            font-weight:700;
+            letter-spacing:.3px;
+            margin-bottom:10px;
+        }
+        .footer-list{
+            list-style:none;
             padding:0;
-            margin:-1px;
-            overflow:hidden;
-            clip:rect(0,0,0,0);
-            white-space:nowrap;
-            border:0;
+            margin:0;
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+        }
+        .footer-link{
+            color:#e2e8f0;
+            text-decoration:none;
+            transition:color .2s, transform .2s;
+        }
+        .footer-link:hover{
+            color:#fff;
+            transform:translateX(2px);
         }
 
         /* ── Responsive ── */
+        @media(max-width:900px){
+            .footer-grid{
+                grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+        }
+        @media(max-width:560px){
+            .footer-grid{
+                grid-template-columns:1fr;
+            }
+        }
         @media(max-width:640px){
             .hero{padding:60px 20px 40px;}
             .free-banner{flex-direction:column;}
             .donate-card{padding:36px 24px;}
             .weekly-banner{margin:0 16px;}
-            .footer-links{
-                grid-template-columns:repeat(2,minmax(140px,1fr));
-                max-width:480px;
-            }
         }
-        @media(max-width:420px){
-            .footer-links{
-                grid-template-columns:1fr;
-                max-width:280px;
-            }
+        @media (max-width: 768px) {
+            body{background-attachment:scroll;}
         }
         @media (max-width: 768px) {
             .nav-links {
@@ -6713,35 +6733,47 @@ def landing_page():
 </div>
 
 <!-- Footer -->
-<div class="footer">
-    <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
-    <div class="footer-links">
-        <a href="/sport/NHL/predictions">NHL</a>
-        <a href="/sport/NBA/predictions">NBA</a>
-        <a href="/sport/MLB/predictions">MLB</a>
-        <a href="/sport/NFL/predictions">NFL</a>
-        <a href="/sport/NCAAB/predictions">NCAAB</a>
-        <a href="/sport/NCAAW/predictions">NCAAW</a>
-        <a href="/sport/NCAAF/predictions">NCAAF</a>
-        <a href="/sport/WNBA/predictions">WNBA</a>
-        <a href="/sport/SOCCER/predictions">Soccer</a>
-        <a href="/tutorial">Tutorial</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms of Use</a>
-        <a href="{{ stripe_url }}" target="_blank">💛 Donate</a>
+<footer class="site-footer">
+    <div class="footer-grid">
+        <div class="footer-col">
+            <div class="footer-brand">underdogs.bet</div>
+            <div class="footer-subtitle">Free AI Sports Picks &amp; Betting Predictions</div>
+            <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
+        </div>
+        <nav class="footer-col" aria-label="Sports">
+            <div class="footer-heading">Sports</div>
+            <ul class="footer-list">
+                <li><a class="footer-link" href="/nhl">NHL</a></li>
+                <li><a class="footer-link" href="/nba">NBA</a></li>
+                <li><a class="footer-link" href="/mlb">MLB</a></li>
+                <li><a class="footer-link" href="/nfl">NFL</a></li>
+                <li><a class="footer-link" href="/ncaab">NCAAB</a></li>
+                <li><a class="footer-link" href="/ncaaw">NCAAW</a></li>
+                <li><a class="footer-link" href="/ncaaf">NCAAF</a></li>
+                <li><a class="footer-link" href="/wnba">WNBA</a></li>
+                <li><a class="footer-link" href="/soccer">Soccer</a></li>
+            </ul>
+        </nav>
+        <nav class="footer-col" aria-label="Resources">
+            <div class="footer-heading">Resources</div>
+            <ul class="footer-list">
+                <li><a class="footer-link" href="/tutorial">Tutorial</a></li>
+                <li><a class="footer-link" href="/privacy">Privacy</a></li>
+                <li><a class="footer-link" href="/terms">Terms of Use</a></li>
+                <li><a class="footer-link" href="/donate">Donate</a></li>
+            </ul>
+        </nav>
+        <nav class="footer-col" aria-label="Socials">
+            <div class="footer-heading">Socials</div>
+            <ul class="footer-list">
+                <li><a class="footer-link" href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X</a></li>
+                <li><a class="footer-link" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a></li>
+                <li><a class="footer-link" href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a></li>
+                <li><a class="footer-link" href="https://tiktok.com/@underdogs.bet" target="_blank" rel="noopener">TikTok</a></li>
+            </ul>
+        </nav>
     </div>
-    <p class="footer-contact">Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
-    {% if social_links %}
-    <div class="footer-social">
-        {% for link in social_links %}
-        <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}">
-            {{ link.icon | safe }}
-            <span class="sr-only">{{ link.label }}</span>
-        </a>
-        {% endfor %}
-    </div>
-    {% endif %}
-</div>
+</footer>
 
 <script>
     function toggleMenu() {
@@ -6803,6 +6835,16 @@ def sitemap_xml():
     urls.append(f"{base_url}/tutorial")
     urls.append(f"{base_url}/privacy")
     urls.append(f"{base_url}/terms")
+    urls.append(f"{base_url}/nhl")
+    urls.append(f"{base_url}/nba")
+    urls.append(f"{base_url}/mlb")
+    urls.append(f"{base_url}/nfl")
+    urls.append(f"{base_url}/ncaab")
+    urls.append(f"{base_url}/ncaaw")
+    urls.append(f"{base_url}/ncaaf")
+    urls.append(f"{base_url}/wnba")
+    urls.append(f"{base_url}/soccer")
+    urls.append(f"{base_url}/donate")
     urlset = "\n".join(
         f"<url><loc>{url}</loc><lastmod>{today}</lastmod><changefreq>daily</changefreq></url>"
         for url in urls
@@ -6825,6 +6867,46 @@ def tutorial_page():
         page_title='How to Use This Page',
         page_description='Learn how to read model predictions, scores, spreads, and totals on the picks pages.'
     )
+
+@app.route('/nhl')
+def nhl_shortcut():
+    return redirect(url_for('sport_predictions', sport='NHL'))
+
+@app.route('/nba')
+def nba_shortcut():
+    return redirect(url_for('sport_predictions', sport='NBA'))
+
+@app.route('/mlb')
+def mlb_shortcut():
+    return redirect(url_for('sport_predictions', sport='MLB'))
+
+@app.route('/nfl')
+def nfl_shortcut():
+    return redirect(url_for('sport_predictions', sport='NFL'))
+
+@app.route('/ncaab')
+def ncaab_shortcut():
+    return redirect(url_for('sport_predictions', sport='NCAAB'))
+
+@app.route('/ncaaw')
+def ncaaw_shortcut():
+    return redirect(url_for('sport_predictions', sport='NCAAW'))
+
+@app.route('/ncaaf')
+def ncaaf_shortcut():
+    return redirect(url_for('sport_predictions', sport='NCAAF'))
+
+@app.route('/wnba')
+def wnba_shortcut():
+    return redirect(url_for('sport_predictions', sport='WNBA'))
+
+@app.route('/soccer')
+def soccer_shortcut():
+    return redirect(url_for('sport_predictions', sport='SOCCER'))
+
+@app.route('/donate')
+def donate_shortcut():
+    return redirect(STRIPE_DONATION_URL)
 
 @app.route('/privacy')
 def privacy_page():
