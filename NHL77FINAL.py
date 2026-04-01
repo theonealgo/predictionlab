@@ -4207,7 +4207,7 @@ BASE_TEMPLATE = """
         .hamburger span {
             width: 24px;
             height: 2px;
-            background: #fbbf24;
+            background: #cbd5e1;
             border-radius: 2px;
             transition: 0.3s;
         }
@@ -4295,6 +4295,21 @@ BASE_TEMPLATE = """
             justify-content: center;
             flex-wrap: wrap;
         }
+        .footer-social a{
+            width:34px;height:34px;
+            border-radius:50%;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            background:rgba(255,255,255,0.08);
+            border:1px solid rgba(255,255,255,0.14);
+            transition:transform .2s,background .2s;
+        }
+        .footer-social a:hover{
+            background:rgba(255,255,255,0.16);
+            transform:translateY(-2px);
+        }
+        .social-icon{width:18px;height:18px;display:block;}
         .footer-copy { margin-top: 12px; opacity: 0.7; }
         @media (max-width: 768px) {
             .nav-links {
@@ -4372,7 +4387,9 @@ BASE_TEMPLATE = """
         {% if social_links %}
         <div class="footer-social">
             {% for link in social_links %}
-            <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
+            <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}" title="{{ link.label }}">
+                <img src="{{ link.icon }}" alt="{{ link.label }}" class="social-icon">
+            </a>
             {% endfor %}
         </div>
         {% endif %}
@@ -5866,12 +5883,12 @@ def _get_cached_weekly_banner_messages(sport_keys, days=7, max_items=4):
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
 CONTACT_EMAIL = 'underdogsbetemail@gmail.com'
 SOCIAL_LINKS = [
-    {'label': 'X', 'url': 'https://x.com/underdogs_bet'},
-    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet'},
-    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet'},
-    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet'},
-    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet'},
-    {'label': 'Discord', 'url': 'https://discord.gg/underdogs.bet'},
+    {'label': 'X', 'url': 'https://x.com/underdogs_bet', 'icon': 'https://cdn.simpleicons.org/x/ffffff'},
+    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet', 'icon': 'https://cdn.simpleicons.org/instagram/ffffff'},
+    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet', 'icon': 'https://cdn.simpleicons.org/facebook/ffffff'},
+    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet', 'icon': 'https://cdn.simpleicons.org/tiktok/ffffff'},
+    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet', 'icon': 'https://cdn.simpleicons.org/youtube/ffffff'},
+    {'label': 'Discord', 'url': 'https://discord.gg/underdogs.bet', 'icon': 'https://cdn.simpleicons.org/discord/ffffff'},
 ]
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
@@ -6011,16 +6028,16 @@ def landing_page():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>underdogs.bet — Free AI Sports Predictions</title>
-    <meta name="description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, Soccer and more. 5-model ensemble powered by machine learning.">
-    <meta property="og:title" content="underdogs.bet — Free AI Sports Predictions">
-    <meta property="og:description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA and Soccer. 5-model ensemble powered by machine learning.">
+    <title>Free AI Sports Picks &amp; Betting Predictions | underdogs.bet</title>
+    <meta name="description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
+    <meta property="og:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
+    <meta property="og:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.url }}">
     <meta property="og:site_name" content="underdogs.bet">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="underdogs.bet — Free AI Sports Predictions">
-    <meta name="twitter:description" content="Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA and Soccer.">
+    <meta name="twitter:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
+    <meta name="twitter:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
     <meta name="twitter:image" content="{{ request.url_root.rstrip('/') }}/static/IMG_3179.PNG">
     <link rel="canonical" href="{{ request.url }}">
     {% if ga_tracking_id %}
@@ -6036,10 +6053,30 @@ def landing_page():
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
+      "@type": "SportsOrganization",
+      "name": "underdogs.bet",
+      "url": "https://underdogs.bet",
+      "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
+      "sameAs": [
+        "https://x.com/underdogs_bet",
+        "https://instagram.com/underdogs.bet",
+        "https://facebook.com/underdogs.bet",
+        "https://tiktok.com/@underdogs.bet",
+        "https://youtube.com/@Underdogsbet"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
       "@type": "WebSite",
       "name": "underdogs.bet",
-      "url": "{{ request.url }}",
-      "description": "Free AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA and Soccer."
+      "url": "https://underdogs.bet",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://underdogs.bet/search?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
     }
     </script>
     <style>
@@ -6052,11 +6089,20 @@ def landing_page():
         }
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-            background:var(--bg);
+            background: #0f172a url('/static/IMG_3179.PNG') center center / cover no-repeat fixed;
             color:#e2e8f0;
             min-height:100vh;
             overflow-x:hidden;
+            position:relative;
         }
+        body::before{
+            content:'';
+            position:fixed;
+            inset:0;
+            background:rgba(7,10,20,0.65);
+            z-index:0;
+        }
+        body > *{position:relative;z-index:1;}
 
         /* ── Navbar ── */
         .navbar {
@@ -6267,12 +6313,17 @@ def landing_page():
         .free-icon{font-size:2.2em;flex-shrink:0;}
         .free-title{font-size:1.15em;font-weight:800;color:var(--green);margin-bottom:6px;}
         .free-body{font-size:.93em;color:#94a3b8;line-height:1.6;}
+        .free-list{margin:8px 0 12px 18px;color:#cbd5e1;line-height:1.6;}
 
         /* ── Sports grid ── */
         .section{padding:70px 30px;max-width:1200px;margin:0 auto;}
         .section-title{
             text-align:center;font-size:1.9em;font-weight:800;
             margin-bottom:8px;
+        }
+        .section-title.secondary{
+            font-size:1.4em;
+            margin-top:22px;
         }
         .section-sub{text-align:center;color:#64748b;font-size:.93em;margin-bottom:40px;}
         .sport-slider{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 32px;}
@@ -6365,6 +6416,7 @@ def landing_page():
         .donate-card > *{position:relative;z-index:1;}
         .donate-title{font-size:1.8em;font-weight:900;margin-bottom:12px;}
         .donate-body{color:#94a3b8;font-size:.97em;line-height:1.7;margin-bottom:28px;max-width:520px;margin-left:auto;margin-right:auto;}
+        .donate-list{margin:8px auto 0;max-width:320px;text-align:left;color:#cbd5e1;line-height:1.6;}
         .btn-stripe{
             display:inline-flex;align-items:center;gap:10px;
             background:linear-gradient(135deg,var(--gold),var(--gold2));
@@ -6401,6 +6453,21 @@ def landing_page():
             justify-content:center;
             flex-wrap:wrap;
         }
+        .footer-social a{
+            width:34px;height:34px;
+            border-radius:50%;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            background:rgba(255,255,255,0.08);
+            border:1px solid rgba(255,255,255,0.14);
+            transition:transform .2s,background .2s;
+        }
+        .footer-social a:hover{
+            background:rgba(255,255,255,0.16);
+            transform:translateY(-2px);
+        }
+        .social-icon{width:18px;height:18px;display:block;}
         .footer-copy{margin-top:12px;opacity:.5;}
 
         /* ── Responsive ── */
@@ -6458,29 +6525,38 @@ def landing_page():
         </div>
     </div>
 </div>
+<div class="section" style="padding-top:30px;padding-bottom:20px;">
+    <h2 class="section-title">Model Performance &amp; Results</h2>
+    <p class="section-sub">All results are tracked, transparent, and updated daily.</p>
+</div>
 
 <!-- Hero -->
 <div class="hero">
-    <div class="hero-badge">✅ 100% Free &nbsp;·&nbsp; No Sign-Up Required</div>
-    <h1>Beat the Books with<br>AI-Powered Picks</h1>
+    <div class="hero-badge">🆓 100% Free Sports Picks &nbsp;·&nbsp; No Paywalls</div>
+    <h1>Free AI Sports Picks &amp; Betting Predictions</h1>
     <p class="hero-sub">
-        underdogs.bet runs a 5-model ensemble — Grinder2, Takedown, Edge, XSharp &amp; Sharp Consensus —
-        analysing every game so you don't have to.
+        underdogs.bet delivers free daily sports picks, betting predictions, and model-driven odds using a 5-model AI system — Grinder2, Takedown, Edge, XSharp &amp; Sharp Consensus.
+        <br>We analyze every game across NBA, NHL, MLB, and more to find high-value betting opportunities so you don’t have to.
     </p>
     <div class="hero-ctas">
-        <a href="/sport/NHL/predictions" class="btn-primary">📊 View Today's Picks</a>
-        <a href="{{ stripe_url }}" target="_blank" class="btn-donate-hero">💛 Support the Site</a>
+        <a href="/sport/NHL/predictions" class="btn-primary">👉 View Today’s Picks</a>
+        <a href="/sport/NHL/results" class="btn-donate-hero">👉 See Model Performance</a>
     </div>
 
     <!-- Free banner -->
     <div class="free-banner" style="margin-top:48px;">
         <div class="free-icon">🆓</div>
         <div>
-            <div class="free-title">Always Free. No Paywalls. No Subscriptions.</div>
+            <div class="free-title">100% Free Sports Picks — No Paywalls, Ever</div>
             <div class="free-body">
-                underdogs.bet is completely free to use — every pick, every sport, every day.
-                We run on donations from users who find value in what we build.
-                If our models help you, consider supporting us so we can keep improving.
+                underdogs.bet is completely free:
+                <ul class="free-list">
+                    <li>No subscriptions</li>
+                    <li>No locked picks</li>
+                    <li>No “premium” upsells</li>
+                </ul>
+                We’re built for bettors who want data-driven predictions, not hype.
+                If you find value in our AI picks, you can support the platform—but everything stays free.
             </div>
         </div>
     </div>
@@ -6489,7 +6565,7 @@ def landing_page():
 <!-- Weekly banner -->
 {% if weekly_banner_messages %}
 <div class="weekly-banner">
-    <div class="weekly-banner-label">Featured Model Records</div>
+    <div class="weekly-banner-label">Featured AI Model Results</div>
     <div class="weekly-banner-lines">
         <div class="weekly-banner-track">
             {% for item in weekly_banner_messages %}
@@ -6513,8 +6589,9 @@ def landing_page():
 
 <!-- Sports grid -->
 <div class="section">
-    <h2 class="section-title">Pick Your Sport</h2>
-    <p class="section-sub">Live predictions updated daily. Click any sport to view today's picks.</p>
+    <h2 class="section-title">Today’s Free Sports Picks</h2>
+    <p class="section-sub">Get daily betting predictions and odds insights for NBA · NHL · MLB · NFL · NCAAB · NCAAF · WNBA · Soccer. Live picks updated every day.</p>
+    <h2 class="section-title secondary">Betting Predictions by Sport</h2>
     <div class="sport-slider">
         <div class="slider-arrow" onclick="scrollSports(-1)">‹</div>
         <div class="sport-badges" id="sportBubbles">
@@ -6543,28 +6620,28 @@ def landing_page():
 <!-- How it works -->
 <div class="how-section">
     <div class="section">
-        <h2 class="section-title">How It Works</h2>
-        <p class="section-sub">Five independent models vote on every game. The Sharp Consensus is the final call.</p>
+        <h2 class="section-title">How Our AI Sports Betting Models Work</h2>
+        <p class="section-sub">We combine real-time data with five AI prediction models to surface high-value betting opportunities.</p>
         <div class="steps-grid">
             <div class="step">
                 <div class="step-num">1</div>
-                <div class="step-title">Live Data Ingestion</div>
-                <div class="step-body">We pull real-time scores, team stats, and schedules from ESPN and official league APIs every day.</div>
+                <div class="step-title">Live Data Processing</div>
+                <div class="step-body">We ingest real-time sports data, team stats, schedules, and historical performance.</div>
             </div>
             <div class="step">
                 <div class="step-num">2</div>
-                <div class="step-title">5-Model Ensemble</div>
-                <div class="step-body">Grinder2, Takedown, Edge, XSharp, and Sharp Consensus each generate independent win probabilities, then the final pick is blended from all five.</div>
+                <div class="step-title">5 AI Prediction Models</div>
+                <div class="step-body">Each model generates win probabilities and betting insights independently.</div>
             </div>
             <div class="step">
                 <div class="step-num">3</div>
-                <div class="step-title">Spread &amp; Total Predictions</div>
-                <div class="step-body">XSharp predicts expected scores, derives the spread and total, and — for NHL — converts to puck-line cover probabilities.</div>
+                <div class="step-title">Spread &amp; Total Projections</div>
+                <div class="step-body">We calculate projected scores to estimate spreads, totals, and betting value.</div>
             </div>
             <div class="step">
                 <div class="step-num">4</div>
-                <div class="step-title">You Get the Pick</div>
-                <div class="step-body">The Sharp Consensus blends all five models. High-confidence picks are highlighted. All results are tracked so you can verify our accuracy.</div>
+                <div class="step-title">Sharp Consensus Pick</div>
+                <div class="step-body">All models combine into one final prediction—highlighting high-confidence bets.</div>
             </div>
         </div>
     </div>
@@ -6574,16 +6651,20 @@ def landing_page():
 <div class="section">
     <div class="donate-section">
         <div class="donate-card">
-            <div class="donate-title">Support underdogs.bet</div>
-            <div class="donate-body">
-                This site is 100% free and always will be. We never charge for picks or lock content behind a paywall.
-                <br><br>
-                If our models are helping your research, a small donation goes directly toward
-                <strong>server costs, data feeds, and paying our developers</strong> who keep the models sharp.
-            </div>
-            <a href="{{ stripe_url }}" target="_blank" class="btn-stripe">
-                <span>💳</span> Donate via Stripe
-            </a>
+        <div class="donate-title">Support the Platform</div>
+        <div class="donate-body">
+            underdogs.bet is free forever.
+            <br><br>
+            If our predictions help your betting strategy, your support goes toward:
+            <ul class="donate-list">
+                <li>Data infrastructure</li>
+                <li>Model improvements</li>
+                <li>Server costs</li>
+            </ul>
+        </div>
+        <a href="{{ stripe_url }}" target="_blank" class="btn-stripe">
+            <span>💳</span> Donate securely via Stripe
+        </a>
             <div class="donate-note">Powered by Stripe · Secure &amp; encrypted · Any amount helps</div>
         </div>
     </div>
@@ -6592,7 +6673,8 @@ def landing_page():
 <!-- Footer -->
 <div class="footer">
     <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo">
-    <p>AI-powered sports predictions — free forever.</p>
+    <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
+    <p>Daily predictions for: NBA · NHL · MLB · NFL · College Basketball · College Football · Soccer · WNBA</p>
     <p class="footer-links">
         <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
         <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
@@ -6610,7 +6692,9 @@ def landing_page():
     {% if social_links %}
     <div class="footer-social">
         {% for link in social_links %}
-        <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
+        <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}" title="{{ link.label }}">
+            <img src="{{ link.icon }}" alt="{{ link.label }}" class="social-icon">
+        </a>
         {% endfor %}
     </div>
     {% endif %}
