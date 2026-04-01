@@ -4092,12 +4092,12 @@ BASE_TEMPLATE = """
     <link rel="canonical" href="{{ request.url }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', '{{ ga_tracking_id }}');
+      gtag('config', 'G-R4XM0WKTGG');
     </script>
     {% endif %}
     {% if sport_info is defined %}
@@ -6080,7 +6080,7 @@ def landing_page():
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', '{{ ga_tracking_id }}');
+      gtag('config', 'G-R4XM0WKTGG');
     </script>
     {% endif %}
     <script type="application/ld+json">
