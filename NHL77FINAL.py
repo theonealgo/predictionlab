@@ -7,6 +7,7 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 """
 
 from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response
+import json
 from flask_cors import CORS
 import sqlite3
 import pandas as pd
@@ -5943,23 +5944,42 @@ def _fetch_ga_traffic():
         return None, "Google Analytics client libraries not installed."
     try:
         creds = None
+        credential_errors = []
         if GA_CREDENTIALS_JSON:
-            creds = service_account.Credentials.from_service_account_file(GA_CREDENTIALS_JSON)
-        elif GA_OAUTH_CLIENT_ID and GA_OAUTH_CLIENT_SECRET and GA_OAUTH_REFRESH_TOKEN:
-            creds = Credentials(
-                None,
-                refresh_token=GA_OAUTH_REFRESH_TOKEN,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=GA_OAUTH_CLIENT_ID,
-                client_secret=GA_OAUTH_CLIENT_SECRET,
-                scopes=["https://www.googleapis.com/auth/analytics.readonly"],
-            )
-            creds.refresh(Request())
+            try:
+                raw = GA_CREDENTIALS_JSON.strip()
+                if raw.startswith('{'):
+                    creds = service_account.Credentials.from_service_account_info(
+                        json.loads(raw),
+                        scopes=["https://www.googleapis.com/auth/analytics.readonly"],
+                    )
+                else:
+                    creds = service_account.Credentials.from_service_account_file(
+                        GA_CREDENTIALS_JSON,
+                        scopes=["https://www.googleapis.com/auth/analytics.readonly"],
+                    )
+            except Exception as exc:
+                credential_errors.append(f"Service account load failed: {exc}")
+                creds = None
+        if not creds and GA_OAUTH_CLIENT_ID and GA_OAUTH_CLIENT_SECRET and GA_OAUTH_REFRESH_TOKEN:
+            try:
+                creds = Credentials(
+                    None,
+                    refresh_token=GA_OAUTH_REFRESH_TOKEN.strip(),
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=GA_OAUTH_CLIENT_ID,
+                    client_secret=GA_OAUTH_CLIENT_SECRET,
+                    scopes=["https://www.googleapis.com/auth/analytics.readonly"],
+                )
+                creds.refresh(Request())
+            except Exception as exc:
+                credential_errors.append(f"OAuth refresh failed: {exc}")
+                creds = None
         if not creds:
-            return None, "GA credentials not configured."
+            return None, "; ".join(credential_errors) if credential_errors else "GA credentials not configured."
         client = BetaAnalyticsDataClient(credentials=creds)
-    except Exception:
-        return None, "Failed to load GA credentials."
+    except Exception as exc:
+        return None, f"Failed to load GA credentials: {exc}"
 
     property_path = f"properties/{GA_PROPERTY_ID}"
     today_dt = _traffic_now()
