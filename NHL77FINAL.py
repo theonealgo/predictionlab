@@ -4343,7 +4343,8 @@ BASE_TEMPLATE = """
         }
         @media (max-width: 560px) {
             .footer-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 16px;
             }
             .footer-col--brand{order:1;}
             .footer-col--resources{order:2;}
@@ -6548,7 +6549,8 @@ def landing_page():
         }
         @media(max-width:560px){
             .footer-grid{
-                grid-template-columns:1fr;
+                grid-template-columns:repeat(2,minmax(0,1fr));
+                gap:16px;
             }
         }
         @media(max-width:640px){
@@ -6564,6 +6566,11 @@ def landing_page():
             body{
                 background:#0f172a;
                 background-attachment:scroll;
+            }
+            body::before{
+                background:
+                    linear-gradient(rgba(7,10,20,0.65), rgba(7,10,20,0.65)),
+                    url('/static/IMG_3179.PNG') center 90px / cover no-repeat;
             }
         }
         @media (max-width: 768px) {
