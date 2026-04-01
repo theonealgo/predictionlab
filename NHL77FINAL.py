@@ -4281,6 +4281,7 @@ BASE_TEMPLATE = """
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 28px;
         }
+        .footer-col { min-width: 0; }
         .footer-brand {
             font-size: 1.1em;
             font-weight: 800;
@@ -4333,12 +4334,21 @@ BASE_TEMPLATE = """
         @media (max-width: 900px) {
             .footer-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 20px;
             }
+            .footer-col--brand { order: 1; }
+            .footer-col--resources { order: 2; }
+            .footer-col--sports { order: 3; }
+            .footer-col--socials { order: 4; }
         }
         @media (max-width: 560px) {
             .footer-grid {
                 grid-template-columns: 1fr;
             }
+            .footer-col--brand{order:1;}
+            .footer-col--resources{order:2;}
+            .footer-col--sports{order:3;}
+            .footer-col--socials{order:4;}
         }
         @media (max-width: 768px) {
             .nav-links {
@@ -4396,12 +4406,12 @@ BASE_TEMPLATE = """
     </div>
     <footer class="site-footer">
         <div class="footer-grid">
-            <div class="footer-col">
+            <div class="footer-col footer-col--brand">
                 <div class="footer-brand">underdogs.bet</div>
                 <div class="footer-subtitle">Free AI Sports Picks &amp; Betting Predictions</div>
                 <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
             </div>
-            <nav class="footer-col" aria-label="Sports">
+            <nav class="footer-col footer-col--sports" aria-label="Sports">
                 <div class="footer-heading">Sports</div>
                 <ul class="footer-list">
                     <li><a class="footer-link" href="/nhl">NHL</a></li>
@@ -4415,7 +4425,7 @@ BASE_TEMPLATE = """
                     <li><a class="footer-link" href="/soccer">Soccer</a></li>
                 </ul>
             </nav>
-            <nav class="footer-col" aria-label="Resources">
+            <nav class="footer-col footer-col--resources" aria-label="Resources">
                 <div class="footer-heading">Resources</div>
                 <ul class="footer-list">
                     <li><a class="footer-link" href="/tutorial">Tutorial</a></li>
@@ -4424,7 +4434,7 @@ BASE_TEMPLATE = """
                     <li><a class="footer-link" href="/donate">Donate</a></li>
                 </ul>
             </nav>
-            <nav class="footer-col" aria-label="Socials">
+            <nav class="footer-col footer-col--socials" aria-label="Socials">
                 <div class="footer-heading">Socials</div>
                 <ul class="footer-list">
                     <li><a class="footer-link" href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X</a></li>
@@ -6489,6 +6499,7 @@ def landing_page():
             grid-template-columns:repeat(4,minmax(0,1fr));
             gap:28px;
         }
+        .footer-col{min-width:0;}
         .footer-brand{
             font-size:1.1em;
             font-weight:800;
@@ -6532,6 +6543,7 @@ def landing_page():
         @media(max-width:900px){
             .footer-grid{
                 grid-template-columns:repeat(2,minmax(0,1fr));
+                gap:20px;
             }
         }
         @media(max-width:560px){
@@ -6741,12 +6753,12 @@ def landing_page():
 <!-- Footer -->
 <footer class="site-footer">
     <div class="footer-grid">
-        <div class="footer-col">
+        <div class="footer-col footer-col--brand">
             <div class="footer-brand">underdogs.bet</div>
             <div class="footer-subtitle">Free AI Sports Picks &amp; Betting Predictions</div>
             <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
         </div>
-        <nav class="footer-col" aria-label="Sports">
+        <nav class="footer-col footer-col--sports" aria-label="Sports">
             <div class="footer-heading">Sports</div>
             <ul class="footer-list">
                 <li><a class="footer-link" href="/nhl">NHL</a></li>
@@ -6760,7 +6772,7 @@ def landing_page():
                 <li><a class="footer-link" href="/soccer">Soccer</a></li>
             </ul>
         </nav>
-        <nav class="footer-col" aria-label="Resources">
+        <nav class="footer-col footer-col--resources" aria-label="Resources">
             <div class="footer-heading">Resources</div>
             <ul class="footer-list">
                 <li><a class="footer-link" href="/tutorial">Tutorial</a></li>
@@ -6769,7 +6781,7 @@ def landing_page():
                 <li><a class="footer-link" href="/donate">Donate</a></li>
             </ul>
         </nav>
-        <nav class="footer-col" aria-label="Socials">
+        <nav class="footer-col footer-col--socials" aria-label="Socials">
             <div class="footer-heading">Socials</div>
             <ul class="footer-list">
                 <li><a class="footer-link" href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X</a></li>
