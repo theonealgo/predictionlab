@@ -4289,7 +4289,30 @@ BASE_TEMPLATE = """
             justify-content: center;
             flex-wrap: wrap;
         }
-        .footer-social a { font-weight: 600; }
+        .footer-social a {
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .footer-social a:hover { background: rgba(255, 255, 255, 0.18); }
+        .footer-social svg { width: 18px; height: 18px; fill: currentColor; }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
         @media (max-width: 768px) {
             .nav-links {
                 left: 0;
@@ -4365,7 +4388,10 @@ BASE_TEMPLATE = """
         {% if social_links %}
         <div class="footer-social">
             {% for link in social_links %}
-            <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
+            <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}">
+                {{ link.icon | safe }}
+                <span class="sr-only">{{ link.label }}</span>
+            </a>
             {% endfor %}
         </div>
         {% endif %}
@@ -5857,12 +5883,19 @@ def _get_cached_weekly_banner_messages(sport_keys, days=7, max_items=4):
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
 CONTACT_EMAIL = 'underdogsbetemail@gmail.com'
+_SOCIAL_ICONS = {
+    'X': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M18.244 2H21l-6.588 7.53L22 22h-6.828l-5.35-6.16L4.59 22H2l7.03-8.04L2 2h6.93l4.84 5.6L18.244 2zm-1.2 18h1.9L7.04 4H5.02l12.02 16z"/></svg>',
+    'Instagram': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7.5 2C4.46 2 2 4.46 2 7.5v9C2 19.54 4.46 22 7.5 22h9c3.04 0 5.5-2.46 5.5-5.5v-9C22 4.46 19.54 2 16.5 2h-9zm9 2c1.93 0 3.5 1.57 3.5 3.5v9c0 1.93-1.57 3.5-3.5 3.5h-9C5.57 20 4 18.43 4 16.5v-9C4 5.57 5.57 4 7.5 4h9zm-4.5 3a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6zm5.25-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z"/></svg>',
+    'Facebook': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M22 12.07C22 6.49 17.52 2 11.94 2S1.88 6.49 1.88 12.07c0 4.99 3.66 9.12 8.44 9.88v-6.99H7.9v-2.89h2.42V9.41c0-2.4 1.43-3.72 3.62-3.72 1.05 0 2.15.19 2.15.19v2.36h-1.21c-1.2 0-1.58.74-1.58 1.5v1.8h2.69l-.43 2.89h-2.26v6.99c4.78-.76 8.44-4.89 8.44-9.88z"/></svg>',
+    'TikTok': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M21 8.5c-1.9-.1-3.4-1.7-3.5-3.6V2h-3.2v13.1c0 1.4-1.1 2.5-2.5 2.5s-2.5-1.1-2.5-2.5 1.1-2.5 2.5-2.5c.3 0 .6.1.9.1V9.5c-.3 0-.6-.1-.9-.1-3.1 0-5.6 2.5-5.6 5.6s2.5 5.6 5.6 5.6 5.6-2.5 5.6-5.6V9.4c1 1 2.4 1.6 3.9 1.6V8.5z"/></svg>',
+    'YouTube': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 00-2.1 2.1A31.4 31.4 0 000 12a31.4 31.4 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.4 31.4 0 0024 12a31.4 31.4 0 00-.5-5.8zM9.7 15.5V8.5l6.2 3.5-6.2 3.5z"/></svg>',
+}
 SOCIAL_LINKS = [
-    {'label': 'X', 'url': 'https://x.com/underdogs_bet'},
-    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet'},
-    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet'},
-    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet'},
-    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet'},
+    {'label': 'X', 'url': 'https://x.com/underdogs_bet', 'icon': _SOCIAL_ICONS['X']},
+    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Instagram']},
+    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Facebook']},
+    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet', 'icon': _SOCIAL_ICONS['TikTok']},
+    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet', 'icon': _SOCIAL_ICONS['YouTube']},
 ]
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
@@ -6184,7 +6217,7 @@ def landing_page():
             display:inline-flex;align-items:center;gap:8px;
             background:rgba(16,185,129,.15);border:1px solid rgba(255,255,255,.35);
             color:#fff;font-size:.82em;font-weight:700;
-            padding:6px 16px;border-radius:20px;margin-top:18px;
+            padding:6px 16px;border-radius:20px;margin:18px auto 0;
             letter-spacing:.5px;
         }
         .hero h1{
@@ -6194,12 +6227,13 @@ def landing_page():
             margin-bottom:18px;
             color:#fff;
         }
-        .hero-sub{
-            font-size:clamp(1em,2.5vw,1.3em);
+        .hero-subhead{
+            font-size:clamp(1.05em,2.6vw,1.35em);
             color:#fff;
             max-width:600px;
-            margin:0 auto 36px;
+            margin:0 auto 28px;
             line-height:1.6;
+            font-weight:700;
         }
         .hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
         .btn-primary{
@@ -6299,6 +6333,13 @@ def landing_page():
             margin-top:22px;
         }
         .section-sub{text-align:center;color:#fff;font-size:.93em;margin-bottom:40px;}
+        .seo-badges{
+            text-align:center;
+            color:#fff;
+            font-weight:700;
+            letter-spacing:.4px;
+            margin:0 auto 16px;
+        }
         .sport-slider{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 32px;}
         .slider-arrow{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.6);color:#fff;font-size:1.3em;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;user-select:none;flex-shrink:0;}
         .slider-arrow:hover{background:rgba(255,255,255,0.25);transform:scale(1.08);}
@@ -6420,7 +6461,30 @@ def landing_page():
             justify-content:center;
             flex-wrap:wrap;
         }
-        .footer-social a{font-weight:600;}
+        .footer-social a{
+            font-weight:600;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            width:32px;
+            height:32px;
+            border-radius:50%;
+            background:rgba(255,255,255,0.08);
+            border:1px solid rgba(255,255,255,0.15);
+        }
+        .footer-social a:hover{background:rgba(255,255,255,0.18);}
+        .footer-social svg{width:18px;height:18px;fill:currentColor;}
+        .sr-only{
+            position:absolute;
+            width:1px;
+            height:1px;
+            padding:0;
+            margin:-1px;
+            overflow:hidden;
+            clip:rect(0,0,0,0);
+            white-space:nowrap;
+            border:0;
+        }
 
         /* ── Responsive ── */
         @media(max-width:640px){
@@ -6481,15 +6545,12 @@ def landing_page():
 <!-- Hero -->
 <div class="hero">
     <h1>Free AI Sports Picks &amp; Betting Predictions</h1>
-    <p class="hero-sub">
-        underdogs.bet delivers free daily sports picks and AI betting predictions using a 5-model system — Grinder2, Takedown, Edge, XSharp &amp; Sharp Consensus.
-        <br>We analyze every NBA, NHL, MLB game and more to find high-value betting opportunities so you don’t have to.
-    </p>
-    <div class="hero-badge">🆓 100% Free Sports Picks &nbsp;·&nbsp; No Paywalls</div>
+    <h2 class="hero-subhead">Master the odds with our 5-model consensus system. We deliver high-value betting edges across 9 major leagues:</h2>
     <div class="hero-ctas">
         <a href="/sport/NHL/predictions" class="btn-primary">👉 View Today’s Picks</a>
         <a href="/sport/NHL/results" class="btn-donate-hero">👉 See Model Performance</a>
     </div>
+    <div class="hero-badge">🆓 100% Free Sports Picks &nbsp;·&nbsp; No Paywalls</div>
 
     <!-- Free banner -->
     <div class="free-banner" style="margin-top:48px;">
@@ -6564,6 +6625,7 @@ def landing_page():
         {% endfor %}
     </div>
 </div>
+<div class="seo-badges">NHL · NBA · MLB · NFL · NCAAB · NCAAW · NCAAF · WNBA · Soccer</div>
 
 <div class="section" style="padding-top:20px;padding-bottom:20px;">
     <h2 class="section-title">Model Performance &amp; Results</h2>
@@ -6645,7 +6707,10 @@ def landing_page():
     {% if social_links %}
     <div class="footer-social">
         {% for link in social_links %}
-        <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
+        <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}">
+            {{ link.icon | safe }}
+            <span class="sr-only">{{ link.label }}</span>
+        </a>
         {% endfor %}
     </div>
     {% endif %}
