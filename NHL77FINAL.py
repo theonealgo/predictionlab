@@ -6549,7 +6549,12 @@ def landing_page():
             body{background-attachment:fixed;}
         }
         @media (max-width: 768px) {
-            body{background-attachment:scroll;}
+            body{
+                background-attachment:scroll;
+                background-size:contain;
+                background-position:center top;
+                background-repeat:no-repeat;
+            }
         }
         @media (max-width: 768px) {
             .nav-links {
