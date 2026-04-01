@@ -4272,20 +4272,14 @@ BASE_TEMPLATE = """
             border-top: none;
             padding: 26px 30px;
             text-align: center;
-            color: #94a3b8;
+            color: #fff;
             font-size: 0.85em;
         }
         .footer a {
-            color: #cbd5e1;
+            color: #fff;
             text-decoration: none;
         }
-        .footer a:hover { color: #fbbf24; }
-        .footer-logo {
-            height: 46px;
-            width: auto;
-            margin: 0 auto 12px;
-            display: block;
-        }
+        .footer a:hover { text-decoration: underline; }
         .footer-links { margin-top: 10px; }
         .footer-contact { margin-top: 10px; }
         .footer-social {
@@ -4295,22 +4289,7 @@ BASE_TEMPLATE = """
             justify-content: center;
             flex-wrap: wrap;
         }
-        .footer-social a{
-            width:34px;height:34px;
-            border-radius:50%;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            background:rgba(255,255,255,0.08);
-            border:1px solid rgba(255,255,255,0.14);
-            transition:transform .2s,background .2s;
-        }
-        .footer-social a:hover{
-            background:rgba(255,255,255,0.16);
-            transform:translateY(-2px);
-        }
-        .social-icon{width:18px;height:18px;display:block;}
-        .footer-copy { margin-top: 12px; opacity: 0.7; }
+        .footer-social a { font-weight: 600; }
         @media (max-width: 768px) {
             .nav-links {
                 left: 0;
@@ -4366,8 +4345,8 @@ BASE_TEMPLATE = """
         {% block content %}{% endblock %}
     </div>
     <div class="footer">
-        <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo">
-        <p>AI-powered sports predictions — free forever.</p>
+        <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
+        <p>Daily predictions for: NBA · NHL · MLB · NFL · College Basketball · College Football · Soccer · WNBA</p>
         <p class="footer-links">
             <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
             <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
@@ -4377,9 +4356,7 @@ BASE_TEMPLATE = """
             <a href="/sport/NCAAW/predictions">NCAAW</a> &nbsp;·&nbsp;
             <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
             <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
-            {% if soccer_enabled %}
             <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
-            {% endif %}
             <a href="/tutorial">Tutorial</a> &nbsp;·&nbsp;
             <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
         </p>
@@ -4387,13 +4364,10 @@ BASE_TEMPLATE = """
         {% if social_links %}
         <div class="footer-social">
             {% for link in social_links %}
-            <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}" title="{{ link.label }}">
-                <img src="{{ link.icon }}" alt="{{ link.label }}" class="social-icon">
-            </a>
+            <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
             {% endfor %}
         </div>
         {% endif %}
-        <p class="footer-copy">© 2025</p>
     </div>
     
     <script>
@@ -5883,12 +5857,11 @@ def _get_cached_weekly_banner_messages(sport_keys, days=7, max_items=4):
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
 CONTACT_EMAIL = 'underdogsbetemail@gmail.com'
 SOCIAL_LINKS = [
-    {'label': 'X', 'url': 'https://x.com/underdogs_bet', 'icon': 'https://cdn.simpleicons.org/x/ffffff'},
-    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet', 'icon': 'https://cdn.simpleicons.org/instagram/ffffff'},
-    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet', 'icon': 'https://cdn.simpleicons.org/facebook/ffffff'},
-    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet', 'icon': 'https://cdn.simpleicons.org/tiktok/ffffff'},
-    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet', 'icon': 'https://cdn.simpleicons.org/youtube/ffffff'},
-    {'label': 'Discord', 'url': 'https://discord.gg/underdogs.bet', 'icon': 'https://cdn.simpleicons.org/discord/ffffff'},
+    {'label': 'X', 'url': 'https://x.com/underdogs_bet'},
+    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet'},
+    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet'},
+    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet'},
+    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet'},
 ]
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
@@ -6090,7 +6063,7 @@ def landing_page():
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
             background: #0f172a url('/static/IMG_3179.PNG') center center / cover no-repeat fixed;
-            color:#e2e8f0;
+            color:#fff;
             min-height:100vh;
             overflow-x:hidden;
             position:relative;
@@ -6108,7 +6081,7 @@ def landing_page():
         .navbar {
             background: rgba(7, 10, 20, 0.94);
             padding: 14px 28px;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
+            border-bottom: none;
             box-shadow: 0 10px 30px rgba(0,0,0,0.35);
             backdrop-filter: blur(12px);
             position: sticky;
@@ -6149,7 +6122,7 @@ def landing_page():
         .hamburger span {
             width: 24px;
             height: 2px;
-            background: #fbbf24;
+            background: #cbd5e1;
             border-radius: 2px;
             transition: 0.3s;
         }
@@ -6169,7 +6142,7 @@ def landing_page():
         }
         .nav-links.active { display: flex; }
         .nav-links a {
-            color: #cbd5e1;
+            color: #fff;
             text-decoration: none;
             font-weight: 600;
             font-size: 0.88em;
@@ -6223,7 +6196,7 @@ def landing_page():
         }
         .hero-sub{
             font-size:clamp(1em,2.5vw,1.3em);
-            color:#94a3b8;
+            color:#fff;
             max-width:600px;
             margin:0 auto 36px;
             line-height:1.6;
@@ -6312,8 +6285,8 @@ def landing_page():
         }
         .free-icon{font-size:2.2em;flex-shrink:0;}
         .free-title{font-size:1.15em;font-weight:800;color:var(--green);margin-bottom:6px;}
-        .free-body{font-size:.93em;color:#94a3b8;line-height:1.6;}
-        .free-list{margin:8px 0 12px 18px;color:#cbd5e1;line-height:1.6;}
+        .free-body{font-size:.93em;color:#fff;line-height:1.6;}
+        .free-list{margin:8px 0 12px 18px;color:#fff;line-height:1.6;}
 
         /* ── Sports grid ── */
         .section{padding:70px 30px;max-width:1200px;margin:0 auto;}
@@ -6325,15 +6298,15 @@ def landing_page():
             font-size:1.4em;
             margin-top:22px;
         }
-        .section-sub{text-align:center;color:#64748b;font-size:.93em;margin-bottom:40px;}
+        .section-sub{text-align:center;color:#fff;font-size:.93em;margin-bottom:40px;}
         .sport-slider{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 32px;}
         .slider-arrow{background:rgba(251,191,36,0.2);border:2px solid var(--gold);color:var(--gold);font-size:1.3em;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;user-select:none;flex-shrink:0;}
         .slider-arrow:hover{background:rgba(251,191,36,0.4);transform:scale(1.08);}
         .sport-badges{display:flex;gap:8px;overflow-x:auto;padding:4px;max-width:860px;scroll-behavior:smooth;}
-        .sport-pill{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;text-decoration:none;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);color:#e2e8f0;font-size:.82em;font-weight:700;white-space:nowrap;transition:all .2s;}
+        .sport-pill{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;text-decoration:none;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);color:#fff;font-size:.82em;font-weight:700;white-space:nowrap;transition:all .2s;}
         .sport-pill:hover{border-color:var(--gold);color:#fff;}
         .sport-pill.live{background:rgba(16,185,129,.18);border-color:rgba(16,185,129,.5);}
-        .sport-pill-status{font-weight:600;opacity:.8;font-size:.7em;text-transform:uppercase;letter-spacing:.4px;}
+        .sport-pill-status{font-weight:600;opacity:.9;font-size:.7em;text-transform:uppercase;letter-spacing:.4px;color:#fff;}
         .sports-grid{
             display:grid;
             grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
@@ -6361,8 +6334,8 @@ def landing_page():
         }
         .sport-icon{font-size:2.8em;margin-bottom:10px;}
         .sport-name{font-size:1.15em;font-weight:700;margin-bottom:4px;}
-        .sport-status{font-size:.78em;color:#64748b;text-transform:uppercase;letter-spacing:.5px;}
-        .sport-status.live-text{color:var(--green);font-weight:700;}
+        .sport-status{font-size:.78em;color:#fff;text-transform:uppercase;letter-spacing:.5px;}
+        .sport-status.live-text{color:#fff;font-weight:700;}
 
         /* ── How it works ── */
         .how-section{
@@ -6384,7 +6357,7 @@ def landing_page():
             font-weight:900;font-size:1.1em;margin:0 auto 14px;
         }
         .step-title{font-weight:700;font-size:1em;margin-bottom:8px;}
-        .step-body{font-size:.86em;color:#64748b;line-height:1.6;}
+        .step-body{font-size:.86em;color:#fff;line-height:1.6;}
 
         /* ── Donation section ── */
         .donate-section{
@@ -6415,8 +6388,8 @@ def landing_page():
         }
         .donate-card > *{position:relative;z-index:1;}
         .donate-title{font-size:1.8em;font-weight:900;margin-bottom:12px;}
-        .donate-body{color:#94a3b8;font-size:.97em;line-height:1.7;margin-bottom:28px;max-width:520px;margin-left:auto;margin-right:auto;}
-        .donate-list{margin:8px auto 0;max-width:320px;text-align:left;color:#cbd5e1;line-height:1.6;}
+        .donate-body{color:#fff;font-size:.97em;line-height:1.7;margin-bottom:28px;max-width:520px;margin-left:auto;margin-right:auto;}
+        .donate-list{margin:8px auto 0;max-width:320px;text-align:left;color:#fff;line-height:1.6;}
         .btn-stripe{
             display:inline-flex;align-items:center;gap:10px;
             background:linear-gradient(135deg,var(--gold),var(--gold2));
@@ -6426,24 +6399,18 @@ def landing_page():
             box-shadow:0 4px 20px rgba(251,191,36,.35);
         }
         .btn-stripe:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(251,191,36,.5);}
-        .donate-note{font-size:.78em;color:#475569;margin-top:14px;}
+        .donate-note{font-size:.78em;color:#fff;margin-top:14px;}
 
         /* ── Footer ── */
         .footer{
             border-top:none;
             padding:36px 30px;
             text-align:center;
-            color:#334155;
+            color:#fff;
             font-size:.85em;
         }
-        .footer a{color:#475569;text-decoration:none;}
-        .footer a:hover{color:var(--gold);}
-        .footer-logo{
-            height:46px;
-            width:auto;
-            margin:0 auto 12px;
-            display:block;
-        }
+        .footer a{color:#fff;text-decoration:none;}
+        .footer a:hover{text-decoration:underline;}
         .footer-links{margin-top:10px;}
         .footer-contact{margin-top:10px;}
         .footer-social{
@@ -6453,22 +6420,7 @@ def landing_page():
             justify-content:center;
             flex-wrap:wrap;
         }
-        .footer-social a{
-            width:34px;height:34px;
-            border-radius:50%;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            background:rgba(255,255,255,0.08);
-            border:1px solid rgba(255,255,255,0.14);
-            transition:transform .2s,background .2s;
-        }
-        .footer-social a:hover{
-            background:rgba(255,255,255,0.16);
-            transform:translateY(-2px);
-        }
-        .social-icon{width:18px;height:18px;display:block;}
-        .footer-copy{margin-top:12px;opacity:.5;}
+        .footer-social a{font-weight:600;}
 
         /* ── Responsive ── */
         @media(max-width:640px){
@@ -6525,18 +6477,14 @@ def landing_page():
         </div>
     </div>
 </div>
-<div class="section" style="padding-top:30px;padding-bottom:20px;">
-    <h2 class="section-title">Model Performance &amp; Results</h2>
-    <p class="section-sub">All results are tracked, transparent, and updated daily.</p>
-</div>
 
 <!-- Hero -->
 <div class="hero">
     <div class="hero-badge">🆓 100% Free Sports Picks &nbsp;·&nbsp; No Paywalls</div>
     <h1>Free AI Sports Picks &amp; Betting Predictions</h1>
     <p class="hero-sub">
-        underdogs.bet delivers free daily sports picks, betting predictions, and model-driven odds using a 5-model AI system — Grinder2, Takedown, Edge, XSharp &amp; Sharp Consensus.
-        <br>We analyze every game across NBA, NHL, MLB, and more to find high-value betting opportunities so you don’t have to.
+        underdogs.bet delivers free daily sports picks and AI betting predictions using a 5-model system — Grinder2, Takedown, Edge, XSharp &amp; Sharp Consensus.
+        <br>We analyze every NBA, NHL, MLB game and more to find high-value betting opportunities so you don’t have to.
     </p>
     <div class="hero-ctas">
         <a href="/sport/NHL/predictions" class="btn-primary">👉 View Today’s Picks</a>
@@ -6617,6 +6565,11 @@ def landing_page():
     </div>
 </div>
 
+<div class="section" style="padding-top:20px;padding-bottom:20px;">
+    <h2 class="section-title">Model Performance &amp; Results</h2>
+    <p class="section-sub">All results are tracked, transparent, and updated daily.</p>
+</div>
+
 <!-- How it works -->
 <div class="how-section">
     <div class="section">
@@ -6672,7 +6625,6 @@ def landing_page():
 
 <!-- Footer -->
 <div class="footer">
-    <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo">
     <p>underdogs.bet — Free AI Sports Picks &amp; Betting Predictions</p>
     <p>Daily predictions for: NBA · NHL · MLB · NFL · College Basketball · College Football · Soccer · WNBA</p>
     <p class="footer-links">
@@ -6692,13 +6644,10 @@ def landing_page():
     {% if social_links %}
     <div class="footer-social">
         {% for link in social_links %}
-        <a href="{{ link.url }}" target="_blank" rel="noopener" aria-label="{{ link.label }}" title="{{ link.label }}">
-            <img src="{{ link.icon }}" alt="{{ link.label }}" class="social-icon">
-        </a>
+        <a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a>
         {% endfor %}
     </div>
     {% endif %}
-    <p class="footer-copy">© 2025</p>
 </div>
 
 <script>
