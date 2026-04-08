@@ -4296,11 +4296,11 @@ BASE_TEMPLATE = """
             min-height: 100vh;
         }
         .navbar {
-            background: rgba(7, 10, 20, 0.94);
+            background: rgba(7, 10, 20, 0.35);
             padding: 14px 28px;
             border-bottom: none;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-            backdrop-filter: blur(12px);
+            box-shadow: none;
+            backdrop-filter: blur(16px);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -4330,11 +4330,11 @@ BASE_TEMPLATE = """
             gap: 5px;
             padding: 7px;
             border-radius: 10px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: transparent;
+            border: none;
         }
         .hamburger:hover {
-            background: rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.08);
         }
         .hamburger span {
             width: 24px;
@@ -4401,87 +4401,36 @@ BASE_TEMPLATE = """
             padding: 30px;
         }
         .site-footer {
-            background: rgba(7, 10, 20, 0.95);
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 34px 30px 40px;
-            color: #e2e8f0;
+            background: rgba(7, 10, 20, 0.4);
+            backdrop-filter: blur(16px);
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 18px 30px;
+            color: #94a3b8;
+            font-size: 0.78em;
         }
-        .footer-grid {
+        .footer-inner {
             max-width: 1200px;
             margin: 0 auto;
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 28px;
-        }
-        .footer-col { min-width: 0; }
-        .footer-brand {
-            font-size: 1.1em;
-            font-weight: 800;
-            color: #fff;
-            margin-bottom: 6px;
-        }
-        .footer-subtitle {
-            color: #cbd5e1;
-            font-size: 0.92em;
-            margin-bottom: 12px;
-        }
-        .footer-email a {
-            color: #e2e8f0;
-            text-decoration: none;
-        }
-        .footer-heading {
-            color: #fff;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-            margin-bottom: 10px;
-        }
-        .footer-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
         }
-        .footer-link {
-            color: #e2e8f0;
-            text-decoration: none;
-            transition: color 0.2s, transform 0.2s;
-        }
-        .footer-link:hover {
-            color: #fff;
-            transform: translateX(2px);
-        }
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
-        @media (max-width: 900px) {
-            .footer-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 20px;
-            }
-            .footer-col--brand { order: 1; }
-            .footer-col--resources { order: 2; }
-            .footer-col--sports { order: 3; }
-            .footer-col--socials { order: 4; }
-        }
-        @media (max-width: 560px) {
-            .footer-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 16px;
-            }
-            .footer-col--brand{order:1;}
-            .footer-col--resources{order:2;}
-            .footer-col--sports{order:3;}
-            .footer-col--socials{order:4;}
+        .footer-left { display: flex; align-items: center; gap: 14px; }
+        .footer-logo-img { height: 32px; width: auto; }
+        .footer-email a { color: #94a3b8; text-decoration: none; font-size: 0.95em; }
+        .footer-email a:hover { color: #fff; }
+        .footer-center { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .footer-center a { color: #94a3b8; text-decoration: none; font-size: 0.95em; }
+        .footer-center a:hover { color: #fff; }
+        .footer-center span { color: rgba(255,255,255,0.2); }
+        .footer-right { color: #64748b; font-size: 0.9em; white-space: nowrap; }
+        .footer-socials { display: flex; align-items: center; gap: 14px; }
+        .footer-socials a { display: flex; opacity: 0.6; transition: opacity 0.2s; }
+        .footer-socials a:hover { opacity: 1; }
+        @media (max-width: 700px) {
+            .footer-inner { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
         }
         @media (max-width: 768px) {
             .nav-links {
@@ -4581,45 +4530,24 @@ BASE_TEMPLATE = """
         {% block content %}{% endblock %}
     </div>
     <footer class="site-footer">
-        <div class="footer-grid">
-            <div class="footer-col footer-col--brand">
-                <div class="footer-brand">underdogs.bet</div>
-                <div class="footer-subtitle">Free AI Sports Picks &amp; Betting Predictions</div>
+        <div class="footer-inner">
+            <div class="footer-left">
+                <a href="/"><img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
                 <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
             </div>
-            <nav class="footer-col footer-col--sports" aria-label="Sports">
-                <div class="footer-heading">Sports</div>
-                <ul class="footer-list">
-                    <li><a class="footer-link" href="/nhl">NHL</a></li>
-                    <li><a class="footer-link" href="/nba">NBA</a></li>
-                    <li><a class="footer-link" href="/mlb">MLB</a></li>
-                    <li><a class="footer-link" href="/nfl">NFL</a></li>
-                    <li><a class="footer-link" href="/ncaab">NCAAB</a></li>
-                    <li><a class="footer-link" href="/ncaaw">NCAAW</a></li>
-                    <li><a class="footer-link" href="/ncaaf">NCAAF</a></li>
-                    <li><a class="footer-link" href="/wnba">WNBA</a></li>
-                    <li><a class="footer-link" href="/soccer">Soccer</a></li>
-                </ul>
-            </nav>
-            <nav class="footer-col footer-col--resources" aria-label="Resources">
-                <div class="footer-heading">Resources</div>
-                <ul class="footer-list">
-                    <li><a class="footer-link" href="/tutorial">Tutorial</a></li>
-                    <li><a class="footer-link" href="/privacy">Privacy</a></li>
-                    <li><a class="footer-link" href="/terms">Terms of Use</a></li>
-                    <li><a class="footer-link" href="/donate">Donate</a></li>
-                </ul>
-            </nav>
-            <nav class="footer-col footer-col--socials" aria-label="Socials">
-                <div class="footer-heading">Socials</div>
-                <ul class="footer-list">
-                    <li><a class="footer-link" href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X</a></li>
-                    <li><a class="footer-link" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a></li>
-                    <li><a class="footer-link" href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a></li>
-                    <li><a class="footer-link" href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a></li>
-                <li><a class="footer-link" href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a></li>
-                </ul>
-            </nav>
+            <div class="footer-center">
+                <a href="/tutorial">Tutorial</a><span>&middot;</span>
+                <a href="/privacy">Privacy</a><span>&middot;</span>
+                <a href="/terms">Terms</a>
+            </div>
+            <div class="footer-socials">
+                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener" title="X"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
+                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener" title="TikTok"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
+                <a href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener" title="YouTube"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+            </div>
+            <div class="footer-right">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
         </div>
     </footer>
     
