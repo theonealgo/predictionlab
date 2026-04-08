@@ -179,6 +179,9 @@
         .team-row:last-child { border-bottom:none; }
         .team-name { font-size:0.94em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .team-name.winner { font-weight:700; }
+        .team-odds { font-size:0.82em; font-weight:700; margin-left:6px; flex-shrink:0; }
+        .team-odds.fav { color:#10b981; }
+        .team-odds.dog { color:#fbbf24; }
         .pick-indicator { color:#10b981; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
         .score-box { font-size:1.05em; font-weight:700; color:#fbbf24; margin-left:8px; flex-shrink:0; }
         .prediction-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:148px; max-width:168px; display:flex; flex-direction:column; gap:4px; }
@@ -221,12 +224,19 @@
                 border-right: none;
                 border-bottom: 2px solid #334155;
             }
-            .nav-links a {
+            .nav-links a, .nav-links .nav-group-title {
                 padding: 12px;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
             .container { padding: 20px 15px; }
         }
+        .nav-group { position: relative; }
+        .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(255,255,255,0.08); }
+        .nav-group-items { display: none; padding-left: 12px; }
+        .nav-group:hover .nav-group-items, .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
+        .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
     </style>
 </head>
 <body>
@@ -241,19 +251,54 @@
             <span></span>
         </div>
         <div class="nav-links" id="navLinks">
-            <a href="/" class="{{ 'active' if page == 'home' else '' }}">Home</a>
-            <a href="/sport/NHL/predictions" class="{{ 'active' if page == 'NHL' else '' }}">🏒 NHL</a>
-            <a href="/sport/NBA/predictions" class="{{ 'active' if page == 'NBA' else '' }}">🏀 NBA</a>
-            <a href="/sport/MLB/predictions" class="{{ 'active' if page == 'MLB' else '' }}">⚾ MLB</a>
-            <a href="/sport/NFL/predictions" class="{{ 'active' if page == 'NFL' else '' }}">🏈 NFL</a>
-            <a href="/sport/NCAAB/predictions" class="{{ 'active' if page == 'NCAAB' else '' }}">🎓 NCAAB</a>
-            <a href="/sport/NCAAW/predictions" class="{{ 'active' if page == 'NCAAW' else '' }}">🏀 NCAAW</a>
-            <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
-            <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
-            {% if soccer_enabled %}
-            <a href="/sport/SOCCER/predictions" class="{{ 'active' if page == 'SOCCER' else '' }}">⚽ Soccer</a>
-            {% endif %}
+            <a href="/">Home</a>
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title">🏆 Join</span>
+                <div class="nav-group-items">
+                    <a href="/plans" style="color:#fbbf24;">🏆 Premium</a>
+                    {% if is_logged_in %}
+                    <a href="/logout">Logout</a>
+                    {% else %}
+                    <a href="/login" style="color:#10b981;">Login</a>
+                    <a href="/signup">Sign Up</a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title">🏀 Sports</span>
+                <div class="nav-group-items">
+                    <a href="/sport/NHL/predictions">🏒 NHL</a>
+                    <a href="/sport/NBA/predictions">🏀 NBA</a>
+                    <a href="/sport/MLB/predictions">⚾ MLB</a>
+                    <a href="/sport/NFL/predictions">🏈 NFL</a>
+                    <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
+                    <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
+                    <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
+                    <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+                    {% if soccer_enabled %}
+                    <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
+                    {% endif %}
+                </div>
+            </div>
             <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
+                <div class="nav-group-items">
+                    <a href="/tutorial">Tutorial</a>
+                    <a href="/privacy">Privacy</a>
+                    <a href="/terms">Terms</a>
+                </div>
+            </div>
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
+                <div class="nav-group-items">
+                    <a href="https://x.com/underdogs_bet" target="_blank">X</a>
+                    <a href="https://instagram.com/underdogs.bet" target="_blank">Instagram</a>
+                    <a href="https://facebook.com/underdogs.bet" target="_blank">Facebook</a>
+                    <a href="https://tiktok.com/@underdog.bet" target="_blank">TikTok</a>
+                    <a href="https://youtube.com/@Underdogsbet" target="_blank">YouTube</a>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -267,11 +312,11 @@
         <a href="/sport/{{ sport }}/predictions" class="tab active">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results"     class="tab">🎯 Results</a>
     </div>
-    {% set label_glicko2 = 'Poisson xG' if sport == 'SOCCER' else 'Grinder2' %}
-    {% set label_trueskill = 'Markov Chain' if sport == 'SOCCER' else 'Takedown' %}
-    {% set label_elo = 'Soccer Elo' if sport == 'SOCCER' else 'Edge' %}
-    {% set label_xgb = 'Poisson Reg' if sport == 'SOCCER' else 'XSharp' %}
-    {% set label_ensemble = 'Soccer Ensemble' if sport == 'SOCCER' else 'Sharp Consensus' %}
+    {% set label_glicko2 = 'Grinder2' %}
+    {% set label_trueskill = 'Takedown' %}
+    {% set label_elo = 'Edge' %}
+    {% set label_xgb = 'XSharp' %}
+    {% set label_ensemble = 'Sharp Consensus' %}
     {% if soccer_leagues %}
     <div class="league-slider">
         <div class="league-badges" id="leagueBubbles">
@@ -312,11 +357,11 @@
                     <div class="game-body">
                         <div class="teams-section">
                             <div class="team-row">
-                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ pred.away_team_id }}</span>
+                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ pred.away_team_id }}{% if not is_final and pred.away_moneyline is not none %} <span class="team-odds {% if pred.away_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.away_moneyline > 0 %}+{% endif %}{{ pred.away_moneyline }}</span>{% endif %}</span>
                                 {% if is_final %}<span class="score-box">{{ pred.away_score }}</span>{% else %}{% if not home_picked %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
                             </div>
                             <div class="team-row">
-                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ pred.home_team_id }}</span>
+                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ pred.home_team_id }}{% if not is_final and pred.home_moneyline is not none %} <span class="team-odds {% if pred.home_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.home_moneyline > 0 %}+{% endif %}{{ pred.home_moneyline }}</span>{% endif %}</span>
                                 {% if is_final %}<span class="score-box">{{ pred.home_score }}</span>{% else %}{% if home_picked %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
                             </div>
                     </div>
@@ -330,10 +375,14 @@
                             {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
                     </div>
-                    {% if not is_final and (pred.xgb_spread is not none or pred.naive_spread is not none) %}
+                    {% if not is_final and (pred.xgb_spread is not none or pred.naive_spread is not none or pred.market_spread is not none) %}
                     <div class="score-footer">
                         {% if pred.xgb_spread is not none %}
+                        {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val sf-xgb">{{ pred.xgb_away_score }} – {{ pred.xgb_home_score }}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
+                        {% endif %}
         {% if sport == 'NHL' and pred.puck_line_tag is not none %}
                         <div class="sf-item"><span class="sf-label">Puck Line</span>
                             {% if pred.puck_line_tag == 'STRONG -1.5' %}<span class="sf-val" style="color:#10b981;font-weight:800;">{{ pred.puck_line_tag }}</span>
@@ -351,22 +400,43 @@
                             <span class="sf-val" style="color:#94a3b8;">{{ pred.puck_line_dog_prob }}%</span>
                         </div>
                         {% else %}
+                        {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Spread</span>
                             {% if home_picked %}<span class="sf-val sf-fav">{{ pred.home_team_id[:11] }} -{{ pred.xgb_spread|abs }}</span>
                             {% else %}<span class="sf-val sf-fav">{{ pred.away_team_id[:11] }} -{{ pred.xgb_spread|abs }}</span>{% endif %}
                         </div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
+                        {% endif %}
+                        {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val">{{ pred.xgb_total }}</span></div>
-                        {% if pred.naive_spread is not none %}
-                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#94a3b8;">{{ pred.naive_total }}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val" style="color:#94a3b8;">🔒</span></div>
                         {% endif %}
-                        {% elif pred.naive_spread is not none %}
+                        {% endif %}
+                        {% if pred.market_spread is not none %}
+                        {% if is_premium %}
+                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#fbbf24;">{{ "%+.1f"|format(pred.market_spread) }}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#94a3b8;">🔒</span></div>
+                        {% endif %}
+                        {% endif %}
+                        {% if pred.market_total is not none %}
+                        {% if is_premium %}
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#fbbf24;">{{ pred.market_total }}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#94a3b8;">🔒</span></div>
+                        {% endif %}
+                        {% elif pred.naive_total is not none %}
+                        {% if is_premium %}
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#94a3b8;">{{ pred.naive_total }}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#94a3b8;">🔒</span></div>
+                        {% endif %}
+                        {% endif %}
+                        {% if not pred.xgb_spread is not none and pred.naive_spread is not none %}
                         <div class="sf-item"><span class="sf-label">Pred Score</span><span class="sf-val">{{ pred.naive_away_score }} – {{ pred.naive_home_score }}</span></div>
-                        <div class="sf-item"><span class="sf-label">Spread</span>
-                            {% if home_picked %}<span class="sf-val sf-fav">{{ pred.home_team_id[:11] }} -{{ pred.naive_spread|abs }}</span>
-                            {% else %}<span class="sf-val sf-fav">{{ pred.away_team_id[:11] }} -{{ pred.naive_spread|abs }}</span>{% endif %}
-                        </div>
-                        <div class="sf-item"><span class="sf-label">Total</span><span class="sf-val">{{ pred.naive_total }}</span></div>
                         {% endif %}
                     </div>
                     {% endif %}

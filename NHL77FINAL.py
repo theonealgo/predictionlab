@@ -6293,6 +6293,75 @@ def _fetch_ga_traffic():
     except Exception:
         return None, "Failed to fetch Google Analytics data."
 
+_SPORT_ML_UNITS_CACHE: dict = {'ts': 0, 'items': []}
+_SPORT_ML_UNITS_TTL = 1800  # 30 min
+
+_SPORT_ICONS_LANDING = {
+    'NHL': '🏒', 'NBA': '🏀', 'NFL': '🏈', 'MLB': '⚾',
+    'NCAAB': '🎓', 'NCAAF': '🏟️', 'WNBA': '🏀', 'SOCCER': '⚽', 'NCAAW': '🏀',
+}
+
+
+def _get_sport_ml_units_banner():
+    """Compute flat-bet consensus ML units per sport from graded predictions."""
+    now_ts = _time.time()
+    cached = _SPORT_ML_UNITS_CACHE
+    if cached and (now_ts - cached.get('ts', 0)) < _SPORT_ML_UNITS_TTL:
+        return cached.get('items', [])
+    items = []
+    try:
+        conn = get_db_connection()
+        rows = conn.execute('''
+            SELECT
+                p.sport,
+                SUM(CASE
+                    WHEN p.win_probability > 0.5 AND g.home_score > g.away_score THEN 1.0
+                    WHEN p.win_probability <= 0.5 AND g.away_score > g.home_score THEN 1.0
+                    ELSE -1.0
+                END) AS units,
+                COUNT(*) AS total,
+                SUM(CASE
+                    WHEN p.win_probability > 0.5 AND g.home_score > g.away_score THEN 1
+                    WHEN p.win_probability <= 0.5 AND g.away_score > g.home_score THEN 1
+                    ELSE 0
+                END) AS wins
+            FROM predictions p
+            JOIN games g ON p.game_id = g.game_id
+            WHERE g.home_score IS NOT NULL
+              AND g.away_score IS NOT NULL
+              AND p.win_probability IS NOT NULL
+              AND g.home_score != g.away_score
+              AND p.sport IS NOT NULL
+            GROUP BY p.sport
+            ORDER BY p.sport
+        ''').fetchall()
+        conn.close()
+        sport_order = ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAF', 'WNBA', 'NCAAW', 'SOCCER']
+        rows_by_sport = {r[0]: r for r in rows}
+        for sport in sport_order:
+            row = rows_by_sport.get(sport)
+            if not row:
+                continue
+            total = int(row[2]) if row[2] else 0
+            if total < 5:
+                continue
+            units = float(row[1]) if row[1] is not None else 0.0
+            wins  = int(row[3]) if row[3] else 0
+            losses = total - wins
+            icon = _SPORT_ICONS_LANDING.get(sport, '🏆')
+            sign = '+' if units >= 0 else ''
+            items.append({
+                'label':    f"{icon} {sport} Moneyline",
+                'units':    f"{sign}{units:.1f}u",
+                'record':   f"{wins}-{losses}",
+                'positive': units >= 0,
+            })
+    except Exception as _ue:
+        logger.debug(f"ML units banner failed: {_ue}")
+    _SPORT_ML_UNITS_CACHE.update({'ts': now_ts, 'items': items})
+    return items
+
+
 @app.route('/')
 def landing_page():
     """Landing page — redesigned with hero, stats, donation, and sport cards"""
@@ -6332,6 +6401,7 @@ def landing_page():
     sports_covered = len(landing_sports)
     banner_sports = [s['key'] for s in landing_sports]
     weekly_banner_messages = list(_MANUAL_BANNER_ITEMS)
+    units_banner_items = _get_sport_ml_units_banner()
 
     return render_template_string("""
 <!DOCTYPE html>
@@ -6697,47 +6767,45 @@ def landing_page():
         .step-title{font-weight:700;font-size:1em;margin-bottom:8px;}
         .step-body{font-size:.86em;color:#fff;line-height:1.6;}
 
-        /* ── Donation section ── */
-        .donate-section{
-            max-width:720px;margin:0 auto;
-            text-align:center;
-        }
-        .donate-card{
-            background:rgba(7,10,20,0.85);
-            border:1px solid rgba(251,191,36,.25);
-            border-radius:20px;padding:48px 40px;
-            position:relative;
+        /* ── Moneyline Units Banner ── */
+        .units-marquee-wrap{
             overflow:hidden;
+            width:100%;
+            margin-top:20px;
         }
-        .donate-card::before{
-            content:'';
-            position:absolute;
-            inset:0;
-            background:url('/static/IMG_3179.PNG') center/cover no-repeat;
-            opacity:0.28;
-            z-index:0;
+        .units-marquee-track{
+            display:inline-flex;
+            align-items:center;
+            gap:14px;
+            width:max-content;
+            white-space:nowrap;
+            animation:weekly-marquee 36s linear infinite;
         }
-        .donate-card::after{
-            content:'';
-            position:absolute;
-            inset:0;
-            background:rgba(7,10,20,0.4);
-            z-index:0;
+        .units-pill{
+            display:inline-flex;
+            align-items:center;
+            gap:10px;
+            padding:10px 22px;
+            border-radius:999px;
+            font-weight:700;
+            font-size:0.93em;
+            white-space:nowrap;
+            flex:0 0 auto;
+            border:1px solid rgba(255,255,255,0.15);
+            background:rgba(255,255,255,0.06);
         }
-        .donate-card > *{position:relative;z-index:1;}
-        .donate-title{font-size:1.8em;font-weight:900;margin-bottom:12px;}
-        .donate-body{color:#fff;font-size:.97em;line-height:1.7;margin-bottom:28px;max-width:520px;margin-left:auto;margin-right:auto;}
-        .donate-list{margin:8px auto 0;max-width:320px;text-align:left;color:#fff;line-height:1.6;}
-        .btn-stripe{
-            display:inline-flex;align-items:center;gap:10px;
-            background:linear-gradient(135deg,var(--gold),var(--gold2));
-            color:#fff;font-weight:800;font-size:1.05em;
-            padding:16px 40px;border-radius:12px;
-            text-decoration:none;transition:transform .2s,box-shadow .2s;
-            box-shadow:0 4px 20px rgba(251,191,36,.35);
+        .units-pill.positive{
+            border-color:rgba(16,185,129,0.45);
+            background:rgba(16,185,129,0.12);
         }
-        .btn-stripe:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(251,191,36,.5);}
-        .donate-note{font-size:.78em;color:#fff;margin-top:14px;}
+        .units-pill.negative{
+            border-color:rgba(239,68,68,0.45);
+            background:rgba(239,68,68,0.12);
+        }
+        .up-label{color:#fff;}
+        .up-units{font-size:1.05em;font-weight:900;color:#10b981;}
+        .units-pill.negative .up-units{color:#ef4444;}
+        .up-rec{color:#94a3b8;font-size:0.82em;}
 
         /* ── Footer ── */
         .site-footer{
@@ -6894,7 +6962,6 @@ def landing_page():
                     {% endif %}
                 </div>
             </div>
-            <a href="{{ stripe_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
             <div class="nav-group" onclick="this.classList.toggle('open')">
                 <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
                 <div class="nav-group-items">
@@ -7028,28 +7095,31 @@ def landing_page():
     </div>
 </div>
 
-<!-- Donation -->
-<div class="section">
-    <div class="donate-section">
-        <div class="donate-card">
-        <div class="donate-title">Support the Platform</div>
-        <div class="donate-body">
-            underdogs.bet is free forever.
-            <br><br>
-            If our predictions help your betting strategy, your support goes toward:
-            <ul class="donate-list">
-                <li>Data infrastructure</li>
-                <li>Model improvements</li>
-                <li>Server costs</li>
-            </ul>
-        </div>
-        <a href="{{ stripe_url }}" target="_blank" class="btn-stripe">
-            <span>💳</span> Donate securely via Stripe
-        </a>
-            <div class="donate-note">Powered by Stripe · Secure &amp; encrypted · Any amount helps</div>
+<!-- Moneyline Units Banner -->
+{% if units_banner_items %}
+<div class="section" style="padding-top:10px;padding-bottom:50px;">
+    <h2 class="section-title" style="margin-bottom:10px;">📈 Season Moneyline Performance</h2>
+    <p class="section-sub">Flat 1u consensus picks — tracked live from every graded game.</p>
+    <div class="units-marquee-wrap">
+        <div class="units-marquee-track">
+            {% for item in units_banner_items %}
+            <div class="units-pill {% if item.positive %}positive{% else %}negative{% endif %}">
+                <span class="up-label">{{ item.label }}</span>
+                <span class="up-units">{{ item.units }}</span>
+                <span class="up-rec">{{ item.record }}</span>
+            </div>
+            {% endfor %}
+            {% for item in units_banner_items %}
+            <div class="units-pill {% if item.positive %}positive{% else %}negative{% endif %}">
+                <span class="up-label">{{ item.label }}</span>
+                <span class="up-units">{{ item.units }}</span>
+                <span class="up-rec">{{ item.record }}</span>
+            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Footer -->
 <footer class="site-footer">
@@ -7079,7 +7149,6 @@ def landing_page():
                 <li><a class="footer-link" href="/tutorial">Tutorial</a></li>
                 <li><a class="footer-link" href="/privacy">Privacy</a></li>
                 <li><a class="footer-link" href="/terms">Terms of Use</a></li>
-                <li><a class="footer-link" href="/donate">Donate</a></li>
             </ul>
         </nav>
         <nav class="footer-col footer-col--socials" aria-label="Socials">
@@ -7133,7 +7202,8 @@ def landing_page():
     """, nhl_accuracy=nhl_accuracy, nfl_accuracy=nfl_accuracy, nba_accuracy=nba_accuracy,
          games_graded=games_graded, predictions_logged=predictions_logged,
          stripe_url=STRIPE_DONATION_URL, landing_sports=landing_sports,
-         sports_covered=sports_covered, weekly_banner_messages=weekly_banner_messages)
+         sports_covered=sports_covered, weekly_banner_messages=weekly_banner_messages,
+         units_banner_items=units_banner_items)
 
 @app.route('/robots.txt')
 def robots_txt():
