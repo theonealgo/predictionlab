@@ -4597,106 +4597,67 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <div class="tutorial-wrap">
         <div class="tutorial-card">
-            <h1>📊 How to Use This Page</h1>
-            <p>This page shows model predictions for upcoming games. Here’s how to read each section and understand what the numbers mean.</p>
+            <h1>📊 How to Read Our Picks</h1>
+            <p>Each game card shows our AI predictions. Here’s what each section means.</p>
         </div>
 
         <div class="tutorial-card">
-            <h2>🏒 Game Matchup Row</h2>
-            <p>Each row represents a single game:</p>
+            <h2>🏒 Game Card Layout</h2>
             <ul>
-                <li>Left team = Away team</li>
-                <li>Right team = Home team</li>
-                <li>The arrow (▶) separates the matchup</li>
+                <li><strong>Top team</strong> = Away team</li>
+                <li><strong>Bottom team</strong> = Home team</li>
+                <li>The <strong>▶ arrow</strong> next to a team = our consensus moneyline pick</li>
+                <li>Moneyline odds appear next to team names when available</li>
             </ul>
         </div>
 
         <div class="tutorial-card">
             <h2>📈 Home Win %</h2>
-            <p>This section shows the predicted win probability for the HOME team from different models.</p>
-            <p><strong>How to read it:</strong></p>
+            <p>The five model percentages all represent the <strong>home team’s win probability</strong>.</p>
             <ul>
-                <li>Each model gives its own percentage</li>
-                <li>The Sharp Consensus is the combined average</li>
+                <li><strong>Grinder2</strong> = Glicko-2 model</li>
+                <li><strong>Takedown</strong> = TrueSkill model</li>
+                <li><strong>Edge</strong> = Elo model</li>
+                <li><strong>XSharp</strong> = XGBoost model</li>
+                <li><strong>Sharp Consensus</strong> = weighted blend of all models</li>
             </ul>
-            <p><strong>What it means:</strong></p>
+            <p>If the number is above 50%, the models favor the home team. If it’s below 50%, they favor the away team.</p>
+        </div>
+
+        <div class="tutorial-card">
+            <h2>🔒 Premium Picks</h2>
+            <p>Free users get moneyline picks and win percentages. Premium unlocks:</p>
             <ul>
-                <li>Higher % → stronger prediction for the home team</li>
-                <li>Lower % → stronger prediction for the away team</li>
+                <li><strong>XSharp Score</strong> = predicted final score</li>
+                <li><strong>XSharp Spread</strong> = model spread projection</li>
+                <li><strong>XSharp Total</strong> = model total projection</li>
+                <li><strong>Our Spread / Our Total</strong> = calibrated market-style lines</li>
             </ul>
         </div>
 
         <div class="tutorial-card">
-            <h2>🎯 Predicted Score (XSharp Score)</h2>
-            <p>This is the model’s projected final score for the game.</p>
-            <p><strong>How to read it:</strong></p>
+            <h2>📉 NHL Puck Line</h2>
+            <p>For hockey, spreads are shown as puck line probabilities:</p>
             <ul>
-                <li>Format: Away Score – Home Score</li>
-                <li>Example: 2.8 – 3.1 means:</li>
-                <li>Away team: 2.8 goals/points</li>
-                <li>Home team: 3.1 goals/points</li>
+                <li><strong>-1.5</strong> = favorite must win by 2+</li>
+                <li><strong>+1.5</strong> = underdog can lose by 1 and still cover</li>
+                <li><strong>STRONG</strong> = 55%+ confidence</li>
+                <li><strong>LEAN</strong> = 52–55% confidence</li>
             </ul>
         </div>
 
         <div class="tutorial-card">
-            <h2>📉 Puck Line / Spread</h2>
-            <p>This section shows probabilities for each team covering the spread:</p>
-            <ul>
-                <li>Favorite side (e.g., -1.5)</li>
-                <li>Underdog side (e.g., +1.5)</li>
-            </ul>
-            <p><strong>How to read it:</strong></p>
-            <ul>
-                <li>Each side has a percentage</li>
-                <li>“STRONG” highlights the higher-probability side</li>
-            </ul>
-        </div>
-
-        <div class="tutorial-card">
-            <h2>📊 Totals</h2>
-            <p>You’ll see two projected totals:</p>
-            <ul>
-                <li>XSharp Total</li>
-                <li>Our Total</li>
-            </ul>
-            <p><strong>What it means:</strong></p>
-            <ul>
-                <li>These are predicted combined scores for both teams</li>
-                <li>They can be compared with sportsbook totals to understand differences</li>
-            </ul>
-        </div>
-
-        <div class="tutorial-card">
-            <h2>🧩 Putting It Together</h2>
-            <p>Each game gives you:</p>
-            <ul>
-                <li>Win probabilities (Home Win %)</li>
-                <li>Projected score (XSharp Score)</li>
-                <li>Spread probabilities (Puck Line)</li>
-                <li>Total projections (Totals)</li>
-            </ul>
-            <p>These are meant to give a data-driven view of the matchup based on model outputs.</p>
+            <h2>⚠️ Analysis / Injuries</h2>
+            <p>Open the <strong>Analysis</strong> section under a game card to see important injury info for both teams.</p>
         </div>
 
         <div class="tutorial-card">
             <h2>📅 Navigation</h2>
-            <p>At the top of the page, you can:</p>
             <ul>
-                <li>Switch between different dates</li>
-                <li>View past results or upcoming games</li>
+                <li>Use the date bubbles at the top to jump between dates</li>
+                <li>Switch between <strong>Predictions</strong> and <strong>Results</strong></li>
+                <li>The results page tracks how each model performed on completed games</li>
             </ul>
-        </div>
-
-        <div class="tutorial-card">
-            <h2>✅ Summary</h2>
-            <ul>
-                <li>Home Win % → probability for the home team</li>
-                <li>Score → predicted outcome</li>
-                <li>Spread → likelihood of covering</li>
-                <li>Totals → expected combined score</li>
-            </ul>
-            <p>Everything updates per game, per day, across all supported sports.</p>
-            <p>If you need deeper features (filters, best bets, edge indicators), those can be added on top of this structure.</p>
         </div>
     </div>
 """)
