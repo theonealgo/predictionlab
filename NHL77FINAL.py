@@ -6486,8 +6486,8 @@ def landing_page():
         body > *{position:relative;z-index:1;}
 
         /* ── Navbar ── */
-        .navbar {
-            background: rgba(7, 10, 20, 0.94);
+        .navbar{
+            background:rgba(7,10,20,0.75);backdrop-filter:blur(12px);
             padding: 14px 28px;
             border-bottom: none;
             box-shadow: 0 10px 30px rgba(0,0,0,0.35);
@@ -6809,9 +6809,10 @@ def landing_page():
 
         /* ── Footer ── */
         .site-footer{
-            background:rgba(7,10,20,0.95);
-            border-top:1px solid rgba(255,255,255,0.08);
-            padding:40px 30px 46px;
+            background:rgba(7,10,20,0.75);
+            backdrop-filter:blur(12px);
+            border-top:1px solid rgba(255,255,255,0.06);
+            padding:40px 30px 90px;
             color:#e2e8f0;
         }
         .footer-grid{
@@ -6985,26 +6986,24 @@ def landing_page():
 </div>
 
 <!-- Hero -->
-<div class="hero">
-    <h1>Free AI Sports Picks &amp; Betting Predictions</h1>
-    <h2 class="hero-subhead">Master the odds with our 5-model consensus system. We deliver high-value betting edges across 9 major leagues:</h2>
-    <div class="hero-ctas">
-        <a href="/sport/NHL/predictions" class="btn-primary">👉 View Today's Picks</a>
-        <a href="/plans" class="btn-donate-hero">🏆 Unlock Spreads &amp; Totals</a>
-    </div>
-    <div class="hero-badge">🆓 100% Free Moneyline Picks &nbsp;·&nbsp; Spreads &amp; Totals for Premium</div>
-
-    <!-- Free banner -->
-    <div class="free-banner" style="margin-top:48px;">
-        <div>
-            <div class="free-title">100% Free Moneyline Picks — Upgrade for Full Card</div>
-            <div class="free-icon">🆓</div>
-            <div class="free-body">
-                Moneyline picks and model win percentages are always free. Upgrade to Premium for Spreads, Totals, and XSharp Score Predictions.
-            </div>
-        </div>
-    </div>
+<div class="hero" style="text-align:left;padding:100px 40px 60px;">
+    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Picks<br>With Real Results</h1>
+    <h2 class="hero-subhead hero-slide" style="text-align:left;max-width:600px;animation:slideIn 0.8s ease-out 0.2s both;">Get accurate, data-driven predictions powered by our 5-model consensus system across 9 major leagues.</h2>
 </div>
+<style>
+@keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
+.hero-slide{opacity:0;}
+</style>
+
+<!-- Sticky Bottom Bar -->
+<div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.92);backdrop-filter:blur(12px);border-top:1px solid rgba(251,191,36,0.2);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:1.2em;">🏆</div>
+        <span style="font-weight:700;color:#e2e8f0;font-size:0.95em;">Premium Membership</span>
+    </div>
+    <a href="/plans" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 24px;border-radius:999px;font-weight:800;text-decoration:none;font-size:0.92em;box-shadow:0 4px 16px rgba(251,191,36,0.35);">Join Now</a>
+</div>
+<style>body{padding-bottom:70px;}</style>
 <div class="section" style="padding-top:20px;padding-bottom:20px;">
     <h2 class="section-title">Model Performance &amp; Results</h2>
     <p class="section-sub">All results are tracked, transparent, and updated daily.</p>
