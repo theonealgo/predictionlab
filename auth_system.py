@@ -24,11 +24,16 @@ import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 
-# Load .env.local for local development (use absolute path)
+# Load .env.local for local dev + Render's /etc/secrets/ path
 try:
     from dotenv import load_dotenv
     _auth_dir = os.path.dirname(os.path.abspath(__file__))
-    for _p in [os.path.join(_auth_dir, '.env.local'), os.path.join(_auth_dir, '.env')]:
+    for _p in [
+        os.path.join(_auth_dir, '.env.local'),
+        os.path.join(_auth_dir, '.env'),
+        '/etc/secrets/.env.local',
+        '/etc/secrets/.env',
+    ]:
         if os.path.exists(_p):
             load_dotenv(_p, override=True)
             break
