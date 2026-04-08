@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 TOTAL_BOUNDS = {
     'NBA':   (200, 255),
     'NFL':   (32,  68),
-    'NHL':   (3.5, 9.5),
+    'NHL':   (4.5, 6.5),
     'MLB':   (5.0, 16.0),
     'NCAAB': (120, 185),
     'NCAAF': (28,  90),
