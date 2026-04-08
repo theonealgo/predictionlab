@@ -58,12 +58,12 @@ auth_bp = Blueprint('auth', __name__)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
-GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
-STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
-STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
-STRIPE_PRICE_MONTHLY = os.environ.get('STRIPE_PRICE_MONTHLY', '')
-STRIPE_PRICE_YEARLY = os.environ.get('STRIPE_PRICE_YEARLY', '')
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '').strip()
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '').strip()
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
+STRIPE_PRICE_MONTHLY = os.environ.get('STRIPE_PRICE_MONTHLY', '').strip()
+STRIPE_PRICE_YEARLY = os.environ.get('STRIPE_PRICE_YEARLY', '').strip()
 
 # Admin emails get automatic premium — no payment needed
 ADMIN_EMAILS = {
