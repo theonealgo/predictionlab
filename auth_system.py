@@ -413,12 +413,36 @@ def checkout(plan):
 
 @auth_bp.route('/checkout/success')
 def checkout_success():
-    """Handle successful Stripe checkout."""
+    """Handle successful Stripe checkout.
+    
+    IMPORTANT: Do NOT activate premium here. Only the Stripe webhook
+    (checkout.session.completed) should activate premium after verifying
+    payment. This page just shows a "thank you" message.
+    """
     if not current_user.is_authenticated:
         return redirect('/')
 
-    # Activate premium immediately (webhook will also handle this)
-    _activate_premium(current_user.id, plan='monthly')
+    # Verify the session_id came from Stripe before showing success
+    session_id = request.args.get('session_id')
+    if not session_id:
+        return redirect('/plans')
+
+    # Verify with Stripe that this is a real completed checkout
+    if STRIPE_SECRET_KEY and session_id:
+        try:
+            import stripe
+            stripe.api_key = STRIPE_SECRET_KEY
+            checkout_session = stripe.checkout.Session.retrieve(session_id)
+            if checkout_session.payment_status == 'paid':
+                user_id = checkout_session.metadata.get('user_id')
+                plan = checkout_session.metadata.get('plan', 'monthly')
+                customer_id = checkout_session.get('customer')
+                if user_id and str(user_id) == str(current_user.id):
+                    _activate_premium(int(user_id), plan=plan, stripe_customer_id=customer_id)
+                    logger.info(f"[checkout/success] Verified + activated premium for user {user_id}")
+        except Exception as e:
+            logger.warning(f"[checkout/success] Stripe verification failed: {e}")
+            # Don't activate — webhook will handle it
 
     return render_template_string(SUCCESS_TEMPLATE, page='success')
 

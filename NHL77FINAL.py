@@ -6521,11 +6521,11 @@ def landing_page():
             gap: 5px;
             padding: 7px;
             border-radius: 10px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: transparent;
+            border: none;
         }
         .hamburger:hover {
-            background: rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.08);
         }
         .hamburger span {
             width: 24px;
@@ -6986,34 +6986,9 @@ def landing_page():
 </div>
 <style>body{padding-bottom:66px;}</style>
 
-<!-- Weekly banner -->
-{% if weekly_banner_messages %}
-<div class="weekly-banner">
-    <div class="weekly-banner-label">Featured AI Model Results</div>
-    <div class="weekly-banner-lines">
-        <div class="weekly-banner-track">
-            {% for item in weekly_banner_messages %}
-            <div class="weekly-banner-line">
-                <span class="wb-title">{{ item.label }}</span>
-                <span class="wb-pct">{{ item.pct }}</span>
-                <span class="wb-rec">{{ item.record }}</span>
-            </div>
-            {% endfor %}
-            {% for item in weekly_banner_messages %}
-            <div class="weekly-banner-line">
-                <span class="wb-title">{{ item.label }}</span>
-                <span class="wb-pct">{{ item.pct }}</span>
-                <span class="wb-rec">{{ item.record }}</span>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <!-- Sports grid -->
 <div class="section">
-    <h2 class="section-title">Today’s Free Sports Picks</h2>
+    <h2 class="section-title">Today's Free Sports Picks</h2>
     <p class="section-sub">Get daily betting predictions and odds insights for NBA · NHL · MLB · NFL · NCAAB · NCAAF · WNBA · Soccer. Live picks updated every day.</p>
     <div class="sport-slider">
         <div class="slider-arrow" onclick="scrollSports(-1)">‹</div>
@@ -7040,6 +7015,31 @@ def landing_page():
     </div>
 </div>
 </div>
+
+<!-- Weekly banner -->
+{% if weekly_banner_messages %}
+<div class="weekly-banner" style="margin-top:30px;">
+    <div class="weekly-banner-label">Featured AI Model Results</div>
+    <div class="weekly-banner-lines">
+        <div class="weekly-banner-track">
+            {% for item in weekly_banner_messages %}
+            <div class="weekly-banner-line">
+                <span class="wb-title">{{ item.label }}</span>
+                <span class="wb-pct">{{ item.pct }}</span>
+                <span class="wb-rec">{{ item.record }}</span>
+            </div>
+            {% endfor %}
+            {% for item in weekly_banner_messages %}
+            <div class="weekly-banner-line">
+                <span class="wb-title">{{ item.label }}</span>
+                <span class="wb-pct">{{ item.pct }}</span>
+                <span class="wb-rec">{{ item.record }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- How it works -->
 <div class="how-section">
