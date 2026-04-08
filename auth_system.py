@@ -381,10 +381,12 @@ def logout():
 
 @auth_bp.route('/checkout/<plan>')
 def checkout(plan):
-    """Create Stripe Checkout session for monthly or yearly plan."""
-    if not current_user.is_authenticated:
-        return redirect(url_for('auth.login_page', next=f'/checkout/{plan}'))
-
+    """Create Stripe Checkout session.
+    
+    No login required. Stripe collects the email during checkout.
+    The webhook auto-creates the user account and activates premium.
+    If the user is already logged in, we pre-fill their email.
+    """
     if not STRIPE_SECRET_KEY:
         return "Stripe not configured. Set STRIPE_SECRET_KEY.", 500
 
@@ -396,15 +398,20 @@ def checkout(plan):
         return "Stripe price not configured.", 500
 
     try:
-        checkout_session = stripe.checkout.Session.create(
-            customer_email=current_user.email,
-            payment_method_types=['card'],
-            line_items=[{'price': price_id, 'quantity': 1}],
-            mode='subscription',
-            success_url=request.url_root.rstrip('/') + '/checkout/success?session_id={CHECKOUT_SESSION_ID}',
-            cancel_url=request.url_root.rstrip('/') + '/plans',
-            metadata={'user_id': str(current_user.id), 'plan': plan},
-        )
+        session_kwargs = {
+            'payment_method_types': ['card'],
+            'line_items': [{'price': price_id, 'quantity': 1}],
+            'mode': 'subscription',
+            'success_url': request.url_root.rstrip('/') + '/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url': request.url_root.rstrip('/') + '/plans',
+            'metadata': {'plan': plan},
+        }
+        # Pre-fill email if logged in
+        if current_user.is_authenticated:
+            session_kwargs['customer_email'] = current_user.email
+            session_kwargs['metadata']['user_id'] = str(current_user.id)
+
+        checkout_session = stripe.checkout.Session.create(**session_kwargs)
         return redirect(checkout_session.url)
     except Exception as e:
         logger.error(f"Stripe checkout error: {e}")
@@ -415,34 +422,44 @@ def checkout(plan):
 def checkout_success():
     """Handle successful Stripe checkout.
     
-    IMPORTANT: Do NOT activate premium here. Only the Stripe webhook
-    (checkout.session.completed) should activate premium after verifying
-    payment. This page just shows a "thank you" message.
+    Verifies the Stripe session, auto-creates account if needed,
+    logs the user in, and activates premium.
     """
-    if not current_user.is_authenticated:
-        return redirect('/')
-
-    # Verify the session_id came from Stripe before showing success
     session_id = request.args.get('session_id')
     if not session_id:
         return redirect('/plans')
 
-    # Verify with Stripe that this is a real completed checkout
     if STRIPE_SECRET_KEY and session_id:
         try:
             import stripe
             stripe.api_key = STRIPE_SECRET_KEY
-            checkout_session = stripe.checkout.Session.retrieve(session_id)
-            if checkout_session.payment_status == 'paid':
-                user_id = checkout_session.metadata.get('user_id')
-                plan = checkout_session.metadata.get('plan', 'monthly')
-                customer_id = checkout_session.get('customer')
-                if user_id and str(user_id) == str(current_user.id):
-                    _activate_premium(int(user_id), plan=plan, stripe_customer_id=customer_id)
-                    logger.info(f"[checkout/success] Verified + activated premium for user {user_id}")
+            cs = stripe.checkout.Session.retrieve(session_id)
+            if cs.payment_status == 'paid':
+                email = (cs.customer_details or {}).get('email') or cs.get('customer_email', '')
+                email = email.strip().lower() if email else ''
+                plan = (cs.metadata or {}).get('plan', 'monthly')
+                customer_id = cs.get('customer')
+
+                if email:
+                    # Find or create user from payment email
+                    user = _load_user_by_email(email)
+                    if not user:
+                        conn = _get_db()
+                        conn.execute(
+                            'INSERT INTO users (email, name) VALUES (?, ?)',
+                            (email, email.split('@')[0])
+                        )
+                        conn.commit()
+                        conn.close()
+                        user = _load_user_by_email(email)
+                        logger.info(f"[checkout/success] Auto-created account for {email}")
+
+                    if user:
+                        _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
+                        login_user(user, remember=True)
+                        logger.info(f"[checkout/success] Activated premium for {email}")
         except Exception as e:
             logger.warning(f"[checkout/success] Stripe verification failed: {e}")
-            # Don't activate — webhook will handle it
 
     return render_template_string(SUCCESS_TEMPLATE, page='success')
 
@@ -467,13 +484,34 @@ def stripe_webhook():
 
     if event['type'] == 'checkout.session.completed':
         session_data = event['data']['object']
-        user_id = session_data.get('metadata', {}).get('user_id')
         plan = session_data.get('metadata', {}).get('plan', 'monthly')
         customer_id = session_data.get('customer')
+        # Get email from Stripe session (works for both logged-in and guest checkouts)
+        email = (session_data.get('customer_details') or {}).get('email') or session_data.get('customer_email', '')
+        email = email.strip().lower() if email else ''
 
-        if user_id:
-            _activate_premium(int(user_id), plan=plan, stripe_customer_id=customer_id)
-            logger.info(f"[stripe] Activated premium for user {user_id} ({plan})")
+        if email:
+            user = _load_user_by_email(email)
+            if not user:
+                # Auto-create account from payment email
+                conn = _get_db()
+                conn.execute(
+                    'INSERT INTO users (email, name) VALUES (?, ?)',
+                    (email, email.split('@')[0])
+                )
+                conn.commit()
+                conn.close()
+                user = _load_user_by_email(email)
+                logger.info(f"[stripe webhook] Auto-created account for {email}")
+            if user:
+                _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
+                logger.info(f"[stripe webhook] Activated premium for {email} ({plan})")
+        else:
+            # Fallback: try user_id from metadata (legacy)
+            user_id = session_data.get('metadata', {}).get('user_id')
+            if user_id:
+                _activate_premium(int(user_id), plan=plan, stripe_customer_id=customer_id)
+                logger.info(f"[stripe webhook] Activated premium for user_id {user_id} ({plan})")
 
     elif event['type'] == 'customer.subscription.deleted':
         customer_id = event['data']['object'].get('customer')
