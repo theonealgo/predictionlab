@@ -4268,12 +4268,12 @@ BASE_TEMPLATE = """
     <link rel="canonical" href="{{ request.url }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JWHPL9X6SY"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-R4XM0WKTGG');
+      gtag('config', 'G-JWHPL9X6SY');
     </script>
     {% endif %}
     {% if sport_info is defined %}
@@ -6182,7 +6182,7 @@ SOCIAL_LINKS = [
     {'label': 'TikTok', 'url': 'https://tiktok.com/@underdog.bet', 'icon': _SOCIAL_ICONS['TikTok']},
     {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet', 'icon': _SOCIAL_ICONS['YouTube']},
 ]
-GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
+GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-JWHPL9X6SY')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
 GA_CREDENTIALS_JSON = _os.environ.get('GA_CREDENTIALS_JSON')
 GA_OAUTH_CLIENT_ID = _os.environ.get('GA_OAUTH_CLIENT_ID')
@@ -6428,7 +6428,7 @@ def landing_page():
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-R4XM0WKTGG');
+      gtag('config', 'G-JWHPL9X6SY');
     </script>
     {% endif %}
     <script type="application/ld+json">
