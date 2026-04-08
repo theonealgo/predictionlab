@@ -401,48 +401,73 @@ def _upsert_engine_odds(
 
 
 def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
-    """Compute moneyline odds from each game's ensemble probability for ROI.
-
-    Uses ens_prob (home win %) to derive American moneyline odds with vig.
-    Also falls back to engine DB if available, but model-derived odds take priority.
-    """
+    """Attach ESPN-engine odds to completed game results for ROI calculation."""
     if not daily_results:
         return
+    from odds_engine_espn import get_odds as _espn_get_odds
     for dd in daily_results.values():
         for g in dd.get('games', []):
-            ens = g.get('ens_prob')
-            ml = _compute_odds_from_prob(ens)
-            if ml:
-                g['home_moneyline'] = ml['moneyline_home']
-                g['away_moneyline'] = ml['moneyline_away']
-            g.setdefault('spread_price_home', -110)
-            g.setdefault('spread_price_away', -110)
-            g.setdefault('total_over_price', -110)
-            g.setdefault('total_under_price', -110)
-            g['odds_source'] = 'model'
+            home = g.get('home', '')
+            away = g.get('away', '')
+            odds = _espn_get_odds(sport, home, away)
+            if odds:
+                g['home_moneyline'] = odds['moneyline_home']
+                g['away_moneyline'] = odds['moneyline_away']
+                g['spread_price_home'] = odds.get('spread_price_home', -110)
+                g['spread_price_away'] = odds.get('spread_price_away', -110)
+                g['total_over_price'] = odds.get('total_over_price', -110)
+                g['total_under_price'] = odds.get('total_under_price', -110)
+                if g.get('market_spread') is None:
+                    g['market_spread'] = odds.get('spread_home')
+                if g.get('market_total') is None:
+                    g['market_total'] = odds.get('total')
+                g['odds_source'] = 'espn_engine'
+            else:
+                # Fallback to model probability
+                ens = g.get('ens_prob')
+                ml = _compute_odds_from_prob(ens)
+                if ml:
+                    g['home_moneyline'] = ml['moneyline_home']
+                    g['away_moneyline'] = ml['moneyline_away']
+                g.setdefault('spread_price_home', -110)
+                g.setdefault('spread_price_away', -110)
+                g.setdefault('total_over_price', -110)
+                g.setdefault('total_under_price', -110)
+                g['odds_source'] = 'model_fallback'
 
 def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
-    """Compute moneyline odds from the prediction's own ensemble probability.
-
-    Uses the model's ensemble_prob (home win %) to derive American odds with vig.
-    Spread/total prices use standard -110 juice.
-    """
+    """Attach ESPN-engine odds to upcoming predictions."""
     if not predictions:
         return
+    from odds_engine_espn import get_odds as _espn_get_odds
     for pred in predictions:
         if pred.get('home_score') is not None:
             continue
-        ens = pred.get('ensemble_prob')
-        ml = _compute_odds_from_prob(ens)
-        if ml:
-            pred['home_moneyline'] = ml['moneyline_home']
-            pred['away_moneyline'] = ml['moneyline_away']
-        # Standard -110/-110 for spread and total prices
-        pred.setdefault('spread_price_home', -110)
-        pred.setdefault('spread_price_away', -110)
-        pred.setdefault('total_over_price', -110)
-        pred.setdefault('total_under_price', -110)
-        pred['odds_source'] = 'model'
+        home = pred.get('home_team_id', '')
+        away = pred.get('away_team_id', '')
+        odds = _espn_get_odds(sport, home, away)
+        if odds:
+            pred['home_moneyline'] = odds['moneyline_home']
+            pred['away_moneyline'] = odds['moneyline_away']
+            pred['market_spread'] = odds.get('spread_home')
+            pred['market_total'] = odds.get('total')
+            pred['spread_price_home'] = odds.get('spread_price_home', -110)
+            pred['spread_price_away'] = odds.get('spread_price_away', -110)
+            pred['total_over_price'] = odds.get('total_over_price', -110)
+            pred['total_under_price'] = odds.get('total_under_price', -110)
+            pred['odds_source'] = 'espn_engine'
+        else:
+            # Fallback to model probability
+            ens = pred.get('ensemble_prob')
+            ml = _compute_odds_from_prob(ens)
+            if ml:
+                pred['home_moneyline'] = ml['moneyline_home']
+                pred['away_moneyline'] = ml['moneyline_away']
+            pred.setdefault('spread_price_home', -110)
+            pred.setdefault('spread_price_away', -110)
+            pred.setdefault('total_over_price', -110)
+            pred.setdefault('total_under_price', -110)
+            pred['odds_source'] = 'model_fallback'
 
 
 def _compute_model_profit(daily_results):
@@ -879,6 +904,10 @@ DATABASE = _os.path.join(_DATA_DIR, 'sports_predictions_original.db')
 # Absolute path to this file's directory — used for template loading
 _BASE_DIR = _os.path.dirname(_os.path.abspath(__file__))
 ODDS_ENGINE_URL = _os.environ.get('ODDS_ENGINE_URL')
+
+# ── Auth + Premium System ─────────────────────────────────────────────────────
+from auth_system import init_auth, is_premium_user
+init_auth(app, db_path=DATABASE)
 _TRAFFIC_TZ = 'America/New_York'
 
 def _traffic_now():
@@ -916,7 +945,7 @@ SPORTS = {
     'WNBA': {'name': 'WNBA', 'icon': '🏀', 'color': '#f97316'},
     'SOCCER': {'name': 'Soccer', 'icon': '⚽', 'color': '#22c55e'},
 }
-SOCCER_ENABLED = False
+SOCCER_ENABLED = True
 
 # Curated soccer leagues (ESPN metadata → canonical display names)
 SOCCER_LEAGUE_ORDER = [
@@ -1097,15 +1126,49 @@ def _get_soccer_model_bundle(completed_games, league_name=None):
         except Exception:
             return None
 
+    # Merge passed-in games with completed games from DB
+    # This ensures the model has enough training data even if the
+    # ESPN live feed only returns upcoming games
     filtered = []
-    for game in completed_games:
+    seen_keys = set()
+    
+    # First add passed-in completed games
+    for game in (completed_games or []):
         league_raw = _val(game, 'league')
         league = _canonical_soccer_league_name(league_raw) or league_raw
         if league_name and league != league_name:
             continue
         if _val(game, 'home_score') is None or _val(game, 'away_score') is None:
             continue
-        filtered.append(game if isinstance(game, dict) else dict(game))
+        gd = game if isinstance(game, dict) else dict(game)
+        key = (_val(game, 'game_id'), _val(game, 'home_team_id'), _val(game, 'away_team_id'))
+        seen_keys.add(key)
+        filtered.append(gd)
+
+    # Then supplement from DB if we don't have enough
+    if len(filtered) < 12:
+        try:
+            conn = get_db_connection()
+            league_filter = league_name or '%'
+            db_games = conn.execute('''
+                SELECT game_id, game_date, home_team_id, away_team_id,
+                       home_score, away_score, league
+                FROM games
+                WHERE sport = 'SOCCER'
+                  AND home_score IS NOT NULL
+                  AND league LIKE ?
+                ORDER BY game_date DESC
+                LIMIT 200
+            ''', (f'%{league_name}%' if league_name else '%',)).fetchall()
+            conn.close()
+            for row in db_games:
+                key = (row['game_id'], row['home_team_id'], row['away_team_id'])
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                filtered.append(dict(row))
+        except Exception as _e:
+            logger.debug(f"[soccer] DB supplement failed: {_e}")
 
     bundle = build_soccer_model_bundle(filtered, league_name=league_name)
     _SOCCER_MODEL_CACHE[cache_key] = {'ts': now_ts, 'bundle': bundle}
@@ -1122,11 +1185,11 @@ MODEL_DISPLAY_NAMES = {
     'ensemble':  'Sharp Consensus',
 }
 SOCCER_MODEL_LABELS = {
-    'glicko2': 'Poisson xG',
-    'trueskill': 'Markov Chain',
-    'elo': 'Soccer Elo',
-    'xgboost': 'Poisson Reg',
-    'ensemble': 'Soccer Ensemble',
+    'glicko2': 'Grinder2',
+    'trueskill': 'Takedown',
+    'elo': 'Edge',
+    'xgboost': 'XSharp',
+    'ensemble': 'Sharp Consensus',
 }
 
 import nfl_data_py as nfl
@@ -2106,60 +2169,61 @@ def get_upcoming_predictions(sport, days=365):
             all_games_with_dates = []
     
     elif sport == 'SOCCER':
+        # Loop -1 to +7 days so the predictions page shows multiple upcoming dates.
+        # Each league needs its own request; results are cached for 15 min so
+        # subsequent page loads within the TTL window are instant.
         api_games = []
-        for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
-            if not league_code:
-                continue
-            url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard"
-            try:
-                data = _cached_get(url)
-            except Exception as e:
-                logger.debug(f"Error fetching SOCCER league {league_code}: {e}")
-                continue
-            league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
-            league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
-            events = data.get('events', []) if isinstance(data, dict) else []
-
-            for event in events:
-                competition = event.get('competitions', [{}])[0]
-                competitors = competition.get('competitors', [])
-
-                if len(competitors) != 2:
+        for days_offset in range(-1, 8):
+            _check_date = datetime.now() + timedelta(days=days_offset)
+            _date_str   = _check_date.strftime('%Y%m%d')
+            for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
+                if not league_code:
                     continue
-
-                home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
-                away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
-
-                if not home or not away:
+                url = (
+                    f"https://site.api.espn.com/apis/site/v2/sports/soccer/"
+                    f"{league_code}/scoreboard?dates={_date_str}"
+                )
+                try:
+                    data = _cached_get(url)
+                except Exception as e:
+                    logger.debug(f"Error fetching SOCCER {league_code} for {_date_str}: {e}")
                     continue
+                league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
+                league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
+                events = data.get('events', []) if isinstance(data, dict) else []
 
-                home_team = home.get('team', {}).get('displayName', '')
-                away_team = away.get('team', {}).get('displayName', '')
-                event_id = event.get('id', '')
-
-                status_info = event.get('status', {}).get('type', {})
-                status_name = status_info.get('name', '')
-
-                home_score = None
-                away_score = None
-                if status_name.startswith('STATUS_FINAL'):
-                    try:
-                        home_score = int(home.get('score', 0))
-                        away_score = int(away.get('score', 0))
-                    except Exception:
-                        pass
-
-                event_dt = event.get('date', '')
-                game_date = _espn_event_date_to_local(event_dt) or datetime.now().strftime('%Y-%m-%d')
-                api_games.append({
-                    'game_id': f"{sport}_{league_code}_{event_id}",
-                    'home_team_id': home_team,
-                    'away_team_id': away_team,
-                    'game_date': game_date,
-                    'home_score': home_score,
-                    'away_score': away_score,
-                    'league': league_name,
-                })
+                for event in events:
+                    competition = event.get('competitions', [{}])[0]
+                    competitors = competition.get('competitors', [])
+                    if len(competitors) != 2:
+                        continue
+                    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+                    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+                    if not home or not away:
+                        continue
+                    home_team = home.get('team', {}).get('displayName', '')
+                    away_team = away.get('team', {}).get('displayName', '')
+                    event_id  = event.get('id', '')
+                    status_info  = event.get('status', {}).get('type', {})
+                    status_name  = status_info.get('name', '')
+                    home_score = away_score = None
+                    if status_name.startswith('STATUS_FINAL'):
+                        try:
+                            home_score = int(home.get('score', 0))
+                            away_score = int(away.get('score', 0))
+                        except Exception:
+                            pass
+                    event_dt  = event.get('date', '')
+                    game_date = _espn_event_date_to_local(event_dt) or _check_date.strftime('%Y-%m-%d')
+                    api_games.append({
+                        'game_id':      f"{sport}_{league_code}_{event_id}",
+                        'home_team_id': home_team,
+                        'away_team_id': away_team,
+                        'game_date':    game_date,
+                        'home_score':   home_score,
+                        'away_score':   away_score,
+                        'league':       league_name,
+                    })
 
         # Enrich with stored predictions from database
         conn = get_db_connection()
@@ -2169,8 +2233,8 @@ def get_upcoming_predictions(sport, days=365):
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             if pred:
-                game['stored_elo_prob'] = pred['elo_home_prob']
-                game['stored_xgb_prob'] = pred['xgboost_home_prob']
+                game['stored_elo_prob']      = pred['elo_home_prob']
+                game['stored_xgb_prob']      = pred['xgboost_home_prob']
                 game['stored_ensemble_prob'] = pred['win_probability']
         conn.close()
 
@@ -2178,7 +2242,7 @@ def get_upcoming_predictions(sport, days=365):
         all_games_with_dates = [(parse_date(g['game_date']), g) for g in api_games if parse_date(g['game_date'])]
         all_games_with_dates.sort(key=lambda x: x[0])
 
-        # Remove duplicates (same matchup on same date)
+        # Remove duplicates (same matchup on same date across league requests)
         seen = set()
         unique_games = []
         for date, game in all_games_with_dates:
@@ -2187,6 +2251,42 @@ def get_upcoming_predictions(sport, days=365):
                 seen.add(key)
                 unique_games.append((date, game))
         all_games_with_dates = unique_games
+
+        # Persist completed soccer games to DB so the results page and
+        # weekly tally have data even between score-updater runs.
+        try:
+            _conn_soc = get_db_connection()
+            _cur_soc  = _conn_soc.cursor()
+            _soc_n    = 0
+            for _sd, _sg in all_games_with_dates:
+                if _sg.get('home_score') is not None:
+                    _ex = _cur_soc.execute(
+                        'SELECT 1 FROM games WHERE game_id=? AND sport=?',
+                        (_sg['game_id'], sport)
+                    ).fetchone()
+                    if not _ex:
+                        try:
+                            _cur_soc.execute('''
+                                INSERT INTO games
+                                (sport, league, game_id, season, game_date,
+                                 home_team_id, away_team_id, home_score, away_score, status)
+                                VALUES (?,?,?,?,?,?,?,?,?,\'final\')
+                            ''', (
+                                sport,
+                                _sg.get('league') or sport,
+                                _sg['game_id'], 2025, _sg['game_date'],
+                                _sg['home_team_id'], _sg['away_team_id'],
+                                _sg['home_score'], _sg['away_score'],
+                            ))
+                            _soc_n += 1
+                        except Exception:
+                            pass
+            if _soc_n > 0:
+                _conn_soc.commit()
+                logger.info(f"[SOCCER] stored {_soc_n} completed games in DB")
+            _conn_soc.close()
+        except Exception as _soc_err:
+            logger.debug(f"[SOCCER] game storage failed: {_soc_err}")
 
     elif sport in ['NBA', 'NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA']:
         # Load from ESPN API and database
@@ -2839,6 +2939,24 @@ def get_upcoming_predictions(sport, days=365):
                 except Exception as _e:
                     logger.debug(f"XGBSpread error: {_e}")
 
+                # ── MLB: override xgb_* with specialized runs model (park factors + Vegas cal) ─
+                if sport == 'MLB':
+                    try:
+                        from mlb_runs_model import get_or_train_mlb_model as _get_mlb_model
+                        _mlbm = _get_mlb_model(DATABASE)
+                        if _mlbm:
+                            _mlb_result = _mlbm.predict(
+                                game_dict.get('home_team_id', ''),
+                                game_dict.get('away_team_id', ''),
+                            )
+                            if _mlb_result and _mlb_result[0] is not None:
+                                game_dict['xgb_home_score'] = _mlb_result[0]
+                                game_dict['xgb_away_score'] = _mlb_result[1]
+                                game_dict['xgb_spread']     = _mlb_result[2]
+                                game_dict['xgb_total']      = _mlb_result[3]
+                    except Exception as _mlbe:
+                        logger.debug(f"MLBRunsModel error: {_mlbe}")
+
                 # ── NHL: convert XSharp spread → puck-line cover probabilities ──────────
                 # Internal xgb_spread value is preserved unchanged as a model feature;
                 # puck_line_* fields are the betting-facing output shown in the UI.
@@ -2862,6 +2980,22 @@ def get_upcoming_predictions(sport, days=365):
             predictions.append(game_dict)
     
     _attach_engine_odds_to_predictions(sport, predictions, limit=40)
+
+    # Soccer: when the odds engine has no spread line, fall back to the model's
+    # naive spread/total so the predictions page shows our own line instead of
+    # "no sportsbook spread line found".
+    if sport == 'SOCCER':
+        for _sp_pred in predictions:
+            if _sp_pred.get('home_score') is not None:
+                continue  # completed game — skip
+            if _sp_pred.get('market_spread') is None:
+                _fb_spread = _sp_pred.get('naive_spread') or _sp_pred.get('xgb_spread')
+                if _fb_spread is not None:
+                    _sp_pred['market_spread'] = round(float(_fb_spread), 2)
+            if _sp_pred.get('market_total') is None:
+                _fb_total = _sp_pred.get('naive_total') or _sp_pred.get('xgb_total')
+                if _fb_total is not None:
+                    _sp_pred['market_total'] = round(float(_fb_total), 2)
 
     # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
@@ -3801,8 +3935,38 @@ def compute_overall_stats_from_daily(daily_results):
     return overall
 
 
+def _tally_spread_total(games):
+    """Compute spread and O/U records from a list of games."""
+    spread = {'correct': 0, 'total': 0, 'pushes': 0}
+    total = {'correct': 0, 'total': 0, 'pushes': 0}
+    for g in games:
+        if g.get('skip_grading'):
+            continue
+        # Spread
+        sp = g.get('spread_correct')
+        sp_pick = g.get('spread_pick')
+        if sp_pick == 'PUSH':
+            spread['pushes'] += 1
+        elif sp is not None:
+            spread['total'] += 1
+            if sp:
+                spread['correct'] += 1
+        # Total (O/U)
+        tp = g.get('total_correct')
+        tp_pick = g.get('total_pick')
+        if tp_pick == 'PUSH':
+            total['pushes'] += 1
+        elif tp is not None:
+            total['total'] += 1
+            if tp:
+                total['correct'] += 1
+    for d in [spread, total]:
+        d['accuracy'] = round(d['correct'] / d['total'] * 100, 1) if d['total'] > 0 else 0.0
+    return spread, total
+
+
 def compute_daily_model_tally(daily_results, target_date):
-    """Compute per-model correct/total for a single date."""
+    """Compute per-model correct/total + spread/total for a single date."""
     if not daily_results or not target_date:
         return None
     day_bucket = daily_results.get(target_date)
@@ -3830,6 +3994,10 @@ def compute_daily_model_tally(daily_results, target_date):
         c = tally[model_name]['correct']
         tally[model_name]['accuracy'] = round(c / t * 100, 1) if t > 0 else 0.0
     tally['games'] = len(day_bucket.get('games', []))
+    # Add spread + O/U tally
+    sp, ou = _tally_spread_total(day_bucket.get('games', []))
+    tally['spread'] = sp
+    tally['total_ou'] = ou
     return tally
 
 
@@ -3868,11 +4036,14 @@ def compute_model_tally_for_range(daily_results, start_date=None, end_date=None)
     ]
     tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
     total_games = 0
+    all_games = []
     for date_key, day_data in daily_results.items():
         if not _date_in_range(date_key, start_date, end_date):
             continue
-        total_games += len(day_data.get('games', []))
-        for game in day_data.get('games', []):
+        games = day_data.get('games', [])
+        total_games += len(games)
+        all_games.extend(games)
+        for game in games:
             if game.get('skip_grading'):
                 continue
             for model_name, correct_key, prob_key in model_configs:
@@ -3886,6 +4057,10 @@ def compute_model_tally_for_range(daily_results, start_date=None, end_date=None)
         c = tally[model_name]['correct']
         tally[model_name]['accuracy'] = round(c / t * 100, 1) if t > 0 else 0.0
     tally['games'] = total_games
+    # Add spread + O/U tally
+    sp, ou = _tally_spread_total(all_games)
+    tally['spread'] = sp
+    tally['total_ou'] = ou
     return tally
 
 
@@ -4319,7 +4494,7 @@ BASE_TEMPLATE = """
                 border-right: none;
                 border-bottom: 2px solid #334155;
             }
-            .nav-links a {
+            .nav-links a, .nav-links .nav-group-title {
                 padding: 12px;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
@@ -4327,6 +4502,14 @@ BASE_TEMPLATE = """
                 padding: 20px 15px;
             }
         }
+        /* Nav dropdown groups */
+        .nav-group { position: relative; }
+        .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(255,255,255,0.08); }
+        .nav-group-items { display: none; padding-left: 12px; }
+        .nav-group:hover .nav-group-items, .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
+        .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
         {% block extra_styles %}{% endblock %}
     </style>
 </head>
@@ -4343,18 +4526,53 @@ BASE_TEMPLATE = """
             </div>
             <div class="nav-links" id="navLinks">
                 <a href="/" class="{{ 'active' if page == 'home' else '' }}">Home</a>
-                <a href="/sport/NHL/predictions" class="{{ 'active' if page == 'NHL' else '' }}">🏒 NHL</a>
-                <a href="/sport/NBA/predictions" class="{{ 'active' if page == 'NBA' else '' }}">🏀 NBA</a>
-                <a href="/sport/MLB/predictions" class="{{ 'active' if page == 'MLB' else '' }}">⚾ MLB</a>
-                <a href="/sport/NFL/predictions" class="{{ 'active' if page == 'NFL' else '' }}">🏈 NFL</a>
-                <a href="/sport/NCAAB/predictions" class="{{ 'active' if page == 'NCAAB' else '' }}">🎓 NCAAB</a>
-                <a href="/sport/NCAAW/predictions" class="{{ 'active' if page == 'NCAAW' else '' }}">🏀 NCAAW</a>
-                <a href="/sport/NCAAF/predictions" class="{{ 'active' if page == 'NCAAF' else '' }}">🏟️ NCAAF</a>
-                <a href="/sport/WNBA/predictions" class="{{ 'active' if page == 'WNBA' else '' }}">🏀 WNBA</a>
-                {% if soccer_enabled %}
-                <a href="/sport/SOCCER/predictions" class="{{ 'active' if page == 'SOCCER' else '' }}">⚽ Soccer</a>
-                {% endif %}
+                <div class="nav-group" onclick="this.classList.toggle('open')">
+                    <span class="nav-group-title">🏆 Join</span>
+                    <div class="nav-group-items">
+                        <a href="/plans" style="color:#fbbf24;">🏆 Premium</a>
+                        {% if is_logged_in %}
+                        <a href="/logout">Logout</a>
+                        {% else %}
+                        <a href="/login" style="color:#10b981;">Login</a>
+                        <a href="/signup">Sign Up</a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="nav-group" onclick="this.classList.toggle('open')">
+                    <span class="nav-group-title">🏀 Sports</span>
+                    <div class="nav-group-items">
+                        <a href="/sport/NHL/predictions">🏒 NHL</a>
+                        <a href="/sport/NBA/predictions">🏀 NBA</a>
+                        <a href="/sport/MLB/predictions">⚾ MLB</a>
+                        <a href="/sport/NFL/predictions">🏈 NFL</a>
+                        <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
+                        <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
+                        <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
+                        <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+                        {% if soccer_enabled %}
+                        <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
+                        {% endif %}
+                    </div>
+                </div>
                 <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
+                <div class="nav-group" onclick="this.classList.toggle('open')">
+                    <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
+                    <div class="nav-group-items">
+                        <a href="/tutorial">Tutorial</a>
+                        <a href="/privacy">Privacy</a>
+                        <a href="/terms">Terms</a>
+                    </div>
+                </div>
+                <div class="nav-group" onclick="this.classList.toggle('open')">
+                    <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
+                    <div class="nav-group-items">
+                        <a href="https://x.com/underdogs_bet" target="_blank">X</a>
+                        <a href="https://instagram.com/underdogs.bet" target="_blank">Instagram</a>
+                        <a href="https://facebook.com/underdogs.bet" target="_blank">Facebook</a>
+                        <a href="https://tiktok.com/@underdog.bet" target="_blank">TikTok</a>
+                        <a href="https://youtube.com/@Underdogsbet" target="_blank">YouTube</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -4398,7 +4616,7 @@ BASE_TEMPLATE = """
                     <li><a class="footer-link" href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X</a></li>
                     <li><a class="footer-link" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a></li>
                     <li><a class="footer-link" href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a></li>
-                    <li><a class="footer-link" href="https://tiktok.com/@underdogs.bet" target="_blank" rel="noopener">TikTok</a></li>
+                    <li><a class="footer-link" href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a></li>
                 <li><a class="footer-link" href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a></li>
                 </ul>
             </nav>
@@ -5193,21 +5411,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
     </div>
-        {% if sport == 'SOCCER' %}
-        {% set model_cards = [('⚽ Poisson xG','glicko2'),('🧠 Markov Chain','trueskill'),('📊 Soccer Elo','elo'),('🧮 Poisson Reg','xgboost'),('🏆 Soccer Ensemble','ensemble')] %}
-        {% set label_glicko2 = 'Poisson xG' %}
-        {% set label_trueskill = 'Markov Chain' %}
-        {% set label_elo = 'Soccer Elo' %}
-        {% set label_xgb = 'Poisson Reg' %}
-        {% set label_ensemble = 'Soccer Ensemble' %}
-        {% else %}
         {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
         {% set label_ensemble = 'Consensus' %}
-        {% endif %}
         {% if daily_results and overall_stats %}
         {% if soccer_leagues %}
         <div class="league-slider">
@@ -5224,6 +5433,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% if daily_tally %}
         <div class="daily-tally">
             <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+            <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in model_cards %}
                 {% set m = daily_tally[m_key] %}
@@ -5239,6 +5449,30 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 </div>
                 {% endfor %}
             </div>
+            {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+                <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
+                    <div class="daily-model">📈 Spread</div>
+                    {% if daily_tally.spread.total > 0 %}
+                    <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy >= 52 %}#10b981{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ daily_tally.spread.accuracy }}%</div>
+                    <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
+                    {% else %}
+                    <div class="daily-acc" style="color:#94a3b8;">—</div>
+                    <div class="daily-rec">no spread data</div>
+                    {% endif %}
+                </div>
+                <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
+                    <div class="daily-model">🎲 Over/Under</div>
+                    {% if daily_tally.total_ou.total > 0 %}
+                    <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy >= 52 %}#10b981{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ daily_tally.total_ou.accuracy }}%</div>
+                    <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
+                    {% else %}
+                    <div class="daily-acc" style="color:#94a3b8;">—</div>
+                    <div class="daily-rec">no O/U data</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
         </div>
         {% else %}
         <div class="daily-tally" style="text-align:center;">
@@ -5250,6 +5484,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% if weekly_tally %}
         <div class="daily-tally">
             <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+            <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in model_cards %}
                 {% set m = weekly_tally[m_key] %}
@@ -5265,6 +5500,30 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 </div>
                 {% endfor %}
             </div>
+            {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+                <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
+                    <div class="daily-model">📈 Spread</div>
+                    {% if weekly_tally.spread.total > 0 %}
+                    <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy >= 52 %}#10b981{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ weekly_tally.spread.accuracy }}%</div>
+                    <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
+                    {% else %}
+                    <div class="daily-acc" style="color:#94a3b8;">—</div>
+                    <div class="daily-rec">no spread data</div>
+                    {% endif %}
+                </div>
+                <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
+                    <div class="daily-model">🎲 Over/Under</div>
+                    {% if weekly_tally.total_ou.total > 0 %}
+                    <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy >= 52 %}#10b981{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ weekly_tally.total_ou.accuracy }}%</div>
+                    <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
+                    {% else %}
+                    <div class="daily-acc" style="color:#94a3b8;">—</div>
+                    <div class="daily-rec">no O/U data</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
         </div>
         {% else %}
         <div class="daily-tally" style="text-align:center;">
@@ -5281,8 +5540,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 {% set c = roi_cards[mkt] %}
                 <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:14px;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.8;margin-bottom:8px;font-weight:700;">{{ mkt_label }}</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;font-size:0.78em;">
-                        <div><div style="opacity:0.6;">Daily</div><div style="font-weight:700;color:{% if c.daily.roi != '—' and '-' not in c.daily.roi %}#10b981{% elif c.daily.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.daily.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.daily.detail }}</div></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;">
                         <div><div style="opacity:0.6;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi != '—' and '-' not in c.weekly.roi %}#10b981{% elif c.weekly.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
                         <div><div style="opacity:0.6;">Season</div><div style="font-weight:700;color:{% if c.total.roi != '—' and '-' not in c.total.roi %}#10b981{% elif c.total.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.total.detail }}</div></div>
                     </div>
@@ -5423,7 +5681,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             </span>
                         </div>
                         <div class="sf-item">
-                            <span class="sf-label">Market Spread</span>
+                            <span class="sf-label">Our Spread</span>
                             <span class="sf-val">
                                 {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
                                 {% elif game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
@@ -5447,7 +5705,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             </span>
                         </div>
                         <div class="sf-item">
-                            <span class="sf-label">Market Total</span>
+                            <span class="sf-label">Our Total</span>
                             <span class="sf-val">
                                 {% if game.market_total is not none %}{{ "%.1f"|format(game.market_total) }}
                                 {% elif game.market_total_reason is defined and game.market_total_reason %}{{ game.market_total_reason }}
@@ -5921,7 +6179,7 @@ SOCIAL_LINKS = [
     {'label': 'X', 'url': 'https://x.com/underdogs_bet', 'icon': _SOCIAL_ICONS['X']},
     {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Instagram']},
     {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Facebook']},
-    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdogs.bet', 'icon': _SOCIAL_ICONS['TikTok']},
+    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdog.bet', 'icon': _SOCIAL_ICONS['TikTok']},
     {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet', 'icon': _SOCIAL_ICONS['YouTube']},
 ]
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
@@ -6114,7 +6372,7 @@ def landing_page():
         "https://x.com/underdogs_bet",
         "https://instagram.com/underdogs.bet",
         "https://facebook.com/underdogs.bet",
-        "https://tiktok.com/@underdogs.bet",
+        "https://tiktok.com/@underdog.bet",
         "https://youtube.com/@Underdogsbet"
       ]
     }
@@ -6579,11 +6837,18 @@ def landing_page():
                 border-right: none;
                 border-bottom: 2px solid #334155;
             }
-            .nav-links a {
+            .nav-links a, .nav-links .nav-group-title {
                 padding: 12px;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
         }
+        .nav-group { position: relative; }
+        .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(255,255,255,0.08); }
+        .nav-group-items { display: none; padding-left: 12px; }
+        .nav-group:hover .nav-group-items, .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
+        .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
     </style>
 </head>
 <body>
@@ -6601,18 +6866,53 @@ def landing_page():
         </div>
         <div class="nav-links" id="navLinks">
             <a href="/" class="active">Home</a>
-            <a href="/sport/NHL/predictions">🏒 NHL</a>
-            <a href="/sport/NBA/predictions">🏀 NBA</a>
-            <a href="/sport/MLB/predictions">⚾ MLB</a>
-            <a href="/sport/NFL/predictions">🏈 NFL</a>
-            <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
-            <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
-            <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
-            <a href="/sport/WNBA/predictions">🏀 WNBA</a>
-            {% if soccer_enabled %}
-            <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
-            {% endif %}
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title">🏆 Join</span>
+                <div class="nav-group-items">
+                    <a href="/plans" style="color:#fbbf24;">🏆 Premium</a>
+                    {% if is_logged_in %}
+                    <a href="/logout">Logout</a>
+                    {% else %}
+                    <a href="/login" style="color:#10b981;">Login</a>
+                    <a href="/signup">Sign Up</a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title">🏀 Sports</span>
+                <div class="nav-group-items">
+                    <a href="/sport/NHL/predictions">🏒 NHL</a>
+                    <a href="/sport/NBA/predictions">🏀 NBA</a>
+                    <a href="/sport/MLB/predictions">⚾ MLB</a>
+                    <a href="/sport/NFL/predictions">🏈 NFL</a>
+                    <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
+                    <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
+                    <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
+                    <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+                    {% if soccer_enabled %}
+                    <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
+                    {% endif %}
+                </div>
+            </div>
             <a href="{{ stripe_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
+                <div class="nav-group-items">
+                    <a href="/tutorial">Tutorial</a>
+                    <a href="/privacy">Privacy</a>
+                    <a href="/terms">Terms</a>
+                </div>
+            </div>
+            <div class="nav-group" onclick="this.classList.toggle('open')">
+                <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
+                <div class="nav-group-items">
+                    <a href="https://x.com/underdogs_bet" target="_blank">X</a>
+                    <a href="https://instagram.com/underdogs.bet" target="_blank">Instagram</a>
+                    <a href="https://facebook.com/underdogs.bet" target="_blank">Facebook</a>
+                    <a href="https://tiktok.com/@underdog.bet" target="_blank">TikTok</a>
+                    <a href="https://youtube.com/@Underdogsbet" target="_blank">YouTube</a>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -6622,19 +6922,18 @@ def landing_page():
     <h1>Free AI Sports Picks &amp; Betting Predictions</h1>
     <h2 class="hero-subhead">Master the odds with our 5-model consensus system. We deliver high-value betting edges across 9 major leagues:</h2>
     <div class="hero-ctas">
-        <a href="/sport/NHL/predictions" class="btn-primary">👉 View Today’s Picks</a>
-        <a href="/sport/NHL/results" class="btn-donate-hero">👉 See Model Performance</a>
+        <a href="/sport/NHL/predictions" class="btn-primary">👉 View Today's Picks</a>
+        <a href="/plans" class="btn-donate-hero">🏆 Unlock Spreads &amp; Totals</a>
     </div>
-    <div class="hero-badge">🆓 100% Free Sports Picks &nbsp;·&nbsp; No Paywalls</div>
+    <div class="hero-badge">🆓 100% Free Moneyline Picks &nbsp;·&nbsp; Spreads &amp; Totals for Premium</div>
 
     <!-- Free banner -->
     <div class="free-banner" style="margin-top:48px;">
         <div>
-            <div class="free-title">100% Free Sports Picks — No Paywalls, Ever</div>
+            <div class="free-title">100% Free Moneyline Picks — Upgrade for Full Card</div>
             <div class="free-icon">🆓</div>
             <div class="free-body">
-                underdogs.bet is completely free. We’re built for bettors who want data-driven predictions, not hype.
-                If you find value in our AI picks, you can support the platform—but everything stays free.
+                Moneyline picks and model win percentages are always free. Upgrade to Premium for Spreads, Totals, and XSharp Score Predictions.
             </div>
         </div>
     </div>
@@ -6789,7 +7088,7 @@ def landing_page():
                 <li><a class="footer-link" href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X</a></li>
                 <li><a class="footer-link" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a></li>
                 <li><a class="footer-link" href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a></li>
-                <li><a class="footer-link" href="https://tiktok.com/@underdogs.bet" target="_blank" rel="noopener">TikTok</a></li>
+                <li><a class="footer-link" href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a></li>
                 <li><a class="footer-link" href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a></li>
             </ul>
         </nav>

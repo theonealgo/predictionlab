@@ -26,43 +26,81 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: #0f172a;
+            background: rgba(255,255,255,0.08);
             color: #fff;
             text-decoration: none;
             padding: 10px 16px;
             border-radius: 10px;
             font-weight: 700;
+            transition: background 0.2s;
         }
+        .btn:hover { background: rgba(255,255,255,0.15); }
         h1 {
-            font-size: clamp(2rem, 4vw, 2.6rem);
-            margin-bottom: 8px;
+            font-size: clamp(1.6rem, 4vw, 2.2rem);
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
         }
         .sub {
-            color: #cbd5e1;
-            margin-bottom: 28px;
+            color: #94a3b8;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
         }
         .card {
             background: #fff;
             border: 1px solid #e2e8f0;
             border-radius: 16px;
-            padding: 28px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-            color: #0f172a;
+            padding: 36px 32px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+            color: #1e293b;
         }
         h2 {
-            font-size: 1.25rem;
-            margin: 20px 0 8px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 28px 0 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
         }
-        ul { padding-left: 20px; margin-top: 8px; }
-        li { margin-bottom: 6px; }
-        .note {
-            background: #f1f5f9;
+        h2:first-of-type { margin-top: 0; }
+        h3 {
+            font-size: 0.96rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 16px 0 6px;
+        }
+        p {
+            font-size: 0.94rem;
+            color: #334155;
+            margin-bottom: 10px;
+            line-height: 1.75;
+        }
+        ul {
+            margin: 8px 0 12px 20px;
+            color: #334155;
+            font-size: 0.94rem;
+            line-height: 1.8;
+        }
+        .callout {
+            background: #f8fafc;
             border-left: 4px solid #0f172a;
-            padding: 12px 16px;
-            border-radius: 10px;
-            margin-top: 16px;
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin: 14px 0;
             font-weight: 600;
+            font-size: 0.93rem;
+            color: #0f172a;
         }
+        .contact-block {
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-top: 12px;
+            font-size: 0.94rem;
+            color: #1e293b;
+        }
+        .contact-block a { color: #2563eb; text-decoration: none; }
+        .contact-block a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -70,22 +108,128 @@
         <div class="top-bar">
             <a class="btn" href="/">← Home</a>
         </div>
-        <h1>Privacy Policy</h1>
-        <p class="sub">Underdogs.bet is built for fast, free access to sports predictions. We keep data collection minimal.</p>
+        <h1>Privacy Policy &mdash; Underdogs.bet</h1>
+        <p class="sub">Last Updated: April 7, 2026</p>
+
         <div class="card">
-            <h2>1. Data Collection</h2>
-            <p>Underdogs.bet does not require registration, accounts, or newsletters. We do not collect personal data, emails, or user identifiers, and we do not create user accounts.</p>
 
-            <h2>2. Automated Information</h2>
-            <p>Like most websites, we may collect non-identifying information such as IP address, browser type, device type, and time spent on pages to help improve performance and reliability.</p>
+            <h2>1. Introduction</h2>
+            <p>This Privacy Policy explains how Underdogs.bet (&ldquo;we,&rdquo; &ldquo;us,&rdquo; &ldquo;our&rdquo;) collects, uses, stores, and protects your personal information when you access our website, platform, or related services (&ldquo;Services&rdquo;).</p>
+            <p>By using our Services, you agree to the practices described in this Privacy Policy. If you do not agree, please discontinue use immediately.</p>
 
-            <h2>3. Cookies</h2>
-            <p>We may use cookies to remember preferences (such as theme choices) or for basic analytics. You can disable cookies in your browser settings at any time.</p>
+            <h2>2. Information We Collect</h2>
 
-            <h2>4. Third-Party Links</h2>
-            <p>Our site may link to external websites. We are not responsible for the privacy practices or content of those third-party sites.</p>
+            <h3>Information You Provide to Us</h3>
+            <p>We collect personal information you voluntarily submit, including:</p>
+            <ul>
+                <li>Account registration details (name, email, password)</li>
+                <li>Payment information (processed securely through third&#8209;party providers)</li>
+                <li>Communications you send to us</li>
+                <li>Information submitted during promotions, surveys, or support requests</li>
+            </ul>
+            <p>All information you provide must be accurate and kept up to date.</p>
 
-            <div class="note">No personal data, no emails, and no user accounts are collected or stored.</div>
+            <h3>Information Collected Automatically</h3>
+            <p>When you use our Services, we automatically collect technical data such as:</p>
+            <ul>
+                <li>IP address</li>
+                <li>Browser type and device information</li>
+                <li>Operating system</li>
+                <li>Usage patterns and activity logs</li>
+                <li>Location data (approximate)</li>
+                <li>Cookies and tracking technologies</li>
+            </ul>
+            <p>This information helps us maintain security, improve performance, and analyze usage trends.</p>
+
+            <h3>Sensitive Information</h3>
+            <p>We do not intentionally collect or process sensitive personal information.</p>
+
+            <h3>Information From Third Parties</h3>
+            <p>We may receive information from analytics providers, advertising partners, social media platforms (if you choose to connect an account), and public databases.</p>
+
+            <h2>3. How We Use Your Information</h2>
+            <p>We process your information to:</p>
+            <ul>
+                <li>Provide and maintain our Services</li>
+                <li>Personalize your experience</li>
+                <li>Process payments and manage subscriptions</li>
+                <li>Improve platform performance and analytics</li>
+                <li>Communicate with you (support, updates, promotions)</li>
+                <li>Detect and prevent fraud or security threats</li>
+                <li>Comply with legal obligations</li>
+            </ul>
+            <p>We only process personal information when we have a lawful basis to do so.</p>
+
+            <h2>4. Sharing Your Information</h2>
+
+            <h3>Service Providers</h3>
+            <p>Trusted third parties that help us operate the platform (payment processors, hosting providers, analytics tools).</p>
+
+            <h3>Business Partners</h3>
+            <p>Only when necessary to offer features, promotions, or integrations you choose to use.</p>
+
+            <h3>Corporate Transactions</h3>
+            <p>If Underdogs.bet is involved in a merger, acquisition, or asset transfer, your information may be included as part of the transaction.</p>
+
+            <h3>Legal Requirements</h3>
+            <p>We may disclose information if required by law, regulation, or court order.</p>
+
+            <div class="callout">We do not sell personal information.</div>
+
+            <h2>5. Cookies &amp; Tracking Technologies</h2>
+            <p>We use cookies, pixels, and similar technologies to:</p>
+            <ul>
+                <li>Maintain platform functionality</li>
+                <li>Save user preferences</li>
+                <li>Improve performance</li>
+                <li>Analyze traffic</li>
+                <li>Deliver personalized advertising</li>
+            </ul>
+            <p>You may adjust cookie settings in your browser, but disabling certain cookies may affect functionality.</p>
+
+            <h2>6. Social Media Logins</h2>
+            <p>If you choose to log in using a social media account, we may receive profile information such as your name, email, profile photo, and public social data.</p>
+            <p>We only use this information for account creation and authentication. Your social media provider controls what information they share &mdash; review their privacy settings for more details.</p>
+
+            <h2>7. International Data Transfers</h2>
+            <p>Your information may be stored or processed in countries outside your region. We take reasonable steps to ensure your data is protected in accordance with applicable laws.</p>
+
+            <h2>8. Data Retention</h2>
+            <p>We retain personal information only as long as necessary to provide Services, meet legal obligations, resolve disputes, and enforce agreements. When data is no longer needed, we securely delete or anonymize it.</p>
+
+            <h2>9. Children&rsquo;s Privacy</h2>
+            <p>Underdogs.bet does not knowingly collect information from individuals under <strong>21 years of age</strong>.</p>
+            <p>If we discover data belonging to a minor, we will delete it promptly. If you believe a minor has used our Services, contact us at <a href="mailto:underdogsbetemail@gmail.com" style="color:#2563eb;">underdogsbetemail@gmail.com</a>.</p>
+
+            <h2>10. Your Privacy Rights</h2>
+            <p>Depending on your location, you may have rights such as:</p>
+            <ul>
+                <li>Accessing your personal information</li>
+                <li>Requesting corrections</li>
+                <li>Requesting deletion</li>
+                <li>Withdrawing consent</li>
+                <li>Requesting a copy of your data</li>
+            </ul>
+            <p>To exercise these rights, contact us at <a href="mailto:underdogsbetemail@gmail.com" style="color:#2563eb;">underdogsbetemail@gmail.com</a>. We will respond in accordance with applicable privacy laws.</p>
+
+            <h2>11. Do&#8209;Not&#8209;Track Signals</h2>
+            <p>Our Services do not currently respond to Do&#8209;Not&#8209;Track (DNT) signals due to the lack of a universal standard.</p>
+
+            <h2>12. Changes to This Policy</h2>
+            <p>We may update this Privacy Policy periodically. The &ldquo;Last Updated&rdquo; date reflects the most recent revision. Significant changes may be communicated through email or platform notifications.</p>
+
+            <h2>13. Contact Us</h2>
+            <p>For questions or concerns about this Privacy Policy, contact us at:</p>
+            <div class="contact-block">
+                &#128231; <a href="mailto:underdogsbetemail@gmail.com">underdogsbetemail@gmail.com</a>
+            </div>
+
+            <h2>14. Requesting Data Access or Deletion</h2>
+            <p>To request access, updates, or deletion of your personal information, email:</p>
+            <div class="contact-block">
+                &#128231; <a href="mailto:underdogsbetemail@gmail.com">underdogsbetemail@gmail.com</a>
+            </div>
+
         </div>
     </div>
 </body>
