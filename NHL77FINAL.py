@@ -4325,7 +4325,7 @@ BASE_TEMPLATE = """
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <meta name="twitter:image" content="{{ _meta_image }}">
-    <link rel="canonical" href="{{ request.url }}">
+    <link rel="canonical" href="https://underdogs.bet{{ request.path }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JWHPL9X6SY"></script>
@@ -6410,7 +6410,7 @@ def landing_page():
     <meta name="twitter:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
     <meta name="twitter:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
     <meta name="twitter:image" content="{{ request.url_root.rstrip('/') }}/static/IMG_3179.PNG">
-    <link rel="canonical" href="{{ request.url }}">
+    <link rel="canonical" href="https://underdogs.bet{{ request.path }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
@@ -7197,40 +7197,60 @@ def landing_page():
          units_banner_items=units_banner_items,
          todays_picks=todays_picks)
 
+_SITE_DOMAIN = 'https://underdogs.bet'
+
 @app.route('/robots.txt')
 def robots_txt():
-    base_url = request.url_root.rstrip('/')
-    body = f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n"
+    body = f"""User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /checkout/
+Disallow: /stripe/
+Disallow: /auth/
+
+Sitemap: {_SITE_DOMAIN}/sitemap.xml
+"""
     return Response(body, mimetype='text/plain')
 
 
 @app.route('/sitemap.xml')
 def sitemap_xml():
-    base_url = request.url_root.rstrip('/')
     today = datetime.now().strftime('%Y-%m-%d')
-    urls = [f"{base_url}/"]
+    now = datetime.now()
+    urls = []
+
+    # Homepage
+    urls.append((_SITE_DOMAIN + '/', 'daily', '1.0'))
+
+    # Sport picks + results pages
     for sport_key in SPORTS.keys():
         if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
         picks_slug = SPORT_SEO_SLUGS.get(sport_key)
         results_slug = _SPORT_RESULTS_SLUGS.get(sport_key)
         if picks_slug:
-            urls.append(f"{base_url}/{picks_slug}")
+            urls.append((f"{_SITE_DOMAIN}/{picks_slug}", 'daily', '0.9'))
         if results_slug:
-            urls.append(f"{base_url}/{results_slug}")
-        # Daily SEO page for today
-        now = datetime.now()
-        month_name = _MONTH_NAMES.get(now.month, 'january')
-        daily_slug = f"{picks_slug}-{month_name}-{now.day}-{now.year}"
-        urls.append(f"{base_url}/{daily_slug}")
-    urls.append(f"{base_url}/tutorial")
-    urls.append(f"{base_url}/privacy")
-    urls.append(f"{base_url}/terms")
-    urls.append(f"{base_url}/plans")
-    urls.append(f"{base_url}/donate")
+            urls.append((f"{_SITE_DOMAIN}/{results_slug}", 'daily', '0.8'))
+        # Daily SEO pages for last 7 days + today
+        if picks_slug:
+            for days_back in range(8):
+                d = now - timedelta(days=days_back)
+                month_name = _MONTH_NAMES.get(d.month, 'january')
+                daily_url = f"{_SITE_DOMAIN}/{picks_slug}-{month_name}-{d.day}-{d.year}"
+                urls.append((daily_url, 'daily', '0.7'))
+
+    # Static pages
+    urls.append((_SITE_DOMAIN + '/plans', 'weekly', '0.8'))
+    urls.append((_SITE_DOMAIN + '/tutorial', 'monthly', '0.5'))
+    urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
+    urls.append((_SITE_DOMAIN + '/terms', 'monthly', '0.3'))
+    urls.append((_SITE_DOMAIN + '/login', 'monthly', '0.4'))
+    urls.append((_SITE_DOMAIN + '/signup', 'monthly', '0.4'))
+
     urlset = "\n".join(
-        f"<url><loc>{url}</loc><lastmod>{today}</lastmod><changefreq>daily</changefreq></url>"
-        for url in urls
+        f'<url><loc>{loc}</loc><lastmod>{today}</lastmod><changefreq>{freq}</changefreq><priority>{prio}</priority></url>'
+        for loc, freq, prio in urls
     )
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urlset}\n</urlset>'
     return Response(xml, mimetype='application/xml')
