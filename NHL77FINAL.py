@@ -2311,10 +2311,11 @@ def get_upcoming_predictions(sport, days=365):
         except Exception as _soc_err:
             logger.debug(f"[SOCCER] game storage failed: {_soc_err}")
 
-    elif sport in ['NBA', 'NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA']:
-        # Load from ESPN API and database
+    elif sport in ['NBA', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA']:
+        # Load from ESPN API and database (includes playoffs)
         ESPN_ENDPOINTS = {
             'NBA': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
+            'NFL': 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
             'MLB': 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard',
             'WNBA': 'https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard',
             'NCAAB': 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard',
@@ -2324,8 +2325,8 @@ def get_upcoming_predictions(sport, days=365):
         
         api_games = []
 
-        # NBA needs a longer forward horizon (regular season + playoffs through June).
-        if sport == 'NBA':
+        # NBA/NFL need a longer forward horizon (regular season + playoffs).
+        if sport in ['NBA', 'NFL']:
             start_str = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
             end_str = (datetime.now() + timedelta(days=120)).strftime('%Y%m%d')
             try:
@@ -2484,7 +2485,7 @@ def get_upcoming_predictions(sport, days=365):
         # ── Store completed API games in DB for team stat derivation & XGB training ──
         # Without this, _build_team_stats_from_db returns empty and _get_xgb_spread_model
         # cannot train, causing missing spread/total/injury data on the predictions page.
-        if sport in ('NBA', 'NCAAB', 'NCAAW', 'WNBA', 'MLB', 'SOCCER'):
+        if sport in ('NBA', 'NFL', 'NCAAB', 'NCAAW', 'WNBA', 'MLB', 'SOCCER'):
             try:
                 _conn_store = get_db_connection()
                 _cur_store = _conn_store.cursor()
@@ -6358,10 +6359,10 @@ def landing_page():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Free Sports Picks Today – AI Predictions for NBA, MLB, NFL &amp; More | underdogs.bet</title>
-    <meta name="description" content="Free daily sports picks powered by AI. Data-driven NBA, MLB, NHL, NFL predictions with projected scores, spreads &amp; totals. Updated daily.">
-    <meta property="og:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
-    <meta property="og:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
+    <title>underdogs.bet – Daily AI Sports Picks &amp; Betting Predictions</title>
+    <meta name="description" content="Get accurate AI-powered picks for NHL, NBA, MLB, NFL and more. Full spreads, totals, and score predictions updated daily. Start free — upgrade for premium edges.">
+    <meta property="og:title" content="underdogs.bet – Daily AI Sports Picks &amp; Betting Predictions">
+    <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.url }}">
     <meta property="og:site_name" content="underdogs.bet">
@@ -6397,17 +6398,10 @@ def landing_page():
     }
     </script>
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "underdogs.bet",
-      "url": "https://underdogs.bet",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://underdogs.bet/search?q={search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
-    }
+    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://underdogs.bet"}
+    </script>
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Monthly","url":"https://underdogs.bet/plans"},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Yearly","url":"https://underdogs.bet/plans"}]}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -6917,8 +6911,12 @@ def landing_page():
 
 <!-- Hero -->
 <div class="hero" style="text-align:left;padding:100px 40px 60px;">
-    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">Free Sports Picks Today<br>AI Predictions for NBA, MLB, NFL &amp; More</h1>
-    <p class="hero-subhead hero-slide" style="text-align:left;max-width:600px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks, projected scores, and betting edges across 9 sports. Updated daily.</p>
+    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">Daily AI Sports Picks<br>&amp; Betting Predictions</h1>
+    <p class="hero-subhead hero-slide" style="text-align:left;max-width:600px;animation:slideIn 0.8s ease-out 0.2s both;">NHL, NBA, MLB, NFL — data-driven moneyline picks, spread projections, and betting edges. Updated every day.</p>
+    <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
+        <a href="/nhl-picks" style="background:#fff;color:#0f172a;padding:12px 24px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.92em;">Start Free Picks Now</a>
+        <a href="/plans" style="background:transparent;color:#fff;padding:12px 24px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.92em;border:1px solid rgba(255,255,255,0.3);">Get Premium Edge</a>
+    </div>
 </div>
 <style>
 @keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
@@ -7025,6 +7023,24 @@ def landing_page():
 <div class="section" style="padding-top:10px;padding-bottom:40px;">
     <h2 class="section-title">Why Our Picks Are Different</h2>
     <p class="section-sub" style="max-width:640px;margin:0 auto;">Most bettors follow public trends. Our models analyze matchups, projections, and betting value to identify edges the market misses.</p>
+    <div style="display:flex;justify-content:center;gap:12px;margin-top:24px;flex-wrap:wrap;">
+        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
+            <div style="font-size:1.6em;font-weight:900;color:#10b981;">{{ sports_covered }}</div>
+            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">Sports</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
+            <div style="font-size:1.6em;font-weight:900;color:#10b981;">5</div>
+            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">AI Models</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
+            <div style="font-size:1.6em;font-weight:900;color:#10b981;">{{ games_graded }}+</div>
+            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">Graded</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
+            <div style="font-size:1.6em;font-weight:900;color:#10b981;">Daily</div>
+            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">Updates</div>
+        </div>
+    </div>
 </div>
 
 <!-- Season Performance -->
@@ -7052,6 +7068,15 @@ def landing_page():
     </div>
 </div>
 {% endif %}
+
+<!-- Premium CTA -->
+<div class="section" style="padding-top:10px;padding-bottom:30px;text-align:center;">
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:28px;max-width:600px;margin:0 auto;">
+        <h3 style="font-size:1.15em;font-weight:800;margin-bottom:8px;">Want Spreads, Totals &amp; Score Predictions?</h3>
+        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:16px;">Free picks get you the winners. Premium gets you the full edge.</p>
+        <a href="/plans" style="display:inline-block;background:#fff;color:#0f172a;padding:12px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Plans — From $12.50/mo</a>
+    </div>
+</div>
 
 <!-- SEO Internal Links -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;text-align:center;">
@@ -7376,10 +7401,9 @@ def sport_predictions(sport, filter_date=None):
             date_key = pred['game_date']
             grouped_predictions[date_key].append(pred)
     elif sport == 'NFL':
-        # Group by week (extract from game data or calculate)
+        # Group by date (ESPN data doesn't have week numbers)
         for pred in predictions:
-            # For NFL, we can use week numbers if available, otherwise group by date
-            date_key = pred.get('week', pred['game_date'])
+            date_key = pred['game_date']
             grouped_predictions[date_key].append(pred)
     else:
         # Default: group by date
@@ -7431,6 +7455,11 @@ def sport_results(sport):
         
         if sport == 'NFL':
             update_nfl_scores()
+            # Also sync from ESPN to catch playoff games nfl_data_py might miss
+            try:
+                update_espn_scores('NFL')
+            except Exception:
+                pass
             weekly_results = calculate_nfl_weekly_performance()
             overall_stats = compute_overall_stats_from_weekly(weekly_results) if weekly_results else {}
             yesterday_dt = datetime.now() - timedelta(days=1)

@@ -676,7 +676,9 @@ def plans_page():
             '{% block extra_styles %}{% endblock %}',
             """
             @keyframes pulse-bg{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(1.1);opacity:1;}}
-            .plans-hero{background:linear-gradient(135deg,#0f172a,#1e293b);border:2px solid rgba(255,255,255,0.15);border-radius:16px;padding:40px 24px 32px;text-align:center;position:relative;overflow:hidden;margin-bottom:30px;}
+            .plans-page-bg{position:fixed;inset:0;background:url('/static/baseball.jpg') center/cover no-repeat;z-index:-2;}
+            .plans-page-bg::after{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:-1;}
+            .plans-hero{background:rgba(255,255,255,0.03);border:2px solid rgba(255,255,255,0.15);border-radius:16px;padding:40px 24px 32px;text-align:center;position:relative;overflow:hidden;margin-bottom:30px;}
             .plans-hero::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:url('/static/IMG_3179.PNG') center/contain no-repeat;opacity:0.06;z-index:0;}
             .plans-hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,0.04) 0%,transparent 60%);animation:pulse-bg 6s ease-in-out infinite;}
             .plans-hero-logo{font-size:2em;font-weight:900;color:#ffffff;position:relative;z-index:1;letter-spacing:0.5px;line-height:1.3;}
@@ -711,6 +713,7 @@ def plans_page():
             @media(max-width:640px){.plans-grid{grid-template-columns:1fr;}.plans-hero-stats{flex-direction:column;align-items:center;gap:10px;}}
             """
         ).replace('{% block content %}{% endblock %}', """
+            <div class="plans-page-bg"></div>
             <div class="plans-hero">
                 <div class="plans-hero-logo">Built to Beat the Public &mdash; Not Follow It.</div>
                 <div class="plans-hero-sub">Data-driven spreads, totals, and score projections &mdash; tracked, transparent, and built for real edges.</div>
