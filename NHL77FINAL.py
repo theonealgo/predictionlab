@@ -970,6 +970,19 @@ _MONTH_NAMES = {
 }
 _MONTH_NAME_TO_NUM = {v: k for k, v in _MONTH_NAMES.items()}
 
+# Sport-specific background images for predictions pages
+SPORT_BG_IMAGES = {
+    'NFL': '/static/sandro-schuh-HgwY_YQ1m0w-unsplash.jpg',
+    'NCAAF': '/static/sandro-schuh-HgwY_YQ1m0w-unsplash.jpg',
+    'SOCCER': '/static/maxim-hopman-xyDkHkvDYp4-unsplash.jpg',
+    'NBA': '/static/felix-yu-Ii7adwWwNh4-unsplash.jpg',
+    'WNBA': '/static/felix-yu-Ii7adwWwNh4-unsplash.jpg',
+    'NCAAB': '/static/felix-yu-Ii7adwWwNh4-unsplash.jpg',
+    'NCAAW': '/static/felix-yu-Ii7adwWwNh4-unsplash.jpg',
+    'MLB': '/static/baseball.jpg',
+    'NHL': '',
+}
+
 # Curated soccer leagues (ESPN metadata → canonical display names)
 SOCCER_LEAGUE_ORDER = [
     'English Premier League',
@@ -7439,6 +7452,7 @@ def sport_predictions(sport, filter_date=None):
         sport_info=SPORTS[sport],
         sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
         sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+        sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
         predictions=predictions,
         prediction_error=prediction_error,
         grouped_predictions=grouped_predictions,
