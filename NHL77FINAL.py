@@ -4611,6 +4611,9 @@ BASE_TEMPLATE = """
 TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
+        body{background:url('/static/felix-yu-Ii7adwWwNh4-unsplash.jpg') center/cover no-repeat fixed !important;}
+        body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.85);z-index:0;}
+        body>*{position:relative;z-index:1;}
         .tutorial-wrap{max-width:900px;margin:0 auto;padding:20px 0 60px;}
         .tutorial-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;margin-bottom:18px;}
         .tutorial-card h1{font-size:2em;margin-bottom:8px;}
