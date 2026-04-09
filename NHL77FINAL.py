@@ -4563,7 +4563,6 @@ BASE_TEMPLATE = """
                         {% endif %}
                     </div>
                 </div>
-                <a href="{{ stripe_donation_url }}" target="_blank" class="nav-donate-btn">💛 Donate</a>
                 <div class="nav-group" onclick="this.classList.toggle('open')">
                     <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
                     <div class="nav-group-items">
