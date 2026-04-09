@@ -980,7 +980,7 @@ SPORT_BG_IMAGES = {
     'NCAAB': '/static/felix-yu-Ii7adwWwNh4-unsplash.jpg',
     'NCAAW': '/static/felix-yu-Ii7adwWwNh4-unsplash.jpg',
     'MLB': '/static/baseball.jpg',
-    'NHL': '',
+    'NHL': '/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg',
 }
 
 # Curated soccer leagues (ESPN metadata → canonical display names)
