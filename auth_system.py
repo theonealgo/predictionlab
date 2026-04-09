@@ -679,7 +679,7 @@ def plans_page():
             .plans-hero{background:linear-gradient(135deg,#0f172a,#1e293b);border:2px solid rgba(251,191,36,0.3);border-radius:16px;padding:40px 24px 32px;text-align:center;position:relative;overflow:hidden;margin-bottom:30px;}
             .plans-hero::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:url('/static/IMG_3179.PNG') center/contain no-repeat;opacity:0.06;z-index:0;}
             .plans-hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(251,191,36,0.06) 0%,transparent 60%);animation:pulse-bg 6s ease-in-out infinite;}
-            .plans-hero-logo{font-size:2.8em;font-weight:900;color:#fbbf24;position:relative;z-index:1;text-shadow:0 0 40px rgba(251,191,36,0.3);letter-spacing:2px;}
+            .plans-hero-logo{font-size:2em;font-weight:900;color:#fbbf24;position:relative;z-index:1;text-shadow:0 0 40px rgba(251,191,36,0.3);letter-spacing:0.5px;line-height:1.3;}
             .plans-hero-sub{font-size:1.05em;color:#e2e8f0;margin-top:12px;position:relative;z-index:1;max-width:650px;margin-left:auto;margin-right:auto;line-height:1.7;}
             .plans-hero-stats{display:flex;justify-content:center;gap:16px;margin-top:20px;position:relative;z-index:1;flex-wrap:wrap;}
             .stat-pill{background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:24px;padding:7px 18px;font-size:0.82em;font-weight:600;color:#fff;}
@@ -712,61 +712,64 @@ def plans_page():
             """
         ).replace('{% block content %}{% endblock %}', """
             <div class="plans-hero">
-                <div class="plans-hero-logo">UNDERDOGS EDGE</div>
-                <div class="plans-hero-sub">Unlock the plays we actually bet. Full spread and total projections, score predictions, and the exact edges the public misses&mdash;built from real data, tracked transparently.</div>
+                <div class="plans-hero-logo">Built to Beat the Public &mdash; Not Follow It.</div>
+                <div class="plans-hero-sub">Data-driven spreads, totals, and score projections &mdash; tracked, transparent, and built for real edges.</div>
                 <div class="plans-hero-stats">
-                    <div class="stat-pill"><span>5</span> AI Models</div>
-                    <div class="stat-pill"><span>9</span> Sports</div>
-                    <div class="stat-pill"><span>24/7</span> Updated</div>
-                    <div class="stat-pill">Our <span>Odds Engine</span></div>
+                    <div class="stat-pill">Full Spread &amp; Total Coverage</div>
+                    <div class="stat-pill">Projected Scores for Every Game</div>
+                    <div class="stat-pill">Find Value the Public Misses</div>
+                </div>
+                <div class="plans-hero-stats" style="margin-top:10px;">
+                    <div class="stat-pill">Consistently Updated Models</div>
+                    <div class="stat-pill">Transparent Results &mdash; Always</div>
                 </div>
                 <div class="competitor-bar">
-                    &#x1f4a1; Competitors charge <strong>$200/mo</strong> for similar picks. We're <strong>90% less</strong> &mdash; same AI, better transparency.
+                    Every pick is tracked. No deletes. No edits. Full transparency.
                 </div>
             </div>
+            <p style="text-align:center;font-size:1.15em;color:#e2e8f0;margin-bottom:28px;font-weight:600;">Free gets you the winners. Premium gets you the edge.</p>
             <div class="plans-grid">
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>
-                    <div class="plan-old-price">$29.99/mo</div>
                     <div class="plan-price">$19.99<span>/month</span></div>
-                    <div class="plan-save">&#x1f525; Save 33% &mdash; Limited Time</div>
+                    <div class="plan-save">Flexible access. Cancel anytime.</div>
                     <ul class="plan-features">
-                        <li>All Spread Picks</li>
-                        <li>All Total (O/U) Picks</li>
-                        <li>Score Predictions</li>
-                        <li>Our Odds Engine (ML + Spread + Total)</li>
-                        <li>9 Sports Covered</li>
+                        <li>Every Spread Pick (No Guessing)</li>
+                        <li>Every Total Pick (Our Strongest Edge)</li>
+                        <li>Projected Scores for Every Game</li>
+                        <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>All Sports Covered</li>
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
                     </ul>
                     <a href="/checkout/monthly" class="plan-btn plan-btn-secondary">Get Monthly Access</a>
                 </div>
                 <div class="plan-card popular">
-                    <div class="plan-badge">MOST POPULAR</div>
+                    <div class="plan-badge">BEST VALUE</div>
                     <div class="plan-name">Yearly</div>
-                    <div class="plan-old-price">$239.99/yr</div>
                     <div class="plan-price">$149.99<span>/year</span></div>
-                    <div class="plan-save">&#x1f525; Save 37% &mdash; Just $12.50/mo</div>
+                    <div class="plan-save">Only $12.50/month &mdash; lock in the edge all year</div>
                     <ul class="plan-features">
-                        <li>All Spread Picks</li>
-                        <li>All Total (O/U) Picks</li>
-                        <li>Score Predictions</li>
-                        <li>Our Odds Engine (ML + Spread + Total)</li>
-                        <li>9 Sports Covered</li>
+                        <li>Every Spread Pick (No Guessing)</li>
+                        <li>Every Total Pick (Our Strongest Edge)</li>
+                        <li>Projected Scores for Every Game</li>
+                        <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>All Sports Covered</li>
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
                     </ul>
                     <a href="/checkout/yearly" class="plan-btn plan-btn-primary">Get Yearly Access</a>
                 </div>
             </div>
+            <p style="text-align:center;font-size:0.85em;color:#64748b;margin-top:20px;">Tracked results updated daily.</p>
             <div class="free-section">
-                <p style="font-size:1.2em;margin-bottom:6px;font-weight:700;">&#x1f193; Free Forever</p>
-                <p style="opacity:0.7;margin-bottom:12px;">No credit card required. Start with free picks today.</p>
+                <p style="font-size:1.2em;margin-bottom:6px;font-weight:700;">Start Free</p>
+                <p style="opacity:0.7;margin-bottom:12px;">Start free. Upgrade when you're ready for the full edge.</p>
                 <div class="free-features">
                     <div class="free-pill">Moneyline Picks</div>
                     <div class="free-pill">5-Model Win %</div>
                     <div class="free-pill">Full Results</div>
-                    <div class="free-pill">All 9 Sports</div>
+                    <div class="free-pill">All Sports Covered</div>
                 </div>
             </div>
         """)
