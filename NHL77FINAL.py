@@ -7496,7 +7496,6 @@ def sport_predictions(sport, filter_date=None):
         sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
         sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
         sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-        sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
         predictions=predictions,
         prediction_error=prediction_error,
         grouped_predictions=grouped_predictions,
