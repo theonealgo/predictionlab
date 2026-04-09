@@ -6877,8 +6877,7 @@ def landing_page():
 
 <!-- Sports grid -->
 <div class="section">
-    <h2 class="section-title">Today's Free Sports Picks</h2>
-    <p class="section-sub">Get daily betting predictions and odds insights for NBA · NHL · MLB · NFL · NCAAB · NCAAF · WNBA · Soccer. Live picks updated every day.</p>
+    <h2 class="section-title">Free Sports Picks &amp; Odds: NBA, NFL, Soccer &amp; More | Today's Top Daily Bets</h2>
     <div class="sport-slider">
         <div class="slider-arrow" onclick="scrollSports(-1)">‹</div>
         <div class="sport-badges" id="sportBubbles">
