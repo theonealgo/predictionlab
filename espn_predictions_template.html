@@ -267,16 +267,16 @@
             <div class="nav-group" onclick="this.classList.toggle('open')">
                 <span class="nav-group-title">🏀 Sports</span>
                 <div class="nav-group-items">
-                    <a href="/sport/NHL/predictions">🏒 NHL</a>
-                    <a href="/sport/NBA/predictions">🏀 NBA</a>
-                    <a href="/sport/MLB/predictions">⚾ MLB</a>
-                    <a href="/sport/NFL/predictions">🏈 NFL</a>
-                    <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
-                    <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
-                    <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
-                    <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+                    <a href="/nhl-picks">🏒 NHL</a>
+                    <a href="/nba-picks">🏀 NBA</a>
+                    <a href="/mlb-picks">⚾ MLB</a>
+                    <a href="/nfl-picks">🏈 NFL</a>
+                    <a href="/ncaab-picks">🎓 NCAAB</a>
+                    <a href="/ncaaw-picks">🏀 NCAAW</a>
+                    <a href="/ncaaf-picks">🏟️ NCAAF</a>
+                    <a href="/wnba-picks">🏀 WNBA</a>
                     {% if soccer_enabled %}
-                    <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
+                    <a href="/soccer-picks">⚽ Soccer</a>
                     {% endif %}
                 </div>
             </div>
@@ -309,8 +309,8 @@
     </div>
 
     <div class="section-tabs">
-        <a href="/sport/{{ sport }}/predictions" class="tab active">📊 Predictions</a>
-        <a href="/sport/{{ sport }}/results"     class="tab">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
     </div>
     {% set label_glicko2 = 'Grinder2' %}
     {% set label_trueskill = 'Takedown' %}
@@ -470,16 +470,16 @@
     <span class="footer-logo">underdogs.bet</span>
     <p>AI-powered sports predictions — free forever.</p>
     <p style="margin-top:10px;">
-        <a href="/sport/NHL/predictions">NHL</a> &nbsp;·&nbsp;
-        <a href="/sport/NBA/predictions">NBA</a> &nbsp;·&nbsp;
-        <a href="/sport/MLB/predictions">MLB</a> &nbsp;·&nbsp;
-        <a href="/sport/NFL/predictions">NFL</a> &nbsp;·&nbsp;
-        <a href="/sport/NCAAB/predictions">NCAAB</a> &nbsp;·&nbsp;
-        <a href="/sport/NCAAW/predictions">NCAAW</a> &nbsp;·&nbsp;
-        <a href="/sport/NCAAF/predictions">NCAAF</a> &nbsp;·&nbsp;
-        <a href="/sport/WNBA/predictions">WNBA</a> &nbsp;·&nbsp;
+        <a href="/nhl-picks">NHL</a> &nbsp;·&nbsp;
+        <a href="/nba-picks">NBA</a> &nbsp;·&nbsp;
+        <a href="/mlb-picks">MLB</a> &nbsp;·&nbsp;
+        <a href="/nfl-picks">NFL</a> &nbsp;·&nbsp;
+        <a href="/ncaab-picks">NCAAB</a> &nbsp;·&nbsp;
+        <a href="/ncaaw-picks">NCAAW</a> &nbsp;·&nbsp;
+        <a href="/ncaaf-picks">NCAAF</a> &nbsp;·&nbsp;
+        <a href="/wnba-picks">WNBA</a> &nbsp;·&nbsp;
         {% if soccer_enabled %}
-        <a href="/sport/SOCCER/predictions">Soccer</a> &nbsp;·&nbsp;
+        <a href="/soccer-picks">Soccer</a> &nbsp;·&nbsp;
         {% endif %}
         <a href="{{ stripe_donation_url }}" target="_blank">💛 Donate</a>
     </p>

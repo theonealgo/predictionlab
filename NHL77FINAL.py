@@ -947,6 +947,29 @@ SPORTS = {
 }
 SOCCER_ENABLED = True
 
+# ── SEO-friendly URL slugs ─────────────────────────────────────────────────────
+SPORT_SEO_SLUGS = {
+    'NHL': 'nhl-picks',
+    'NBA': 'nba-picks',
+    'NFL': 'nfl-picks',
+    'MLB': 'mlb-picks',
+    'NCAAB': 'ncaab-picks',
+    'NCAAW': 'ncaaw-picks',
+    'NCAAF': 'ncaaf-picks',
+    'WNBA': 'wnba-picks',
+    'SOCCER': 'soccer-picks',
+}
+_SEO_SLUG_TO_SPORT = {v: k for k, v in SPORT_SEO_SLUGS.items()}
+_SPORT_RESULTS_SLUGS = {k: v.replace('-picks', '-results') for k, v in SPORT_SEO_SLUGS.items()}
+_RESULTS_SLUG_TO_SPORT = {v: k for k, v in _SPORT_RESULTS_SLUGS.items()}
+
+_MONTH_NAMES = {
+    1: 'january', 2: 'february', 3: 'march', 4: 'april',
+    5: 'may', 6: 'june', 7: 'july', 8: 'august',
+    9: 'september', 10: 'october', 11: 'november', 12: 'december',
+}
+_MONTH_NAME_TO_NUM = {v: k for k, v in _MONTH_NAMES.items()}
+
 # Curated soccer leagues (ESPN metadata → canonical display names)
 SOCCER_LEAGUE_ORDER = [
     'English Premier League',
@@ -4490,16 +4513,16 @@ BASE_TEMPLATE = """
                 <div class="nav-group" onclick="this.classList.toggle('open')">
                     <span class="nav-group-title">🏀 Sports</span>
                     <div class="nav-group-items">
-                        <a href="/sport/NHL/predictions">🏒 NHL</a>
-                        <a href="/sport/NBA/predictions">🏀 NBA</a>
-                        <a href="/sport/MLB/predictions">⚾ MLB</a>
-                        <a href="/sport/NFL/predictions">🏈 NFL</a>
-                        <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
-                        <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
-                        <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
-                        <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+                        <a href="/nhl-picks">🏒 NHL</a>
+                        <a href="/nba-picks">🏀 NBA</a>
+                        <a href="/mlb-picks">⚾ MLB</a>
+                        <a href="/nfl-picks">🏈 NFL</a>
+                        <a href="/ncaab-picks">🎓 NCAAB</a>
+                        <a href="/ncaaw-picks">🏀 NCAAW</a>
+                        <a href="/ncaaf-picks">🏟️ NCAAF</a>
+                        <a href="/wnba-picks">🏀 WNBA</a>
                         {% if soccer_enabled %}
-                        <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
+                        <a href="/soccer-picks">⚽ Soccer</a>
                         {% endif %}
                     </div>
                 </div>
@@ -6282,6 +6305,7 @@ def landing_page():
         status_text, is_live = get_season_status(sport_key, today=today)
         landing_sports.append({
             'key': sport_key,
+            'seo_slug': SPORT_SEO_SLUGS.get(sport_key, sport_key.lower() + '-picks'),
             'icon': info['icon'],
             'name': _LANDING_SPORT_SHORT.get(sport_key, info['name']),
             'status': status_text,
@@ -6292,14 +6316,54 @@ def landing_page():
     weekly_banner_messages = list(_MANUAL_BANNER_ITEMS)
     units_banner_items = _get_sport_ml_units_banner()
 
+    # Build "Today's Top Picks" from live sports with upcoming games
+    todays_picks = []
+    try:
+        _tp_tz = ZoneInfo('America/New_York')
+        _tp_today = datetime.now(_tp_tz).strftime('%Y-%m-%d')
+    except Exception:
+        _tp_today = datetime.now().strftime('%Y-%m-%d')
+    for _tp_sport in ['NHL', 'NBA', 'MLB', 'SOCCER']:
+        if _tp_sport == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        try:
+            _tp_preds = get_upcoming_predictions(_tp_sport)
+            for _tp in _tp_preds:
+                if _tp.get('home_score') is not None:
+                    continue  # skip completed
+                if _tp.get('game_date') != _tp_today:
+                    continue
+                _ens = _tp.get('ensemble_prob')
+                if _ens is None:
+                    continue
+                _home = _tp.get('home_team_id', '')
+                _away = _tp.get('away_team_id', '')
+                _pick = _home if _ens > 50 else _away
+                _xh = _tp.get('xgb_home_score')
+                _xa = _tp.get('xgb_away_score')
+                _proj = f"{_xa} \u2013 {_xh}" if _xh is not None and _xa is not None else None
+                todays_picks.append({
+                    'away': _away, 'home': _home,
+                    'pick': _pick, 'prob': round(_ens, 1),
+                    'projection': _proj,
+                    'sport': _tp_sport,
+                    'slug': SPORT_SEO_SLUGS.get(_tp_sport, ''),
+                })
+                if len(todays_picks) >= 4:
+                    break
+        except Exception:
+            pass
+        if len(todays_picks) >= 4:
+            break
+
     return render_template_string("""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Free AI Sports Picks &amp; Betting Predictions | underdogs.bet</title>
-    <meta name="description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
+    <title>Free Sports Picks Today – AI Predictions for NBA, MLB, NFL &amp; More | underdogs.bet</title>
+    <meta name="description" content="Free daily sports picks powered by AI. Data-driven NBA, MLB, NHL, NFL predictions with projected scores, spreads &amp; totals. Updated daily.">
     <meta property="og:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
     <meta property="og:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
     <meta property="og:type" content="website">
@@ -6586,7 +6650,7 @@ def landing_page():
         .free-body{font-size:.93em;color:#fff;line-height:1.6;max-width:620px;}
 
         /* ── Sports grid ── */
-        .section{padding:70px 30px;max-width:1200px;margin:0 auto;}
+        .section{padding:120px 30px 70px;max-width:1200px;margin:0 auto;}
         .section-title{
             text-align:center;font-size:1.9em;font-weight:800;
             margin-bottom:8px;
@@ -6820,16 +6884,16 @@ def landing_page():
             <div class="nav-group" onclick="this.classList.toggle('open')">
                 <span class="nav-group-title">🏀 Sports</span>
                 <div class="nav-group-items">
-                    <a href="/sport/NHL/predictions">🏒 NHL</a>
-                    <a href="/sport/NBA/predictions">🏀 NBA</a>
-                    <a href="/sport/MLB/predictions">⚾ MLB</a>
-                    <a href="/sport/NFL/predictions">🏈 NFL</a>
-                    <a href="/sport/NCAAB/predictions">🎓 NCAAB</a>
-                    <a href="/sport/NCAAW/predictions">🏀 NCAAW</a>
-                    <a href="/sport/NCAAF/predictions">🏟️ NCAAF</a>
-                    <a href="/sport/WNBA/predictions">🏀 WNBA</a>
+                    <a href="/nhl-picks">🏒 NHL</a>
+                    <a href="/nba-picks">🏀 NBA</a>
+                    <a href="/mlb-picks">⚾ MLB</a>
+                    <a href="/nfl-picks">🏈 NFL</a>
+                    <a href="/ncaab-picks">🎓 NCAAB</a>
+                    <a href="/ncaaw-picks">🏀 NCAAW</a>
+                    <a href="/ncaaf-picks">🏟️ NCAAF</a>
+                    <a href="/wnba-picks">🏀 WNBA</a>
                     {% if soccer_enabled %}
-                    <a href="/sport/SOCCER/predictions">⚽ Soccer</a>
+                    <a href="/soccer-picks">⚽ Soccer</a>
                     {% endif %}
                 </div>
             </div>
@@ -6857,8 +6921,8 @@ def landing_page():
 
 <!-- Hero -->
 <div class="hero" style="text-align:left;padding:100px 40px 60px;">
-    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Picks<br>With Real Results</h1>
-    <h2 class="hero-subhead hero-slide" style="text-align:left;max-width:600px;animation:slideIn 0.8s ease-out 0.2s both;">Get accurate, data-driven predictions powered by our 5-model consensus system across 9 major leagues.</h2>
+    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">Free Sports Picks Today<br>AI Predictions for NBA, MLB, NFL &amp; More</h1>
+    <p class="hero-subhead hero-slide" style="text-align:left;max-width:600px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks, projected scores, and betting edges across 9 sports. Updated daily.</p>
 </div>
 <style>
 @keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
@@ -6877,23 +6941,10 @@ def landing_page():
 
 <!-- Sports grid -->
 <div class="section">
-    <h2 class="section-title">Free Sports Picks &amp; Odds: NBA, NFL, Soccer &amp; More | Today's Top Daily Bets</h2>
-    <div class="sport-slider">
-        <div class="slider-arrow" onclick="scrollSports(-1)">‹</div>
-        <div class="sport-badges" id="sportBubbles">
-            {% for s in landing_sports %}
-            <a href="/sport/{{ s.key }}/predictions" class="sport-pill {% if s.is_live %}live{% endif %}">
-                <span>{{ s.icon }}</span>
-                <span>{{ s.name }}</span>
-                <span class="sport-pill-status">{{ s.status }}</span>
-            </a>
-            {% endfor %}
-        </div>
-        <div class="slider-arrow" onclick="scrollSports(1)">›</div>
-    </div>
+    <h2 class="section-title">Browse Picks by Sport</h2>
     <div class="sports-grid">
         {% for s in landing_sports %}
-        <a href="/sport/{{ s.key }}/predictions" class="sport-card {% if s.is_live %}live{% endif %}">
+        <a href="/{{ s.seo_slug }}" class="sport-card {% if s.is_live %}live{% endif %}">
             {% if s.is_live %}<div class="live-dot"></div>{% endif %}
             <div class="sport-icon">{{ s.icon }}</div>
             <div class="sport-name">{{ s.name }}</div>
@@ -6902,7 +6953,24 @@ def landing_page():
         {% endfor %}
     </div>
 </div>
+
+<!-- Today's Top Picks (dynamic SEO content) -->
+{% if todays_picks %}
+<div class="section" style="padding-top:20px;">
+    <h2 class="section-title">Today's Top Picks</h2>
+    <p class="section-sub">Free moneyline picks from today's games, powered by our consensus model.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:900px;margin:0 auto;">
+        {% for tp in todays_picks %}
+        <a href="/{{ tp.slug }}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:18px 20px;text-decoration:none;color:#fff;transition:border-color 0.2s;">
+            <div style="font-size:0.72em;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">{{ tp.sport }}</div>
+            <div style="font-weight:700;font-size:1.05em;margin-bottom:6px;">{{ tp.away }} vs {{ tp.home }}</div>
+            {% if tp.projection %}<div style="font-size:0.85em;color:#94a3b8;margin-bottom:4px;">Projection: {{ tp.projection }}</div>{% endif %}
+            <div style="font-size:0.9em;color:#10b981;font-weight:700;">▶ Free Pick: {{ tp.pick }} ML</div>
+        </a>
+        {% endfor %}
+    </div>
 </div>
+{% endif %}
 
 <!-- Weekly banner -->
 {% if weekly_banner_messages %}
@@ -6932,38 +7000,43 @@ def landing_page():
 <!-- How it works -->
 <div class="how-section">
     <div class="section">
-        <h2 class="section-title">How Our AI Sports Betting Models Work</h2>
-        <p class="section-sub">We combine real-time data with five AI prediction models to surface high-value betting opportunities.</p>
+        <h2 class="section-title">How It Works</h2>
         <div class="steps-grid">
             <div class="step">
                 <div class="step-num">1</div>
-                <div class="step-title">Live Data Processing</div>
-                <div class="step-body">We ingest real-time sports data, team stats, schedules, and historical performance.</div>
+                <div class="step-title">Live Data</div>
+                <div class="step-body">Real-time stats, matchups, and historical performance across 9 sports.</div>
             </div>
             <div class="step">
                 <div class="step-num">2</div>
-                <div class="step-title">5 AI Prediction Models</div>
-                <div class="step-body">Each model generates win probabilities and betting insights independently.</div>
+                <div class="step-title">AI Models</div>
+                <div class="step-body">5 independent models generate win probabilities for every game.</div>
             </div>
             <div class="step">
                 <div class="step-num">3</div>
-                <div class="step-title">Spread &amp; Total Projections</div>
-                <div class="step-body">We calculate projected scores to estimate spreads, totals, and betting value.</div>
+                <div class="step-title">Projections</div>
+                <div class="step-body">Predicted scores, spreads, and totals for each matchup.</div>
             </div>
             <div class="step">
                 <div class="step-num">4</div>
-                <div class="step-title">Sharp Consensus Pick</div>
-                <div class="step-body">All models combine into one final prediction—highlighting high-confidence bets.</div>
+                <div class="step-title">Consensus</div>
+                <div class="step-body">All models combine into one pick—highlighting real edges.</div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Moneyline Units Banner -->
+<!-- Why Different -->
+<div class="section" style="padding-top:10px;padding-bottom:40px;">
+    <h2 class="section-title">Why Our Picks Are Different</h2>
+    <p class="section-sub" style="max-width:640px;margin:0 auto;">Most bettors follow public trends. Our models analyze matchups, projections, and betting value to identify edges the market misses.</p>
+</div>
+
+<!-- Season Performance -->
 {% if units_banner_items %}
 <div class="section" style="padding-top:10px;padding-bottom:50px;">
-    <h2 class="section-title" style="margin-bottom:10px;">📈 Season Moneyline Performance</h2>
-    <p class="section-sub">Flat 1u consensus picks — tracked live from every graded game.</p>
+    <h2 class="section-title" style="margin-bottom:10px;">Season Performance</h2>
+    <p class="section-sub">All results tracked. No edits. Full transparency.</p>
     <div class="units-marquee-wrap">
         <div class="units-marquee-track">
             {% for item in units_banner_items %}
@@ -6984,6 +7057,20 @@ def landing_page():
     </div>
 </div>
 {% endif %}
+
+<!-- SEO Internal Links -->
+<div class="section" style="padding-top:10px;padding-bottom:40px;text-align:center;">
+    <h3 style="font-size:1.1em;font-weight:700;margin-bottom:14px;color:#e2e8f0;">Today's Picks by Sport</h3>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
+        <a href="/mlb-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">MLB Picks Today</a>
+        <a href="/nba-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NBA Picks Today</a>
+        <a href="/nhl-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NHL Picks Today</a>
+        <a href="/nfl-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NFL Picks Today</a>
+        <a href="/soccer-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">Soccer Picks Today</a>
+        <a href="/ncaab-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NCAAB Picks Today</a>
+        <a href="/wnba-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">WNBA Picks Today</a>
+    </div>
+</div>
 
 <!-- Footer -->
 <footer class="site-footer">
@@ -7047,7 +7134,8 @@ def landing_page():
          games_graded=games_graded, predictions_logged=predictions_logged,
          stripe_url=STRIPE_DONATION_URL, landing_sports=landing_sports,
          sports_covered=sports_covered, weekly_banner_messages=weekly_banner_messages,
-         units_banner_items=units_banner_items)
+         units_banner_items=units_banner_items,
+         todays_picks=todays_picks)
 
 @app.route('/robots.txt')
 def robots_txt():
@@ -7061,23 +7149,24 @@ def sitemap_xml():
     base_url = request.url_root.rstrip('/')
     today = datetime.now().strftime('%Y-%m-%d')
     urls = [f"{base_url}/"]
-    for sport in SPORTS.keys():
-        if sport == 'SOCCER' and not SOCCER_ENABLED:
+    for sport_key in SPORTS.keys():
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
-        urls.append(f"{base_url}/sport/{sport}/predictions")
-        urls.append(f"{base_url}/sport/{sport}/results")
+        picks_slug = SPORT_SEO_SLUGS.get(sport_key)
+        results_slug = _SPORT_RESULTS_SLUGS.get(sport_key)
+        if picks_slug:
+            urls.append(f"{base_url}/{picks_slug}")
+        if results_slug:
+            urls.append(f"{base_url}/{results_slug}")
+        # Daily SEO page for today
+        now = datetime.now()
+        month_name = _MONTH_NAMES.get(now.month, 'january')
+        daily_slug = f"{picks_slug}-{month_name}-{now.day}-{now.year}"
+        urls.append(f"{base_url}/{daily_slug}")
     urls.append(f"{base_url}/tutorial")
     urls.append(f"{base_url}/privacy")
     urls.append(f"{base_url}/terms")
-    urls.append(f"{base_url}/nhl")
-    urls.append(f"{base_url}/nba")
-    urls.append(f"{base_url}/mlb")
-    urls.append(f"{base_url}/nfl")
-    urls.append(f"{base_url}/ncaab")
-    urls.append(f"{base_url}/ncaaw")
-    urls.append(f"{base_url}/ncaaf")
-    urls.append(f"{base_url}/wnba")
-    urls.append(f"{base_url}/soccer")
+    urls.append(f"{base_url}/plans")
     urls.append(f"{base_url}/donate")
     urlset = "\n".join(
         f"<url><loc>{url}</loc><lastmod>{today}</lastmod><changefreq>daily</changefreq></url>"
@@ -7086,12 +7175,66 @@ def sitemap_xml():
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urlset}\n</urlset>'
     return Response(xml, mimetype='application/xml')
 
+# ── SEO picks routes ──────────────────────────────────────────────────────────
+
+@app.route('/<slug>')
+def seo_picks_page(slug):
+    """Handle SEO-friendly URLs like /nhl-picks, /nba-picks, /nhl-results, etc."""
+    # Check picks slugs
+    sport = _SEO_SLUG_TO_SPORT.get(slug)
+    if sport:
+        return sport_predictions(sport)
+    # Check results slugs
+    sport = _RESULTS_SLUG_TO_SPORT.get(slug)
+    if sport:
+        return sport_results(sport)
+    # Not a known SEO slug — fall through to 404
+    return "Page not found", 404
+
+
+@app.route('/<slug>-<month>-<int:day>-<int:year>')
+def seo_daily_picks(slug, month, day, year):
+    """Daily SEO pages like /nhl-picks-april-9-2026"""
+    full_slug = f"{slug}"
+    sport = _SEO_SLUG_TO_SPORT.get(full_slug)
+    if not sport:
+        return "Page not found", 404
+    month_num = _MONTH_NAME_TO_NUM.get(month.lower())
+    if not month_num:
+        return "Invalid date", 404
+    target_date = f"{year}-{month_num:02d}-{day:02d}"
+    # Render the predictions page filtered to this date
+    return sport_predictions(sport, filter_date=target_date)
+
+
+# ── 301 redirects from old URLs ───────────────────────────────────────────────
+
+@app.route('/sport/<sport>/predictions')
+def old_sport_predictions_redirect(sport):
+    """301 redirect old /sport/X/predictions to new SEO URL."""
+    slug = SPORT_SEO_SLUGS.get(sport)
+    if slug:
+        return redirect(f'/{slug}', code=301)
+    return "Sport not found", 404
+
+
+@app.route('/sport/<sport>/results')
+def old_sport_results_redirect(sport):
+    """301 redirect old /sport/X/results to new SEO URL."""
+    slug = _SPORT_RESULTS_SLUGS.get(sport)
+    if slug:
+        return redirect(f'/{slug}', code=301)
+    return "Sport not found", 404
+
+
 @app.route('/sport/<sport>')
 def sport_home(sport):
-    """Redirect to predictions page"""
-    return render_template_string(f"""
-        <script>window.location.href = '/sport/{sport}/predictions';</script>
-    """)
+    """Redirect to new SEO URL"""
+    slug = SPORT_SEO_SLUGS.get(sport)
+    if slug:
+        return redirect(f'/{slug}', code=301)
+    return "Sport not found", 404
+
 
 @app.route('/tutorial')
 def tutorial_page():
@@ -7104,39 +7247,39 @@ def tutorial_page():
 
 @app.route('/nhl')
 def nhl_shortcut():
-    return redirect(url_for('sport_predictions', sport='NHL'))
+    return redirect('/nhl-picks', code=301)
 
 @app.route('/nba')
 def nba_shortcut():
-    return redirect(url_for('sport_predictions', sport='NBA'))
+    return redirect('/nba-picks', code=301)
 
 @app.route('/mlb')
 def mlb_shortcut():
-    return redirect(url_for('sport_predictions', sport='MLB'))
+    return redirect('/mlb-picks', code=301)
 
 @app.route('/nfl')
 def nfl_shortcut():
-    return redirect(url_for('sport_predictions', sport='NFL'))
+    return redirect('/nfl-picks', code=301)
 
 @app.route('/ncaab')
 def ncaab_shortcut():
-    return redirect(url_for('sport_predictions', sport='NCAAB'))
+    return redirect('/ncaab-picks', code=301)
 
 @app.route('/ncaaw')
 def ncaaw_shortcut():
-    return redirect(url_for('sport_predictions', sport='NCAAW'))
+    return redirect('/ncaaw-picks', code=301)
 
 @app.route('/ncaaf')
 def ncaaf_shortcut():
-    return redirect(url_for('sport_predictions', sport='NCAAF'))
+    return redirect('/ncaaf-picks', code=301)
 
 @app.route('/wnba')
 def wnba_shortcut():
-    return redirect(url_for('sport_predictions', sport='WNBA'))
+    return redirect('/wnba-picks', code=301)
 
 @app.route('/soccer')
 def soccer_shortcut():
-    return redirect(url_for('sport_predictions', sport='SOCCER'))
+    return redirect('/soccer-picks', code=301)
 
 @app.route('/donate')
 def donate_shortcut():
@@ -7152,16 +7295,15 @@ def terms_page():
 
 @app.route('/sport/SOCCER/predictions/<league_slug>')
 def soccer_predictions_league(league_slug):
-    return redirect(url_for('sport_predictions', sport='SOCCER', league=league_slug))
+    return redirect(f'/soccer-picks?league={league_slug}', code=301)
 
 @app.route('/sport/SOCCER/results/<league_slug>')
 def soccer_results_league(league_slug):
-    return redirect(url_for('sport_results', sport='SOCCER', league=league_slug))
+    return redirect(f'/soccer-results?league={league_slug}', code=301)
 
-@app.route('/sport/<sport>/predictions')
-def sport_predictions(sport):
+def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
-    log_site_visit(f'/sport/{sport}/predictions')
+    log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
     if sport not in SPORTS:
         return "Sport not found", 404
     if sport == 'SOCCER' and not SOCCER_ENABLED:
@@ -7220,7 +7362,7 @@ def sport_predictions(sport):
                 'name': lg,
                 'slug': _soccer_league_slug(lg),
                 'active': lg == selected_league,
-                'url': f"/sport/{sport}/predictions?league={_soccer_league_slug(lg)}",
+                'url': f"/soccer-picks?league={_soccer_league_slug(lg)}",
             }
             for lg in soccer_league_list
         ]
@@ -7253,6 +7395,15 @@ def sport_predictions(sport):
     # Sort dates
     sorted_dates = sorted(grouped_predictions.keys())
 
+    # Filter to specific date if requested (daily SEO pages)
+    if filter_date:
+        if filter_date in grouped_predictions:
+            grouped_predictions = {filter_date: grouped_predictions[filter_date]}
+            sorted_dates = [filter_date]
+        else:
+            grouped_predictions = {}
+            sorted_dates = []
+
     # soccer_leagues already computed above for soccer
     
     # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
@@ -7264,6 +7415,8 @@ def sport_predictions(sport):
         page=sport,
         sport=sport,
         sport_info=SPORTS[sport],
+        sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+        sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
         predictions=predictions,
         prediction_error=prediction_error,
         grouped_predictions=grouped_predictions,
@@ -7273,7 +7426,6 @@ def sport_predictions(sport):
         soccer_leagues=soccer_leagues
     )
 
-@app.route('/sport/<sport>/results')
 def sport_results(sport):
     """Show model performance results for a sport"""
     try:

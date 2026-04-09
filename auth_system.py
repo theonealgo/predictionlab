@@ -676,21 +676,21 @@ def plans_page():
             '{% block extra_styles %}{% endblock %}',
             """
             @keyframes pulse-bg{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(1.1);opacity:1;}}
-            .plans-hero{background:linear-gradient(135deg,#0f172a,#1e293b);border:2px solid rgba(251,191,36,0.3);border-radius:16px;padding:40px 24px 32px;text-align:center;position:relative;overflow:hidden;margin-bottom:30px;}
+            .plans-hero{background:linear-gradient(135deg,#0f172a,#1e293b);border:2px solid rgba(255,255,255,0.15);border-radius:16px;padding:40px 24px 32px;text-align:center;position:relative;overflow:hidden;margin-bottom:30px;}
             .plans-hero::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:url('/static/IMG_3179.PNG') center/contain no-repeat;opacity:0.06;z-index:0;}
-            .plans-hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(251,191,36,0.06) 0%,transparent 60%);animation:pulse-bg 6s ease-in-out infinite;}
-            .plans-hero-logo{font-size:2em;font-weight:900;color:#fbbf24;position:relative;z-index:1;text-shadow:0 0 40px rgba(251,191,36,0.3);letter-spacing:0.5px;line-height:1.3;}
-            .plans-hero-sub{font-size:1.05em;color:#e2e8f0;margin-top:12px;position:relative;z-index:1;max-width:650px;margin-left:auto;margin-right:auto;line-height:1.7;}
+            .plans-hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,0.04) 0%,transparent 60%);animation:pulse-bg 6s ease-in-out infinite;}
+            .plans-hero-logo{font-size:2em;font-weight:900;color:#ffffff;position:relative;z-index:1;letter-spacing:0.5px;line-height:1.3;}
+            .plans-hero-sub{font-size:1.05em;color:#94a3b8;margin-top:12px;position:relative;z-index:1;max-width:650px;margin-left:auto;margin-right:auto;line-height:1.7;}
             .plans-hero-stats{display:flex;justify-content:center;gap:16px;margin-top:20px;position:relative;z-index:1;flex-wrap:wrap;}
-            .stat-pill{background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:24px;padding:7px 18px;font-size:0.82em;font-weight:600;color:#fff;}
-            .stat-pill span{color:#fbbf24;}
-            .competitor-bar{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:10px;max-width:560px;margin:20px auto 0;padding:10px 18px;font-size:0.85em;position:relative;z-index:1;color:#e2e8f0;}
-            .competitor-bar strong{color:#fbbf24;}
+            .stat-pill{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);border-radius:24px;padding:7px 18px;font-size:0.82em;font-weight:600;color:#cbd5e1;}
+            .stat-pill span{color:#fff;}
+            .competitor-bar{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:10px;max-width:560px;margin:20px auto 0;padding:10px 18px;font-size:0.85em;position:relative;z-index:1;color:#94a3b8;}
+            .competitor-bar strong{color:#fff;}
             .plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
             .plan-card{background:#ffffff;color:#1e293b;border-radius:18px;padding:36px 28px;text-align:center;transition:all 0.3s;box-shadow:0 4px 24px rgba(0,0,0,0.3);position:relative;}
             .plan-card:hover{transform:translateY(-6px);box-shadow:0 12px 40px rgba(0,0,0,0.4);}
-            .plan-card.popular{border:3px solid #fbbf24;}
-            .plan-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#fbbf24;color:#000;padding:5px 20px;border-radius:20px;font-size:0.78em;font-weight:800;}
+            .plan-card.popular{border:3px solid #e2e8f0;}
+            .plan-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#fff;color:#0f172a;padding:5px 20px;border-radius:20px;font-size:0.78em;font-weight:800;}
             .plan-name{font-size:1.4em;font-weight:800;margin-bottom:6px;color:#0f172a;}
             .plan-old-price{font-size:1.1em;color:#94a3b8;text-decoration:line-through;margin-bottom:2px;}
             .plan-price{font-size:3.2em;font-weight:900;color:#0f172a;margin-bottom:2px;}
@@ -701,8 +701,8 @@ def plans_page():
             .plan-features li:last-child{border-bottom:none;}
             .plan-features li::before{content:none;}
             .plan-btn{display:block;width:100%;padding:16px;border:none;border-radius:10px;font-size:1.1em;font-weight:800;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.2s;}
-            .plan-btn-primary{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;box-shadow:0 4px 16px rgba(251,191,36,0.4);}
-            .plan-btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(251,191,36,0.5);}
+            .plan-btn-primary{background:#fff;color:#0f172a;box-shadow:0 4px 16px rgba(255,255,255,0.15);}
+            .plan-btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,255,255,0.25);}
             .plan-btn-secondary{background:#0f172a;color:white;}
             .plan-btn-secondary:hover{background:#1e293b;}
             .free-section{margin-top:40px;text-align:center;padding:28px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;}
