@@ -2340,7 +2340,9 @@ def get_upcoming_predictions(sport, days=365):
 
         # NBA/NFL need a longer forward horizon (regular season + playoffs).
         if sport in ['NBA', 'NFL']:
-            start_str = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
+            # NFL: look back further to catch completed season + playoffs
+            _lookback = 240 if sport == 'NFL' else 7
+            start_str = (datetime.now() - timedelta(days=_lookback)).strftime('%Y%m%d')
             end_str = (datetime.now() + timedelta(days=120)).strftime('%Y%m%d')
             try:
                 url = f"{ESPN_ENDPOINTS[sport]}?dates={start_str}-{end_str}&limit=500"
@@ -2467,9 +2469,30 @@ def get_upcoming_predictions(sport, days=365):
                 except Exception as e:
                     logger.debug(f"Error fetching {sport} for {date_str}: {e}")
         
+        # NFL fallback: if ESPN returned nothing (offseason), load from database
+        if not api_games and sport == 'NFL':
+            conn = get_db_connection()
+            all_games_raw = conn.execute('''
+                SELECT g.*,
+                       p.elo_home_prob as stored_elo_prob,
+                       p.xgboost_home_prob as stored_xgb_prob,
+                       p.win_probability as stored_ensemble_prob
+                FROM games g
+                LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                WHERE g.sport = ?
+            ''', (sport, sport)).fetchall()
+            conn.close()
+            for g in all_games_raw:
+                gd = dict(g)
+                gd['home_team_id'] = gd.get('home_team_id', '')
+                gd['away_team_id'] = gd.get('away_team_id', '')
+                api_games.append(gd)
+
         # Enrich with stored predictions from database
         conn = get_db_connection()
         for game in api_games:
+            if game.get('stored_elo_prob') is not None:
+                continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability
                 FROM predictions WHERE game_id = ? AND sport = ?
