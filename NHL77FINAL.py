@@ -6339,13 +6339,9 @@ def landing_page():
                 _home = _tp.get('home_team_id', '')
                 _away = _tp.get('away_team_id', '')
                 _pick = _home if _ens > 50 else _away
-                _xh = _tp.get('xgb_home_score')
-                _xa = _tp.get('xgb_away_score')
-                _proj = f"{_xa} \u2013 {_xh}" if _xh is not None and _xa is not None else None
                 todays_picks.append({
                     'away': _away, 'home': _home,
                     'pick': _pick, 'prob': round(_ens, 1),
-                    'projection': _proj,
                     'sport': _tp_sport,
                     'slug': SPORT_SEO_SLUGS.get(_tp_sport, ''),
                 })
@@ -6964,7 +6960,6 @@ def landing_page():
         <a href="/{{ tp.slug }}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:18px 20px;text-decoration:none;color:#fff;transition:border-color 0.2s;">
             <div style="font-size:0.72em;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">{{ tp.sport }}</div>
             <div style="font-weight:700;font-size:1.05em;margin-bottom:6px;">{{ tp.away }} vs {{ tp.home }}</div>
-            {% if tp.projection %}<div style="font-size:0.85em;color:#94a3b8;margin-bottom:4px;">Projection: {{ tp.projection }}</div>{% endif %}
             <div style="font-size:0.9em;color:#10b981;font-weight:700;">▶ Free Pick: {{ tp.pick }} ML</div>
         </a>
         {% endfor %}

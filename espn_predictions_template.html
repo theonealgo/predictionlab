@@ -388,17 +388,10 @@
                     </div>
                         <div class="prediction-panel">
                             <div class="panel-title">Home Win %</div>
-                            {% if is_premium %}
                             <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else '—' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
                             <div class="model-row"><span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span><span class="model-val">{{ pred.trueskill_prob if pred.trueskill_prob is not none else '—' }}{% if pred.trueskill_prob is not none %}%{% endif %}</span></div>
                             <div class="model-row"><span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span><span class="model-val">{{ pred.elo_prob if pred.elo_prob is not none else '—' }}{% if pred.elo_prob is not none %}%{% endif %}</span></div>
                             <div class="model-row"><span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span><span class="model-val">{{ pred.xgb_prob if pred.xgb_prob is not none else '—' }}{% if pred.xgb_prob is not none %}%{% endif %}</span></div>
-                            {% else %}
-                            <div class="model-row"><span class="model-lbl">{{ label_glicko2 }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
-                            <div class="model-row"><span class="model-lbl">{{ label_trueskill }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
-                            <div class="model-row"><span class="model-lbl">{{ label_elo }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
-                            <div class="model-row"><span class="model-lbl">{{ label_xgb }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
-                            {% endif %}
                             <div class="ensemble-badge">{{ label_ensemble|upper }} {{ pred.ensemble_prob if pred.ensemble_prob is not none else '—' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
                             {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
