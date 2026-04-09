@@ -5504,23 +5504,23 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;">
-            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 {{ ens.total }} Games Graded</h2>
+            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 Season Performance</h2>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎯 Moneyline (Consensus)</div>
                     <div style="font-size:2em;font-weight:bold;color:{% if ens.accuracy>=55 %}#10b981{% elif ens.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ ens.accuracy }}%</div>
-                    <div style="font-size:0.85em;opacity:0.85;">{{ ens.correct }}-{{ ens.total - ens.correct }}</div>
+                    <div style="font-size:0.85em;opacity:0.85;">{{ ens.correct }}-{{ ens.total - ens.correct }} ({{ ens.total }} games)</div>
                 </div>
                 {% if spread_total_stats is defined and spread_total_stats %}
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">📈 Spread (XSharp)</div>
                     <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.spread_pct>=52 %}#10b981{% elif spread_total_stats.spread_pct>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ spread_total_stats.spread_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.spread_covered }}/{{ spread_total_stats.spread_graded }}</div>
+                    <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.spread_covered }}-{{ spread_total_stats.spread_graded - spread_total_stats.spread_covered }} ({{ spread_total_stats.spread_graded }} graded)</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎲 O/U (XSharp)</div>
                     <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.total_pct>=52 %}#10b981{% elif spread_total_stats.total_pct>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ spread_total_stats.total_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.total_correct }}/{{ spread_total_stats.total_graded }}</div>
+                    <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.total_correct }}-{{ spread_total_stats.total_graded - spread_total_stats.total_correct }} ({{ spread_total_stats.total_graded }} graded)</div>
                 </div>
                 {% else %}
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
