@@ -2338,10 +2338,10 @@ def get_upcoming_predictions(sport, days=365):
         
         api_games = []
 
-        # NBA/NFL need a longer forward horizon (regular season + playoffs).
-        if sport in ['NBA', 'NFL']:
-            # NFL: look back further to catch completed season + playoffs
-            _lookback = 240 if sport == 'NFL' else 7
+        # NBA/NFL/NCAAF need a longer forward horizon (regular season + playoffs).
+        if sport in ['NBA', 'NFL', 'NCAAF']:
+            # NFL/NCAAF: look back further to catch completed season + playoffs
+            _lookback = 240 if sport in ('NFL', 'NCAAF') else 7
             start_str = (datetime.now() - timedelta(days=_lookback)).strftime('%Y%m%d')
             end_str = (datetime.now() + timedelta(days=120)).strftime('%Y%m%d')
             try:
@@ -2469,8 +2469,8 @@ def get_upcoming_predictions(sport, days=365):
                 except Exception as e:
                     logger.debug(f"Error fetching {sport} for {date_str}: {e}")
         
-        # NFL fallback: if ESPN returned nothing (offseason), load from database
-        if not api_games and sport == 'NFL':
+        # NFL/NCAAF fallback: if ESPN returned nothing (offseason), load from database
+        if not api_games and sport in ('NFL', 'NCAAF'):
             conn = get_db_connection()
             all_games_raw = conn.execute('''
                 SELECT g.*,
@@ -5287,6 +5287,7 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
+    {% if sport_bg_image %}body{background:url('{{ sport_bg_image }}') center/cover no-repeat fixed !important;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}@media(max-width:768px){body{background-attachment:scroll !important;}}{% endif %}
     .page-title { font-size: 2.2em; margin-bottom: 20px; text-align: center; }
     .section-tabs { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap; }
     .tab { padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; background: rgba(255,255,255,0.1); color: white; font-size: 0.9em; }
@@ -5733,6 +5734,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
+    {% if sport_bg_image %}body{background:url('{{ sport_bg_image }}') center/cover no-repeat fixed !important;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}@media(max-width:768px){body{background-attachment:scroll !important;}}{% endif %}
     .page-title {
         font-size: 2.5em;
         margin-bottom: 30px;
@@ -7471,7 +7473,7 @@ def sport_predictions(sport, filter_date=None):
         espn_template,
         page=sport,
         sport=sport,
-        sport_info=SPORTS[sport],
+        sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
         sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
         sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
         sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
@@ -7519,7 +7521,7 @@ def sport_results(sport):
                 NFL_WEEKLY_RESULTS_TEMPLATE,
                 page=sport,
                 sport=sport,
-                sport_info=SPORTS[sport],
+                sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                 weekly_results=weekly_results,
                 overall_stats=overall_stats,
                 daily_tally=daily_tally,
@@ -7594,7 +7596,7 @@ def sport_results(sport):
 
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
-                    page=sport, sport=sport, sport_info=SPORTS[sport],
+                    page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                     daily_results=daily_results, sorted_dates=sorted_dates,
                     today_date=today_date, overall_stats=overall_stats,
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
@@ -7666,7 +7668,7 @@ def sport_results(sport):
                 roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
-                    page=sport, sport=sport, sport_info=SPORTS[sport],
+                    page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                     daily_results=daily_results, sorted_dates=sorted_dates,
                     today_date=today_date, overall_stats=overall_stats,
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
@@ -7862,7 +7864,7 @@ def sport_results(sport):
 
             rendered = render_template_string(
                 DAILY_RESULTS_TEMPLATE,
-                page=sport, sport=sport, sport_info=SPORTS[sport],
+                page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                 daily_results=daily_results, sorted_dates=sorted_dates,
                 today_date=today_date, overall_stats=overall_stats,
                 total_over=_ov, total_under=_un, total_games_ou=_gou,
@@ -7885,7 +7887,7 @@ def sport_results(sport):
             RESULTS_TEMPLATE,
             page=sport,
             sport=sport,
-            sport_info=SPORTS[sport],
+            sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
             performance=performance
         )
     except Exception as e:
@@ -8058,7 +8060,7 @@ def sport_ats_picks(sport):
         ATS_PICKS_TEMPLATE,
         page=sport,
         sport=sport,
-        sport_info=SPORTS[sport],
+        sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
         ml_picks=ml_picks,
         spread_picks=spread_picks,
         total_picks=total_picks,

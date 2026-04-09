@@ -57,6 +57,9 @@
         {% if sport_bg_image %}
         body::before { content:''; position:fixed; inset:0; background:rgba(7,10,20,0.82); z-index:0; }
         body>* { position:relative; z-index:1; }
+        @media (max-width: 768px) {
+            body { background-attachment:scroll !important; background-size:cover !important; }
+        }
         {% endif %}
         .hamburger:hover { background: rgba(255, 255, 255, 0.12); }
         .navbar {
