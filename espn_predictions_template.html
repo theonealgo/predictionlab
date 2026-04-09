@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    {% set _meta_title = sport_info.name ~ ' Predictions — underdogs.bet' %}
-    {% set _meta_desc = sport_info.name ~ ' predictions, spreads, totals, and model insights powered by AI.' %}
+    {% set _meta_title = sport_info.name ~ ' Picks Today – ' ~ today_date ~ ' | underdogs.bet' %}
+    {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks today. AI-powered predictions with projected scores, spreads, and totals. Updated daily.' %}
     <title>{{ _meta_title }}</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,6 +35,17 @@
       "url": "{{ request.url }}"
     }
     </script>
+    {% if grouped_predictions %}
+    {% for date in sorted_dates %}
+    {% for pred in grouped_predictions[date] %}
+    {% if pred.home_score is none %}
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} vs {{ pred.home_team_id }}","startDate":"{{ date }}","location":{"@type":"Place","name":"{{ sport_info.name }}"},"performer":[{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"}]}
+    </script>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+    {% endif %}
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -165,6 +176,8 @@
         .date-bubble.active.today { background:#10b981; color:white; }
         .date-section { display:none; }
         .date-section.visible { display:block; }
+        .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
+        .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         .date-header { font-size:1.25em; margin-bottom:14px; color:#fbbf24; font-weight:600; }
         .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(400px,1fr)); gap:12px; margin-bottom:22px; }
 
@@ -305,7 +318,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>{{ sport_info.icon }} {{ sport_info.name }} — Predictions</h1>
+        <h1>{{ sport_info.icon }} {{ sport_info.name }} Picks Today – {{ today_date }}</h1>
     </div>
 
     <div class="section-tabs">
@@ -339,9 +352,17 @@
         <div class="nav-arrow" onclick="nextWeek()">›</div>
     </div>
 
+    {% if sorted_dates %}
+    <ul class="sr-only">
+        {% for date in sorted_dates %}
+        <li><a href="#date-{{ date }}">{{ date }}</a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
     {% if grouped_predictions %}
         {% for date in sorted_dates %}
-        <div class="date-section" id="date-{{ date }}">
+        <div class="date-section seo-hidden" id="date-{{ date }}">
             <div class="date-header">
                 📅 {{ date }}
                 {% if date == today_date %}<span style="background:#10b981;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
@@ -367,10 +388,17 @@
                     </div>
                         <div class="prediction-panel">
                             <div class="panel-title">Home Win %</div>
+                            {% if is_premium %}
                             <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else '—' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
                             <div class="model-row"><span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span><span class="model-val">{{ pred.trueskill_prob if pred.trueskill_prob is not none else '—' }}{% if pred.trueskill_prob is not none %}%{% endif %}</span></div>
                             <div class="model-row"><span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span><span class="model-val">{{ pred.elo_prob if pred.elo_prob is not none else '—' }}{% if pred.elo_prob is not none %}%{% endif %}</span></div>
                             <div class="model-row"><span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span><span class="model-val">{{ pred.xgb_prob if pred.xgb_prob is not none else '—' }}{% if pred.xgb_prob is not none %}%{% endif %}</span></div>
+                            {% else %}
+                            <div class="model-row"><span class="model-lbl">{{ label_glicko2 }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
+                            <div class="model-row"><span class="model-lbl">{{ label_trueskill }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
+                            <div class="model-row"><span class="model-lbl">{{ label_elo }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
+                            <div class="model-row"><span class="model-lbl">{{ label_xgb }}</span><span class="model-val" style="color:#64748b;">🔒</span></div>
+                            {% endif %}
                             <div class="ensemble-badge">{{ label_ensemble|upper }} {{ pred.ensemble_prob if pred.ensemble_prob is not none else '—' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
                             {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
@@ -384,6 +412,7 @@
                         <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
         {% if sport == 'NHL' and pred.puck_line_tag is not none %}
+                        {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">Puck Line</span>
                             {% if pred.puck_line_tag == 'STRONG -1.5' %}<span class="sf-val" style="color:#10b981;font-weight:800;">{{ pred.puck_line_tag }}</span>
                             {% elif pred.puck_line_tag == 'LEAN -1.5' %}<span class="sf-val" style="color:#34d399;">{{ pred.puck_line_tag }}</span>
@@ -399,6 +428,9 @@
                             <span class="sf-label">{% if pred.puck_line_fav_side == 'home' %}{{ pred.away_team_id[:10] }} +1.5{% else %}{{ pred.home_team_id[:10] }} +1.5{% endif %}</span>
                             <span class="sf-val" style="color:#94a3b8;">{{ pred.puck_line_dog_prob }}%</span>
                         </div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">Puck Line</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
+                        {% endif %}
                         {% else %}
                         {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Spread</span>
@@ -519,9 +551,12 @@
         return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
     }
     function showDate(date) {
-        document.querySelectorAll('.date-section').forEach(s=>s.classList.remove('visible'));
+        document.querySelectorAll('.date-section').forEach(s=>{
+            s.classList.remove('visible');
+            s.classList.add('seo-hidden');
+        });
         const sec=document.getElementById('date-'+date);
-        if(sec){sec.classList.add('visible');activeDate=date;}
+        if(sec){sec.classList.remove('seo-hidden');sec.classList.add('visible');activeDate=date;}
     }
     function toggleAnalysis(id, el) {
         const panel = document.getElementById(id);
