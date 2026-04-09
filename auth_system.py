@@ -703,8 +703,8 @@ def plans_page():
             .plan-features li:last-child{border-bottom:none;}
             .plan-features li::before{content:none;}
             .plan-btn{display:block;width:100%;padding:16px;border:none;border-radius:10px;font-size:1.1em;font-weight:800;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.2s;}
-            .plan-btn-primary{background:#fff;color:#0f172a;box-shadow:0 4px 16px rgba(255,255,255,0.15);}
-            .plan-btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,255,255,0.25);}
+            .plan-btn-primary{background:#0f172a;color:white;box-shadow:0 4px 16px rgba(0,0,0,0.3);}
+            .plan-btn-primary:hover{transform:translateY(-2px);background:#1e293b;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
             .plan-btn-secondary{background:#0f172a;color:white;}
             .plan-btn-secondary:hover{background:#1e293b;}
             .free-section{margin-top:40px;text-align:center;padding:28px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;}
