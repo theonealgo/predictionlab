@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    {% set _meta_title = sport_info.name ~ ' Picks Today – ' ~ today_date ~ ' | underdogs.bet' %}
+    {% set _meta_title = sport_info.name ~ ' Picks Today | underdogs.bet' %}
     {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks today. AI-powered predictions with projected scores, spreads, and totals. Updated daily.' %}
     <title>{{ _meta_title }}</title>
     <meta charset="UTF-8">
@@ -318,7 +318,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>{{ sport_info.icon }} {{ sport_info.name }} Picks Today – {{ today_date }}</h1>
+        <h1 id="pageHeading">{{ sport_info.icon }} {{ sport_info.name }} Picks Today</h1>
     </div>
 
     <div class="section-tabs">
@@ -550,6 +550,8 @@
         const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
     }
+    const sportIcon = '{{ sport_info.icon }}';
+    const sportName = '{{ sport_info.name }}';
     function showDate(date) {
         document.querySelectorAll('.date-section').forEach(s=>{
             s.classList.remove('visible');
@@ -557,6 +559,12 @@
         });
         const sec=document.getElementById('date-'+date);
         if(sec){sec.classList.remove('seo-hidden');sec.classList.add('visible');activeDate=date;}
+        // Update heading with selected date
+        const h=document.getElementById('pageHeading');
+        if(h){
+            if(date===today){h.textContent=sportIcon+' '+sportName+' Picks Today';}
+            else{h.textContent=sportIcon+' '+sportName+' Picks \u2013 '+formatDate(date);}
+        }
     }
     function toggleAnalysis(id, el) {
         const panel = document.getElementById(id);
