@@ -879,13 +879,17 @@ CORS(app, origins=[
 
 @app.context_processor
 def inject_globals():
-    """Make stripe_donation_url available in every template automatically."""
+    """Make global template variables available in every template automatically."""
+    # Determine current sport from request args or view context
+    _sport = request.view_args.get('sport', '') if request.view_args else ''
     return {
         'stripe_donation_url': STRIPE_DONATION_URL,
         'contact_email': CONTACT_EMAIL,
         'social_links': SOCIAL_LINKS,
         'soccer_enabled': SOCCER_ENABLED,
         'ga_tracking_id': GA_TRACKING_ID,
+        'sport_seo_slug': SPORT_SEO_SLUGS.get(_sport, ''),
+        'sport_results_slug': _SPORT_RESULTS_SLUGS.get(_sport, ''),
     }
 
 @app.after_request
@@ -4317,15 +4321,15 @@ BASE_TEMPLATE = """
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ request.url }}">
-    <meta property="og:image" content="{{ request.url_root.rstrip('/') }}/static/IMG_3179.PNG">
-    <meta property="og:image" content="{{ _meta_image }}">
+    <meta property="og:url" content="https://www.underdogs.bet{{ request.path }}">
+    <meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
     <meta property="og:site_name" content="underdogs.bet">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <meta name="twitter:image" content="{{ _meta_image }}">
+    <meta name="twitter:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
+    <link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JWHPL9X6SY"></script>
@@ -4336,17 +4340,22 @@ BASE_TEMPLATE = """
       gtag('config', 'G-JWHPL9X6SY');
     </script>
     {% endif %}
-    {% if sport_info is defined %}
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SportsOrganization",
+      "@type": "Organization",
       "name": "underdogs.bet",
-      "sport": "{{ sport_info.name }}",
-      "url": "{{ request.url }}"
+      "url": "https://www.underdogs.bet",
+      "logo": "https://www.underdogs.bet/static/IMG_3179.PNG",
+      "sameAs": [
+        "https://x.com/underdogs_bet",
+        "https://instagram.com/underdogs.bet",
+        "https://facebook.com/underdogs.bet",
+        "https://tiktok.com/@underdog.bet",
+        "https://youtube.com/@Underdogsbet"
+      ]
     }
     </script>
-    {% endif %}
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -4754,8 +4763,8 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - VALUE BETTING PICKS</h1>
     <div class="section-tabs">
-        <a href="/sport/{{ sport }}/predictions" class="tab active">💰 Value Picks</a>
-        <a href="/sport/{{ sport }}/results" class="tab">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab active">💰 Value Picks</a>
+        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
     </div>
     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: rgba(251, 191, 36, 0.1); border-radius: 10px;">
         <p style="font-size: 1.2em; margin-bottom: 10px;">✅ <strong>Only showing games with +5% or higher edge</strong></p>
@@ -4972,8 +4981,8 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Predictions</h1>
     
     <div class="section-tabs">
-        <a href="/sport/{{ sport }}/predictions" class="tab active">📊 Predictions</a>
-        <a href="/sport/{{ sport }}/results" class="tab">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
     </div>
     
     {% if today_date in sorted_dates %}
@@ -5101,11 +5110,11 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Completed Games Results</h1>
     
     <div class="section-tabs">
-        <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
-        <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
     </div>
     
-    <div class="results-table-container">
+    <div class="results-container">
         <div class="results-header">
             <h2>📅 2025-26 Season - All Completed Games</h2>
             <p style="opacity: 0.8;">Model predictions shown as home team win probability (%)</p>
@@ -5234,10 +5243,10 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Results</h1>
     
     <div class="section-tabs">
-        <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
-        <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
     </div>
-    
+        {% set model_cards
     <div class="results-container">
         {% if performance %}
         <div class="date-range">📅 Test Period: {{ performance.date_range }}</div>
@@ -5863,15 +5872,15 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Week by Week Results</h1>
     
     <div class="section-tabs">
-        <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
-        <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
     </div>
     
     {% if daily_tally %}
     <div class="daily-tally">
         <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
         <div class="daily-tally-grid">
-            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')]
             {% set m = daily_tally[m_key] %}
             <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                 <div class="daily-model">{{ m_label }}</div>
@@ -6404,13 +6413,15 @@ def landing_page():
     <meta property="og:title" content="underdogs.bet – Daily AI Sports Picks &amp; Betting Predictions">
     <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:url" content="https://www.underdogs.bet/">
+    <meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
     <meta property="og:site_name" content="underdogs.bet">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
     <meta name="twitter:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
-    <meta name="twitter:image" content="{{ request.url_root.rstrip('/') }}/static/IMG_3179.PNG">
+    <meta name="twitter:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
+    <link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
@@ -6424,9 +6435,10 @@ def landing_page():
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SportsOrganization",
+      "@type": "Organization",
       "name": "underdogs.bet",
       "url": "https://www.underdogs.bet",
+      "logo": "https://www.underdogs.bet/static/IMG_3179.PNG",
       "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
       "sameAs": [
         "https://x.com/underdogs_bet",
@@ -6438,10 +6450,10 @@ def landing_page():
     }
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet"}
+    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet","potentialAction":{"@type":"SearchAction","target":"https://www.underdogs.bet/?q={search_term_string}","query-input":"required name=search_term_string"}}
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"image":"https://www.underdogs.bet/static/IMG_3179.PNG","aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Monthly","url":"https://www.underdogs.bet/plans"},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Yearly","url":"https://www.underdogs.bet/plans"}]}
+    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"image":["https://www.underdogs.bet/static/IMG_3179.PNG"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -7541,6 +7553,8 @@ def sport_results(sport):
                 page=sport,
                 sport=sport,
                 sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+                sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+                sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
                 weekly_results=weekly_results,
                 overall_stats=overall_stats,
                 daily_tally=daily_tally,
@@ -7616,6 +7630,8 @@ def sport_results(sport):
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
                     page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+                    sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+                    sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
                     daily_results=daily_results, sorted_dates=sorted_dates,
                     today_date=today_date, overall_stats=overall_stats,
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
@@ -7688,6 +7704,8 @@ def sport_results(sport):
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
                     page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+                    sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+                    sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
                     daily_results=daily_results, sorted_dates=sorted_dates,
                     today_date=today_date, overall_stats=overall_stats,
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
@@ -7876,7 +7894,7 @@ def sport_results(sport):
                         'name': lg,
                         'slug': _soccer_league_slug(lg),
                         'active': lg == selected_league,
-                        'url': f"/sport/{sport}/results?league={_soccer_league_slug(lg)}",
+                    'url': f"/soccer-results?league={_soccer_league_slug(lg)}",
                     }
                     for lg in SOCCER_LEAGUE_ORDER
                 ]
@@ -7884,6 +7902,8 @@ def sport_results(sport):
             rendered = render_template_string(
                 DAILY_RESULTS_TEMPLATE,
                 page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+                sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+                sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
                 daily_results=daily_results, sorted_dates=sorted_dates,
                 today_date=today_date, overall_stats=overall_stats,
                 total_over=_ov, total_under=_un, total_games_ou=_gou,
@@ -7907,6 +7927,8 @@ def sport_results(sport):
             page=sport,
             sport=sport,
             sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+            sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+            sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
             performance=performance
         )
     except Exception as e:

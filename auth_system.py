@@ -592,6 +592,14 @@ LOGIN_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login — underdogs.bet</title>
+<meta name="description" content="Log in to your underdogs.bet account to access AI-powered sports picks, spreads, and totals.">
+<meta property="og:title" content="Login — underdogs.bet">
+<meta property="og:description" content="Log in to access AI-powered sports picks.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.underdogs.bet/login">
+<meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+<link rel="canonical" href="https://www.underdogs.bet/login">
+<link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:url('/static/baseball.jpg') center/cover no-repeat fixed;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
@@ -620,6 +628,14 @@ SIGNUP_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign Up — underdogs.bet</title>
+<meta name="description" content="Create a free underdogs.bet account to access AI-powered sports picks. Upgrade for spreads, totals, and score predictions.">
+<meta property="og:title" content="Sign Up — underdogs.bet">
+<meta property="og:description" content="Create a free account for AI-powered sports picks.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.underdogs.bet/signup">
+<meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+<link rel="canonical" href="https://www.underdogs.bet/signup">
+<link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:url('/static/baseball.jpg') center/cover no-repeat fixed;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
@@ -649,6 +665,8 @@ SUCCESS_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Welcome to Premium — underdogs.bet</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;}</style>
 </head><body>
 <div style="text-align:center;padding:40px;">
