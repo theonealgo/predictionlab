@@ -7140,6 +7140,18 @@ def landing_page():
 .hero-slide{opacity:0;}
 </style>
 
+<!-- Daily Results Box -->
+<div style="max-width:680px;margin:0 auto;padding:0 24px;">
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:28px 24px;text-align:center;backdrop-filter:blur(8px);">
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:1.4em;">📊</span>
+            <h2 style="font-size:1.2em;font-weight:800;color:#fff;">Daily Betting Results Report</h2>
+        </div>
+        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:16px;">See yesterday's performance across all sports and models — tracked, transparent, updated daily.</p>
+        <a href="/results" style="display:inline-block;background:#fff;color:#0f172a;padding:12px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.92em;transition:opacity 0.2s;">View Full Results</a>
+    </div>
+</div>
+
 <!-- Sticky Bottom Bar -->
 <div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
     <div style="display:flex;align-items:center;gap:12px;">
@@ -7672,6 +7684,10 @@ def wnba_shortcut():
 @app.route('/soccer')
 def soccer_shortcut():
     return redirect('/soccer-picks', code=301)
+
+@app.route('/results')
+def results_shortcut():
+    return redirect('/daily-report', code=301)
 
 @app.route('/donate')
 def donate_shortcut():
