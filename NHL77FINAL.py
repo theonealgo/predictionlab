@@ -4743,6 +4743,10 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
 DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
+    body{background:url('/static/IMG_2695.jpeg') center/cover no-repeat fixed !important;}
+    body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.88);z-index:0;}
+    body>*{position:relative;z-index:1;}
+    @media(max-width:768px){body{background-attachment:scroll !important;}}
     .rpt-wrap{max-width:760px;margin:0 auto;padding:10px 0 60px;}
     .rpt-header{text-align:center;margin-bottom:28px;}
     .rpt-header h1{font-size:1.8em;margin-bottom:6px;}
@@ -7137,20 +7141,6 @@ def landing_page():
 .hero-slide{opacity:0;}
 </style>
 
-<!-- Daily Results Box -->
-<div style="max-width:720px;margin:0 auto;padding:0 24px;">
-    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
-        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
-        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
-        <div style="position:relative;padding:32px 28px;text-align:center;">
-            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
-            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models — tracked, transparent, verified.</p>
-            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
-        </div>
-    </div>
-</div>
-<style>@keyframes shineText{to{background-position:200% center;}}</style>
-
 <!-- Sticky Bottom Bar -->
 <div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
     <div style="display:flex;align-items:center;gap:12px;">
@@ -7176,7 +7166,7 @@ def landing_page():
     </div>
 </div>
 
-<!-- Today's Top Picks (dynamic SEO content) -->
+<!-- Today's Top Picks
 {% if todays_picks %}
 <div class="section" style="padding-top:20px;">
     <h2 class="section-title">Today's Top Picks</h2>
@@ -7319,6 +7309,20 @@ def landing_page():
         <a href="/wnba-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">WNBA Picks Today</a>
     </div>
 </div>
+
+<!-- Daily Results Box -->
+<div style="max-width:720px;margin:0 auto 30px;padding:0 24px;">
+    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
+        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
+        <div style="position:relative;padding:32px 28px;text-align:center;">
+            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
+            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
+            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
+        </div>
+    </div>
+</div>
+<style>@keyframes shineText{to{background-position:200% center;}}</style>
 
 <!-- Footer -->
 <footer class="site-footer">
@@ -7578,6 +7582,9 @@ def daily_report_page():
                     'skip_grading': True if home_won is None else False,
                 }
                 daily_results[report_date]['games'].append(game_info)
+            # Attach spread/total grading data
+            _attach_engine_odds_to_daily_results(sport_key, daily_results, limit=50)
+            _compute_spread_total_for_daily(sport_key, daily_results)
             tally = compute_daily_model_tally(daily_results, report_date)
             if not tally or tally.get('games', 0) == 0:
                 continue
