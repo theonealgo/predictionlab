@@ -4743,26 +4743,28 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
 DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
-    .rpt-wrap{max-width:720px;margin:0 auto;padding:10px 0 60px;}
+    .rpt-wrap{max-width:760px;margin:0 auto;padding:10px 0 60px;}
     .rpt-header{text-align:center;margin-bottom:28px;}
     .rpt-header h1{font-size:1.8em;margin-bottom:6px;}
     .rpt-header .rpt-date{color:#fbbf24;font-size:1.15em;font-weight:700;}
     .rpt-header .rpt-sub{color:#94a3b8;font-size:0.9em;margin-top:6px;}
-    .rpt-section{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:20px;margin-bottom:18px;}
-    .rpt-section h2{font-size:1.15em;margin-bottom:14px;color:#fbbf24;text-align:center;}
-    .rpt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;}
-    .rpt-card{background:rgba(255,255,255,0.06);border-radius:10px;padding:12px 8px;text-align:center;}
-    .rpt-card.highlight{border:2px solid #fbbf24;}
-    .rpt-model{font-size:0.78em;opacity:0.85;margin-bottom:4px;}
-    .rpt-acc{font-size:1.5em;font-weight:800;}
-    .rpt-acc.green{color:#10b981;}
-    .rpt-acc.yellow{color:#fbbf24;}
-    .rpt-acc.red{color:#ef4444;}
-    .rpt-acc.gray{color:#94a3b8;}
-    .rpt-rec{font-size:0.82em;opacity:0.8;}
-    .rpt-sport-header{font-size:0.88em;font-weight:700;color:#e2e8f0;margin:14px 0 8px;padding-left:4px;}
+    .rpt-sport-block{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:20px;margin-bottom:16px;}
+    .rpt-sport-title{font-size:1.1em;font-weight:800;color:#fff;margin-bottom:14px;text-align:center;}
+    .rpt-sport-title span{color:#fbbf24;}
+    .rpt-cat-label{font-size:0.72em;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;text-align:center;margin:12px 0 6px;font-weight:600;}
+    .rpt-cat-label:first-child{margin-top:0;}
+    .rpt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;}
+    .rpt-card{background:rgba(255,255,255,0.06);border-radius:10px;padding:10px 6px;text-align:center;}
+    .rpt-card.hl{border:2px solid #fbbf24;}
+    .rpt-model{font-size:0.72em;opacity:0.85;margin-bottom:3px;}
+    .rpt-acc{font-size:1.35em;font-weight:800;}
+    .rpt-acc.g{color:#10b981;}.rpt-acc.y{color:#fbbf24;}.rpt-acc.r{color:#ef4444;}.rpt-acc.x{color:#94a3b8;}
+    .rpt-rec{font-size:0.78em;opacity:0.8;}
+    .rpt-sou-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .rpt-total{text-align:center;font-size:0.9em;color:#94a3b8;margin-bottom:18px;}
+    .rpt-total strong{color:#fff;font-size:1.1em;}
     .rpt-actions{display:flex;gap:10px;justify-content:center;margin-top:28px;flex-wrap:wrap;}
-    .rpt-btn{padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:0.88em;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;}
+    .rpt-btn{padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:0.88em;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;border:none;}
     .rpt-btn:hover{opacity:0.85;transform:translateY(-1px);}
     .rpt-btn-x{background:#000;color:#fff;border:1px solid rgba(255,255,255,0.2);}
     .rpt-btn-fb{background:#1877f2;color:#fff;}
@@ -4773,12 +4775,11 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     .rpt-btn-cta{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;}
     .rpt-share-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
     .rpt-cta-row{display:flex;justify-content:center;}
-    .rpt-total{text-align:center;font-size:0.9em;color:#94a3b8;margin-bottom:18px;}
-    .rpt-total strong{color:#fff;font-size:1.1em;}
-    @media(max-width:500px){.rpt-grid{grid-template-columns:repeat(3,1fr);}.rpt-acc{font-size:1.2em;}}
+    .rpt-sharing{font-size:0.78em;color:#94a3b8;text-align:center;margin-top:6px;}
+    @media(max-width:500px){.rpt-grid{grid-template-columns:repeat(3,1fr);}.rpt-acc{font-size:1.1em;}.rpt-sou-row{grid-template-columns:1fr;}}
     """
 ).replace('{% block content %}{% endblock %}', """
-    <div class="rpt-wrap">
+    <div class="rpt-wrap" id="reportCapture">
         <div class="rpt-header">
             <h1>Daily Betting Results Report</h1>
             <div class="rpt-date">{{ report_display }}</div>
@@ -4791,111 +4792,107 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
         <div style="text-align:center;padding:40px;opacity:0.7;">No completed games found for this date.</div>
         {% else %}
 
-        <!-- ── MONEYLINE ── -->
-        <div class="rpt-section">
-            <h2>🎯 Moneyline</h2>
-            <div class="rpt-grid">
-                {% for mk, mlabel in model_labels %}
-                {% set m = agg_models.get(mk, {}) %}
-                <div class="rpt-card {% if mk == 'ensemble' %}highlight{% endif %}">
-                    <div class="rpt-model">{{ mlabel }}</div>
-                    {% if m.total > 0 %}
-                    <div class="rpt-acc {% if m.accuracy >= 60 %}green{% elif m.accuracy >= 50 %}yellow{% else %}red{% endif %}">{{ m.accuracy }}%</div>
-                    <div class="rpt-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
-                    {% else %}
-                    <div class="rpt-acc gray">&mdash;</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
+        {% for st in sport_tallies %}
+        <div class="rpt-sport-block">
+            <div class="rpt-sport-title">{{ st.info.icon }} <span>{{ st.info.name }}</span> &mdash; {{ st.tally.games }} games</div>
 
-            <!-- Per-sport breakdown -->
-            {% for st in sport_tallies %}
-            <div class="rpt-sport-header">{{ st.info.icon }} {{ st.info.name }} ({{ st.tally.games }} games)</div>
+            <div class="rpt-cat-label">Moneyline</div>
             <div class="rpt-grid">
                 {% for mk, mlabel in model_labels %}
                 {% set m = st.tally.get(mk, {}) %}
-                <div class="rpt-card {% if mk == 'ensemble' %}highlight{% endif %}">
+                <div class="rpt-card {% if mk == 'ensemble' %}hl{% endif %}">
                     <div class="rpt-model">{{ mlabel }}</div>
                     {% if m.total > 0 %}
-                    <div class="rpt-acc {% if m.accuracy >= 60 %}green{% elif m.accuracy >= 50 %}yellow{% else %}red{% endif %}">{{ m.accuracy }}%</div>
+                    <div class="rpt-acc {% if m.accuracy >= 60 %}g{% elif m.accuracy >= 50 %}y{% else %}r{% endif %}">{{ m.accuracy }}%</div>
                     <div class="rpt-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                     {% else %}
-                    <div class="rpt-acc gray">&mdash;</div>
+                    <div class="rpt-acc x">&mdash;</div>
                     {% endif %}
                 </div>
                 {% endfor %}
             </div>
-            {% endfor %}
-        </div>
 
-        <!-- ── SPREAD ── -->
-        {% if agg_spread.total > 0 %}
-        <div class="rpt-section">
-            <h2>📈 Spread</h2>
-            <div class="rpt-grid" style="max-width:320px;margin:0 auto;">
-                <div class="rpt-card highlight">
-                    <div class="rpt-model">Record</div>
-                    <div class="rpt-acc {% if agg_spread.accuracy >= 55 %}green{% elif agg_spread.accuracy >= 48 %}yellow{% else %}red{% endif %}">{{ agg_spread.accuracy }}%</div>
-                    <div class="rpt-rec">{{ agg_spread.correct }}-{{ agg_spread.total - agg_spread.correct }}{% if agg_spread.pushes %}-{{ agg_spread.pushes }}{% endif %}</div>
+            {% set sp = st.tally.get('spread', {}) %}
+            {% set ou = st.tally.get('total_ou', {}) %}
+            {% if sp.total > 0 or ou.total > 0 %}
+            <div class="rpt-sou-row" style="margin-top:10px;">
+                {% if sp.total > 0 %}
+                <div>
+                    <div class="rpt-cat-label">Spread</div>
+                    <div class="rpt-card hl">
+                        <div class="rpt-acc {% if sp.accuracy >= 55 %}g{% elif sp.accuracy >= 48 %}y{% else %}r{% endif %}">{{ sp.accuracy }}%</div>
+                        <div class="rpt-rec">{{ sp.correct }}-{{ sp.total - sp.correct }}{% if sp.pushes %}-{{ sp.pushes }}{% endif %}</div>
+                    </div>
                 </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- ── OVER/UNDER ── -->
-        {% if agg_ou.total > 0 %}
-        <div class="rpt-section">
-            <h2>🎲 Over/Under</h2>
-            <div class="rpt-grid" style="max-width:320px;margin:0 auto;">
-                <div class="rpt-card highlight">
-                    <div class="rpt-model">Record</div>
-                    <div class="rpt-acc {% if agg_ou.accuracy >= 55 %}green{% elif agg_ou.accuracy >= 48 %}yellow{% else %}red{% endif %}">{{ agg_ou.accuracy }}%</div>
-                    <div class="rpt-rec">{{ agg_ou.correct }}-{{ agg_ou.total - agg_ou.correct }}{% if agg_ou.pushes %}-{{ agg_ou.pushes }}{% endif %}</div>
+                {% endif %}
+                {% if ou.total > 0 %}
+                <div>
+                    <div class="rpt-cat-label">Over/Under</div>
+                    <div class="rpt-card hl">
+                        <div class="rpt-acc {% if ou.accuracy >= 55 %}g{% elif ou.accuracy >= 48 %}y{% else %}r{% endif %}">{{ ou.accuracy }}%</div>
+                        <div class="rpt-rec">{{ ou.correct }}-{{ ou.total - ou.correct }}{% if ou.pushes %}-{{ ou.pushes }}{% endif %}</div>
+                    </div>
                 </div>
+                {% endif %}
             </div>
+            {% endif %}
         </div>
-        {% endif %}
+        {% endfor %}
 
         {% endif %}
-
-        <div class="rpt-actions" style="flex-direction:column;align-items:center;">
-            <div class="rpt-share-row">
-                <a class="rpt-btn rpt-btn-x" href="https://twitter.com/intent/tweet?text={{ share_text }}" target="_blank" rel="noopener">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                    X
-                </a>
-                <a class="rpt-btn rpt-btn-fb" href="https://www.facebook.com/sharer/sharer.php?u=https://www.underdogs.bet/daily-report" target="_blank" rel="noopener">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                    Facebook
-                </a>
-                <a class="rpt-btn rpt-btn-ig" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
-                    Instagram
-                </a>
-                <a class="rpt-btn rpt-btn-tk" href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
-                    TikTok
-                </a>
-                <button class="rpt-btn rpt-btn-copy" onclick="copyReportLink(this)">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                    Copy Link
-                </button>
-            </div>
-            <div class="rpt-cta-row">
-                <a class="rpt-btn rpt-btn-cta" href="/">View Today's Picks &rarr;</a>
-            </div>
-        </div>
-        <script>
-        function copyReportLink(btn){
-            navigator.clipboard.writeText('https://www.underdogs.bet/daily-report').then(function(){
-                btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
-                btn.classList.add('copied');
-                setTimeout(function(){btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy Link';btn.classList.remove('copied');},2000);
-            });
-        }
-        </script>
     </div>
+
+    <div class="rpt-actions" style="flex-direction:column;align-items:center;">
+        <div class="rpt-share-row">
+            <button class="rpt-btn rpt-btn-x" onclick="shareScreenshot('x')">X</button>
+            <button class="rpt-btn rpt-btn-fb" onclick="shareScreenshot('fb')">Facebook</button>
+            <button class="rpt-btn rpt-btn-ig" onclick="shareScreenshot('ig')">Instagram</button>
+            <button class="rpt-btn rpt-btn-tk" onclick="shareScreenshot('tk')">TikTok</button>
+            <button class="rpt-btn rpt-btn-copy" onclick="shareScreenshot('save')">Save Image</button>
+        </div>
+        <div class="rpt-sharing" id="shareStatus"></div>
+        <div class="rpt-cta-row" style="margin-top:12px;">
+            <a class="rpt-btn rpt-btn-cta" href="/">View Today's Picks &rarr;</a>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script>
+    function shareScreenshot(platform){
+        var status=document.getElementById('shareStatus');
+        status.textContent='Generating image...';
+        var el=document.getElementById('reportCapture');
+        html2canvas(el,{backgroundColor:'#0f172a',scale:2,useCORS:true}).then(function(canvas){
+            canvas.toBlob(function(blob){
+                var file=new File([blob],'underdogs-daily-report.png',{type:'image/png'});
+                if(platform==='save'){
+                    var a=document.createElement('a');
+                    a.href=URL.createObjectURL(blob);
+                    a.download='underdogs-daily-report.png';
+                    a.click();
+                    status.textContent='Image saved!';
+                } else if(navigator.canShare && navigator.canShare({files:[file]})){
+                    navigator.share({files:[file],title:'underdogs.bet Daily Report',url:'https://www.underdogs.bet/daily-report'}).then(function(){status.textContent='Shared!';}).catch(function(){fallbackShare(platform,blob,status);});
+                } else {
+                    fallbackShare(platform,blob,status);
+                }
+            },'image/png');
+        }).catch(function(err){status.textContent='Screenshot failed: '+err;});
+    }
+    function fallbackShare(platform,blob,status){
+        var url='https://www.underdogs.bet/daily-report';
+        var text=encodeURIComponent('underdogs.bet Daily Results Report \\u2014 check our AI picks performance');
+        if(platform==='x') window.open('https://twitter.com/intent/tweet?text='+text+'&url='+encodeURIComponent(url),'_blank');
+        else if(platform==='fb') window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(url),'_blank');
+        else {
+            var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='underdogs-daily-report.png';a.click();
+            status.textContent='Image saved! Upload it to '+platform.toUpperCase()+'.';
+            return;
+        }
+        status.textContent='Image saved to clipboard. Paste into your post!';
+        try{navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);}catch(e){}
+    }
+    </script>
 """)
 
 # ============================================================================
@@ -7141,16 +7138,18 @@ def landing_page():
 </style>
 
 <!-- Daily Results Box -->
-<div style="max-width:680px;margin:0 auto;padding:0 24px;">
-    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:28px 24px;text-align:center;backdrop-filter:blur(8px);">
-        <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">
-            <span style="font-size:1.4em;">📊</span>
-            <h2 style="font-size:1.2em;font-weight:800;color:#fff;">Daily Betting Results Report</h2>
+<div style="max-width:720px;margin:0 auto;padding:0 24px;">
+    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
+        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
+        <div style="position:relative;padding:32px 28px;text-align:center;">
+            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
+            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models — tracked, transparent, verified.</p>
+            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
         </div>
-        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:16px;">See yesterday's performance across all sports and models — tracked, transparent, updated daily.</p>
-        <a href="/results" style="display:inline-block;background:#fff;color:#0f172a;padding:12px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.92em;transition:opacity 0.2s;">View Full Results</a>
     </div>
 </div>
+<style>@keyframes shineText{to{background-position:200% center;}}</style>
 
 <!-- Sticky Bottom Bar -->
 <div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
