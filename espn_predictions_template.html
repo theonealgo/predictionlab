@@ -38,9 +38,9 @@
     {% if grouped_predictions %}
     {% for date in sorted_dates %}
     {% for pred in grouped_predictions[date] %}
-    {% if pred.home_score is none %}
+    {% if pred.home_score is none and pred.home_team_id != 'TBD' and pred.away_team_id != 'TBD' and pred.home_team_id and pred.away_team_id %}
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} vs {{ pred.home_team_id }}","startDate":"{{ date }}","location":{"@type":"Place","name":"{{ sport_info.name }}"},"performer":[{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"}]}
+    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} vs {{ pred.home_team_id }}","description":"{{ sport_info.name }} game: {{ pred.away_team_id }} at {{ pred.home_team_id }}. AI predictions and picks at underdogs.bet.","startDate":"{{ date }}T19:00:00-04:00","endDate":"{{ date }}T22:00:00-04:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","location":{"@type":"Place","name":"{{ pred.home_team_id }} Arena","address":{"@type":"PostalAddress","addressCountry":"US"}},"organizer":{"@type":"SportsOrganization","name":"{{ sport_info.name }}","url":"https://underdogs.bet/{{ sport_seo_slug }}"},"performer":[{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"}],"image":"https://underdogs.bet/static/IMG_3179.PNG","offers":{"@type":"Offer","url":"https://underdogs.bet/{{ sport_seo_slug }}","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","validFrom":"{{ date }}"}}
     </script>
     {% endif %}
     {% endfor %}
