@@ -15,7 +15,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <link rel="canonical" href="https://underdogs.bet{{ request.path }}">
+    <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
@@ -40,7 +40,7 @@
     {% for pred in grouped_predictions[date] %}
     {% if pred.home_score is none and pred.home_team_id != 'TBD' and pred.away_team_id != 'TBD' and pred.home_team_id and pred.away_team_id %}
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} vs {{ pred.home_team_id }}","description":"{{ sport_info.name }} game: {{ pred.away_team_id }} at {{ pred.home_team_id }}. AI predictions and picks at underdogs.bet.","startDate":"{{ date }}T19:00:00-04:00","endDate":"{{ date }}T22:00:00-04:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","location":{"@type":"Place","name":"{{ pred.home_team_id }} Arena","address":{"@type":"PostalAddress","addressCountry":"US"}},"organizer":{"@type":"SportsOrganization","name":"{{ sport_info.name }}","url":"https://underdogs.bet/{{ sport_seo_slug }}"},"performer":[{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"}],"image":"https://underdogs.bet/static/IMG_3179.PNG","offers":{"@type":"Offer","url":"https://underdogs.bet/{{ sport_seo_slug }}","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","validFrom":"{{ date }}"}}
+    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} vs {{ pred.home_team_id }}","description":"{{ sport_info.name }} game: {{ pred.away_team_id }} at {{ pred.home_team_id }}. AI predictions and picks at underdogs.bet.","startDate":"{{ date }}T19:00:00-04:00","endDate":"{{ date }}T22:00:00-04:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","location":{"@type":"Place","name":"{{ pred.home_team_id }} Arena","address":{"@type":"PostalAddress","addressCountry":"US"}},"organizer":{"@type":"SportsOrganization","name":"{{ sport_info.name }}","url":"https://www.underdogs.bet/{{ sport_seo_slug }}"},"performer":[{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"}],"image":"https://www.underdogs.bet/static/IMG_3179.PNG","offers":{"@type":"Offer","url":"https://www.underdogs.bet/{{ sport_seo_slug }}","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","validFrom":"{{ date }}"}}
     </script>
     {% endif %}
     {% endfor %}

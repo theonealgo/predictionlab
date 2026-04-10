@@ -4325,7 +4325,7 @@ BASE_TEMPLATE = """
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <meta name="twitter:image" content="{{ _meta_image }}">
-    <link rel="canonical" href="https://underdogs.bet{{ request.path }}">
+    <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JWHPL9X6SY"></script>
@@ -6410,7 +6410,7 @@ def landing_page():
     <meta name="twitter:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
     <meta name="twitter:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
     <meta name="twitter:image" content="{{ request.url_root.rstrip('/') }}/static/IMG_3179.PNG">
-    <link rel="canonical" href="https://underdogs.bet{{ request.path }}">
+    <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
@@ -6426,7 +6426,7 @@ def landing_page():
       "@context": "https://schema.org",
       "@type": "SportsOrganization",
       "name": "underdogs.bet",
-      "url": "https://underdogs.bet",
+      "url": "https://www.underdogs.bet",
       "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
       "sameAs": [
         "https://x.com/underdogs_bet",
@@ -6438,10 +6438,10 @@ def landing_page():
     }
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://underdogs.bet"}
+    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet"}
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Monthly","url":"https://underdogs.bet/plans"},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Yearly","url":"https://underdogs.bet/plans"}]}
+    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Monthly","url":"https://www.underdogs.bet/plans"},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","name":"Yearly","url":"https://www.underdogs.bet/plans"}]}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -7197,7 +7197,7 @@ def landing_page():
          units_banner_items=units_banner_items,
          todays_picks=todays_picks)
 
-_SITE_DOMAIN = 'https://underdogs.bet'
+_SITE_DOMAIN = 'https://www.underdogs.bet'
 
 @app.route('/robots.txt')
 def robots_txt():
