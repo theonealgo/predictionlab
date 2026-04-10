@@ -400,17 +400,19 @@
                 {% set home_wins = is_final and pred.home_score > pred.away_score %}
                 {% set away_wins = is_final and pred.away_score > pred.home_score %}
                 {% set home_picked = pred.predicted_winner == pred.home_team_id %}
+                {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
+                {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
                 <div class="game-card" data-league="{{ pred.league if pred.league else 'Other' }}">
                     <div class="game-status {% if is_final %}final{% endif %}">{% if is_final %}FINAL{% else %}UPCOMING{% endif %}</div>
                     <div class="game-body">
                         <div class="teams-section">
                             <div class="team-row">
                                 <span class="team-name {% if away_wins %}winner{% endif %}">{{ pred.away_team_id }}{% if not is_final and pred.away_moneyline is not none %} <span class="team-odds {% if pred.away_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.away_moneyline > 0 %}+{% endif %}{{ pred.away_moneyline }}</span>{% endif %}</span>
-                                {% if is_final %}<span class="score-box">{{ pred.away_score }}</span>{% else %}{% if not home_picked %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
+                                {% if is_final %}<span class="score-box">{{ pred.away_score }}</span>{% else %}{% if not home_picked and _odds_pass %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
                             </div>
                             <div class="team-row">
                                 <span class="team-name {% if home_wins %}winner{% endif %}">{{ pred.home_team_id }}{% if not is_final and pred.home_moneyline is not none %} <span class="team-odds {% if pred.home_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.home_moneyline > 0 %}+{% endif %}{{ pred.home_moneyline }}</span>{% endif %}</span>
-                                {% if is_final %}<span class="score-box">{{ pred.home_score }}</span>{% else %}{% if home_picked %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
+                                {% if is_final %}<span class="score-box">{{ pred.home_score }}</span>{% else %}{% if home_picked and _odds_pass %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
                             </div>
                     </div>
                         <div class="prediction-panel">

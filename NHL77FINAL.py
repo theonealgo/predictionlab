@@ -4166,6 +4166,9 @@ def compute_roi_for_range(daily_results, start_date=None, end_date=None):
                 if home_score == away_score:
                     home_win = None
                 odds = g.get("home_moneyline") if pick_home else g.get("away_moneyline")
+                # Filter: skip heavy favorites worse than -150
+                if odds is not None and odds < -150:
+                    continue
                 entry = summary["moneyline"]
                 if home_win is None:
                     entry["pushes"] += 1
@@ -4730,6 +4733,168 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
                 <li>The results page tracks how each model performed on completed games</li>
             </ul>
         </div>
+    </div>
+""")
+
+# ============================================================================
+# DAILY REPORT TEMPLATE (marketing / proof-of-performance)
+# ============================================================================
+
+DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+    .rpt-wrap{max-width:720px;margin:0 auto;padding:10px 0 60px;}
+    .rpt-header{text-align:center;margin-bottom:28px;}
+    .rpt-header h1{font-size:1.8em;margin-bottom:6px;}
+    .rpt-header .rpt-date{color:#fbbf24;font-size:1.15em;font-weight:700;}
+    .rpt-header .rpt-sub{color:#94a3b8;font-size:0.9em;margin-top:6px;}
+    .rpt-section{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:20px;margin-bottom:18px;}
+    .rpt-section h2{font-size:1.15em;margin-bottom:14px;color:#fbbf24;text-align:center;}
+    .rpt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;}
+    .rpt-card{background:rgba(255,255,255,0.06);border-radius:10px;padding:12px 8px;text-align:center;}
+    .rpt-card.highlight{border:2px solid #fbbf24;}
+    .rpt-model{font-size:0.78em;opacity:0.85;margin-bottom:4px;}
+    .rpt-acc{font-size:1.5em;font-weight:800;}
+    .rpt-acc.green{color:#10b981;}
+    .rpt-acc.yellow{color:#fbbf24;}
+    .rpt-acc.red{color:#ef4444;}
+    .rpt-acc.gray{color:#94a3b8;}
+    .rpt-rec{font-size:0.82em;opacity:0.8;}
+    .rpt-sport-header{font-size:0.88em;font-weight:700;color:#e2e8f0;margin:14px 0 8px;padding-left:4px;}
+    .rpt-actions{display:flex;gap:10px;justify-content:center;margin-top:28px;flex-wrap:wrap;}
+    .rpt-btn{padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:0.88em;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;}
+    .rpt-btn:hover{opacity:0.85;transform:translateY(-1px);}
+    .rpt-btn-x{background:#000;color:#fff;border:1px solid rgba(255,255,255,0.2);}
+    .rpt-btn-fb{background:#1877f2;color:#fff;}
+    .rpt-btn-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;}
+    .rpt-btn-tk{background:#000;color:#fff;border:1px solid rgba(255,255,255,0.2);}
+    .rpt-btn-copy{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);cursor:pointer;}
+    .rpt-btn-copy.copied{background:#10b981;border-color:#10b981;}
+    .rpt-btn-cta{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;}
+    .rpt-share-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
+    .rpt-cta-row{display:flex;justify-content:center;}
+    .rpt-total{text-align:center;font-size:0.9em;color:#94a3b8;margin-bottom:18px;}
+    .rpt-total strong{color:#fff;font-size:1.1em;}
+    @media(max-width:500px){.rpt-grid{grid-template-columns:repeat(3,1fr);}.rpt-acc{font-size:1.2em;}}
+    """
+).replace('{% block content %}{% endblock %}', """
+    <div class="rpt-wrap">
+        <div class="rpt-header">
+            <h1>Daily Betting Results Report</h1>
+            <div class="rpt-date">{{ report_display }}</div>
+            <div class="rpt-sub">All results tracked, transparent, and verified.</div>
+        </div>
+
+        <div class="rpt-total">Games Graded: <strong>{{ total_games }}</strong></div>
+
+        {% if total_games == 0 %}
+        <div style="text-align:center;padding:40px;opacity:0.7;">No completed games found for this date.</div>
+        {% else %}
+
+        <!-- ── MONEYLINE ── -->
+        <div class="rpt-section">
+            <h2>🎯 Moneyline</h2>
+            <div class="rpt-grid">
+                {% for mk, mlabel in model_labels %}
+                {% set m = agg_models.get(mk, {}) %}
+                <div class="rpt-card {% if mk == 'ensemble' %}highlight{% endif %}">
+                    <div class="rpt-model">{{ mlabel }}</div>
+                    {% if m.total > 0 %}
+                    <div class="rpt-acc {% if m.accuracy >= 60 %}green{% elif m.accuracy >= 50 %}yellow{% else %}red{% endif %}">{{ m.accuracy }}%</div>
+                    <div class="rpt-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                    {% else %}
+                    <div class="rpt-acc gray">&mdash;</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Per-sport breakdown -->
+            {% for st in sport_tallies %}
+            <div class="rpt-sport-header">{{ st.info.icon }} {{ st.info.name }} ({{ st.tally.games }} games)</div>
+            <div class="rpt-grid">
+                {% for mk, mlabel in model_labels %}
+                {% set m = st.tally.get(mk, {}) %}
+                <div class="rpt-card {% if mk == 'ensemble' %}highlight{% endif %}">
+                    <div class="rpt-model">{{ mlabel }}</div>
+                    {% if m.total > 0 %}
+                    <div class="rpt-acc {% if m.accuracy >= 60 %}green{% elif m.accuracy >= 50 %}yellow{% else %}red{% endif %}">{{ m.accuracy }}%</div>
+                    <div class="rpt-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                    {% else %}
+                    <div class="rpt-acc gray">&mdash;</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- ── SPREAD ── -->
+        {% if agg_spread.total > 0 %}
+        <div class="rpt-section">
+            <h2>📈 Spread</h2>
+            <div class="rpt-grid" style="max-width:320px;margin:0 auto;">
+                <div class="rpt-card highlight">
+                    <div class="rpt-model">Record</div>
+                    <div class="rpt-acc {% if agg_spread.accuracy >= 55 %}green{% elif agg_spread.accuracy >= 48 %}yellow{% else %}red{% endif %}">{{ agg_spread.accuracy }}%</div>
+                    <div class="rpt-rec">{{ agg_spread.correct }}-{{ agg_spread.total - agg_spread.correct }}{% if agg_spread.pushes %}-{{ agg_spread.pushes }}{% endif %}</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ── OVER/UNDER ── -->
+        {% if agg_ou.total > 0 %}
+        <div class="rpt-section">
+            <h2>🎲 Over/Under</h2>
+            <div class="rpt-grid" style="max-width:320px;margin:0 auto;">
+                <div class="rpt-card highlight">
+                    <div class="rpt-model">Record</div>
+                    <div class="rpt-acc {% if agg_ou.accuracy >= 55 %}green{% elif agg_ou.accuracy >= 48 %}yellow{% else %}red{% endif %}">{{ agg_ou.accuracy }}%</div>
+                    <div class="rpt-rec">{{ agg_ou.correct }}-{{ agg_ou.total - agg_ou.correct }}{% if agg_ou.pushes %}-{{ agg_ou.pushes }}{% endif %}</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% endif %}
+
+        <div class="rpt-actions" style="flex-direction:column;align-items:center;">
+            <div class="rpt-share-row">
+                <a class="rpt-btn rpt-btn-x" href="https://twitter.com/intent/tweet?text={{ share_text }}" target="_blank" rel="noopener">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                    X
+                </a>
+                <a class="rpt-btn rpt-btn-fb" href="https://www.facebook.com/sharer/sharer.php?u=https://www.underdogs.bet/daily-report" target="_blank" rel="noopener">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                    Facebook
+                </a>
+                <a class="rpt-btn rpt-btn-ig" href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                    Instagram
+                </a>
+                <a class="rpt-btn rpt-btn-tk" href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
+                    TikTok
+                </a>
+                <button class="rpt-btn rpt-btn-copy" onclick="copyReportLink(this)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    Copy Link
+                </button>
+            </div>
+            <div class="rpt-cta-row">
+                <a class="rpt-btn rpt-btn-cta" href="/">View Today's Picks &rarr;</a>
+            </div>
+        </div>
+        <script>
+        function copyReportLink(btn){
+            navigator.clipboard.writeText('https://www.underdogs.bet/daily-report').then(function(){
+                btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+                btn.classList.add('copied');
+                setTimeout(function(){btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy Link';btn.classList.remove('copied');},2000);
+            });
+        }
+        </script>
     </div>
 """)
 
@@ -7326,6 +7491,141 @@ def sport_home(sport):
     if slug:
         return redirect(f'/{slug}', code=301)
     return "Sport not found", 404
+
+
+@app.route('/daily-report')
+def daily_report_page():
+    """Daily Betting Results Report — marketing/proof-of-performance page."""
+    from collections import defaultdict
+    try:
+        _tz = ZoneInfo('America/New_York')
+        yesterday_dt = datetime.now(_tz) - timedelta(days=1)
+    except Exception:
+        yesterday_dt = datetime.now() - timedelta(days=1)
+    report_date = yesterday_dt.strftime('%Y-%m-%d')
+    report_display = yesterday_dt.strftime('%B %d, %Y')
+
+    # Gather yesterday's tally for each active sport
+    sport_tallies = []
+    total_games = 0
+    agg_models = {}
+    agg_spread = {'correct': 0, 'total': 0, 'pushes': 0}
+    agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
+
+    for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        if sport_key not in SPORTS:
+            continue
+        try:
+            # Build daily_results for this sport from DB
+            conn = get_db_connection()
+            rows = conn.execute('''
+                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                FROM games g
+                LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                WHERE g.sport = ? AND g.home_score IS NOT NULL AND g.game_date LIKE ?
+                ORDER BY g.game_date DESC LIMIT 50
+            ''', (sport_key, sport_key, f'{report_date}%')).fetchall()
+            conn.close()
+            if not rows:
+                continue
+            daily_results = defaultdict(lambda: {'games': []})
+            for game in rows:
+                home_score = _to_float_safe(game['home_score'])
+                away_score = _to_float_safe(game['away_score'])
+                if home_score is None or away_score is None:
+                    continue
+                home_won = home_score > away_score
+                is_draw = sport_key == 'SOCCER' and abs(home_score - away_score) < 1e-9
+                if is_draw:
+                    home_won = None
+                elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                xgb_prob = _to_float_safe(game['xgboost_home_prob']) or elo_prob
+                ens_prob = _to_float_safe(game['win_probability']) or elo_prob
+                v2 = get_v2_prediction(sport_key, game['home_team_id'], game['away_team_id'], report_date) if sport_key != 'SOCCER' else None
+                glicko2_prob = v2.get('glicko2_prob') if v2 else None
+                trueskill_prob = v2.get('trueskill_prob') if v2 else None
+                if v2:
+                    xgb_prob = v2.get('xgboost_prob', xgb_prob)
+                    ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
+                game_info = {
+                    'date': report_date,
+                    'home': game['home_team_id'], 'away': game['away_team_id'],
+                    'home_score': int(home_score), 'away_score': int(away_score),
+                    'home_win': home_won, 'is_draw': is_draw,
+                    'glicko2_prob': round(glicko2_prob * 100, 1) if glicko2_prob else None,
+                    'trueskill_prob': round(trueskill_prob * 100, 1) if trueskill_prob else None,
+                    'elo_prob': round(elo_prob * 100, 1),
+                    'xgb_prob': round(xgb_prob * 100, 1),
+                    'ens_prob': round(ens_prob * 100, 1),
+                    'glicko2_correct': (glicko2_prob > 0.5) == home_won if glicko2_prob and home_won is not None else None,
+                    'trueskill_correct': (trueskill_prob > 0.5) == home_won if trueskill_prob and home_won is not None else None,
+                    'elo_correct': (elo_prob > 0.5) == home_won if home_won is not None else None,
+                    'xgb_correct': (xgb_prob > 0.5) == home_won if home_won is not None else None,
+                    'ens_correct': (ens_prob > 0.5) == home_won if home_won is not None else None,
+                    'skip_grading': True if home_won is None else False,
+                }
+                daily_results[report_date]['games'].append(game_info)
+            tally = compute_daily_model_tally(daily_results, report_date)
+            if not tally or tally.get('games', 0) == 0:
+                continue
+            sport_tallies.append({'sport': sport_key, 'info': SPORTS[sport_key], 'tally': tally})
+            total_games += tally.get('games', 0)
+            # Aggregate across sports
+            for mk in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
+                mt = tally.get(mk, {})
+                if mk not in agg_models:
+                    agg_models[mk] = {'correct': 0, 'total': 0}
+                agg_models[mk]['correct'] += mt.get('correct', 0)
+                agg_models[mk]['total'] += mt.get('total', 0)
+            sp = tally.get('spread', {})
+            agg_spread['correct'] += sp.get('correct', 0)
+            agg_spread['total'] += sp.get('total', 0)
+            agg_spread['pushes'] += sp.get('pushes', 0)
+            ou = tally.get('total_ou', {})
+            agg_ou['correct'] += ou.get('correct', 0)
+            agg_ou['total'] += ou.get('total', 0)
+            agg_ou['pushes'] += ou.get('pushes', 0)
+        except Exception as e:
+            logger.error(f"Daily report {sport_key}: {e}")
+            continue
+
+    # Compute aggregate accuracies
+    for mk in agg_models:
+        t = agg_models[mk]['total']
+        agg_models[mk]['accuracy'] = round(agg_models[mk]['correct'] / t * 100, 1) if t > 0 else 0.0
+    agg_spread['accuracy'] = round(agg_spread['correct'] / agg_spread['total'] * 100, 1) if agg_spread['total'] > 0 else 0.0
+    agg_ou['accuracy'] = round(agg_ou['correct'] / agg_ou['total'] * 100, 1) if agg_ou['total'] > 0 else 0.0
+
+    model_labels = [
+        ('glicko2', '⭐ Grinder2'),
+        ('trueskill', '🎯 Takedown'),
+        ('elo', '📊 Edge'),
+        ('xgboost', '🤖 XSharp'),
+        ('ensemble', '🏆 Consensus'),
+    ]
+
+    share_text = f"underdogs.bet Daily Report — {report_display}%0A"
+    ens = agg_models.get('ensemble', {})
+    if ens.get('total', 0) > 0:
+        share_text += f"Consensus: {ens['accuracy']}% ({ens['correct']}-{ens['total'] - ens['correct']})%0A"
+    share_text += f"{total_games} games graded%0Ahttps://www.underdogs.bet/daily-report"
+
+    return render_template_string(DAILY_REPORT_TEMPLATE,
+        page='daily-report',
+        page_title=f'Daily Betting Results Report — {report_date}',
+        page_description=f'AI model performance report for {report_display}. Moneyline, spread, and over/under results across all sports.',
+        report_date=report_date,
+        report_display=report_display,
+        total_games=total_games,
+        sport_tallies=sport_tallies,
+        agg_models=agg_models,
+        agg_spread=agg_spread,
+        agg_ou=agg_ou,
+        model_labels=model_labels,
+        share_text=share_text,
+    )
 
 
 @app.route('/tutorial')
