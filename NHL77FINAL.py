@@ -6651,7 +6651,7 @@ def landing_page():
         }
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-            background: #0f172a url('/static/IMG_3179.PNG') center center / cover no-repeat;
+            background: #0f172a url('/static/Logo.PNG') center center / cover no-repeat;
             color:#fff;
             min-height:100vh;
             overflow-x:hidden;
@@ -7054,7 +7054,7 @@ def landing_page():
             body::before{
                 background:
                     linear-gradient(rgba(7,10,20,0.65), rgba(7,10,20,0.65)),
-                    url('/static/IMG_3179.PNG') center 90px / cover no-repeat;
+                    url('/static/Logo.PNG') center 90px / cover no-repeat;
             }
         }
         @media (max-width: 768px) {
