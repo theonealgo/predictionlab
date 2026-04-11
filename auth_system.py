@@ -597,9 +597,9 @@ LOGIN_TEMPLATE = """
 <meta property="og:description" content="Log in to access AI-powered sports picks.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.underdogs.bet/login">
-<meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+<meta property="og:image" content="https://www.underdogs.bet/static/Logo.PNG">
 <link rel="canonical" href="https://www.underdogs.bet/login">
-<link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
+<link rel="icon" type="image/png" href="/static/Logo.PNG">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:url('/static/baseball.jpg') center/cover no-repeat fixed;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
@@ -633,9 +633,9 @@ SIGNUP_TEMPLATE = """
 <meta property="og:description" content="Create a free account for AI-powered sports picks.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.underdogs.bet/signup">
-<meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+<meta property="og:image" content="https://www.underdogs.bet/static/Logo.PNG">
 <link rel="canonical" href="https://www.underdogs.bet/signup">
-<link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
+<link rel="icon" type="image/png" href="/static/Logo.PNG">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:url('/static/baseball.jpg') center/cover no-repeat fixed;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
@@ -666,7 +666,7 @@ SUCCESS_TEMPLATE = """
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Welcome to Premium — underdogs.bet</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
+<link rel="icon" type="image/png" href="/static/Logo.PNG">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;}</style>
 </head><body>
 <div style="text-align:center;padding:40px;">
@@ -697,7 +697,7 @@ def plans_page():
             .plans-page-bg{position:fixed;inset:0;background:url('/static/baseball.jpg') center/cover no-repeat;z-index:-2;}
             .plans-page-bg::after{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:-1;}
             .plans-hero{background:rgba(255,255,255,0.03);border:2px solid rgba(255,255,255,0.15);border-radius:16px;padding:40px 24px 32px;text-align:center;position:relative;overflow:hidden;margin-bottom:30px;}
-            .plans-hero::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:url('/static/IMG_3179.PNG') center/contain no-repeat;opacity:0.06;z-index:0;}
+            .plans-hero::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:url('/static/Logo.PNG') center/contain no-repeat;opacity:0.06;z-index:0;}
             .plans-hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,0.04) 0%,transparent 60%);animation:pulse-bg 6s ease-in-out infinite;}
             .plans-hero-logo{font-size:2em;font-weight:900;color:#ffffff;position:relative;z-index:1;letter-spacing:0.5px;line-height:1.3;}
             .plans-hero-sub{font-size:1.05em;color:#94a3b8;margin-top:12px;position:relative;z-index:1;max-width:650px;margin-left:auto;margin-right:auto;line-height:1.7;}

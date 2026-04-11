@@ -4338,21 +4338,21 @@ BASE_TEMPLATE = """
     {% elif sport_info is defined %}{% set _meta_desc = sport_info.name ~ ' predictions, results, spreads, and totals powered by AI.' %}
     {% else %}{% set _meta_desc = 'AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA, and Soccer.' %}{% endif %}
     {% if page_image is defined and page_image %}{% set _meta_image = page_image %}
-    {% else %}{% set _meta_image = request.url_root.rstrip('/') ~ '/static/IMG_3179.PNG' %}{% endif %}
+    {% else %}{% set _meta_image = request.url_root.rstrip('/') ~ '/static/Logo.PNG' %}{% endif %}
     <title>{{ _meta_title }}</title>
     <meta name="description" content="{{ _meta_desc }}">
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.underdogs.bet{{ request.path }}">
-    <meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+    <meta property="og:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <meta property="og:site_name" content="underdogs.bet">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <meta name="twitter:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+    <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
-    <link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
+    <link rel="icon" type="image/png" href="/static/Logo.PNG">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JWHPL9X6SY"></script>
@@ -4369,7 +4369,7 @@ BASE_TEMPLATE = """
       "@type": "Organization",
       "name": "underdogs.bet",
       "url": "https://www.underdogs.bet",
-      "logo": "https://www.underdogs.bet/static/IMG_3179.PNG",
+      "logo": "https://www.underdogs.bet/static/Logo.PNG",
       "sameAs": [
         "https://x.com/underdogs_bet",
         "https://instagram.com/underdogs.bet",
@@ -4558,7 +4558,7 @@ BASE_TEMPLATE = """
     <div class="navbar">
         <div class="navbar-content">
             <a href="/" class="logo">
-                <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="logo-img">
+                <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img">
             </a>
             <div class="hamburger" onclick="toggleMenu()">
                 <span></span>
@@ -4623,7 +4623,7 @@ BASE_TEMPLATE = """
     <footer class="site-footer">
         <div class="footer-inner">
             <div class="footer-left">
-                <a href="/"><img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
+                <a href="/"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
                 <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
             </div>
             <div class="footer-center">
@@ -6601,14 +6601,14 @@ def landing_page():
     <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.underdogs.bet/">
-    <meta property="og:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+    <meta property="og:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <meta property="og:site_name" content="underdogs.bet">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
     <meta name="twitter:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
-    <meta name="twitter:image" content="https://www.underdogs.bet/static/IMG_3179.PNG">
+    <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
-    <link rel="icon" type="image/png" href="/static/IMG_3179.PNG">
+    <link rel="icon" type="image/png" href="/static/Logo.PNG">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
@@ -6625,7 +6625,7 @@ def landing_page():
       "@type": "Organization",
       "name": "underdogs.bet",
       "url": "https://www.underdogs.bet",
-      "logo": "https://www.underdogs.bet/static/IMG_3179.PNG",
+      "logo": "https://www.underdogs.bet/static/Logo.PNG",
       "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
       "sameAs": [
         "https://x.com/underdogs_bet",
@@ -6640,7 +6640,7 @@ def landing_page():
     {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet","potentialAction":{"@type":"SearchAction","target":"https://www.underdogs.bet/?q={search_term_string}","query-input":"required name=search_term_string"}}
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"image":["https://www.underdogs.bet/static/IMG_3179.PNG"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
+    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"image":["https://www.underdogs.bet/static/Logo.PNG"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -7089,7 +7089,7 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo">
-            <img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="logo-img">
+            <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img">
         </a>
         <div class="hamburger" onclick="toggleMenu()">
             <span></span>
@@ -7361,7 +7361,7 @@ def landing_page():
 <footer class="site-footer">
     <div class="footer-inner">
         <div class="footer-left">
-            <a href="/"><img src="/static/IMG_3179.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
+            <a href="/"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
             <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
         </div>
         <div class="footer-center">
@@ -7560,8 +7560,22 @@ def daily_report_page():
     agg_spread = {'correct': 0, 'total': 0, 'pushes': 0}
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
-    # Sync scores for active sports before building report
-    for _sync_sport in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
+    # Determine which sports are currently in-season
+    _active_sports = []
+    _today_dt = datetime.now()
+    for _sk in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
+        if _sk == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        if _sk not in SPORTS:
+            continue
+        _status, _live = get_season_status(_sk, today=_today_dt)
+        if _live:
+            _active_sports.append(_sk)
+    if not _active_sports:
+        _active_sports = ['NHL', 'NBA', 'MLB']  # fallback
+
+    # Sync scores only for active sports
+    for _sync_sport in _active_sports:
         try:
             if _sync_sport == 'NHL':
                 update_nhl_scores()
@@ -7569,26 +7583,24 @@ def daily_report_page():
                 update_nba_scores()
             elif _sync_sport == 'NFL':
                 update_nfl_scores()
-            elif _sync_sport in ['MLB', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
+            else:
                 update_espn_scores(_sync_sport)
         except Exception as e:
             logger.debug(f"Daily report score sync {_sync_sport}: {e}")
 
-    for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
-        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
-            continue
-        if sport_key not in SPORTS:
-            continue
+    for sport_key in _active_sports:
         try:
             # Build daily_results for this sport from DB
+            # Try exact date match first, then broader match for timezone edge cases
             conn = get_db_connection()
             rows = conn.execute('''
                 SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
-                WHERE g.sport = ? AND g.home_score IS NOT NULL AND g.game_date LIKE ?
+                WHERE g.sport = ? AND g.home_score IS NOT NULL
+                AND (g.game_date LIKE ? OR g.game_date = ?)
                 ORDER BY g.game_date DESC LIMIT 50
-            ''', (sport_key, sport_key, f'{report_date}%')).fetchall()
+            ''', (sport_key, sport_key, f'{report_date}%', report_date)).fetchall()
             conn.close()
             if not rows:
                 continue
