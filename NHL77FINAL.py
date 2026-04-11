@@ -2863,18 +2863,6 @@ def get_upcoming_predictions(sport, days=365):
             ):
                 if _k not in game_dict:
                     game_dict[_k] = None
-            # ── MLB: invert moneyline probabilities (models pick opposite) ──
-            if sport == 'MLB':
-                elo_prob = 1.0 - elo_prob
-                xgb_prob = 1.0 - xgb_prob
-                ensemble_prob = 1.0 - ensemble_prob
-                _g2_raw = game.get('glicko2_prob')
-                _ts_raw = game.get('trueskill_prob')
-                if _g2_raw is not None:
-                    game['glicko2_prob'] = 1.0 - _g2_raw
-                if _ts_raw is not None:
-                    game['trueskill_prob'] = 1.0 - _ts_raw
-
             game_dict['elo_prob'] = round(elo_prob * 100, 1)
             game_dict['xgb_prob'] = round(xgb_prob * 100, 1)
             game_dict['ensemble_prob'] = round(ensemble_prob * 100, 1)
@@ -3015,10 +3003,11 @@ def get_upcoming_predictions(sport, days=365):
                 except Exception as _e:
                     logger.debug(f"XGBSpread error: {_e}")
 
-                # ── MLB: override xgb_* with specialized runs model (park factors + Vegas cal) ─
+                # ── MLB: override xgb_* AND moneyline with specialized runs model ─
                 if sport == 'MLB':
                     try:
                         from mlb_runs_model import get_or_train_mlb_model as _get_mlb_model
+                        import math as _math
                         _mlbm = _get_mlb_model(DATABASE)
                         if _mlbm:
                             _mlb_result = _mlbm.predict(
@@ -3030,6 +3019,18 @@ def get_upcoming_predictions(sport, days=365):
                                 game_dict['xgb_away_score'] = _mlb_result[1]
                                 game_dict['xgb_spread']     = _mlb_result[2]
                                 game_dict['xgb_total']      = _mlb_result[3]
+                                # Derive moneyline from predicted spread
+                                # MLB game margin std dev ~4.0 runs
+                                _mlb_spread = float(_mlb_result[2])
+                                _mlb_win_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (4.0 * _math.sqrt(2))))
+                                _mlb_win_prob = max(0.05, min(0.95, _mlb_win_prob))
+                                # Override all model probabilities with runs-model-derived prob
+                                game_dict['elo_prob']      = round(_mlb_win_prob * 100, 1)
+                                game_dict['xgb_prob']      = round(_mlb_win_prob * 100, 1)
+                                game_dict['ensemble_prob'] = round(_mlb_win_prob * 100, 1)
+                                game_dict['glicko2_prob']  = round(_mlb_win_prob * 100, 1)
+                                game_dict['trueskill_prob'] = round(_mlb_win_prob * 100, 1)
+                                game_dict['predicted_winner'] = game_dict['home_team_id'] if _mlb_win_prob > 0.5 else game_dict['away_team_id']
                     except Exception as _mlbe:
                         logger.debug(f"MLBRunsModel error: {_mlbe}")
 
