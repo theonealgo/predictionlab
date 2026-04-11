@@ -7558,22 +7558,22 @@ def daily_report_page():
     except Exception:
         pass
 
-    # Lightweight: query DB directly for ALL sports
+    # Query DB for yesterday's completed games only (fast, no external API calls)
     for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
         if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
         if sport_key not in SPORTS:
             continue
         try:
-            update_espn_scores(sport_key)
             conn = get_db_connection()
             completed_games = conn.execute('''
                 SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ? AND g.home_score IS NOT NULL
-                ORDER BY g.game_date DESC LIMIT 100
-            ''', (sport_key, sport_key)).fetchall()
+                AND (g.game_date LIKE ? OR g.game_date = ?)
+                ORDER BY g.game_date DESC LIMIT 50
+            ''', (sport_key, sport_key, f'{report_date}%', report_date)).fetchall()
             conn.close()
             if not completed_games:
                 continue
@@ -7626,6 +7626,11 @@ def daily_report_page():
                     'skip_grading': True if home_won is None else False,
                 }
                 daily_results[game_date]['games'].append(game_info)
+            # Compute spread/total grading (DB-only, no external API calls)
+            try:
+                _compute_spread_total_for_daily(sport_key, daily_results)
+            except Exception:
+                pass  # spread/total may be unavailable but moneyline still works
             tally = compute_daily_model_tally(daily_results, report_date)
             if not tally or tally.get('games', 0) == 0:
                 continue
