@@ -3033,8 +3033,15 @@ def get_upcoming_predictions(sport, days=365):
                     except Exception as _mlbe:
                         logger.debug(f"MLBRunsModel error: {_mlbe}")
 
+                # ── NHL: invert XSharp spread (model picks opposite side) ──────────
+                if sport == 'NHL' and game_dict.get('xgb_spread') is not None:
+                    game_dict['xgb_spread'] = -game_dict['xgb_spread']
+                    if game_dict.get('xgb_home_score') is not None and game_dict.get('xgb_away_score') is not None:
+                        _tmp = game_dict['xgb_home_score']
+                        game_dict['xgb_home_score'] = game_dict['xgb_away_score']
+                        game_dict['xgb_away_score'] = _tmp
+
                 # ── NHL: convert XSharp spread → puck-line cover probabilities ──────────
-                # Internal xgb_spread value is preserved unchanged as a model feature;
                 # puck_line_* fields are the betting-facing output shown in the UI.
                 if sport == 'NHL' and game_dict.get('xgb_spread') is not None:
                     try:
@@ -3932,9 +3939,6 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
                 g['spread_pick'] = sp_disp
                 g['spread_correct'] = sp_ok
-                # NHL: invert spread result (model picks opposite)
-                if sport == 'NHL' and sp_ok is not None:
-                    g['spread_correct'] = not sp_ok
                 g['total_pick'] = tp_disp
                 g['total_correct'] = tp_ok
 
