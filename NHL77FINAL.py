@@ -2863,6 +2863,18 @@ def get_upcoming_predictions(sport, days=365):
             ):
                 if _k not in game_dict:
                     game_dict[_k] = None
+            # ── MLB: invert moneyline probabilities (models pick opposite) ──
+            if sport == 'MLB':
+                elo_prob = 1.0 - elo_prob
+                xgb_prob = 1.0 - xgb_prob
+                ensemble_prob = 1.0 - ensemble_prob
+                _g2_raw = game.get('glicko2_prob')
+                _ts_raw = game.get('trueskill_prob')
+                if _g2_raw is not None:
+                    game['glicko2_prob'] = 1.0 - _g2_raw
+                if _ts_raw is not None:
+                    game['trueskill_prob'] = 1.0 - _ts_raw
+
             game_dict['elo_prob'] = round(elo_prob * 100, 1)
             game_dict['xgb_prob'] = round(xgb_prob * 100, 1)
             game_dict['ensemble_prob'] = round(ensemble_prob * 100, 1)
