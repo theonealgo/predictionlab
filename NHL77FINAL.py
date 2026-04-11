@@ -7549,22 +7549,15 @@ def daily_report_page():
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
     # Use the SAME code path as the results pages for each sport
-    _report_sports = [
-        ('NHL', 'calculate_nhl_weekly_performance', 'update_nhl_scores'),
-        ('NBA', 'calculate_nba_weekly_performance', 'update_nba_scores'),
-    ]
     # NHL + NBA: use weekly_performance functions (same as results pages)
-    for sport_key, perf_func_name, sync_func_name in _report_sports:
+    for sport_key in ['NHL', 'NBA']:
         try:
-            # Score sync (same as results page)
-            if sync_func_name == 'update_nhl_scores':
+            if sport_key == 'NHL':
                 update_nhl_scores()
-            elif sync_func_name == 'update_nba_scores':
+                weekly_results = calculate_nhl_weekly_performance()
+            else:
                 update_nba_scores()
-            perf_func = globals().get(perf_func_name)
-            if not perf_func:
-                continue
-            weekly_results = perf_func()
+                weekly_results = calculate_nba_weekly_performance()
             if not weekly_results:
                 continue
             # Regroup into daily_results (same as results page)
