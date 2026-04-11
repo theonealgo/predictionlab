@@ -7548,8 +7548,14 @@ def daily_report_page():
     agg_spread = {'correct': 0, 'total': 0, 'pushes': 0}
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
-    # Lightweight: query DB directly for ALL sports (no heavy season calculations)
-    # The results pages keep the DB current via score syncs on normal traffic
+    # Quick score sync for NHL only (10 fast API calls, no ESPN odds engine)
+    # Other sports are synced by their results pages via normal traffic
+    try:
+        update_nhl_scores()
+    except Exception:
+        pass
+
+    # Lightweight: query DB directly for ALL sports
     for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
         if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
