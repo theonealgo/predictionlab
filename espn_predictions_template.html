@@ -82,13 +82,13 @@
             body::before { position:absolute !important; min-height:100% !important; }
         }
         {% endif %}
-        .hamburger:hover { background: rgba(255, 255, 255, 0.12); }
+        .hamburger:hover { background: rgba(255, 255, 255, 0.08); }
         .navbar {
-            background: rgba(7, 10, 20, 0.94);
+            background: rgba(7, 10, 20, 0.35);
             padding: 14px 28px;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-            backdrop-filter: blur(12px);
+            border-bottom: none;
+            box-shadow: none;
+            backdrop-filter: blur(16px);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -118,13 +118,13 @@
             gap: 5px;
             padding: 7px;
             border-radius: 10px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: transparent;
+            border: none;
         }
         .hamburger span {
             width: 24px;
             height: 2px;
-            background: #fbbf24;
+            background: #cbd5e1;
             border-radius: 2px;
             transition: 0.3s;
         }
