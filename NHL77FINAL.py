@@ -7548,49 +7548,9 @@ def daily_report_page():
     agg_spread = {'correct': 0, 'total': 0, 'pushes': 0}
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
-    # Use the SAME code path as the results pages for each sport
-    # NHL + NBA: use weekly_performance functions (same as results pages)
-    for sport_key in ['NHL', 'NBA']:
-        try:
-            if sport_key == 'NHL':
-                update_nhl_scores()
-                weekly_results = calculate_nhl_weekly_performance()
-            else:
-                update_nba_scores()
-                weekly_results = calculate_nba_weekly_performance()
-            if not weekly_results:
-                continue
-            # Regroup into daily_results (same as results page)
-            daily_results = defaultdict(lambda: {'games': []})
-            for week_data in weekly_results.values():
-                for game in week_data.get('games', []):
-                    daily_results[game['date']]['games'].append(game)
-            _attach_engine_odds_to_daily_results(sport_key, daily_results, limit=40)
-            _compute_spread_total_for_daily(sport_key, daily_results)
-            tally = compute_daily_model_tally(daily_results, report_date)
-            if not tally or tally.get('games', 0) == 0:
-                continue
-            sport_tallies.append({'sport': sport_key, 'info': SPORTS[sport_key], 'tally': tally})
-            total_games += tally.get('games', 0)
-            for mk in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
-                mt = tally.get(mk, {})
-                if mk not in agg_models:
-                    agg_models[mk] = {'correct': 0, 'total': 0}
-                agg_models[mk]['correct'] += mt.get('correct', 0)
-                agg_models[mk]['total'] += mt.get('total', 0)
-            sp = tally.get('spread', {})
-            agg_spread['correct'] += sp.get('correct', 0)
-            agg_spread['total'] += sp.get('total', 0)
-            agg_spread['pushes'] += sp.get('pushes', 0)
-            ou = tally.get('total_ou', {})
-            agg_ou['correct'] += ou.get('correct', 0)
-            agg_ou['total'] += ou.get('total', 0)
-            agg_ou['pushes'] += ou.get('pushes', 0)
-        except Exception as e:
-            logger.error(f"Daily report {sport_key}: {e}")
-
-    # ESPN-based sports (MLB, NCAAB, NCAAW, NCAAF, WNBA, SOCCER) — same path as their results pages
-    for sport_key in ['MLB', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
+    # Lightweight: query DB directly for ALL sports (no heavy season calculations)
+    # The results pages keep the DB current via score syncs on normal traffic
+    for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
         if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
         if sport_key not in SPORTS:
