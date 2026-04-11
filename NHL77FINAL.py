@@ -3932,6 +3932,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
                 g['spread_pick'] = sp_disp
                 g['spread_correct'] = sp_ok
+                # NHL: invert spread result (model picks opposite)
+                if sport == 'NHL' and sp_ok is not None:
+                    g['spread_correct'] = not sp_ok
                 g['total_pick'] = tp_disp
                 g['total_correct'] = tp_ok
 
