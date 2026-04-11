@@ -7548,45 +7548,75 @@ def daily_report_page():
     agg_spread = {'correct': 0, 'total': 0, 'pushes': 0}
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
-    # Sync scores for all sports — skip offseason ones naturally if no games found
-    _all_sports = ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']
-    for _sync_sport in _all_sports:
-        if _sync_sport == 'SOCCER' and not SOCCER_ENABLED:
-            continue
+    # Use the SAME code path as the results pages for each sport
+    _report_sports = [
+        ('NHL', 'calculate_nhl_weekly_performance', 'update_nhl_scores'),
+        ('NBA', 'calculate_nba_weekly_performance', 'update_nba_scores'),
+    ]
+    # NHL + NBA: use weekly_performance functions (same as results pages)
+    for sport_key, perf_func_name, sync_func_name in _report_sports:
         try:
-            if _sync_sport == 'NHL':
+            # Score sync (same as results page)
+            if sync_func_name == 'update_nhl_scores':
                 update_nhl_scores()
-            elif _sync_sport == 'NBA':
+            elif sync_func_name == 'update_nba_scores':
                 update_nba_scores()
-            elif _sync_sport == 'NFL':
-                update_nfl_scores()
-            else:
-                update_espn_scores(_sync_sport)
+            perf_func = globals().get(perf_func_name)
+            if not perf_func:
+                continue
+            weekly_results = perf_func()
+            if not weekly_results:
+                continue
+            # Regroup into daily_results (same as results page)
+            daily_results = defaultdict(lambda: {'games': []})
+            for week_data in weekly_results.values():
+                for game in week_data.get('games', []):
+                    daily_results[game['date']]['games'].append(game)
+            _attach_engine_odds_to_daily_results(sport_key, daily_results, limit=40)
+            _compute_spread_total_for_daily(sport_key, daily_results)
+            tally = compute_daily_model_tally(daily_results, report_date)
+            if not tally or tally.get('games', 0) == 0:
+                continue
+            sport_tallies.append({'sport': sport_key, 'info': SPORTS[sport_key], 'tally': tally})
+            total_games += tally.get('games', 0)
+            for mk in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
+                mt = tally.get(mk, {})
+                if mk not in agg_models:
+                    agg_models[mk] = {'correct': 0, 'total': 0}
+                agg_models[mk]['correct'] += mt.get('correct', 0)
+                agg_models[mk]['total'] += mt.get('total', 0)
+            sp = tally.get('spread', {})
+            agg_spread['correct'] += sp.get('correct', 0)
+            agg_spread['total'] += sp.get('total', 0)
+            agg_spread['pushes'] += sp.get('pushes', 0)
+            ou = tally.get('total_ou', {})
+            agg_ou['correct'] += ou.get('correct', 0)
+            agg_ou['total'] += ou.get('total', 0)
+            agg_ou['pushes'] += ou.get('pushes', 0)
         except Exception as e:
-            logger.debug(f"Daily report score sync {_sync_sport}: {e}")
+            logger.error(f"Daily report {sport_key}: {e}")
 
-    for sport_key in _all_sports:
+    # ESPN-based sports (MLB, NCAAB, NCAAW, NCAAF, WNBA, SOCCER) — same path as their results pages
+    for sport_key in ['MLB', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
         if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
         if sport_key not in SPORTS:
             continue
         try:
-            # Build daily_results for this sport from DB
-            # Try exact date match first, then broader match for timezone edge cases
+            update_espn_scores(sport_key)
             conn = get_db_connection()
-            rows = conn.execute('''
+            completed_games = conn.execute('''
                 SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ? AND g.home_score IS NOT NULL
-                AND (g.game_date LIKE ? OR g.game_date = ?)
-                ORDER BY g.game_date DESC LIMIT 50
-            ''', (sport_key, sport_key, f'{report_date}%', report_date)).fetchall()
+                ORDER BY g.game_date DESC LIMIT 100
+            ''', (sport_key, sport_key)).fetchall()
             conn.close()
-            if not rows:
+            if not completed_games:
                 continue
             daily_results = defaultdict(lambda: {'games': []})
-            for game in rows:
+            for game in completed_games:
                 home_score = _to_float_safe(game['home_score'])
                 away_score = _to_float_safe(game['away_score'])
                 if home_score is None or away_score is None:
@@ -7595,42 +7625,52 @@ def daily_report_page():
                 is_draw = sport_key == 'SOCCER' and abs(home_score - away_score) < 1e-9
                 if is_draw:
                     home_won = None
+                home_team = game['home_team_id']
+                away_team = game['away_team_id']
+                _raw_date = _to_date_str(game['game_date'])
+                game_date = _raw_date[:10] if _raw_date else None
+                if not game_date:
+                    continue
                 elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-                xgb_prob = _to_float_safe(game['xgboost_home_prob']) or elo_prob
-                ens_prob = _to_float_safe(game['win_probability']) or elo_prob
-                v2 = get_v2_prediction(sport_key, game['home_team_id'], game['away_team_id'], report_date) if sport_key != 'SOCCER' else None
+                xgb_prob = _to_float_safe(game['xgboost_home_prob'])
+                if xgb_prob is None:
+                    xgb_prob = elo_prob
+                ens_prob = _to_float_safe(game['win_probability'])
+                if ens_prob is None:
+                    ens_prob = elo_prob
+                v2 = get_v2_prediction(sport_key, home_team, away_team, game_date) if sport_key != 'SOCCER' else None
                 glicko2_prob = v2.get('glicko2_prob') if v2 else None
                 trueskill_prob = v2.get('trueskill_prob') if v2 else None
                 if v2:
                     xgb_prob = v2.get('xgboost_prob', xgb_prob)
                     ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
                 game_info = {
-                    'date': report_date,
-                    'home': game['home_team_id'], 'away': game['away_team_id'],
-                    'home_score': int(home_score), 'away_score': int(away_score),
+                    'game_id': game['game_id'],
+                    'date': game_date,
+                    'home': home_team, 'away': away_team,
+                    'home_score': int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
+                    'away_score': int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
                     'home_win': home_won, 'is_draw': is_draw,
-                    'glicko2_prob': round(glicko2_prob * 100, 1) if glicko2_prob else None,
-                    'trueskill_prob': round(trueskill_prob * 100, 1) if trueskill_prob else None,
+                    'glicko2_prob': round(glicko2_prob * 100, 1) if glicko2_prob is not None else None,
+                    'trueskill_prob': round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
                     'elo_prob': round(elo_prob * 100, 1),
                     'xgb_prob': round(xgb_prob * 100, 1),
                     'ens_prob': round(ens_prob * 100, 1),
-                    'glicko2_correct': (glicko2_prob > 0.5) == home_won if glicko2_prob and home_won is not None else None,
-                    'trueskill_correct': (trueskill_prob > 0.5) == home_won if trueskill_prob and home_won is not None else None,
+                    'glicko2_correct': (glicko2_prob > 0.5) == home_won if glicko2_prob is not None and home_won is not None else None,
+                    'trueskill_correct': (trueskill_prob > 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
                     'elo_correct': (elo_prob > 0.5) == home_won if home_won is not None else None,
                     'xgb_correct': (xgb_prob > 0.5) == home_won if home_won is not None else None,
                     'ens_correct': (ens_prob > 0.5) == home_won if home_won is not None else None,
                     'skip_grading': True if home_won is None else False,
                 }
-                daily_results[report_date]['games'].append(game_info)
-            # Attach spread/total grading data
-            _attach_engine_odds_to_daily_results(sport_key, daily_results, limit=50)
+                daily_results[game_date]['games'].append(game_info)
+            _attach_engine_odds_to_daily_results(sport_key, daily_results, limit=40)
             _compute_spread_total_for_daily(sport_key, daily_results)
             tally = compute_daily_model_tally(daily_results, report_date)
             if not tally or tally.get('games', 0) == 0:
                 continue
             sport_tallies.append({'sport': sport_key, 'info': SPORTS[sport_key], 'tally': tally})
             total_games += tally.get('games', 0)
-            # Aggregate across sports
             for mk in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
                 mt = tally.get(mk, {})
                 if mk not in agg_models:
