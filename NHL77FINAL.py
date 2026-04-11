@@ -7617,8 +7617,6 @@ def daily_report_page():
                     'skip_grading': True if home_won is None else False,
                 }
                 daily_results[game_date]['games'].append(game_info)
-            _attach_engine_odds_to_daily_results(sport_key, daily_results, limit=40)
-            _compute_spread_total_for_daily(sport_key, daily_results)
             tally = compute_daily_model_tally(daily_results, report_date)
             if not tally or tally.get('games', 0) == 0:
                 continue
