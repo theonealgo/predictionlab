@@ -4885,16 +4885,17 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     }
     function fallbackShare(platform,blob,status){
         var url='https://www.underdogs.bet/daily-report';
-        var text=encodeURIComponent('underdogs.bet Daily Results Report \\u2014 check our AI picks performance');
+        var text=encodeURIComponent('underdogs.bet Daily Results Report — check our AI picks performance');
+        // Save image to downloads
+        var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='underdogs-daily-report.png';a.click();
+        // Copy image to clipboard
+        try{navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);}catch(e){}
+        // Open the platform
         if(platform==='x') window.open('https://twitter.com/intent/tweet?text='+text+'&url='+encodeURIComponent(url),'_blank');
         else if(platform==='fb') window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(url),'_blank');
-        else {
-            var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='underdogs-daily-report.png';a.click();
-            status.textContent='Image saved! Upload it to '+platform.toUpperCase()+'.';
-            return;
-        }
-        status.textContent='Image saved to clipboard. Paste into your post!';
-        try{navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);}catch(e){}
+        else if(platform==='ig') window.open('https://instagram.com/underdogs.bet','_blank');
+        else if(platform==='tk') window.open('https://tiktok.com/@underdog.bet','_blank');
+        status.textContent='Image saved & copied to clipboard — paste it into your post!';
     }
     </script>
 """)
