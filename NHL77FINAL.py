@@ -7549,14 +7549,14 @@ def daily_report_page():
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
     # Quick score syncs (lightweight API calls only, no ESPN odds engine)
-    try:
-        update_nhl_scores()
-    except Exception:
-        pass
-    try:
-        update_espn_scores('SOCCER')
-    except Exception:
-        pass
+    for _sync in ['NHL', 'NBA', 'MLB', 'SOCCER']:
+        try:
+            if _sync == 'NHL':
+                update_nhl_scores()
+            else:
+                update_espn_scores(_sync)
+        except Exception:
+            pass
 
     # Query DB for yesterday's completed games only (fast, no external API calls)
     for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
