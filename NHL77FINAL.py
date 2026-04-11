@@ -7549,7 +7549,7 @@ def daily_report_page():
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
     # Quick score syncs (lightweight API calls only, no ESPN odds engine)
-    for _sync in ['NHL', 'NBA', 'MLB', 'SOCCER']:
+    for _sync in ['NHL', 'NBA', 'MLB']:
         try:
             if _sync == 'NHL':
                 update_nhl_scores()
@@ -7557,6 +7557,61 @@ def daily_report_page():
                 update_espn_scores(_sync)
         except Exception:
             pass
+    # Soccer: fetch ONLY yesterday's date directly (skip full update_espn_scores which is too slow)
+    try:
+        _soc_date_str = yesterday_dt.strftime('%Y%m%d')
+        _soc_conn = get_db_connection()
+        _soc_cursor = _soc_conn.cursor()
+        _soc_count = 0
+        for _soc_league in SOCCER_LEAGUE_ORDER:
+            _soc_code = SOCCER_LEAGUE_ENDPOINTS.get(_soc_league)
+            if not _soc_code:
+                continue
+            try:
+                _soc_resp = requests.get(f'https://site.api.espn.com/apis/site/v2/sports/soccer/{_soc_code}/scoreboard?dates={_soc_date_str}', timeout=5)
+                if _soc_resp.status_code != 200:
+                    continue
+                _soc_data = _soc_resp.json()
+                _soc_lg_info = (_soc_data.get('leagues', [{}])[0] or {}) if isinstance(_soc_data, dict) else {}
+                _soc_lg_name = _canonical_soccer_league_name(_soc_lg_info.get('name')) or _soc_league
+                for _soc_ev in (_soc_data.get('events', []) if isinstance(_soc_data, dict) else []):
+                    _soc_comp = _soc_ev.get('competitions', [{}])[0]
+                    _soc_comps = _soc_comp.get('competitors', [])
+                    if len(_soc_comps) != 2:
+                        continue
+                    _soc_st = _soc_ev.get('status', {}).get('type', {}).get('name', '')
+                    if not _soc_st.startswith('STATUS_FINAL'):
+                        continue
+                    _soc_home = next((c for c in _soc_comps if c.get('homeAway') == 'home'), None)
+                    _soc_away = next((c for c in _soc_comps if c.get('homeAway') == 'away'), None)
+                    if not _soc_home or not _soc_away:
+                        continue
+                    _soc_ht = _soc_home.get('team', {}).get('displayName', '')
+                    _soc_at = _soc_away.get('team', {}).get('displayName', '')
+                    try:
+                        _soc_hs = int(_soc_home.get('score', 0))
+                        _soc_as = int(_soc_away.get('score', 0))
+                    except Exception:
+                        continue
+                    _soc_gd = _espn_event_date_to_local(_soc_ev.get('date', '')) or report_date
+                    _soc_gid = f'SOCCER_{_soc_code}_{_soc_ev.get("id", "")}'
+                    _soc_ex = _soc_cursor.execute('SELECT 1 FROM games WHERE game_id=? AND sport=?', (_soc_gid, 'SOCCER')).fetchone()
+                    if _soc_ex:
+                        _soc_cursor.execute('UPDATE games SET home_score=?, away_score=?, status="final" WHERE game_id=? AND sport=? AND (home_score IS NULL OR home_score!=?)', (_soc_hs, _soc_as, _soc_gid, 'SOCCER', _soc_hs))
+                    else:
+                        try:
+                            _soc_cursor.execute('INSERT INTO games (sport,league,game_id,season,game_date,home_team_id,away_team_id,home_score,away_score,status) VALUES (?,?,?,?,?,?,?,?,?,"final")', ('SOCCER', _soc_lg_name, _soc_gid, 2025, _soc_gd, _soc_ht, _soc_at, _soc_hs, _soc_as))
+                            _soc_count += 1
+                        except Exception:
+                            pass
+            except Exception:
+                continue
+        _soc_conn.commit()
+        _soc_conn.close()
+        if _soc_count > 0:
+            logger.info(f'Daily report: inserted {_soc_count} Soccer games for {report_date}')
+    except Exception as _soc_e:
+        logger.debug(f'Daily report Soccer sync: {_soc_e}')
 
     # Query DB for yesterday's completed games only (fast, no external API calls)
     for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
