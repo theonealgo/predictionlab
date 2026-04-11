@@ -7548,10 +7548,13 @@ def daily_report_page():
     agg_spread = {'correct': 0, 'total': 0, 'pushes': 0}
     agg_ou = {'correct': 0, 'total': 0, 'pushes': 0}
 
-    # Quick score sync for NHL only (10 fast API calls, no ESPN odds engine)
-    # Other sports are synced by their results pages via normal traffic
+    # Quick score syncs (lightweight API calls only, no ESPN odds engine)
     try:
         update_nhl_scores()
+    except Exception:
+        pass
+    try:
+        update_espn_scores('SOCCER')
     except Exception:
         pass
 
