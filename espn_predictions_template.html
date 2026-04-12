@@ -175,8 +175,8 @@
             display: block;
         }
         .header { text-align:left; margin-bottom:16px; padding:20px 18px; border:1px solid rgba(255,255,255,0.1); border-radius:12px; position:relative; overflow:hidden; }
-        {% if sport_bg_image %}.header::before { content:''; position:absolute; inset:0; background:url('{{ sport_bg_image }}') center/cover no-repeat; opacity:0.25; z-index:0; }
-        .header::after { content:''; position:absolute; inset:0; background:rgba(7,10,20,0.7); z-index:0; }
+        {% if sport_bg_image %}.header::before { content:''; position:absolute; inset:0; background:url('{{ sport_bg_image }}') center/cover no-repeat; z-index:0; }
+        .header::after { content:''; position:absolute; inset:0; background:rgba(7,10,20,0.6); z-index:0; }
         .header>* { position:relative; z-index:1; }{% endif %}
         h1 { font-size:1.85em; letter-spacing:0.2px; }
         .section-tabs { display:flex; gap:8px; margin-bottom:16px; justify-content:center; flex-wrap:wrap; }
