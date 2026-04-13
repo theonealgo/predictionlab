@@ -131,9 +131,15 @@ def _ensure_users_table():
             is_premium INTEGER DEFAULT 0,
             premium_expires TEXT,
             stripe_customer_id TEXT,
+            session_token TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         )
     ''')
+    # Add session_token column if missing (existing DBs)
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN session_token TEXT')
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
@@ -174,7 +180,21 @@ def _load_user_by_email(email):
     return None
 
 
-# ─── Init ─────────────────────────────────────────────────────────────────────
+def _set_session_token(user_id):
+    """Generate a new session token, store in DB and session cookie.
+    This invalidates any previous session for this user."""
+    token = secrets.token_hex(32)
+    try:
+        conn = _get_db()
+        conn.execute('UPDATE users SET session_token = ? WHERE id = ?', (token, user_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Failed to set session token for user {user_id}: {e}")
+    session['_session_token'] = token
+
+
+# ─── Init ─────────────────────────────────────────────────────────────────────────────
 
 def init_auth(app, db_path=None):
     """Initialize auth system on the Flask app."""
@@ -192,21 +212,24 @@ def init_auth(app, db_path=None):
     def load_user(user_id):
         return _load_user_by_id(user_id)
 
-    # IP-based session validation to prevent account sharing
+    # Concurrent session limiter — only one active session per premium user
     @app.before_request
-    def _check_session_ip():
+    def _check_session_token():
         if current_user.is_authenticated and current_user.premium_active and not current_user.is_admin:
-            client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-            if client_ip:
-                client_ip = client_ip.split(',')[0].strip()
-            stored_ip = session.get('_premium_ip')
-            if stored_ip is None:
-                session['_premium_ip'] = client_ip
-            elif stored_ip != client_ip:
-                # Different IP — log out to prevent sharing
-                logout_user()
-                session.clear()
-                return redirect('/login?error=session_expired')
+            local_token = session.get('_session_token')
+            if local_token:
+                try:
+                    conn = _get_db()
+                    row = conn.execute('SELECT session_token FROM users WHERE id = ?', (current_user.id,)).fetchone()
+                    conn.close()
+                    db_token = row['session_token'] if row else None
+                    if db_token and db_token != local_token:
+                        # Another device logged in — this session is invalid
+                        logout_user()
+                        session.clear()
+                        return redirect('/login?error=session_expired')
+                except Exception:
+                    pass
 
     # Create users table
     _ensure_users_table()
@@ -293,6 +316,7 @@ def google_callback():
             user = _load_user_by_id(user.id)
 
         login_user(user, remember=True)
+        _set_session_token(user.id)
         return redirect(request.args.get('next', '/'))
 
     except Exception as e:
@@ -311,6 +335,7 @@ def login_page():
         'no_email': 'Could not get email from Google.',
         'oauth_failed': 'Google login failed. Please try again.',
         'mismatch': 'Passwords do not match.',
+        'session_expired': 'Your session was ended because your account was logged in on another device.',
     }.get(error, '')
 
     return render_template_string(LOGIN_TEMPLATE,
@@ -343,6 +368,7 @@ def login_submit():
         return redirect(url_for('auth.login_page', error='invalid'))
 
     login_user(user, remember=True)
+    _set_session_token(user.id)
     return redirect(request.args.get('next', '/'))
 
 
@@ -383,6 +409,7 @@ def signup_submit():
     user = _load_user_by_email(email)
     if user:
         login_user(user, remember=True)
+        _set_session_token(user.id)
 
     return redirect('/')
 
@@ -473,6 +500,7 @@ def checkout_success():
                     if user:
                         _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
                         login_user(user, remember=True)
+                        _set_session_token(user.id)
                         logger.info(f"[checkout/success] Activated premium for {email}")
         except Exception as e:
             logger.warning(f"[checkout/success] Stripe verification failed: {e}")
