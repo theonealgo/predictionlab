@@ -215,21 +215,31 @@ def init_auth(app, db_path=None):
     # Concurrent session limiter — only one active session per premium user
     @app.before_request
     def _check_session_token():
-        if current_user.is_authenticated and current_user.premium_active and not current_user.is_admin:
+        try:
+            if not current_user.is_authenticated:
+                return None
+            if not current_user.premium_active:
+                return None
+            if current_user.is_admin:
+                return None
             local_token = session.get('_session_token')
-            if local_token:
-                try:
-                    conn = _get_db()
-                    row = conn.execute('SELECT session_token FROM users WHERE id = ?', (current_user.id,)).fetchone()
-                    conn.close()
-                    db_token = row['session_token'] if row else None
-                    if db_token and db_token != local_token:
-                        # Another device logged in — this session is invalid
-                        logout_user()
-                        session.clear()
-                        return redirect('/login?error=session_expired')
-                except Exception:
-                    pass
+            if not local_token:
+                return None
+            conn = _get_db()
+            try:
+                row = conn.execute('SELECT session_token FROM users WHERE id = ?', (current_user.id,)).fetchone()
+                db_token = row['session_token'] if row else None
+            except Exception:
+                db_token = None
+            finally:
+                conn.close()
+            if db_token and db_token != local_token:
+                logout_user()
+                session.clear()
+                return redirect('/login?error=session_expired')
+        except Exception:
+            pass
+        return None
 
     # Create users table
     _ensure_users_table()
