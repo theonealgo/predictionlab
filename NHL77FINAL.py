@@ -4186,9 +4186,6 @@ def compute_roi_for_range(daily_results, start_date=None, end_date=None):
                 if home_score == away_score:
                     home_win = None
                 odds = g.get("home_moneyline") if pick_home else g.get("away_moneyline")
-                # Filter: skip heavy favorites worse than -150
-                if odds is not None and odds < -150:
-                    continue
                 entry = summary["moneyline"]
                 if home_win is None:
                     entry["pushes"] += 1
@@ -5702,11 +5699,11 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 Season Performance <span class="info-btn" onclick="this.nextElementSibling.classList.toggle('open')" style="cursor:pointer;font-size:0.5em;vertical-align:middle;opacity:0.6;">ⓘ</span></h2>
-            <div class="info-tooltip" style="display:none;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 16px;margin:-8px 0 14px;font-size:0.78em;color:#cbd5e1;line-height:1.6;text-align:center;">
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;">🏆 Season Performance</h2>
+            <div id="seasonInfoBox" style="display:none;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.78em;color:#cbd5e1;line-height:1.6;text-align:center;">
                 Results are tracked from the start of the {{ sport_info.name }} season. All completed games with available model predictions are graded automatically. Game counts reflect actual games graded — some games may lack model data due to missing stats or early-season data gaps. Numbers grow daily as more games are played.
             </div>
-            <style>.info-tooltip.open{display:block !important;}</style>
+            <div style="text-align:center;margin-bottom:14px;"><span onclick="var b=document.getElementById('seasonInfoBox');b.style.display=b.style.display==='none'?'block':'none';" style="cursor:pointer;font-size:0.75em;color:#94a3b8;border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:3px 10px;">ⓘ What do these numbers mean?</span></div>
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎯 Moneyline (Consensus)</div>
@@ -5736,6 +5733,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
 
         <!-- ── Model Records ── -->
+        <h3 style="text-align:center;font-size:1.15em;margin:0 0 12px;color:#e2e8f0;">Moneyline Accuracy by Model</h3>
         <div class="model-grid">
             {% for m_label, m_key in model_cards %}
             {% set m = overall_stats[m_key] %}
