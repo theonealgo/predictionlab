@@ -5702,7 +5702,11 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 Season Performance</h2>
+            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 Season Performance <span class="info-btn" onclick="this.nextElementSibling.classList.toggle('open')" style="cursor:pointer;font-size:0.5em;vertical-align:middle;opacity:0.6;">ⓘ</span></h2>
+            <div class="info-tooltip" style="display:none;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 16px;margin:-8px 0 14px;font-size:0.78em;color:#cbd5e1;line-height:1.6;text-align:center;">
+                Results are tracked from the start of the {{ sport_info.name }} season. All completed games with available model predictions are graded automatically. Game counts reflect actual games graded — some games may lack model data due to missing stats or early-season data gaps. Numbers grow daily as more games are played.
+            </div>
+            <style>.info-tooltip.open{display:block !important;}</style>
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎯 Moneyline (Consensus)</div>
