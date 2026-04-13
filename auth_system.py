@@ -192,6 +192,22 @@ def init_auth(app, db_path=None):
     def load_user(user_id):
         return _load_user_by_id(user_id)
 
+    # IP-based session validation to prevent account sharing
+    @app.before_request
+    def _check_session_ip():
+        if current_user.is_authenticated and current_user.premium_active and not current_user.is_admin:
+            client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+            if client_ip:
+                client_ip = client_ip.split(',')[0].strip()
+            stored_ip = session.get('_premium_ip')
+            if stored_ip is None:
+                session['_premium_ip'] = client_ip
+            elif stored_ip != client_ip:
+                # Different IP — log out to prevent sharing
+                logout_user()
+                session.clear()
+                return redirect('/login?error=session_expired')
+
     # Create users table
     _ensure_users_table()
 

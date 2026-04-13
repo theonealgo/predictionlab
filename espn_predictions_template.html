@@ -227,6 +227,9 @@
         .model-val { font-weight:600; }
         .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#10b981; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
 
+        /* Premium content protection */
+        .premium-protected { -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; -webkit-touch-callout:none; }
+        @media print { .premium-protected { display:none !important; } }
         /* Score/Spread/Total footer */
         .score-footer { border-top:1px solid rgba(255,255,255,0.07); padding:7px 12px; display:flex; gap:16px; flex-wrap:wrap; background:rgba(0,0,0,0.18); }
         .sf-item { display:flex; flex-direction:column; gap:1px; }
@@ -421,7 +424,7 @@
                         </div>
                     </div>
                     {% if not is_final and (pred.xgb_spread is not none or pred.naive_spread is not none or pred.market_spread is not none) %}
-                    <div class="score-footer">
+                    <div class="score-footer premium-protected">
                         {% if pred.xgb_spread is not none %}
                         {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val sf-xgb">{{ pred.xgb_away_score }} – {{ pred.xgb_home_score }}</span></div>

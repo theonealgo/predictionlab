@@ -3020,9 +3020,9 @@ def get_upcoming_predictions(sport, days=365):
                                 game_dict['xgb_spread']     = _mlb_result[2]
                                 game_dict['xgb_total']      = _mlb_result[3]
                                 # Derive moneyline from predicted spread
-                                # MLB game margin std dev ~4.0 runs
+                                # Use std=3.0 for more decisive picks (actual game std ~4.2 but model spreads are smaller)
                                 _mlb_spread = float(_mlb_result[2])
-                                _mlb_win_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (4.0 * _math.sqrt(2))))
+                                _mlb_win_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2))))
                                 _mlb_win_prob = max(0.05, min(0.95, _mlb_win_prob))
                                 # Override all model probabilities with runs-model-derived prob
                                 game_dict['elo_prob']      = round(_mlb_win_prob * 100, 1)
@@ -5483,8 +5483,9 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
-    {% if sport_bg_image %}body{background:url('{{ sport_bg_image }}') center/cover no-repeat fixed !important;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}@media(max-width:768px){body{background-attachment:scroll !important;}}{% endif %}
-    .page-title { font-size: 2.2em; margin-bottom: 20px; text-align: center; }
+    .page-title { font-size: 2.2em; margin-bottom: 20px; text-align: center; padding:22px 18px; border:1px solid rgba(255,255,255,0.1); border-radius:12px; position:relative; overflow:hidden; z-index:1; }
+    {% if sport_bg_image %}.page-title::before{content:'';position:absolute;inset:0;background:url('{{ sport_bg_image }}') center/cover no-repeat;z-index:-2;}
+    .page-title::after{content:'';position:absolute;inset:0;background:rgba(7,10,20,0.6);z-index:-1;}{% endif %}
     .section-tabs { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap; }
     .tab { padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; background: rgba(255,255,255,0.1); color: white; font-size: 0.9em; }
     .tab.active { background: linear-gradient(135deg, #10b981, #059669); }
@@ -5552,6 +5553,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .daily-model { font-size:0.78em; opacity:0.85; margin-bottom:4px; }
     .daily-acc { font-size:1.35em; font-weight:700; }
     .daily-rec { font-size:0.8em; opacity:0.8; }
+    @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} }
     """
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} — Results</h1>
@@ -5681,9 +5683,9 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── ROI Cards ── -->
         {% if roi_cards %}
-        <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #fbbf24;border-radius:14px;padding:22px;margin-bottom:16px;">
+        <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #fbbf24;border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.3em;">💰 ROI Tracker (1u flat bets)</h2>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+            <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
                 {% for mkt, mkt_label in [('moneyline','Moneyline'),('spread','Spread'),('total','Total (O/U)')] %}
                 {% set c = roi_cards[mkt] %}
                 <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:14px;">
@@ -5699,9 +5701,9 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% endif %}
 
         <!-- ── Combined Stats Banner ── -->
-        <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;">
+        <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.5em;">🏆 Season Performance</h2>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+            <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎯 Moneyline (Consensus)</div>
                     <div style="font-size:2em;font-weight:bold;color:{% if ens.accuracy>=55 %}#10b981{% elif ens.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ ens.accuracy }}%</div>
@@ -5776,11 +5778,11 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="result-body">
                         <div class="teams-section">
                             <div class="team-row">
-                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ game.away }}</span>
+                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ game.away }}{% if game.away_moneyline is defined and game.away_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.away_moneyline < 0 %}#10b981{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.away_moneyline > 0 %}+{% endif %}{{ game.away_moneyline }}</span>{% endif %}</span>
                                 <span class="score-box">{{ game.away_score }}</span>
                             </div>
                             <div class="team-row">
-                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ game.home }}</span>
+                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ game.home }}{% if game.home_moneyline is defined and game.home_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.home_moneyline < 0 %}#10b981{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.home_moneyline > 0 %}+{% endif %}{{ game.home_moneyline }}</span>{% endif %}</span>
                                 <span class="score-box">{{ game.home_score }}</span>
                             </div>
                         </div>
@@ -5930,12 +5932,18 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
-    {% if sport_bg_image %}body{background:url('{{ sport_bg_image }}') center/cover no-repeat fixed !important;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}@media(max-width:768px){body{background-attachment:scroll !important;}}{% endif %}
     .page-title {
         font-size: 2.5em;
         margin-bottom: 30px;
         text-align: center;
+        padding:20px 18px;
+        border:1px solid rgba(255,255,255,0.1);
+        border-radius:12px;
+        position:relative;
+        overflow:hidden;
     }
+    {% if sport_bg_image %}.page-title::before{content:'';position:absolute;inset:0;background:url('{{ sport_bg_image }}') center/cover no-repeat;z-index:-2;}
+    .page-title::after{content:'';position:absolute;inset:0;background:rgba(7,10,20,0.6);z-index:-1;}{% endif %}
     .section-tabs {
         display: flex;
         gap: 10px;

@@ -77,12 +77,12 @@ PARK_FACTORS: dict = {
 }
 
 # ── MLB model constants ───────────────────────────────────────────────────────
-HOME_ADV_MLB        = 0.15   # historical home-field run advantage
+HOME_ADV_MLB        = 0.05   # reduced home-field advantage (was 0.15, too high)
 LEAGUE_MEAN_TOTAL   = 8.8    # from 2,626-game DB average
 TOTAL_BOUNDS        = (5.0, 16.0)
 SPREAD_BOUNDS       = (-8.0, 8.0)
-TOTAL_REGRESSION_ALPHA  = 0.85   # pulls toward league mean (15 % shrinkage)
-SPREAD_REGRESSION_ALPHA = 0.90
+TOTAL_REGRESSION_ALPHA  = 0.92   # less shrinkage (was 0.85)
+SPREAD_REGRESSION_ALPHA = 0.95   # less shrinkage (was 0.90)
 N_FEATURES          = 15
 K_FACTOR_MLB        = 14     # Elo K-factor for MLB (lower than basketball/hockey)
 
