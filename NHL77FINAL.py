@@ -4371,9 +4371,10 @@ BASE_TEMPLATE = """
     <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     <link rel="icon" type="image/png" href="/static/Logo.PNG">
+    <link rel="apple-touch-icon" href="/static/Logo.PNG">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JWHPL9X6SY"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JWHPL9X6SY">
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
@@ -6640,6 +6641,7 @@ def landing_page():
     <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     <link rel="icon" type="image/png" href="/static/Logo.PNG">
+    <link rel="apple-touch-icon" href="/static/Logo.PNG">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
