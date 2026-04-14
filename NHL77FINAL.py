@@ -3003,36 +3003,43 @@ def get_upcoming_predictions(sport, days=365):
                 except Exception as _e:
                     logger.debug(f"XGBSpread error: {_e}")
 
-                # ── MLB: override xgb_* AND moneyline with specialized runs model ─
+                # ── MLB: pitching-enhanced prediction (35% Elo / 45% Pitching / 20% ML) ─
                 if sport == 'MLB':
                     try:
                         from mlb_runs_model import get_or_train_mlb_model as _get_mlb_model
+                        from mlb_pitching import get_mlb_pitching_adjustment as _get_pitching
                         import math as _math
+                        _ht = game_dict.get('home_team_id', '')
+                        _at = game_dict.get('away_team_id', '')
+                        # 1. ML correction: runs model spread → probability
+                        _ml_prob = 0.5
                         _mlbm = _get_mlb_model(DATABASE)
                         if _mlbm:
-                            _mlb_result = _mlbm.predict(
-                                game_dict.get('home_team_id', ''),
-                                game_dict.get('away_team_id', ''),
-                            )
+                            _mlb_result = _mlbm.predict(_ht, _at)
                             if _mlb_result and _mlb_result[0] is not None:
                                 game_dict['xgb_home_score'] = _mlb_result[0]
                                 game_dict['xgb_away_score'] = _mlb_result[1]
                                 game_dict['xgb_spread']     = _mlb_result[2]
                                 game_dict['xgb_total']      = _mlb_result[3]
-                                # Derive moneyline from predicted spread
-                                # Use std=3.0 for more decisive picks (actual game std ~4.2 but model spreads are smaller)
                                 _mlb_spread = float(_mlb_result[2])
-                                _mlb_win_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2))))
-                                _mlb_win_prob = max(0.05, min(0.95, _mlb_win_prob))
-                                # Override all model probabilities with runs-model-derived prob
-                                game_dict['elo_prob']      = round(_mlb_win_prob * 100, 1)
-                                game_dict['xgb_prob']      = round(_mlb_win_prob * 100, 1)
-                                game_dict['ensemble_prob'] = round(_mlb_win_prob * 100, 1)
-                                game_dict['glicko2_prob']  = round(_mlb_win_prob * 100, 1)
-                                game_dict['trueskill_prob'] = round(_mlb_win_prob * 100, 1)
-                                game_dict['predicted_winner'] = game_dict['home_team_id'] if _mlb_win_prob > 0.5 else game_dict['away_team_id']
+                                _ml_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2))))
+                        # 2. Pitching adjustment from ESPN probable starters
+                        _pitch = _get_pitching(_ht, _at)
+                        _pitch_prob = _pitch.get('pitching_prob', 0.5)
+                        # 3. Elo baseline (already computed above as elo_prob 0-1)
+                        _elo_base = elo_prob  # from v2 predictor, already 0-1 scale
+                        # 4. Blend: 35% Elo + 45% Pitching + 20% ML
+                        _blended = 0.35 * _elo_base + 0.45 * _pitch_prob + 0.20 * _ml_prob
+                        _blended = max(0.05, min(0.95, _blended))
+                        # Override all model display slots
+                        game_dict['elo_prob']       = round(_elo_base * 100, 1)
+                        game_dict['xgb_prob']       = round(_ml_prob * 100, 1)
+                        game_dict['glicko2_prob']   = round(_pitch_prob * 100, 1)
+                        game_dict['trueskill_prob'] = round(_pitch_prob * 100, 1)
+                        game_dict['ensemble_prob']  = round(_blended * 100, 1)
+                        game_dict['predicted_winner'] = _ht if _blended > 0.5 else _at
                     except Exception as _mlbe:
-                        logger.debug(f"MLBRunsModel error: {_mlbe}")
+                        logger.debug(f"MLB enhanced prediction error: {_mlbe}")
 
                 # ── NHL: invert XSharp spread (model picks opposite side) ──────────
                 if sport == 'NHL' and game_dict.get('xgb_spread') is not None:
