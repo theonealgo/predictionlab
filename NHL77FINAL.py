@@ -2784,16 +2784,38 @@ def get_upcoming_predictions(sport, days=365):
                 elo_prob = soccer_pred.get('elo_prob')
                 xgb_prob = soccer_pred.get('poisson_reg_prob')
                 ensemble_prob = soccer_pred.get('ensemble_prob')
-                if xgb_prob is None:
-                    xgb_prob = elo_prob
-                if ensemble_prob is None:
-                    ensemble_prob = elo_prob
-                game['glicko2_prob'] = soccer_pred.get('poisson_xg_prob')
-                game['trueskill_prob'] = soccer_pred.get('markov_prob')
+                _g2_soc = soccer_pred.get('poisson_xg_prob')
+                _ts_soc = soccer_pred.get('markov_prob')
+                # Count how many valid model outputs we have
+                _valid_count = sum(1 for p in [elo_prob, xgb_prob, _g2_soc, _ts_soc] if p is not None and abs(p - 0.5) > 0.005)
+                if _valid_count < 2:
+                    # Insufficient data — don't show fake predictions
+                    elo_prob = 0.5
+                    xgb_prob = None
+                    ensemble_prob = None
+                    game['glicko2_prob'] = None
+                    game['trueskill_prob'] = None
+                    game['soccer_model_note'] = soccer_note or 'Insufficient data for reliable prediction'
+                else:
+                    if xgb_prob is None:
+                        xgb_prob = elo_prob
+                    if ensemble_prob is None:
+                        ensemble_prob = elo_prob
+                    game['glicko2_prob'] = _g2_soc
+                    game['trueskill_prob'] = _ts_soc
+                    game['soccer_model_note'] = None
                 game['v2_expected_home'] = soccer_pred.get('expected_home_score')
                 game['v2_expected_away'] = soccer_pred.get('expected_away_score')
                 game['is_v2'] = True
-                game['soccer_model_note'] = soccer_note
+            elif sport == 'SOCCER' and not soccer_pred:
+                # Soccer without model data — show insufficient data
+                elo_prob = 0.5
+                xgb_prob = None
+                ensemble_prob = None
+                game['glicko2_prob'] = None
+                game['trueskill_prob'] = None
+                game['soccer_model_note'] = soccer_note or 'Insufficient data for reliable prediction'
+                game['is_v2'] = False
             elif v2_pred:
                 # Use actual stored Elo prob from DB; fall back to Elo rating computation
                 stored_elo = game.get('stored_elo_prob')
@@ -2877,10 +2899,15 @@ def get_upcoming_predictions(sport, days=365):
             ):
                 if _k not in game_dict:
                     game_dict[_k] = None
-            game_dict['elo_prob'] = round(elo_prob * 100, 1)
-            game_dict['xgb_prob'] = round(xgb_prob * 100, 1)
-            game_dict['ensemble_prob'] = round(ensemble_prob * 100, 1)
-            game_dict['predicted_winner'] = game['home_team_id'] if ensemble_prob > 0.5 else game['away_team_id']
+            game_dict['elo_prob'] = round(elo_prob * 100, 1) if elo_prob is not None else None
+            game_dict['xgb_prob'] = round(xgb_prob * 100, 1) if xgb_prob is not None else None
+            game_dict['ensemble_prob'] = round(ensemble_prob * 100, 1) if ensemble_prob is not None else None
+            if ensemble_prob is not None:
+                game_dict['predicted_winner'] = game['home_team_id'] if ensemble_prob > 0.5 else game['away_team_id']
+            elif elo_prob is not None:
+                game_dict['predicted_winner'] = game['home_team_id'] if elo_prob > 0.5 else game['away_team_id']
+            else:
+                game_dict['predicted_winner'] = game['home_team_id']  # fallback
             
             # Ensure date has no time in GUI
             from datetime import datetime as _dt
