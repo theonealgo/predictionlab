@@ -551,12 +551,16 @@
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
     {% endif %}
 
-    <!-- Internal links to recent dated pages -->
-    {% if sorted_dates and sorted_dates|length != 1 %}
+    <!-- Internal links to recent dated pages (past dates only) -->
+    {% set _past_dates = [] %}
+    {% for _d in sorted_dates if _d <= today_date %}
+    {% if _past_dates.append(_d) %}{% endif %}
+    {% endfor %}
+    {% if _past_dates|length > 1 %}
     <div style="margin-top:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
         <div style="font-size:0.82em;font-weight:700;color:#e2e8f0;margin-bottom:8px;">Recent {{ sport_info.name }} Picks</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            {% for _d in sorted_dates[-7:] %}
+            {% for _d in _past_dates[-7:] %}
             {% set _m = _d.split('-') %}
             {% if _m|length == 3 %}
             <a href="/{{ sport_seo_slug }}-{{ {'01':'january','02':'february','03':'march','04':'april','05':'may','06':'june','07':'july','08':'august','09':'september','10':'october','11':'november','12':'december'}.get(_m[1],'january') }}-{{ _m[2]|int }}-{{ _m[0] }}" style="color:#94a3b8;text-decoration:none;font-size:0.8em;padding:4px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;">{{ _d }}</a>
