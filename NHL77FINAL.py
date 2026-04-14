@@ -7917,7 +7917,9 @@ def sport_predictions(sport, filter_date=None):
             filtered.append(pred)
         soccer_league_list = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
         selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
-        # If a specific league is selected, filter to it. Otherwise show ALL.
+        # Default to first available league if none selected (loading all leagues causes OOM)
+        if not selected_league and soccer_league_list:
+            selected_league = soccer_league_list[0]
         if selected_league:
             filtered = [p for p in filtered if p.get('league') == selected_league]
         predictions = filtered
