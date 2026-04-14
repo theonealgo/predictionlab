@@ -646,6 +646,8 @@ LOGIN_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login — underdogs.bet</title>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="description" content="Log in to your underdogs.bet account to access AI-powered sports picks, spreads, and totals.">
 <meta property="og:title" content="Login — underdogs.bet">
 <meta property="og:description" content="Log in to access AI-powered sports picks.">
@@ -683,6 +685,8 @@ SIGNUP_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign Up — underdogs.bet</title>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="description" content="Create a free underdogs.bet account to access AI-powered sports picks. Upgrade for spreads, totals, and score predictions.">
 <meta property="og:title" content="Sign Up — underdogs.bet">
 <meta property="og:description" content="Create a free account for AI-powered sports picks.">
@@ -721,6 +725,8 @@ SUCCESS_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Welcome to Premium — underdogs.bet</title>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/png" href="/static/Logo.PNG">
 <link rel="apple-touch-icon" href="/static/Logo.PNG">

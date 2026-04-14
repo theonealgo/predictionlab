@@ -4371,16 +4371,8 @@ BASE_TEMPLATE = """
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     <link rel="icon" type="image/png" href="/static/Logo.PNG">
     <link rel="apple-touch-icon" href="/static/Logo.PNG">
-    {% if ga_tracking_id %}
-    <!-- Google Analytics gtag.js snippet -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG">
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-R4XM0WKTGG');
-    </script>
-    {% endif %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-R4XM0WKTGG');</script>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
