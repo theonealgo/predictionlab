@@ -7182,18 +7182,44 @@ def landing_page():
 </div>
 
 <!-- Hero -->
-<div class="hero" style="text-align:left;padding:100px 40px 60px;">
-    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">Daily AI Sports Picks<br>&amp; Betting Predictions</h1>
-    <p class="hero-subhead hero-slide" style="text-align:left;max-width:600px;animation:slideIn 0.8s ease-out 0.2s both;">NHL, NBA, MLB, NFL — data-driven moneyline picks, spread projections, and betting edges. Updated every day.</p>
+<div class="hero" style="text-align:left;padding:100px 40px 50px;">
+    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Predictions<br>With Real Results</h1>
+    <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
     <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
-        <a href="/nhl-picks" style="background:#fff;color:#0f172a;padding:12px 24px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.92em;">Start Free Picks Now</a>
-        <a href="/plans" style="background:transparent;color:#fff;padding:12px 24px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.92em;border:1px solid rgba(255,255,255,0.3);">Get Premium Edge</a>
+        <a href="/nba-picks" style="background:#fff;color:#0f172a;padding:14px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Today's Picks</a>
+        <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Unlock Full Model</a>
     </div>
+    <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
 </div>
 <style>
 @keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
 .hero-slide{opacity:0;}
 </style>
+
+<!-- Proof Section -->
+<div style="max-width:800px;margin:0 auto;padding:0 24px 20px;">
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(16,185,129,0.25);border-radius:14px;padding:20px 24px;">
+        <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;text-align:center;">
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#10b981;">{{ games_graded }}+</div>
+                <div style="font-size:0.75em;color:#94a3b8;">Games Graded</div>
+            </div>
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#10b981;">{{ sports_covered }}</div>
+                <div style="font-size:0.75em;color:#94a3b8;">Sports Covered</div>
+            </div>
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#10b981;">5</div>
+                <div style="font-size:0.75em;color:#94a3b8;">AI Models</div>
+            </div>
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#10b981;">Daily</div>
+                <div style="font-size:0.75em;color:#94a3b8;">Updates</div>
+            </div>
+        </div>
+        <p style="text-align:center;font-size:0.78em;color:#94a3b8;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#fbbf24;text-decoration:none;">View full results &rarr;</a></p>
+    </div>
+</div>
 
 <!-- Sticky Bottom Bar -->
 <div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
@@ -7294,25 +7320,7 @@ def landing_page():
 <!-- Why Different -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;">
     <h2 class="section-title">Why Our Picks Are Different</h2>
-    <p class="section-sub" style="max-width:640px;margin:0 auto;">Most bettors follow public trends. Our models analyze matchups, projections, and betting value to identify edges the market misses.</p>
-    <div style="display:flex;justify-content:center;gap:12px;margin-top:24px;flex-wrap:wrap;">
-        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
-            <div style="font-size:1.6em;font-weight:900;color:#10b981;">{{ sports_covered }}</div>
-            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">Sports</div>
-        </div>
-        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
-            <div style="font-size:1.6em;font-weight:900;color:#10b981;">5</div>
-            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">AI Models</div>
-        </div>
-        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
-            <div style="font-size:1.6em;font-weight:900;color:#10b981;">{{ games_graded }}+</div>
-            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">Graded</div>
-        </div>
-        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:16px 20px;text-align:center;min-width:130px;">
-            <div style="font-size:1.6em;font-weight:900;color:#10b981;">Daily</div>
-            <div style="font-size:0.78em;color:#94a3b8;margin-top:4px;">Updates</div>
-        </div>
-    </div>
+    <p class="section-sub" style="max-width:640px;margin:0 auto;">Most bettors follow public trends. Our system analyzes matchups, projections, and real-time data to find edges the market misses &mdash; then tracks every result with full transparency.</p>
 </div>
 
 <!-- Season Performance -->
@@ -7341,13 +7349,34 @@ def landing_page():
 </div>
 {% endif %}
 
-<!-- Premium CTA -->
-<div class="section" style="padding-top:10px;padding-bottom:30px;text-align:center;">
-    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:28px;max-width:600px;margin:0 auto;">
-        <h3 style="font-size:1.15em;font-weight:800;margin-bottom:8px;">Want Spreads, Totals &amp; Score Predictions?</h3>
-        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:16px;">Free picks get you the winners. Premium gets you the full edge.</p>
-        <a href="/plans" style="display:inline-block;background:#fff;color:#0f172a;padding:12px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Plans — From $12.50/mo</a>
+<!-- Free vs Premium -->
+<div class="section" style="padding-top:10px;padding-bottom:30px;">
+    <h2 class="section-title">Free vs Premium</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:700px;margin:0 auto;">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;">
+            <h4 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#e2e8f0;">Free</h4>
+            <ul style="list-style:none;padding:0;font-size:0.85em;color:#94a3b8;line-height:2;">
+                <li>&#10003; Moneyline picks</li>
+                <li>&#10003; Model win percentages</li>
+                <li>&#10003; Full results tracking</li>
+            </ul>
+        </div>
+        <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:22px;">
+            <h4 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#fbbf24;">Premium</h4>
+            <ul style="list-style:none;padding:0;font-size:0.85em;color:#cbd5e1;line-height:2;">
+                <li>&#10003; Spread picks</li>
+                <li>&#10003; Total (over/under) picks</li>
+                <li>&#10003; Score projections</li>
+                <li>&#10003; Full model output</li>
+            </ul>
+            <a href="/plans" style="display:inline-block;margin-top:14px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.88em;">Unlock Premium Picks</a>
+        </div>
     </div>
+</div>
+
+<!-- SEO Text -->
+<div class="section" style="padding-top:0;padding-bottom:20px;">
+    <p style="max-width:700px;margin:0 auto;font-size:0.82em;color:#64748b;line-height:1.7;text-align:center;">underdogs.bet provides AI-powered sports predictions across NBA, NFL, MLB, NHL, and more. Our system analyzes real-time data, team performance, and matchups to generate daily picks. Every prediction is tracked with full transparency so users can evaluate real performance over time.</p>
 </div>
 
 <!-- SEO Internal Links -->
