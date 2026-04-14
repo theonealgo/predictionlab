@@ -7468,18 +7468,19 @@ def sitemap_xml():
     # Homepage
     urls.append((_SITE_DOMAIN + '/', 'daily', '1.0'))
 
-    # Sport picks + results pages
+    # Sport picks + results pages (only in-season sports get dated pages)
     for sport_key in SPORTS.keys():
         if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
         picks_slug = SPORT_SEO_SLUGS.get(sport_key)
         results_slug = _SPORT_RESULTS_SLUGS.get(sport_key)
+        _status, _is_live = get_season_status(sport_key, today=now)
         if picks_slug:
             urls.append((f"{_SITE_DOMAIN}/{picks_slug}", 'daily', '0.9'))
-        if results_slug:
+        if results_slug and _is_live:
             urls.append((f"{_SITE_DOMAIN}/{results_slug}", 'daily', '0.8'))
-        # Daily SEO pages for last 7 days + today
-        if picks_slug:
+        # Daily SEO pages only for in-season sports
+        if picks_slug and _is_live:
             for days_back in range(8):
                 d = now - timedelta(days=days_back)
                 month_name = _MONTH_NAMES.get(d.month, 'january')
@@ -7487,6 +7488,7 @@ def sitemap_xml():
                 urls.append((daily_url, 'daily', '0.7'))
 
     # Static pages
+    urls.append((_SITE_DOMAIN + '/daily-report', 'daily', '0.8'))
     urls.append((_SITE_DOMAIN + '/plans', 'weekly', '0.8'))
     urls.append((_SITE_DOMAIN + '/tutorial', 'monthly', '0.5'))
     urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
@@ -7866,7 +7868,10 @@ def sport_predictions(sport, filter_date=None):
             "Please refresh in a minute."
         )
 
-    _attach_engine_odds_to_predictions(sport, predictions)
+    try:
+        _attach_engine_odds_to_predictions(sport, predictions)
+    except Exception as _odds_err:
+        logger.debug(f"Odds attachment failed for {sport}: {_odds_err}")
 
     for pred in predictions:
         for _k in (

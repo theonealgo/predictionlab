@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
+    {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
+    {% set _meta_title = sport_info.name ~ ' Picks for ' ~ sorted_dates[0] ~ ' | underdogs.bet' %}
+    {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks for ' ~ sorted_dates[0] ~ '. AI-powered predictions with projected scores, spreads, and totals.' %}
+    {% else %}
     {% set _meta_title = sport_info.name ~ ' Picks Today | underdogs.bet' %}
     {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks today. AI-powered predictions with projected scores, spreads, and totals. Updated daily.' %}
+    {% endif %}
     <title>{{ _meta_title }}</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ _meta_desc }}">
+    {% if grouped_predictions is defined and not grouped_predictions %}<meta name="robots" content="noindex, follow">{% endif %}
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
