@@ -4183,6 +4183,8 @@ def _roi_entry():
     }
 
 def compute_roi_for_range(daily_results, start_date=None, end_date=None):
+    """Flat unit performance tracker: Win = +1u, Loss = -1u, Push = 0u.
+    No sportsbook odds used. Every graded pick is 1 unit risked."""
     summary = {
         "moneyline": _roi_entry(),
         "spread": _roi_entry(),
@@ -4199,84 +4201,56 @@ def compute_roi_for_range(daily_results, start_date=None, end_date=None):
             if home_score is None or away_score is None:
                 continue
 
-            # Moneyline ROI based on ensemble win prob
+            # Moneyline: flat +1u win, -1u loss
             ens_prob = g.get("ens_prob")
             if ens_prob is not None:
                 pick_home = ens_prob >= 50
                 home_win = home_score > away_score
                 if home_score == away_score:
                     home_win = None
-                odds = g.get("home_moneyline") if pick_home else g.get("away_moneyline")
                 entry = summary["moneyline"]
                 if home_win is None:
                     entry["pushes"] += 1
-                elif odds is None:
-                    entry["missing_odds"] += 1
                 else:
-                    units = _american_units(odds)
-                    if units is None:
-                        entry["missing_odds"] += 1
+                    entry["units_risked"] += 1
+                    entry["graded"] += 1
+                    correct = (pick_home and home_win) or ((not pick_home) and (not home_win))
+                    if correct:
+                        entry["wins"] += 1
+                        entry["units_won"] += 1.0
                     else:
-                        entry["units_risked"] += 1
-                        entry["graded"] += 1
-                        if (pick_home and home_win) or ((not pick_home) and (not home_win)):
-                            entry["wins"] += 1
-                            entry["units_won"] += units
-                        else:
-                            entry["losses"] += 1
-                            entry["units_won"] -= 1
+                        entry["losses"] += 1
+                        entry["units_won"] -= 1.0
 
-            # Spread ROI based on xSharp pick/grade
+            # Spread: flat +1u win, -1u loss
             spread_pick = g.get("spread_pick")
             spread_correct = g.get("spread_correct")
             if spread_pick and spread_pick != "PUSH" and spread_correct is not None:
                 entry = summary["spread"]
-                if spread_pick == "HOME":
-                    odds = g.get("spread_price_home")
+                entry["units_risked"] += 1
+                entry["graded"] += 1
+                if spread_correct is True:
+                    entry["wins"] += 1
+                    entry["units_won"] += 1.0
                 else:
-                    odds = g.get("spread_price_away")
-                if odds is None:
-                    entry["missing_odds"] += 1
-                else:
-                    units = _american_units(odds)
-                    if units is None:
-                        entry["missing_odds"] += 1
-                    else:
-                        entry["units_risked"] += 1
-                        entry["graded"] += 1
-                        if spread_correct is True:
-                            entry["wins"] += 1
-                            entry["units_won"] += units
-                        else:
-                            entry["losses"] += 1
-                            entry["units_won"] -= 1
+                    entry["losses"] += 1
+                    entry["units_won"] -= 1.0
             elif spread_pick == "PUSH":
                 summary["spread"]["pushes"] += 1
 
-            # Total ROI based on xSharp pick/grade
+            # Total (O/U): flat +1u win, -1u loss
             total_pick = g.get("total_pick")
             total_correct = g.get("total_correct")
             if total_pick and total_pick != "PUSH" and total_correct is not None:
                 entry = summary["total"]
-                if total_pick == "OVER":
-                    odds = g.get("total_over_price")
+                entry["units_risked"] += 1
+                entry["graded"] += 1
+                if total_correct is True:
+                    entry["wins"] += 1
+                    entry["units_won"] += 1.0
                 else:
-                    odds = g.get("total_under_price")
-                if odds is None:
-                    entry["missing_odds"] += 1
-                else:
-                    units = _american_units(odds)
-                    if units is None:
-                        entry["missing_odds"] += 1
-                    else:
-                        entry["units_risked"] += 1
-                        entry["graded"] += 1
-                        if total_correct is True:
-                            entry["wins"] += 1
-                            entry["units_won"] += units
-                        else:
-                            entry["losses"] += 1
-                            entry["units_won"] -= 1
+                    entry["losses"] += 1
+                    entry["units_won"] -= 1.0
             elif total_pick == "PUSH":
                 summary["total"]["pushes"] += 1
     for entry in summary.values():
@@ -4284,9 +4258,7 @@ def compute_roi_for_range(daily_results, start_date=None, end_date=None):
             entry["roi_pct"] = round((entry["units_won"] / entry["units_risked"]) * 100, 2)
         else:
             if entry["graded"] == 0:
-                entry["reason"] = "No graded bets in range."
-            elif entry["missing_odds"] > 0:
-                entry["reason"] = "Odds missing for graded bets."
+                entry["reason"] = "No graded picks in range."
     return summary
 
 def build_roi_cards(roi_daily, roi_weekly, roi_total):
@@ -5704,7 +5676,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── ROI Cards ── -->
         {% if roi_cards %}
         <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #fbbf24;border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.3em;">💰 ROI Tracker (1u flat bets)</h2>
+            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.3em;">💰 Model Performance (Flat Unit Tracking)</h2>
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
                 {% for mkt, mkt_label in [('moneyline','Moneyline'),('spread','Spread'),('total','Total (O/U)')] %}
                 {% set c = roi_cards[mkt] %}
