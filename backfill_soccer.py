@@ -43,7 +43,15 @@ LEAGUES = {
     'conmebol.libertadores': 'Copa Libertadores',
 }
 
-DAYS_BACK = 90  # How far back to fetch
+def _parse_event_date(event):
+    """Extract game date from ESPN event."""
+    try:
+        dt_str = event.get('date', '')
+        if dt_str:
+            return dt_str[:10]  # '2026-01-15T...' -> '2026-01-15'
+    except Exception:
+        pass
+    return datetime.now().strftime('%Y-%m-%d')
 
 
 def backfill():
@@ -54,81 +62,93 @@ def backfill():
     total_inserted = 0
     total_skipped = 0
 
+    # Use date range queries to get full season data in fewer API calls
+    now = datetime.now()
+    # Fetch 2 windows: current year and last few months of previous year
+    date_ranges = [
+        (f'{now.year}0101', now.strftime('%Y%m%d')),           # Jan 1 to today
+        (f'{now.year - 1}0801', f'{now.year - 1}1231'),       # Aug-Dec last year
+    ]
+
     for league_code, league_name in LEAGUES.items():
         logger.info(f"Fetching {league_name} ({league_code})...")
         league_inserted = 0
 
-        for days_offset in range(DAYS_BACK):
-            date = datetime.now() - timedelta(days=days_offset)
-            date_str = date.strftime('%Y%m%d')
-
-            try:
-                url = f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={date_str}'
-                resp = requests.get(url, timeout=8)
-                if resp.status_code != 200:
-                    continue
-                data = resp.json()
-            except Exception as e:
-                logger.debug(f"  {date_str}: fetch error: {e}")
-                continue
-
-            events = data.get('events', [])
-            if not events:
-                continue
-
-            for event in events:
-                comp = event.get('competitions', [{}])[0]
-                competitors = comp.get('competitors', [])
-                if len(competitors) != 2:
-                    continue
-
-                status = event.get('status', {}).get('type', {}).get('name', '')
-                if not status.startswith('STATUS_FINAL'):
-                    continue
-
-                home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
-                away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
-                if not home or not away:
-                    continue
-
-                home_team = home.get('team', {}).get('displayName', '')
-                away_team = away.get('team', {}).get('displayName', '')
+        for start_date, end_date in date_ranges:
+            page = 1
+            while page <= 5:  # max 5 pages per range
                 try:
-                    home_score = int(home.get('score', 0))
-                    away_score = int(away.get('score', 0))
-                except (ValueError, TypeError):
-                    continue
-
-                event_id = event.get('id', '')
-                game_id = f'SOCCER_{league_code}_{event_id}'
-                game_date = date.strftime('%Y-%m-%d')
-
-                # Check if already exists
-                existing = cursor.execute(
-                    'SELECT 1 FROM games WHERE game_id = ? AND sport = ?',
-                    (game_id, 'SOCCER')
-                ).fetchone()
-
-                if existing:
-                    total_skipped += 1
-                    continue
-
-                try:
-                    cursor.execute(
-                        '''INSERT INTO games (sport, league, game_id, season, game_date,
-                           home_team_id, away_team_id, home_score, away_score, status)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')''',
-                        ('SOCCER', league_name, game_id, 2025, game_date,
-                         home_team, away_team, home_score, away_score)
-                    )
-                    league_inserted += 1
-                    total_inserted += 1
+                    url = (f'https://site.api.espn.com/apis/site/v2/sports/soccer/'
+                           f'{league_code}/scoreboard?dates={start_date}-{end_date}&limit=100&page={page}')
+                    resp = requests.get(url, timeout=12)
+                    if resp.status_code != 200:
+                        break
+                    data = resp.json()
                 except Exception as e:
-                    logger.debug(f"  Insert error: {e}")
+                    logger.debug(f"  Fetch error: {e}")
+                    break
 
+                events = data.get('events', [])
+                if not events:
+                    break
+
+                for event in events:
+                    comp = event.get('competitions', [{}])[0]
+                    competitors = comp.get('competitors', [])
+                    if len(competitors) != 2:
+                        continue
+
+                    status = event.get('status', {}).get('type', {}).get('name', '')
+                    if 'FINAL' not in status and 'FULL_TIME' not in status:
+                        continue
+
+                    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+                    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+                    if not home or not away:
+                        continue
+
+                    home_team = home.get('team', {}).get('displayName', '')
+                    away_team = away.get('team', {}).get('displayName', '')
+                    try:
+                        home_score = int(home.get('score', 0))
+                        away_score = int(away.get('score', 0))
+                    except (ValueError, TypeError):
+                        continue
+
+                    event_id = event.get('id', '')
+                    game_id = f'SOCCER_{league_code}_{event_id}'
+                    game_date = _parse_event_date(event)
+
+                    existing = cursor.execute(
+                        'SELECT 1 FROM games WHERE game_id = ? AND sport = ?',
+                        (game_id, 'SOCCER')
+                    ).fetchone()
+
+                    if existing:
+                        total_skipped += 1
+                        continue
+
+                    try:
+                        cursor.execute(
+                            '''INSERT INTO games (sport, league, game_id, season, game_date,
+                               home_team_id, away_team_id, home_score, away_score, status)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')''',
+                            ('SOCCER', league_name, game_id, 2025, game_date,
+                             home_team, away_team, home_score, away_score)
+                        )
+                        league_inserted += 1
+                        total_inserted += 1
+                    except Exception as e:
+                        logger.debug(f"  Insert error: {e}")
+
+                # If we got fewer than 100, no more pages
+                if len(events) < 100:
+                    break
+                page += 1
+
+        conn.commit()  # commit per league
         logger.info(f"  {league_name}: {league_inserted} games inserted")
 
-    conn.commit()
     conn.close()
 
     logger.info(f"\nDone. Inserted {total_inserted} games, skipped {total_skipped} duplicates.")
