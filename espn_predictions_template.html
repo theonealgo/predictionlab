@@ -356,6 +356,24 @@
         <h1 id="pageHeading">{{ sport_info.icon }} {{ sport_info.name }} Picks Today</h1>
     </div>
 
+    <!-- SEO text block -->
+    <div style="margin-bottom:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:0.85em;color:#94a3b8;line-height:1.7;">
+        {% if sport == 'NBA' %}Our NBA picks today are powered by a multi-model AI system combining advanced team ratings, performance data, and real-time matchup analysis. Our models analyze pace, efficiency, and player trends to generate accurate daily predictions across moneyline, spread, and totals.
+        {% elif sport == 'MLB' %}Our MLB picks today are generated using a specialized system that focuses on starting pitchers, bullpen usage, and advanced matchup data. By analyzing strikeout rates, run projections, and team performance, we identify high-value opportunities across moneyline, spread, and totals.
+        {% elif sport == 'NHL' %}Our NHL picks are driven by advanced models that evaluate team strength, goaltending performance, shot metrics, and recent form. We combine real-time data with predictive analysis to generate daily value across moneyline, puck line, and totals.
+        {% elif sport == 'NFL' %}Our NFL picks are built using predictive systems that combine team performance metrics, quarterback play, and matchup data. We analyze offensive and defensive strengths to generate high-confidence predictions for spreads, totals, and moneyline outcomes.
+        {% elif sport == 'NCAAB' %}Our college basketball picks use advanced analytics, team ratings, and matchup-based projections to identify value in daily games. The system evaluates efficiency and recent performance trends to produce accurate predictions.
+        {% elif sport == 'NCAAF' %}Our college football picks are powered by data-driven models that analyze team strength, scoring efficiency, and matchup dynamics to project outcomes and identify value across spreads and totals.
+        {% elif sport == 'SOCCER' %}Our soccer predictions combine team form, expected performance metrics, and matchup data to generate accurate forecasts. The system evaluates both attacking and defensive strength to identify value opportunities.
+        {% elif sport == 'WNBA' %}Our WNBA picks are generated using advanced models that evaluate team efficiency, pace, and player performance trends to identify high-value opportunities in daily matchups.
+        {% elif sport == 'NCAAW' %}Our women's college basketball picks combine team ratings and performance analytics to identify value in daily matchups across spreads and totals.
+        {% else %}Our AI-powered picks combine multiple predictive models to generate accurate daily predictions across moneyline, spread, and totals.
+        {% endif %}
+        {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
+        <br><strong style="color:#e2e8f0;">Showing picks for {{ sorted_dates[0] }}.</strong> <a href="/{{ sport_seo_slug }}" style="color:#fbbf24;text-decoration:none;">View today's picks →</a>
+        {% endif %}
+    </div>
+
     <div class="section-tabs">
         <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
@@ -531,6 +549,21 @@
         {% endfor %}
     {% else %}
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
+    {% endif %}
+
+    <!-- Internal links to recent dated pages -->
+    {% if sorted_dates and sorted_dates|length != 1 %}
+    <div style="margin-top:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+        <div style="font-size:0.82em;font-weight:700;color:#e2e8f0;margin-bottom:8px;">Recent {{ sport_info.name }} Picks</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            {% for _d in sorted_dates[-7:] %}
+            {% set _m = _d.split('-') %}
+            {% if _m|length == 3 %}
+            <a href="/{{ sport_seo_slug }}-{{ {'01':'january','02':'february','03':'march','04':'april','05':'may','06':'june','07':'july','08':'august','09':'september','10':'october','11':'november','12':'december'}.get(_m[1],'january') }}-{{ _m[2]|int }}-{{ _m[0] }}" style="color:#94a3b8;text-decoration:none;font-size:0.8em;padding:4px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;">{{ _d }}</a>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
     {% endif %}
 </div>
 <footer style="background:rgba(7,10,20,0.4);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,0.06);padding:18px 30px;color:#94a3b8;font-size:0.78em;">
