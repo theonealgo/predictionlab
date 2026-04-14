@@ -4648,7 +4648,8 @@ BASE_TEMPLATE = """
             <div class="footer-center">
                 <a href="/tutorial">Tutorial</a><span>&middot;</span>
                 <a href="/privacy">Privacy</a><span>&middot;</span>
-                <a href="/terms">Terms</a>
+                <a href="/terms">Terms</a><span>&middot;</span>
+                <a href="/responsible-gaming">Responsible Gaming</a>
             </div>
             <div class="footer-socials">
                 <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener" title="X"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
@@ -4728,11 +4729,11 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
             <h2>📈 Home Win %</h2>
             <p>The five model percentages all represent the <strong>home team’s win probability</strong>.</p>
             <ul>
-                <li><strong>Grinder2</strong> = Glicko-2 model</li>
-                <li><strong>Takedown</strong> = TrueSkill model</li>
-                <li><strong>Edge</strong> = Elo model</li>
-                <li><strong>XSharp</strong> = XGBoost model</li>
-                <li><strong>Sharp Consensus</strong> = weighted blend of all models</li>
+                <li><strong>Grinder2</strong> = Team rating model</li>
+                <li><strong>Takedown</strong> = Matchup analysis model</li>
+                <li><strong>Edge</strong> = Performance rating model</li>
+                <li><strong>XSharp</strong> = Machine learning model</li>
+                <li><strong>Sharp Consensus</strong> = Weighted blend of all models</li>
             </ul>
             <p>If the number is above 50%, the models favor the home team. If it’s below 50%, they favor the away team.</p>
         </div>
@@ -7418,7 +7419,8 @@ def landing_page():
         <div class="footer-center">
             <a href="/tutorial">Tutorial</a><span>·</span>
             <a href="/privacy">Privacy</a><span>·</span>
-            <a href="/terms">Terms</a>
+            <a href="/terms">Terms</a><span>·</span>
+            <a href="/responsible-gaming">Responsible Gaming</a>
         </div>
         <div class="footer-socials">
             <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener" title="X"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
@@ -7523,6 +7525,7 @@ def sitemap_xml():
     urls.append((_SITE_DOMAIN + '/tutorial', 'monthly', '0.5'))
     urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/terms', 'monthly', '0.3'))
+    urls.append((_SITE_DOMAIN + '/responsible-gaming', 'monthly', '0.4'))
     urls.append((_SITE_DOMAIN + '/login', 'monthly', '0.4'))
     urls.append((_SITE_DOMAIN + '/signup', 'monthly', '0.4'))
 
@@ -7863,6 +7866,14 @@ def results_shortcut():
 @app.route('/donate')
 def donate_shortcut():
     return redirect(STRIPE_DONATION_URL)
+
+@app.route('/responsible-gaming')
+def responsible_gaming_page():
+    return render_template_string(RESPONSIBLE_GAMING_TEMPLATE,
+        page='responsible-gaming',
+        page_title='Responsible Gaming Resources | underdogs.bet',
+        page_description='Find responsible gaming resources and support in Canada and the United States. underdogs.bet promotes safe and responsible play.'
+    )
 
 @app.route('/privacy')
 def privacy_page():
