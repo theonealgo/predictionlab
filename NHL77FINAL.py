@@ -3048,7 +3048,6 @@ def get_upcoming_predictions(sport, days=365):
                 if sport == 'MLB':
                     try:
                         from mlb_runs_model import get_or_train_mlb_model as _get_mlb_model
-                        from mlb_pitching import get_mlb_pitching_adjustment as _get_pitching
                         import math as _math
                         _ht = game_dict.get('home_team_id', '')
                         _at = game_dict.get('away_team_id', '')
@@ -3064,15 +3063,19 @@ def get_upcoming_predictions(sport, days=365):
                                 game_dict['xgb_total']      = _mlb_result[3]
                                 _mlb_spread = float(_mlb_result[2])
                                 _ml_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2))))
-                        # 2. Pitching adjustment from ESPN probable starters
-                        _pitch = _get_pitching(_ht, _at)
-                        _pitch_prob = _pitch.get('pitching_prob', 0.5)
-                        # 3. Elo baseline (already computed above as elo_prob 0-1)
-                        _elo_base = elo_prob  # from v2 predictor, already 0-1 scale
+                        # 2. Pitching adjustment (cached, single ESPN API call)
+                        _pitch_prob = 0.5
+                        try:
+                            from mlb_pitching import get_mlb_pitching_adjustment as _get_pitching
+                            _pitch = _get_pitching(_ht, _at)
+                            _pitch_prob = _pitch.get('pitching_prob', 0.5)
+                        except Exception:
+                            pass
+                        # 3. Elo baseline
+                        _elo_base = elo_prob
                         # 4. Blend: 35% Elo + 45% Pitching + 20% ML
                         _blended = 0.35 * _elo_base + 0.45 * _pitch_prob + 0.20 * _ml_prob
                         _blended = max(0.05, min(0.95, _blended))
-                        # Override all model display slots
                         game_dict['elo_prob']       = round(_elo_base * 100, 1)
                         game_dict['xgb_prob']       = round(_ml_prob * 100, 1)
                         game_dict['glicko2_prob']   = round(_pitch_prob * 100, 1)
@@ -3111,9 +3114,12 @@ def get_upcoming_predictions(sport, days=365):
 
             predictions.append(game_dict)
     
-    _attach_engine_odds_to_predictions(sport, predictions, limit=40)
+    try:
+        _attach_engine_odds_to_predictions(sport, predictions, limit=40)
+    except Exception as _eoe:
+        logger.debug(f"Engine odds failed in get_upcoming_predictions for {sport}: {_eoe}")
 
-    # Soccer: when the odds engine has no spread line, fall back to the model's
+    # Soccer: when the odds engine has no spread line
     # naive spread/total so the predictions page shows our own line instead of
     # "no sportsbook spread line found".
     if sport == 'SOCCER':
