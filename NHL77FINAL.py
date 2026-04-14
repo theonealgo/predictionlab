@@ -4694,6 +4694,54 @@ BASE_TEMPLATE = """
 </html>
 """
 
+RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+        .rg-wrap{max-width:800px;margin:0 auto;padding:20px 0 60px;}
+        .rg-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;margin-bottom:18px;}
+        .rg-card h1{font-size:1.8em;margin-bottom:12px;}
+        .rg-card h2{font-size:1.2em;margin:6px 0 12px;color:#fbbf24;}
+        .rg-card p{color:#cbd5e1;line-height:1.7;margin-bottom:12px;}
+        .rg-card a{color:#fbbf24;text-decoration:none;font-weight:600;}
+        .rg-card a:hover{text-decoration:underline;}
+        .rg-resource{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:12px;}
+        .rg-resource h3{font-size:1em;margin-bottom:6px;color:#e2e8f0;}
+        .rg-resource p{font-size:0.88em;margin-bottom:0;}
+    """
+).replace('{% block content %}{% endblock %}', """
+    <div class="rg-wrap">
+        <div class="rg-card">
+            <h1>Responsible Gaming &amp; Resources</h1>
+            <p>underdogs.bet provides data-driven sports predictions for informational purposes. We do not promote irresponsible gambling. If betting is becoming a concern, support resources are available below. Please bet responsibly and only wager what you can afford to lose.</p>
+        </div>
+        <div class="rg-card">
+            <h2>Canada Support Resources</h2>
+            <div class="rg-resource">
+                <h3><a href="https://www.connexontario.ca/" target="_blank" rel="noopener">ConnexOntario</a></h3>
+                <p>Free, confidential support for gambling, mental health, and addiction services in Ontario.</p>
+            </div>
+            <div class="rg-resource">
+                <h3><a href="https://www.responsiblegambling.org/" target="_blank" rel="noopener">Responsible Gambling Council</a></h3>
+                <p>Provides education and resources to promote responsible gambling in Canada.</p>
+            </div>
+        </div>
+        <div class="rg-card">
+            <h2>United States Support Resources</h2>
+            <div class="rg-resource">
+                <h3><a href="https://www.ncpgambling.org/" target="_blank" rel="noopener">National Council on Problem Gambling</a></h3>
+                <p>24/7 confidential helpline and resources for individuals experiencing gambling problems. Call 1-800-522-4700.</p>
+            </div>
+            <div class="rg-resource">
+                <h3><a href="https://www.gamblersanonymous.org/" target="_blank" rel="noopener">Gamblers Anonymous</a></h3>
+                <p>Peer support organization for individuals looking to stop gambling.</p>
+            </div>
+        </div>
+        <div class="rg-card">
+            <p style="text-align:center;font-style:italic;color:#94a3b8;">If you or someone you know may have a gambling problem, reaching out for help is the first step.</p>
+        </div>
+    </div>
+""")
+
 TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
