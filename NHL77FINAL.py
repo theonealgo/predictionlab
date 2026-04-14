@@ -990,24 +990,27 @@ SPORT_BG_IMAGES = {
 # Curated soccer leagues (ESPN metadata → canonical display names)
 SOCCER_LEAGUE_ORDER = [
     'English Premier League',
-    'FA Cup',
-    'EFL Cup',
-    'EFL Championship',
     'UEFA Champions League',
     'UEFA Europa League',
     'UEFA Europa Conference League',
     'Spanish LaLiga',
-    'Spanish Segunda División',
     'German Bundesliga',
     'Italian Serie A',
     'French Ligue 1',
+    'Dutch Eredivisie',
+    'Portuguese Primeira Liga',
+    'EFL Championship',
+    'FA Cup',
+    'EFL Cup',
+    'Major League Soccer',
+    'Liga MX',
+    'Copa Libertadores',
     'FIFA World Cup',
     'FIFA World Cup Qualifiers (UEFA)',
     'FIFA World Cup Qualifiers (CONMEBOL)',
     'FIFA World Cup Qualifiers (CAF)',
     'FIFA World Cup Qualifiers (CONCACAF)',
-    'Major League Soccer',
-    'Liga MX',
+    'Spanish Segunda División',
     'CONCACAF Champions Cup',
     'Leagues Cup',
     'USL Championship',
@@ -1083,6 +1086,14 @@ _SOCCER_LEAGUE_CANONICAL = {
     'leagues cup': 'Leagues Cup',
     'usl championship': 'USL Championship',
     'usa.2': 'USL Championship',
+    'dutch eredivisie': 'Dutch Eredivisie',
+    'eredivisie': 'Dutch Eredivisie',
+    'ned.1': 'Dutch Eredivisie',
+    'portuguese primeira liga': 'Portuguese Primeira Liga',
+    'primeira liga': 'Portuguese Primeira Liga',
+    'por.1': 'Portuguese Primeira Liga',
+    'copa libertadores': 'Copa Libertadores',
+    'conmebol libertadores': 'Copa Libertadores',
 }
 
 SOCCER_LEAGUE_ENDPOINTS = {
@@ -1105,6 +1116,9 @@ SOCCER_LEAGUE_ENDPOINTS = {
     'FIFA World Cup Qualifiers (CONCACAF)': 'fifa.worldq.concacaf',
     'Major League Soccer': 'usa.1',
     'Liga MX': 'mex.1',
+    'Dutch Eredivisie': 'ned.1',
+    'Portuguese Primeira Liga': 'por.1',
+    'Copa Libertadores': 'conmebol.libertadores',
     'CONCACAF Champions Cup': 'concacaf.champions',
     'Leagues Cup': 'concacaf.leagues.cup',
     'USL Championship': None,
@@ -7883,12 +7897,18 @@ def sport_predictions(sport, filter_date=None):
             filtered.append(pred)
         soccer_league_list = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
         selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
-        if not selected_league and soccer_league_list:
-            selected_league = soccer_league_list[0]
+        # If a specific league is selected, filter to it. Otherwise show ALL.
         if selected_league:
             filtered = [p for p in filtered if p.get('league') == selected_league]
         predictions = filtered
         soccer_leagues = [
+            {
+                'name': 'All Leagues',
+                'slug': '',
+                'active': selected_league is None,
+                'url': '/soccer-picks',
+            }
+        ] + [
             {
                 'name': lg,
                 'slug': _soccer_league_slug(lg),
