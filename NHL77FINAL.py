@@ -7360,6 +7360,7 @@ def landing_page():
                 <li>&#10003; Model win percentages</li>
                 <li>&#10003; Full results tracking</li>
             </ul>
+            <a href="/nba-picks" style="display:inline-block;margin-top:14px;background:#fff;color:#0f172a;padding:10px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.88em;">Access Picks &amp; Results</a>
         </div>
         <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:22px;">
             <h4 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#fbbf24;">Premium</h4>
