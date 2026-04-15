@@ -3114,10 +3114,11 @@ def get_upcoming_predictions(sport, days=365):
 
             predictions.append(game_dict)
     
-    try:
-        _attach_engine_odds_to_predictions(sport, predictions, limit=40)
-    except Exception as _eoe:
-        logger.debug(f"Engine odds failed in get_upcoming_predictions for {sport}: {_eoe}")
+    if sport not in ('MLB', 'SOCCER'):
+        try:
+            _attach_engine_odds_to_predictions(sport, predictions, limit=40)
+        except Exception as _eoe:
+            logger.debug(f"Engine odds failed in get_upcoming_predictions for {sport}: {_eoe}")
 
     # Soccer: when the odds engine has no spread line
     # naive spread/total so the predictions page shows our own line instead of
@@ -7954,10 +7955,11 @@ def sport_predictions(sport, filter_date=None):
             "Please refresh in a minute."
         )
 
-    try:
-        _attach_engine_odds_to_predictions(sport, predictions)
-    except Exception as _odds_err:
-        logger.debug(f"Odds attachment failed for {sport}: {_odds_err}")
+    if sport not in ('MLB', 'SOCCER'):
+        try:
+            _attach_engine_odds_to_predictions(sport, predictions)
+        except Exception as _odds_err:
+            logger.debug(f"Odds attachment failed for {sport}: {_odds_err}")
 
     for pred in predictions:
         for _k in (
