@@ -456,7 +456,7 @@
                             {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
                     </div>
-                    {% if not is_final and (pred.xgb_spread is not none or pred.naive_spread is not none or pred.market_spread is not none) %}
+                    {% if (pred.xgb_spread is not none or pred.naive_spread is not none or pred.market_spread is not none) %}
                     <div class="score-footer premium-protected">
                         {% if pred.xgb_spread is not none %}
                         {% if is_premium %}
@@ -522,6 +522,11 @@
                         {% endif %}
                         {% if not pred.xgb_spread is not none and pred.naive_spread is not none %}
                         <div class="sf-item"><span class="sf-label">Pred Score</span><span class="sf-val">{{ pred.naive_away_score }} – {{ pred.naive_home_score }}</span></div>
+                        {% endif %}
+                        {% if is_final and is_premium %}
+                        <div class="sf-item"><span class="sf-label">Actual Score</span><span class="sf-val" style="color:#10b981;font-weight:700;">{{ pred.away_score }} – {{ pred.home_score }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Actual Total</span><span class="sf-val" style="color:#10b981;">{{ pred.away_score + pred.home_score }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Actual Spread</span><span class="sf-val" style="color:#10b981;">{{ "%+.0f"|format(pred.home_score - pred.away_score) }}</span></div>
                         {% endif %}
                     </div>
                     {% endif %}
