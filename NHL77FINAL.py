@@ -2963,7 +2963,7 @@ def get_upcoming_predictions(sport, days=365):
             game_dict['puck_line_fav_side'] = None
             game_dict['spread_total_note']  = None
 
-            if True:  # compute spread/total for both upcoming AND completed games
+            if game_dict.get('home_score') is None:  # upcoming game only
                 if sport == 'SOCCER':
                     if soccer_pred and soccer_pred.get('expected_home_score') is not None:
                         exp_home = soccer_pred.get('expected_home_score')
