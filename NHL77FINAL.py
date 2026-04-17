@@ -401,73 +401,45 @@ def _upsert_engine_odds(
 
 
 def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
-    """Attach ESPN-engine odds to completed game results for ROI calculation."""
+    """Attach odds to completed game results for ROI calculation.
+    ESPN engine disabled — uses model-probability fallback only to avoid
+    hundreds of HTTP requests that kill the Render worker."""
     if not daily_results:
         return
-    from odds_engine_espn import get_odds as _espn_get_odds
     for dd in daily_results.values():
         for g in dd.get('games', []):
-            home = g.get('home', '')
-            away = g.get('away', '')
-            odds = _espn_get_odds(sport, home, away)
-            if odds:
-                g['home_moneyline'] = odds['moneyline_home']
-                g['away_moneyline'] = odds['moneyline_away']
-                g['spread_price_home'] = odds.get('spread_price_home', -110)
-                g['spread_price_away'] = odds.get('spread_price_away', -110)
-                g['total_over_price'] = odds.get('total_over_price', -110)
-                g['total_under_price'] = odds.get('total_under_price', -110)
-                if g.get('market_spread') is None:
-                    g['market_spread'] = odds.get('spread_home')
-                if g.get('market_total') is None:
-                    g['market_total'] = odds.get('total')
-                g['odds_source'] = 'espn_engine'
-            else:
-                # Fallback to model probability
-                ens = g.get('ens_prob')
-                ml = _compute_odds_from_prob(ens)
-                if ml:
-                    g['home_moneyline'] = ml['moneyline_home']
-                    g['away_moneyline'] = ml['moneyline_away']
-                g.setdefault('spread_price_home', -110)
-                g.setdefault('spread_price_away', -110)
-                g.setdefault('total_over_price', -110)
-                g.setdefault('total_under_price', -110)
-                g['odds_source'] = 'model_fallback'
+            # Model-probability fallback only (no ESPN API calls)
+            ens = g.get('ens_prob')
+            ml = _compute_odds_from_prob(ens)
+            if ml:
+                g['home_moneyline'] = ml['moneyline_home']
+                g['away_moneyline'] = ml['moneyline_away']
+            g.setdefault('spread_price_home', -110)
+            g.setdefault('spread_price_away', -110)
+            g.setdefault('total_over_price', -110)
+            g.setdefault('total_under_price', -110)
+            g['odds_source'] = 'model_fallback'
 
 def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
-    """Attach ESPN-engine odds to upcoming predictions."""
+    """Attach odds to upcoming predictions.
+    ESPN engine disabled — uses model-probability fallback only to avoid
+    hundreds of HTTP requests that kill the Render worker."""
     if not predictions:
         return
-    from odds_engine_espn import get_odds as _espn_get_odds
     for pred in predictions:
         if pred.get('home_score') is not None:
             continue
-        home = pred.get('home_team_id', '')
-        away = pred.get('away_team_id', '')
-        odds = _espn_get_odds(sport, home, away)
-        if odds:
-            pred['home_moneyline'] = odds['moneyline_home']
-            pred['away_moneyline'] = odds['moneyline_away']
-            pred['market_spread'] = odds.get('spread_home')
-            pred['market_total'] = odds.get('total')
-            pred['spread_price_home'] = odds.get('spread_price_home', -110)
-            pred['spread_price_away'] = odds.get('spread_price_away', -110)
-            pred['total_over_price'] = odds.get('total_over_price', -110)
-            pred['total_under_price'] = odds.get('total_under_price', -110)
-            pred['odds_source'] = 'espn_engine'
-        else:
-            # Fallback to model probability
-            ens = pred.get('ensemble_prob')
-            ml = _compute_odds_from_prob(ens)
-            if ml:
-                pred['home_moneyline'] = ml['moneyline_home']
-                pred['away_moneyline'] = ml['moneyline_away']
-            pred.setdefault('spread_price_home', -110)
-            pred.setdefault('spread_price_away', -110)
-            pred.setdefault('total_over_price', -110)
-            pred.setdefault('total_under_price', -110)
-            pred['odds_source'] = 'model_fallback'
+        # Model-probability fallback only (no ESPN API calls)
+        ens = pred.get('ensemble_prob')
+        ml = _compute_odds_from_prob(ens)
+        if ml:
+            pred['home_moneyline'] = ml['moneyline_home']
+            pred['away_moneyline'] = ml['moneyline_away']
+        pred.setdefault('spread_price_home', -110)
+        pred.setdefault('spread_price_away', -110)
+        pred.setdefault('total_over_price', -110)
+        pred.setdefault('total_under_price', -110)
+        pred['odds_source'] = 'model_fallback'
 
 
 def _compute_model_profit(daily_results):
