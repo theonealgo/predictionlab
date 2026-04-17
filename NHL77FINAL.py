@@ -6604,41 +6604,42 @@ def landing_page():
     weekly_banner_messages = list(_MANUAL_BANNER_ITEMS)
     units_banner_items = _get_sport_ml_units_banner()
 
-    # Build "Today's Top Picks" from live sports with upcoming games
+    # Build "Today's Top Picks" from stored predictions in DB (lightweight).
+    # Previously this called get_upcoming_predictions() for 4 sports which
+    # triggered 200+ ESPN API calls on cold start, killing the Render worker.
     todays_picks = []
     try:
         _tp_tz = ZoneInfo('America/New_York')
         _tp_today = datetime.now(_tp_tz).strftime('%Y-%m-%d')
     except Exception:
         _tp_today = datetime.now().strftime('%Y-%m-%d')
-    for _tp_sport in ['NHL', 'NBA', 'MLB', 'SOCCER']:
-        if _tp_sport == 'SOCCER' and not SOCCER_ENABLED:
-            continue
-        try:
-            _tp_preds = get_upcoming_predictions(_tp_sport)
-            for _tp in _tp_preds:
-                if _tp.get('home_score') is not None:
-                    continue  # skip completed
-                if _tp.get('game_date') != _tp_today:
-                    continue
-                _ens = _tp.get('ensemble_prob')
-                if _ens is None:
-                    continue
-                _home = _tp.get('home_team_id', '')
-                _away = _tp.get('away_team_id', '')
-                _pick = _home if _ens > 50 else _away
-                todays_picks.append({
-                    'away': _away, 'home': _home,
-                    'pick': _pick, 'prob': round(_ens, 1),
-                    'sport': _tp_sport,
-                    'slug': SPORT_SEO_SLUGS.get(_tp_sport, ''),
-                })
-                if len(todays_picks) >= 4:
-                    break
-        except Exception:
-            pass
-        if len(todays_picks) >= 4:
-            break
+    try:
+        _tp_conn = get_db_connection()
+        _tp_rows = _tp_conn.execute('''
+            SELECT p.sport, p.home_team_id, p.away_team_id, p.win_probability
+            FROM predictions p
+            LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport
+            WHERE date(p.game_date) = ?
+              AND (g.home_score IS NULL OR g.game_id IS NULL)
+              AND p.win_probability IS NOT NULL
+              AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
+            ORDER BY ABS(p.win_probability - 0.5) DESC
+            LIMIT 4
+        ''', (_tp_today,)).fetchall()
+        _tp_conn.close()
+        for _tp in _tp_rows:
+            _ens = float(_tp['win_probability']) * 100
+            _home = _tp['home_team_id']
+            _away = _tp['away_team_id']
+            _pick = _home if _ens > 50 else _away
+            todays_picks.append({
+                'away': _away, 'home': _home,
+                'pick': _pick, 'prob': round(_ens, 1),
+                'sport': _tp['sport'],
+                'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
+            })
+    except Exception as _tp_err:
+        logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
 
     return render_template_string("""
 <!DOCTYPE html>
