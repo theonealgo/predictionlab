@@ -442,6 +442,157 @@ def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
         pred['odds_source'] = 'model_fallback'
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# H2H (head-to-head) projected total
+#
+# "Our Total" is the last-N head-to-head games average between the two teams
+# (default N=10), across all sports.
+#
+#   avg_home = mean of the (upcoming) home team's scores in past H2H games
+#   avg_away = mean of the (upcoming) away team's scores in past H2H games
+#   our_total  = avg_home + avg_away
+#
+# XGBoost's xgb_total is left untouched and is compared against our_total to
+# produce the OVER / UNDER pick. Spread logic is completely unchanged.
+# ─────────────────────────────────────────────────────────────────────────────
+_H2H_PROJECTION_CACHE: dict = {}
+_H2H_PROJECTION_TTL = 900  # 15 minutes
+
+
+def _compute_h2h_projection(
+    conn,
+    sport: str,
+    home_team: str,
+    away_team: str,
+    n: int = 10,
+    min_games: int = 2,
+):
+    """Return last-N H2H projection for (home_team vs away_team) or None.
+
+    Output dict keys:
+        games_used, avg_home, avg_away, our_total, our_spread, totals (list),
+        over_vs (callable placeholder) -- trend counts computed on demand.
+    """
+    if not (sport and home_team and away_team):
+        return None
+    cache_key = (sport, home_team, away_team, n)
+    cached = _H2H_PROJECTION_CACHE.get(cache_key)
+    now_ts = _time.time()
+    if cached and (now_ts - cached['ts']) < _H2H_PROJECTION_TTL:
+        return cached['data']
+    try:
+        rows = conn.execute(
+            '''
+            SELECT home_team_id, away_team_id, home_score, away_score, game_date
+            FROM games
+            WHERE sport = ?
+              AND home_score IS NOT NULL AND away_score IS NOT NULL
+              AND (
+                    (home_team_id = ? AND away_team_id = ?)
+                 OR (home_team_id = ? AND away_team_id = ?)
+              )
+            ORDER BY date(game_date) DESC
+            LIMIT ?
+            ''',
+            (sport, home_team, away_team, away_team, home_team, int(n)),
+        ).fetchall()
+    except Exception as _e:
+        logger.debug(f"[h2h] query failed for {sport} {home_team} vs {away_team}: {_e}")
+        return None
+    if not rows or len(rows) < min_games:
+        _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': None}
+        return None
+    home_pts = []
+    away_pts = []
+    totals = []
+    for r in rows:
+        try:
+            hs = float(r['home_score'])
+            as_ = float(r['away_score'])
+        except Exception:
+            continue
+        if r['home_team_id'] == home_team:
+            home_pts.append(hs)
+            away_pts.append(as_)
+        else:
+            home_pts.append(as_)
+            away_pts.append(hs)
+        totals.append(hs + as_)
+    if len(home_pts) < min_games:
+        _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': None}
+        return None
+    avg_home = sum(home_pts) / len(home_pts)
+    avg_away = sum(away_pts) / len(away_pts)
+    data = {
+        'games_used': len(home_pts),
+        'avg_home': round(avg_home, 2),
+        'avg_away': round(avg_away, 2),
+        'our_total': round(avg_home + avg_away, 1),
+        'totals': totals,
+    }
+    _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': data}
+    return data
+
+
+def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
+    """Set pred['our_total'] and pred['our_spread'] using last-N H2H averages."""
+    if not predictions:
+        return
+    try:
+        conn = get_db_connection()
+    except Exception as _e:
+        logger.debug(f"[h2h] db connect failed for {sport}: {_e}")
+        return
+    try:
+        for pred in predictions:
+            ht = pred.get('home_team_id')
+            at = pred.get('away_team_id')
+            proj = _compute_h2h_projection(conn, sport, ht, at, n=n)
+            if proj:
+                pred['our_total'] = proj['our_total']
+                pred['our_total_games'] = proj['games_used']
+                pred['our_avg_home'] = proj['avg_home']
+                pred['our_avg_away'] = proj['avg_away']
+            else:
+                pred.setdefault('our_total', None)
+                pred.setdefault('our_total_games', 0)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _attach_h2h_projection_to_daily_results(sport, daily_results, n: int = 10):
+    """Set g['our_total']/g['our_spread'] on each completed game using prior H2H."""
+    if not daily_results:
+        return
+    try:
+        conn = get_db_connection()
+    except Exception as _e:
+        logger.debug(f"[h2h] db connect failed for {sport}: {_e}")
+        return
+    try:
+        for dd in daily_results.values():
+            for g in dd.get('games', []):
+                ht = g.get('home')
+                at = g.get('away')
+                proj = _compute_h2h_projection(conn, sport, ht, at, n=n)
+                if proj:
+                    g['our_total'] = proj['our_total']
+                    g['our_total_games'] = proj['games_used']
+                    g['our_avg_home'] = proj['avg_home']
+                    g['our_avg_away'] = proj['avg_away']
+                else:
+                    g.setdefault('our_total', None)
+                    g.setdefault('our_total_games', 0)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _compute_model_profit(daily_results):
     model_keys = ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']
     model_map = {'glicko2': 'glicko2', 'trueskill': 'trueskill', 'elo': 'elo', 'xgboost': 'xgb', 'ensemble': 'ens'}
@@ -3088,6 +3239,12 @@ def get_upcoming_predictions(sport, days=365):
             logger.info(f"Saved {saved_count} new {sport} predictions to database")
         conn_save.close()
     
+    # H2H last-10 projection for "Our Total" / "Our Spread" (all sports)
+    try:
+        _attach_h2h_projection_to_predictions(sport, predictions, n=10)
+    except Exception as _h2he:
+        logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
+
     _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
     return predictions
 
@@ -3642,6 +3799,11 @@ def _compute_spread_total_for_daily(sport, daily_results):
     """Compute XSharp spread/total grading for games already in daily_results (in-place).
     Returns aggregate stats dict or None if the XGB model is unavailable."""
     try:
+        # H2H last-10 "Our Total" (used as the O/U line the model is compared to)
+        try:
+            _attach_h2h_projection_to_daily_results(sport, daily_results, n=10)
+        except Exception as _h2he:
+            logger.debug(f"[h2h] daily attach failed for {sport}: {_h2he}")
         _xgb = _get_xgb_spread_model(sport)
         _sp = None
         if not _xgb:
@@ -3820,42 +3982,40 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             if sp_ok:
                                 st_cov += 1
 
-                    if mt is None and xt is not None:
-                        mt = xt
-                        g['market_total_reason'] = "XSharp total (fallback)"
-                        g['market_total'] = mt
-                        g['total_pick_label'] = f"XSharp {mt:.1f}"
-                        g['total_pick_reason'] = "fallback line"
+                    # Our Total = H2H last-10 average; compare XSharp (xt) against it.
+                    our_total = g.get('our_total')
+                    g['market_total'] = our_total
+                    if our_total is None:
+                        g['market_total_reason'] = "not enough head-to-head history"
+                        g['total_pick_reason'] = "no H2H line yet"
+                    elif xt is None:
+                        g['total_pick_reason'] = "model score unavailable"
                     else:
-                        g['market_total'] = mt
-                        if mt is None:
-                            g['market_total_reason'] = "no sportsbook total line found"
-                            g['total_pick_reason'] = "no sportsbook total line"
-                        elif xt is None:
-                            g['total_pick_reason'] = "model score unavailable"
+                        if abs(xt - our_total) < 1e-9:
+                            tp_disp = 'PUSH'
                         else:
-                            if abs(xt - mt) < 1e-9:
-                                tp_disp = 'PUSH'
-                            else:
-                                tp_disp = 'OVER' if xt > mt else 'UNDER'
-                                if abs(at - mt) >= 1e-9:
-                                    aou = 'OVER' if at > mt else 'UNDER'
-                                    tp_ok = (tp_disp == aou)
-                                    tt_gr += 1
-                                    if tp_ok:
-                                        tt_cor += 1
-                            if tp_disp in ('OVER', 'UNDER'):
-                                g['total_pick_label'] = f"{tp_disp.title()} {mt:.1f}"
-                            elif tp_disp == 'PUSH':
-                                g['total_pick_label'] = "PUSH"
+                            tp_disp = 'OVER' if xt > our_total else 'UNDER'
+                            if abs(at - our_total) >= 1e-9:
+                                aou = 'OVER' if at > our_total else 'UNDER'
+                                tp_ok = (tp_disp == aou)
+                                tt_gr += 1
+                                if tp_ok:
+                                    tt_cor += 1
+                        if tp_disp in ('OVER', 'UNDER'):
+                            g['total_pick_label'] = f"{tp_disp.title()} {our_total:.1f}"
+                        elif tp_disp == 'PUSH':
+                            g['total_pick_label'] = "PUSH"
 
                 else:
+                    # "Our Total" = H2H last-10 average (replaces Vegas total for O/U pick).
+                    # Spread logic is UNCHANGED and still uses the sportsbook line (ms).
+                    our_total = g.get('our_total')
                     g['market_spread'] = ms
-                    g['market_total'] = mt
+                    g['market_total'] = our_total
                     if ms is None:
                         g['market_spread_reason'] = "no sportsbook spread line found"
-                    if mt is None:
-                        g['market_total_reason'] = "no sportsbook total line found"
+                    if our_total is None:
+                        g['market_total_reason'] = "not enough head-to-head history"
 
                     if xs is not None and ms is not None:
                         dm = xs + ms
@@ -3875,19 +4035,21 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     elif xs is None:
                         g['spread_pick_reason'] = "model score unavailable"
 
-                    if xt is not None and mt is not None:
-                        if abs(xt - mt) < 1e-9:
+                    if xt is not None and our_total is not None:
+                        if abs(xt - our_total) < 1e-9:
                             tp_disp = 'PUSH'
                         else:
-                            tp_disp = 'OVER' if xt > mt else 'UNDER'
-                            if abs(at - mt) >= 1e-9:
-                                aou = 'OVER' if at > mt else 'UNDER'
+                            tp_disp = 'OVER' if xt > our_total else 'UNDER'
+                            if abs(at - our_total) >= 1e-9:
+                                aou = 'OVER' if at > our_total else 'UNDER'
                                 tp_ok = (tp_disp == aou)
                                 tt_gr += 1
                                 if tp_ok:
                                     tt_cor += 1
                     elif xt is None:
                         g['total_pick_reason'] = "model score unavailable"
+                    elif our_total is None:
+                        g['total_pick_reason'] = "no H2H line yet"
 
                     # Display-ready strings for the unified table
                     g['spread_pick_label'] = None
@@ -3898,8 +4060,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     else:
                         g['spread_line_display'] = None
                     g['total_pick_label'] = None
-                    if tp_disp in ('OVER', 'UNDER') and mt is not None:
-                        g['total_line_display'] = f"{tp_disp.title()} {mt:.1f}"
+                    if tp_disp in ('OVER', 'UNDER') and our_total is not None:
+                        g['total_line_display'] = f"{tp_disp.title()} {our_total:.1f}"
                         g['total_pick_label'] = g['total_line_display']
                     elif tp_disp == 'PUSH':
                         g['total_pick_label'] = "PUSH"

@@ -521,7 +521,7 @@
                         </div>
                     </div>
                     {% set _spread_val = pred.market_spread if pred.market_spread is not none else (pred.xgb_spread if pred.xgb_spread is not none else pred.naive_spread) %}
-                    {% set _total_val = pred.market_total if pred.market_total is not none else (pred.xgb_total if pred.xgb_total is not none else pred.naive_total) %}
+                    {% set _total_val = pred.our_total if pred.our_total is not none else (pred.market_total if pred.market_total is not none else (pred.xgb_total if pred.xgb_total is not none else pred.naive_total)) %}
                     {% if _spread_val is not none or _total_val is not none or (sport == 'NHL' and pred.puck_line_tag is not none) or is_final %}
                     <div class="score-footer premium-protected">
                         {% if sport == 'NHL' and pred.puck_line_tag is not none %}
