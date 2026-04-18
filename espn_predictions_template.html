@@ -236,6 +236,28 @@
         .model-val { font-weight:600; }
         .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#10b981; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
 
+        /* MLB pick confidence strip (each box = one model) */
+        .pick-conf-bar { border-top:1px solid rgba(255,255,255,0.08); padding:10px 12px 12px; background:rgba(0,0,0,0.22); }
+        .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+        @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
+        .pc-box { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+        .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
+        .pc-name { font-size:0.68em; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+        .pc-val { font-size:0.95em; font-weight:800; color:#fff; }
+        .pc-side { font-size:0.65em; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; padding:2px 6px; border-radius:4px; }
+        .pc-side.home { color:#10b981; background:rgba(16,185,129,0.15); }
+        .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
+
+        /* MLB premium picks side-panel (replaces Home Win % panel) */
+        .premium-panel { background:linear-gradient(180deg,rgba(251,191,36,0.14),rgba(251,191,36,0.06)); border-left:3px solid #fbbf24; padding:10px 12px; min-width:140px; max-width:190px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+        @media(max-width:400px){ .premium-panel{ max-width:none; min-width:0; border-left:none; border-top:3px solid #fbbf24; } }
+        .premium-panel .panel-title { color:#fbbf24; }
+        .premium-row { display:flex; flex-direction:column; gap:1px; }
+        .premium-row .sf-label { color:#fde68a; }
+        .premium-lock { font-size:0.78em; color:#94a3b8; }
+        .premium-lock a { color:#fbbf24; text-decoration:none; font-weight:700; }
+
         /* Premium content — print-hidden only (text must be copiable for analysis) */
         @media print { .premium-protected { display:none !important; } }
         /* Score/Spread/Total footer */
@@ -445,6 +467,37 @@
                                 {% if is_final %}<span class="score-box">{{ pred.home_score }}</span>{% else %}{% if home_picked and _odds_pass %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
                             </div>
                     </div>
+                        {% if sport == 'MLB' %}
+                        <div class="premium-panel premium-protected">
+                            <div class="panel-title">🏆 Premium Picks</div>
+                            {% if is_premium %}
+                            <div class="premium-row">
+                                <span class="sf-label">Sharp Consensus</span>
+                                <span class="sf-val" style="color:#fbbf24;">{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}{% if pred.ensemble_prob is not none %} · {% if home_picked %}{{ pred.ensemble_prob }}{% else %}{{ 100 - pred.ensemble_prob }}{% endif %}%{% endif %}</span>
+                            </div>
+                            {% if pred.xgb_spread is not none %}
+                            <div class="premium-row">
+                                <span class="sf-label">XSharp Spread</span>
+                                <span class="sf-val sf-xgb">{% if home_picked %}{{ pred.home_team_id }} -{{ pred.xgb_spread|abs }}{% else %}{{ pred.away_team_id }} -{{ pred.xgb_spread|abs }}{% endif %}</span>
+                            </div>
+                            {% endif %}
+                            {% if pred.xgb_total is not none %}
+                            <div class="premium-row">
+                                <span class="sf-label">XSharp Total</span>
+                                <span class="sf-val">{{ pred.xgb_total }}</span>
+                            </div>
+                            {% endif %}
+                            {% if pred.xgb_away_score is not none and pred.xgb_home_score is not none %}
+                            <div class="premium-row">
+                                <span class="sf-label">XSharp Score</span>
+                                <span class="sf-val sf-xgb">{{ pred.xgb_away_score }} – {{ pred.xgb_home_score }}</span>
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <div class="premium-lock">🔒 Premium picks locked. <a href="/plans">Unlock</a></div>
+                            {% endif %}
+                        </div>
+                        {% else %}
                         <div class="prediction-panel">
                             <div class="panel-title">Home Win %</div>
                             <div class="model-row"><span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span><span class="model-val">{{ pred.glicko2_prob if pred.glicko2_prob is not none else '—' }}{% if pred.glicko2_prob is not none %}%{% endif %}</span></div>
@@ -454,14 +507,42 @@
                             <div class="ensemble-badge">{{ label_ensemble|upper }} {{ pred.ensemble_prob if pred.ensemble_prob is not none else '—' }}{% if pred.ensemble_prob is not none %}%{% endif %}</div>
                             {% if pred.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ pred.model_data_note }}</div>{% endif %}
                         </div>
+                        {% endif %}
                     </div>
+                    {% if sport == 'MLB' %}
+                    <div class="pick-conf-bar">
+                        <div class="pick-conf-title">Pick Confidence</div>
+                        <div class="pick-conf-grid">
+                            {% for m in [
+                                {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
+                                {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
+                                {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
+                                {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                                {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
+                            ] %}
+                            <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %}">
+                                <div class="pc-name">{{ m.name }}</div>
+                                {% if m.prob is not none %}
+                                <div class="pc-val">{{ m.prob }}%</div>
+                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}</div>
+                                {% else %}
+                                <div class="pc-val" style="color:#64748b;">—</div>
+                                <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                     {% if (pred.xgb_spread is not none or pred.naive_spread is not none or pred.market_spread is not none) %}
                     <div class="score-footer premium-protected">
                         {% if pred.xgb_spread is not none %}
+                        {% if sport != 'MLB' %}
                         {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val sf-xgb">{{ pred.xgb_away_score }} – {{ pred.xgb_home_score }}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
+                        {% endif %}
                         {% endif %}
         {% if sport == 'NHL' and pred.puck_line_tag is not none %}
                         {% if is_premium %}
@@ -484,6 +565,7 @@
                         <div class="sf-item"><span class="sf-label">Puck Line</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% else %}
+                        {% if sport != 'MLB' %}
                         {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Spread</span>
                             {% if home_picked %}<span class="sf-val sf-fav">{{ pred.home_team_id[:11] }} -{{ pred.xgb_spread|abs }}</span>
@@ -493,10 +575,13 @@
                         <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% endif %}
+                        {% endif %}
+                        {% if sport != 'MLB' %}
                         {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val">{{ pred.xgb_total }}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val" style="color:#94a3b8;">🔒</span></div>
+                        {% endif %}
                         {% endif %}
                         {% endif %}
                         {% if pred.market_spread is not none %}

@@ -2195,11 +2195,10 @@ def get_upcoming_predictions(sport, days=365):
             all_games_with_dates = []
     
     elif sport == 'SOCCER':
-        # Loop -1 to +7 days so the predictions page shows multiple upcoming dates.
-        # Each league needs its own request; results are cached for 15 min so
-        # subsequent page loads within the TTL window are instant.
+        # Loop -1 to +3 days (reduced from +7 to cut API calls on cold start).
+        # Each league needs its own request; results are cached for 15 min.
         api_games = []
-        for days_offset in range(-1, 8):
+        for days_offset in range(-1, 4):
             _check_date = datetime.now() + timedelta(days=days_offset)
             _date_str   = _check_date.strftime('%Y%m%d')
             for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
@@ -2328,24 +2327,25 @@ def get_upcoming_predictions(sport, days=365):
         
         api_games = []
 
-        # Sports using a single date-range API call (fast) vs day-by-day loop.
-        if sport in ['NBA', 'NFL', 'NCAAF', 'MLB']:
-            # NFL/NCAAF: look back further to catch completed season + playoffs
-            # MLB: keep window tight — 500 games kills the Render worker
-            if sport in ('NFL', 'NCAAF'):
-                _lookback = 240
-                _forward = 120
-            elif sport == 'MLB':
-                _lookback = 3
-                _forward = 5
-            else:
-                _lookback = 7
-                _forward = 120
+        # All sports use a single date-range API call (1 request) instead of
+        # day-by-day loops (22+ requests) that kill the Render worker.
+        if sport in ['NBA', 'NFL', 'NCAAF', 'MLB', 'WNBA', 'NCAAB', 'NCAAW']:
+            # Tight windows: enough for predictions page without overloading Render
+            _SPORT_WINDOWS = {
+                'NFL':   (14, 14, 200),   # offseason — small
+                'NCAAF': (14, 14, 200),   # offseason — small
+                'NBA':   (3,  7,  200),   # playoffs — tight
+                'MLB':   (3,  5,  100),   # daily — tight
+                'WNBA':  (3,  7,  100),
+                'NCAAB': (3,  7,  200),
+                'NCAAW': (3,  7,  200),
+            }
+            _lookback, _forward, _api_limit = _SPORT_WINDOWS.get(sport, (3, 7, 200))
             start_str = (datetime.now() - timedelta(days=_lookback)).strftime('%Y%m%d')
             end_str = (datetime.now() + timedelta(days=_forward)).strftime('%Y%m%d')
-            _api_limit = 100 if sport == 'MLB' else 500
+            _extra = '&groups=50' if sport == 'NCAAB' else ''
             try:
-                url = f"{ESPN_ENDPOINTS[sport]}?dates={start_str}-{end_str}&limit={_api_limit}"
+                url = f"{ESPN_ENDPOINTS[sport]}?dates={start_str}-{end_str}&limit={_api_limit}{_extra}"
                 data = _cached_get(url)
                 events = data.get('events', [])
                 for event in events:
@@ -2397,77 +2397,7 @@ def get_upcoming_predictions(sport, days=365):
                     })
             except Exception as e:
                 logger.debug(f"Error fetching {sport} range {start_str}-{end_str}: {e}")
-        else:
-            # Other sports: keep shorter day-by-day window.
-            for days_offset in range(-7, 15):
-                check_date = datetime.now() + timedelta(days=days_offset)
-                date_str = check_date.strftime('%Y%m%d')
-                
-                try:
-                    extra_params = '&groups=50&limit=357' if sport == 'NCAAB' else ''
-                    url = f"{ESPN_ENDPOINTS[sport]}?dates={date_str}{extra_params}"
-                    data = _cached_get(url)
-                    
-                    events = data.get('events', [])
-                    
-                    for event in events:
-                        competition = event.get('competitions', [{}])[0]
-                        competitors = competition.get('competitors', [])
-                        
-                        if len(competitors) != 2:
-                            continue
-                        
-                        home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
-                        away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
-                        
-                        if not home or not away:
-                            continue
-                        
-                        home_team = home.get('team', {}).get('displayName', '')
-                        away_team = away.get('team', {}).get('displayName', '')
-                        league_name = None
-                        try:
-                            league_name = (
-                                event.get('league', {}) or {}
-                            ).get('name') or (
-                                competition.get('league', {}) or {}
-                            ).get('name')
-                        except Exception:
-                            league_name = None
-                        if sport == 'SOCCER':
-                            league_name = _canonical_soccer_league_from_event(event, competition)
-                            if not league_name:
-                                continue
-                        event_id = event.get('id', '')
-                        
-                        # Get status
-                        status_info = event.get('status', {}).get('type', {})
-                        status_name = status_info.get('name', 'scheduled')
-                        
-                        home_score = None
-                        away_score = None
-                        
-                        if status_name in ['STATUS_FINAL', 'STATUS_FINAL_OT']:
-                            try:
-                                home_score = int(home.get('score', 0))
-                                away_score = int(away.get('score', 0))
-                            except:
-                                pass
-                        
-                        event_dt = event.get('date', '')
-                        game_date = _espn_event_date_to_local(event_dt) or check_date.strftime('%Y-%m-%d')
-                        api_games.append({
-                            'game_id': f"{sport}_{event_id}",
-                            'home_team_id': home_team,
-                            'away_team_id': away_team,
-                            'game_date': game_date,
-                            'home_score': home_score,
-                            'away_score': away_score,
-                            'league': league_name or sport,
-                        })
-                        
-                except Exception as e:
-                    logger.debug(f"Error fetching {sport} for {date_str}: {e}")
+        # (day-by-day fallback removed — all sports now use date-range above)
         
         # NFL/NCAAF fallback: if ESPN returned nothing (offseason), load from database
         if not api_games and sport in ('NFL', 'NCAAF'):
