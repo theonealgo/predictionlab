@@ -5516,6 +5516,20 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .sf-val { font-weight:600; font-size:0.85em; color:#e2e8f0; }
     .pick-ok { color:#10b981; font-weight:700; }
     .pick-no { color:#ef4444; font-weight:700; }
+    /* Pick confidence grid (results cards) */
+    .pick-conf-bar { border-top:1px solid rgba(255,255,255,0.08); padding:10px 12px 12px; background:rgba(0,0,0,0.22); }
+    .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
+    .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+    @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
+    .pc-box { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+    .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
+    .pc-box.correct { border-color:rgba(16,185,129,0.5); }
+    .pc-box.wrong { border-color:rgba(239,68,68,0.45); }
+    .pc-name { font-size:0.68em; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+    .pc-val { font-size:0.95em; font-weight:800; color:#fff; }
+    .pc-side { font-size:0.65em; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; gap:3px; }
+    .pc-side.home { color:#10b981; background:rgba(16,185,129,0.15); }
+    .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
     .section-ml, .section-spread, .section-total { display:block; }
     .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
     @media(max-width:900px){ .model-grid { grid-template-columns:repeat(3,1fr); } }
@@ -5770,39 +5784,30 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                                 <span class="score-box">{{ game.home_score }}</span>
                             </div>
                         </div>
-                        <div class="model-panel section-ml">
-                            <div class="panel-title">Moneyline Models</div>
-                            <div class="model-row">
-                                <span class="model-lbl" style="color:#60a5fa;">{{ label_glicko2 }}</span>
-                                <span class="model-right">
-                                    <span class="model-val">{{ game.glicko2_prob if game.glicko2_prob is not none else '—' }}{% if game.glicko2_prob is not none %}%{% endif %}</span>
-                                    {% if game.glicko2_correct is not none %}<span class="{{ 'pick-ok' if game.glicko2_correct else 'pick-no' }}">{{ '✅' if game.glicko2_correct else '❌' }}</span>{% endif %}
-                                </span>
+                    </div>
+                    <div class="pick-conf-bar section-ml">
+                        <div class="pick-conf-title">Pick Confidence</div>
+                        <div class="pick-conf-grid">
+                            {% for m in [
+                                {'name': label_glicko2, 'prob': game.glicko2_prob, 'correct': game.glicko2_correct, 'key': 'glicko2'},
+                                {'name': label_trueskill, 'prob': game.trueskill_prob, 'correct': game.trueskill_correct, 'key': 'trueskill'},
+                                {'name': label_elo, 'prob': game.elo_prob, 'correct': game.elo_correct, 'key': 'elo'},
+                                {'name': label_xgb, 'prob': game.xgb_prob, 'correct': game.xgb_correct, 'key': 'xgb'},
+                                {'name': label_ensemble, 'prob': game.ens_prob, 'correct': game.ens_correct, 'key': 'consensus'}
+                            ] %}
+                            <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %} {% if m.correct == true %}correct{% elif m.correct == false %}wrong{% endif %}">
+                                <div class="pc-name">{{ m.name }}</div>
+                                {% if m.prob is not none %}
+                                <div class="pc-val">{{ m.prob }}%</div>
+                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ game.home }}{% else %}{{ game.away }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
+                                {% else %}
+                                <div class="pc-val" style="color:#64748b;">—</div>
+                                <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
+                                {% endif %}
                             </div>
-                            <div class="model-row">
-                                <span class="model-lbl" style="color:#a78bfa;">{{ label_trueskill }}</span>
-                                <span class="model-right">
-                                    <span class="model-val">{{ game.trueskill_prob if game.trueskill_prob is not none else '—' }}{% if game.trueskill_prob is not none %}%{% endif %}</span>
-                                    {% if game.trueskill_correct is not none %}<span class="{{ 'pick-ok' if game.trueskill_correct else 'pick-no' }}">{{ '✅' if game.trueskill_correct else '❌' }}</span>{% endif %}
-                                </span>
-                            </div>
-                            <div class="model-row">
-                                <span class="model-lbl" style="color:#34d399;">{{ label_elo }}</span>
-                                <span class="model-right">
-                                    <span class="model-val">{{ game.elo_prob if game.elo_prob is not none else '—' }}{% if game.elo_prob is not none %}%{% endif %}</span>
-                                    {% if game.elo_correct is not none %}<span class="{{ 'pick-ok' if game.elo_correct else 'pick-no' }}">{{ '✅' if game.elo_correct else '❌' }}</span>{% endif %}
-                                </span>
-                            </div>
-                            <div class="model-row">
-                                <span class="model-lbl" style="color:#f87171;">{{ label_xgb }}</span>
-                                <span class="model-right">
-                                    <span class="model-val">{{ game.xgb_prob if game.xgb_prob is not none else '—' }}{% if game.xgb_prob is not none %}%{% endif %}</span>
-                                    {% if game.xgb_correct is not none %}<span class="{{ 'pick-ok' if game.xgb_correct else 'pick-no' }}">{{ '✅' if game.xgb_correct else '❌' }}</span>{% endif %}
-                                </span>
-                            </div>
-                            <div class="ensemble-badge">{{ label_ensemble|upper }} {{ game.ens_prob }}% {% if game.ens_correct is not none %}<span class="{{ 'pick-ok' if game.ens_correct else 'pick-no' }}">{{ '✅' if game.ens_correct else '❌' }}</span>{% endif %}</div>
-                            {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:4px;">{{ game.model_data_note }}</div>{% endif %}
+                            {% endfor %}
                         </div>
+                        {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:6px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
                     </div>
                     <div class="result-footer section-spread">
                         <div class="sf-item">
@@ -7869,7 +7874,7 @@ def sport_predictions(sport, filter_date=None):
             "Please refresh in a minute."
         )
 
-    if sport not in ('MLB', 'SOCCER'):
+    if sport != 'SOCCER':
         try:
             _attach_engine_odds_to_predictions(sport, predictions)
         except Exception as _odds_err:
