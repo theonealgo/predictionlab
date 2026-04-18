@@ -5525,9 +5525,9 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
     .pc-box.correct { border-color:rgba(16,185,129,0.5); }
     .pc-box.wrong { border-color:rgba(239,68,68,0.45); }
-    .pc-name { font-size:0.68em; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+    .pc-name { font-size:0.68em; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; }
     .pc-val { font-size:0.95em; font-weight:800; color:#fff; }
-    .pc-side { font-size:0.65em; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; gap:3px; }
+    .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; box-sizing:border-box; text-align:center; }
     .pc-side.home { color:#10b981; background:rgba(16,185,129,0.15); }
     .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
     .section-ml, .section-spread, .section-total { display:block; }
@@ -5799,7 +5799,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                                 <div class="pc-name">{{ m.name }}</div>
                                 {% if m.prob is not none %}
                                 <div class="pc-val">{{ m.prob }}%</div>
-                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ game.home }}{% else %}{{ game.away }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
+                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ game.home }}{% else %}{{ game.away }}{% endif %}">{% if m.prob >= 50 %}{{ game.home.split()[-1] }}{% else %}{{ game.away.split()[-1] }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
                                 {% else %}
                                 <div class="pc-val" style="color:#64748b;">—</div>
                                 <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
