@@ -2328,8 +2328,8 @@ def get_upcoming_predictions(sport, days=365):
         
         api_games = []
 
-        # NBA/NFL/NCAAF need a longer forward horizon (regular season + playoffs).
-        if sport in ['NBA', 'NFL', 'NCAAF']:
+        # Sports using a single date-range API call (fast) vs day-by-day loop.
+        if sport in ['NBA', 'NFL', 'NCAAF', 'MLB']:
             # NFL/NCAAF: look back further to catch completed season + playoffs
             _lookback = 240 if sport in ('NFL', 'NCAAF') else 7
             start_str = (datetime.now() - timedelta(days=_lookback)).strftime('%Y%m%d')
@@ -3110,7 +3110,8 @@ def get_upcoming_predictions(sport, days=365):
 
     # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
-        _cache_market_lines_for_predictions(sport, predictions, limit=20)
+        _ml_limit = 5 if sport == 'MLB' else 20
+        _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
