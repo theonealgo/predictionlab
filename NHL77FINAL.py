@@ -3885,6 +3885,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         xs = xt = None
                 except Exception:
                     xs = xt = None
+                # Preserve XSharp model projections on the row so the UI can show
+                # both "XSharp Total" (model projection) and "Our Total" (H2H line).
+                g['xgb_total'] = xt
+                g['xgb_spread'] = xs
 
                 hk = _normalize_team_key_for_sport(sport, h)
                 ak = _normalize_team_key_for_sport(sport, a)
@@ -6004,6 +6008,10 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                                 {% else %}—{% endif %}
                                 {% if game.total_correct is not none %}<span class="{{ 'pick-ok' if game.total_correct else 'pick-no' }}">{{ '✅' if game.total_correct else '❌' }}</span>{% endif %}
                             </span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">XSharp Total</span>
+                            <span class="sf-val sf-xgb">{% if game.xgb_total is not none %}{{ "%.1f"|format(game.xgb_total) }}{% else %}—{% endif %}</span>
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">Our Total</span>
