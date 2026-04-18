@@ -2331,11 +2331,21 @@ def get_upcoming_predictions(sport, days=365):
         # Sports using a single date-range API call (fast) vs day-by-day loop.
         if sport in ['NBA', 'NFL', 'NCAAF', 'MLB']:
             # NFL/NCAAF: look back further to catch completed season + playoffs
-            _lookback = 240 if sport in ('NFL', 'NCAAF') else 7
+            # MLB: keep window tight — 500 games kills the Render worker
+            if sport in ('NFL', 'NCAAF'):
+                _lookback = 240
+                _forward = 120
+            elif sport == 'MLB':
+                _lookback = 3
+                _forward = 5
+            else:
+                _lookback = 7
+                _forward = 120
             start_str = (datetime.now() - timedelta(days=_lookback)).strftime('%Y%m%d')
-            end_str = (datetime.now() + timedelta(days=120)).strftime('%Y%m%d')
+            end_str = (datetime.now() + timedelta(days=_forward)).strftime('%Y%m%d')
+            _api_limit = 100 if sport == 'MLB' else 500
             try:
-                url = f"{ESPN_ENDPOINTS[sport]}?dates={start_str}-{end_str}&limit=500"
+                url = f"{ESPN_ENDPOINTS[sport]}?dates={start_str}-{end_str}&limit={_api_limit}"
                 data = _cached_get(url)
                 events = data.get('events', [])
                 for event in events:
