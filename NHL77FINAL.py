@@ -3026,39 +3026,20 @@ def get_upcoming_predictions(sport, days=365):
             game_dict['puck_line_fav_side'] = None
             game_dict['spread_total_note']  = None
 
-            if game_dict.get('home_score') is None:  # upcoming game only
-                if sport == 'SOCCER':
-                    if soccer_pred and soccer_pred.get('expected_home_score') is not None:
-                        exp_home = soccer_pred.get('expected_home_score')
-                        exp_away = soccer_pred.get('expected_away_score')
-                        if exp_home is not None and exp_away is not None:
-                            game_dict['naive_home_score'] = round(exp_home, 2)
-                            game_dict['naive_away_score'] = round(exp_away, 2)
-                            game_dict['naive_spread'] = round(exp_home - exp_away, 2)
-                            game_dict['naive_total'] = round(exp_home + exp_away, 2)
-                    if game_dict.get('naive_spread') is None:
-                        try:
-                            _sp = _score_predictor_instance(sport)
-                            if _sp:
-                                nh, na, ns, nt = _sp.predict_score(
-                                    game_dict.get('home_team_id', ''),
-                                    game_dict.get('away_team_id', ''),
-                                    sport,
-                                )
-                                if nh is not None:
-                                    game_dict['naive_home_score'] = nh
-                                    game_dict['naive_away_score'] = na
-                                    game_dict['naive_spread'] = ns
-                                    game_dict['naive_total'] = nt
-                        except Exception as _e:
-                            logger.debug(f"ScorePredictor error: {_e}")
-                    if game_dict.get('naive_spread') is None:
-                        game_dict['spread_total_note'] = soccer_note or (
-                            "Soccer spread/total requires team scoring rates; data not ready yet."
-                        )
-                else:
+            # Spread / Total score predictions are computed for EVERY game
+            # (upcoming and final) so the predictions card continues to show
+            # Our Spread / Our Total even after the final score is posted.
+            if sport == 'SOCCER':
+                if soccer_pred and soccer_pred.get('expected_home_score') is not None:
+                    exp_home = soccer_pred.get('expected_home_score')
+                    exp_away = soccer_pred.get('expected_away_score')
+                    if exp_home is not None and exp_away is not None:
+                        game_dict['naive_home_score'] = round(exp_home, 2)
+                        game_dict['naive_away_score'] = round(exp_away, 2)
+                        game_dict['naive_spread'] = round(exp_home - exp_away, 2)
+                        game_dict['naive_total'] = round(exp_home + exp_away, 2)
+                if game_dict.get('naive_spread') is None:
                     try:
-                        from score_predictor import ScorePredictor
                         _sp = _score_predictor_instance(sport)
                         if _sp:
                             nh, na, ns, nt = _sp.predict_score(
@@ -3073,41 +3054,64 @@ def get_upcoming_predictions(sport, days=365):
                                 game_dict['naive_total'] = nt
                     except Exception as _e:
                         logger.debug(f"ScorePredictor error: {_e}")
-
-                    # Fallback to Vegas-style predictor if naive stats are still missing
-                    if game_dict.get('naive_spread') is None:
-                        try:
-                            from vegas_score_predictor import VegasScorePredictor
-                            _vsp = VegasScorePredictor(db_path=DATABASE)
-                            vh, va, vs, vt = _vsp.predict_score_vegas_method(
-                                game_dict.get('home_team_id', ''),
-                                game_dict.get('away_team_id', ''),
-                                sport
-                            )
-                            if vh is not None:
-                                game_dict['naive_home_score'] = vh
-                                game_dict['naive_away_score'] = va
-                                game_dict['naive_spread'] = vs
-                                game_dict['naive_total'] = vt
-                        except Exception as _ve:
-                            logger.debug(f"VegasScorePredictor error: {_ve}")
-
+                if game_dict.get('naive_spread') is None:
+                    game_dict['spread_total_note'] = soccer_note or (
+                        "Soccer spread/total requires team scoring rates; data not ready yet."
+                    )
+            else:
                 try:
-                    _xm = _get_xgb_spread_model(sport)
-                    if _xm:
-                        result = _xm.predict(
+                    from score_predictor import ScorePredictor
+                    _sp = _score_predictor_instance(sport)
+                    if _sp:
+                        nh, na, ns, nt = _sp.predict_score(
                             game_dict.get('home_team_id', ''),
                             game_dict.get('away_team_id', ''),
+                            sport,
                         )
-                        if result and result[0] is not None:
-                            game_dict['xgb_home_score'] = result[0]
-                            game_dict['xgb_away_score'] = result[1]
-                            game_dict['xgb_spread'] = result[2]
-                            game_dict['xgb_total'] = result[3]
+                        if nh is not None:
+                            game_dict['naive_home_score'] = nh
+                            game_dict['naive_away_score'] = na
+                            game_dict['naive_spread'] = ns
+                            game_dict['naive_total'] = nt
                 except Exception as _e:
-                    logger.debug(f"XGBSpread error: {_e}")
+                    logger.debug(f"ScorePredictor error: {_e}")
 
-                # ── MLB: pitching-enhanced prediction (35% Elo / 45% Pitching / 20% ML) ─
+                # Fallback to Vegas-style predictor if naive stats are still missing
+                if game_dict.get('naive_spread') is None:
+                    try:
+                        from vegas_score_predictor import VegasScorePredictor
+                        _vsp = VegasScorePredictor(db_path=DATABASE)
+                        vh, va, vs, vt = _vsp.predict_score_vegas_method(
+                            game_dict.get('home_team_id', ''),
+                            game_dict.get('away_team_id', ''),
+                            sport
+                        )
+                        if vh is not None:
+                            game_dict['naive_home_score'] = vh
+                            game_dict['naive_away_score'] = va
+                            game_dict['naive_spread'] = vs
+                            game_dict['naive_total'] = vt
+                    except Exception as _ve:
+                        logger.debug(f"VegasScorePredictor error: {_ve}")
+
+            try:
+                _xm = _get_xgb_spread_model(sport)
+                if _xm:
+                    result = _xm.predict(
+                        game_dict.get('home_team_id', ''),
+                        game_dict.get('away_team_id', ''),
+                    )
+                    if result and result[0] is not None:
+                        game_dict['xgb_home_score'] = result[0]
+                        game_dict['xgb_away_score'] = result[1]
+                        game_dict['xgb_spread'] = result[2]
+                        game_dict['xgb_total'] = result[3]
+            except Exception as _e:
+                logger.debug(f"XGBSpread error: {_e}")
+
+            if game_dict.get('home_score') is None:
+                # ── MLB: pitching-enhanced prediction (upcoming games only
+                #    so we do not retroactively rewrite picks for completed games) ─
                 if sport == 'MLB':
                     try:
                         from mlb_runs_model import get_or_train_mlb_model as _get_mlb_model
@@ -3148,22 +3152,22 @@ def get_upcoming_predictions(sport, days=365):
                     except Exception as _mlbe:
                         logger.debug(f"MLB enhanced prediction error: {_mlbe}")
 
-                # ── NHL: invert XSharp spread (model picks opposite side) ──────────
-                if sport == 'NHL' and game_dict.get('xgb_spread') is not None:
-                    game_dict['xgb_spread'] = -game_dict['xgb_spread']
-                    if game_dict.get('xgb_home_score') is not None and game_dict.get('xgb_away_score') is not None:
-                        _tmp = game_dict['xgb_home_score']
-                        game_dict['xgb_home_score'] = game_dict['xgb_away_score']
-                        game_dict['xgb_away_score'] = _tmp
+            # ── NHL: invert XSharp spread (model picks opposite side) ──────────
+            if sport == 'NHL' and game_dict.get('xgb_spread') is not None:
+                game_dict['xgb_spread'] = -game_dict['xgb_spread']
+                if game_dict.get('xgb_home_score') is not None and game_dict.get('xgb_away_score') is not None:
+                    _tmp = game_dict['xgb_home_score']
+                    game_dict['xgb_home_score'] = game_dict['xgb_away_score']
+                    game_dict['xgb_away_score'] = _tmp
 
-                # ── NHL: convert XSharp spread → puck-line cover probabilities ──────────
-                # puck_line_* fields are the betting-facing output shown in the UI.
-                if sport == 'NHL' and game_dict.get('xgb_spread') is not None:
-                    try:
-                        _pl = compute_puck_line_prob(game_dict['xgb_spread'], sport)
-                        game_dict.update(_pl)
-                    except Exception as _ple:
-                        logger.debug(f"[NHL] puck_line_prob error: {_ple}")
+            # ── NHL: convert XSharp spread → puck-line cover probabilities ──────────
+            # puck_line_* fields are the betting-facing output shown in the UI.
+            if sport == 'NHL' and game_dict.get('xgb_spread') is not None:
+                try:
+                    _pl = compute_puck_line_prob(game_dict['xgb_spread'], sport)
+                    game_dict.update(_pl)
+                except Exception as _ple:
+                    logger.debug(f"[NHL] puck_line_prob error: {_ple}")
 
             # ── Injury warnings (upcoming games only) ─────────────────────────
             if game_dict.get('home_score') is None:
@@ -5658,7 +5662,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .date-section { display:none; background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
     .date-header { color:#fbbf24; font-size:1.3em; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid rgba(255,255,255,0.2); }
-    .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:16px; }
+    .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(420px, 100%),1fr)); gap:16px; }
+    @media(max-width:480px){ .results-grid { grid-template-columns:1fr; } .result-card { max-width:100%; } }
     .result-card { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; overflow:hidden; transition:border-color 0.2s; }
     .result-card:hover { border-color:#fbbf24; }
     .result-status { padding:6px 14px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#10b981; background:rgba(16,185,129,0.12); }
