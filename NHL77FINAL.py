@@ -563,6 +563,143 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
             pass
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# O/U model enhancements (post-hoc adjustments that DO NOT modify xgb_total)
+#
+# These produce a `pick_total` = xgb_total + injury_adj + rest_adj + park_adj
+# used purely for grading / pick display. The raw xgb_total stays unchanged.
+# ─────────────────────────────────────────────────────────────────────────────
+_INJURY_OUT_STATUSES = {'Out', 'Injured Reserve', 'Inactive'}
+_INJURY_DOUBTFUL_STATUSES = {'Doubtful'}
+
+# Points lost per starter ruled Out. Doubtful is treated at ~50%.
+_INJURY_OUT_POINTS_PER_STARTER = {
+    'NBA': 2.5, 'NCAAB': 2.0, 'NCAAW': 2.0, 'WNBA': 2.0,
+    'NFL': 3.0, 'NCAAF': 3.0,
+    'NHL': 0.25, 'MLB': 0.4, 'SOCCER': 0.15,
+}
+# Rest (back-to-back) penalty applied to each team if their prior completed game
+# was the day before the current game.
+_B2B_PENALTY = {
+    'NBA': 1.5, 'NCAAB': 1.0, 'NCAAW': 1.0, 'WNBA': 1.0,
+    'NFL': 0.0, 'NCAAF': 0.0,
+    'NHL': 0.15, 'MLB': 0.1, 'SOCCER': 0.05,
+}
+# CLV edge thresholds: minimum |xgb_total - market_total| needed to post a pick.
+_OU_EDGE_THRESHOLD = {
+    'NBA': 2.5, 'NCAAB': 2.5, 'NCAAW': 2.5, 'WNBA': 2.5,
+    'NFL': 1.5, 'NCAAF': 2.5,
+    'NHL': 0.25, 'MLB': 0.4, 'SOCCER': 0.25,
+}
+# MLB park/weather factor relative to neutral 8.9 baseline.
+_MLB_PARK_FACTORS = {
+    'Colorado Rockies': +1.2, 'Boston Red Sox': +0.4, 'Cincinnati Reds': +0.3,
+    'Chicago Cubs': +0.2, 'Baltimore Orioles': +0.2, 'Arizona Diamondbacks': +0.1,
+    'San Francisco Giants': -0.4, 'San Diego Padres': -0.3, 'Oakland Athletics': -0.3,
+    'Miami Marlins': -0.3, 'Seattle Mariners': -0.2,
+}
+# NFL rough weather (cold/wind) factor by home team outdoor stadium.
+_NFL_COLD_TEAMS = {
+    'Buffalo Bills', 'Green Bay Packers', 'Chicago Bears', 'Cleveland Browns',
+    'Pittsburgh Steelers', 'Denver Broncos', 'Cincinnati Bengals', 'New England Patriots',
+    'Philadelphia Eagles', 'New York Jets', 'New York Giants', 'Washington Commanders',
+    'Kansas City Chiefs',
+}
+
+
+def _count_out_injured_starters(sport, team_name):
+    """Return a weighted count of top impact players ruled Out/Doubtful."""
+    if not (sport and team_name):
+        return 0.0
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            'SELECT status FROM injuries WHERE sport=? AND team_name=?',
+            (sport, team_name),
+        ).fetchall()
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[injuries] lookup failed for {sport} {team_name}: {_e}")
+        return 0.0
+    out = sum(1 for r in rows if r['status'] in _INJURY_OUT_STATUSES)
+    dbt = sum(1 for r in rows if r['status'] in _INJURY_DOUBTFUL_STATUSES)
+    # Cap contribution from any single team (avoid 10-player lists killing the number).
+    return min(5.0, out + 0.5 * dbt)
+
+
+def _injury_total_adjustment(sport, home_team, away_team):
+    """Subtract points from projected total based on Out/Doubtful players on both rosters."""
+    pts_per = _INJURY_OUT_POINTS_PER_STARTER.get(sport, 0.0)
+    if not pts_per:
+        return 0.0
+    adj = 0.0
+    adj -= pts_per * _count_out_injured_starters(sport, home_team)
+    adj -= pts_per * _count_out_injured_starters(sport, away_team)
+    return adj
+
+
+def _last_game_date_for_team(sport, team, before_date):
+    """Return the most recent completed game_date (YYYY-MM-DD) for team strictly before a date."""
+    if not (sport and team and before_date):
+        return None
+    try:
+        conn = get_db_connection()
+        r = conn.execute(
+            '''SELECT MAX(date(game_date)) AS d
+               FROM games
+               WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL
+                 AND date(game_date) < date(?)
+                 AND (home_team_id=? OR away_team_id=?)''',
+            (sport, before_date, team, team),
+        ).fetchone()
+        conn.close()
+        return r['d'] if r and r['d'] else None
+    except Exception as _e:
+        logger.debug(f"[rest] lookup failed for {sport} {team}: {_e}")
+        return None
+
+
+def _rest_total_adjustment(sport, home_team, away_team, game_date):
+    """Penalise total if either team is on a back-to-back (prior game exactly 1 day before)."""
+    penalty = _B2B_PENALTY.get(sport, 0.0)
+    if not penalty or not game_date:
+        return 0.0
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        gd = _dt.strptime(str(game_date)[:10], '%Y-%m-%d')
+    except Exception:
+        return 0.0
+    total_adj = 0.0
+    for team in (home_team, away_team):
+        last = _last_game_date_for_team(sport, team, gd.strftime('%Y-%m-%d'))
+        if not last:
+            continue
+        try:
+            ld = _dt.strptime(last[:10], '%Y-%m-%d')
+        except Exception:
+            continue
+        if (gd - ld).days <= 1:
+            total_adj -= penalty
+    return total_adj
+
+
+def _park_weather_total_adjustment(sport, home_team):
+    """Return a park/weather adjustment for the total projection."""
+    if sport == 'MLB':
+        return _MLB_PARK_FACTORS.get(home_team, 0.0)
+    if sport == 'NFL':
+        # Cold / outdoor stadiums lean slightly UNDER in winter months.
+        from datetime import datetime as _dt
+        month = _dt.now().month
+        if home_team in _NFL_COLD_TEAMS and month in (11, 12, 1, 2):
+            return -1.5
+    return 0.0
+
+
+def _ou_edge_threshold(sport):
+    return _OU_EDGE_THRESHOLD.get(sport, 0.0)
+
+
 def _attach_h2h_projection_to_daily_results(sport, daily_results, n: int = 10):
     """Set g['our_total']/g['our_spread'] on each completed game using prior H2H."""
     if not daily_results:
@@ -728,11 +865,11 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             'elo_prob':         round(elo_prob  * 100, 1),
             'xgb_prob':         round(xgb_prob  * 100, 1),
             'ens_prob':         round(ens_prob  * 100, 1),
-            'glicko2_correct':   (glicko2_prob   > 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
-            'trueskill_correct': (trueskill_prob > 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-            'elo_correct':       (elo_prob  > 0.5) == home_won if home_won is not None else None,
-            'xgb_correct':       (xgb_prob  > 0.5) == home_won if home_won is not None else None,
-            'ens_correct':       (ens_prob  > 0.5) == home_won if ens_prob is not None and home_won is not None else None,
+            'glicko2_correct':   (glicko2_prob   >= 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
+            'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
+            'elo_correct':       (elo_prob  >= 0.5) == home_won if home_won is not None else None,
+            'xgb_correct':       (xgb_prob  >= 0.5) == home_won if home_won is not None else None,
+            'ens_correct':       (ens_prob  >= 0.5) == home_won if ens_prob is not None and home_won is not None else None,
             'skip_grading':      True if home_won is None else False,
         }
         daily_results[game_info['date']]['games'].append(game_info)
@@ -3347,11 +3484,11 @@ def calculate_nfl_weekly_performance():
                     'games': []
                 }
 
-            glicko2_correct   = (glicko2_prob   > 0.5) == actual_home_win if glicko2_prob   is not None else None
-            trueskill_correct = (trueskill_prob > 0.5) == actual_home_win if trueskill_prob is not None else None
-            elo_correct       = (elo_prob       > 0.5) == actual_home_win if elo_prob       is not None else None
-            xgb_correct       = (xgb_prob       > 0.5) == actual_home_win if xgb_prob       is not None else None
-            ens_correct       = (ens_prob       > 0.5) == actual_home_win if ens_prob       is not None else None
+            glicko2_correct   = (glicko2_prob   >= 0.5) == actual_home_win if glicko2_prob   is not None else None
+            trueskill_correct = (trueskill_prob >= 0.5) == actual_home_win if trueskill_prob is not None else None
+            elo_correct       = (elo_prob       >= 0.5) == actual_home_win if elo_prob       is not None else None
+            xgb_correct       = (xgb_prob       >= 0.5) == actual_home_win if xgb_prob       is not None else None
+            ens_correct       = (ens_prob       >= 0.5) == actual_home_win if ens_prob       is not None else None
 
             for model, prob, correct in [
                 ('glicko2',   glicko2_prob,   glicko2_correct),
@@ -3497,11 +3634,11 @@ def calculate_nhl_weekly_performance():
                     'games': []
                 }
 
-            glicko2_correct   = (glicko2_prob   > 0.5) == actual_home_win if glicko2_prob   is not None else None
-            trueskill_correct = (trueskill_prob > 0.5) == actual_home_win if trueskill_prob is not None else None
-            elo_correct       = (elo_prob       > 0.5) == actual_home_win
-            xgb_correct       = (xgb_prob       > 0.5) == actual_home_win
-            meta_correct      = (meta_prob      > 0.5) == actual_home_win
+            glicko2_correct   = (glicko2_prob   >= 0.5) == actual_home_win if glicko2_prob   is not None else None
+            trueskill_correct = (trueskill_prob >= 0.5) == actual_home_win if trueskill_prob is not None else None
+            elo_correct       = (elo_prob       >= 0.5) == actual_home_win
+            xgb_correct       = (xgb_prob       >= 0.5) == actual_home_win
+            meta_correct      = (meta_prob      >= 0.5) == actual_home_win
             weekly_results[bucket]['elo']['total'] += 1
             if elo_correct: weekly_results[bucket]['elo']['correct'] += 1
 
@@ -3647,11 +3784,11 @@ def calculate_nba_weekly_performance():
                     'games': []
                 }
 
-            glicko2_correct   = (glicko2_prob   > 0.5) == actual_home_win if glicko2_prob   is not None else None
-            trueskill_correct = (trueskill_prob > 0.5) == actual_home_win if trueskill_prob is not None else None
-            elo_correct       = (elo_prob       > 0.5) == actual_home_win if elo_prob       is not None else None
-            xgb_correct       = (xgb_prob       > 0.5) == actual_home_win if xgb_prob       is not None else None
-            ens_correct       = (ens_prob       > 0.5) == actual_home_win if ens_prob       is not None else None
+            glicko2_correct   = (glicko2_prob   >= 0.5) == actual_home_win if glicko2_prob   is not None else None
+            trueskill_correct = (trueskill_prob >= 0.5) == actual_home_win if trueskill_prob is not None else None
+            elo_correct       = (elo_prob       >= 0.5) == actual_home_win if elo_prob       is not None else None
+            xgb_correct       = (xgb_prob       >= 0.5) == actual_home_win if xgb_prob       is not None else None
+            ens_correct       = (ens_prob       >= 0.5) == actual_home_win if ens_prob       is not None else None
 
             for model, prob, correct in [
                 ('glicko2',   glicko2_prob,   glicko2_correct),
@@ -3990,40 +4127,73 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             if sp_ok:
                                 st_cov += 1
 
-                    # Our Total = H2H last-10 average; compare XSharp (xt) against it.
-                    our_total = g.get('our_total')
-                    g['market_total'] = our_total
-                    if our_total is None:
-                        g['market_total_reason'] = "not enough head-to-head history"
-                        g['total_pick_reason'] = "no H2H line yet"
-                    elif xt is None:
+                    # ── MLB total grading: XSharp (+ park/rest/injury adj) vs Vegas total ──
+                    inj_adj = _injury_total_adjustment(sport, h, a)
+                    rest_adj = _rest_total_adjustment(sport, h, a, gd)
+                    park_adj = _park_weather_total_adjustment(sport, h)
+                    adj_xt = xt + inj_adj + rest_adj + park_adj if xt is not None else None
+                    our_total_h2h = g.get('our_total')
+                    g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
+                    g['total_adj_breakdown'] = {
+                        'injury': round(inj_adj, 2),
+                        'rest': round(rest_adj, 2),
+                        'park': round(park_adj, 2),
+                    }
+                    # Keep Vegas market_total as the O/U grading line (previous behaviour)
+                    if mt is None and adj_xt is not None:
+                        mt = round(adj_xt, 1)
+                        g['market_total_reason'] = "XSharp total (fallback)"
+                        g['total_pick_reason'] = "fallback line"
+                    g['market_total'] = mt
+                    if mt is None:
+                        g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
+                        g['total_pick_reason'] = g.get('total_pick_reason') or "no sportsbook total line"
+                    elif adj_xt is None:
                         g['total_pick_reason'] = "model score unavailable"
                     else:
-                        if abs(xt - our_total) < 1e-9:
-                            tp_disp = 'PUSH'
+                        edge = adj_xt - mt
+                        if abs(edge) < _ou_edge_threshold(sport):
+                            g['total_pick_reason'] = f"edge {edge:+.1f} below threshold"
                         else:
-                            tp_disp = 'OVER' if xt > our_total else 'UNDER'
-                            if abs(at - our_total) >= 1e-9:
-                                aou = 'OVER' if at > our_total else 'UNDER'
+                            tp_disp = 'OVER' if edge > 0 else 'UNDER'
+                            if abs(at - mt) >= 1e-9:
+                                aou = 'OVER' if at > mt else 'UNDER'
                                 tp_ok = (tp_disp == aou)
                                 tt_gr += 1
                                 if tp_ok:
                                     tt_cor += 1
-                        if tp_disp in ('OVER', 'UNDER'):
-                            g['total_pick_label'] = f"{tp_disp.title()} {our_total:.1f}"
-                        elif tp_disp == 'PUSH':
-                            g['total_pick_label'] = "PUSH"
+                            strong = False
+                            if our_total_h2h is not None:
+                                h2h_edge = our_total_h2h - mt
+                                strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
+                            g['strong_ou'] = strong
+                            label = f"{tp_disp.title()} {mt:.1f}"
+                            if strong:
+                                label += " ★"
+                            g['total_pick_label'] = label
 
                 else:
-                    # "Our Total" = H2H last-10 average (replaces Vegas total for O/U pick).
-                    # Spread logic is UNCHANGED and still uses the sportsbook line (ms).
-                    our_total = g.get('our_total')
+                    # ── Non-MLB grading: Spread uses Vegas (unchanged).
+                    #    O/U uses Vegas market_total vs XSharp xgb_total + post-hoc
+                    #    adjustments (injury / rest / park / weather) + CLV threshold
+                    #    + consensus-of-two (STRONG when H2H agrees).
+                    inj_adj = _injury_total_adjustment(sport, h, a)
+                    rest_adj = _rest_total_adjustment(sport, h, a, gd)
+                    park_adj = _park_weather_total_adjustment(sport, h)
+                    adj_xt = xt + inj_adj + rest_adj + park_adj if xt is not None else None
+                    our_total_h2h = g.get('our_total')
+                    g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
+                    g['total_adj_breakdown'] = {
+                        'injury': round(inj_adj, 2),
+                        'rest': round(rest_adj, 2),
+                        'park': round(park_adj, 2),
+                    }
                     g['market_spread'] = ms
-                    g['market_total'] = our_total
+                    g['market_total'] = mt
                     if ms is None:
                         g['market_spread_reason'] = "no sportsbook spread line found"
-                    if our_total is None:
-                        g['market_total_reason'] = "not enough head-to-head history"
+                    if mt is None:
+                        g['market_total_reason'] = "no sportsbook total line found"
 
                     if xs is not None and ms is not None:
                         dm = xs + ms
@@ -4043,21 +4213,27 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     elif xs is None:
                         g['spread_pick_reason'] = "model score unavailable"
 
-                    if xt is not None and our_total is not None:
-                        if abs(xt - our_total) < 1e-9:
-                            tp_disp = 'PUSH'
+                    if adj_xt is not None and mt is not None:
+                        edge = adj_xt - mt
+                        if abs(edge) < _ou_edge_threshold(sport):
+                            g['total_pick_reason'] = f"edge {edge:+.1f} below threshold"
                         else:
-                            tp_disp = 'OVER' if xt > our_total else 'UNDER'
-                            if abs(at - our_total) >= 1e-9:
-                                aou = 'OVER' if at > our_total else 'UNDER'
+                            tp_disp = 'OVER' if edge > 0 else 'UNDER'
+                            if abs(at - mt) >= 1e-9:
+                                aou = 'OVER' if at > mt else 'UNDER'
                                 tp_ok = (tp_disp == aou)
                                 tt_gr += 1
                                 if tp_ok:
                                     tt_cor += 1
+                            strong = False
+                            if our_total_h2h is not None:
+                                h2h_edge = our_total_h2h - mt
+                                strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
+                            g['strong_ou'] = strong
                     elif xt is None:
                         g['total_pick_reason'] = "model score unavailable"
-                    elif our_total is None:
-                        g['total_pick_reason'] = "no H2H line yet"
+                    elif mt is None:
+                        g['total_pick_reason'] = "no sportsbook total line"
 
                     # Display-ready strings for the unified table
                     g['spread_pick_label'] = None
@@ -4068,9 +4244,12 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     else:
                         g['spread_line_display'] = None
                     g['total_pick_label'] = None
-                    if tp_disp in ('OVER', 'UNDER') and our_total is not None:
-                        g['total_line_display'] = f"{tp_disp.title()} {our_total:.1f}"
-                        g['total_pick_label'] = g['total_line_display']
+                    if tp_disp in ('OVER', 'UNDER') and mt is not None:
+                        g['total_line_display'] = f"{tp_disp.title()} {mt:.1f}"
+                        label = g['total_line_display']
+                        if g.get('strong_ou'):
+                            label += " ★"
+                        g['total_pick_label'] = label
                     elif tp_disp == 'PUSH':
                         g['total_pick_label'] = "PUSH"
                     else:
@@ -6016,10 +6195,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">XSharp Total</span>
-                            <span class="sf-val sf-xgb">{% if game.xgb_total is not none %}{{ "%.1f"|format(game.xgb_total) }}{% else %}—{% endif %}</span>
+                            <span class="sf-val sf-xgb">{% if game.xgb_total is not none %}{{ "%.1f"|format(game.xgb_total) }}{% if game.xgb_total_adj is defined and game.xgb_total_adj is not none and (game.xgb_total_adj - game.xgb_total)|abs > 0.05 %} <span style="color:#a78bfa;font-size:0.78em;">→ {{ "%.1f"|format(game.xgb_total_adj) }}</span>{% endif %}{% else %}—{% endif %}</span>
                         </div>
                         <div class="sf-item">
-                            <span class="sf-label">Our Total</span>
+                            <span class="sf-label">H2H Last 10</span>
+                            <span class="sf-val">{% if game.our_total is defined and game.our_total is not none %}{{ "%.1f"|format(game.our_total) }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">Vegas Line</span>
                             <span class="sf-val">
                                 {% if game.market_total is not none %}{{ "%.1f"|format(game.market_total) }}
                                 {% elif game.market_total_reason is defined and game.market_total_reason %}{{ game.market_total_reason }}
@@ -7881,11 +8064,11 @@ def daily_report_page():
                     'elo_prob': round(elo_prob * 100, 1),
                     'xgb_prob': round(xgb_prob * 100, 1),
                     'ens_prob': round(ens_prob * 100, 1),
-                    'glicko2_correct': (glicko2_prob > 0.5) == home_won if glicko2_prob is not None and home_won is not None else None,
-                    'trueskill_correct': (trueskill_prob > 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-                    'elo_correct': (elo_prob > 0.5) == home_won if home_won is not None else None,
-                    'xgb_correct': (xgb_prob > 0.5) == home_won if home_won is not None else None,
-                    'ens_correct': (ens_prob > 0.5) == home_won if home_won is not None else None,
+                    'glicko2_correct': (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None,
+                    'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
+                    'elo_correct': (elo_prob >= 0.5) == home_won if home_won is not None else None,
+                    'xgb_correct': (xgb_prob >= 0.5) == home_won if home_won is not None else None,
+                    'ens_correct': (ens_prob >= 0.5) == home_won if home_won is not None else None,
                     'skip_grading': True if home_won is None else False,
                 }
                 daily_results[game_date]['games'].append(game_info)
@@ -8509,11 +8692,11 @@ def sport_results(sport):
                     'elo_prob':         round(elo_prob  * 100, 1),
                     'xgb_prob':         round(xgb_prob  * 100, 1),
                     'ens_prob':         round(ens_prob  * 100, 1),
-                    'glicko2_correct':   (glicko2_prob   > 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
-                    'trueskill_correct': (trueskill_prob > 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-                    'elo_correct':       (elo_prob  > 0.5) == home_won if home_won is not None else None,
-                    'xgb_correct':       (xgb_prob  > 0.5) == home_won if home_won is not None else None,
-                    'ens_correct':       (ens_prob  > 0.5) == home_won if home_won is not None else None,
+                    'glicko2_correct':   (glicko2_prob   >= 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
+                    'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
+                    'elo_correct':       (elo_prob  >= 0.5) == home_won if home_won is not None else None,
+                    'xgb_correct':       (xgb_prob  >= 0.5) == home_won if home_won is not None else None,
+                    'ens_correct':       (ens_prob  >= 0.5) == home_won if home_won is not None else None,
                     'skip_grading':      True if home_won is None else False,
                     'model_data_note':   model_note,
                 }
