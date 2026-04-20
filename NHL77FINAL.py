@@ -2117,6 +2117,50 @@ try:
 except Exception as _dbe:
     logger.warning(f"init_db failed: {_dbe}")
 
+
+def _maybe_backfill_soccer_on_startup():
+    """If the DB has fewer than 200 completed Soccer games in the last 90 days,
+    run the historical backfill in a background thread so Soccer results pages
+    have data. Guarded by a file flag + a DB-count threshold so it only runs when
+    truly needed."""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            """SELECT COUNT(*) AS n FROM games
+               WHERE sport='SOCCER' AND home_score IS NOT NULL
+                 AND date(game_date) >= date('now','-90 days')"""
+        ).fetchone()
+        conn.close()
+        recent_n = row['n'] if row else 0
+    except Exception as _e:
+        logger.debug(f"[soccer-backfill] count check failed: {_e}")
+        return
+    if recent_n >= 200:
+        return  # already populated
+    flag_path = _os.path.join(_os.path.dirname(DATABASE), '.soccer_backfill_ran')
+    if _os.path.exists(flag_path):
+        return  # already attempted this deploy
+    import threading
+    def _run():
+        try:
+            logger.info(f"[soccer-backfill] starting (recent_n={recent_n})...")
+            from backfill_soccer import backfill as _bf
+            _bf()
+            try:
+                open(flag_path, 'w').write('done')
+            except Exception:
+                pass
+            logger.info("[soccer-backfill] finished.")
+        except Exception as _be:
+            logger.warning(f"[soccer-backfill] failed: {_be}")
+    threading.Thread(target=_run, daemon=True, name='soccer-backfill').start()
+
+try:
+    _maybe_backfill_soccer_on_startup()
+except Exception as _sbe:
+    logger.debug(f"[soccer-backfill] hook error: {_sbe}")
+
 def parse_date(date_str):
     """Parse date string from multiple formats (DD/MM/YYYY or YYYY-MM-DD)"""
     try:
