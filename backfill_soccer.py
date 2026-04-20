@@ -25,22 +25,32 @@ DB_PATH = os.path.join(os.path.dirname(__file__), 'sports_predictions_original.d
 if os.path.isdir('/data'):
     DB_PATH = '/data/sports_predictions_original.db'
 
-# League code → display name mapping
+# League code → display name mapping (kept in sync with SOCCER_LEAGUE_ENDPOINTS)
 LEAGUES = {
     'eng.1': 'English Premier League',
     'esp.1': 'Spanish LaLiga',
+    'esp.2': 'Spanish Segunda División',
     'ger.1': 'German Bundesliga',
     'ita.1': 'Italian Serie A',
     'fra.1': 'French Ligue 1',
     'ned.1': 'Dutch Eredivisie',
     'por.1': 'Portuguese Primeira Liga',
     'eng.2': 'EFL Championship',
+    'eng.fa': 'FA Cup',
+    'eng.league_cup': 'EFL Cup',
     'uefa.champions': 'UEFA Champions League',
     'uefa.europa': 'UEFA Europa League',
     'uefa.europa.conf': 'UEFA Europa Conference League',
     'usa.1': 'Major League Soccer',
     'mex.1': 'Liga MX',
     'conmebol.libertadores': 'Copa Libertadores',
+    'concacaf.champions': 'CONCACAF Champions Cup',
+    'concacaf.leagues.cup': 'Leagues Cup',
+    'fifa.world': 'FIFA World Cup',
+    'fifa.worldq.uefa': 'FIFA World Cup Qualifiers (UEFA)',
+    'fifa.worldq.conmebol': 'FIFA World Cup Qualifiers (CONMEBOL)',
+    'fifa.worldq.caf': 'FIFA World Cup Qualifiers (CAF)',
+    'fifa.worldq.concacaf': 'FIFA World Cup Qualifiers (CONCACAF)',
 }
 
 def _parse_event_date(event):

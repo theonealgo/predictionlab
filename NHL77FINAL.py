@@ -921,7 +921,7 @@ def _upsert_betting_line(conn, sport, game_id, game_date, home_team, away_team, 
 
 
 def _cache_market_lines_for_predictions(sport, predictions, limit=20):
-    if sport not in ['NBA', 'MLB'] or not predictions:
+    if sport not in ['NBA', 'MLB', 'SOCCER'] or not predictions:
         return
     try:
         conn = get_db_connection()
@@ -979,7 +979,7 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
 
 
 def _cache_market_lines_for_results(sport, daily_results, limit=20):
-    if sport not in ['NBA', 'MLB'] or not daily_results:
+    if sport not in ['NBA', 'MLB', 'SOCCER'] or not daily_results:
         return
     try:
         conn = get_db_connection()
@@ -1012,7 +1012,7 @@ def _cache_market_lines_for_results(sport, daily_results, limit=20):
                     pass
                 try:
                     gd_dt = parse_date(gd)
-                    if gd_dt and sport in ['NBA', 'MLB'] and abs((datetime.now() - gd_dt).days) > 3:
+                    if gd_dt and sport in ['NBA', 'MLB', 'SOCCER'] and abs((datetime.now() - gd_dt).days) > 3:
                         continue
                 except Exception:
                     pass
@@ -1081,51 +1081,69 @@ def _fetch_live_market_line(
 
     if not event_candidates:
         return None
-        return None
 
     sport_slug, league_slug = sport_path
-    for event_id in event_candidates:
-        odds_url = (
-            f"https://sports.core.api.espn.com/v2/sports/{sport_slug}/leagues/{league_slug}/"
-            f"events/{event_id}/competitions/{event_id}/odds"
-        )
-
+    # Soccer game_ids are formatted 'SOCCER_<espn-league-code>_<event_id>'.
+    # ESPN's core API requires a real league slug (not 'all'), so parse it out.
+    soccer_league_slugs = []
+    if sport == 'SOCCER':
         try:
-            odds_data = _cached_get(odds_url, timeout=8)
-            items = odds_data.get('items', []) if isinstance(odds_data, dict) else []
-            if not items:
-                continue
-
-            chosen = None
-            for item in items:
-                if item.get('spread') is not None or item.get('overUnder') is not None:
-                    chosen = item
-                    break
-            if chosen is None:
-                chosen = items[0]
-
-            def _to_num(v):
-                try:
-                    return float(v) if v is not None else None
-                except Exception:
-                    return None
-
-            spread_val = _to_num(chosen.get('spread'))
-            total_val = _to_num(chosen.get('overUnder'))
-            if spread_val is None and total_val is None:
-                continue
-
-            return {
-                'spread': spread_val,
-                'total': total_val,
-                'source': (
-                    'ESPN Core API (matchup fallback)'
-                    if mapped_event_id and str(event_id) == str(mapped_event_id)
-                    else 'ESPN Core API (live fallback)'
-                ),
-            }
+            parts = str(game_id).split('_')
+            if len(parts) >= 3:
+                soccer_league_slugs.append(parts[1])
         except Exception:
-            continue
+            pass
+        # Fallback: probe the most common leagues if we cannot parse the slug.
+        if not soccer_league_slugs:
+            soccer_league_slugs = [
+                'eng.1', 'esp.1', 'ger.1', 'ita.1', 'fra.1',
+                'uefa.champions', 'uefa.europa', 'uefa.europa.conf',
+                'usa.1', 'mex.1', 'ned.1', 'por.1',
+            ]
+    for event_id in event_candidates:
+        league_candidates = soccer_league_slugs if sport == 'SOCCER' else [league_slug]
+        for _league_slug in league_candidates:
+            odds_url = (
+                f"https://sports.core.api.espn.com/v2/sports/{sport_slug}/leagues/{_league_slug}/"
+                f"events/{event_id}/competitions/{event_id}/odds"
+            )
+
+            try:
+                odds_data = _cached_get(odds_url, timeout=8)
+                items = odds_data.get('items', []) if isinstance(odds_data, dict) else []
+                if not items:
+                    continue
+
+                chosen = None
+                for item in items:
+                    if item.get('spread') is not None or item.get('overUnder') is not None:
+                        chosen = item
+                        break
+                if chosen is None:
+                    chosen = items[0]
+
+                def _to_num(v):
+                    try:
+                        return float(v) if v is not None else None
+                    except Exception:
+                        return None
+
+                spread_val = _to_num(chosen.get('spread'))
+                total_val = _to_num(chosen.get('overUnder'))
+                if spread_val is None and total_val is None:
+                    continue
+
+                return {
+                    'spread': spread_val,
+                    'total': total_val,
+                    'source': (
+                        'ESPN Core API (matchup fallback)'
+                        if mapped_event_id and str(event_id) == str(mapped_event_id)
+                        else 'ESPN Core API (live fallback)'
+                    ),
+                }
+            except Exception:
+                continue
 
     return None
 
@@ -4049,7 +4067,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
         st_cov = st_gr = tt_cor = tt_gr = 0
         live_attempts = 0
-        live_cap = 10 if sport == 'NBA' else 5
+        live_cap = 10 if sport in ('NBA', 'SOCCER') else 5
         for dd in daily_results.values():
             for g in dd.get('games', []):
                 h, a = g['home'], g['away']
@@ -4105,10 +4123,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 # Live fallback for missing market lines (recent games only)
                 if (ms is None or mt is None) and live_attempts < live_cap and gd:
                     try:
-                        if sport == 'NBA':
+                        if sport in ('NBA', 'SOCCER'):
                             gd_dt = parse_date(gd)
                             if gd_dt and abs((datetime.now() - gd_dt).days) > 3:
-                                raise Exception("skip live fetch for older NBA dates")
+                                raise Exception(f"skip live fetch for older {sport} dates")
                         live_attempts += 1
                         live_line = _fetch_live_market_line(sport, gid, gd, h, a)
                         if live_line:
@@ -4116,7 +4134,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                                 ms = live_line.get('spread')
                             if mt is None:
                                 mt = live_line.get('total')
-                            if sport == 'NBA' and (ms is not None or mt is not None):
+                            if sport in ('NBA', 'SOCCER') and (ms is not None or mt is not None):
                                 try:
                                     _conn_line = get_db_connection()
                                     _upsert_betting_line(_conn_line, sport, gid, gd, h, a, ms, mt, live_line.get('source'))
