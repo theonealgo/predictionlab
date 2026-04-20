@@ -6148,7 +6148,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %} {% if m.correct == true %}correct{% elif m.correct == false %}wrong{% endif %}">
                                 <div class="pc-name">{{ m.name }}</div>
                                 {% if m.prob is not none %}
-                                <div class="pc-val">{{ m.prob }}%</div>
+                                <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
                                 <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ game.home }}{% else %}{{ game.away }}{% endif %}">{% if m.prob >= 50 %}{{ game.home.split()[-1] }}{% else %}{{ game.away.split()[-1] }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
                                 {% else %}
                                 <div class="pc-val" style="color:#64748b;">—</div>
