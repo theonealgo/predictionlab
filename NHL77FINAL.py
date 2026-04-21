@@ -4267,25 +4267,22 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         g['total_pick_reason'] = "model score unavailable"
                     else:
                         edge = adj_xt - mt
-                        if abs(edge) < _ou_edge_threshold(sport):
-                            g['total_pick_reason'] = f"edge {edge:+.1f} below threshold"
-                        else:
-                            tp_disp = 'OVER' if edge > 0 else 'UNDER'
-                            if abs(at - mt) >= 1e-9:
-                                aou = 'OVER' if at > mt else 'UNDER'
-                                tp_ok = (tp_disp == aou)
-                                tt_gr += 1
-                                if tp_ok:
-                                    tt_cor += 1
-                            strong = False
-                            if our_total_h2h is not None:
-                                h2h_edge = our_total_h2h - mt
-                                strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
-                            g['strong_ou'] = strong
-                            label = f"{tp_disp.title()} {mt:.1f}"
-                            if strong:
-                                label += " ★"
-                            g['total_pick_label'] = label
+                        tp_disp = 'OVER' if edge >= 0 else 'UNDER'
+                        if abs(at - mt) >= 1e-9:
+                            aou = 'OVER' if at > mt else 'UNDER'
+                            tp_ok = (tp_disp == aou)
+                            tt_gr += 1
+                            if tp_ok:
+                                tt_cor += 1
+                        strong = False
+                        if our_total_h2h is not None:
+                            h2h_edge = our_total_h2h - mt
+                            strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
+                        g['strong_ou'] = strong
+                        label = f"{tp_disp.title()} {mt:.1f}"
+                        if strong and abs(edge) >= _ou_edge_threshold(sport):
+                            label += " ★"
+                        g['total_pick_label'] = label
 
                 else:
                     # ── Non-MLB grading: Spread uses Vegas (unchanged).
@@ -4330,21 +4327,18 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
                     if adj_xt is not None and mt is not None:
                         edge = adj_xt - mt
-                        if abs(edge) < _ou_edge_threshold(sport):
-                            g['total_pick_reason'] = f"edge {edge:+.1f} below threshold"
-                        else:
-                            tp_disp = 'OVER' if edge > 0 else 'UNDER'
-                            if abs(at - mt) >= 1e-9:
-                                aou = 'OVER' if at > mt else 'UNDER'
-                                tp_ok = (tp_disp == aou)
-                                tt_gr += 1
-                                if tp_ok:
-                                    tt_cor += 1
-                            strong = False
-                            if our_total_h2h is not None:
-                                h2h_edge = our_total_h2h - mt
-                                strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
-                            g['strong_ou'] = strong
+                        tp_disp = 'OVER' if edge >= 0 else 'UNDER'
+                        if abs(at - mt) >= 1e-9:
+                            aou = 'OVER' if at > mt else 'UNDER'
+                            tp_ok = (tp_disp == aou)
+                            tt_gr += 1
+                            if tp_ok:
+                                tt_cor += 1
+                        strong = False
+                        if our_total_h2h is not None:
+                            h2h_edge = our_total_h2h - mt
+                            strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
+                        g['strong_ou'] = strong and abs(edge) >= _ou_edge_threshold(sport)
                     elif xt is None:
                         g['total_pick_reason'] = "model score unavailable"
                     elif mt is None:
@@ -7684,7 +7678,7 @@ def landing_page():
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:1020px;margin:0 auto;">
         {% for tp in todays_picks %}
         {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
-        <div style="position:relative;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px 18px;overflow:hidden;">
+        <a href="/{{ tp.slug }}" style="position:relative;display:block;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px 18px;overflow:hidden;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(255,255,255,0.14)';this.style.boxShadow='none';">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <span style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;">{{ tp.sport }}</span>
                 <span style="font-size:0.62em;color:#94a3b8;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:999px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;">AI Pick</span>
@@ -7712,12 +7706,11 @@ def landing_page():
                 </div>
                 <a href="/plans" style="position:absolute;inset:10px 0 0 0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:0.72em;font-weight:800;color:#fbbf24;text-decoration:none;text-transform:uppercase;letter-spacing:0.5px;background:rgba(7,10,20,0.55);border-radius:8px;">🔒 Unlock full model →</a>
             </div>
-        </div>
+        </a>
         {% endfor %}
     </div>
     <div style="text-align:center;margin-top:18px;">
         <a href="/plans" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.92em;box-shadow:0 4px 20px rgba(251,191,36,0.25);">Unlock Full Model</a>
-        <div style="font-size:0.75em;color:#e2e8f0;margin-top:8px;">Updated daily before games start</div>
     </div>
 </div>
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
@@ -7852,7 +7845,7 @@ def landing_page():
                 <li>&#10003; Full model breakdown</li>
             </ul>
             <a href="/plans" style="display:block;text-align:center;margin-top:14px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Unlock Full Model</a>
-            <div style="text-align:center;margin-top:8px;font-size:0.75em;color:#fde68a;">Updated daily before games start</div>
+            <div style="text-align:center;margin-top:8px;font-size:0.75em;color:#fde68a;">Updated daily</div>
         </div>
     </div>
 </div>
