@@ -7670,37 +7670,76 @@ def landing_page():
 </div>
 <style>body{padding-bottom:66px;}</style>
 
+<!-- Today's AI Picks (live product preview) -->
+{% if todays_picks %}
+<div class="section" style="padding-top:24px;padding-bottom:8px;">
+    <div style="text-align:center;margin-bottom:8px;">
+        <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#10b981;font-size:0.78em;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;padding:5px 14px;border-radius:999px;">
+            <span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:50%;animation:pulseDot 1.6s infinite;"></span>
+            Winning Results Tracked Daily
+        </span>
+    </div>
+    <h2 class="section-title" style="margin-bottom:6px;">Today’s AI Picks</h2>
+    <p class="section-sub" style="color:#e2e8f0;">Live model projections updated daily</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:1020px;margin:0 auto;">
+        {% for tp in todays_picks %}
+        {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
+        <div style="position:relative;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px 18px;overflow:hidden;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;">{{ tp.sport }}</span>
+                <span style="font-size:0.62em;color:#94a3b8;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:999px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;">AI Pick</span>
+            </div>
+            <div style="font-weight:800;font-size:1.02em;color:#fff;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">
+                <span style="color:#10b981;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
+                <span style="color:#fff;font-weight:800;">{{ _disp_pct }}%</span>
+                <span style="color:#94a3b8;font-size:0.78em;font-weight:600;">Moneyline</span>
+            </div>
+            <div style="position:relative;border-top:1px dashed rgba(255,255,255,0.12);padding-top:10px;">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;filter:blur(5px);pointer-events:none;user-select:none;">
+                    <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px;text-align:center;">
+                        <div style="font-size:0.6em;color:#94a3b8;text-transform:uppercase;">Spread</div>
+                        <div style="font-weight:700;color:#fff;">-2.5</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px;text-align:center;">
+                        <div style="font-size:0.6em;color:#94a3b8;text-transform:uppercase;">Total</div>
+                        <div style="font-weight:700;color:#fff;">O 218.5</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px;text-align:center;">
+                        <div style="font-size:0.6em;color:#94a3b8;text-transform:uppercase;">Score</div>
+                        <div style="font-weight:700;color:#fff;">111–108</div>
+                    </div>
+                </div>
+                <a href="/plans" style="position:absolute;inset:10px 0 0 0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:0.72em;font-weight:800;color:#fbbf24;text-decoration:none;text-transform:uppercase;letter-spacing:0.5px;background:rgba(7,10,20,0.55);border-radius:8px;">🔒 Unlock full model →</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div style="text-align:center;margin-top:18px;">
+        <a href="/plans" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.92em;box-shadow:0 4px 20px rgba(251,191,36,0.25);">Unlock Full Model</a>
+        <div style="font-size:0.75em;color:#e2e8f0;margin-top:8px;">Updated daily before games start</div>
+    </div>
+</div>
+<style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
+{% endif %}
+
 <!-- Sports grid -->
 <div class="section">
-    <h2 class="section-title">Browse Picks by Sport</h2>
+    <h2 class="section-title">Today’s Picks by Sport</h2>
+    <p class="section-sub" style="color:#e2e8f0;">Live model projections updated daily</p>
     <div class="sports-grid">
         {% for s in landing_sports %}
-        <a href="/{{ s.seo_slug }}" class="sport-card {% if s.is_live %}live{% endif %}">
+        <a href="/{{ s.seo_slug }}" class="sport-card {% if s.is_live %}live{% endif %}" style="transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-3px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='';this.style.boxShadow='none';">
             {% if s.is_live %}<div class="live-dot"></div>{% endif %}
             <div class="sport-icon">{{ s.icon }}</div>
             <div class="sport-name">{{ s.name }}</div>
             <div class="sport-status {% if s.is_live %}live-text{% endif %}">{{ s.status }}</div>
+            <div style="margin-top:8px;font-size:0.72em;color:#e2e8f0;">Today’s projections available</div>
+            <div style="margin-top:4px;font-size:0.78em;color:#fbbf24;font-weight:700;">View Picks →</div>
         </a>
         {% endfor %}
     </div>
 </div>
-
-<!-- Today's Top Picks
-{% if todays_picks %}
-<div class="section" style="padding-top:20px;">
-    <h2 class="section-title">Today's Top Picks</h2>
-    <p class="section-sub">Free moneyline picks from today's games, powered by our consensus model.</p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:900px;margin:0 auto;">
-        {% for tp in todays_picks %}
-        <a href="/{{ tp.slug }}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:18px 20px;text-decoration:none;color:#fff;transition:border-color 0.2s;">
-            <div style="font-size:0.72em;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">{{ tp.sport }}</div>
-            <div style="font-weight:700;font-size:1.05em;margin-bottom:6px;">{{ tp.away }} vs {{ tp.home }}</div>
-            <div style="font-size:0.9em;color:#10b981;font-weight:700;">▶ Free Pick: {{ tp.pick }} ML</div>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 
 <!-- Weekly banner -->
 {% if weekly_banner_messages %}
@@ -7788,48 +7827,52 @@ def landing_page():
 </div>
 {% endif %}
 
-<!-- Free vs Premium -->
+<!-- See What You're Missing -->
 <div class="section" style="padding-top:10px;padding-bottom:30px;">
-    <h2 class="section-title">Free vs Premium</h2>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:700px;margin:0 auto;">
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;">
-            <h4 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#e2e8f0;">Free</h4>
-            <ul style="list-style:none;padding:0;font-size:0.85em;color:#94a3b8;line-height:2;">
+    <h2 class="section-title">See What You’re Missing</h2>
+    <p class="section-sub" style="color:#e2e8f0;">The public sees picks. Members see the edge.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:780px;margin:0 auto;">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;display:flex;flex-direction:column;">
+            <h4 style="font-size:1.05em;font-weight:800;margin-bottom:12px;color:#e2e8f0;">Free Picks</h4>
+            <ul style="list-style:none;padding:0;font-size:0.88em;color:#e2e8f0;line-height:2;flex:1;">
                 <li>&#10003; Moneyline picks</li>
-                <li>&#10003; Model win percentages</li>
-                <li>&#10003; Full results tracking</li>
+                <li>&#10003; Basic win probabilities</li>
+                <li>&#10003; Public results tracking</li>
             </ul>
-            <a href="/nba-picks" style="display:inline-block;margin-top:14px;background:#fff;color:#0f172a;padding:10px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.88em;">Access Picks &amp; Results</a>
+            <a href="/nba-picks" style="display:block;text-align:center;margin-top:14px;background:#fff;color:#0f172a;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;">View Free Picks</a>
         </div>
-        <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:22px;">
-            <h4 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#fbbf24;">Premium</h4>
-            <ul style="list-style:none;padding:0;font-size:0.85em;color:#cbd5e1;line-height:2;">
-                <li>&#10003; Spread picks</li>
-                <li>&#10003; Total (over/under) picks</li>
-                <li>&#10003; Score projections</li>
-                <li>&#10003; Full model output</li>
+        <div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:22px;display:flex;flex-direction:column;position:relative;">
+            <h4 style="font-size:1.05em;font-weight:800;margin-bottom:8px;color:#fbbf24;">Full AI Model Access</h4>
+            <div style="font-size:0.78em;color:#fde68a;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.4px;">Everything in Free, plus</div>
+            <ul style="list-style:none;padding:0;font-size:0.88em;color:#f1f5f9;line-height:2;flex:1;">
+                <li>&#10003; Spread picks with edge</li>
+                <li>&#10003; Total (O/U) projections</li>
+                <li>&#10003; Predicted final scores</li>
+                <li>&#10003; Multi-model consensus signal</li>
+                <li>&#10003; Full model breakdown</li>
             </ul>
-            <a href="/plans" style="display:inline-block;margin-top:14px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.88em;">Unlock Premium Picks</a>
+            <a href="/plans" style="display:block;text-align:center;margin-top:14px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Unlock Full Model</a>
+            <div style="text-align:center;margin-top:8px;font-size:0.75em;color:#fde68a;">Updated daily before games start</div>
         </div>
     </div>
 </div>
 
-<!-- SEO Text -->
+<!-- SEO Text (visible, readable) -->
 <div class="section" style="padding-top:0;padding-bottom:20px;">
-    <p style="max-width:700px;margin:0 auto;font-size:0.82em;color:#64748b;line-height:1.7;text-align:center;">underdogs.bet provides AI-powered sports predictions across NBA, NFL, MLB, NHL, and more. Our system analyzes real-time data, team performance, and matchups to generate daily picks. Every prediction is tracked with full transparency so users can evaluate real performance over time.</p>
+    <p style="max-width:760px;margin:0 auto;font-size:0.92em;color:#e2e8f0;line-height:1.8;text-align:center;">Free AI sports picks and predictions for NBA, NFL, MLB, NHL, soccer, and more. Our models generate daily projections for moneyline, spreads, and totals using real-time data and multi-model consensus &mdash; every pick tracked with full transparency so you can evaluate real performance over time.</p>
 </div>
 
 <!-- SEO Internal Links -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;text-align:center;">
-    <h3 style="font-size:1.1em;font-weight:700;margin-bottom:14px;color:#e2e8f0;">Today's Picks by Sport</h3>
+    <h3 style="font-size:1.15em;font-weight:800;margin-bottom:14px;color:#fff;">Browse Today’s Picks</h3>
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
-        <a href="/mlb-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">MLB Picks Today</a>
-        <a href="/nba-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NBA Picks Today</a>
-        <a href="/nhl-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NHL Picks Today</a>
-        <a href="/nfl-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NFL Picks Today</a>
-        <a href="/soccer-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">Soccer Picks Today</a>
-        <a href="/ncaab-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">NCAAB Picks Today</a>
-        <a href="/wnba-picks" style="color:#94a3b8;text-decoration:none;font-size:0.88em;padding:6px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;">WNBA Picks Today</a>
+        <a href="/mlb-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">MLB Picks Today</a>
+        <a href="/nba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NBA Picks Today</a>
+        <a href="/nhl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NHL Picks Today</a>
+        <a href="/nfl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NFL Picks Today</a>
+        <a href="/soccer-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">Soccer Picks Today</a>
+        <a href="/ncaab-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NCAAB Picks Today</a>
+        <a href="/wnba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">WNBA Picks Today</a>
     </div>
 </div>
 
