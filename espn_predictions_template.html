@@ -136,11 +136,15 @@
             padding: 10px;
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 14px;
-            display: none;
+            display: flex;
             min-width: 200px;
             box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(-8px) scale(0.98);
+            pointer-events: none;
+            transition: opacity 0.22s ease, transform 0.22s ease;
         }
-        .nav-links.active { display: flex; }
+        .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
         .nav-links a {
             color: #cbd5e1;
             text-decoration: none;
@@ -304,7 +308,7 @@
         .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
         .nav-group-title:hover { background: rgba(255,255,255,0.08); }
         .nav-group-items { display: none; padding-left: 12px; }
-        .nav-group:hover .nav-group-items, .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
         .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
     </style>
@@ -353,7 +357,7 @@
             <div class="nav-group" onclick="this.classList.toggle('open')">
                 <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
                 <div class="nav-group-items">
-                    <a href="/tutorial">Tutorial</a>
+                    <a href="/tutorial">How Picks Work</a>
                     <a href="/privacy">Privacy</a>
                     <a href="/terms">Terms</a>
                 </div>
@@ -374,7 +378,7 @@
 <div class="container">
 
     <div class="header">
-        <h1 id="pageHeading">{{ sport_info.icon }} {{ sport_info.name }} Picks Today</h1>
+        <h1 id="pageHeading">{{ sport_info.icon }} {{ sport_info.name }} AI Picks, Predictions and Model Probabilities</h1>
     </div>
 
     <!-- SEO text block -->
@@ -610,6 +614,26 @@
         </div>
     </div>
     {% endif %}
+
+    <div class="seo-picks-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#cbd5e1;line-height:1.75;font-size:0.95rem;">
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">How These AI Picks Are Generated</h2>
+        <p style="margin-bottom:14px;">The picks on this page are generated using a data-driven sports betting model that analyzes market odds, historical performance, and team-level trends. Instead of relying on opinions or public sentiment, the model looks for pricing inefficiencies across sportsbooks to identify potential value.</p>
+        <p style="margin-bottom:22px;">This approach is designed to stay consistent over time. While individual results can vary from day to day, the goal is long-term profitability based on disciplined, repeatable analysis.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">What to Expect From These Picks</h2>
+        <p style="margin-bottom:14px;">These picks are not meant to guarantee wins on a daily basis. Sports betting naturally includes variance, and even strong edges can result in short-term losses. The focus is on maintaining a structured approach and tracking performance over a larger sample size.</p>
+        <p style="margin-bottom:22px;">Users should approach these picks with proper bankroll management and realistic expectations.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Full Transparency &amp; Results Tracking</h2>
+        <p style="margin-bottom:14px;">Every pick published is tracked and recorded. There is no cherry-picking or selective reporting. You can review historical performance and verify results directly on our results pages.</p>
+        <p style="margin-bottom:22px;">If you're looking to evaluate long-term performance, we recommend checking the latest results and trends across each sport.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Learn More About the Model</h2>
+        <p style="margin-bottom:10px;">If you're new to AI sports betting picks, you can learn more about how the system works and how it compares to traditional betting approaches:</p>
+        <ul style="margin:0 0 14px 22px;">
+            <li style="margin-bottom:6px;"><a href="/ai-sports-betting-picks-today" style="color:#fbbf24;font-weight:600;text-decoration:none;">AI picks overview</a></li>
+            <li style="margin-bottom:6px;"><a href="/what-are-ai-sports-betting-picks" style="color:#fbbf24;font-weight:600;text-decoration:none;">What AI picks are</a></li>
+            <li style="margin-bottom:6px;"><a href="/our-model-vs-sportsbooks" style="color:#fbbf24;font-weight:600;text-decoration:none;">Model vs sportsbooks</a></li>
+        </ul>
+        <p style="margin:0;">This helps provide a clearer understanding of the strategy behind the picks and how they are generated.</p>
+    </div>
 </div>
 <footer style="background:rgba(7,10,20,0.4);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,0.06);padding:18px 30px;color:#94a3b8;font-size:0.78em;">
     <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;">
@@ -618,7 +642,7 @@
             <span style="font-size:0.95em;"><a href="mailto:{{ contact_email }}" style="color:#94a3b8;text-decoration:none;">{{ contact_email }}</a></span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <a href="/tutorial" style="color:#94a3b8;text-decoration:none;font-size:0.95em;">Tutorial</a><span style="color:rgba(255,255,255,0.2);">·</span>
+            <a href="/tutorial" style="color:#94a3b8;text-decoration:none;font-size:0.95em;">How Picks Work</a><span style="color:rgba(255,255,255,0.2);">·</span>
             <a href="/privacy" style="color:#94a3b8;text-decoration:none;font-size:0.95em;">Privacy</a><span style="color:rgba(255,255,255,0.2);">·</span>
             <a href="/terms" style="color:#94a3b8;text-decoration:none;font-size:0.95em;">Terms</a><span style="color:rgba(255,255,255,0.2);">·</span>
             <a href="/responsible-gaming" style="color:#94a3b8;text-decoration:none;font-size:0.95em;">Responsible Gaming</a>
@@ -677,8 +701,8 @@
         // Update heading with selected date
         const h=document.getElementById('pageHeading');
         if(h){
-            if(date===today){h.textContent=sportIcon+' '+sportName+' Picks Today';}
-            else{h.textContent=sportIcon+' '+sportName+' Picks \u2013 '+formatDate(date);}
+            if(date===today){h.textContent=sportIcon+' '+sportName+' AI Picks, Predictions and Model Probabilities';}
+            else{h.textContent=sportIcon+' '+sportName+' AI Picks and Predictions for '+formatDate(date);}
         }
     }
     function toggleAnalysis(id, el) {

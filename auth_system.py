@@ -661,6 +661,7 @@ LOGIN_TEMPLATE = """
 """ + _AUTH_STYLES + """
 </head><body>
 <div class="auth-container">
+    <h1 style="position:absolute;left:-9999px;">Log in to underdogs.bet AI sports picks platform</h1>
     <div class="auth-title">🔐 Login</div>
     {% if error_msg %}<div class="auth-error">{{ error_msg }}</div>{% endif %}
     {% if google_enabled %}
@@ -700,6 +701,7 @@ SIGNUP_TEMPLATE = """
 """ + _AUTH_STYLES + """
 </head><body>
 <div class="auth-container">
+    <h1 style="position:absolute;left:-9999px;">Sign up for underdogs.bet AI sports picks access</h1>
     <div class="auth-title">Create Account</div>
     <p style="text-align:center;color:#94a3b8;font-size:0.85em;margin-bottom:18px;">Sign up to access free picks. Upgrade anytime for Spreads, Totals &amp; Score Predictions.</p>
     {% if google_enabled %}
@@ -752,7 +754,7 @@ PLANS_USES_BASE_TEMPLATE = True
 def plans_page():
     # Import BASE_TEMPLATE from main app to get consistent navbar
     try:
-        from NHL77FINAL import BASE_TEMPLATE
+        from NHL77FINAL import BASE_TEMPLATE, _SEO_UTILITY_FAQ_FOOTER
         plans_content = BASE_TEMPLATE.replace(
             '{% block extra_styles %}{% endblock %}',
             """
@@ -796,6 +798,7 @@ def plans_page():
         ).replace('{% block content %}{% endblock %}', """
             <div class="plans-page-bg"></div>
             <div class="plans-hero">
+                <h1 style="font-size:2.1em;font-weight:900;color:#fff;position:relative;z-index:1;line-height:1.25;margin-bottom:10px;">AI Sports Betting Pricing Plans for Spreads, Totals and Score Predictions</h1>
                 <div class="plans-hero-logo">Built to Beat the Public &mdash; Not Follow It.</div>
                 <div class="plans-hero-sub">Data-driven spreads, totals, and score projections &mdash; tracked, transparent, and built for real edges.</div>
                 <div class="plans-hero-stats">
@@ -856,6 +859,7 @@ def plans_page():
                     <div class="free-pill">All Sports Covered</div>
                 </div>
             </div>
+        """ + _SEO_UTILITY_FAQ_FOOTER + """
         """)
         return render_template_string(plans_content, page='plans')
     except Exception as e:

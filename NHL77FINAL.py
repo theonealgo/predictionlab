@@ -82,6 +82,20 @@ _SOCCER_MODEL_CACHE: dict = {}
 _SOCCER_MODEL_TTL = 900
 _LANDING_BANNER_CACHE = {'ts': 0, 'messages': []}
 _LANDING_BANNER_TTL = 900
+_DAILY_REPORT_CACHE = {'ts': 0, 'date': None, 'html': None}
+_DAILY_REPORT_TTL = 300
+_SPORT_PREDICTIONS_PAGE_CACHE: dict = {}
+_SPORT_PREDICTIONS_PAGE_TTL = {
+    'SOCCER': 300,
+    'MLB': 240,
+    'NHL': 180,
+    'NBA': 180,
+    'NFL': 240,
+    'NCAAB': 240,
+    'NCAAW': 240,
+    'NCAAF': 240,
+    'WNBA': 240,
+}
 _MANUAL_BANNER_ITEMS = [
     {'label': '⭐ Grinder2', 'pct': '83.3%', 'record': '40-8'},
     {'label': '🎲 NBA O/U (XSharp)', 'pct': '82.6%', 'record': '247/299'},
@@ -4861,11 +4875,15 @@ BASE_TEMPLATE = """
             padding: 10px;
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 14px;
-            display: none;
+            display: flex;
             min-width: 200px;
             box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(-8px) scale(0.98);
+            pointer-events: none;
+            transition: opacity 0.22s ease, transform 0.22s ease;
         }
-        .nav-links.active { display: flex; }
+        .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
         .nav-links a {
             color: #fff;
             text-decoration: none;
@@ -4964,7 +4982,7 @@ BASE_TEMPLATE = """
         .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
         .nav-group-title:hover { background: rgba(255,255,255,0.08); }
         .nav-group-items { display: none; padding-left: 12px; }
-        .nav-group:hover .nav-group-items, .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
         .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
         {% block extra_styles %}{% endblock %}
@@ -5014,7 +5032,10 @@ BASE_TEMPLATE = """
                 <div class="nav-group" onclick="this.classList.toggle('open')">
                     <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
                     <div class="nav-group-items">
-                        <a href="/tutorial">Tutorial</a>
+                        <a href="/tutorial">How to Read Picks</a>
+                        <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
+                        <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
+                        <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
                         <a href="/privacy">Privacy</a>
                         <a href="/terms">Terms</a>
                     </div>
@@ -5043,10 +5064,7 @@ BASE_TEMPLATE = """
                 <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
             </div>
             <div class="footer-center">
-                <a href="/tutorial">Tutorial</a><span>&middot;</span>
-                <a href="/ai-sports-betting-picks-today">AI Picks Today</a><span>&middot;</span>
-                <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a><span>&middot;</span>
-                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a><span>&middot;</span>
+                <a href="/tutorial">How to Read Picks</a><span>&middot;</span>
                 <a href="/privacy">Privacy</a><span>&middot;</span>
                 <a href="/terms">Terms</a><span>&middot;</span>
                 <a href="/responsible-gaming">Responsible Gaming</a>
@@ -5095,6 +5113,60 @@ BASE_TEMPLATE = """
 </html>
 """
 
+# Static HTML footers for picks / results / utility pages (no Jinja).
+_SEO_PICKS_PAGE_FOOTER = """
+    <div class="seo-picks-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#cbd5e1;line-height:1.75;font-size:0.95rem;">
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">How These AI Picks Are Generated</h2>
+        <p style="margin-bottom:14px;">The picks on this page are generated using a data-driven sports betting model that analyzes market odds, historical performance, and team-level trends. Instead of relying on opinions or public sentiment, the model looks for pricing inefficiencies across sportsbooks to identify potential value.</p>
+        <p style="margin-bottom:22px;">This approach is designed to stay consistent over time. While individual results can vary from day to day, the goal is long-term profitability based on disciplined, repeatable analysis.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">What to Expect From These Picks</h2>
+        <p style="margin-bottom:14px;">These picks are not meant to guarantee wins on a daily basis. Sports betting naturally includes variance, and even strong edges can result in short-term losses. The focus is on maintaining a structured approach and tracking performance over a larger sample size.</p>
+        <p style="margin-bottom:22px;">Users should approach these picks with proper bankroll management and realistic expectations.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Full Transparency &amp; Results Tracking</h2>
+        <p style="margin-bottom:14px;">Every pick published is tracked and recorded. There is no cherry-picking or selective reporting. You can review historical performance and verify results directly on our results pages.</p>
+        <p style="margin-bottom:22px;">If you're looking to evaluate long-term performance, we recommend checking the latest results and trends across each sport.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Learn More About the Model</h2>
+        <p style="margin-bottom:10px;">If you're new to AI sports betting picks, you can learn more about how the system works and how it compares to traditional betting approaches:</p>
+        <ul style="margin:0 0 14px 22px;">
+            <li style="margin-bottom:6px;"><a href="/ai-sports-betting-picks-today" style="color:#fbbf24;font-weight:600;text-decoration:none;">AI picks overview</a></li>
+            <li style="margin-bottom:6px;"><a href="/what-are-ai-sports-betting-picks" style="color:#fbbf24;font-weight:600;text-decoration:none;">What AI picks are</a></li>
+            <li style="margin-bottom:6px;"><a href="/our-model-vs-sportsbooks" style="color:#fbbf24;font-weight:600;text-decoration:none;">Model vs sportsbooks</a></li>
+        </ul>
+        <p style="margin:0;">This helps provide a clearer understanding of the strategy behind the picks and how they are generated.</p>
+    </div>
+"""
+
+_SEO_RESULTS_PAGE_FOOTER = """
+    <div class="seo-results-footer" style="max-width:920px;margin:40px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#cbd5e1;line-height:1.75;font-size:0.95rem;">
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Understanding These Results</h2>
+        <p style="margin-bottom:14px;">The results displayed on this page reflect all tracked picks generated by the model. Performance is measured using standard sports betting metrics such as win percentage, units gained or lost, and overall return on investment.</p>
+        <p style="margin-bottom:22px;">These metrics provide a clearer picture of performance beyond simple win/loss records.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Why Transparency Matters</h2>
+        <p style="margin-bottom:14px;">All results are recorded without modification or filtering. This ensures that users can evaluate the model based on complete and accurate data rather than selective highlights.</p>
+        <p style="margin-bottom:22px;">Transparency is a core part of the approach, allowing users to build trust through consistent tracking.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Reviewing Picks Alongside Results</h2>
+        <p style="margin-bottom:14px;">For the best understanding of performance, results should be viewed alongside the original picks. This gives context to how the model operates and how outcomes compare over time.</p>
+        <p style="margin:0;">You can explore daily picks pages to see how selections were made and how they performed.</p>
+    </div>
+"""
+
+_SEO_UTILITY_FAQ_FOOTER = """
+    <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#cbd5e1;line-height:1.75;font-size:0.95rem;">
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Frequently Asked Questions</h2>
+        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">How are the picks generated?</h3>
+        <p style="margin-bottom:12px;">The picks are generated using a data-driven model that evaluates odds, trends, and market conditions to identify potential value.</p>
+        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">Are the results verified?</h3>
+        <p style="margin-bottom:12px;">Yes, all picks and results are tracked publicly to ensure full transparency.</p>
+        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">Is this suitable for beginners?</h3>
+        <p style="margin-bottom:12px;">The platform is designed to be accessible, but users should understand basic sports betting concepts and always manage risk responsibly.</p>
+        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">Do the picks guarantee wins?</h3>
+        <p style="margin-bottom:22px;">No. Sports betting always involves risk and variance. The model is designed for long-term consistency, not short-term guarantees.</p>
+        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Final Notes</h2>
+        <p style="margin-bottom:14px;">Users should always approach sports betting responsibly. The tools and information provided are intended to support informed decision-making, not replace it.</p>
+        <p style="margin:0;">Maintaining discipline, tracking results, and managing expectations are key to long-term success.</p>
+    </div>
+"""
+
 RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
@@ -5140,6 +5212,7 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="rg-card">
             <p style="text-align:center;font-style:italic;color:#94a3b8;">If you or someone you know may have a gambling problem, reaching out for help is the first step.</p>
         </div>
+""" + _SEO_UTILITY_FAQ_FOOTER + """
     </div>
 """)
 
@@ -5174,8 +5247,8 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
 
         <div class="tutorial-card">
-            <h2>📈 Home Win %</h2>
-            <p>The five model percentages all represent the <strong>home team’s win probability</strong>.</p>
+            <h2>📊 Model Confidence &amp; Pick Side</h2>
+            <p>The models now display a confidence percentage and the team each model is picking.</p>
             <ul>
                 <li><strong>Grinder2</strong> = Team rating model</li>
                 <li><strong>Takedown</strong> = Matchup analysis model</li>
@@ -5183,7 +5256,7 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
                 <li><strong>XSharp</strong> = Machine learning model</li>
                 <li><strong>Sharp Consensus</strong> = Weighted blend of all models</li>
             </ul>
-            <p>If the number is above 50%, the models favor the home team. If it’s below 50%, they favor the away team.</p>
+            <p>Each model card shows both the confidence % and the side it favors, so you can quickly see where model agreement is strongest.</p>
         </div>
 
         <div class="tutorial-card">
@@ -5221,6 +5294,7 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
                 <li>The results page tracks how each model performed on completed games</li>
             </ul>
         </div>
+""" + _SEO_UTILITY_FAQ_FOOTER + """
     </div>
 """)
 
@@ -5333,7 +5407,6 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
 
         {% endif %}
     </div>
-
     <div class="rpt-actions" style="flex-direction:column;align-items:center;">
         <div class="rpt-share-row">
             <button class="rpt-btn rpt-btn-x" onclick="shareScreenshot('x')" title="Share on X"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></button>
@@ -5347,6 +5420,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
             <a class="rpt-btn rpt-btn-cta" href="/">View Today's Picks &rarr;</a>
         </div>
     </div>
+""" + _SEO_RESULTS_PAGE_FOOTER + """
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
@@ -5465,6 +5539,7 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% endif %}
     </div>
+""" + _SEO_PICKS_PAGE_FOOTER + """
 """)
 
 # ============================================================================
@@ -5686,6 +5761,7 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="no-data">No upcoming predictions available for {{ sport_info.name }}</div>
         {% endif %}
     </div>
+""" + _SEO_PICKS_PAGE_FOOTER + """
 """)
 
 # ============================================================================
@@ -5809,6 +5885,7 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <p style="opacity: 0.8;">Values shown are home team win probabilities. Higher % = model favors home team.</p>
         </div>
     </div>
+""" + _SEO_RESULTS_PAGE_FOOTER + """
 """)
 
 RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
@@ -5895,13 +5972,12 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <div style="margin-bottom: 20px;">
         <a href="/" style="display: inline-block; padding: 10px 20px; background: rgba(255,255,255,0.1); border-radius: 8px; text-decoration: none; color: white; font-weight: 600;">← Back to Home</a>
     </div>
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Results</h1>
+    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     
     <div class="section-tabs">
         <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
     </div>
-        {% set model_cards
     <div class="results-container">
         {% if performance %}
         <div class="date-range">📅 Test Period: {{ performance.date_range }}</div>
@@ -5945,6 +6021,7 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="no-data">Not enough data to calculate performance for {{ sport_info.name }}</div>
         {% endif %}
     </div>
+""" + _SEO_RESULTS_PAGE_FOOTER + """
 """)
 
 # Daily Results Template (for NHL/NBA/NCAAB etc.)
@@ -6039,7 +6116,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} — Results</h1>
+    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
         <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
@@ -6413,6 +6490,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         showDate(activeDate);renderBubbles();
     });
 </script>
+""" + _SEO_RESULTS_PAGE_FOOTER + """
 """)
 
 # NFL Weekly Results Template
@@ -6670,6 +6748,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     {% else %}
         <div class="no-data">No completed NFL games available yet.</div>
     {% endif %}
+""" + _SEO_RESULTS_PAGE_FOOTER + """
 """)
 
 # ============================================================================
@@ -7047,6 +7126,20 @@ def landing_page():
     banner_sports = [s['key'] for s in landing_sports]
     weekly_banner_messages = list(_MANUAL_BANNER_ITEMS)
     units_banner_items = _get_sport_ml_units_banner()
+    seo_archive_links = []
+    for _sport_key in ['NHL', 'NBA', 'MLB', 'SOCCER']:
+        if _sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        _slug = SPORT_SEO_SLUGS.get(_sport_key)
+        if not _slug:
+            continue
+        for _days_back in range(1, 8):
+            _d = today - timedelta(days=_days_back)
+            _m_name = _MONTH_NAMES.get(_d.month, 'january')
+            seo_archive_links.append({
+                'url': f"/{_slug}-{_m_name}-{_d.day}-{_d.year}",
+                'label': f"{_sport_key} picks {_d.strftime('%b')} {_d.day}, {_d.year}",
+            })
 
     # Build "Today's Top Picks" from stored predictions in DB (lightweight).
     # Previously this called get_upcoming_predictions() for 4 sports which
@@ -7243,11 +7336,15 @@ def landing_page():
             padding: 10px;
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 14px;
-            display: none;
+            display: flex;
             min-width: 200px;
             box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(-8px) scale(0.98);
+            pointer-events: none;
+            transition: opacity 0.22s ease, transform 0.22s ease;
         }
-        .nav-links.active { display: flex; }
+        .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
         .nav-links a {
             color: #fff;
             text-decoration: none;
@@ -7595,7 +7692,7 @@ def landing_page():
         .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
         .nav-group-title:hover { background: rgba(255,255,255,0.08); }
         .nav-group-items { display: none; padding-left: 12px; }
-        .nav-group:hover .nav-group-items, .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
         .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
         /* Skip link for accessibility */
@@ -7651,8 +7748,11 @@ def landing_page():
                 <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
                 <div class="nav-group-items">
                     <a href="/tutorial">Tutorial</a>
-                    <a href="/privacy">Privacy Policy</a>
-                    <a href="/terms">Terms &amp; Conditions</a>
+                    <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
+                    <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
+                    <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                    <a href="/privacy">Data Privacy Policy</a>
+                    <a href="/terms">Betting Terms &amp; Conditions</a>
                 </div>
             </div>
             <div class="nav-group" onclick="this.classList.toggle('open')">
@@ -7972,15 +8072,28 @@ def landing_page():
 
 <!-- SEO Internal Links -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;text-align:center;">
-    <h3 style="font-size:1.15em;font-weight:800;margin-bottom:14px;color:#fff;">Browse Today’s Picks</h3>
+    <h3 style="font-size:1.15em;font-weight:800;margin-bottom:14px;color:#fff;">Browse AI Picks by League</h3>
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
-        <a href="/mlb-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">MLB Picks Today</a>
-        <a href="/nba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NBA Picks Today</a>
-        <a href="/nhl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NHL Picks Today</a>
-        <a href="/nfl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NFL Picks Today</a>
-        <a href="/soccer-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">Soccer Picks Today</a>
-        <a href="/ncaab-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NCAAB Picks Today</a>
-        <a href="/wnba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">WNBA Picks Today</a>
+        <a href="/mlb-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">MLB AI Picks &amp; Projections</a>
+        <a href="/nba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NBA AI Picks &amp; Projections</a>
+        <a href="/nhl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NHL AI Picks &amp; Projections</a>
+        <a href="/nfl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NFL AI Picks &amp; Projections</a>
+        <a href="/soccer-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">Soccer AI Picks &amp; Projections</a>
+        <a href="/ncaab-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NCAAB AI Picks &amp; Projections</a>
+        <a href="/wnba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">WNBA AI Picks &amp; Projections</a>
+        <a href="/daily-report" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">Daily Betting Results Report</a>
+        <a href="/llms.txt" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">LLMs Discovery File</a>
+        <a href="/ai.txt" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">AI Crawler Hints</a>
+    </div>
+</div>
+
+<!-- Recent Archive Links -->
+<div class="section" style="padding-top:0;padding-bottom:28px;text-align:center;">
+    <h3 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#cbd5e1;">Recent Dated Picks Archive</h3>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:980px;margin:0 auto;">
+        {% for _lnk in seo_archive_links %}
+        <a href="{{ _lnk.url }}" style="color:#cbd5e1;text-decoration:none;font-size:0.82em;padding:6px 12px;border:1px solid rgba(255,255,255,0.14);border-radius:8px;">{{ _lnk.label }}</a>
+        {% endfor %}
     </div>
 </div>
 
@@ -8008,12 +8121,9 @@ def landing_page():
             <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
         </div>
         <div class="footer-center">
-            <a href="/tutorial">Tutorial</a><span>·</span>
-            <a href="/ai-sports-betting-picks-today">AI Picks Today</a><span>·</span>
-            <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a><span>·</span>
-            <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a><span>·</span>
-            <a href="/privacy">Privacy</a><span>·</span>
-            <a href="/terms">Terms</a><span>·</span>
+            <a href="/tutorial">How Picks Work</a><span>·</span>
+            <a href="/privacy">Privacy Center</a><span>·</span>
+            <a href="/terms">Legal Terms</a><span>·</span>
             <a href="/responsible-gaming">Responsible Gaming</a>
         </div>
         <div class="footer-socials">
@@ -8067,6 +8177,7 @@ def landing_page():
          stripe_url=STRIPE_DONATION_URL, landing_sports=landing_sports,
          sports_covered=sports_covered, weekly_banner_messages=weekly_banner_messages,
          units_banner_items=units_banner_items,
+         seo_archive_links=seo_archive_links,
          todays_picks=todays_picks)
 
 _SITE_DOMAIN = 'https://www.underdogs.bet'
@@ -8256,6 +8367,13 @@ def daily_report_page():
         yesterday_dt = datetime.now() - timedelta(days=1)
     report_date = yesterday_dt.strftime('%Y-%m-%d')
     report_display = yesterday_dt.strftime('%B %d, %Y')
+    now_ts = _time.time()
+    if (
+        _DAILY_REPORT_CACHE.get('html')
+        and _DAILY_REPORT_CACHE.get('date') == report_date
+        and (now_ts - _DAILY_REPORT_CACHE.get('ts', 0)) < _DAILY_REPORT_TTL
+    ):
+        return _DAILY_REPORT_CACHE['html']
 
     # Gather yesterday's tally for each active sport
     sport_tallies = []
@@ -8446,7 +8564,7 @@ def daily_report_page():
         share_text += f"Consensus: {ens['accuracy']}% ({ens['correct']}-{ens['total'] - ens['correct']})%0A"
     share_text += f"{total_games} games graded%0Ahttps://www.underdogs.bet/daily-report"
 
-    return render_template_string(DAILY_REPORT_TEMPLATE,
+    rendered = render_template_string(DAILY_REPORT_TEMPLATE,
         page='daily-report',
         page_title=f'Daily Betting Results Report — {report_date}',
         page_description=f'AI model performance report for {report_display}. Moneyline, spread, and over/under results across all sports.',
@@ -8460,6 +8578,8 @@ def daily_report_page():
         model_labels=model_labels,
         share_text=share_text,
     )
+    _DAILY_REPORT_CACHE.update({'ts': _time.time(), 'date': report_date, 'html': rendered})
+    return rendered
 
 
 @app.route('/tutorial')
@@ -8558,6 +8678,17 @@ def sport_predictions(sport, filter_date=None):
         return "Sport not found", 404
     if sport == 'SOCCER' and not SOCCER_ENABLED:
         return "Soccer predictions are temporarily hidden while data loads.", 404
+    cache_key = None
+    selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
+    if not current_user.is_authenticated:
+        cache_key = f"pred_page::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
+        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        if isinstance(cached_page, dict):
+            cached_ts = cached_page.get('ts')
+            cached_html = cached_page.get('html')
+            if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+                return cached_html
     prediction_error = None
     try:
         predictions = get_upcoming_predictions(sport)
@@ -8671,7 +8802,7 @@ def sport_predictions(sport, filter_date=None):
     with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
         espn_template = f.read()
     
-    return render_template_string(
+    rendered = render_template_string(
         espn_template,
         page=sport,
         sport=sport,
@@ -8686,6 +8817,9 @@ def sport_predictions(sport, filter_date=None):
         group_by='week' if sport == 'NFL' else 'date',
         soccer_leagues=soccer_leagues
     )
+    if cache_key:
+        _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+    return rendered
 
 def sport_results(sport):
     """Show model performance results for a sport"""
@@ -9011,8 +9145,14 @@ def sport_results(sport):
                     cached_html = cached_page.get('html')
                     if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
                         return cached_html
-            # Update scores first
-            update_espn_scores(sport)
+            # Update scores at most once every 10 minutes per sport.
+            sync_key = f'{sport}_results_score_sync_ts'
+            sync_entry = _SPORT_RESULTS_CACHE.get(sync_key)
+            sync_last_ts = sync_entry.get('ts') if isinstance(sync_entry, dict) else None
+            now_ts = _time.time()
+            if sync_last_ts is None or (now_ts - sync_last_ts) >= 600:
+                update_espn_scores(sport)
+                _SPORT_RESULTS_CACHE[sync_key] = {'ts': now_ts}
             
             # Get completed games from database
             conn = get_db_connection()
