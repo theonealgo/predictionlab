@@ -7571,9 +7571,13 @@ def landing_page():
         .nav-group:hover .nav-group-items, .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
         .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
+        /* Skip link for accessibility */
+        .skip-link { position:absolute; left:-9999px; top:0; z-index:2000; background:#fbbf24; color:#0f172a; padding:10px 14px; font-weight:800; border-radius:0 0 8px 0; text-decoration:none; }
+        .skip-link:focus { left:0; outline:2px solid #0f172a; }
     </style>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 
 <!-- Navbar -->
 <div class="navbar">
@@ -7581,11 +7585,11 @@ def landing_page():
         <a href="/" class="logo">
             <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img">
         </a>
-        <div class="hamburger" onclick="toggleMenu()">
+        <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="navLinks" style="background:transparent;border:none;cursor:pointer;padding:0;">
             <span></span>
             <span></span>
             <span></span>
-        </div>
+        </button>
         <div class="nav-links" id="navLinks">
             <a href="/" class="active">Home</a>
             <div class="nav-group" onclick="this.classList.toggle('open')">
@@ -7627,11 +7631,11 @@ def landing_page():
             <div class="nav-group" onclick="this.classList.toggle('open')">
                 <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
                 <div class="nav-group-items">
-                    <a href="https://x.com/underdogs_bet" target="_blank">X</a>
-                    <a href="https://instagram.com/underdogs.bet" target="_blank">Instagram</a>
-                    <a href="https://facebook.com/underdogs.bet" target="_blank">Facebook</a>
-                    <a href="https://tiktok.com/@underdog.bet" target="_blank">TikTok</a>
-                    <a href="https://youtube.com/@Underdogsbet" target="_blank">YouTube</a>
+                    <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on X (opens in new tab)">X</a>
+                    <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Instagram (opens in new tab)">Instagram</a>
+                    <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Facebook (opens in new tab)">Facebook</a>
+                    <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on TikTok (opens in new tab)">TikTok</a>
+                    <a href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)">YouTube</a>
                 </div>
             </div>
         </div>
@@ -7639,6 +7643,7 @@ def landing_page():
 </div>
 
 <!-- Hero -->
+<main id="main-content">
 <div class="hero" style="text-align:left;padding:100px 40px 50px;">
     <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Predictions<br>With Real Results</h1>
     <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
@@ -7839,7 +7844,7 @@ def landing_page():
     <p class="section-sub" style="color:#e2e8f0;">The public sees picks. Members see the edge.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:780px;margin:0 auto;">
         <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;display:flex;flex-direction:column;">
-            <h4 style="font-size:1.05em;font-weight:800;margin-bottom:12px;color:#e2e8f0;">Free Picks</h4>
+            <h3 style="font-size:1.05em;font-weight:800;margin-bottom:12px;color:#e2e8f0;">Free Picks</h3>
             <ul style="list-style:none;padding:0;font-size:0.88em;color:#e2e8f0;line-height:2;flex:1;">
                 <li>&#10003; Moneyline picks for 9 sports</li>
                 <li>&#10003; Win probabilities</li>
@@ -7850,7 +7855,7 @@ def landing_page():
             <a href="/nba-picks" style="display:block;text-align:center;margin-top:14px;background:#fff;color:#0f172a;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;">View Free Picks</a>
         </div>
         <div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:22px;display:flex;flex-direction:column;position:relative;">
-            <h4 style="font-size:1.05em;font-weight:800;margin-bottom:8px;color:#fbbf24;">Full AI Model Access</h4>
+            <h3 style="font-size:1.05em;font-weight:800;margin-bottom:8px;color:#fbbf24;">Full AI Model Access</h3>
             <div style="font-size:0.78em;color:#fde68a;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.4px;">Everything in Free, plus</div>
             <ul style="list-style:none;padding:0;font-size:0.88em;color:#f1f5f9;line-height:2;flex:1;">
                 <li>&#10003; Spreads</li>
@@ -7896,11 +7901,13 @@ def landing_page():
 </div>
 <style>@keyframes shineText{to{background-position:200% center;}}</style>
 
+</main>
+
 <!-- Footer -->
 <footer class="site-footer">
     <div class="footer-inner">
         <div class="footer-left">
-            <a href="/"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
+            <a href="/" aria-label="underdogs.bet home"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
             <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
         </div>
         <div class="footer-center">
@@ -7910,11 +7917,11 @@ def landing_page():
             <a href="/responsible-gaming">Responsible Gaming</a>
         </div>
         <div class="footer-socials">
-            <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener" title="X"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
-            <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
-            <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-            <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener" title="TikTok"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
-            <a href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener" title="YouTube"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+            <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on X (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+            <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Instagram (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
+            <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Facebook (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+            <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on TikTok (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
+            <a href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
         </div>
         <div class="footer-right">© 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
     </div>
