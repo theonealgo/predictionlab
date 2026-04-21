@@ -7644,7 +7644,7 @@ def landing_page():
     <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
     <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
         <a href="/nba-picks" style="background:#fff;color:#0f172a;padding:14px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Today's Picks</a>
-        <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Unlock Full Model</a>
+        <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Go Premium</a>
     </div>
     <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
 </div>
@@ -7699,42 +7699,19 @@ def landing_page():
     </div>
     <h2 class="section-title" style="margin-bottom:6px;">Today’s AI Picks</h2>
     <p class="section-sub" style="color:#e2e8f0;">Live model projections updated daily</p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:1020px;margin:0 auto;">
+    <div style="display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;">
         {% for tp in todays_picks %}
         {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
-        <a href="/{{ tp.slug }}" style="position:relative;display:block;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px 18px;overflow:hidden;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(255,255,255,0.14)';this.style.boxShadow='none';">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <span style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;">{{ tp.sport }}</span>
-                <span style="font-size:0.62em;color:#94a3b8;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:999px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;">AI Pick</span>
-            </div>
+        <a href="/{{ tp.slug }}" style="display:block;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(255,255,255,0.14)';this.style.boxShadow='none';">
+            <div style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;">{{ tp.sport }}</div>
             <div style="font-weight:800;font-size:1.02em;color:#fff;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
-            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">
+            <div style="display:flex;align-items:baseline;gap:10px;">
                 <span style="color:#10b981;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
                 <span style="color:#fff;font-weight:800;">{{ _disp_pct }}%</span>
                 <span style="color:#94a3b8;font-size:0.78em;font-weight:600;">Moneyline</span>
             </div>
-            <div style="position:relative;border-top:1px dashed rgba(255,255,255,0.12);padding-top:10px;">
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;filter:blur(5px);pointer-events:none;user-select:none;">
-                    <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px;text-align:center;">
-                        <div style="font-size:0.6em;color:#94a3b8;text-transform:uppercase;">Spread</div>
-                        <div style="font-weight:700;color:#fff;">-2.5</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px;text-align:center;">
-                        <div style="font-size:0.6em;color:#94a3b8;text-transform:uppercase;">Total</div>
-                        <div style="font-weight:700;color:#fff;">O 218.5</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px;text-align:center;">
-                        <div style="font-size:0.6em;color:#94a3b8;text-transform:uppercase;">Score</div>
-                        <div style="font-weight:700;color:#fff;">111–108</div>
-                    </div>
-                </div>
-                <a href="/plans" style="position:absolute;inset:10px 0 0 0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:0.72em;font-weight:800;color:#fbbf24;text-decoration:none;text-transform:uppercase;letter-spacing:0.5px;background:rgba(7,10,20,0.55);border-radius:8px;">🔒 Unlock full model →</a>
-            </div>
         </a>
         {% endfor %}
-    </div>
-    <div style="text-align:center;margin-top:18px;">
-        <a href="/plans" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.92em;box-shadow:0 4px 20px rgba(251,191,36,0.25);">Unlock Full Model</a>
     </div>
 </div>
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
@@ -7868,7 +7845,7 @@ def landing_page():
                 <li>&#10003; Multi-model consensus signal</li>
                 <li>&#10003; Full model breakdown</li>
             </ul>
-            <a href="/plans" style="display:block;text-align:center;margin-top:14px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Unlock Full Model</a>
+            <a href="/plans" style="display:block;text-align:center;margin-top:14px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Go Premium</a>
             <div style="text-align:center;margin-top:8px;font-size:0.75em;color:#fde68a;">Updated daily</div>
         </div>
     </div>
