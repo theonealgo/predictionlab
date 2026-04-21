@@ -7,6 +7,7 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 """
 
 from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response
+from flask_login import current_user
 import json
 from collections import defaultdict
 from flask_cors import CORS
@@ -8087,14 +8088,16 @@ def landing_page():
     </div>
 </div>
 
-<!-- Recent Archive Links -->
+<!-- Recent archive links: same URLs for crawlers; collapsed by default for a cleaner home layout -->
 <div class="section" style="padding-top:0;padding-bottom:28px;text-align:center;">
-    <h3 style="font-size:1em;font-weight:700;margin-bottom:12px;color:#cbd5e1;">Recent Dated Picks Archive</h3>
-    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:980px;margin:0 auto;">
-        {% for _lnk in seo_archive_links %}
-        <a href="{{ _lnk.url }}" style="color:#cbd5e1;text-decoration:none;font-size:0.82em;padding:6px 12px;border:1px solid rgba(255,255,255,0.14);border-radius:8px;">{{ _lnk.label }}</a>
-        {% endfor %}
-    </div>
+    <details style="max-width:980px;margin:0 auto;text-align:left;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 14px;">
+        <summary style="cursor:pointer;font-size:0.95em;font-weight:700;color:#cbd5e1;list-style-position:outside;">Recent dated picks archive <span style="font-weight:500;opacity:0.75;">(last 7 days per league)</span></summary>
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">
+            {% for _lnk in seo_archive_links %}
+            <a href="{{ _lnk.url }}" style="color:#cbd5e1;text-decoration:none;font-size:0.82em;padding:6px 12px;border:1px solid rgba(255,255,255,0.14);border-radius:8px;">{{ _lnk.label }}</a>
+            {% endfor %}
+        </div>
+    </details>
 </div>
 
 <!-- Daily Results Box -->
