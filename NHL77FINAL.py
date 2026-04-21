@@ -4254,11 +4254,18 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'rest': round(rest_adj, 2),
                         'park': round(park_adj, 2),
                     }
-                    # Keep Vegas market_total as the O/U grading line (previous behaviour)
-                    if mt is None and adj_xt is not None:
-                        mt = round(adj_xt, 1)
-                        g['market_total_reason'] = "XSharp total (fallback)"
-                        g['total_pick_reason'] = "fallback line"
+                    # Grading line: Vegas → H2H → sport benchmark. Ensures every
+                    # game produces an OVER/UNDER pick (the count matches games played).
+                    if mt is None:
+                        if our_total_h2h is not None:
+                            mt = round(float(our_total_h2h), 1)
+                            g['market_total_reason'] = "H2H last-10 (fallback)"
+                        elif _OU_BENCH.get(sport):
+                            mt = float(_OU_BENCH[sport])
+                            g['market_total_reason'] = "sport benchmark (fallback)"
+                        elif adj_xt is not None:
+                            mt = round(adj_xt, 1)
+                            g['market_total_reason'] = "XSharp total (fallback)"
                     g['market_total'] = mt
                     if mt is None:
                         g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
@@ -4300,13 +4307,30 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'rest': round(rest_adj, 2),
                         'park': round(park_adj, 2),
                     }
+                    # Grading line fallback for O/U: Vegas → H2H → sport benchmark.
+                    if mt is None:
+                        if our_total_h2h is not None:
+                            mt = round(float(our_total_h2h), 1)
+                            g['market_total_reason'] = "H2H last-10 (fallback)"
+                        elif _OU_BENCH.get(sport):
+                            mt = float(_OU_BENCH[sport])
+                            g['market_total_reason'] = "sport benchmark (fallback)"
+                        elif adj_xt is not None:
+                            mt = round(adj_xt, 1)
+                            g['market_total_reason'] = "XSharp total (fallback)"
                     g['market_spread'] = ms
                     g['market_total'] = mt
                     if ms is None:
                         g['market_spread_reason'] = "no sportsbook spread line found"
                     if mt is None:
-                        g['market_total_reason'] = "no sportsbook total line found"
+                        g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
 
+                    # Fallback spread: if Vegas spread missing, use pick-em (0)
+                    # so every game with a model spread gets graded.
+                    if ms is None and xs is not None:
+                        ms = 0.0
+                        g['market_spread_reason'] = "pick-em (fallback)"
+                    g['market_spread'] = ms
                     if xs is not None and ms is not None:
                         dm = xs + ms
                         da = am + ms
