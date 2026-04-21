@@ -7791,8 +7791,20 @@ def landing_page():
 
 <!-- Why Different -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;">
-    <h2 class="section-title">Why Our Picks Are Different</h2>
-    <p class="section-sub" style="max-width:640px;margin:0 auto;">Most bettors follow public trends. Our system analyzes matchups, projections, and real-time data to find edges the market misses &mdash; then tracks every result with full transparency.</p>
+    <div style="max-width:900px;margin:0 auto;">
+        <img src="/static/IMG_2695.jpeg" alt="AI sports betting picks and data-driven predictions across NBA, NFL, MLB, NHL and soccer" style="width:100%;max-height:240px;object-fit:cover;border-radius:14px;margin-bottom:24px;display:block;" loading="lazy">
+        <h2 class="section-title">Why Our Picks Are Different</h2>
+        <div style="max-width:720px;margin:0 auto;color:#e2e8f0;line-height:1.75;font-size:0.95em;text-align:left;">
+            <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
+            <p style="margin-bottom:14px;">Our AI sports betting picks are built differently.</p>
+            <p style="margin-bottom:14px;">We use a proprietary odds engine powered by four independent AI prediction models to analyze matchups, player performance, advanced team metrics, and real-time market movement. Instead of following sportsbook lines, we generate our own probabilities to uncover +EV betting opportunities the market often misprices.</p>
+            <p style="margin-bottom:14px;">This approach allows us to identify value before it becomes obvious. While most bettors chase line movement, our system is designed to stay ahead of it.</p>
+            <p style="margin-bottom:14px;">Every pick is backed by data &mdash; not opinions, narratives, or social media hype. Our models continuously process new information, adjusting predictions based on injuries, form, and betting market shifts. The result is a smarter, more consistent approach to sports betting predictions.</p>
+            <p style="margin-bottom:14px;">Transparency is a core part of what we do. Every result is tracked publicly, with no cherry-picked wins or hidden losses. You can see exactly how the model performs over time, giving you full confidence in the system behind the picks.</p>
+            <p style="margin-bottom:14px;">If you&rsquo;re looking for the best betting picks today, built on real data and AI-driven analysis, you&rsquo;re in the right place.</p>
+            <p style="margin-bottom:0;">Our goal isn&rsquo;t just to win short-term &mdash; it&rsquo;s to create a long-term edge using disciplined, data-driven betting strategies that outperform the average bettor.</p>
+        </div>
+    </div>
 </div>
 
 <!-- Season Performance -->
