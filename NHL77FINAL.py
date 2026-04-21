@@ -4771,6 +4771,9 @@ BASE_TEMPLATE = """
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
+    <meta name="author" content="underdogs.bet">
+    <meta name="publisher" content="GoodsandMore Inc.">
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
     <link rel="icon" type="image/png" href="/static/Logo.PNG">
     <link rel="apple-touch-icon" href="/static/Logo.PNG">
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
@@ -5040,6 +5043,9 @@ BASE_TEMPLATE = """
             </div>
             <div class="footer-center">
                 <a href="/tutorial">Tutorial</a><span>&middot;</span>
+                <a href="/ai-sports-betting-picks-today">AI Picks Today</a><span>&middot;</span>
+                <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a><span>&middot;</span>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a><span>&middot;</span>
                 <a href="/privacy">Privacy</a><span>&middot;</span>
                 <a href="/terms">Terms</a><span>&middot;</span>
                 <a href="/responsible-gaming">Responsible Gaming</a>
@@ -7117,6 +7123,20 @@ def landing_page():
       "url": "https://www.underdogs.bet",
       "logo": "https://www.underdogs.bet/static/Logo.PNG",
       "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
+      "email": "underdogsbetemail@gmail.com",
+      "telephone": "+1-519-992-8484",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "980 Lake Trail Drive",
+        "addressLocality": "Windsor",
+        "addressRegion": "Ontario",
+        "postalCode": "N9G 2R8",
+        "addressCountry": "CA"
+      },
+      "parentOrganization": {
+        "@type": "Corporation",
+        "name": "GoodsandMore Inc."
+      },
       "sameAs": [
         "https://x.com/underdogs_bet",
         "https://instagram.com/underdogs.bet",
@@ -7128,6 +7148,12 @@ def landing_page():
     </script>
     <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet","potentialAction":{"@type":"SearchAction","target":"https://www.underdogs.bet/?q={search_term_string}","query-input":"required name=search_term_string"}}
+    </script>
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"LocalBusiness","name":"underdogs.bet","url":"https://www.underdogs.bet","email":"underdogsbetemail@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
+    </script>
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do your AI sports betting picks work?","acceptedAnswer":{"@type":"Answer","text":"Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions. Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available."}},{"@type":"Question","name":"What makes your picks different from sportsbooks?","acceptedAnswer":{"@type":"Answer","text":"Sportsbooks set odds based on balancing action and public perception, not just true probability. Our system creates its own projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential positive expected value opportunity."}},{"@type":"Question","name":"How do you find value bets?","acceptedAnswer":{"@type":"Answer","text":"We compare model projections against sportsbook lines for moneyline, spread, and totals markets. When the difference is significant, the market may be mispricing the game."}},{"@type":"Question","name":"What does the probability percentage mean?","acceptedAnswer":{"@type":"Answer","text":"Each model outputs a win probability for every game. For example, if our model gives a team a 60 percent chance to win but the sportsbook implies 50 percent, that creates value."}},{"@type":"Question","name":"Do your models agree on every pick?","acceptedAnswer":{"@type":"Answer","text":"No. Each of our four AI models has a different methodology. We display individual model predictions and a consensus view so users can see where agreement is strongest."}},{"@type":"Question","name":"What sports do you cover?","acceptedAnswer":{"@type":"Answer","text":"We currently focus on major markets like MLB, NBA, NFL, and other high-liquidity sports where data quality is strong and inefficiencies can be identified."}},{"@type":"Question","name":"Are your results tracked publicly?","acceptedAnswer":{"@type":"Answer","text":"Yes. Every pick is tracked with full transparency including wins, losses, and performance over time."}},{"@type":"Question","name":"Is there a refund policy?","acceptedAnswer":{"@type":"Answer","text":"Yes. Monthly plan has a 10-day return window and yearly plan has a 30-day return window."}},{"@type":"Question","name":"Are your picks guaranteed to win?","acceptedAnswer":{"@type":"Answer","text":"No system can guarantee wins. Sports betting involves variance, and even strong positive expected value strategies will have losing streaks."}},{"@type":"Question","name":"Who are these picks for?","acceptedAnswer":{"@type":"Answer","text":"These picks are designed for bettors who want a structured, data-driven approach rather than guesswork or public trends."}}]}
     </script>
     <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"image":["https://www.underdogs.bet/static/Logo.PNG"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
@@ -7868,7 +7894,56 @@ def landing_page():
     </div>
 </div>
 
-<!-- SEO Text (visible, readable) -->
+<!-- FAQ -->
+<div class="section" style="padding-top:10px;padding-bottom:20px;">
+    <h2 class="section-title">Frequently Asked Questions</h2>
+    <div style="max-width:920px;margin:0 auto;display:grid;gap:10px;">
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">How do your AI sports betting picks work?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions.</p>
+            <p style="margin-top:8px;color:#cbd5e1;">Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">What makes your picks different from sportsbooks?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">Sportsbooks set odds based on balancing action and public perception, not just true probability.</p>
+            <p style="margin-top:8px;color:#cbd5e1;">Our system creates projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential +EV opportunity.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">How do you find value bets?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">We compare projections and market lines for moneyline, spread, and totals. Significant gaps indicate potential market mispricing.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">What does the probability percentage mean?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">Each model outputs win probability for each game. If our model probability is higher than sportsbook implied probability, it can indicate value.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Do your models agree on every pick?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">No. Each model uses a different methodology. We show individual predictions and consensus so confidence is transparent.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">What sports do you cover?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">We focus on major markets such as MLB, NBA, NFL, and other high-liquidity sports where data quality is strong.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Are your results tracked publicly?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">Yes. Every pick is tracked with full transparency, including wins, losses, and performance over time.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Is there a refund policy?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">Yes. Monthly plans have a 10-day return window and yearly plans have a 30-day return window.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Are your picks guaranteed to win?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">No system can guarantee wins. Sports betting includes variance; the goal is long-term +EV performance.</p>
+        </details>
+        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Who are these picks for?</summary>
+            <p style="margin-top:10px;color:#cbd5e1;">These picks are built for bettors who want a structured, data-driven process rather than guesswork.</p>
+        </details>
+    </div>
+</div>
+
+<!-- SEO Text -->
 <div class="section" style="padding-top:0;padding-bottom:20px;">
     <p style="max-width:760px;margin:0 auto;font-size:0.92em;color:#e2e8f0;line-height:1.8;text-align:center;">Free AI sports picks and predictions for NBA, NFL, MLB, NHL, soccer, and more. Our models generate daily projections for moneyline, spreads, and totals using real-time data and multi-model consensus &mdash; every pick tracked with full transparency so you can evaluate real performance over time.</p>
 </div>
@@ -7912,6 +7987,9 @@ def landing_page():
         </div>
         <div class="footer-center">
             <a href="/tutorial">Tutorial</a><span>·</span>
+            <a href="/ai-sports-betting-picks-today">AI Picks Today</a><span>·</span>
+            <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a><span>·</span>
+            <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a><span>·</span>
             <a href="/privacy">Privacy</a><span>·</span>
             <a href="/terms">Terms</a><span>·</span>
             <a href="/responsible-gaming">Responsible Gaming</a>
@@ -7985,6 +8063,55 @@ Sitemap: {_SITE_DOMAIN}/sitemap.xml
     return Response(body, mimetype='text/plain')
 
 
+@app.route('/llms.txt')
+def llms_txt():
+    body = """# underdogs.bet
+
+> AI-powered sports betting picks and probability-based projections.
+
+## About
+- Brand: underdogs.bet
+- Parent organization: GoodsandMore Inc. (Canada)
+- URL: https://www.underdogs.bet
+- Contact: underdogsbetemail@gmail.com
+
+## What We Offer
+- Free daily moneyline picks
+- Premium spread, totals, and score projections
+- Multi-model AI consensus and transparent tracking
+
+## Core Pages
+- Home: https://www.underdogs.bet/
+- Daily report: https://www.underdogs.bet/daily-report
+- Plans: https://www.underdogs.bet/plans
+- AI picks today: https://www.underdogs.bet/ai-sports-betting-picks-today
+- What are AI picks: https://www.underdogs.bet/what-are-ai-sports-betting-picks
+- Model vs sportsbooks: https://www.underdogs.bet/our-model-vs-sportsbooks
+- Privacy: https://www.underdogs.bet/privacy
+- Terms: https://www.underdogs.bet/terms
+
+## Notes
+- Picks are informational and educational, not guaranteed outcomes.
+- Sports betting involves risk and variance.
+"""
+    return Response(body, mimetype='text/plain')
+
+
+@app.route('/ai.txt')
+def ai_txt():
+    body = """User-agent: *
+Allow: /
+
+# AI discovery
+LLMs: https://www.underdogs.bet/llms.txt
+Sitemap: https://www.underdogs.bet/sitemap.xml
+
+# Canonical contact for AI indexing
+Contact: underdogsbetemail@gmail.com
+"""
+    return Response(body, mimetype='text/plain')
+
+
 @app.route('/sitemap.xml')
 def sitemap_xml():
     today = datetime.now().strftime('%Y-%m-%d')
@@ -8017,6 +8144,11 @@ def sitemap_xml():
     urls.append((_SITE_DOMAIN + '/daily-report', 'daily', '0.8'))
     urls.append((_SITE_DOMAIN + '/plans', 'weekly', '0.8'))
     urls.append((_SITE_DOMAIN + '/tutorial', 'monthly', '0.5'))
+    urls.append((_SITE_DOMAIN + '/llms.txt', 'monthly', '0.2'))
+    urls.append((_SITE_DOMAIN + '/ai.txt', 'monthly', '0.2'))
+    urls.append((_SITE_DOMAIN + '/ai-sports-betting-picks-today', 'weekly', '0.7'))
+    urls.append((_SITE_DOMAIN + '/what-are-ai-sports-betting-picks', 'weekly', '0.7'))
+    urls.append((_SITE_DOMAIN + '/our-model-vs-sportsbooks', 'weekly', '0.7'))
     urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/terms', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/responsible-gaming', 'monthly', '0.4'))
@@ -8376,6 +8508,18 @@ def privacy_page():
 @app.route('/terms')
 def terms_page():
     return render_template('terms.html')
+
+@app.route('/ai-sports-betting-picks-today')
+def ai_picks_today_page():
+    return render_template('ai_picks_today.html')
+
+@app.route('/what-are-ai-sports-betting-picks')
+def what_are_ai_picks_page():
+    return render_template('what_are_ai_picks.html')
+
+@app.route('/our-model-vs-sportsbooks')
+def model_vs_sportsbooks_page():
+    return render_template('model_vs_sportsbooks.html')
 
 @app.route('/sport/SOCCER/predictions/<league_slug>')
 def soccer_predictions_league(league_slug):

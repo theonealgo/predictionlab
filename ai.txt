@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# AI discovery
+LLMs: https://www.underdogs.bet/llms.txt
+Sitemap: https://www.underdogs.bet/sitemap.xml
+
+# Canonical contact for AI indexing
+Contact: underdogsbetemail@gmail.com
