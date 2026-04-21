@@ -572,6 +572,11 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
 _INJURY_OUT_STATUSES = {'Out', 'Injured Reserve', 'Inactive'}
 _INJURY_DOUBTFUL_STATUSES = {'Doubtful'}
 
+# Caches populated once per request so we don't open one DB connection per game.
+_INJURY_COUNT_CACHE: dict = {'ts': 0, 'sport': None, 'data': {}}
+_LAST_GAME_DATE_CACHE: dict = {'ts': 0, 'sport': None, 'data': {}}
+_ENH_CACHE_TTL = 120  # 2 minutes — refreshed naturally by page-cache TTLs
+
 # Points lost per starter ruled Out. Doubtful is treated at ~50%.
 _INJURY_OUT_POINTS_PER_STARTER = {
     'NBA': 2.5, 'NCAAB': 2.0, 'NCAAW': 2.0, 'WNBA': 2.0,
@@ -607,24 +612,43 @@ _NFL_COLD_TEAMS = {
 }
 
 
-def _count_out_injured_starters(sport, team_name):
-    """Return a weighted count of top impact players ruled Out/Doubtful."""
-    if not (sport and team_name):
-        return 0.0
+def _load_injury_counts(sport):
+    """Load all injury counts for a sport once and cache them per process."""
+    cache = _INJURY_COUNT_CACHE
+    now_ts = _time.time()
+    if cache.get('sport') == sport and (now_ts - cache.get('ts', 0)) < _ENH_CACHE_TTL:
+        return cache['data']
+    data: dict = {}
     try:
         conn = get_db_connection()
         rows = conn.execute(
-            'SELECT status FROM injuries WHERE sport=? AND team_name=?',
-            (sport, team_name),
+            'SELECT team_name, status FROM injuries WHERE sport=?',
+            (sport,),
         ).fetchall()
         conn.close()
+        agg: dict = {}
+        for r in rows:
+            t = r['team_name'] or ''
+            if not t:
+                continue
+            bucket = agg.setdefault(t, {'out': 0, 'dbt': 0})
+            if r['status'] in _INJURY_OUT_STATUSES:
+                bucket['out'] += 1
+            elif r['status'] in _INJURY_DOUBTFUL_STATUSES:
+                bucket['dbt'] += 1
+        for t, b in agg.items():
+            data[t] = min(5.0, b['out'] + 0.5 * b['dbt'])
     except Exception as _e:
-        logger.debug(f"[injuries] lookup failed for {sport} {team_name}: {_e}")
+        logger.debug(f"[injuries] bulk load failed for {sport}: {_e}")
+    _INJURY_COUNT_CACHE.update({'ts': now_ts, 'sport': sport, 'data': data})
+    return data
+
+
+def _count_out_injured_starters(sport, team_name):
+    """Return a weighted count of top impact players ruled Out/Doubtful (cached)."""
+    if not (sport and team_name):
         return 0.0
-    out = sum(1 for r in rows if r['status'] in _INJURY_OUT_STATUSES)
-    dbt = sum(1 for r in rows if r['status'] in _INJURY_DOUBTFUL_STATUSES)
-    # Cap contribution from any single team (avoid 10-player lists killing the number).
-    return min(5.0, out + 0.5 * dbt)
+    return _load_injury_counts(sport).get(team_name, 0.0)
 
 
 def _injury_total_adjustment(sport, home_team, away_team):
@@ -638,25 +662,54 @@ def _injury_total_adjustment(sport, home_team, away_team):
     return adj
 
 
+def _load_team_game_dates(sport):
+    """Load every team's sorted list of completed game dates once per process.
+    Returns {team: [date_str asc]}. O(1) lookup for 'last game before X'.
+    """
+    cache = _LAST_GAME_DATE_CACHE
+    now_ts = _time.time()
+    if cache.get('sport') == sport and (now_ts - cache.get('ts', 0)) < _ENH_CACHE_TTL:
+        return cache['data']
+    data: dict = {}
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            '''SELECT home_team_id, away_team_id, date(game_date) AS d
+               FROM games
+               WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL
+               ORDER BY date(game_date)''',
+            (sport,),
+        ).fetchall()
+        conn.close()
+        for r in rows:
+            d = r['d']
+            if not d:
+                continue
+            for t in (r['home_team_id'], r['away_team_id']):
+                if not t:
+                    continue
+                lst = data.setdefault(t, [])
+                if not lst or lst[-1] != d:
+                    lst.append(d)
+    except Exception as _e:
+        logger.debug(f"[rest] bulk load failed for {sport}: {_e}")
+    _LAST_GAME_DATE_CACHE.update({'ts': now_ts, 'sport': sport, 'data': data})
+    return data
+
+
 def _last_game_date_for_team(sport, team, before_date):
     """Return the most recent completed game_date (YYYY-MM-DD) for team strictly before a date."""
     if not (sport and team and before_date):
         return None
-    try:
-        conn = get_db_connection()
-        r = conn.execute(
-            '''SELECT MAX(date(game_date)) AS d
-               FROM games
-               WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL
-                 AND date(game_date) < date(?)
-                 AND (home_team_id=? OR away_team_id=?)''',
-            (sport, before_date, team, team),
-        ).fetchone()
-        conn.close()
-        return r['d'] if r and r['d'] else None
-    except Exception as _e:
-        logger.debug(f"[rest] lookup failed for {sport} {team}: {_e}")
+    dates = _load_team_game_dates(sport).get(team)
+    if not dates:
         return None
+    # Binary search for rightmost date < before_date.
+    import bisect
+    i = bisect.bisect_left(dates, str(before_date)[:10])
+    if i <= 0:
+        return None
+    return dates[i - 1]
 
 
 def _rest_total_adjustment(sport, home_team, away_team, game_date):
