@@ -7697,7 +7697,7 @@ def landing_page():
             Winning Results Tracked Daily
         </span>
     </div>
-    <h2 class="section-title" style="margin-bottom:6px;">Today’s AI Picks</h2>
+    <h2 class="section-title" style="margin-bottom:6px;">Today’s Model Predictions</h2>
     <p class="section-sub" style="color:#e2e8f0;">Live model projections updated daily</p>
     <div style="display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;">
         {% for tp in todays_picks %}
