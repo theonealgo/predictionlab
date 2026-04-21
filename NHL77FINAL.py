@@ -7090,17 +7090,17 @@ def landing_page():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>underdogs.bet – Daily AI Sports Picks &amp; Betting Predictions</title>
-    <meta name="description" content="Get accurate AI-powered picks for NHL, NBA, MLB, NFL and more. Full spreads, totals, and score predictions updated daily. Start free — upgrade for premium edges.">
-    <meta property="og:title" content="underdogs.bet – Daily AI Sports Picks &amp; Betting Predictions">
+    <title>Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet</title>
+    <meta name="description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
+    <meta property="og:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
     <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.underdogs.bet/">
     <meta property="og:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <meta property="og:site_name" content="underdogs.bet">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Free AI Sports Picks &amp; Betting Predictions | underdogs.bet">
-    <meta name="twitter:description" content="Get free daily sports picks powered by AI models. NBA, NHL, MLB predictions with win probabilities, spreads &amp; totals. No subscriptions. Always free.">
+    <meta name="twitter:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
+    <meta name="twitter:description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
     <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     <link rel="icon" type="image/png" href="/static/Logo.PNG">
@@ -7650,8 +7650,8 @@ def landing_page():
                 <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
                 <div class="nav-group-items">
                     <a href="/tutorial">Tutorial</a>
-                    <a href="/privacy">Privacy</a>
-                    <a href="/terms">Terms</a>
+                    <a href="/privacy">Privacy Policy</a>
+                    <a href="/terms">Terms &amp; Conditions</a>
                 </div>
             </div>
             <div class="nav-group" onclick="this.classList.toggle('open')">
@@ -7676,6 +7676,11 @@ def landing_page():
     <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
         <a href="/nba-picks" style="background:#fff;color:#0f172a;padding:14px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Today's Picks</a>
         <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Go Premium</a>
+    </div>
+    <div class="hero-slide" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;animation:slideIn 0.8s ease-out 0.45s both;">
+        <a href="https://x.com/intent/tweet?text=Daily%20AI%20sports%20picks%20and%20betting%20predictions&url=https%3A%2F%2Fwww.underdogs.bet%2F" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.8em;border:1px solid rgba(255,255,255,0.2);">Share on X</a>
+        <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.underdogs.bet%2F" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.8em;border:1px solid rgba(255,255,255,0.2);">Share on Facebook</a>
+        <a href="mailto:?subject=Daily%20AI%20Sports%20Picks&body=Check%20out%20these%20daily%20AI%20sports%20picks%3A%20https%3A%2F%2Fwww.underdogs.bet%2F" style="background:rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.8em;border:1px solid rgba(255,255,255,0.2);">Share by Email</a>
     </div>
     <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
 </div>
