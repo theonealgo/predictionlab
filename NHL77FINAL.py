@@ -7829,9 +7829,11 @@ def landing_page():
         <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;display:flex;flex-direction:column;">
             <h4 style="font-size:1.05em;font-weight:800;margin-bottom:12px;color:#e2e8f0;">Free Picks</h4>
             <ul style="list-style:none;padding:0;font-size:0.88em;color:#e2e8f0;line-height:2;flex:1;">
-                <li>&#10003; Moneyline picks</li>
-                <li>&#10003; Basic win probabilities</li>
-                <li>&#10003; Public results tracking</li>
+                <li>&#10003; Moneyline picks for 9 sports</li>
+                <li>&#10003; Win probabilities</li>
+                <li>&#10003; Odds from our own odds engine</li>
+                <li>&#10003; Fully transparent results for every sport</li>
+                <li>&#10003; Multi-model consensus signal</li>
             </ul>
             <a href="/nba-picks" style="display:block;text-align:center;margin-top:14px;background:#fff;color:#0f172a;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;">View Free Picks</a>
         </div>
@@ -7839,11 +7841,9 @@ def landing_page():
             <h4 style="font-size:1.05em;font-weight:800;margin-bottom:8px;color:#fbbf24;">Full AI Model Access</h4>
             <div style="font-size:0.78em;color:#fde68a;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.4px;">Everything in Free, plus</div>
             <ul style="list-style:none;padding:0;font-size:0.88em;color:#f1f5f9;line-height:2;flex:1;">
-                <li>&#10003; Spread picks with edge</li>
-                <li>&#10003; Total (O/U) projections</li>
-                <li>&#10003; Predicted final scores</li>
-                <li>&#10003; Multi-model consensus signal</li>
-                <li>&#10003; Full model breakdown</li>
+                <li>&#10003; Spreads</li>
+                <li>&#10003; O/U Total</li>
+                <li>&#10003; Predicted final score</li>
             </ul>
             <a href="/plans" style="display:block;text-align:center;margin-top:14px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 22px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Go Premium</a>
             <div style="text-align:center;margin-top:8px;font-size:0.75em;color:#fde68a;">Updated daily</div>
