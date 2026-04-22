@@ -7358,7 +7358,7 @@ def landing_page():
     }
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet","potentialAction":{"@type":"SearchAction","target":"https://www.underdogs.bet/?q={search_term_string}","query-input":"required name=search_term_string"}}
+    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet","potentialAction":{"@type":"SearchAction","target":"https://www.underdogs.bet/search?query={search_term_string}","query-input":"required name=search_term_string"}}
     </script>
     <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"LocalBusiness","name":"underdogs.bet","url":"https://www.underdogs.bet","email":"underdogsbetemail@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
@@ -7374,16 +7374,16 @@ def landing_page():
         :root{
             --gold:#fbbf24;--gold2:#f59e0b;
             --green:#10b981;--red:#ef4444;
-            --bg:#0f172a;--surface:rgba(255,255,255,0.05);
-            --border:rgba(255,255,255,0.1);
+            --bg:#ffffff;--surface:rgba(15,23,42,0.04);
+            --border:rgba(15,23,42,0.12);
         }
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
             background:
-                radial-gradient(1200px 600px at 70% -10%, rgba(251,191,36,0.12), transparent 60%),
-                radial-gradient(900px 500px at -10% 20%, rgba(16,185,129,0.08), transparent 60%),
-                #0f172a;
-            color:#fff;
+                radial-gradient(1200px 600px at 70% -10%, rgba(251,191,36,0.10), transparent 60%),
+                radial-gradient(900px 500px at -10% 20%, rgba(16,185,129,0.05), transparent 60%),
+                #ffffff;
+            color:#0f172a;
             min-height:100vh;
             overflow-x:hidden;
             position:relative;
@@ -7392,14 +7392,14 @@ def landing_page():
             content:'';
             position:fixed;
             inset:0;
-            background:rgba(7,10,20,0.65);
+            background:transparent;
             z-index:0;
         }
         body > *{position:relative;z-index:1;}
 
         /* ── Navbar ── */
         .navbar{
-            background:rgba(7,10,20,0.35);
+            background:rgba(255,255,255,0.92);
             padding: 14px 28px;
             border-bottom: none;
             box-shadow: none;
@@ -7414,7 +7414,51 @@ def landing_page():
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 14px;
         }
+        .nav-search {
+            flex: 1;
+            max-width: 620px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            border: 1px solid rgba(15,23,42,0.2);
+            border-radius: 999px;
+            padding: 5px 8px 5px 14px;
+        }
+        .nav-search input {
+            flex: 1;
+            min-width: 0;
+            border: none;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: 0.9em;
+        }
+        .nav-search input::placeholder { color: #64748b; }
+        .nav-search button {
+            border: none;
+            background: linear-gradient(135deg,#fbbf24,#f59e0b);
+            color: #111827;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .nav-actions { display:flex; align-items:center; gap:10px; }
+        .auth-btn {
+            text-decoration:none;
+            border-radius:999px;
+            font-weight:800;
+            font-size:0.82em;
+            padding:9px 14px;
+            transition:opacity .2s ease;
+            white-space:nowrap;
+        }
+        .auth-btn.signup { background:linear-gradient(135deg,#fbbf24,#f59e0b); color:#111827; }
+        .auth-btn.login { border:1px solid rgba(15,23,42,0.35); color:#0f172a; background:#fff; }
+        .auth-btn:hover { opacity:.9; }
         .logo {
             display: flex;
             align-items: center;
@@ -7442,7 +7486,7 @@ def landing_page():
         .hamburger span {
             width: 24px;
             height: 2px;
-            background: #cbd5e1;
+            background: #0f172a;
             border-radius: 2px;
             transition: 0.3s;
         }
@@ -7782,13 +7826,16 @@ def landing_page():
         @media (min-width: 769px) {
             body{background-attachment:fixed;}
         }
+        @media (max-width: 980px) {
+            .nav-search { display:none; }
+        }
         @media (max-width: 768px) {
             body{
-                background:#0f172a;
+                background:#ffffff;
                 background-attachment:scroll;
             }
             body::before{
-                background:linear-gradient(rgba(7,10,20,0.65), rgba(7,10,20,0.65));
+                background:transparent;
             }
         }
         @media (max-width: 768px) {
@@ -7825,9 +7872,21 @@ def landing_page():
 <!-- Navbar -->
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#fff;letter-spacing:0.2px;">
+        <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">
             underdogs.bet
         </a>
+        <form class="nav-search" action="/search" method="get" role="search">
+            <input type="text" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
+            <button type="submit">Search</button>
+        </form>
+        <div class="nav-actions">
+            {% if is_logged_in %}
+            <a href="/logout" class="auth-btn login">Logout</a>
+            {% else %}
+            <a href="/login" class="auth-btn login">Login</a>
+            <a href="/signup" class="auth-btn signup">Sign Up</a>
+            {% endif %}
+        </div>
         <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="navLinks" style="background:transparent;border:none;cursor:pointer;padding:0;">
             <span></span>
             <span></span>
@@ -7835,18 +7894,6 @@ def landing_page():
         </button>
         <div class="nav-links" id="navLinks">
             <a href="/" class="active">Home</a>
-            <div class="nav-group" onclick="this.classList.toggle('open')">
-                <span class="nav-group-title">🏆 Join</span>
-                <div class="nav-group-items">
-                    <a href="/plans" style="color:#fbbf24;">🏆 Premium</a>
-                    {% if is_logged_in %}
-                    <a href="/logout">Logout</a>
-                    {% else %}
-                    <a href="/login" style="color:#10b981;">Login</a>
-                    <a href="/signup">Sign Up</a>
-                    {% endif %}
-                </div>
-            </div>
             <div class="nav-group" onclick="this.classList.toggle('open')">
                 <span class="nav-group-title">🏀 Sports</span>
                 <div class="nav-group-items">
@@ -7861,27 +7908,6 @@ def landing_page():
                     {% if soccer_enabled %}
                     <a href="/soccer-picks">⚽ Soccer</a>
                     {% endif %}
-                </div>
-            </div>
-            <div class="nav-group" onclick="this.classList.toggle('open')">
-                <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
-                <div class="nav-group-items">
-                    <a href="/tutorial">Tutorial</a>
-                    <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
-                    <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
-                    <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
-                    <a href="/privacy">Data Privacy Policy</a>
-                    <a href="/terms">Betting Terms &amp; Conditions</a>
-                </div>
-            </div>
-            <div class="nav-group" onclick="this.classList.toggle('open')">
-                <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
-                <div class="nav-group-items">
-                    <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)">YouTube</a>
-                    <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on X (opens in new tab)">X</a>
-                    <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Instagram (opens in new tab)">Instagram</a>
-                    <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Facebook (opens in new tab)">Facebook</a>
-                    <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on TikTok (opens in new tab)">TikTok</a>
                 </div>
             </div>
         </div>
@@ -8133,7 +8159,9 @@ def landing_page():
 <!-- Why Different (above FAQ) -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;">
     <div style="max-width:900px;margin:0 auto;">
-        <div aria-hidden="true" style="width:100%;max-height:240px;height:220px;border-radius:14px;margin-bottom:24px;display:block;background:linear-gradient(135deg,rgba(251,191,36,0.18),rgba(245,158,11,0.08));border:1px solid rgba(251,191,36,0.28);"></div>
+        <div style="width:100%;max-height:240px;height:220px;border-radius:14px;margin-bottom:24px;display:flex;align-items:center;justify-content:center;background:#ffffff;border:1px solid rgba(15,23,42,0.14);">
+            <img src="/static/css/UnderdogsLogo.svg" alt="underdogs.bet logo" style="max-width:92%;max-height:88%;object-fit:contain;">
+        </div>
         <h2 class="section-title">Why Our Picks Are Different</h2>
         <div style="max-width:720px;margin:0 auto;color:#e2e8f0;line-height:1.75;font-size:0.95em;text-align:left;">
             <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
@@ -8329,6 +8357,60 @@ def landing_page():
          landing_share_tweet=_landing_share_tweet)
 
 _SITE_DOMAIN = 'https://www.underdogs.bet'
+
+@app.route('/search')
+def site_search():
+    """Route search queries to the most relevant page."""
+    raw_query = (request.args.get('query') or '').strip()
+    if not raw_query:
+        return redirect(url_for('landing_page'))
+    q = raw_query.lower()
+
+    # Quick route intents.
+    intent_routes = {
+        'nba': '/nba-picks',
+        'nhl': '/nhl-picks',
+        'mlb': '/mlb-picks',
+        'nfl': '/nfl-picks',
+        'wnba': '/wnba-picks',
+        'ncaab': '/ncaab-picks',
+        'ncaaw': '/ncaaw-picks',
+        'ncaaf': '/ncaaf-picks',
+        'soccer': '/soccer-picks',
+        'results': '/results',
+        'performance': '/results',
+        'record': '/results',
+        'plans': '/plans',
+        'premium': '/plans',
+        'tutorial': '/tutorial',
+    }
+    for keyword, route in intent_routes.items():
+        if keyword in q:
+            return redirect(route)
+
+    # Team / matchup query: send users to sport page where latest matching game lives.
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            """
+            SELECT sport
+            FROM system_picks
+            WHERE LOWER(COALESCE(home_team,'')) LIKE ?
+               OR LOWER(COALESCE(away_team,'')) LIKE ?
+            ORDER BY game_date DESC
+            LIMIT 1
+            """,
+            (f'%{q}%', f'%{q}%')
+        ).fetchone()
+        conn.close()
+        if row:
+            sport_slug = SPORT_SEO_SLUGS.get((row['sport'] or '').upper())
+            if sport_slug:
+                return redirect(f'/{sport_slug}')
+    except Exception:
+        pass
+
+    return redirect(url_for('landing_page'))
 
 @app.route('/robots.txt')
 def robots_txt():
