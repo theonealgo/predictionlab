@@ -132,6 +132,16 @@
             font-weight: 800;
             cursor: pointer;
         }
+        .nav-search-wrap{position:relative;flex:1;max-width:620px;}
+        .search-autocomplete{
+            display:none;position:absolute;top:48px;left:0;right:0;z-index:1100;
+            background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:10px;
+            box-shadow:0 10px 24px rgba(15,23,42,0.12);padding:6px;
+        }
+        .search-autocomplete.show{display:block;}
+        .search-item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#0f172a;}
+        .search-item:hover{background:rgba(15,23,42,0.06);}
+        .search-item small{color:#64748b;}
         .nav-actions { display:flex; align-items:center; gap:10px; }
         .auth-btn {
             text-decoration:none;
@@ -376,10 +386,13 @@
         <a href="/" class="logo">
             <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img">
         </a>
-        <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
-            <input type="text" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
-            <button type="submit">Search</button>
-        </form>
+        <div class="nav-search-wrap">
+            <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
+                <input type="text" id="navSearchInputPicks" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
+                <button type="submit">Search</button>
+            </form>
+            <div id="searchAutocompletePicks" class="search-autocomplete" aria-live="polite"></div>
+        </div>
         <div class="nav-actions">
             {% if is_logged_in %}
             <a href="/logout" class="auth-btn login">Logout</a>
@@ -701,7 +714,15 @@
     document.addEventListener('DOMContentLoaded', function() {
         const navLinks = document.getElementById('navLinks');
         const searchForm = document.getElementById('navSearchFormPicks');
+        const searchInput = document.getElementById('navSearchInputPicks');
+        const autocompleteEl = document.getElementById('searchAutocompletePicks');
         const resultsEl = document.getElementById('searchResultsPicks');
+        const teams = [
+            { name: "Detroit Pistons", sport: "NBA", slug: "detroit-pistons" },
+            { name: "Detroit Red Wings", sport: "NHL", slug: "detroit-red-wings" },
+            { name: "Detroit Tigers", sport: "MLB", slug: "detroit-tigers" },
+            { name: "Boston Celtics", sport: "NBA", slug: "boston-celtics" },
+        ];
         if (!navLinks) return;
         navLinks.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', function() {
@@ -709,6 +730,28 @@
             });
         });
         if (searchForm && resultsEl) {
+            let debounceTimer = null;
+            if (searchInput && autocompleteEl) {
+                searchInput.addEventListener('input', function() {
+                    const q = (searchInput.value || '').trim().toLowerCase();
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        if (!q) {
+                            autocompleteEl.classList.remove('show');
+                            autocompleteEl.innerHTML = '';
+                            return;
+                        }
+                        const matches = teams.filter(t => t.name.toLowerCase().includes(q)).slice(0, 5);
+                        autocompleteEl.innerHTML = matches.map(t => `<div class="search-item" data-slug="${t.slug}"><span>${t.name}</span><small>${t.sport}</small></div>`).join('') || '<div class="search-item"><span>No team matches</span></div>';
+                        autocompleteEl.classList.add('show');
+                    }, 300);
+                });
+                autocompleteEl.addEventListener('click', function(e) {
+                    const item = e.target.closest('[data-slug]');
+                    if (!item) return;
+                    window.location.href = `/teams/${item.getAttribute('data-slug')}`;
+                });
+            }
             searchForm.addEventListener('submit', async function(event) {
                 event.preventDefault();
                 const input = searchForm.querySelector('input[name="query"]');
