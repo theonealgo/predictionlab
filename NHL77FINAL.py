@@ -10,6 +10,7 @@ from flask import Flask, render_template, render_template_string, request, jsoni
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
+import re
 from collections import defaultdict
 from flask_cors import CORS
 import sqlite3
@@ -4894,11 +4895,11 @@ BASE_TEMPLATE = """
             position: absolute;
             top: 64px;
             right: 22px;
-            background: rgba(7, 10, 20, 0.98);
+            background: #ffffff;
             flex-direction: column;
             gap: 2px;
             padding: 10px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border: 1px solid rgba(15,23,42,0.18);
             border-radius: 14px;
             display: flex;
             min-width: 200px;
@@ -7471,7 +7472,7 @@ def landing_page():
         }
         .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
         .nav-links a {
-            color: #fff;
+            color: #0f172a;
             text-decoration: none;
             font-weight: 600;
             font-size: 0.88em;
@@ -7480,8 +7481,8 @@ def landing_page():
             padding: 8px 10px;
             border-radius: 8px;
         }
-        .nav-links a:hover { color: #fff; background: rgba(255,255,255,0.08); }
-        .nav-links a.active { color: #fff; background: rgba(255,255,255,0.12); }
+        .nav-links a:hover { color: #0f172a; background: rgba(15,23,42,0.08); }
+        .nav-links a.active { color: #0f172a; background: rgba(15,23,42,0.12); }
         .nav-section-title { display: none; }
         .nav-divider { display: none; }
         .nav-donate-btn {
@@ -7553,8 +7554,8 @@ def landing_page():
             margin:-8px auto 18px;
             max-width:1200px;
             width:100%;
-            background:linear-gradient(90deg,rgba(15,23,42,0.95),rgba(30,41,59,0.95));
-            border:1px solid rgba(251,191,36,0.35);
+            background:#ffffff;
+            border:1px solid rgba(15,23,42,0.18);
             border-radius:16px;
             padding:14px 18px;
             display:flex;
@@ -7569,7 +7570,7 @@ def landing_page():
             font-size:0.7em;
             text-transform:uppercase;
             letter-spacing:0.7px;
-            color:#fff;
+            color:#0f172a;
             font-weight:800;
         }
         .weekly-banner-lines{
@@ -7586,13 +7587,13 @@ def landing_page():
             animation:weekly-marquee 26s linear infinite;
         }
         .weekly-banner-line{
-            background:rgba(255,255,255,0.06);
-            border:1px solid rgba(255,255,255,0.12);
+            background:#f8fafc;
+            border:1px solid rgba(15,23,42,0.14);
             border-radius:999px;
             padding:6px 14px;
             font-size:0.95em;
             font-weight:700;
-            color:#fff;
+            color:#0f172a;
             white-space:nowrap;
             display:flex;
             gap:10px;
@@ -7614,8 +7615,8 @@ def landing_page():
             flex-direction:column;text-align:center;
         }
         .free-icon{font-size:2.2em;display:inline-flex;align-items:center;justify-content:center;}
-        .free-title{font-size:1.15em;font-weight:800;color:#fff;margin-bottom:6px;}
-        .free-body{font-size:.93em;color:#fff;line-height:1.6;max-width:620px;}
+        .free-title{font-size:1.15em;font-weight:800;color:#0f172a;margin-bottom:6px;}
+        .free-body{font-size:.93em;color:#334155;line-height:1.6;max-width:620px;}
 
         /* ── Sports grid ── */
         .section{padding:120px 30px 70px;max-width:1200px;margin:0 auto;}
@@ -7627,15 +7628,15 @@ def landing_page():
             font-size:1.4em;
             margin-top:22px;
         }
-        .section-sub{text-align:center;color:#fff;font-size:.93em;margin-bottom:40px;}
+        .section-sub{text-align:center;color:#334155;font-size:.93em;margin-bottom:40px;}
         .sport-slider{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 32px;}
         .slider-arrow{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.6);color:#fff;font-size:1.3em;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;user-select:none;flex-shrink:0;}
         .slider-arrow:hover{background:rgba(255,255,255,0.25);transform:scale(1.08);}
         .sport-badges{display:flex;gap:8px;overflow-x:auto;padding:4px;max-width:860px;scroll-behavior:smooth;}
-        .sport-pill{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;text-decoration:none;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);color:#fff;font-size:.82em;font-weight:700;white-space:nowrap;transition:all .2s;}
-        .sport-pill:hover{border-color:var(--gold);color:#fff;}
+        .sport-pill{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;text-decoration:none;background:#ffffff;border:2px solid rgba(15,23,42,0.18);color:#0f172a;font-size:.82em;font-weight:700;white-space:nowrap;transition:all .2s;}
+        .sport-pill:hover{border-color:var(--gold);color:#0f172a;}
         .sport-pill.live{background:rgba(16,185,129,.18);border-color:rgba(16,185,129,.5);}
-        .sport-pill-status{font-weight:600;opacity:.9;font-size:.7em;text-transform:uppercase;letter-spacing:.4px;color:#fff;}
+        .sport-pill-status{font-weight:600;opacity:.9;font-size:.7em;text-transform:uppercase;letter-spacing:.4px;color:#334155;}
         .sports-grid{
             display:grid;
             grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
@@ -7664,8 +7665,8 @@ def landing_page():
         }
         .sport-icon{font-size:2.8em;margin-bottom:10px;}
         .sport-name{font-size:1.15em;font-weight:700;margin-bottom:4px;}
-        .sport-status{font-size:.78em;color:#fff;text-transform:uppercase;letter-spacing:.5px;}
-        .sport-status.live-text{color:#fff;font-weight:700;}
+        .sport-status{font-size:.78em;color:#334155;text-transform:uppercase;letter-spacing:.5px;}
+        .sport-status.live-text{color:#0f172a;font-weight:700;}
 
         /* ── How it works ── */
         .how-section{
@@ -7687,7 +7688,7 @@ def landing_page():
             font-weight:900;font-size:1.1em;margin:0 auto 14px;
         }
         .step-title{font-weight:700;font-size:1em;margin-bottom:8px;}
-        .step-body{font-size:.86em;color:#fff;line-height:1.6;}
+        .step-body{font-size:.86em;color:#334155;line-height:1.6;}
 
         /* ── Moneyline Units Banner ── */
         .units-marquee-wrap{
@@ -7724,16 +7725,16 @@ def landing_page():
             border-color:rgba(239,68,68,0.45);
             background:rgba(239,68,68,0.12);
         }
-        .up-label{color:#fff;}
+        .up-label{color:#0f172a;}
         .up-units{font-size:1.05em;font-weight:900;color:#10b981;}
         .units-pill.negative .up-units{color:#ef4444;}
         .up-rec{color:#94a3b8;font-size:0.82em;}
 
         /* ── Footer ── */
         .site-footer{
-            background:rgba(7,10,20,0.4);
+            background:#ffffff;
             backdrop-filter:blur(16px);
-            border-top:1px solid rgba(255,255,255,0.06);
+            border-top:1px solid rgba(15,23,42,0.12);
             padding:18px 30px 80px;
             color:#94a3b8;
             font-size:0.78em;
@@ -7754,7 +7755,7 @@ def landing_page():
         }
         .footer-logo-img{height:32px;width:auto;}
         .footer-email a{color:#94a3b8;text-decoration:none;font-size:0.95em;}
-        .footer-email a:hover{color:#fff;}
+        .footer-email a:hover{color:#0f172a;}
         .footer-center{
             display:flex;
             align-items:center;
@@ -7762,8 +7763,8 @@ def landing_page():
             flex-wrap:wrap;
         }
         .footer-center a{color:#94a3b8;text-decoration:none;font-size:0.95em;}
-        .footer-center a:hover{color:#fff;}
-        .footer-center span{color:rgba(255,255,255,0.2);}
+        .footer-center a:hover{color:#0f172a;}
+        .footer-center span{color:rgba(15,23,42,0.2);}
         .footer-right{color:#94a3b8;font-size:0.9em;white-space:nowrap;}
         .footer-socials{
             display:flex;
@@ -7772,7 +7773,7 @@ def landing_page():
         }
         .footer-socials a{display:flex;opacity:0.6;transition:opacity 0.2s;}
         .footer-socials a:hover{opacity:1;}
-        .footer-socials img{width:20px;height:20px;filter:brightness(0) invert(1);}
+        .footer-socials img{width:20px;height:20px;filter:none;}
 
         /* ── Responsive ── */
         @media(max-width:700px){
@@ -7940,17 +7941,17 @@ def landing_page():
         </span>
     </div>
     <h2 class="section-title" style="margin-bottom:6px;">Top Value Picks Today</h2>
-    <p class="section-sub" style="color:#e2e8f0;">Ranked by edge quality, model agreement, and confidence</p>
+    <p class="section-sub" style="color:#334155;">Ranked by edge quality, model agreement, and confidence</p>
     <div style="display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;">
         {% for tp in todays_picks %}
         {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
-        <a href="/{{ tp.slug }}" style="display:block;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(255,255,255,0.14)';this.style.boxShadow='none';">
+        <a href="/{{ tp.slug }}" style="display:block;background:#ffffff;border:1px solid rgba(15,23,42,0.18);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 22px rgba(15,23,42,0.12)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(15,23,42,0.18)';this.style.boxShadow='none';">
             <div style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;">{{ tp.sport }}</div>
-            <div style="font-weight:800;font-size:1.02em;color:#fff;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#94a3b8;font-weight:600;">vs</span> {{ tp.home }}</div>
+            <div style="font-weight:800;font-size:1.02em;color:#0f172a;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
             <div style="display:flex;align-items:baseline;gap:10px;">
                 <span style="color:#10b981;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
-                <span style="color:#fff;font-weight:800;">{{ _disp_pct }}%</span>
-                <span style="color:#94a3b8;font-size:0.78em;font-weight:600;">Moneyline</span>
+                <span style="color:#0f172a;font-weight:800;">{{ _disp_pct }}%</span>
+                <span style="color:#64748b;font-size:0.78em;font-weight:600;">Moneyline</span>
             </div>
         </a>
         {% endfor %}
@@ -7962,7 +7963,7 @@ def landing_page():
 <!-- Sports grid -->
 <div class="section">
     <h2 class="section-title">Today’s Picks by Sport</h2>
-    <p class="section-sub" style="color:#e2e8f0;">Live model projections updated daily</p>
+    <p class="section-sub" style="color:#334155;">Live model projections updated daily</p>
     <div class="sports-grid">
         {% for s in landing_sports %}
         <a href="/{{ s.seo_slug }}" class="sport-card {% if s.is_live %}live{% endif %}" style="transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-3px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='';this.style.boxShadow='none';">
@@ -7970,7 +7971,7 @@ def landing_page():
             <div class="sport-icon">{{ s.icon }}</div>
             <div class="sport-name">{{ s.name }}</div>
             <div class="sport-status {% if s.is_live %}live-text{% endif %}">{{ s.status }}</div>
-            <div style="margin-top:8px;font-size:0.72em;color:#e2e8f0;">Today’s projections available</div>
+            <div style="margin-top:8px;font-size:0.72em;color:#334155;">Today’s projections available</div>
             <div style="margin-top:4px;font-size:0.78em;color:#fbbf24;font-weight:700;">View Picks →</div>
         </a>
         {% endfor %}
@@ -8004,11 +8005,10 @@ def landing_page():
 
 <!-- Daily Results Box (above How It Works) -->
 <div style="max-width:720px;margin:26px auto 24px;padding:0 24px;">
-    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
-        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.95),rgba(15,23,42,0.95));"></div>
+    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(15,23,42,0.16);background:#ffffff;">
         <div style="position:relative;padding:32px 28px;text-align:center;">
             <h2 style="font-size:1.5em;font-weight:900;color:#fbbf24;">Daily Betting Results Report</h2>
-            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
+            <p style="color:#334155;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
             <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
         </div>
     </div>
@@ -8071,12 +8071,12 @@ def landing_page():
 <!-- See What You're Missing -->
 <div class="section" style="padding-top:10px;padding-bottom:30px;">
     <h2 class="section-title">See What You’re Missing</h2>
-    <p class="section-sub" style="color:#e2e8f0;">The public sees picks. Members see the edge.</p>
+    <p class="section-sub" style="color:#334155;">The public sees picks. Members see the edge.</p>
     <div class="landing-pricing-row">
-        <div class="landing-price-card" style="background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03));border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:24px;">
-            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 8px;color:#e2e8f0;">Free Picks</h3>
+        <div class="landing-price-card" style="background:#ffffff;border:1px solid rgba(15,23,42,0.22);border-radius:14px;padding:24px;">
+            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 8px;color:#0f172a;">Free Picks</h3>
             <div style="font-size:0.78em;color:#94a3b8;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.4px;line-height:1.35;min-height:2.7em;">Updated daily &middot; no subscription</div>
-            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#e2e8f0;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
+            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#0f172a;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Moneyline picks across 9 sports</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model-generated win probability for every game</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Proprietary AI odds engine pricing (not public consensus)</span></li>
@@ -8085,10 +8085,10 @@ def landing_page():
             </ul>
             <a href="/nba-picks" class="landing-price-cta landing-price-cta--light" style="text-align:center;background:#fff;color:#0f172a;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;">View Free Picks</a>
         </div>
-        <div class="landing-price-card" style="background:linear-gradient(180deg,rgba(251,191,36,0.12),rgba(245,158,11,0.06));border:1px solid rgba(251,191,36,0.34);border-radius:14px;padding:24px;">
+        <div class="landing-price-card" style="background:#fffdf5;border:1px solid rgba(251,191,36,0.5);border-radius:14px;padding:24px;">
             <h3 style="font-size:1.05em;font-weight:800;margin:0 0 8px;color:#fbbf24;">Full AI Model Access</h3>
             <div style="font-size:0.78em;color:#fde68a;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.4px;line-height:1.35;min-height:2.7em;">Everything in Free, plus</div>
-            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#f8fafc;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
+            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#0f172a;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Spread betting models (edge-based pricing)</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Over/Under totals with projected game flow</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Predicted final scores (simulation-based outputs)</span></li>
@@ -8099,15 +8099,15 @@ def landing_page():
         </div>
     </div>
     <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">Free moneyline picks and premium spreads, totals, and scores are all updated daily as schedules, injuries, and markets change.</p>
-    <div style="max-width:860px;margin:16px auto 0;background:rgba(15,23,42,0.75);border:1px solid rgba(148,163,184,0.3);border-radius:14px;padding:16px 18px;">
+    <div style="max-width:860px;margin:16px auto 0;background:#ffffff;border:1px solid rgba(15,23,42,0.2);border-radius:14px;padding:16px 18px;">
         <h3 style="font-size:1.1em;font-weight:800;color:#fbbf24;margin:0 0 14px;text-align:center;letter-spacing:0.02em;">Underdogs.bet Performance Stats</h3>
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;color:#e2e8f0;font-size:0.88em;font-weight:700;">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;color:#0f172a;font-size:0.88em;font-weight:700;">
             <div>NBA Totals (2025/2026): 704-500 (+204u)</div>
             <div>NBA Spreads: 822-395 (+427u)</div>
             <div>NHL Spreads: 124-65 (+59u)</div>
             <div>NHL Totals (7 days): 8-1 (+7u)</div>
         </div>
-        <p style="margin-top:12px;color:#cbd5e1;font-size:0.86em;line-height:1.7;">Our models are continuously evaluated across seasons to detect market inefficiencies and pricing edges.</p>
+        <p style="margin-top:12px;color:#334155;font-size:0.86em;line-height:1.7;">Our models are continuously evaluated across seasons to detect market inefficiencies and pricing edges.</p>
     </div>
     <style>
         .landing-pricing-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:860px; margin:0 auto; }
@@ -8194,28 +8194,28 @@ def landing_page():
 
 <!-- SEO Internal Links -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;text-align:center;">
-    <h3 style="font-size:1.15em;font-weight:800;margin-bottom:14px;color:#fff;">Browse AI Picks by League</h3>
+    <h3 style="font-size:1.15em;font-weight:800;margin-bottom:14px;color:#0f172a;">Browse AI Picks by League</h3>
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
-        <a href="/mlb-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">MLB AI Picks &amp; Projections</a>
-        <a href="/nba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NBA AI Picks &amp; Projections</a>
-        <a href="/nhl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NHL AI Picks &amp; Projections</a>
-        <a href="/nfl-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NFL AI Picks &amp; Projections</a>
-        <a href="/soccer-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">Soccer AI Picks &amp; Projections</a>
-        <a href="/ncaab-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">NCAAB AI Picks &amp; Projections</a>
-        <a href="/wnba-picks" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">WNBA AI Picks &amp; Projections</a>
-        <a href="/daily-report" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">Daily Betting Results Report</a>
-        <a href="/llms.txt" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">LLMs Discovery File</a>
-        <a href="/ai.txt" style="color:#f1f5f9;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;">AI Crawler Hints</a>
+        <a href="/mlb-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">MLB AI Picks &amp; Projections</a>
+        <a href="/nba-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NBA AI Picks &amp; Projections</a>
+        <a href="/nhl-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NHL AI Picks &amp; Projections</a>
+        <a href="/nfl-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NFL AI Picks &amp; Projections</a>
+        <a href="/soccer-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">Soccer AI Picks &amp; Projections</a>
+        <a href="/ncaab-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NCAAB AI Picks &amp; Projections</a>
+        <a href="/wnba-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">WNBA AI Picks &amp; Projections</a>
+        <a href="/daily-report" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">Daily Betting Results Report</a>
+        <a href="/llms.txt" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">LLMs Discovery File</a>
+        <a href="/ai.txt" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">AI Crawler Hints</a>
     </div>
 </div>
 
 <!-- Recent archive links: same URLs for crawlers; collapsed by default for a cleaner home layout -->
 <div class="section" style="padding-top:0;padding-bottom:28px;text-align:center;">
-    <details style="max-width:980px;margin:0 auto;text-align:left;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 14px;">
-        <summary style="cursor:pointer;font-size:0.95em;font-weight:700;color:#cbd5e1;list-style-position:outside;">Recent dated picks archive <span style="font-weight:500;opacity:0.75;">(last 3 days per league)</span></summary>
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">
+    <details style="max-width:980px;margin:0 auto;text-align:left;background:#ffffff;border:1px solid rgba(15,23,42,0.14);border-radius:12px;padding:10px 14px;">
+        <summary style="cursor:pointer;font-size:0.95em;font-weight:700;color:#0f172a;list-style-position:outside;">Recent dated picks archive <span style="font-weight:500;opacity:0.75;">(last 3 days per league)</span></summary>
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(15,23,42,0.08);">
             {% for _lnk in seo_archive_links %}
-            <a href="{{ _lnk.url }}" style="color:#cbd5e1;text-decoration:none;font-size:0.82em;padding:6px 12px;border:1px solid rgba(255,255,255,0.14);border-radius:8px;">{{ _lnk.label }}</a>
+            <a href="{{ _lnk.url }}" style="color:#0f172a;text-decoration:none;font-size:0.82em;padding:6px 12px;border:1px solid rgba(15,23,42,0.16);border-radius:8px;background:#f8fafc;">{{ _lnk.label }}</a>
             {% endfor %}
         </div>
     </details>
@@ -8227,12 +8227,12 @@ def landing_page():
         <h2 class="section-title" style="margin-bottom:6px;">Share underdogs.bet</h2>
         <p class="section-sub" style="color:#94a3b8;margin-bottom:16px;">Share our performance snapshot and site with your network.</p>
         <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
-            <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on X</a>
-            <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on Facebook</a>
-            <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on LinkedIn</a>
-            <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on WhatsApp</a>
-            <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on Reddit</a>
-            <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share by Email</a>
+            <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on X</a>
+            <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on Facebook</a>
+            <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on LinkedIn</a>
+            <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on WhatsApp</a>
+            <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on Reddit</a>
+            <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share by Email</a>
         </div>
         <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:14px;">
             <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">Instagram</a>
@@ -8327,6 +8327,7 @@ def site_search():
     if not raw_query:
         return redirect(url_for('landing_page'))
     q = raw_query.lower()
+    tokens = [tok for tok in re.split(r'[^a-z0-9]+', q) if tok]
 
     # Quick route intents.
     intent_routes = {
@@ -8349,10 +8350,13 @@ def site_search():
     for keyword, route in intent_routes.items():
         if keyword in q:
             return redirect(route)
+    if any(k in q for k in ('grinder', 'xsharp', 'confidence', 'over', 'under', '%')):
+        return redirect('/results')
 
     # Team / matchup query: send users to sport page where latest matching game lives.
     try:
         conn = get_db_connection()
+        like_pattern = f"%{' '.join(tokens) if tokens else q}%"
         row = conn.execute(
             """
             SELECT sport
@@ -8362,11 +8366,27 @@ def site_search():
             ORDER BY game_date DESC
             LIMIT 1
             """,
+            (like_pattern, like_pattern)
+        ).fetchone()
+        if row:
+            sport_slug = SPORT_SEO_SLUGS.get((row['sport'] or '').upper())
+            if sport_slug:
+                conn.close()
+                return redirect(f'/{sport_slug}')
+        pred_row = conn.execute(
+            """
+            SELECT sport
+            FROM predictions
+            WHERE LOWER(COALESCE(home_team_id,'')) LIKE ?
+               OR LOWER(COALESCE(away_team_id,'')) LIKE ?
+            ORDER BY game_date DESC
+            LIMIT 1
+            """,
             (f'%{q}%', f'%{q}%')
         ).fetchone()
         conn.close()
-        if row:
-            sport_slug = SPORT_SEO_SLUGS.get((row['sport'] or '').upper())
+        if pred_row:
+            sport_slug = SPORT_SEO_SLUGS.get((pred_row['sport'] or '').upper())
             if sport_slug:
                 return redirect(f'/{sport_slug}')
     except Exception:
