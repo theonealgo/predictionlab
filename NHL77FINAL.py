@@ -1346,17 +1346,17 @@ _MONTH_NAMES = {
 }
 _MONTH_NAME_TO_NUM = {v: k for k, v in _MONTH_NAMES.items()}
 
-# Sport-specific background images for predictions pages
+# Image backgrounds removed site-wide
 SPORT_BG_IMAGES = {
-    'NFL': '/static/sandro-schuh-HgwY_YQ1m0w-unsplash.jpg',
-    'NCAAF': '/static/sandro-schuh-HgwY_YQ1m0w-unsplash.jpg',
-    'SOCCER': '/static/maxim-hopman-xyDkHkvDYp4-unsplash.jpg',
-    'NBA': '/static/IMG_2695.jpeg',
-    'WNBA': '/static/IMG_2695.jpeg',
-    'NCAAB': '/static/IMG_2695.jpeg',
-    'NCAAW': '/static/IMG_2695.jpeg',
-    'MLB': '/static/baseball.jpg',
-    'NHL': '/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg',
+    'NFL': '',
+    'NCAAF': '',
+    'SOCCER': '',
+    'NBA': '',
+    'WNBA': '',
+    'NCAAB': '',
+    'NCAAW': '',
+    'MLB': '',
+    'NHL': '',
 }
 
 # Curated soccer leagues (ESPN metadata → canonical display names)
@@ -4797,26 +4797,20 @@ BASE_TEMPLATE = """
     {% if page_description is defined and page_description %}{% set _meta_desc = page_description %}
     {% elif sport_info is defined %}{% set _meta_desc = sport_info.name ~ ' predictions, results, spreads, and totals powered by AI.' %}
     {% else %}{% set _meta_desc = 'AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA, and Soccer.' %}{% endif %}
-    {% if page_image is defined and page_image %}{% set _meta_image = page_image %}
-    {% else %}{% set _meta_image = request.url_root.rstrip('/') ~ '/static/Logo.PNG' %}{% endif %}
     <title>{{ _meta_title }}</title>
     <meta name="description" content="{{ _meta_desc }}">
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.underdogs.bet{{ request.path }}">
-    <meta property="og:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <meta property="og:site_name" content="underdogs.bet">
-    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
     <meta name="author" content="underdogs.bet">
     <meta name="publisher" content="GoodsandMore Inc.">
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
-    <link rel="icon" type="image/png" href="/static/Logo.PNG">
-    <link rel="apple-touch-icon" href="/static/Logo.PNG">
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
     <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-R4XM0WKTGG');</script>
     <script type="application/ld+json">
@@ -4825,7 +4819,6 @@ BASE_TEMPLATE = """
       "@type": "Organization",
       "name": "underdogs.bet",
       "url": "https://www.underdogs.bet",
-      "logo": "https://www.underdogs.bet/static/Logo.PNG",
       "sameAs": [
         "https://x.com/underdogs_bet",
         "https://instagram.com/underdogs.bet",
@@ -4847,11 +4840,10 @@ BASE_TEMPLATE = """
             min-height: 100vh;
         }
         .navbar {
-            background: rgba(255,255,255,0.92);
+            background: #F4F7F9;
             padding: 14px 28px;
-            border-bottom: none;
-            box-shadow: none;
-            backdrop-filter: blur(16px);
+            border-bottom: 1px solid #E0E4E8;
+            box-shadow: 0 2px 8px rgba(26,29,35,0.05);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -4874,51 +4866,35 @@ BASE_TEMPLATE = """
             width: auto;
             display: block;
         }
-        .hamburger {
-            display: flex;
-            flex-direction: column;
-            cursor: pointer;
-            gap: 5px;
-            padding: 7px;
-            border-radius: 10px;
-            background: transparent;
-            border: none;
-        }
-        .hamburger:hover {
-            background: rgba(255, 255, 255, 0.08);
-        }
-        .hamburger span {
-            width: 24px;
-            height: 2px;
-            background: #0f172a;
-            border-radius: 2px;
-            transition: 0.3s;
-        }
+        .hamburger { display: none; }
         .nav-links {
-            position: absolute;
-            top: 64px;
-            right: 22px;
-            background: #ffffff;
-            flex-direction: column;
-            gap: 2px;
-            padding: 10px;
-            border: 1px solid rgba(15,23,42,0.18);
-            border-radius: 14px;
+            position: static;
+            background: transparent;
+            flex-direction: row;
+            gap: 6px;
+            padding: 0;
+            border: none;
+            border-radius: 0;
             display: flex;
-            min-width: 200px;
-            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
-            opacity: 0;
-            transform: translateY(-8px) scale(0.98);
-            pointer-events: none;
-            transition: opacity 0.22s ease, transform 0.22s ease;
+            min-width: 0;
+            box-shadow: none;
+            opacity: 1;
+            transform: none;
+            pointer-events: auto;
+            transition: none;
+            flex-wrap: wrap;
+            justify-content: center;
         }
-        .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+        .nav-links.active { opacity: 1; transform: none; pointer-events: auto; }
         .nav-links a {
-            color: #0f172a;
+            color: #1A1D23;
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.3s;
+            transition: all 0.2s;
             white-space: nowrap;
+            padding: 7px 9px;
+            border-radius: 999px;
+            font-size: 0.82em;
         }
         .nav-section-title { display: none; }
         .nav-divider { display: none; }
@@ -4934,14 +4910,8 @@ BASE_TEMPLATE = """
             background: rgba(255, 255, 255, 0.1);
             margin: 6px 0;
         }
-        .nav-links a:hover {
-            color: #0f172a;
-            background: rgba(15,23,42,0.08);
-        }
-        .nav-links a.active {
-            color: #0f172a;
-            background: rgba(15,23,42,0.12);
-        }
+        .nav-links a:hover { color: #00529B; background: rgba(0,82,155,0.08); }
+        .nav-links a.active { color: #00529B; background: rgba(0,82,155,0.12); }
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             color: #fff !important;
@@ -4989,24 +4959,13 @@ BASE_TEMPLATE = """
         @media (max-width: 700px) {
             .footer-inner { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
         }
+        @media (max-width: 1100px) {
+            .navbar-content { flex-wrap: wrap; justify-content: center; }
+            .nav-links { justify-content: center; }
+        }
         @media (max-width: 768px) {
-            .nav-links {
-                left: 0;
-                right: 0;
-                top: 70px;
-                padding: 20px;
-                border-radius: 0;
-                border-left: none;
-                border-right: none;
-                border-bottom: 2px solid #334155;
-            }
-            .nav-links a, .nav-links .nav-group-title {
-                padding: 12px;
-                border-bottom: 1px solid rgba(15, 23, 42, 0.1);
-            }
-            .container {
-                padding: 20px 15px;
-            }
+            .nav-links a { font-size: 0.78em; padding: 6px 8px; }
+            .container { padding: 20px 15px; }
         }
         /* Nav dropdown groups */
         .nav-group { position: relative; }
@@ -5022,9 +4981,7 @@ BASE_TEMPLATE = """
 <body>
     <div class="navbar">
         <div class="navbar-content">
-            <a href="/" class="logo">
-                <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img" width="44" height="44">
-            </a>
+            <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">underdogs.bet</a>
             <div class="hamburger" onclick="toggleMenu()">
                 <span></span>
                 <span></span>
@@ -5052,7 +5009,7 @@ BASE_TEMPLATE = """
     <footer class="site-footer">
         <div class="footer-inner">
             <div class="footer-left">
-                <a href="/"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img" width="32" height="32"></a>
+                <a href="/" aria-label="underdogs.bet home" style="text-decoration:none;color:#0f172a;font-weight:900;font-size:1.02em;">underdogs.bet</a>
                 <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
             </div>
             <div class="footer-center">
@@ -5062,11 +5019,11 @@ BASE_TEMPLATE = """
                 <a href="/responsible-gaming">Responsible Gaming</a>
             </div>
             <div class="footer-socials">
-                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener" title="X"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
-                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
-                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener" title="TikTok"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
-                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" title="YouTube" aria-label="underdogs.bet on YouTube"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener" title="X"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
+                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener" title="TikTok"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
+                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" title="YouTube" aria-label="underdogs.bet on YouTube"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
             </div>
             <div class="footer-right">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
         </div>
@@ -5129,7 +5086,7 @@ _SEO_PICKS_PAGE_FOOTER = """
 """
 
 _SEO_RESULTS_PAGE_FOOTER = """
-    <div class="seo-results-footer" style="max-width:920px;margin:40px auto 0;padding:26px 22px;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
+    <div class="seo-results-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
         <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">Understanding These Results</h2>
         <p style="margin-bottom:14px;">The results displayed on this page reflect all tracked picks generated by the model. Performance is measured using standard sports betting metrics such as win percentage, units gained or lost, and overall return on investment.</p>
         <p style="margin-bottom:22px;">These metrics provide a clearer picture of performance beyond simple win/loss records.</p>
@@ -5211,7 +5168,7 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
 TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
-        body{background:url('/static/felix-yu-Ii7adwWwNh4-unsplash.jpg') center/cover no-repeat fixed !important;}
+        body{background:#ffffff !important;}
         body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.85);z-index:0;}
         body>*{position:relative;z-index:1;}
         .tutorial-wrap{max-width:900px;margin:0 auto;padding:20px 0 60px;}
@@ -5316,7 +5273,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     .rpt-card.hl{border:2px solid #fbbf24;}
     .rpt-model{font-size:0.72em;opacity:0.85;margin-bottom:3px;}
     .rpt-acc{font-size:1.35em;font-weight:800;}
-    .rpt-acc.g{color:#10b981;}.rpt-acc.y{color:#fbbf24;}.rpt-acc.r{color:#ef4444;}.rpt-acc.x{color:#94a3b8;}
+    .rpt-acc.g{color:#00C076;}.rpt-acc.y{color:#fbbf24;}.rpt-acc.r{color:#D93025;}.rpt-acc.x{color:#94a3b8;}
     .rpt-rec{font-size:0.78em;opacity:0.8;}
     .rpt-sou-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
     .rpt-total{text-align:center;font-size:0.9em;color:#334155;margin-bottom:18px;}
@@ -5329,7 +5286,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     .rpt-btn-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;}
     .rpt-btn-tk{background:#ffffff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);}
     .rpt-btn-copy{background:#ffffff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);cursor:pointer;}
-    .rpt-btn-copy.copied{background:#10b981;border-color:#10b981;}
+    .rpt-btn-copy.copied{background:#00C076;border-color:#00C076;}
     .rpt-btn-cta{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;}
     .rpt-share-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
     .rpt-cta-row{display:flex;justify-content:center;}
@@ -5467,18 +5424,18 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
     .tab.active { background: linear-gradient(135deg, #3b82f6, #2563eb); }
     .value-picks-container { background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 25px; }
     .pick-card { background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px; border-left: 4px solid; }
-    .pick-card.HIGH { border-left-color: #10b981; }
+    .pick-card.HIGH { border-left-color: #00C076; }
     .pick-card.MEDIUM { border-left-color: #fbbf24; }
     .pick-card.LOW { border-left-color: #3b82f6; }
     .matchup { font-size: 1.4em; font-weight: bold; margin-bottom: 10px; }
-    .pick-team { color: #10b981; font-size: 1.2em; font-weight: bold; }
+    .pick-team { color: #00C076; font-size: 1.2em; font-weight: bold; }
     .edge-badge { display: inline-block; padding: 6px 14px; border-radius: 6px; font-weight: bold; margin: 5px; }
-    .edge-badge.HIGH { background: #10b981; color: white; }
+    .edge-badge.HIGH { background: #00C076; color: white; }
     .edge-badge.MEDIUM { background: #fbbf24; color: black; }
     .edge-badge.LOW { background: #3b82f6; color: white; }
     .situational { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; font-size: 0.9em; opacity: 0.9; }
     .situational-item { background: rgba(255, 255, 255, 0.1); padding: 6px 12px; border-radius: 6px; }
-    .warning { color: #ef4444; font-weight: bold; }
+    .warning { color: #D93025; font-weight: bold; }
     .no-picks { text-align: center; padding: 60px; opacity: 0.7; font-size: 1.2em; }
     """
 ).replace('{% block content %}{% endblock %}', """
@@ -5684,13 +5641,13 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
         font-weight: bold;
     }
     .high-conf {
-        color: #10b981;
+        color: #00C076;
     }
     .med-conf {
         color: #fbbf24;
     }
     .low-conf {
-        color: #ef4444;
+        color: #D93025;
     }
     .no-data {
         text-align: center;
@@ -5719,7 +5676,7 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
             <div id="date-{{ date }}" style="margin-bottom: 40px;">
                 <h2 style="color: #fbbf24; margin-bottom: 15px; padding-left: 10px; {% if date == today_date %}background: rgba(251, 191, 36, 0.1); padding: 10px; border-radius: 8px;{% endif %}">
                     {% if group_by == 'week' %}Week {{ date }}{% else %}📅 {{ date }}{% endif %}
-                    {% if date == today_date %} <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 4px; font-size: 0.8em; margin-left: 10px;">TODAY</span>{% endif %}
+                    {% if date == today_date %} <span style="background: #00C076; color: white; padding: 4px 12px; border-radius: 4px; font-size: 0.8em; margin-left: 10px;">TODAY</span>{% endif %}
                 </h2>
                 <table style="margin-bottom: 20px;">
                     <thead>
@@ -5784,7 +5741,7 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         color: white;
     }
     .tab.active {
-        background: linear-gradient(135deg, #10b981, #059669);
+        background: linear-gradient(135deg, #00C076, #059669);
     }
     .results-table-container {
         background: rgba(255, 255, 255, 0.05);
@@ -5822,11 +5779,11 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         background: rgba(255, 255, 255, 0.05);
     }
     .prob-high {
-        color: #10b981;
+        color: #00C076;
         font-weight: bold;
     }
     .prob-low {
-        color: #ef4444;
+        color: #D93025;
     }
     """
 ).replace('{% block content %}{% endblock %}', """
@@ -5904,7 +5861,7 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         color: white;
     }
     .tab.active {
-        background: linear-gradient(135deg, #10b981, #059669);
+        background: linear-gradient(135deg, #00C076, #059669);
     }
     .results-container {
         background: rgba(255, 255, 255, 0.05);
@@ -6023,7 +5980,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .page-title { font-size: 2.2em; margin-bottom: 20px; text-align: center; padding:22px 18px; border:1px solid rgba(15,23,42,0.14); border-radius:12px; position:relative; overflow:hidden; z-index:1; background:#ffffff; color:#0f172a; }
     .section-tabs { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap; }
     .tab { padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; background: #ffffff; color: #0f172a; border:1px solid rgba(15,23,42,0.18); font-size: 0.9em; }
-    .tab.active { background: linear-gradient(135deg, #10b981, #059669); }
+    .tab.active { background: linear-gradient(135deg, #00C076, #059669); }
     /* Type toggle */
     .type-toggle { display:flex; gap:6px; justify-content:center; margin-bottom:16px; }
     .toggle-btn { padding:8px 18px; border-radius:6px; border:2px solid rgba(15,23,42,0.2); background:#fff; color:#0f172a; font-weight:600; font-size:0.85em; cursor:pointer; transition:all 0.2s; }
@@ -6042,8 +5999,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .date-bubble { background:#ffffff; border:2px solid rgba(15,23,42,0.2); border-radius:22px; padding:8px 15px; min-width:100px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.84em; color:#0f172a; }
     .date-bubble:hover { border-color:#fbbf24; }
     .date-bubble.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; font-weight:700; }
-    .date-bubble.today { border-color:#10b981; color:#10b981; }
-    .date-bubble.active.today { background:#10b981; color:white; }
+    .date-bubble.today { border-color:#00C076; color:#00C076; }
+    .date-bubble.active.today { background:#00C076; color:white; }
     /* Date sections */
     .date-section { display:none; background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
@@ -6052,7 +6009,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     @media(max-width:480px){ .results-grid { grid-template-columns:1fr; } .result-card { max-width:100%; } }
     .result-card { background:#f8fafc; border:1px solid rgba(15,23,42,0.12); border-radius:12px; overflow:hidden; transition:border-color 0.2s; }
     .result-card:hover { border-color:#fbbf24; }
-    .result-status { padding:6px 14px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#10b981; background:rgba(16,185,129,0.12); }
+    .result-status { padding:6px 14px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#00C076; background:rgba(16,185,129,0.12); }
     .result-body { display:flex; padding:12px 14px; gap:12px; }
     .teams-section { flex:1; min-width:0; }
     .team-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(15,23,42,0.08); }
@@ -6066,13 +6023,13 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .model-lbl { opacity:0.85; }
     .model-right { display:flex; align-items:center; gap:6px; }
     .model-val { font-weight:600; }
-    .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#10b981; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
+    .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #00C076; color:#00C076; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
     .result-footer { border-top:1px solid rgba(15,23,42,0.09); padding:8px 12px; display:flex; gap:14px; flex-wrap:wrap; background:#ffffff; }
     .sf-item { display:flex; flex-direction:column; gap:1px; }
     .sf-label { color:#94a3b8; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
     .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
-    .pick-ok { color:#10b981; font-weight:700; }
-    .pick-no { color:#ef4444; font-weight:700; }
+    .pick-ok { color:#00C076; font-weight:700; }
+    .pick-no { color:#D93025; font-weight:700; }
     /* Pick confidence grid (results cards) */
     .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#ffffff; }
     .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
@@ -6085,7 +6042,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .pc-name { font-size:0.68em; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; }
     .pc-val { font-size:0.95em; font-weight:800; color:#0f172a; }
     .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; box-sizing:border-box; text-align:center; }
-    .pc-side.home { color:#10b981; background:rgba(16,185,129,0.15); }
+    .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
     .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
     .section-ml, .section-spread, .section-total { display:block; }
     .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
@@ -6093,7 +6050,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .model-card { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:10px; padding:12px; text-align:center; }
     .model-card.highlight { border:2px solid #fbbf24; }
     .model-label { font-size:0.78em; opacity:0.8; margin-bottom:4px; }
-    .model-acc { font-size:1.4em; font-weight:700; color:#10b981; }
+    .model-acc { font-size:1.4em; font-weight:700; color:#00C076; }
     .model-rec { font-size:0.82em; opacity:0.85; }
     .daily-tally { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:16px; margin-bottom:16px; }
     .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.15em; color:#fbbf24; }
@@ -6154,7 +6111,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
                     <div class="daily-model">📈 Spread</div>
                     {% if daily_tally.spread.total > 0 %}
-                    <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy >= 52 %}#10b981{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ daily_tally.spread.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy >= 52 %}#00C076{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ daily_tally.spread.accuracy }}%</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -6164,7 +6121,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
                     <div class="daily-model">🎲 Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
-                    <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy >= 52 %}#10b981{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ daily_tally.total_ou.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy >= 52 %}#00C076{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ daily_tally.total_ou.accuracy }}%</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -6205,7 +6162,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
                     <div class="daily-model">📈 Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
-                    <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy >= 52 %}#10b981{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ weekly_tally.spread.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy >= 52 %}#00C076{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ weekly_tally.spread.accuracy }}%</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -6215,7 +6172,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
                     <div class="daily-model">🎲 Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
-                    <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy >= 52 %}#10b981{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#ef4444{% endif %};">{{ weekly_tally.total_ou.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy >= 52 %}#00C076{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ weekly_tally.total_ou.accuracy }}%</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -6233,16 +6190,16 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── ROI Cards ── -->
         {% if roi_cards %}
-        <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #fbbf24;border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.3em;">💰 Model Performance (Flat Unit Tracking)</h2>
+        <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
+            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
                 {% for mkt, mkt_label in [('moneyline','Moneyline'),('spread','Spread'),('total','Total (O/U)')] %}
                 {% set c = roi_cards[mkt] %}
-                <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:14px;">
-                    <div style="font-size:0.82em;text-align:center;opacity:0.8;margin-bottom:8px;font-weight:700;">{{ mkt_label }}</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;">
-                        <div><div style="opacity:0.6;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi != '—' and '-' not in c.weekly.roi %}#10b981{% elif c.weekly.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
-                        <div><div style="opacity:0.6;">Season</div><div style="font-weight:700;color:{% if c.total.roi != '—' and '-' not in c.total.roi %}#10b981{% elif c.total.roi != '—' %}#ef4444{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.7;font-size:0.9em;">{{ c.total.detail }}</div></div>
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
+                    <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:8px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
+                        <div><div style="opacity:0.8;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi != '—' and '-' not in c.weekly.roi %}#00C076{% elif c.weekly.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
+                        <div><div style="opacity:0.8;">Season</div><div style="font-weight:700;color:{% if c.total.roi != '—' and '-' not in c.total.roi %}#00C076{% elif c.total.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.total.detail }}</div></div>
                     </div>
                 </div>
                 {% endfor %}
@@ -6251,42 +6208,42 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% endif %}
 
         <!-- ── Combined Stats Banner ── -->
-        <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b981;border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;">🏆 Season Performance</h2>
-            <div id="seasonInfoBox" style="display:none;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.78em;color:#cbd5e1;line-height:1.6;text-align:center;">
+        <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance</h2>
+            <div id="seasonInfoBox" style="display:none;background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.78em;color:#334155;line-height:1.6;text-align:center;">
                 Results are tracked from the start of the {{ sport_info.name }} season. All completed games with available model predictions are graded automatically. Game counts reflect actual games graded — some games may lack model data due to missing stats or early-season data gaps. Numbers grow daily as more games are played.
             </div>
-            <div style="text-align:center;margin-bottom:14px;"><span onclick="var b=document.getElementById('seasonInfoBox');b.style.display=b.style.display==='none'?'block':'none';" style="cursor:pointer;font-size:0.75em;color:#94a3b8;border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:3px 10px;">ⓘ What do these numbers mean?</span></div>
+            <div style="text-align:center;margin-bottom:14px;"><span onclick="var b=document.getElementById('seasonInfoBox');b.style.display=b.style.display==='none'?'block':'none';" style="cursor:pointer;font-size:0.75em;color:#475569;border:1px solid rgba(15,23,42,0.18);border-radius:12px;padding:3px 10px;background:#f8fafc;">ⓘ What do these numbers mean?</span></div>
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
-                <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎯 Moneyline (Consensus)</div>
-                    <div style="font-size:2em;font-weight:bold;color:{% if ens.accuracy>=55 %}#10b981{% elif ens.accuracy>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ ens.accuracy }}%</div>
-                    <div style="font-size:0.85em;opacity:0.85;">{{ ens.correct }}-{{ ens.total - ens.correct }} ({{ ens.total }} games)</div>
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline (Consensus)</div>
+                    <div style="font-size:2em;font-weight:bold;color:{% if ens.accuracy>=55 %}#00C076{% elif ens.accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ ens.accuracy }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ ens.correct }}-{{ ens.total - ens.correct }} ({{ ens.total }} games)</div>
                 </div>
                 {% if spread_total_stats is defined and spread_total_stats %}
-                <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">📈 Spread (XSharp)</div>
-                    <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.spread_pct>=52 %}#10b981{% elif spread_total_stats.spread_pct>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ spread_total_stats.spread_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.spread_covered }}-{{ spread_total_stats.spread_graded - spread_total_stats.spread_covered }} ({{ spread_total_stats.spread_graded }} graded)</div>
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread (XSharp)</div>
+                    <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.spread_pct>=52 %}#00C076{% elif spread_total_stats.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ spread_total_stats.spread_pct }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ spread_total_stats.spread_covered }}-{{ spread_total_stats.spread_graded - spread_total_stats.spread_covered }} ({{ spread_total_stats.spread_graded }} graded)</div>
                 </div>
-                <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;margin-bottom:4px;">🎲 O/U (XSharp)</div>
-                    <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.total_pct>=52 %}#10b981{% elif spread_total_stats.total_pct>=50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ spread_total_stats.total_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.85;">{{ spread_total_stats.total_correct }}-{{ spread_total_stats.total_graded - spread_total_stats.total_correct }} ({{ spread_total_stats.total_graded }} graded)</div>
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U (XSharp)</div>
+                    <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.total_pct>=52 %}#00C076{% elif spread_total_stats.total_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ spread_total_stats.total_pct }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ spread_total_stats.total_correct }}-{{ spread_total_stats.total_graded - spread_total_stats.total_correct }} ({{ spread_total_stats.total_graded }} graded)</div>
                 </div>
                 {% else %}
-                <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;">📈 Spread</div><div style="font-size:1.5em;color:#94a3b8;">—</div></div>
-                <div style="background:rgba(255,255,255,0.07);border-radius:9px;padding:14px;text-align:center;">
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.8;">🎲 O/U</div><div style="font-size:1.5em;color:#94a3b8;">—</div></div>
                 {% endif %}
             </div>
-            <div style="border-top:1px solid rgba(255,255,255,0.12);padding-top:12px;"></div>
+            <div style="border-top:1px solid rgba(15,23,42,0.12);padding-top:12px;"></div>
         </div>
 
 
         <!-- ── Model Records ── -->
-        <h3 style="text-align:center;font-size:1.15em;margin:0 0 12px;color:#e2e8f0;">Moneyline Accuracy by Model</h3>
+        <h3 style="text-align:center;font-size:1.15em;margin:0 0 12px;color:#0f172a;">Moneyline Accuracy by Model</h3>
         <div class="model-grid">
             {% for m_label, m_key in model_cards %}
             {% set m = overall_stats[m_key] %}
@@ -6320,7 +6277,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% for date in sorted_dates %}
         {% set date_data = daily_results[date] %}
         <div id="date-{{ date }}" class="date-section">
-            <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#10b981;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
+            <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
 
             <div class="results-grid">
                 {% for game in date_data.games %}
@@ -6333,11 +6290,11 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="result-body">
                         <div class="teams-section">
                             <div class="team-row">
-                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ game.away }}{% if game.away_moneyline is defined and game.away_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.away_moneyline < 0 %}#10b981{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.away_moneyline > 0 %}+{% endif %}{{ game.away_moneyline }}</span>{% endif %}</span>
+                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ game.away }}{% if game.away_moneyline is defined and game.away_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.away_moneyline < 0 %}#00C076{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.away_moneyline > 0 %}+{% endif %}{{ game.away_moneyline }}</span>{% endif %}</span>
                                 <span class="score-box">{{ game.away_score }}</span>
                             </div>
                             <div class="team-row">
-                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ game.home }}{% if game.home_moneyline is defined and game.home_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.home_moneyline < 0 %}#10b981{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.home_moneyline > 0 %}+{% endif %}{{ game.home_moneyline }}</span>{% endif %}</span>
+                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ game.home }}{% if game.home_moneyline is defined and game.home_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.home_moneyline < 0 %}#00C076{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.home_moneyline > 0 %}+{% endif %}{{ game.home_moneyline }}</span>{% endif %}</span>
                                 <span class="score-box">{{ game.home_score }}</span>
                             </div>
                         </div>
@@ -6516,7 +6473,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         color: #0f172a;
     }
     .tab.active {
-        background: linear-gradient(135deg, #10b981, #059669);
+        background: linear-gradient(135deg, #00C076, #059669);
     }
     .week-section {
         background: #ffffff;
@@ -6552,7 +6509,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         text-align: center;
     }
     .week-model-card.best {
-        border: 2px solid #10b981;
+        border: 2px solid #00C076;
         background: rgba(16, 185, 129, 0.1);
     }
     .daily-tally { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:16px; margin-bottom:20px; }
@@ -6603,17 +6560,17 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         font-weight: bold;
     }
     .winner {
-        color: #10b981;
+        color: #00C076;
     }
     .loser {
-        color: #ef4444;
+        color: #D93025;
     }
     .prob-correct {
-        color: #10b981;
+        color: #00C076;
         font-weight: bold;
     }
     .prob-wrong {
-        color: #ef4444;
+        color: #D93025;
     }
     .no-data {
         text-align: center;
@@ -6681,19 +6638,19 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     {% if weekly_results and overall_stats %}
         {% set ens = overall_stats.ensemble %}
         <!-- Overall per-model performance -->
-        <div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px solid #10b981; border-radius: 15px; padding: 25px; margin-bottom: 25px;">
-            <h2 style="text-align: center; margin: 0 0 20px 0; font-size: 1.8em;">🏆 Overall Model Performance &mdash; {{ ens.total }} Games</h2>
+        <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:15px;padding:25px;margin-bottom:25px;">
+            <h2 style="text-align:center;margin:0 0 20px 0;font-size:1.8em;color:#0f172a;">🏆 Overall Model Performance &mdash; {{ ens.total }} Games</h2>
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
                 {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
                 {% set m = overall_stats[m_key] %}
-                <div style="background: rgba(255,255,255,0.08); border-radius: 10px; padding: 15px; text-align: center; {% if m_key == 'ensemble' %}border: 2px solid #fbbf24; grid-column: span 4;{% endif %}">
-                    <div style="font-size: 0.9em; opacity: 0.8; margin-bottom: 4px;">{{ m_label }}</div>
-                    <div style="font-size: {% if m_key == 'ensemble' %}2.8em{% else %}1.9em{% endif %}; font-weight: bold; color: {% if m.accuracy >= 55 %}#10b981{% elif m.accuracy >= 50 %}#fbbf24{% else %}#ef4444{% endif %};">{{ m.accuracy }}%</div>
-                    <div style="font-size: 0.9em; opacity: 0.85;">{{ m.correct }}-{{ m.total - m.correct }}</div>
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:15px;text-align:center;{% if m_key == 'ensemble' %}border:2px solid #fbbf24; grid-column: span 4;{% endif %}">
+                    <div style="font-size:0.9em;opacity:0.9;margin-bottom:4px;color:#334155;">{{ m_label }}</div>
+                    <div style="font-size: {% if m_key == 'ensemble' %}2.8em{% else %}1.9em{% endif %}; font-weight: bold; color: {% if m.accuracy >= 55 %}#00C076{% elif m.accuracy >= 50 %}#fbbf24{% else %}#D93025{% endif %};">{{ m.accuracy }}%</div>
+                    <div style="font-size:0.9em;opacity:0.9;color:#334155;">{{ m.correct }}-{{ m.total - m.correct }}</div>
                 </div>
                 {% endfor %}
             </div>
-            <div style="border-top: 1px solid rgba(255,255,255,0.15); padding-top: 15px;"></div>
+            <div style="border-top:1px solid rgba(15,23,42,0.12);padding-top:15px;"></div>
         </div>
         {% for week_num in weekly_results|dictsort(reverse=true) %}
         {% set week_data = weekly_results[week_num[0]] %}
@@ -7276,15 +7233,11 @@ def landing_page():
     <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.underdogs.bet/">
-    <meta property="og:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <meta property="og:site_name" content="underdogs.bet">
-    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
     <meta name="twitter:description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
-    <meta name="twitter:image" content="https://www.underdogs.bet/static/Logo.PNG">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
-    <link rel="icon" type="image/png" href="/static/Logo.PNG">
-    <link rel="apple-touch-icon" href="/static/Logo.PNG">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
@@ -7301,7 +7254,6 @@ def landing_page():
       "@type": "Organization",
       "name": "underdogs.bet",
       "url": "https://www.underdogs.bet",
-      "logo": "https://www.underdogs.bet/static/Logo.PNG",
       "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
       "email": "underdogsbetemail@gmail.com",
       "telephone": "+1-519-992-8484",
@@ -7336,23 +7288,22 @@ def landing_page():
     {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do your AI sports betting picks work?","acceptedAnswer":{"@type":"Answer","text":"Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions. Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available."}},{"@type":"Question","name":"What makes your picks different from sportsbooks?","acceptedAnswer":{"@type":"Answer","text":"Sportsbooks set odds based on balancing action and public perception, not just true probability. Our system creates its own projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential positive expected value opportunity."}},{"@type":"Question","name":"How do you find value bets?","acceptedAnswer":{"@type":"Answer","text":"We compare model projections against sportsbook lines for moneyline, spread, and totals markets. When the difference is significant, the market may be mispricing the game."}},{"@type":"Question","name":"What does the probability percentage mean?","acceptedAnswer":{"@type":"Answer","text":"Each model outputs a win probability for every game. For example, if our model gives a team a 60 percent chance to win but the sportsbook implies 50 percent, that creates value."}},{"@type":"Question","name":"Do your models agree on every pick?","acceptedAnswer":{"@type":"Answer","text":"No. Each of our four AI models has a different methodology. We display individual model predictions and a consensus view so users can see where agreement is strongest."}},{"@type":"Question","name":"What sports do you cover?","acceptedAnswer":{"@type":"Answer","text":"We currently focus on major markets like MLB, NBA, NFL, and other high-liquidity sports where data quality is strong and inefficiencies can be identified."}},{"@type":"Question","name":"Are your results tracked publicly?","acceptedAnswer":{"@type":"Answer","text":"Yes. Every pick is tracked with full transparency including wins, losses, and performance over time."}},{"@type":"Question","name":"Is there a refund policy?","acceptedAnswer":{"@type":"Answer","text":"Yes. Monthly plan has a 10-day return window and yearly plan has a 30-day return window."}},{"@type":"Question","name":"Are your picks guaranteed to win?","acceptedAnswer":{"@type":"Answer","text":"No system can guarantee wins. Sports betting involves variance, and even strong positive expected value strategies will have losing streaks."}},{"@type":"Question","name":"Who are these picks for?","acceptedAnswer":{"@type":"Answer","text":"These picks are designed for bettors who want a structured, data-driven approach rather than guesswork or public trends."}}]}
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"image":["https://www.underdogs.bet/static/Logo.PNG"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
+    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         :root{
             --gold:#fbbf24;--gold2:#f59e0b;
-            --green:#10b981;--red:#ef4444;
-            --bg:#ffffff;--surface:rgba(15,23,42,0.04);
-            --border:rgba(15,23,42,0.12);
+            --green:#00C076;--red:#D93025;
+            --bg:#ffffff;--surface:#F4F7F9;
+            --border:#E0E4E8;
+            --text:#1A1D23;
+            --link:#00529B;
         }
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-            background:
-                radial-gradient(1200px 600px at 70% -10%, rgba(251,191,36,0.10), transparent 60%),
-                radial-gradient(900px 500px at -10% 20%, rgba(16,185,129,0.05), transparent 60%),
-                #ffffff;
-            color:#0f172a;
+            background:#ffffff;
+            color:var(--text);
             min-height:100vh;
             overflow-x:hidden;
             position:relative;
@@ -7368,11 +7319,10 @@ def landing_page():
 
         /* ── Navbar ── */
         .navbar{
-            background:rgba(255,255,255,0.92);
+            background:#F4F7F9;
             padding: 14px 28px;
-            border-bottom: none;
-            box-shadow: none;
-            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 2px 8px rgba(26,29,35,0.05);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -7392,9 +7342,10 @@ def landing_page():
             align-items: center;
             gap: 8px;
             background: #ffffff;
-            border: 1px solid rgba(15,23,42,0.2);
+            border: 1px solid var(--border);
             border-radius: 999px;
             padding: 5px 8px 5px 14px;
+            box-shadow: 0 3px 10px rgba(26,29,35,0.08);
         }
         .nav-search input {
             flex: 1;
@@ -7402,20 +7353,21 @@ def landing_page():
             border: none;
             outline: none;
             background: transparent;
-            color: #0f172a;
+            color: var(--text);
             font-size: 0.9em;
         }
         .nav-search input::placeholder { color: #64748b; }
         .nav-search button {
             border: none;
-            background: linear-gradient(135deg,#fbbf24,#f59e0b);
-            color: #111827;
+            background: #ffffff;
+            color: var(--link);
+            border: 1px solid var(--border);
             border-radius: 999px;
             padding: 8px 14px;
             font-weight: 800;
             cursor: pointer;
         }
-        .nav-search-wrap{position:relative;flex:1;max-width:620px;}
+        .nav-search-wrap{position:relative;flex:1;max-width:760px;width:100%;}
         .search-autocomplete{
             display:none;position:absolute;top:48px;left:0;right:0;z-index:1100;
             background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:10px;
@@ -7435,8 +7387,8 @@ def landing_page():
             transition:opacity .2s ease;
             white-space:nowrap;
         }
-        .auth-btn.signup { background:linear-gradient(135deg,#fbbf24,#f59e0b); color:#111827; }
-        .auth-btn.login { border:1px solid rgba(15,23,42,0.35); color:#0f172a; background:#fff; }
+        .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
+        .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
         .auth-btn:hover { opacity:.9; }
         .search-results-wrap{
             max-width:1200px;
@@ -7459,7 +7411,7 @@ def landing_page():
         }
         .search-results p{margin:0 0 8px;color:#334155;font-size:0.9em;}
         .search-results ul{margin:0;padding-left:18px;color:#0f172a;font-size:0.88em;display:grid;gap:5px;}
-        .search-results a{color:#0f172a;text-decoration:underline;}
+        .search-results a{color:var(--link);text-decoration:underline;}
         .perf-dashboard{
             max-width:1200px;margin:10px auto 0;padding:14px 16px;background:#fff;
             border:1px solid rgba(15,23,42,0.16);border-radius:12px;
@@ -7477,22 +7429,16 @@ def landing_page():
             align-items: center;
             gap: 10px;
             text-decoration: none;
+            color: var(--text);
+            font-weight: 900;
+            font-size: 1.08em;
         }
         .logo-img {
             height: 44px;
             width: auto;
             display: block;
         }
-        .hamburger {
-            display: flex;
-            flex-direction: column;
-            cursor: pointer;
-            gap: 5px;
-            padding: 7px;
-            border-radius: 10px;
-            background: transparent;
-            border: none;
-        }
+        .hamburger { display: none; }
         .hamburger:hover {
             background: rgba(255, 255, 255, 0.08);
         }
@@ -7504,36 +7450,36 @@ def landing_page():
             transition: 0.3s;
         }
         .nav-links {
-            position: absolute;
-            top: 64px;
-            right: 22px;
-            background: #ffffff;
-            flex-direction: column;
-            gap: 2px;
-            padding: 10px;
-            border: 1px solid rgba(15,23,42,0.18);
-            border-radius: 14px;
+            position: static;
+            background: transparent;
+            flex-direction: row;
+            gap: 6px;
+            padding: 0;
+            border: none;
+            border-radius: 0;
             display: flex;
-            min-width: 200px;
-            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
-            opacity: 0;
-            transform: translateY(-8px) scale(0.98);
-            pointer-events: none;
-            transition: opacity 0.22s ease, transform 0.22s ease;
+            min-width: 0;
+            box-shadow: none;
+            opacity: 1;
+            transform: none;
+            pointer-events: auto;
+            transition: none;
+            flex-wrap: wrap;
+            justify-content: center;
         }
-        .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+        .nav-links.active { opacity: 1; transform: none; pointer-events: auto; }
         .nav-links a {
-            color: #0f172a;
+            color: var(--text);
             text-decoration: none;
             font-weight: 600;
-            font-size: 0.88em;
+            font-size: 0.82em;
             transition: all 0.2s;
             white-space: nowrap;
-            padding: 8px 10px;
-            border-radius: 8px;
+            padding: 7px 9px;
+            border-radius: 999px;
         }
-        .nav-links a:hover { color: #0f172a; background: rgba(15,23,42,0.08); }
-        .nav-links a.active { color: #0f172a; background: rgba(15,23,42,0.12); }
+        .nav-links a:hover { color: var(--link); background: rgba(0,82,155,0.08); }
+        .nav-links a.active { color: var(--link); background: rgba(0,82,155,0.12); }
         .nav-section-title { display: none; }
         .nav-divider { display: none; }
         .nav-donate-btn {
@@ -7674,6 +7620,7 @@ def landing_page():
         .section-title{
             text-align:center;font-size:1.9em;font-weight:800;
             margin-bottom:8px;
+            color:var(--text);
         }
         .section-title.secondary{
             font-size:1.4em;
@@ -7694,13 +7641,13 @@ def landing_page():
             gap:16px;
         }
         .sport-card{
-            background:var(--surface);border:1px solid var(--border);
+            background:#ffffff;border:1px solid var(--border);
             border-radius:14px;padding:28px 20px;
             text-align:center;text-decoration:none;color:inherit;
             transition:border-color .2s,transform .2s,box-shadow .2s;
             position:relative;overflow:hidden;
         }
-        .sport-card:hover{border-color:var(--gold);transform:translateY(-4px);box-shadow:0 8px 24px rgba(251,191,36,.15);}
+        .sport-card:hover{border-color:#cdd6dc;transform:translateY(-4px);box-shadow:0 8px 24px rgba(26,29,35,.10);}
         .sport-card.live{border-color:rgba(16,185,129,.4);}
         .sport-card.live:hover{border-color:var(--green);box-shadow:0 8px 24px rgba(16,185,129,.2);}
         .live-dot{
@@ -7729,14 +7676,15 @@ def landing_page():
             display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;
         }
         .step{
-            background:var(--surface);border:1px solid var(--border);
+            background:#ffffff;border:1px solid var(--border);
             border-radius:14px;padding:28px 24px;text-align:center;
         }
         .step-num{
             width:42px;height:42px;border-radius:50%;
-            background:linear-gradient(135deg,#6366f1,#4f46e5);
+            background:#00529B;
             display:flex;align-items:center;justify-content:center;
             font-weight:900;font-size:1.1em;margin:0 auto 14px;
+            color:#ffffff;
         }
         .step-title{font-weight:700;font-size:1em;margin-bottom:8px;}
         .step-body{font-size:.86em;color:#334155;line-height:1.6;}
@@ -7777,8 +7725,8 @@ def landing_page():
             background:rgba(239,68,68,0.12);
         }
         .up-label{color:#0f172a;}
-        .up-units{font-size:1.05em;font-weight:900;color:#10b981;}
-        .units-pill.negative .up-units{color:#ef4444;}
+        .up-units{font-size:1.05em;font-weight:900;color:#00C076;}
+        .units-pill.negative .up-units{color:#D93025;}
         .up-rec{color:#94a3b8;font-size:0.82em;}
 
         /* ── Footer ── */
@@ -7870,8 +7818,9 @@ def landing_page():
         @media (min-width: 769px) {
             body{background-attachment:fixed;}
         }
-        @media (max-width: 980px) {
-            .nav-search { display:none; }
+        @media (max-width: 1100px) {
+            .navbar-content { flex-wrap: wrap; justify-content: center; }
+            .nav-search-wrap { order: 3; width: 100%; max-width: 100%; }
         }
         @media (max-width: 768px) {
             body{
@@ -7883,20 +7832,9 @@ def landing_page():
             }
         }
         @media (max-width: 768px) {
-            .nav-links {
-                left: 0;
-                right: 0;
-                top: 70px;
-                padding: 20px;
-                border-radius: 0;
-                border-left: none;
-                border-right: none;
-                border-bottom: 2px solid #334155;
-            }
-            .nav-links a, .nav-links .nav-group-title {
-                padding: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            }
+            .nav-links { justify-content: center; }
+            .nav-links a { font-size: 0.78em; padding: 6px 8px; }
+            .nav-actions { width: 100%; justify-content: center; }
         }
         .nav-group { position: relative; }
         .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
@@ -7909,14 +7847,11 @@ def landing_page():
         .skip-link { position:absolute; left:-9999px; top:0; z-index:2000; background:#fbbf24; color:#0f172a; padding:10px 14px; font-weight:800; border-radius:0 0 8px 0; text-decoration:none; }
         .skip-link:focus { left:0; outline:2px solid #0f172a; }
         /* Readability override requested: render homepage text in navy. */
-        .navbar a,
-        .navbar span,
-        .navbar div,
         #main-content,
         #main-content *:not(svg):not(path),
         .site-footer,
         .site-footer *:not(svg):not(path) {
-            color: #0f172a !important;
+            color: var(--text) !important;
         }
     </style>
 </head>
@@ -7926,9 +7861,20 @@ def landing_page():
 <!-- Navbar -->
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">
-            underdogs.bet
-        </a>
+        <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
+        <div class="nav-links" id="navLinks">
+            <a href="/nhl-picks">NHL</a>
+            <a href="/nba-picks">NBA</a>
+            <a href="/mlb-picks">MLB</a>
+            <a href="/nfl-picks">NFL</a>
+            <a href="/ncaab-picks">NCAAB</a>
+            <a href="/ncaaw-picks">NCAAW</a>
+            <a href="/ncaaf-picks">NCAAF</a>
+            <a href="/wnba-picks">WNBA</a>
+            {% if soccer_enabled %}
+            <a href="/soccer-picks">Soccer</a>
+            {% endif %}
+        </div>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
                 <input type="text" id="navSearchInput" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
@@ -7944,31 +7890,93 @@ def landing_page():
             <a href="/signup" class="auth-btn signup">Sign Up</a>
             {% endif %}
         </div>
-        <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="navLinks" style="background:transparent;border:none;cursor:pointer;padding:0;">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <div class="nav-links" id="navLinks">
-            <a href="/nhl-picks">🏒 NHL</a>
-            <a href="/nba-picks">🏀 NBA</a>
-            <a href="/mlb-picks">⚾ MLB</a>
-            <a href="/nfl-picks">🏈 NFL</a>
-            <a href="/ncaab-picks">🎓 NCAAB</a>
-            <a href="/ncaaw-picks">🏀 NCAAW</a>
-            <a href="/ncaaf-picks">🏟️ NCAAF</a>
-            <a href="/wnba-picks">🏀 WNBA</a>
-            {% if soccer_enabled %}
-            <a href="/soccer-picks">⚽ Soccer</a>
-            {% endif %}
-        </div>
     </div>
 </div>
 
 <div class="search-results-wrap">
     <div id="searchResults" class="search-results" aria-live="polite"></div>
 </div>
-<div class="search-results-wrap">
+<!-- Hero -->
+<main id="main-content">
+<div class="hero" style="text-align:left;padding:100px 40px 50px;">
+    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Predictions<br>With Real Results</h1>
+    <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
+    <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
+        <a href="/nba-picks" style="background:#fff;color:#0f172a;padding:14px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Today's Picks</a>
+        <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Go Premium</a>
+    </div>
+    <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
+</div>
+<style>
+@keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
+.hero-slide{opacity:0;}
+</style>
+
+<!-- Proof Section -->
+<div style="max-width:800px;margin:0 auto;padding:0 24px 20px;">
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(16,185,129,0.25);border-radius:14px;padding:20px 24px;">
+        <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;text-align:center;">
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#00C076;">{{ games_graded }}+</div>
+                <div style="font-size:0.75em;color:#94a3b8;">Games Graded</div>
+            </div>
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#00C076;">{{ sports_covered }}</div>
+                <div style="font-size:0.75em;color:#94a3b8;">Sports Covered</div>
+            </div>
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#00C076;">5</div>
+                <div style="font-size:0.75em;color:#94a3b8;">AI Models</div>
+            </div>
+            <div style="min-width:120px;">
+                <div style="font-size:1.8em;font-weight:900;color:#00C076;">Daily</div>
+                <div style="font-size:0.75em;color:#94a3b8;">Updates</div>
+            </div>
+        </div>
+        <p style="text-align:center;font-size:0.78em;color:#94a3b8;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#fbbf24;text-decoration:underline;">View full results &rarr;</a></p>
+    </div>
+</div>
+
+<!-- Sticky Bottom Bar -->
+<div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:1.1em;">🏆</div>
+        <span style="font-weight:700;color:#e2e8f0;font-size:0.92em;">Premium Membership</span>
+    </div>
+    <a href="/plans" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 24px;border-radius:999px;font-weight:800;text-decoration:none;font-size:0.88em;box-shadow:0 4px 16px rgba(251,191,36,0.3);">Join Now</a>
+</div>
+<style>body{padding-bottom:66px;}</style>
+
+<!-- Today's AI Picks (live product preview) -->
+{% if todays_picks %}
+<div class="section" style="padding-top:24px;padding-bottom:8px;">
+    <div style="text-align:center;margin-bottom:8px;">
+        <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#00C076;font-size:0.78em;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;padding:5px 14px;border-radius:999px;">
+            <span style="display:inline-block;width:8px;height:8px;background:#00C076;border-radius:50%;animation:pulseDot 1.6s infinite;"></span>
+            Winning Results Tracked Daily
+        </span>
+    </div>
+    <h2 class="section-title" style="margin-bottom:6px;">Top Value Picks Today</h2>
+    <p class="section-sub" style="color:#334155;">Ranked by edge quality, model agreement, and confidence</p>
+    <div style="display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;">
+        {% for tp in todays_picks %}
+        {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
+        <a href="/{{ tp.slug }}" style="display:block;background:#ffffff;border:1px solid rgba(15,23,42,0.18);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 22px rgba(15,23,42,0.12)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(15,23,42,0.18)';this.style.boxShadow='none';">
+            <div style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;">{{ tp.sport }}</div>
+            <div style="font-weight:800;font-size:1.02em;color:#0f172a;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
+            <div style="display:flex;align-items:baseline;gap:10px;">
+                <span style="color:#00C076;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
+                <span style="color:#0f172a;font-weight:800;">{{ _disp_pct }}%</span>
+                <span style="color:#64748b;font-size:0.78em;font-weight:600;">Moneyline</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+<style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
+{% endif %}
+
+<div class="search-results-wrap" style="margin-top:6px;">
     <div class="perf-dashboard" id="perfDashboard">
         <h3 style="margin:0;color:#0f172a;">Model Performance Filters</h3>
         <div class="perf-controls">
@@ -8004,86 +8012,6 @@ def landing_page():
         </div>
     </div>
 </div>
-
-<!-- Hero -->
-<main id="main-content">
-<div class="hero" style="text-align:left;padding:100px 40px 50px;">
-    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Predictions<br>With Real Results</h1>
-    <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
-    <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
-        <a href="/nba-picks" style="background:#fff;color:#0f172a;padding:14px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Today's Picks</a>
-        <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Go Premium</a>
-    </div>
-    <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
-</div>
-<style>
-@keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
-.hero-slide{opacity:0;}
-</style>
-
-<!-- Proof Section -->
-<div style="max-width:800px;margin:0 auto;padding:0 24px 20px;">
-    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(16,185,129,0.25);border-radius:14px;padding:20px 24px;">
-        <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;text-align:center;">
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#10b981;">{{ games_graded }}+</div>
-                <div style="font-size:0.75em;color:#94a3b8;">Games Graded</div>
-            </div>
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#10b981;">{{ sports_covered }}</div>
-                <div style="font-size:0.75em;color:#94a3b8;">Sports Covered</div>
-            </div>
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#10b981;">5</div>
-                <div style="font-size:0.75em;color:#94a3b8;">AI Models</div>
-            </div>
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#10b981;">Daily</div>
-                <div style="font-size:0.75em;color:#94a3b8;">Updates</div>
-            </div>
-        </div>
-        <p style="text-align:center;font-size:0.78em;color:#94a3b8;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#fbbf24;text-decoration:underline;">View full results &rarr;</a></p>
-    </div>
-</div>
-
-<!-- Sticky Bottom Bar -->
-<div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
-    <div style="display:flex;align-items:center;gap:12px;">
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:1.1em;">🏆</div>
-        <span style="font-weight:700;color:#e2e8f0;font-size:0.92em;">Premium Membership</span>
-    </div>
-    <a href="/plans" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 24px;border-radius:999px;font-weight:800;text-decoration:none;font-size:0.88em;box-shadow:0 4px 16px rgba(251,191,36,0.3);">Join Now</a>
-</div>
-<style>body{padding-bottom:66px;}</style>
-
-<!-- Today's AI Picks (live product preview) -->
-{% if todays_picks %}
-<div class="section" style="padding-top:24px;padding-bottom:8px;">
-    <div style="text-align:center;margin-bottom:8px;">
-        <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#10b981;font-size:0.78em;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;padding:5px 14px;border-radius:999px;">
-            <span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:50%;animation:pulseDot 1.6s infinite;"></span>
-            Winning Results Tracked Daily
-        </span>
-    </div>
-    <h2 class="section-title" style="margin-bottom:6px;">Top Value Picks Today</h2>
-    <p class="section-sub" style="color:#334155;">Ranked by edge quality, model agreement, and confidence</p>
-    <div style="display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;">
-        {% for tp in todays_picks %}
-        {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
-        <a href="/{{ tp.slug }}" style="display:block;background:#ffffff;border:1px solid rgba(15,23,42,0.18);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 22px rgba(15,23,42,0.12)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(15,23,42,0.18)';this.style.boxShadow='none';">
-            <div style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;">{{ tp.sport }}</div>
-            <div style="font-weight:800;font-size:1.02em;color:#0f172a;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
-            <div style="display:flex;align-items:baseline;gap:10px;">
-                <span style="color:#10b981;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
-                <span style="color:#0f172a;font-weight:800;">{{ _disp_pct }}%</span>
-                <span style="color:#64748b;font-size:0.78em;font-weight:600;">Moneyline</span>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-<style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
-{% endif %}
 
 <!-- Sports grid -->
 <div class="section">
@@ -8410,12 +8338,13 @@ def landing_page():
             { name: "Detroit Tigers", sport: "MLB", slug: "detroit-tigers" },
             { name: "Boston Celtics", sport: "NBA", slug: "boston-celtics" },
         ];
-        if (!navLinks) return;
-        navLinks.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', function() {
-                navLinks.classList.remove('active');
+        if (navLinks) {
+            navLinks.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', function() {
+                    navLinks.classList.remove('active');
+                });
             });
-        });
+        }
         if (searchForm && resultsEl) {
             let debounceTimer = null;
             if (searchInput && autocompleteEl) {
