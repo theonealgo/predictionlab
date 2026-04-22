@@ -7760,7 +7760,7 @@ def landing_page():
         .up-label{color:#0f172a;}
         .up-units{font-size:1.05em;font-weight:900;color:#00C076;}
         .units-pill.negative .up-units{color:#D93025;}
-        .up-rec{color:#94a3b8;font-size:0.82em;}
+        .up-rec{color:#475569;font-size:0.82em;}
 
         /* ── Footer ── */
         .site-footer{
@@ -7768,7 +7768,7 @@ def landing_page():
             backdrop-filter:blur(16px);
             border-top:1px solid rgba(15,23,42,0.12);
             padding:18px 30px 80px;
-            color:#94a3b8;
+            color:#475569;
             font-size:0.78em;
         }
         .footer-inner{
@@ -7786,7 +7786,7 @@ def landing_page():
             gap:14px;
         }
         .footer-logo-img{height:32px;width:auto;}
-        .footer-email a{color:#94a3b8;text-decoration:none;font-size:0.95em;}
+        .footer-email a{color:#475569;text-decoration:none;font-size:0.95em;}
         .footer-email a:hover{color:#0f172a;}
         .footer-center{
             display:flex;
@@ -7794,10 +7794,10 @@ def landing_page():
             gap:12px;
             flex-wrap:wrap;
         }
-        .footer-center a{color:#94a3b8;text-decoration:none;font-size:0.95em;}
+        .footer-center a{color:#475569;text-decoration:none;font-size:0.95em;}
         .footer-center a:hover{color:#0f172a;}
         .footer-center span{color:rgba(15,23,42,0.2);}
-        .footer-right{color:#94a3b8;font-size:0.9em;white-space:nowrap;}
+        .footer-right{color:#475569;font-size:0.9em;white-space:nowrap;}
         .footer-socials{
             display:flex;
             align-items:center;
@@ -7986,7 +7986,7 @@ def landing_page():
         <a href="/nba-picks" style="background:#ffffff;color:#0f172a;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid rgba(15,23,42,0.2);box-shadow:0 6px 18px rgba(15,23,42,0.12);">View Today's Picks</a>
         <a href="/plans" style="background:#00529B;color:#ffffff;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid #00529B;box-shadow:0 6px 18px rgba(0,82,155,0.28);">Go Premium</a>
     </div>
-    <p class="hero-slide" style="font-size:0.78em;color:#cbd5e1;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
+    <p class="hero-slide" style="font-size:0.78em;color:#e2e8f0;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
 </div>
 <style>
 @keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
@@ -7995,26 +7995,26 @@ def landing_page():
 
 <!-- Proof Section -->
 <div style="max-width:800px;margin:0 auto;padding:0 24px 20px;">
-    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(16,185,129,0.25);border-radius:14px;padding:20px 24px;">
+    <div style="background:#f8fafc;border:1px solid #E0E4E8;border-radius:14px;padding:20px 24px;">
         <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;text-align:center;">
             <div style="min-width:120px;">
                 <div style="font-size:1.8em;font-weight:900;color:#00C076;">{{ games_graded }}+</div>
-                <div style="font-size:0.75em;color:#94a3b8;">Games Graded</div>
+                <div style="font-size:0.75em;color:#475569;font-weight:600;">Games Graded</div>
             </div>
             <div style="min-width:120px;">
                 <div style="font-size:1.8em;font-weight:900;color:#00C076;">{{ sports_covered }}</div>
-                <div style="font-size:0.75em;color:#94a3b8;">Sports Covered</div>
+                <div style="font-size:0.75em;color:#475569;font-weight:600;">Sports Covered</div>
             </div>
             <div style="min-width:120px;">
                 <div style="font-size:1.8em;font-weight:900;color:#00C076;">5</div>
-                <div style="font-size:0.75em;color:#94a3b8;">AI Models</div>
+                <div style="font-size:0.75em;color:#475569;font-weight:600;">AI Models</div>
             </div>
             <div style="min-width:120px;">
                 <div style="font-size:1.8em;font-weight:900;color:#00C076;">Daily</div>
-                <div style="font-size:0.75em;color:#94a3b8;">Updates</div>
+                <div style="font-size:0.75em;color:#475569;font-weight:600;">Updates</div>
             </div>
         </div>
-        <p style="text-align:center;font-size:0.78em;color:#94a3b8;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#fbbf24;text-decoration:underline;">View full results &rarr;</a></p>
+        <p style="text-align:center;font-size:0.78em;color:#475569;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#00529B;text-decoration:underline;font-weight:700;">View full results &rarr;</a></p>
     </div>
 </div>
 
@@ -8022,7 +8022,7 @@ def landing_page():
 <div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
     <div style="display:flex;align-items:center;gap:12px;">
         <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:1.1em;">🏆</div>
-        <span style="font-weight:700;color:#e2e8f0;font-size:0.92em;">Premium Membership</span>
+        <span style="font-weight:700;color:#f8fafc;font-size:0.92em;">Premium Membership</span>
     </div>
     <a href="/plans" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 24px;border-radius:999px;font-weight:800;text-decoration:none;font-size:0.88em;box-shadow:0 4px 16px rgba(251,191,36,0.3);">Join Now</a>
 </div>
