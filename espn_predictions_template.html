@@ -299,9 +299,9 @@
         .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
 
         /* MLB premium picks side-panel (replaces Home Win % panel) */
-        .premium-panel { background:linear-gradient(180deg,rgba(251,191,36,0.14),rgba(251,191,36,0.06)); border-left:3px solid #fbbf24; padding:10px 12px; min-width:140px; max-width:190px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
-        @media(max-width:400px){ .premium-panel{ max-width:none; min-width:0; border-left:none; border-top:3px solid #fbbf24; } }
-        .premium-panel .panel-title { color:#fbbf24; }
+        .premium-panel { background:#f4f7f9; border-left:3px solid #d1d5db; padding:10px 12px; min-width:140px; max-width:190px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+        @media(max-width:400px){ .premium-panel{ max-width:none; min-width:0; border-left:none; border-top:3px solid #d1d5db; } }
+        .premium-panel .panel-title { color:#1A1D23; font-weight:700; }
         .premium-row { display:flex; flex-direction:column; gap:1px; }
         .premium-row .sf-label { color:#fde68a; }
         .premium-lock { font-size:0.78em; color:#94a3b8; }
@@ -356,7 +356,7 @@
         <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">underdogs.bet</a>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
-                <input type="text" id="navSearchInputPicks" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
+                <input type="text" id="navSearchInputPicks" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
                 <button type="submit">Search</button>
             </form>
             <div id="searchAutocompletePicks" class="search-autocomplete" aria-live="polite"></div>

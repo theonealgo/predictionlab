@@ -7413,7 +7413,7 @@ def landing_page():
         .search-results ul{margin:0;padding-left:18px;color:#0f172a;font-size:0.88em;display:grid;gap:5px;}
         .search-results a{color:var(--link);text-decoration:underline;}
         .perf-dashboard{
-            max-width:1200px;margin:10px auto 0;padding:14px 16px;background:#fff;
+            max-width:860px;margin:0 auto;padding:14px 16px;background:#fff;
             border:1px solid rgba(15,23,42,0.16);border-radius:12px;
         }
         .perf-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:10px;}
@@ -7422,8 +7422,13 @@ def landing_page():
         .perf-value{font-size:1.05em;font-weight:800;color:#0f172a;margin-top:2px;}
         .perf-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
         .perf-controls select,.perf-controls input{padding:7px 10px;border:1px solid rgba(15,23,42,0.18);border-radius:8px;background:#fff;color:#0f172a;}
+        .perf-apply-btn{padding:8px 14px;border:1px solid #00529B;background:#00529B;color:#fff;border-radius:8px;font-weight:700;cursor:pointer;}
         .question-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
         .question-buttons button{border:1px solid rgba(15,23,42,0.2);background:#fff;border-radius:999px;padding:6px 10px;font-size:0.78em;cursor:pointer;color:#0f172a;}
+        .perf-answer{margin-top:12px;background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:10px 12px;}
+        .perf-answer-title{font-size:0.82em;color:#334155;font-weight:700;margin-bottom:8px;}
+        .perf-answer-list{display:grid;gap:6px;}
+        .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
         .logo {
             display: flex;
             align-items: center;
@@ -7681,10 +7686,10 @@ def landing_page():
         }
         .step-num{
             width:42px;height:42px;border-radius:50%;
-            background:#00529B;
+            background:#93c5fd;
             display:flex;align-items:center;justify-content:center;
             font-weight:900;font-size:1.1em;margin:0 auto 14px;
-            color:#ffffff;
+            color:#1e3a8a !important;
         }
         .step-title{font-weight:700;font-size:1em;margin-bottom:8px;}
         .step-body{font-size:.86em;color:#334155;line-height:1.6;}
@@ -7778,7 +7783,7 @@ def landing_page():
             max-width:1200px;
             margin:10px auto 0;
             display:grid;
-            grid-template-columns:repeat(4,minmax(0,1fr));
+            grid-template-columns:repeat(5,minmax(0,1fr));
             gap:18px 24px;
         }
         .footer-col-title{
@@ -7797,6 +7802,26 @@ def landing_page():
             text-decoration:none;
         }
         .footer-col a:hover{text-decoration:underline;}
+        .footer-icon-links{
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+            align-items:center;
+        }
+        .footer-icon-links a{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            width:30px;
+            height:30px;
+            border:1px solid rgba(15,23,42,0.16);
+            border-radius:999px;
+            background:#ffffff;
+            color:#0f172a;
+            text-decoration:none;
+        }
+        .footer-icon-links a:hover{background:#f4f7f9;}
+        .footer-icon-links svg{width:16px;height:16px;fill:currentColor;}
         .footer-note{
             max-width:1200px;
             margin:10px auto 0;
@@ -7846,13 +7871,7 @@ def landing_page():
         /* Skip link for accessibility */
         .skip-link { position:absolute; left:-9999px; top:0; z-index:2000; background:#fbbf24; color:#0f172a; padding:10px 14px; font-weight:800; border-radius:0 0 8px 0; text-decoration:none; }
         .skip-link:focus { left:0; outline:2px solid #0f172a; }
-        /* Readability override requested: render homepage text in navy. */
-        #main-content,
-        #main-content *:not(svg):not(path),
-        .site-footer,
-        .site-footer *:not(svg):not(path) {
-            color: var(--text) !important;
-        }
+        #main-content, .site-footer { color: var(--text); }
     </style>
 </head>
 <body>
@@ -7877,7 +7896,7 @@ def landing_page():
         </div>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
-                <input type="text" id="navSearchInput" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
+                <input type="text" id="navSearchInput" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
                 <button type="submit">Search</button>
             </form>
             <div id="searchAutocomplete" class="search-autocomplete" aria-live="polite"></div>
@@ -7902,8 +7921,8 @@ def landing_page():
     <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Predictions<br>With Real Results</h1>
     <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
     <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
-        <a href="/nba-picks" style="background:#fff;color:#0f172a;padding:14px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Today's Picks</a>
-        <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Go Premium</a>
+        <a href="/nba-picks" style="background:#ffffff;color:#0f172a;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid rgba(15,23,42,0.2);box-shadow:0 6px 18px rgba(15,23,42,0.12);">View Today's Picks</a>
+        <a href="/plans" style="background:#00529B;color:#ffffff;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid #00529B;box-shadow:0 6px 18px rgba(0,82,155,0.28);">Go Premium</a>
     </div>
     <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
 </div>
@@ -7976,7 +7995,7 @@ def landing_page():
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
 {% endif %}
 
-<div class="search-results-wrap" style="margin-top:6px;">
+<div class="search-results-wrap" style="margin:26px auto 34px;">
     <div class="perf-dashboard" id="perfDashboard">
         <h3 style="margin:0;color:#0f172a;">Model Performance Filters</h3>
         <div class="perf-controls">
@@ -7997,6 +8016,7 @@ def landing_page():
                 <option value="NCAAB">NCAAB</option>
                 <option value="NCAAF">NCAAF</option>
             </select>
+            <button type="button" id="perfApply" class="perf-apply-btn">Apply Filters</button>
         </div>
         <div class="question-buttons">
             <button type="button" data-preset="highConfidence">High Confidence Picks</button>
@@ -8009,6 +8029,10 @@ def landing_page():
             <div class="perf-stat"><div class="perf-label">Losses</div><div class="perf-value" id="statLosses">0</div></div>
             <div class="perf-stat"><div class="perf-label">Win %</div><div class="perf-value" id="statWinPct">0%</div></div>
             <div class="perf-stat"><div class="perf-label">Units</div><div class="perf-value" id="statUnits">0</div></div>
+        </div>
+        <div class="perf-answer">
+            <div class="perf-answer-title" id="perfAnswerTitle">Answers for current filters</div>
+            <div class="perf-answer-list" id="perfAnswerList"></div>
         </div>
     </div>
 </div>
@@ -8057,7 +8081,7 @@ def landing_page():
 {% endif %}
 
 <!-- Daily Results Box (above How It Works) -->
-<div style="max-width:720px;margin:26px auto 24px;padding:0 24px;">
+<div style="max-width:720px;margin:44px auto 32px;padding:0 24px;">
     <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(15,23,42,0.16);background:#ffffff;">
         <div style="position:relative;padding:32px 28px;text-align:center;">
             <h2 style="font-size:1.5em;font-weight:900;color:#fbbf24;">Daily Betting Results Report</h2>
@@ -8278,18 +8302,22 @@ def landing_page():
             </div>
             <div class="footer-col">
                 <div class="footer-col-title">Share underdogs.bet</div>
-                <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer">Share on X</a>
-                <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer">Share on Facebook</a>
-                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer">Share on LinkedIn</a>
-                <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a>
-                <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer">Share on Reddit</a>
-                <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}">Share by Email</a>
+                <div class="footer-icon-links">
+                    <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+                    <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12S0 5.446 0 12.073c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+                    <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.48 6S0 4.88 0 3.5 1.12 1 2.48 1s2.5 1.12 2.5 2.5zM.5 8h4v15h-4V8zm7 0h3.8v2.1h.1c.53-1 1.82-2.1 3.75-2.1 4 0 4.74 2.64 4.74 6.08V23h-4v-7.8c0-1.86-.03-4.25-2.59-4.25-2.59 0-2.99 2.02-2.99 4.12V23h-4V8z"/></svg></a>
+                    <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.52 3.48A11.93 11.93 0 0012.06 0C5.49 0 .14 5.35.14 11.92c0 2.1.55 4.16 1.6 5.98L0 24l6.28-1.64a11.9 11.9 0 005.78 1.48h.01c6.57 0 11.92-5.35 11.92-11.92 0-3.18-1.24-6.17-3.47-8.44zM12.07 21.8c-1.8 0-3.56-.48-5.11-1.39l-.37-.22-3.73.98 1-3.64-.24-.38a9.88 9.88 0 01-1.52-5.23c0-5.45 4.43-9.88 9.88-9.88 2.64 0 5.12 1.03 6.98 2.9a9.8 9.8 0 012.9 6.98c0 5.45-4.43 9.88-9.88 9.88zm5.42-7.42c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.27-.47-2.42-1.49a9.06 9.06 0 01-1.68-2.1c-.18-.3-.02-.46.14-.6.14-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.03-.53-.08-.15-.68-1.63-.93-2.23-.24-.58-.49-.5-.68-.5h-.58c-.2 0-.53.08-.8.38-.28.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.13 3.25 5.15 4.56.72.31 1.29.5 1.73.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.31.18-1.43-.08-.12-.28-.2-.58-.35z"/></svg></a>
+                    <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Reddit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12c0-1.47-1.2-2.67-2.67-2.67-.72 0-1.37.29-1.85.76-1.81-1.25-4.24-2.06-6.94-2.15l1.17-3.68 3.18.74a2.16 2.16 0 002.15 1.9c1.2 0 2.17-.97 2.17-2.17S20.24 2.56 19.04 2.56c-.86 0-1.6.5-1.95 1.22l-3.67-.86a.67.67 0 00-.79.44l-1.45 4.58c-2.84.04-5.39.86-7.27 2.16a2.65 2.65 0 00-1.9-.8A2.67 2.67 0 000 12a2.67 2.67 0 001.42 2.35c-.02.2-.03.4-.03.6 0 3.43 4.07 6.22 9.09 6.22s9.09-2.79 9.09-6.22c0-.18-.01-.36-.03-.54A2.66 2.66 0 0024 12zm-15.5 2.25a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm8 3.8c-.98.98-2.65 1.45-4.5 1.45-1.85 0-3.52-.47-4.5-1.45a.75.75 0 111.06-1.06c.62.62 1.8 1.01 3.44 1.01s2.82-.39 3.44-1.01a.75.75 0 111.06 1.06zm-.25-2.3a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg></a>
+                    <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" aria-label="Share by Email"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h20a1 1 0 011 1v14a1 1 0 01-1 1H2a1 1 0 01-1-1V5a1 1 0 011-1zm18.8 2H3.2L12 12.4 20.8 6zM3 18h18V7.2l-8.5 6.2a1 1 0 01-1.2 0L3 7.2V18z"/></svg></a>
+                </div>
             </div>
             <div class="footer-col">
                 <div class="footer-col-title">Social</div>
-                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer">Instagram</a>
-                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer">TikTok</a>
-                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer">YouTube</a>
+                <div class="footer-icon-links">
+                    <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 2C4.46 2 2 4.46 2 7.5v9C2 19.54 4.46 22 7.5 22h9c3.04 0 5.5-2.46 5.5-5.5v-9C22 4.46 19.54 2 16.5 2h-9zm9 2c1.93 0 3.5 1.57 3.5 3.5v9c0 1.93-1.57 3.5-3.5 3.5h-9C5.57 20 4 18.43 4 16.5v-9C4 5.57 5.57 4 7.5 4h9zm-4.5 3a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6zm5.25-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z"/></svg></a>
+                    <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8.5c-1.9-.1-3.4-1.7-3.5-3.6V2h-3.2v13.1c0 1.4-1.1 2.5-2.5 2.5s-2.5-1.1-2.5-2.5 1.1-2.5 2.5-2.5c.3 0 .6.1.9.1V9.5c-.3 0-.6-.1-.9-.1-3.1 0-5.6 2.5-5.6 5.6s2.5 5.6 5.6 5.6 5.6-2.5 5.6-5.6V9.4c1 1 2.4 1.6 3.9 1.6V8.5z"/></svg></a>
+                    <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 00-2.1 2.1A31.4 31.4 0 000 12a31.4 31.4 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.4 31.4 0 0024 12a31.4 31.4 0 00-.5-5.8zM9.7 15.5V8.5l6.2 3.5-6.2 3.5z"/></svg></a>
+                </div>
             </div>
             <div class="footer-col">
                 <div class="footer-col-title">Contact</div>
@@ -8406,8 +8434,11 @@ def landing_page():
         const perfModel = document.getElementById('perfModel');
         const perfConfidence = document.getElementById('perfConfidence');
         const perfSport = document.getElementById('perfSport');
+        const perfApply = document.getElementById('perfApply');
+        const perfAnswerTitle = document.getElementById('perfAnswerTitle');
+        const perfAnswerList = document.getElementById('perfAnswerList');
         let perfRows = [];
-        const renderPerf = () => {
+        const renderPerf = (reasonLabel) => {
             const model = (perfModel?.value || '').trim();
             const minConf = Number(perfConfidence?.value || 0);
             const sport = (perfSport?.value || '').trim();
@@ -8423,16 +8454,38 @@ def landing_page():
             set('statLosses', losses);
             set('statWinPct', `${winPct}%`);
             set('statUnits', units > 0 ? `+${units}` : units);
+            if (perfAnswerTitle) {
+                const label = reasonLabel || 'current filters';
+                perfAnswerTitle.textContent = `Answer for ${label}: ${total} matched picks`;
+            }
+            if (perfAnswerList) {
+                if (!filtered.length) {
+                    perfAnswerList.innerHTML = '<div class="perf-answer-item"><span>No picks match this question yet.</span></div>';
+                } else {
+                    const top = filtered.slice(0, 8);
+                    perfAnswerList.innerHTML = top.map(p => {
+                        const outcome = p.result === 'win' ? 'Win' : 'Loss';
+                        return `<div class="perf-answer-item"><span><strong>${p.sport}</strong> · ${p.model}</span><span>${p.confidence}% · ${outcome} · ${p.date || 'n/a'}</span></div>`;
+                    }).join('');
+                }
+            }
         };
-        fetch('/api/performance-data').then(r => r.json()).then(data => { perfRows = data.rows || []; renderPerf(); }).catch(() => { perfRows = []; renderPerf(); });
-        [perfModel, perfConfidence, perfSport].forEach(el => el && el.addEventListener('change', renderPerf));
+        const applyPerfFilters = (label) => renderPerf(label || 'current filters');
+        fetch('/api/performance-data').then(r => r.json()).then(data => { perfRows = data.rows || []; applyPerfFilters('current filters'); }).catch(() => { perfRows = []; applyPerfFilters('current filters'); });
+        [perfModel, perfConfidence, perfSport].forEach(el => el && el.addEventListener('change', () => applyPerfFilters('current filters')));
+        if (perfApply) perfApply.addEventListener('click', () => applyPerfFilters('current filters'));
         document.querySelectorAll('[data-preset]').forEach(btn => {
             btn.addEventListener('click', function() {
                 const p = btn.getAttribute('data-preset');
                 if (p === 'highConfidence') { if (perfConfidence) perfConfidence.value = '75'; }
-                if (p === 'agreement') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; }
+                if (p === 'agreement') { if (perfModel) perfModel.value = 'Edge'; if (perfConfidence) perfConfidence.value = '65'; }
                 if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; }
-                renderPerf();
+                const labels = {
+                    highConfidence: 'High Confidence Picks',
+                    agreement: 'Model Agreement',
+                    consensus: 'Consensus > 70%'
+                };
+                applyPerfFilters(labels[p] || 'current filters');
             });
         });
     });
@@ -8690,6 +8743,7 @@ def api_performance_data():
         for r in rows:
             for model, prob_col in (
                 ('Grinder2', 'elo_home_prob'),
+                ('Edge', 'elo_home_prob'),
                 ('Takedown', 'logistic_home_prob'),
                 ('XSharp', 'xgboost_home_prob'),
                 ('Sharp Consensus', 'meta_home_prob'),
