@@ -8,6 +8,7 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 
 from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response
 from flask_login import current_user
+from werkzeug.middleware.proxy_fix import ProxyFix
 import json
 from collections import defaultdict
 from flask_cors import CORS
@@ -1217,12 +1218,32 @@ def _fetch_live_market_line(
     return None
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 CORS(app, origins=[
     'https://underdogs.bet',
     'https://www.underdogs.bet',
     'http://localhost:3000',
     'http://localhost:5000',
 ])
+
+_CANONICAL_HOST = 'www.underdogs.bet'
+
+@app.before_request
+def enforce_canonical_domain():
+    """Redirect underdogs.bet/http variants to canonical https://www.underdogs.bet."""
+    host = (request.host or '').split(':')[0].lower()
+    if not host or host in {'localhost', '127.0.0.1'} or host.endswith('.local'):
+        return None
+    if not host.endswith('underdogs.bet'):
+        return None
+    target_host = _CANONICAL_HOST
+    is_https = request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https'
+    needs_redirect = (host != target_host) or (not is_https)
+    if not needs_redirect:
+        return None
+    # request.full_path includes trailing '?' when no query string; strip it.
+    full_path = request.full_path[:-1] if request.full_path.endswith('?') else request.full_path
+    return redirect(f"https://{target_host}{full_path}", code=301)
 
 @app.context_processor
 def inject_globals():
@@ -7942,20 +7963,6 @@ def landing_page():
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
 {% endif %}
 
-<!-- Daily Results Box (above Today's Picks by Sport) -->
-<div style="max-width:720px;margin:0 auto 24px;padding:0 24px;">
-    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
-        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
-        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
-        <div style="position:relative;padding:32px 28px;text-align:center;">
-            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
-            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
-            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
-        </div>
-    </div>
-</div>
-<style>@keyframes shineText{to{background-position:200% center;}}</style>
-
 <!-- Sports grid -->
 <div class="section">
     <h2 class="section-title">Today’s Picks by Sport</h2>
@@ -7998,6 +8005,20 @@ def landing_page():
     </div>
 </div>
 {% endif %}
+
+<!-- Daily Results Box (above How It Works) -->
+<div style="max-width:720px;margin:26px auto 24px;padding:0 24px;">
+    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
+        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
+        <div style="position:relative;padding:32px 28px;text-align:center;">
+            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
+            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
+            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
+        </div>
+    </div>
+</div>
+<style>@keyframes shineText{to{background-position:200% center;}}</style>
 
 <!-- How it works -->
 <div class="how-section">
@@ -8228,7 +8249,7 @@ def landing_page():
             <span style="color:#475569;">·</span>
             <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">YouTube</a>
         </div>
-        <p style="text-align:center;font-size:0.72em;color:#64748b;margin-top:12px;line-height:1.5;">Share buttons pre-fill <strong style="color:#94a3b8;">{{ landing_share_title }}</strong> and sample NBA/NHL lines (same figures as the performance stats card on this page).</p>
+        <p style="text-align:center;font-size:0.72em;color:#ffffff;margin-top:12px;line-height:1.5;">Share buttons pre-fill <strong style="color:#ffffff;">{{ landing_share_title }}</strong> and sample NBA/NHL lines (same figures as the performance stats card on this page).</p>
     </div>
 </div>
 
