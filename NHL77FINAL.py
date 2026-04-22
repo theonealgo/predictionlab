@@ -7801,10 +7801,41 @@ def landing_page():
         .footer-socials a{display:flex;opacity:0.6;transition:opacity 0.2s;}
         .footer-socials a:hover{opacity:1;}
         .footer-socials img{width:20px;height:20px;filter:none;}
+        .footer-columns{
+            width:100%;
+            max-width:1200px;
+            margin:10px auto 0;
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:18px 24px;
+        }
+        .footer-col-title{
+            font-size:0.75em;
+            text-transform:uppercase;
+            letter-spacing:0.45px;
+            font-weight:800;
+            color:#334155;
+            margin-bottom:8px;
+        }
+        .footer-col a{
+            display:block;
+            font-size:0.84em;
+            line-height:1.7;
+            color:#0f172a;
+            text-decoration:none;
+        }
+        .footer-col a:hover{text-decoration:underline;}
+        .footer-note{
+            max-width:1200px;
+            margin:10px auto 0;
+            font-size:0.75em;
+            color:#64748b;
+        }
 
         /* ── Responsive ── */
         @media(max-width:700px){
             .footer-inner{flex-direction:column;align-items:center;text-align:center;gap:12px;}
+            .footer-columns{grid-template-columns:repeat(2,minmax(0,1fr));}
         }
         @media(max-width:640px){
             .hero{padding:60px 20px 40px;}
@@ -8240,64 +8271,60 @@ def landing_page():
     </div>
 </div>
 
-<!-- Recent archive links: same URLs for crawlers; collapsed by default for a cleaner home layout -->
-<div class="section" style="padding-top:0;padding-bottom:28px;text-align:center;">
-    <details style="max-width:980px;margin:0 auto;text-align:left;background:#ffffff;border:1px solid rgba(15,23,42,0.14);border-radius:12px;padding:10px 14px;">
-        <summary style="cursor:pointer;font-size:0.95em;font-weight:700;color:#0f172a;list-style-position:outside;">Recent dated picks archive <span style="font-weight:500;opacity:0.75;">(last 3 days per league)</span></summary>
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(15,23,42,0.08);">
-            {% for _lnk in seo_archive_links %}
-            <a href="{{ _lnk.url }}" style="color:#0f172a;text-decoration:none;font-size:0.82em;padding:6px 12px;border:1px solid rgba(15,23,42,0.16);border-radius:8px;background:#f8fafc;">{{ _lnk.label }}</a>
-            {% endfor %}
-        </div>
-    </details>
-</div>
-
-<!-- Share underdogs.bet (pre-footer) -->
-<div class="section" style="padding-top:8px;padding-bottom:28px;">
-    <div style="max-width:720px;margin:0 auto;padding:0 20px;">
-        <h2 class="section-title" style="margin-bottom:6px;">Share underdogs.bet</h2>
-        <p class="section-sub" style="color:#94a3b8;margin-bottom:16px;">Share our performance snapshot and site with your network.</p>
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
-            <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on X</a>
-            <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on Facebook</a>
-            <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on LinkedIn</a>
-            <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on WhatsApp</a>
-            <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share on Reddit</a>
-            <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" style="background:#ffffff;color:#0f172a;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(15,23,42,0.2);">Share by Email</a>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:14px;">
-            <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">Instagram</a>
-            <span style="color:#475569;">·</span>
-            <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">TikTok</a>
-            <span style="color:#475569;">·</span>
-            <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">YouTube</a>
-        </div>
-        <p style="text-align:center;font-size:0.72em;color:#ffffff;margin-top:12px;line-height:1.5;">Share buttons pre-fill <strong style="color:#ffffff;">{{ landing_share_title }}</strong> and sample NBA/NHL lines (same figures as the performance stats card on this page).</p>
-    </div>
-</div>
-
 </main>
 
 <!-- Footer -->
 <footer class="site-footer">
     <div class="footer-inner">
         <div class="footer-left">
-            <a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1em;color:#fff;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a>
+            <a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a>
             <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
         </div>
-        <div class="footer-center">
-            <a href="/tutorial">How Picks Work</a><span>·</span>
-            <a href="/privacy">Privacy Center</a><span>·</span>
-            <a href="/terms">Legal Terms</a><span>·</span>
-            <a href="/responsible-gaming">Responsible Gaming</a>
+        <div class="footer-columns">
+            <div class="footer-col">
+                <div class="footer-col-title">Site</div>
+                <a href="/tutorial">How Picks Work</a>
+                <a href="/privacy">Privacy Center</a>
+                <a href="/terms">Legal Terms</a>
+                <a href="/responsible-gaming">Responsible Gaming</a>
+            </div>
+            <div class="footer-col">
+                <div class="footer-col-title">Share underdogs.bet</div>
+                <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer">Share on X</a>
+                <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer">Share on Facebook</a>
+                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer">Share on LinkedIn</a>
+                <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a>
+                <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer">Share on Reddit</a>
+                <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}">Share by Email</a>
+            </div>
+            <div class="footer-col">
+                <div class="footer-col-title">Social</div>
+                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer">Instagram</a>
+                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer">TikTok</a>
+                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer">YouTube</a>
+            </div>
+            <div class="footer-col">
+                <div class="footer-col-title">Explore</div>
+                <a href="/mlb-picks">MLB AI Picks &amp; Projections</a>
+                <a href="/nba-picks">NBA AI Picks &amp; Projections</a>
+                <a href="/nhl-picks">NHL AI Picks &amp; Projections</a>
+                <a href="/nfl-picks">NFL AI Picks &amp; Projections</a>
+                <a href="/soccer-picks">Soccer AI Picks &amp; Projections</a>
+                <a href="/ncaab-picks">NCAAB AI Picks &amp; Projections</a>
+                <a href="/wnba-picks">WNBA AI Picks &amp; Projections</a>
+                <a href="/daily-report">Daily Betting Results Report</a>
+                <a href="/llms.txt">LLMs Discovery File</a>
+                <a href="/ai.txt">AI Crawler Hints</a>
+                <a href="#" onclick="document.getElementById('footer-archive').style.display='block'; this.style.display='none'; return false;">Recent dated picks archive (last 3 days per league)</a>
+            </div>
+            <div id="footer-archive" class="footer-col" style="display:none;grid-column:1/-1;">
+                <div class="footer-col-title">Recent dated picks archive (last 3 days per league)</div>
+                {% for _lnk in seo_archive_links %}
+                <a href="{{ _lnk.url }}">{{ _lnk.label }}</a>
+                {% endfor %}
+            </div>
         </div>
-        <div class="footer-socials">
-            <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on X (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
-            <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Instagram (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
-            <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Facebook (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-            <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on TikTok (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
-            <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
-        </div>
+        <div class="footer-note">Share buttons pre-fill {{ landing_share_title }} and sample NBA/NHL lines (same figures as the performance stats card on this page).</div>
         <div class="footer-right">© 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
