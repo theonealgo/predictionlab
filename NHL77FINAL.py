@@ -4806,7 +4806,7 @@ BASE_TEMPLATE = """
         "https://instagram.com/underdogs.bet",
         "https://facebook.com/underdogs.bet",
         "https://tiktok.com/@underdog.bet",
-        "https://youtube.com/@Underdogsbet"
+        "https://www.youtube.com/@Underdogsbet"
       ]
     }
     </script>
@@ -5044,11 +5044,11 @@ BASE_TEMPLATE = """
                 <div class="nav-group" onclick="this.classList.toggle('open')">
                     <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
                     <div class="nav-group-items">
-                        <a href="https://x.com/underdogs_bet" target="_blank">X</a>
-                        <a href="https://instagram.com/underdogs.bet" target="_blank">Instagram</a>
-                        <a href="https://facebook.com/underdogs.bet" target="_blank">Facebook</a>
-                        <a href="https://tiktok.com/@underdog.bet" target="_blank">TikTok</a>
-                        <a href="https://youtube.com/@Underdogsbet" target="_blank">YouTube</a>
+                        <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on YouTube">YouTube</a>
+                        <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on X">X</a>
+                        <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on Instagram">Instagram</a>
+                        <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on Facebook">Facebook</a>
+                        <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on TikTok">TikTok</a>
                     </div>
                 </div>
             </div>
@@ -5075,7 +5075,7 @@ BASE_TEMPLATE = """
                 <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
                 <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
                 <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener" title="TikTok"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
-                <a href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener" title="YouTube"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" title="YouTube" aria-label="underdogs.bet on YouTube"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
             </div>
             <div class="footer-right">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
         </div>
@@ -6904,7 +6904,7 @@ SOCIAL_LINKS = [
     {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Instagram']},
     {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Facebook']},
     {'label': 'TikTok', 'url': 'https://tiktok.com/@underdog.bet', 'icon': _SOCIAL_ICONS['TikTok']},
-    {'label': 'YouTube', 'url': 'https://youtube.com/@Underdogsbet', 'icon': _SOCIAL_ICONS['YouTube']},
+    {'label': 'YouTube', 'url': 'https://www.youtube.com/@Underdogsbet', 'icon': _SOCIAL_ICONS['YouTube']},
 ]
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
@@ -7142,9 +7142,26 @@ def landing_page():
                 'label': f"{_sport_key} picks {_d.strftime('%b')} {_d.day}, {_d.year}",
             })
 
+    _landing_share_url = 'https://www.underdogs.bet/'
+    _landing_share_title = 'Underdogs.bet Performance Stats'
+    _landing_share_body = (
+        f"{_landing_share_title}\n\n"
+        "NBA Totals (2025/2026): 704-500 (+204u)\n"
+        "NBA Spreads: 822-395 (+427u)\n"
+        "NHL Spreads: 124-65 (+59u)\n"
+        "NHL Totals (7 days): 8-1 (+7u)\n\n"
+        "Our models are continuously evaluated across seasons to detect market inefficiencies and pricing edges.\n\n"
+        f"{_landing_share_url}"
+    )
+    _landing_share_tweet = (
+        "Underdogs.bet Performance Stats — NBA Totals 704-500 (+204u), NBA Spreads +427u, "
+        "NHL Spreads +59u, NHL Totals 8-1 (+7u). Tracked AI picks & results: "
+        + _landing_share_url
+    )
+
     # Build "Today's Top Picks" from stored predictions in DB (lightweight).
-    # Previously this called get_upcoming_predictions() for 4 sports which
-    # triggered 200+ ESPN API calls on cold start, killing the Render worker.
+    # Ranking emphasizes value/consensus quality over pure heavy-favorite confidence.
+    # We still always return 4 picks (fallback ranking fills gaps).
     todays_picks = []
     try:
         _tp_tz = ZoneInfo('America/New_York')
@@ -7154,28 +7171,103 @@ def landing_page():
     try:
         _tp_conn = get_db_connection()
         _tp_rows = _tp_conn.execute('''
-            SELECT p.sport, p.home_team_id, p.away_team_id, p.win_probability
+            SELECT p.game_id, p.sport, p.home_team_id, p.away_team_id, p.win_probability,
+                   p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob,
+                   b.home_implied_prob, b.away_implied_prob
             FROM predictions p
             LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport
+            LEFT JOIN betting_odds b ON p.game_id = b.game_id
             WHERE date(p.game_date) = ?
               AND (g.home_score IS NULL OR g.game_id IS NULL)
               AND p.win_probability IS NOT NULL
               AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
-            ORDER BY ABS(p.win_probability - 0.5) DESC
-            LIMIT 4
+            ORDER BY p.game_date ASC
+            LIMIT 80
         ''', (_tp_today,)).fetchall()
         _tp_conn.close()
+        _candidates = []
         for _tp in _tp_rows:
-            _ens = float(_tp['win_probability']) * 100
+            _ens_home = float(_tp['win_probability'])
             _home = _tp['home_team_id']
             _away = _tp['away_team_id']
-            _pick = _home if _ens > 50 else _away
-            todays_picks.append({
-                'away': _away, 'home': _home,
-                'pick': _pick, 'prob': round(_ens, 1),
+            _home_picked = _ens_home >= 0.5
+            _pick_prob = _ens_home if _home_picked else (1.0 - _ens_home)
+            _pick = _home if _home_picked else _away
+
+            # Model agreement score: lower spread between models = higher quality.
+            _model_vals = []
+            for _k in ('elo_home_prob', 'xgboost_home_prob', 'logistic_home_prob', 'meta_home_prob', 'win_probability'):
+                _v = _tp[_k]
+                if _v is None:
+                    continue
+                try:
+                    _model_vals.append(float(_v))
+                except Exception:
+                    continue
+            _agreement_bonus = 0.0
+            if len(_model_vals) >= 2:
+                _aligned = [v if _home_picked else (1.0 - v) for v in _model_vals]
+                _spread = max(_aligned) - min(_aligned)
+                _agreement_bonus = max(0.0, 0.18 - _spread) * 120.0
+
+            # Market edge bonus where odds exist.
+            _implied = _tp['home_implied_prob'] if _home_picked else _tp['away_implied_prob']
+            _edge_bonus = 0.0
+            if _implied is not None:
+                try:
+                    _edge_bonus = (_pick_prob - float(_implied)) * 160.0
+                except Exception:
+                    _edge_bonus = 0.0
+
+            # Moderate-confidence sweet spot; penalize ultra-heavy favorites.
+            _conf_bonus = (_pick_prob - 0.5) * 55.0
+            _heavy_penalty = max(0.0, _pick_prob - 0.77) * 130.0
+            _quality_score = _conf_bonus + _edge_bonus + _agreement_bonus - _heavy_penalty
+
+            _candidates.append({
+                'game_id': _tp['game_id'],
+                'away': _away,
+                'home': _home,
+                'pick': _pick,
+                'prob': round(_pick_prob * 100, 1),
                 'sport': _tp['sport'],
                 'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
+                'quality_score': _quality_score,
+                'fallback_score': abs(_ens_home - 0.5),
             })
+
+        # Deduplicate by game and pick the strongest quality candidates first.
+        _seen_game_ids = set()
+        _scored = sorted(_candidates, key=lambda x: x['quality_score'], reverse=True)
+        for _row in _scored:
+            _gid = _row.get('game_id') or f"{_row['sport']}::{_row['away']}::{_row['home']}"
+            if _gid in _seen_game_ids:
+                continue
+            _seen_game_ids.add(_gid)
+            todays_picks.append({
+                'away': _row['away'], 'home': _row['home'],
+                'pick': _row['pick'], 'prob': _row['prob'],
+                'sport': _row['sport'], 'slug': _row['slug'],
+            })
+            if len(todays_picks) >= 4:
+                break
+
+        # Always keep 4 picks: fallback to strongest confidence if quality list is short.
+        if len(todays_picks) < 4:
+            _picked_keys = {f"{p['sport']}::{p['away']}::{p['home']}" for p in todays_picks}
+            _fallback = sorted(_candidates, key=lambda x: x['fallback_score'], reverse=True)
+            for _row in _fallback:
+                _key = f"{_row['sport']}::{_row['away']}::{_row['home']}"
+                if _key in _picked_keys:
+                    continue
+                _picked_keys.add(_key)
+                todays_picks.append({
+                    'away': _row['away'], 'home': _row['home'],
+                    'pick': _row['pick'], 'prob': _row['prob'],
+                    'sport': _row['sport'], 'slug': _row['slug'],
+                })
+                if len(todays_picks) >= 4:
+                    break
     except Exception as _tp_err:
         logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
 
@@ -7237,7 +7329,7 @@ def landing_page():
         "https://instagram.com/underdogs.bet",
         "https://facebook.com/underdogs.bet",
         "https://tiktok.com/@underdog.bet",
-        "https://youtube.com/@Underdogsbet"
+        "https://www.youtube.com/@Underdogsbet"
       ]
     }
     </script>
@@ -7759,11 +7851,11 @@ def landing_page():
             <div class="nav-group" onclick="this.classList.toggle('open')">
                 <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
                 <div class="nav-group-items">
+                    <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)">YouTube</a>
                     <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on X (opens in new tab)">X</a>
                     <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Instagram (opens in new tab)">Instagram</a>
                     <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Facebook (opens in new tab)">Facebook</a>
                     <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on TikTok (opens in new tab)">TikTok</a>
-                    <a href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)">YouTube</a>
                 </div>
             </div>
         </div>
@@ -7778,11 +7870,6 @@ def landing_page():
     <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
         <a href="/nba-picks" style="background:#fff;color:#0f172a;padding:14px 28px;border-radius:8px;font-weight:800;text-decoration:none;font-size:0.95em;">View Today's Picks</a>
         <a href="/plans" style="background:transparent;color:#fff;padding:14px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.95em;border:1px solid rgba(255,255,255,0.3);">Go Premium</a>
-    </div>
-    <div class="hero-slide" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;animation:slideIn 0.8s ease-out 0.45s both;">
-        <a href="https://x.com/intent/tweet?text=Daily%20AI%20sports%20picks%20and%20betting%20predictions&url=https%3A%2F%2Fwww.underdogs.bet%2F" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.8em;border:1px solid rgba(255,255,255,0.2);">Share on X</a>
-        <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.underdogs.bet%2F" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.8em;border:1px solid rgba(255,255,255,0.2);">Share on Facebook</a>
-        <a href="mailto:?subject=Daily%20AI%20Sports%20Picks&body=Check%20out%20these%20daily%20AI%20sports%20picks%3A%20https%3A%2F%2Fwww.underdogs.bet%2F" style="background:rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.8em;border:1px solid rgba(255,255,255,0.2);">Share by Email</a>
     </div>
     <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
 </div>
@@ -7835,8 +7922,8 @@ def landing_page():
             Winning Results Tracked Daily
         </span>
     </div>
-    <h2 class="section-title" style="margin-bottom:6px;">Today’s Model Predictions</h2>
-    <p class="section-sub" style="color:#e2e8f0;">Live model projections updated daily</p>
+    <h2 class="section-title" style="margin-bottom:6px;">Top Value Picks Today</h2>
+    <p class="section-sub" style="color:#e2e8f0;">Ranked by edge quality, model agreement, and confidence</p>
     <div style="display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;">
         {% for tp in todays_picks %}
         {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
@@ -7854,6 +7941,20 @@ def landing_page():
 </div>
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
 {% endif %}
+
+<!-- Daily Results Box (above Today's Picks by Sport) -->
+<div style="max-width:720px;margin:0 auto 24px;padding:0 24px;">
+    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
+        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
+        <div style="position:relative;padding:32px 28px;text-align:center;">
+            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
+            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
+            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
+        </div>
+    </div>
+</div>
+<style>@keyframes shineText{to{background-position:200% center;}}</style>
 
 <!-- Sports grid -->
 <div class="section">
@@ -7927,24 +8028,6 @@ def landing_page():
     </div>
 </div>
 
-<!-- Why Different -->
-<div class="section" style="padding-top:10px;padding-bottom:40px;">
-    <div style="max-width:900px;margin:0 auto;">
-        <img src="/static/IMG_2695.jpeg" alt="AI sports betting picks and data-driven predictions across NBA, NFL, MLB, NHL and soccer" style="width:100%;max-height:240px;object-fit:cover;border-radius:14px;margin-bottom:24px;display:block;" loading="lazy">
-        <h2 class="section-title">Why Our Picks Are Different</h2>
-        <div style="max-width:720px;margin:0 auto;color:#e2e8f0;line-height:1.75;font-size:0.95em;text-align:left;">
-            <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
-            <p style="margin-bottom:14px;">Our AI sports betting picks are built differently.</p>
-            <p style="margin-bottom:14px;">We use a proprietary odds engine powered by four independent AI prediction models to analyze matchups, player performance, advanced team metrics, and real-time market movement. Instead of following sportsbook lines, we generate our own probabilities to uncover +EV betting opportunities the market often misprices.</p>
-            <p style="margin-bottom:14px;">This approach allows us to identify value before it becomes obvious. While most bettors chase line movement, our system is designed to stay ahead of it.</p>
-            <p style="margin-bottom:14px;">Every pick is backed by data &mdash; not opinions, narratives, or social media hype. Our models continuously process new information, adjusting predictions based on injuries, form, and betting market shifts. The result is a smarter, more consistent approach to sports betting predictions.</p>
-            <p style="margin-bottom:14px;">Transparency is a core part of what we do. Every result is tracked publicly, with no cherry-picked wins or hidden losses. You can see exactly how the model performs over time, giving you full confidence in the system behind the picks.</p>
-            <p style="margin-bottom:14px;">If you&rsquo;re looking for the best betting picks today, built on real data and AI-driven analysis, you&rsquo;re in the right place.</p>
-            <p style="margin-bottom:0;">Our goal isn&rsquo;t just to win short-term &mdash; it&rsquo;s to create a long-term edge using disciplined, data-driven betting strategies that outperform the average bettor.</p>
-        </div>
-    </div>
-</div>
-
 <!-- Season Performance -->
 {% if units_banner_items %}
 <div class="section" style="padding-top:10px;padding-bottom:50px;">
@@ -7975,33 +8058,35 @@ def landing_page():
 <div class="section" style="padding-top:10px;padding-bottom:30px;">
     <h2 class="section-title">See What You’re Missing</h2>
     <p class="section-sub" style="color:#e2e8f0;">The public sees picks. Members see the edge.</p>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:18px;max-width:860px;margin:0 auto;">
-        <div style="background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03));border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:24px;display:flex;flex-direction:column;min-height:100%;">
-            <h3 style="font-size:1.05em;font-weight:800;margin-bottom:12px;color:#e2e8f0;">Free Picks</h3>
-            <ul style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#e2e8f0;line-height:1.9;display:grid;gap:8px;flex:1;">
-                <li>&#10003; Moneyline picks across 9 sports</li>
-                <li>&#10003; Model-generated win probability for every game</li>
-                <li>&#10003; Proprietary AI odds engine pricing (not public consensus)</li>
-                <li>&#10003; Multi-model consensus signal strength</li>
-                <li>&#10003; Fully tracked historical performance (transparent results)</li>
+    <div class="landing-pricing-row">
+        <div class="landing-price-card" style="background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03));border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:24px;">
+            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 8px;color:#e2e8f0;">Free Picks</h3>
+            <div style="font-size:0.78em;color:#94a3b8;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.4px;line-height:1.35;min-height:2.7em;">Updated daily &middot; no subscription</div>
+            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#e2e8f0;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Moneyline picks across 9 sports</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model-generated win probability for every game</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Proprietary AI odds engine pricing (not public consensus)</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Multi-model consensus signal strength</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Fully tracked historical performance (transparent results)</span></li>
             </ul>
-            <a href="/nba-picks" style="display:block;text-align:center;margin-top:16px;background:#fff;color:#0f172a;padding:12px 22px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;">View Free Picks</a>
+            <a href="/nba-picks" class="landing-price-cta landing-price-cta--light" style="text-align:center;background:#fff;color:#0f172a;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;">View Free Picks</a>
         </div>
-        <div style="background:linear-gradient(180deg,rgba(251,191,36,0.12),rgba(245,158,11,0.06));border:1px solid rgba(251,191,36,0.34);border-radius:14px;padding:24px;display:flex;flex-direction:column;position:relative;min-height:100%;">
-            <h3 style="font-size:1.05em;font-weight:800;margin-bottom:8px;color:#fbbf24;">Full AI Model Access</h3>
-            <div style="font-size:0.78em;color:#fde68a;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.4px;">Everything in Free, plus</div>
-            <ul style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#f8fafc;line-height:1.9;display:grid;gap:8px;flex:1;">
-                <li>&#10003; Spread betting models (edge-based pricing)</li>
-                <li>&#10003; Over/Under totals with projected game flow</li>
-                <li>&#10003; Predicted final scores (simulation-based outputs)</li>
-                <li>&#10003; Enhanced multi-model consensus signals</li>
-                <li>&#10003; Expanded dataset weighting (injuries, pace, efficiency, market movement)</li>
+        <div class="landing-price-card" style="background:linear-gradient(180deg,rgba(251,191,36,0.12),rgba(245,158,11,0.06));border:1px solid rgba(251,191,36,0.34);border-radius:14px;padding:24px;">
+            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 8px;color:#fbbf24;">Full AI Model Access</h3>
+            <div style="font-size:0.78em;color:#fde68a;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.4px;line-height:1.35;min-height:2.7em;">Everything in Free, plus</div>
+            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#f8fafc;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Spread betting models (edge-based pricing)</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Over/Under totals with projected game flow</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Predicted final scores (simulation-based outputs)</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Enhanced multi-model consensus signals</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Expanded dataset weighting (injuries, pace, efficiency, market movement)</span></li>
             </ul>
-            <a href="/plans" style="display:block;text-align:center;margin-top:16px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:12px 22px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Unlock Model Edge</a>
-            <div style="text-align:center;margin-top:8px;font-size:0.75em;color:#fde68a;">Updated daily</div>
+            <a href="/plans" class="landing-price-cta landing-price-cta--gold" style="text-align:center;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Unlock Model Edge</a>
         </div>
     </div>
+    <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">Free moneyline picks and premium spreads, totals, and scores are all updated daily as schedules, injuries, and markets change.</p>
     <div style="max-width:860px;margin:16px auto 0;background:rgba(15,23,42,0.75);border:1px solid rgba(148,163,184,0.3);border-radius:14px;padding:16px 18px;">
+        <h3 style="font-size:1.1em;font-weight:800;color:#fbbf24;margin:0 0 14px;text-align:center;letter-spacing:0.02em;">Underdogs.bet Performance Stats</h3>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;color:#e2e8f0;font-size:0.88em;font-weight:700;">
             <div>NBA Totals (2025/2026): 704-500 (+204u)</div>
             <div>NBA Spreads: 822-395 (+427u)</div>
@@ -8011,10 +8096,33 @@ def landing_page():
         <p style="margin-top:12px;color:#cbd5e1;font-size:0.86em;line-height:1.7;">Our models are continuously evaluated across seasons to detect market inefficiencies and pricing edges.</p>
     </div>
     <style>
+        .landing-pricing-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:860px; margin:0 auto; }
+        .landing-price-card { display:flex; flex-direction:column; min-height:100%; }
+        .landing-price-card .landing-price-list { flex:1 1 auto; min-height:16.5rem; }
+        .landing-price-cta { display:flex; align-items:center; justify-content:center; margin-top:auto; min-height:48px; padding:0 22px; box-sizing:border-box; flex-shrink:0; }
         @media (max-width: 768px) {
-            .section div[style*="grid-template-columns:repeat(2,minmax(0,1fr))"] { grid-template-columns: 1fr !important; }
+            .landing-pricing-row { grid-template-columns:1fr !important; }
+            .landing-price-card .landing-price-list { min-height:0; }
         }
     </style>
+</div>
+
+<!-- Why Different (above FAQ) -->
+<div class="section" style="padding-top:10px;padding-bottom:40px;">
+    <div style="max-width:900px;margin:0 auto;">
+        <img src="/static/IMG_2695.jpeg" alt="AI sports betting picks and data-driven predictions across NBA, NFL, MLB, NHL and soccer" style="width:100%;max-height:240px;object-fit:cover;border-radius:14px;margin-bottom:24px;display:block;" loading="lazy">
+        <h2 class="section-title">Why Our Picks Are Different</h2>
+        <div style="max-width:720px;margin:0 auto;color:#e2e8f0;line-height:1.75;font-size:0.95em;text-align:left;">
+            <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
+            <p style="margin-bottom:14px;">Our AI sports betting picks are built differently.</p>
+            <p style="margin-bottom:14px;">We use a proprietary odds engine powered by four independent AI prediction models to analyze matchups, player performance, advanced team metrics, and real-time market movement. Instead of following sportsbook lines, we generate our own probabilities to uncover +EV betting opportunities the market often misprices.</p>
+            <p style="margin-bottom:14px;">This approach allows us to identify value before it becomes obvious. While most bettors chase line movement, our system is designed to stay ahead of it.</p>
+            <p style="margin-bottom:14px;">Every pick is backed by data &mdash; not opinions, narratives, or social media hype. Our models continuously process new information, adjusting predictions based on injuries, form, and betting market shifts. The result is a smarter, more consistent approach to sports betting predictions.</p>
+            <p style="margin-bottom:14px;">Transparency is a core part of what we do. Every result is tracked publicly, with no cherry-picked wins or hidden losses. You can see exactly how the model performs over time, giving you full confidence in the system behind the picks.</p>
+            <p style="margin-bottom:14px;">If you&rsquo;re looking for the best betting picks today, built on real data and AI-driven analysis, you&rsquo;re in the right place.</p>
+            <p style="margin-bottom:0;">Our goal isn&rsquo;t just to win short-term &mdash; it&rsquo;s to create a long-term edge using disciplined, data-driven betting strategies that outperform the average bettor.</p>
+        </div>
+    </div>
 </div>
 
 <!-- FAQ -->
@@ -8100,19 +8208,29 @@ def landing_page():
     </details>
 </div>
 
-<!-- Daily Results Box -->
-<div style="max-width:720px;margin:0 auto 30px;padding:0 24px;">
-    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
-        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
-        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
-        <div style="position:relative;padding:32px 28px;text-align:center;">
-            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
-            <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
-            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
+<!-- Share underdogs.bet (pre-footer) -->
+<div class="section" style="padding-top:8px;padding-bottom:28px;">
+    <div style="max-width:720px;margin:0 auto;padding:0 20px;">
+        <h2 class="section-title" style="margin-bottom:6px;">Share underdogs.bet</h2>
+        <p class="section-sub" style="color:#94a3b8;margin-bottom:16px;">Share our performance snapshot and site with your network.</p>
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
+            <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on X</a>
+            <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on Facebook</a>
+            <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on LinkedIn</a>
+            <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on WhatsApp</a>
+            <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share on Reddit</a>
+            <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" style="background:rgba(255,255,255,0.1);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;text-decoration:none;font-size:0.82em;border:1px solid rgba(255,255,255,0.2);">Share by Email</a>
         </div>
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:14px;">
+            <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">Instagram</a>
+            <span style="color:#475569;">·</span>
+            <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">TikTok</a>
+            <span style="color:#475569;">·</span>
+            <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" style="color:#cbd5e1;font-size:0.78em;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(148,163,184,0.4);">YouTube</a>
+        </div>
+        <p style="text-align:center;font-size:0.72em;color:#64748b;margin-top:12px;line-height:1.5;">Share buttons pre-fill <strong style="color:#94a3b8;">{{ landing_share_title }}</strong> and sample NBA/NHL lines (same figures as the performance stats card on this page).</p>
     </div>
 </div>
-<style>@keyframes shineText{to{background-position:200% center;}}</style>
 
 </main>
 
@@ -8134,7 +8252,7 @@ def landing_page():
             <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Instagram (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
             <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on Facebook (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
             <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on TikTok (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
-            <a href="https://youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+            <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="Follow underdogs.bet on YouTube (opens in new tab)"><svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
         </div>
         <div class="footer-right">© 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
     </div>
@@ -8181,7 +8299,11 @@ def landing_page():
          sports_covered=sports_covered, weekly_banner_messages=weekly_banner_messages,
          units_banner_items=units_banner_items,
          seo_archive_links=seo_archive_links,
-         todays_picks=todays_picks)
+         todays_picks=todays_picks,
+         landing_share_url=_landing_share_url,
+         landing_share_title=_landing_share_title,
+         landing_share_body=_landing_share_body,
+         landing_share_tweet=_landing_share_tweet)
 
 _SITE_DOMAIN = 'https://www.underdogs.bet'
 
