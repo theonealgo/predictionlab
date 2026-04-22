@@ -7421,6 +7421,28 @@ def landing_page():
         .auth-btn.signup { background:linear-gradient(135deg,#fbbf24,#f59e0b); color:#111827; }
         .auth-btn.login { border:1px solid rgba(15,23,42,0.35); color:#0f172a; background:#fff; }
         .auth-btn:hover { opacity:.9; }
+        .search-results-wrap{
+            max-width:1200px;
+            margin:14px auto 0;
+            padding:0 24px;
+        }
+        .search-results{
+            display:none;
+            background:#ffffff;
+            border:1px solid rgba(15,23,42,0.16);
+            border-radius:12px;
+            padding:14px 16px;
+            box-shadow:0 8px 20px rgba(15,23,42,0.08);
+        }
+        .search-results.show{display:block;}
+        .search-results h3{
+            margin:0 0 8px;
+            font-size:0.98em;
+            color:#0f172a;
+        }
+        .search-results p{margin:0 0 8px;color:#334155;font-size:0.9em;}
+        .search-results ul{margin:0;padding-left:18px;color:#0f172a;font-size:0.88em;display:grid;gap:5px;}
+        .search-results a{color:#0f172a;text-decoration:underline;}
         .logo {
             display: flex;
             align-items: center;
@@ -7847,7 +7869,7 @@ def landing_page():
         <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">
             underdogs.bet
         </a>
-        <form class="nav-search" action="/search" method="get" role="search">
+        <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
             <input type="text" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
             <button type="submit">Search</button>
         </form>
@@ -7878,6 +7900,10 @@ def landing_page():
             {% endif %}
         </div>
     </div>
+</div>
+
+<div class="search-results-wrap">
+    <div id="searchResults" class="search-results" aria-live="polite"></div>
 </div>
 
 <!-- Hero -->
@@ -8278,12 +8304,49 @@ def landing_page():
     }
     document.addEventListener('DOMContentLoaded', function() {
         const navLinks = document.getElementById('navLinks');
+        const searchForm = document.getElementById('navSearchForm');
+        const resultsEl = document.getElementById('searchResults');
         if (!navLinks) return;
         navLinks.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', function() {
                 navLinks.classList.remove('active');
             });
         });
+        if (searchForm && resultsEl) {
+            searchForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const input = searchForm.querySelector('input[name="query"]');
+                const query = (input?.value || '').trim();
+                if (!query) {
+                    resultsEl.classList.remove('show');
+                    resultsEl.innerHTML = '';
+                    return;
+                }
+                resultsEl.classList.add('show');
+                resultsEl.innerHTML = '<p>Searching...</p>';
+                try {
+                    const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`, { headers: { 'Accept': 'application/json' } });
+                    const data = await resp.json();
+                    const modelLine = data.matched_model ? `<p><strong>Model:</strong> ${data.matched_model.public_name} -> ${data.matched_model.internal_name}${data.confidence_threshold ? ` (confidence >= ${data.confidence_threshold}%)` : ''}</p>` : '';
+                    const modelItems = (data.model_results || []).map(r => `<li>${r.sport}: ${r.record} (${r.accuracy}%)${r.filtered_games !== null && r.filtered_games !== undefined ? ` - ${r.filtered_games} games at threshold` : ''}</li>`).join('');
+                    const localTeamItems = (data.team_results || []).map(r => `<li>${r.sport}: ${r.away_team} vs ${r.home_team} (${r.game_date}) - pick: ${r.predicted_winner} (${r.win_probability}%)</li>`).join('');
+                    const espnItems = (data.espn_results || []).map(r => `<li>${r.sport}: ${r.away_team} at ${r.home_team} (${r.status})</li>`).join('');
+                    const routeLine = data.suggested_route ? `<p><strong>Suggested page:</strong> <a href="${data.suggested_route}">${data.suggested_route}</a></p>` : '';
+                    const empty = (!modelItems && !localTeamItems && !espnItems) ? '<p>No matches found yet. Try a team name, league, or model alias.</p>' : '';
+                    resultsEl.innerHTML = `
+                        <h3>Search Results</h3>
+                        ${modelLine}
+                        ${routeLine}
+                        ${modelItems ? `<p><strong>Model Performance</strong></p><ul>${modelItems}</ul>` : ''}
+                        ${localTeamItems ? `<p style="margin-top:10px;"><strong>Our Prediction Matches</strong></p><ul>${localTeamItems}</ul>` : ''}
+                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest ESPN Matchups</strong></p><ul>${espnItems}</ul>` : ''}
+                        ${empty}
+                    `;
+                } catch (_err) {
+                    resultsEl.innerHTML = '<p>Search temporarily unavailable. Please try again.</p>';
+                }
+            });
+        }
     });
     document.addEventListener('click', function(event) {
         const navLinks = document.getElementById('navLinks');
@@ -8320,78 +8383,204 @@ def landing_page():
 
 _SITE_DOMAIN = 'https://www.underdogs.bet'
 
-@app.route('/search')
-def site_search():
-    """Route search queries to the most relevant page."""
-    raw_query = (request.args.get('query') or '').strip()
-    if not raw_query:
-        return redirect(url_for('landing_page'))
-    q = raw_query.lower()
-    tokens = [tok for tok in re.split(r'[^a-z0-9]+', q) if tok]
+_PUBLIC_TO_INTERNAL_MODEL = {
+    'grinder2': 'Glicko-2',
+    'takedown': 'TrueSkill',
+    'edge': 'Elo',
+    'xsharp': 'XGBoost',
+    'sharp consensus': 'Ensemble',
+}
 
-    # Quick route intents.
-    intent_routes = {
-        'nba': '/nba-picks',
-        'nhl': '/nhl-picks',
-        'mlb': '/mlb-picks',
-        'nfl': '/nfl-picks',
-        'wnba': '/wnba-picks',
-        'ncaab': '/ncaab-picks',
-        'ncaaw': '/ncaaw-picks',
-        'ncaaf': '/ncaaf-picks',
-        'soccer': '/soccer-picks',
-        'results': '/results',
-        'performance': '/results',
-        'record': '/results',
-        'plans': '/plans',
-        'premium': '/plans',
-        'tutorial': '/tutorial',
+_MODEL_BACKTEST_COLS = {
+    'Glicko-2': ('elo_correct', 'elo_accuracy', 'elo_home_prob'),
+    'Elo': ('elo_correct', 'elo_accuracy', 'elo_home_prob'),
+    'TrueSkill': ('consensus_correct', 'consensus_accuracy', 'logistic_home_prob'),
+    'XGBoost': ('xgboost_correct', 'xgboost_accuracy', 'xgboost_home_prob'),
+    'Ensemble': ('combined_correct', 'combined_accuracy', 'meta_home_prob'),
+}
+
+_SPORT_TO_ROUTE = {
+    'NHL': '/nhl-picks',
+    'NBA': '/nba-picks',
+    'MLB': '/mlb-picks',
+    'NFL': '/nfl-picks',
+    'NCAAB': '/ncaab-picks',
+    'NCAAW': '/ncaaw-picks',
+    'NCAAF': '/ncaaf-picks',
+    'WNBA': '/wnba-picks',
+    'SOCCER': '/soccer-picks',
+}
+
+_ESPN_SCOREBOARD_ENDPOINTS = {
+    'NBA': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
+    'MLB': 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard',
+    'NFL': 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
+    'NHL': 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard',
+    'WNBA': 'https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard',
+    'NCAAB': 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard',
+    'NCAAF': 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard',
+}
+
+def _parse_search_model(query_text: str):
+    q = query_text.lower()
+    for public_name, internal_name in _PUBLIC_TO_INTERNAL_MODEL.items():
+        if public_name in q:
+            return public_name, internal_name
+    return None, None
+
+def _parse_confidence_threshold(query_text: str):
+    q = query_text.lower()
+    match = re.search(r'(\d{2,3})\s*%?', q)
+    if not match:
+        return None
+    value = max(0, min(100, int(match.group(1))))
+    if any(tok in q for tok in ('over', 'above', '>=', '>','at least')):
+        return value
+    return None
+
+def _search_model_performance(conn, internal_model: str, threshold: int | None):
+    if not internal_model:
+        return []
+    correct_col, accuracy_col, prob_col = _MODEL_BACKTEST_COLS.get(
+        internal_model, ('combined_correct', 'combined_accuracy', 'meta_home_prob')
+    )
+    rows = conn.execute("SELECT * FROM model_backtest_results ORDER BY sport").fetchall()
+    results = []
+    for row in rows:
+        sport = row['sport']
+        total_games = int(row['total_games'] or 0)
+        correct = int(row[correct_col] or 0)
+        accuracy = round(float(row[accuracy_col] or 0), 1)
+        filtered_games = None
+        if threshold is not None:
+            threshold_pct = threshold / 100.0
+            filtered_games = conn.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM predictions
+                WHERE sport = ?
+                  AND {prob_col} IS NOT NULL
+                  AND (
+                        {prob_col} >= ?
+                     OR (1.0 - {prob_col}) >= ?
+                  )
+                """,
+                (sport, threshold_pct, threshold_pct)
+            ).fetchone()[0]
+        results.append({
+            'sport': sport,
+            'record': f'{correct}-{max(total_games - correct, 0)}',
+            'accuracy': accuracy,
+            'filtered_games': filtered_games,
+        })
+    return results
+
+def _search_local_team_predictions(conn, query_text: str):
+    like = f"%{query_text.lower()}%"
+    rows = conn.execute(
+        """
+        SELECT sport, game_date, away_team_id, home_team_id, predicted_winner, win_probability
+        FROM predictions
+        WHERE LOWER(COALESCE(home_team_id,'')) LIKE ?
+           OR LOWER(COALESCE(away_team_id,'')) LIKE ?
+        ORDER BY created_at DESC
+        LIMIT 6
+        """,
+        (like, like)
+    ).fetchall()
+    return [{
+        'sport': r['sport'],
+        'game_date': r['game_date'],
+        'away_team': r['away_team_id'],
+        'home_team': r['home_team_id'],
+        'predicted_winner': r['predicted_winner'],
+        'win_probability': round(float(r['win_probability'] or 0) * 100, 1),
+    } for r in rows]
+
+def _search_espn_team_matches(query_text: str):
+    q = query_text.lower()
+    matches = []
+    for sport, endpoint in _ESPN_SCOREBOARD_ENDPOINTS.items():
+        if len(matches) >= 6:
+            break
+        try:
+            data = _cached_get(endpoint, timeout=6) or {}
+            for ev in data.get('events', []):
+                comp = (ev.get('competitions') or [{}])[0]
+                teams = comp.get('competitors') or []
+                if len(teams) < 2:
+                    continue
+                home = next((t for t in teams if t.get('homeAway') == 'home'), teams[0])
+                away = next((t for t in teams if t.get('homeAway') == 'away'), teams[-1])
+                home_name = ((home.get('team') or {}).get('displayName') or '').strip()
+                away_name = ((away.get('team') or {}).get('displayName') or '').strip()
+                if q in home_name.lower() or q in away_name.lower():
+                    matches.append({
+                        'sport': sport,
+                        'home_team': home_name,
+                        'away_team': away_name,
+                        'status': (comp.get('status') or {}).get('type', {}).get('shortDetail', 'Scheduled'),
+                    })
+                    if len(matches) >= 6:
+                        break
+        except Exception:
+            continue
+    return matches
+
+def _build_search_payload(raw_query: str):
+    q = (raw_query or '').strip()
+    if not q:
+        return {
+            'query': '',
+            'matched_model': None,
+            'confidence_threshold': None,
+            'model_results': [],
+            'team_results': [],
+            'espn_results': [],
+            'suggested_route': '/',
+        }
+    public_model, internal_model = _parse_search_model(q)
+    threshold = _parse_confidence_threshold(q)
+    payload = {
+        'query': q,
+        'matched_model': (
+            {'public_name': public_model.title(), 'internal_name': internal_model}
+            if internal_model else None
+        ),
+        'confidence_threshold': threshold,
+        'model_results': [],
+        'team_results': [],
+        'espn_results': [],
+        'suggested_route': None,
     }
-    for keyword, route in intent_routes.items():
-        if keyword in q:
-            return redirect(route)
-    if any(k in q for k in ('grinder', 'xsharp', 'confidence', 'over', 'under', '%')):
-        return redirect('/results')
-
-    # Team / matchup query: send users to sport page where latest matching game lives.
     try:
         conn = get_db_connection()
-        like_pattern = f"%{' '.join(tokens) if tokens else q}%"
-        row = conn.execute(
-            """
-            SELECT sport
-            FROM system_picks
-            WHERE LOWER(COALESCE(home_team,'')) LIKE ?
-               OR LOWER(COALESCE(away_team,'')) LIKE ?
-            ORDER BY game_date DESC
-            LIMIT 1
-            """,
-            (like_pattern, like_pattern)
-        ).fetchone()
-        if row:
-            sport_slug = SPORT_SEO_SLUGS.get((row['sport'] or '').upper())
-            if sport_slug:
-                conn.close()
-                return redirect(f'/{sport_slug}')
-        pred_row = conn.execute(
-            """
-            SELECT sport
-            FROM predictions
-            WHERE LOWER(COALESCE(home_team_id,'')) LIKE ?
-               OR LOWER(COALESCE(away_team_id,'')) LIKE ?
-            ORDER BY game_date DESC
-            LIMIT 1
-            """,
-            (f'%{q}%', f'%{q}%')
-        ).fetchone()
+        payload['team_results'] = _search_local_team_predictions(conn, q)
+        payload['model_results'] = _search_model_performance(conn, internal_model, threshold)
         conn.close()
-        if pred_row:
-            sport_slug = SPORT_SEO_SLUGS.get((pred_row['sport'] or '').upper())
-            if sport_slug:
-                return redirect(f'/{sport_slug}')
     except Exception:
         pass
+    payload['espn_results'] = _search_espn_team_matches(q)
+    if payload['team_results']:
+        top_sport = (payload['team_results'][0].get('sport') or '').upper()
+        payload['suggested_route'] = _SPORT_TO_ROUTE.get(top_sport)
+    elif payload['espn_results']:
+        top_sport = (payload['espn_results'][0].get('sport') or '').upper()
+        payload['suggested_route'] = _SPORT_TO_ROUTE.get(top_sport)
+    elif internal_model or threshold is not None:
+        payload['suggested_route'] = '/results'
+    return payload
 
+@app.route('/api/search')
+def api_search():
+    return jsonify(_build_search_payload(request.args.get('query', '')))
+
+@app.route('/search')
+def site_search():
+    """No-JS fallback: redirect to best-matching page."""
+    payload = _build_search_payload(request.args.get('query', ''))
+    if payload.get('suggested_route'):
+        return redirect(payload['suggested_route'])
     return redirect(url_for('landing_page'))
 
 @app.route('/robots.txt')
