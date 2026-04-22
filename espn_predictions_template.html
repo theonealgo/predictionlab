@@ -114,7 +114,7 @@
             color: #0f172a;
             font-size: 0.9em;
         }
-        .nav-search input::placeholder { color: #64748b; }
+        .nav-search input::placeholder { color: #475569; }
         .nav-search button {
             border: 1px solid #E0E4E8;
             background: #ffffff;
@@ -133,7 +133,7 @@
         .search-autocomplete.show{display:block;}
         .search-item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#0f172a;}
         .search-item:hover{background:rgba(15,23,42,0.06);}
-        .search-item small{color:#64748b;}
+        .search-item small{color:#475569;}
         .nav-actions { display:flex; align-items:center; gap:10px; }
         .auth-btn {
             text-decoration:none;
@@ -158,7 +158,17 @@
             width: auto;
             display: block;
         }
-        .hamburger { display:none; }
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid #E0E4E8;
+            background: #ffffff;
+        }
         .hamburger span {
             width: 24px;
             height: 2px;
@@ -221,7 +231,7 @@
             border-top: 1px solid rgba(15,23,42,0.12);
             padding: 26px 30px;
             text-align: center;
-            color: #64748b;
+            color: #475569;
             font-size: 0.85em;
         }
         .footer a { color: #0f172a; text-decoration: none; }
@@ -241,30 +251,30 @@
         .tab:hover { background:rgba(15,23,42,0.06); }
         .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 14px; }
         .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
-        .league-pill { background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#e2e8f0; text-decoration:none; display:inline-flex; align-items:center; }
+        .league-pill { background:#f8fafc; border:2px solid rgba(15,23,42,0.14); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#334155; text-decoration:none; display:inline-flex; align-items:center; }
         .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
         .league-pill:hover { border-color:#fbbf24; }
         .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }
-        .nav-arrow { background:rgba(251,191,36,0.2); border:2px solid #fbbf24; color:#fbbf24; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
-        .nav-arrow:hover { background:rgba(251,191,36,0.4); transform:scale(1.1); }
+        .nav-arrow { background:rgba(146,64,14,0.12); border:2px solid #92400e; color:#92400e; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
+        .nav-arrow:hover { background:rgba(146,64,14,0.22); transform:scale(1.1); }
         .date-bubbles { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
         .date-bubble { background:#fff; border:2px solid rgba(15,23,42,0.18); border-radius:22px; padding:9px 16px; min-width:105px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.86em; color:#0f172a; }
-        .date-bubble:hover { border-color:#fbbf24; }
-        .date-bubble.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; font-weight:700; }
+        .date-bubble:hover { border-color:#92400e; }
+        .date-bubble.active { background:#f59e0b; border-color:#d97706; color:#0f172a; font-weight:700; }
         .date-bubble.today { border-color:#00C076; color:#00C076; }
         .date-bubble.active.today { background:#00C076; color:#fff; }
         .date-section { display:none; }
         .date-section.visible { display:block; }
         .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
         .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-        .date-header { font-size:1.25em; margin-bottom:14px; color:#fbbf24; font-weight:600; }
+        .date-header { font-size:1.25em; margin-bottom:14px; color:#92400e; font-weight:600; }
         .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; margin-bottom:22px; }
         @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
 
         /* Card */
         .game-card { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:10px; overflow:hidden; transition:border-color 0.2s; }
-        .game-card:hover { border-color:#fbbf24; }
-        .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#fbbf24; background:rgba(251,191,36,0.12); }
+        .game-card:hover { border-color:#b45309; }
+        .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#92400e; background:rgba(146,64,14,0.1); }
         .game-status.final { color:#00C076; background:rgba(16,185,129,0.12); }
         .game-body { display:flex; padding:10px 12px; gap:10px; }
         .teams-section { flex:1; min-width:0; }
@@ -274,9 +284,9 @@
         .team-name.winner { font-weight:700; }
         .team-odds { font-size:0.82em; font-weight:700; margin-left:6px; flex-shrink:0; }
         .team-odds.fav { color:#00C076; }
-        .team-odds.dog { color:#fbbf24; }
+        .team-odds.dog { color:#92400e; }
         .pick-indicator { color:#00C076; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
-        .score-box { font-size:1.05em; font-weight:700; color:#fbbf24; margin-left:8px; flex-shrink:0; }
+        .score-box { font-size:1.05em; font-weight:700; color:#92400e; margin-left:8px; flex-shrink:0; }
         .prediction-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:120px; max-width:168px; display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
         @media(max-width:400px){ .game-body{flex-direction:column;} .prediction-panel{max-width:none;min-width:0;border-left:none;border-top:3px solid #8b5cf6;} }
         .panel-title { font-size:0.66em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
@@ -296,23 +306,23 @@
         .pc-val { font-size:0.95em; font-weight:800; color:#0f172a; }
         .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; box-sizing:border-box; text-align:center; }
         .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
-        .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
+        .pc-side.away { color:#92400e; background:rgba(146,64,14,0.1); }
 
         /* MLB premium picks side-panel (replaces Home Win % panel) */
         .premium-panel { background:#f4f7f9; border-left:3px solid #d1d5db; padding:10px 12px; min-width:140px; max-width:190px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
         @media(max-width:400px){ .premium-panel{ max-width:none; min-width:0; border-left:none; border-top:3px solid #d1d5db; } }
         .premium-panel .panel-title { color:#1A1D23; font-weight:700; }
         .premium-row { display:flex; flex-direction:column; gap:1px; }
-        .premium-row .sf-label { color:#fde68a; }
-        .premium-lock { font-size:0.78em; color:#94a3b8; }
-        .premium-lock a { color:#fbbf24; text-decoration:none; font-weight:700; }
+        .premium-row .sf-label { color:#334155; }
+        .premium-lock { font-size:0.78em; color:#475569; }
+        .premium-lock a { color:#00529B; text-decoration:none; font-weight:700; }
 
         /* Premium content — print-hidden only (text must be copiable for analysis) */
         @media print { .premium-protected { display:none !important; } }
         /* Score/Spread/Total footer */
         .score-footer { border-top:1px solid rgba(15,23,42,0.07); padding:7px 12px; display:flex; gap:16px; flex-wrap:wrap; background:rgba(15,23,42,0.03); }
         .sf-item { display:flex; flex-direction:column; gap:1px; }
-        .sf-label { color:#94a3b8; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
+        .sf-label { color:#475569; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
         .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
         .sf-fav { color:#00C076; }
         .sf-xgb { color:#f87171; }
@@ -320,56 +330,68 @@
         /* Injury badges */
         .injury-bar { padding:4px 12px 6px; display:flex; flex-wrap:wrap; gap:5px; background:rgba(239,68,68,0.06); border-top:1px solid rgba(239,68,68,0.15); }
         .injury-tag { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.71em; font-weight:600; }
-        .injury-tag.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fde68a; }
+        .injury-tag.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(146,64,14,0.45); color:#92400e; }
         /* Analysis toggle */
         .analysis-toggle { padding:6px 12px; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#a78bfa; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
         .analysis-toggle:hover { color:#c4b5fd; }
         .analysis-panel { display:none; padding:8px 12px 12px; border-top:1px solid rgba(15,23,42,0.08); background:rgba(15,23,42,0.03); }
         .analysis-panel.open { display:block; }
-        .analysis-title { font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#94a3b8; margin-bottom:6px; }
-        .analysis-empty { font-size:0.78em; color:#94a3b8; }
+        .analysis-title { font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#475569; margin-bottom:6px; }
+        .analysis-empty { font-size:0.78em; color:#475569; }
         .injury-list { display:flex; flex-wrap:wrap; gap:6px; }
         .injury-pill { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.72em; font-weight:600; }
-        .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fde68a; }
+        .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(146,64,14,0.45); color:#92400e; }
         @media (max-width: 1100px) {
             .navbar-content { flex-wrap:wrap; justify-content:center; }
             .nav-search-wrap { order:3; width:100%; max-width:100%; }
         }
         @media (max-width: 768px) {
-            .nav-links { justify-content:center; }
-            .nav-links a { font-size:0.78em; padding:6px 8px; }
+            .navbar-content {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                grid-template-areas:
+                    "logo ham"
+                    "search search"
+                    "actions actions"
+                    "links links";
+                align-items: center;
+                gap: 10px 12px;
+            }
+            .navbar .logo { grid-area: logo; justify-self: start; }
+            .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
+            .nav-search-wrap { grid-area: search; width: 100%; max-width: none; }
+            .nav-actions { grid-area: actions; display: flex; justify-content: center; width: 100%; }
+            .nav-links {
+                grid-area: links;
+                display: none;
+                flex-direction: column;
+                flex-wrap: nowrap;
+                align-items: stretch;
+                gap: 0;
+                width: 100%;
+                padding: 4px 0 10px;
+                border-top: 1px solid #E0E4E8;
+                background: #F4F7F9;
+            }
+            .nav-links.active { display: flex; }
+            .nav-links a { font-size: 0.88em; padding: 10px 12px; white-space: normal; border-radius: 8px; }
             .container { padding: 20px 10px; }
             .games-grid { grid-template-columns:1fr !important; }
         }
         .nav-group { position: relative; }
-        .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
-        .nav-group-title:hover { background: rgba(255,255,255,0.08); }
+        .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(0,82,155,0.08); }
         .nav-group-items { display: none; padding-left: 12px; }
         .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
-        .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
+        .nav-group-items a:hover { opacity: 1; color: #00529B; }
     </style>
 </head>
 <body>
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">underdogs.bet</a>
-        <div class="nav-search-wrap">
-            <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
-                <input type="text" id="navSearchInputPicks" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
-                <button type="submit">Search</button>
-            </form>
-            <div id="searchAutocompletePicks" class="search-autocomplete" aria-live="polite"></div>
-        </div>
-        <div class="nav-actions">
-            {% if is_logged_in %}
-            <a href="/logout" class="auth-btn login">Logout</a>
-            {% else %}
-            <a href="/login" class="auth-btn login">Login</a>
-            <a href="/signup" class="auth-btn signup">Sign Up</a>
-            {% endif %}
-        </div>
-        <div class="hamburger" onclick="toggleMenu()">
+        <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
             <span></span>
             <span></span>
             <span></span>
@@ -387,6 +409,21 @@
             <a href="/soccer-picks">Soccer</a>
             {% endif %}
         </div>
+        <div class="nav-search-wrap">
+            <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
+                <input type="text" id="navSearchInputPicks" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
+                <button type="submit">Search</button>
+            </form>
+            <div id="searchAutocompletePicks" class="search-autocomplete" aria-live="polite"></div>
+        </div>
+        <div class="nav-actions">
+            {% if is_logged_in %}
+            <a href="/logout" class="auth-btn login">Logout</a>
+            {% else %}
+            <a href="/login" class="auth-btn login">Login</a>
+            <a href="/signup" class="auth-btn signup">Sign Up</a>
+            {% endif %}
+        </div>
     </div>
 </div>
 <div class="search-results-wrap">
@@ -399,7 +436,7 @@
     </div>
 
     <!-- SEO text block -->
-    <div style="margin-bottom:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:0.85em;color:#94a3b8;line-height:1.7;">
+    <div style="margin-bottom:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:0.85em;color:#475569;line-height:1.7;">
         {% if sport == 'NBA' %}Our NBA picks today are powered by a multi-model AI system combining advanced team ratings, performance data, and real-time matchup analysis. Our models analyze pace, efficiency, and player trends to generate accurate daily predictions across moneyline, spread, and totals.
         {% elif sport == 'MLB' %}Our MLB picks today are generated using a specialized system that focuses on starting pitchers, bullpen usage, and advanced matchup data. By analyzing strikeout rates, run projections, and team performance, we identify high-value opportunities across moneyline, spread, and totals.
         {% elif sport == 'NHL' %}Our NHL picks are driven by advanced models that evaluate team strength, goaltending performance, shot metrics, and recent form. We combine real-time data with predictive analysis to generate daily value across moneyline, puck line, and totals.
@@ -412,7 +449,7 @@
         {% else %}Our AI-powered picks combine multiple predictive models to generate accurate daily predictions across moneyline, spread, and totals.
         {% endif %}
         {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
-        <br><strong style="color:#e2e8f0;">Showing picks for {{ sorted_dates[0] }}.</strong> <a href="/{{ sport_seo_slug }}" style="color:#fbbf24;text-decoration:none;">View today's picks →</a>
+        <br><strong style="color:#334155;">Showing picks for {{ sorted_dates[0] }}.</strong> <a href="/{{ sport_seo_slug }}" style="color:#00529B;text-decoration:none;font-weight:700;">View today's picks →</a>
         {% endif %}
     </div>
 
@@ -467,7 +504,7 @@
                 {% for pred in grouped_predictions[date]|sort(attribute='league') %}
                 {% if sport == 'SOCCER' and pred.league and pred.league != _prev_league.val %}
                 {% set _prev_league.val = pred.league %}
-                <div style="grid-column:1/-1;font-size:0.88em;font-weight:700;color:#fbbf24;padding:10px 0 4px;border-top:1px solid rgba(255,255,255,0.08);margin-top:6px;">{{ pred.league }}</div>
+                <div style="grid-column:1/-1;font-size:0.88em;font-weight:700;color:#92400e;padding:10px 0 4px;border-top:1px solid rgba(15,23,42,0.1);margin-top:6px;">{{ pred.league }}</div>
                 {% endif %}
                 {% set is_final = pred.home_score is not none %}
                 {% set home_wins = is_final and pred.home_score > pred.away_score %}
@@ -493,7 +530,7 @@
                             {% if is_premium %}
                             <div class="premium-row">
                                 <span class="sf-label">Sharp Consensus</span>
-                                <span class="sf-val" style="color:#fbbf24;">{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}{% if pred.ensemble_prob is not none %} · {% if home_picked %}{{ pred.ensemble_prob }}{% else %}{{ 100 - pred.ensemble_prob }}{% endif %}%{% endif %}</span>
+                                <span class="sf-val" style="color:#92400e;">{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}{% if pred.ensemble_prob is not none %} · {% if home_picked %}{{ pred.ensemble_prob }}{% else %}{{ 100 - pred.ensemble_prob }}{% endif %}%{% endif %}</span>
                             </div>
                             {% if pred.xgb_spread is not none %}
                             <div class="premium-row">
@@ -534,8 +571,8 @@
                                 <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
                                 <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}">{% if m.prob >= 50 %}{{ pred.home_team_id.split()[-1] }}{% else %}{{ pred.away_team_id.split()[-1] }}{% endif %}</div>
                                 {% else %}
-                                <div class="pc-val" style="color:#64748b;">—</div>
-                                <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
+                                <div class="pc-val" style="color:#475569;">—</div>
+                                <div class="pc-side" style="color:#475569;background:transparent;">—</div>
                                 {% endif %}
                             </div>
                             {% endfor %}
@@ -550,9 +587,9 @@
                         <div class="sf-item"><span class="sf-label">Puck Line</span>
                             {% if pred.puck_line_tag == 'STRONG -1.5' %}<span class="sf-val" style="color:#00C076;font-weight:800;">{{ pred.puck_line_tag }}</span>
                             {% elif pred.puck_line_tag == 'LEAN -1.5' %}<span class="sf-val" style="color:#34d399;">{{ pred.puck_line_tag }}</span>
-                            {% elif pred.puck_line_tag == 'STRONG +1.5' %}<span class="sf-val" style="color:#fbbf24;font-weight:800;">{{ pred.puck_line_tag }}</span>
+                            {% elif pred.puck_line_tag == 'STRONG +1.5' %}<span class="sf-val" style="color:#92400e;font-weight:800;">{{ pred.puck_line_tag }}</span>
                             {% elif pred.puck_line_tag == 'LEAN +1.5' %}<span class="sf-val" style="color:#fcd34d;">{{ pred.puck_line_tag }}</span>
-                            {% else %}<span class="sf-val" style="color:#94a3b8;">{{ pred.puck_line_tag }}</span>{% endif %}
+                            {% else %}<span class="sf-val" style="color:#475569;">{{ pred.puck_line_tag }}</span>{% endif %}
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">{% if pred.puck_line_fav_side == 'home' %}{{ pred.home_team_id[:10] }} -1.5{% else %}{{ pred.away_team_id[:10] }} -1.5{% endif %}</span>
@@ -560,24 +597,24 @@
                         </div>
                         <div class="sf-item">
                             <span class="sf-label">{% if pred.puck_line_fav_side == 'home' %}{{ pred.away_team_id[:10] }} +1.5{% else %}{{ pred.home_team_id[:10] }} +1.5{% endif %}</span>
-                            <span class="sf-val" style="color:#94a3b8;">{{ pred.puck_line_dog_prob }}%</span>
+                            <span class="sf-val" style="color:#475569;">{{ pred.puck_line_dog_prob }}%</span>
                         </div>
                         {% else %}
-                        <div class="sf-item"><span class="sf-label">Puck Line</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
+                        <div class="sf-item"><span class="sf-label">Puck Line</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% endif %}
                         {% if _spread_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#fbbf24;">{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} -{{ _spread_val|abs }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#92400e;">{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} -{{ _spread_val|abs }}</span></div>
                         {% else %}
-                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#94a3b8;">🔒 <a href="/plans" style="color:#fbbf24;font-size:0.85em;">Unlock</a></span></div>
+                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% endif %}
                         {% if _total_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#fbbf24;">{{ _total_val }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#92400e;">{{ _total_val }}</span></div>
                         {% else %}
-                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#94a3b8;">🔒</span></div>
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
                         {% endif %}
                         {% endif %}
                         {% if is_final and is_premium %}
@@ -620,12 +657,12 @@
     {% endfor %}
     {% if _past_dates|length > 1 %}
     <div style="margin-top:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
-        <div style="font-size:0.82em;font-weight:700;color:#e2e8f0;margin-bottom:8px;">Recent {{ sport_info.name }} Picks</div>
+        <div style="font-size:0.82em;font-weight:700;color:#334155;margin-bottom:8px;">Recent {{ sport_info.name }} Picks</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
             {% for _d in _past_dates[-7:] %}
             {% set _m = _d.split('-') %}
             {% if _m|length == 3 %}
-            <a href="/{{ sport_seo_slug }}-{{ {'01':'january','02':'february','03':'march','04':'april','05':'may','06':'june','07':'july','08':'august','09':'september','10':'october','11':'november','12':'december'}.get(_m[1],'january') }}-{{ _m[2]|int }}-{{ _m[0] }}" style="color:#94a3b8;text-decoration:none;font-size:0.8em;padding:4px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;">{{ _d }}</a>
+            <a href="/{{ sport_seo_slug }}-{{ {'01':'january','02':'february','03':'march','04':'april','05':'may','06':'june','07':'july','08':'august','09':'september','10':'october','11':'november','12':'december'}.get(_m[1],'january') }}-{{ _m[2]|int }}-{{ _m[0] }}" style="color:#475569;text-decoration:none;font-size:0.8em;padding:4px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;">{{ _d }}</a>
             {% endif %}
             {% endfor %}
         </div>
@@ -652,7 +689,7 @@
         <p style="margin:0;">This helps provide a clearer understanding of the strategy behind the picks and how they are generated.</p>
     </div>
 </div>
-<footer style="background:#ffffff;border-top:1px solid rgba(15,23,42,0.12);padding:18px 30px;color:#94a3b8;font-size:0.78em;">
+<footer style="background:#ffffff;border-top:1px solid rgba(15,23,42,0.12);padding:18px 30px;color:#475569;font-size:0.78em;">
     <div style="max-width:1200px;margin:0 auto;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;">
             <a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a>
@@ -696,7 +733,7 @@
                 <a href="/daily-report" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Daily Betting Results Report</a>
             </div>
         </div>
-        <div style="max-width:1200px;margin:10px auto 0;font-size:0.75em;color:#64748b;">© 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+        <div style="max-width:1200px;margin:10px auto 0;font-size:0.75em;color:#475569;">© 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
 

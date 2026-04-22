@@ -750,47 +750,44 @@ def plans_page():
         plans_content = BASE_TEMPLATE.replace(
             '{% block extra_styles %}{% endblock %}',
             """
-            @keyframes pulse-bg{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(1.1);opacity:1;}}
-            .plans-page-bg{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);z-index:-2;}
-            .plans-page-bg::after{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:-1;}
-            .plans-hero{background:rgba(255,255,255,0.03);border:2px solid rgba(255,255,255,0.15);border-radius:16px;padding:40px 24px 32px;text-align:center;position:relative;overflow:hidden;margin-bottom:30px;}
-            .plans-hero::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:radial-gradient(circle,rgba(255,255,255,0.08) 0%,transparent 70%);opacity:0.06;z-index:0;}
-            .plans-hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,0.04) 0%,transparent 60%);animation:pulse-bg 6s ease-in-out infinite;}
-            .plans-hero-logo{font-size:2em;font-weight:900;color:#ffffff;position:relative;z-index:1;letter-spacing:0.5px;line-height:1.3;}
-            .plans-hero-sub{font-size:1.05em;color:#94a3b8;margin-top:12px;position:relative;z-index:1;max-width:650px;margin-left:auto;margin-right:auto;line-height:1.7;}
-            .plans-hero-stats{display:flex;justify-content:center;gap:16px;margin-top:20px;position:relative;z-index:1;flex-wrap:wrap;}
-            .stat-pill{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);border-radius:24px;padding:7px 18px;font-size:0.82em;font-weight:600;color:#cbd5e1;}
-            .stat-pill span{color:#fff;}
-            .competitor-bar{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:10px;max-width:560px;margin:20px auto 0;padding:10px 18px;font-size:0.85em;position:relative;z-index:1;color:#94a3b8;}
-            .competitor-bar strong{color:#fff;}
-            .plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
-            .plan-card{background:#ffffff;color:#1e293b;border-radius:18px;padding:36px 28px;text-align:center;transition:all 0.3s;box-shadow:0 4px 24px rgba(0,0,0,0.3);position:relative;}
-            .plan-card:hover{transform:translateY(-6px);box-shadow:0 12px 40px rgba(0,0,0,0.4);}
-            .plan-card.popular{border:3px solid #e2e8f0;}
-            .plan-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#fff;color:#0f172a;padding:5px 20px;border-radius:20px;font-size:0.78em;font-weight:800;}
-            .plan-name{font-size:1.4em;font-weight:800;margin-bottom:6px;color:#0f172a;}
-            .plan-old-price{font-size:1.1em;color:#94a3b8;text-decoration:line-through;margin-bottom:2px;}
-            .plan-price{font-size:3.2em;font-weight:900;color:#0f172a;margin-bottom:2px;}
-            .plan-price span{font-size:0.3em;opacity:0.5;font-weight:500;}
+            .plans-wrap{max-width:1080px;margin:0 auto;padding:4px 0 40px;}
+            .plans-hero{background:#ffffff;border:1px solid #E0E4E8;border-radius:16px;padding:36px 22px 28px;text-align:center;box-shadow:0 4px 20px rgba(15,23,42,0.06);margin-bottom:24px;}
+            .plans-hero-logo{font-size:1.65em;font-weight:900;color:#0f172a;letter-spacing:0.3px;line-height:1.35;margin-top:10px;}
+            .plans-hero-sub{font-size:1.05em;color:#475569;margin-top:12px;max-width:650px;margin-left:auto;margin-right:auto;line-height:1.75;}
+            .plans-hero-stats{display:flex;justify-content:center;gap:12px;margin-top:18px;flex-wrap:wrap;}
+            .stat-pill{background:#F4F7F9;border:1px solid #E0E4E8;border-radius:24px;padding:8px 16px;font-size:0.82em;font-weight:600;color:#334155;}
+            .competitor-bar{background:#f8fafc;border:1px solid #E0E4E8;border-radius:10px;max-width:560px;margin:18px auto 0;padding:12px 18px;font-size:0.88em;color:#475569;}
+            .competitor-bar strong{color:#0f172a;}
+            .plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+            .plan-card{background:#ffffff;color:#1e293b;border-radius:18px;padding:34px 26px;text-align:center;transition:all 0.25s;box-shadow:0 4px 18px rgba(15,23,42,0.08);border:1px solid #E0E4E8;position:relative;}
+            .plan-card:hover{transform:translateY(-4px);box-shadow:0 10px 28px rgba(15,23,42,0.12);}
+            .plan-card.popular{border:2px solid #00529B;}
+            .plan-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#00529B;color:#fff;padding:5px 20px;border-radius:20px;font-size:0.78em;font-weight:800;}
+            .plan-name{font-size:1.35em;font-weight:800;margin-bottom:6px;color:#0f172a;}
+            .plan-old-price{font-size:1.05em;color:#475569;text-decoration:line-through;margin-bottom:2px;}
+            .plan-price{font-size:3em;font-weight:900;color:#0f172a;margin-bottom:2px;}
+            .plan-price span{font-size:0.3em;opacity:0.55;font-weight:500;}
             .plan-save{color:#059669;font-size:0.88em;margin-bottom:20px;font-weight:700;}
-            .plan-features{text-align:left;margin-bottom:28px;padding:0;}
+            .plan-features{text-align:left;margin-bottom:26px;padding:0;}
             .plan-features li{padding:7px 0;font-size:0.9em;list-style:none;color:#334155;border-bottom:1px solid #f1f5f9;}
             .plan-features li:last-child{border-bottom:none;}
             .plan-features li::before{content:none;}
-            .plan-btn{display:block;width:100%;padding:16px;border:none;border-radius:10px;font-size:1.1em;font-weight:800;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.2s;}
-            .plan-btn-primary{background:#0f172a;color:white;box-shadow:0 4px 16px rgba(0,0,0,0.3);}
-            .plan-btn-primary:hover{transform:translateY(-2px);background:#1e293b;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
-            .plan-btn-secondary{background:#0f172a;color:white;}
+            .plan-btn{display:block;width:100%;padding:15px;border:none;border-radius:10px;font-size:1.05em;font-weight:800;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.2s;}
+            .plan-btn-primary{background:#00529B;color:#fff;box-shadow:0 4px 14px rgba(0,82,155,0.25);}
+            .plan-btn-primary:hover{transform:translateY(-2px);background:#003d73;}
+            .plan-btn-secondary{background:#0f172a;color:#fff;}
             .plan-btn-secondary:hover{background:#1e293b;}
-            .free-section{margin-top:40px;text-align:center;padding:28px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;}
-            .free-features{display:flex;justify-content:center;gap:20px;margin-top:12px;flex-wrap:wrap;}
-            .free-pill{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 16px;font-size:0.82em;}
+            .free-section{margin-top:32px;text-align:center;padding:26px 20px;background:#ffffff;border:1px solid #E0E4E8;border-radius:14px;}
+            .free-section .free-head{font-size:1.2em;margin-bottom:8px;font-weight:800;color:#0f172a;}
+            .free-section .free-copy{margin-bottom:14px;color:#475569;font-size:0.95em;line-height:1.55;}
+            .free-features{display:flex;justify-content:center;gap:12px;margin-top:12px;flex-wrap:wrap;}
+            .free-pill{background:#F4F7F9;border:1px solid #E0E4E8;border-radius:20px;padding:7px 16px;font-size:0.82em;color:#334155;font-weight:600;}
             @media(max-width:640px){.plans-grid{grid-template-columns:1fr;}.plans-hero-stats{flex-direction:column;align-items:center;gap:10px;}}
             """
         ).replace('{% block content %}{% endblock %}', """
-            <div class="plans-page-bg"></div>
+            <div class="plans-wrap">
             <div class="plans-hero">
-                <h1 style="font-size:2.1em;font-weight:900;color:#fff;position:relative;z-index:1;line-height:1.25;margin-bottom:10px;">AI Sports Betting Pricing Plans for Spreads, Totals and Score Predictions</h1>
+                <h1 style="font-size:2em;font-weight:900;color:#0f172a;line-height:1.25;margin-bottom:8px;">AI Sports Betting Pricing Plans for Spreads, Totals and Score Predictions</h1>
                 <div class="plans-hero-logo">Built to Beat the Public &mdash; Not Follow It.</div>
                 <div class="plans-hero-sub">Data-driven spreads, totals, and score projections &mdash; tracked, transparent, and built for real edges.</div>
                 <div class="plans-hero-stats">
@@ -806,7 +803,7 @@ def plans_page():
                     Every pick is tracked. No deletes. No edits. Full transparency.
                 </div>
             </div>
-            <p style="text-align:center;font-size:1.15em;color:#e2e8f0;margin-bottom:28px;font-weight:600;">Free gets you the winners. Premium gets you the edge.</p>
+            <p style="text-align:center;font-size:1.12em;color:#334155;margin-bottom:26px;font-weight:700;">Free gets you the winners. Premium gets you the edge.</p>
             <div class="plans-grid">
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>
@@ -840,16 +837,17 @@ def plans_page():
                     <a href="/checkout/yearly" class="plan-btn plan-btn-primary">Get Yearly Access</a>
                 </div>
             </div>
-            <p style="text-align:center;font-size:0.85em;color:#64748b;margin-top:20px;">Tracked results updated daily.</p>
+            <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily.</p>
             <div class="free-section">
-                <p style="font-size:1.2em;margin-bottom:6px;font-weight:700;">Start Free</p>
-                <p style="opacity:0.7;margin-bottom:12px;">Start free. Upgrade when you're ready for the full edge.</p>
+                <p class="free-head">Start Free</p>
+                <p class="free-copy">Start free. Upgrade when you're ready for the full edge.</p>
                 <div class="free-features">
                     <div class="free-pill">Moneyline Picks</div>
                     <div class="free-pill">5-Model Win %</div>
                     <div class="free-pill">Full Results</div>
                     <div class="free-pill">All Sports Covered</div>
                 </div>
+            </div>
             </div>
         """ + _SEO_UTILITY_FAQ_FOOTER + """
         """)

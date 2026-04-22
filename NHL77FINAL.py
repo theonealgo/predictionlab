@@ -4866,7 +4866,24 @@ BASE_TEMPLATE = """
             width: auto;
             display: block;
         }
-        .hamburger { display: none; }
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid #E0E4E8;
+            background: #ffffff;
+        }
+        .hamburger span {
+            width: 24px;
+            height: 2px;
+            background: #0f172a;
+            border-radius: 2px;
+            transition: 0.3s;
+        }
         .nav-links {
             position: static;
             background: transparent;
@@ -4902,7 +4919,7 @@ BASE_TEMPLATE = """
             font-size: 0.65em;
             text-transform: uppercase;
             letter-spacing: 0.6px;
-            color: #64748b;
+            color: #475569;
             padding: 6px 8px;
         }
         .nav-divider {
@@ -4932,7 +4949,7 @@ BASE_TEMPLATE = """
             backdrop-filter: blur(16px);
             border-top: 1px solid rgba(15,23,42,0.12);
             padding: 18px 30px;
-            color: #94a3b8;
+            color: #475569;
             font-size: 0.78em;
         }
         .footer-inner {
@@ -4946,13 +4963,13 @@ BASE_TEMPLATE = """
         }
         .footer-left { display: flex; align-items: center; gap: 14px; }
         .footer-logo-img { height: 32px; width: auto; }
-        .footer-email a { color: #94a3b8; text-decoration: none; font-size: 0.95em; }
+        .footer-email a { color: #475569; text-decoration: none; font-size: 0.95em; }
         .footer-email a:hover { color: #0f172a; }
         .footer-center { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .footer-center a { color: #94a3b8; text-decoration: none; font-size: 0.95em; }
+        .footer-center a { color: #475569; text-decoration: none; font-size: 0.95em; }
         .footer-center a:hover { color: #0f172a; }
         .footer-center span { color: rgba(15,23,42,0.2); }
-        .footer-right { color: #64748b; font-size: 0.9em; white-space: nowrap; }
+        .footer-right { color: #475569; font-size: 0.9em; white-space: nowrap; }
         .footer-socials { display: flex; align-items: center; gap: 14px; }
         .footer-socials a { display: flex; opacity: 0.6; transition: opacity 0.2s; }
         .footer-socials a:hover { opacity: 1; }
@@ -4964,17 +4981,30 @@ BASE_TEMPLATE = """
             .nav-links { justify-content: center; }
         }
         @media (max-width: 768px) {
-            .nav-links a { font-size: 0.78em; padding: 6px 8px; }
+            .hamburger { display: flex; }
+            .nav-links {
+                display: none;
+                flex-basis: 100%;
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                padding: 10px 0 4px;
+                border-top: 1px solid #E0E4E8;
+                gap: 2px;
+                background: #F4F7F9;
+            }
+            .nav-links.active { display: flex; }
+            .nav-links a { font-size: 0.88em; padding: 10px 12px; white-space: normal; border-radius: 8px; }
             .container { padding: 20px 15px; }
         }
         /* Nav dropdown groups */
         .nav-group { position: relative; }
-        .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
-        .nav-group-title:hover { background: rgba(255,255,255,0.08); }
+        .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(0,82,155,0.08); }
         .nav-group-items { display: none; padding-left: 12px; }
         .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
-        .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
+        .nav-group-items a:hover { opacity: 1; color: #00529B; }
         {% block extra_styles %}{% endblock %}
     </style>
 </head>
@@ -7356,7 +7386,7 @@ def landing_page():
             color: var(--text);
             font-size: 0.9em;
         }
-        .nav-search input::placeholder { color: #64748b; }
+        .nav-search input::placeholder { color: #475569; }
         .nav-search button {
             border: none;
             background: #ffffff;
@@ -7376,7 +7406,7 @@ def landing_page():
         .search-autocomplete.show{display:block;}
         .search-item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#0f172a;}
         .search-item:hover{background:rgba(15,23,42,0.06);}
-        .search-item small{color:#64748b;}
+        .search-item small{color:#475569;}
         .nav-actions { display:flex; align-items:center; gap:10px; }
         .auth-btn {
             text-decoration:none;
@@ -7418,7 +7448,7 @@ def landing_page():
         }
         .perf-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:10px;}
         .perf-stat{background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:10px 12px;}
-        .perf-label{font-size:0.72em;color:#64748b;text-transform:uppercase;letter-spacing:0.4px;}
+        .perf-label{font-size:0.72em;color:#475569;text-transform:uppercase;letter-spacing:0.4px;}
         .perf-value{font-size:1.05em;font-weight:800;color:#0f172a;margin-top:2px;}
         .perf-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
         .perf-controls select,.perf-controls input{padding:7px 10px;border:1px solid rgba(15,23,42,0.18);border-radius:8px;background:#fff;color:#0f172a;}
@@ -7443,10 +7473,18 @@ def landing_page():
             width: auto;
             display: block;
         }
-        .hamburger { display: none; }
-        .hamburger:hover {
-            background: rgba(255, 255, 255, 0.08);
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #ffffff;
         }
+        .hamburger:hover { background: #f8fafc; }
         .hamburger span {
             width: 24px;
             height: 2px;
@@ -7826,7 +7864,7 @@ def landing_page():
             max-width:1200px;
             margin:10px auto 0;
             font-size:0.75em;
-            color:#64748b;
+            color:#475569;
         }
 
         /* ── Responsive ── */
@@ -7855,19 +7893,48 @@ def landing_page():
             body::before{
                 background:transparent;
             }
-        }
-        @media (max-width: 768px) {
-            .nav-links { justify-content: center; }
-            .nav-links a { font-size: 0.78em; padding: 6px 8px; }
-            .nav-actions { width: 100%; justify-content: center; }
+            .navbar-content {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                grid-template-areas:
+                    "logo ham"
+                    "search search"
+                    "actions actions"
+                    "links links";
+                align-items: center;
+                gap: 10px 12px;
+            }
+            .navbar .logo { grid-area: logo; justify-self: start; }
+            .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
+            .nav-search-wrap { grid-area: search; width: 100%; max-width: none; }
+            .nav-actions { grid-area: actions; display: flex; justify-content: center; width: 100%; }
+            .nav-links {
+                grid-area: links;
+                display: none;
+                flex-direction: column;
+                flex-wrap: nowrap;
+                align-items: stretch;
+                gap: 0;
+                width: 100%;
+                padding: 4px 0 10px;
+                border-top: 1px solid var(--border);
+                background: #F4F7F9;
+            }
+            .nav-links.active { display: flex; }
+            .nav-links a {
+                white-space: normal;
+                border-radius: 8px;
+                padding: 10px 12px;
+                font-size: 0.88em;
+            }
         }
         .nav-group { position: relative; }
-        .nav-group-title { color: #fbbf24; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
-        .nav-group-title:hover { background: rgba(255,255,255,0.08); }
+        .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(0,82,155,0.08); }
         .nav-group-items { display: none; padding-left: 12px; }
         .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
-        .nav-group-items a:hover { opacity: 1; color: #fbbf24; }
+        .nav-group-items a:hover { opacity: 1; color: #00529B; }
         /* Skip link for accessibility */
         .skip-link { position:absolute; left:-9999px; top:0; z-index:2000; background:#fbbf24; color:#0f172a; padding:10px 14px; font-weight:800; border-radius:0 0 8px 0; text-decoration:none; }
         .skip-link:focus { left:0; outline:2px solid #0f172a; }
@@ -7881,6 +7948,11 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
+        <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
         <div class="nav-links" id="navLinks">
             <a href="/nhl-picks">NHL</a>
             <a href="/nba-picks">NBA</a>
@@ -7924,7 +7996,7 @@ def landing_page():
         <a href="/nba-picks" style="background:#ffffff;color:#0f172a;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid rgba(15,23,42,0.2);box-shadow:0 6px 18px rgba(15,23,42,0.12);">View Today's Picks</a>
         <a href="/plans" style="background:#00529B;color:#ffffff;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid #00529B;box-shadow:0 6px 18px rgba(0,82,155,0.28);">Go Premium</a>
     </div>
-    <p class="hero-slide" style="font-size:0.78em;color:#94a3b8;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
+    <p class="hero-slide" style="font-size:0.78em;color:#cbd5e1;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
 </div>
 <style>
 @keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
@@ -8177,7 +8249,7 @@ def landing_page():
     </div>
     <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">Free moneyline picks and premium spreads, totals, and scores are all updated daily as schedules, injuries, and markets change.</p>
     <div style="max-width:860px;margin:16px auto 0;background:#ffffff;border:1px solid rgba(15,23,42,0.2);border-radius:14px;padding:16px 18px;">
-        <h3 style="font-size:1.1em;font-weight:800;color:#fbbf24;margin:0 0 14px;text-align:center;letter-spacing:0.02em;">Underdogs.bet Performance Stats</h3>
+        <h3 style="font-size:1.1em;font-weight:800;color:#92400e;margin:0 0 14px;text-align:center;letter-spacing:0.02em;">Underdogs.bet Performance Stats</h3>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;color:#0f172a;font-size:0.88em;font-weight:700;">
             <div>NBA Totals (2025/2026): 704-500 (+204u)</div>
             <div>NBA Spreads: 822-395 (+427u)</div>
@@ -8333,8 +8405,6 @@ def landing_page():
                 <a href="/ncaab-picks">NCAAB AI Picks &amp; Projections</a>
                 <a href="/wnba-picks">WNBA AI Picks &amp; Projections</a>
                 <a href="/daily-report">Daily Betting Results Report</a>
-                <a href="/llms.txt">LLMs Discovery File</a>
-                <a href="/ai.txt">AI Crawler Hints</a>
                 <a href="#" onclick="document.getElementById('footer-archive').style.display='block'; this.style.display='none'; return false;">Recent dated picks archive (last 3 days per league)</a>
             </div>
             <div id="footer-archive" class="footer-col" style="display:none;grid-column:1/-1;">
@@ -8442,7 +8512,15 @@ def landing_page():
             const model = (perfModel?.value || '').trim();
             const minConf = Number(perfConfidence?.value || 0);
             const sport = (perfSport?.value || '').trim();
-            const filtered = perfRows.filter(p => (!model || p.model === model) && p.confidence >= minConf && (!sport || p.sport === sport));
+            const modelNorm = model.toLowerCase();
+            const sportNorm = sport.toLowerCase();
+            const filtered = perfRows.filter(p => {
+                const pm = String(p.model || '').toLowerCase();
+                const ps = String(p.sport || '').toLowerCase();
+                const modelOk = !modelNorm || pm === modelNorm;
+                const sportOk = !sportNorm || ps === sportNorm;
+                return modelOk && (Number(p.confidence) >= minConf) && sportOk;
+            });
             const total = filtered.length;
             const wins = filtered.filter(p => p.result === 'win').length;
             const losses = total - wins;
@@ -8472,7 +8550,11 @@ def landing_page():
         };
         const applyPerfFilters = (label) => renderPerf(label || 'current filters');
         fetch('/api/performance-data').then(r => r.json()).then(data => { perfRows = data.rows || []; applyPerfFilters('current filters'); }).catch(() => { perfRows = []; applyPerfFilters('current filters'); });
-        [perfModel, perfConfidence, perfSport].forEach(el => el && el.addEventListener('change', () => applyPerfFilters('current filters')));
+        [perfModel, perfConfidence, perfSport].forEach(el => {
+            if (!el) return;
+            el.addEventListener('change', () => applyPerfFilters('current filters'));
+            if (el === perfConfidence) el.addEventListener('input', () => applyPerfFilters('current filters'));
+        });
         if (perfApply) perfApply.addEventListener('click', () => applyPerfFilters('current filters'));
         document.querySelectorAll('[data-preset]').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -8782,14 +8864,15 @@ def api_performance_data():
                 total = int(r['total_games'] or 0)
                 if total <= 0:
                     continue
-                for model, correct_col, acc_col in model_map:
+                for model, correct_col, _acc_col in model_map:
                     correct = int(r[correct_col] or 0)
                     losses = max(total - correct, 0)
-                    conf = round(float(r[acc_col] or 0.0), 1)
+                    # Synthetic rows are not per-game confidence; use 100 so min-confidence
+                    # filters do not zero the dashboard when backtest accuracy is ~50–60%.
                     for _ in range(correct):
                         rows_out.append({
                             'model': model,
-                            'confidence': conf,
+                            'confidence': 100.0,
                             'result': 'win',
                             'sport': (r['sport'] or '').upper(),
                             'date': '',
@@ -8798,7 +8881,7 @@ def api_performance_data():
                     for _ in range(losses):
                         rows_out.append({
                             'model': model,
-                            'confidence': conf,
+                            'confidence': 100.0,
                             'result': 'loss',
                             'sport': (r['sport'] or '').upper(),
                             'date': '',
