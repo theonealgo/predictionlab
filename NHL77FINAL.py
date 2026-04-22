@@ -5025,56 +5025,17 @@ BASE_TEMPLATE = """
                 <span></span>
             </div>
             <div class="nav-links" id="navLinks">
-                <a href="/" class="{{ 'active' if page == 'home' else '' }}">Home</a>
-                <div class="nav-group" onclick="this.classList.toggle('open')">
-                    <span class="nav-group-title">🏆 Join</span>
-                    <div class="nav-group-items">
-                        <a href="/plans" style="color:#fbbf24;">🏆 Premium</a>
-                        {% if is_logged_in %}
-                        <a href="/logout">Logout</a>
-                        {% else %}
-                        <a href="/login" style="color:#10b981;">Login</a>
-                        <a href="/signup">Sign Up</a>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="nav-group" onclick="this.classList.toggle('open')">
-                    <span class="nav-group-title">🏀 Sports</span>
-                    <div class="nav-group-items">
-                        <a href="/nhl-picks">🏒 NHL</a>
-                        <a href="/nba-picks">🏀 NBA</a>
-                        <a href="/mlb-picks">⚾ MLB</a>
-                        <a href="/nfl-picks">🏈 NFL</a>
-                        <a href="/ncaab-picks">🎓 NCAAB</a>
-                        <a href="/ncaaw-picks">🏀 NCAAW</a>
-                        <a href="/ncaaf-picks">🏟️ NCAAF</a>
-                        <a href="/wnba-picks">🏀 WNBA</a>
-                        {% if soccer_enabled %}
-                        <a href="/soccer-picks">⚽ Soccer</a>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="nav-group" onclick="this.classList.toggle('open')">
-                    <span class="nav-group-title" style="color:#cbd5e1;">Resources</span>
-                    <div class="nav-group-items">
-                        <a href="/tutorial">How to Read Picks</a>
-                        <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
-                        <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
-                        <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
-                        <a href="/privacy">Privacy</a>
-                        <a href="/terms">Terms</a>
-                    </div>
-                </div>
-                <div class="nav-group" onclick="this.classList.toggle('open')">
-                    <span class="nav-group-title" style="color:#cbd5e1;">Socials</span>
-                    <div class="nav-group-items">
-                        <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on YouTube">YouTube</a>
-                        <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on X">X</a>
-                        <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on Instagram">Instagram</a>
-                        <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on Facebook">Facebook</a>
-                        <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="underdogs.bet on TikTok">TikTok</a>
-                    </div>
-                </div>
+                <a href="/nhl-picks">🏒 NHL</a>
+                <a href="/nba-picks">🏀 NBA</a>
+                <a href="/mlb-picks">⚾ MLB</a>
+                <a href="/nfl-picks">🏈 NFL</a>
+                <a href="/ncaab-picks">🎓 NCAAB</a>
+                <a href="/ncaaw-picks">🏀 NCAAW</a>
+                <a href="/ncaaf-picks">🏟️ NCAAF</a>
+                <a href="/wnba-picks">🏀 WNBA</a>
+                {% if soccer_enabled %}
+                <a href="/soccer-picks">⚽ Soccer</a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -7864,6 +7825,16 @@ def landing_page():
         /* Skip link for accessibility */
         .skip-link { position:absolute; left:-9999px; top:0; z-index:2000; background:#fbbf24; color:#0f172a; padding:10px 14px; font-weight:800; border-radius:0 0 8px 0; text-decoration:none; }
         .skip-link:focus { left:0; outline:2px solid #0f172a; }
+        /* Readability override requested: render homepage text in navy. */
+        .navbar a,
+        .navbar span,
+        .navbar div,
+        #main-content,
+        #main-content *:not(svg):not(path),
+        .site-footer,
+        .site-footer *:not(svg):not(path) {
+            color: #0f172a !important;
+        }
     </style>
 </head>
 <body>
@@ -7893,23 +7864,17 @@ def landing_page():
             <span></span>
         </button>
         <div class="nav-links" id="navLinks">
-            <a href="/" class="active">Home</a>
-            <div class="nav-group" onclick="this.classList.toggle('open')">
-                <span class="nav-group-title">🏀 Sports</span>
-                <div class="nav-group-items">
-                    <a href="/nhl-picks">🏒 NHL</a>
-                    <a href="/nba-picks">🏀 NBA</a>
-                    <a href="/mlb-picks">⚾ MLB</a>
-                    <a href="/nfl-picks">🏈 NFL</a>
-                    <a href="/ncaab-picks">🎓 NCAAB</a>
-                    <a href="/ncaaw-picks">🏀 NCAAW</a>
-                    <a href="/ncaaf-picks">🏟️ NCAAF</a>
-                    <a href="/wnba-picks">🏀 WNBA</a>
-                    {% if soccer_enabled %}
-                    <a href="/soccer-picks">⚽ Soccer</a>
-                    {% endif %}
-                </div>
-            </div>
+            <a href="/nhl-picks">🏒 NHL</a>
+            <a href="/nba-picks">🏀 NBA</a>
+            <a href="/mlb-picks">⚾ MLB</a>
+            <a href="/nfl-picks">🏈 NFL</a>
+            <a href="/ncaab-picks">🎓 NCAAB</a>
+            <a href="/ncaaw-picks">🏀 NCAAW</a>
+            <a href="/ncaaf-picks">🏟️ NCAAF</a>
+            <a href="/wnba-picks">🏀 WNBA</a>
+            {% if soccer_enabled %}
+            <a href="/soccer-picks">⚽ Soccer</a>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -8159,9 +8124,6 @@ def landing_page():
 <!-- Why Different (above FAQ) -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;">
     <div style="max-width:900px;margin:0 auto;">
-        <div style="width:100%;max-height:240px;height:220px;border-radius:14px;margin-bottom:24px;display:flex;align-items:center;justify-content:center;background:#ffffff;border:1px solid rgba(15,23,42,0.14);">
-            <img src="/static/css/UnderdogsLogo.svg" alt="underdogs.bet logo" style="max-width:92%;max-height:88%;object-fit:contain;">
-        </div>
         <h2 class="section-title">Why Our Picks Are Different</h2>
         <div style="max-width:720px;margin:0 auto;color:#e2e8f0;line-height:1.75;font-size:0.95em;text-align:left;">
             <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
