@@ -4839,12 +4839,15 @@ BASE_TEMPLATE = """
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #fff;
+            background:
+                radial-gradient(1200px 600px at 70% -10%, rgba(251,191,36,0.10), transparent 60%),
+                radial-gradient(900px 500px at -10% 20%, rgba(16,185,129,0.05), transparent 60%),
+                #ffffff;
+            color: #0f172a;
             min-height: 100vh;
         }
         .navbar {
-            background: rgba(7, 10, 20, 0.35);
+            background: rgba(255,255,255,0.92);
             padding: 14px 28px;
             border-bottom: none;
             box-shadow: none;
@@ -4887,7 +4890,7 @@ BASE_TEMPLATE = """
         .hamburger span {
             width: 24px;
             height: 2px;
-            background: #cbd5e1;
+            background: #0f172a;
             border-radius: 2px;
             transition: 0.3s;
         }
@@ -4911,7 +4914,7 @@ BASE_TEMPLATE = """
         }
         .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
         .nav-links a {
-            color: #fff;
+            color: #0f172a;
             text-decoration: none;
             font-weight: 500;
             transition: color 0.3s;
@@ -4932,10 +4935,12 @@ BASE_TEMPLATE = """
             margin: 6px 0;
         }
         .nav-links a:hover {
-            color: #fff;
+            color: #0f172a;
+            background: rgba(15,23,42,0.08);
         }
         .nav-links a.active {
-            color: #fff;
+            color: #0f172a;
+            background: rgba(15,23,42,0.12);
         }
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
@@ -4953,9 +4958,9 @@ BASE_TEMPLATE = """
             padding: 30px;
         }
         .site-footer {
-            background: rgba(7, 10, 20, 0.4);
+            background: #ffffff;
             backdrop-filter: blur(16px);
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            border-top: 1px solid rgba(15,23,42,0.12);
             padding: 18px 30px;
             color: #94a3b8;
             font-size: 0.78em;
@@ -4972,11 +4977,11 @@ BASE_TEMPLATE = """
         .footer-left { display: flex; align-items: center; gap: 14px; }
         .footer-logo-img { height: 32px; width: auto; }
         .footer-email a { color: #94a3b8; text-decoration: none; font-size: 0.95em; }
-        .footer-email a:hover { color: #fff; }
+        .footer-email a:hover { color: #0f172a; }
         .footer-center { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
         .footer-center a { color: #94a3b8; text-decoration: none; font-size: 0.95em; }
-        .footer-center a:hover { color: #fff; }
-        .footer-center span { color: rgba(255,255,255,0.2); }
+        .footer-center a:hover { color: #0f172a; }
+        .footer-center span { color: rgba(15,23,42,0.2); }
         .footer-right { color: #64748b; font-size: 0.9em; white-space: nowrap; }
         .footer-socials { display: flex; align-items: center; gap: 14px; }
         .footer-socials a { display: flex; opacity: 0.6; transition: opacity 0.2s; }
@@ -4997,7 +5002,7 @@ BASE_TEMPLATE = """
             }
             .nav-links a, .nav-links .nav-group-title {
                 padding: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                border-bottom: 1px solid rgba(15, 23, 42, 0.1);
             }
             .container {
                 padding: 20px 15px;
@@ -7478,11 +7483,11 @@ def landing_page():
             position: absolute;
             top: 64px;
             right: 22px;
-            background: rgba(7, 10, 20, 0.98);
+            background: #ffffff;
             flex-direction: column;
             gap: 2px;
             padding: 10px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border: 1px solid rgba(15,23,42,0.18);
             border-radius: 14px;
             display: flex;
             min-width: 200px;

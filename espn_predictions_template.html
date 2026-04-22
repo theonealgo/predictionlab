@@ -80,14 +80,14 @@
             background:
                 radial-gradient(1200px 600px at 70% -10%, rgba(251,191,36,0.10), transparent 60%),
                 radial-gradient(900px 500px at -10% 20%, rgba(16,185,129,0.07), transparent 60%),
-                #111827;
-            color: white;
+                #ffffff;
+            color: #0f172a;
         }
         .hamburger:hover { background: rgba(255, 255, 255, 0.08); }
         .navbar {
-            background: rgba(7, 10, 20, 0.94);
+            background: rgba(255,255,255,0.92);
             padding: 14px 28px;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
+            border-bottom: 1px solid rgba(15,23,42,0.10);
             box-shadow: 0 4px 16px rgba(0,0,0,0.3);
             backdrop-filter: blur(16px);
             position: sticky;
@@ -108,7 +108,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            background: rgba(15,23,42,0.9);
+            background: #ffffff;
             border: 1px solid rgba(148,163,184,0.35);
             border-radius: 999px;
             padding: 5px 8px 5px 14px;
@@ -119,10 +119,10 @@
             border: none;
             outline: none;
             background: transparent;
-            color: #e2e8f0;
+            color: #0f172a;
             font-size: 0.9em;
         }
-        .nav-search input::placeholder { color: #94a3b8; }
+        .nav-search input::placeholder { color: #64748b; }
         .nav-search button {
             border: none;
             background: linear-gradient(135deg,#fbbf24,#f59e0b);
@@ -143,7 +143,7 @@
             white-space:nowrap;
         }
         .auth-btn.signup { background:linear-gradient(135deg,#fbbf24,#f59e0b); color:#111827; }
-        .auth-btn.login { border:1px solid rgba(148,163,184,0.7); color:#e2e8f0; }
+        .auth-btn.login { border:1px solid rgba(15,23,42,0.35); color:#0f172a; background:#fff; }
         .auth-btn:hover { opacity:.9; }
         .logo {
             display: flex;
@@ -169,7 +169,7 @@
         .hamburger span {
             width: 24px;
             height: 2px;
-            background: #cbd5e1;
+            background: #0f172a;
             border-radius: 2px;
             transition: 0.3s;
         }
@@ -177,11 +177,11 @@
             position: absolute;
             top: 64px;
             right: 22px;
-            background: rgba(7, 10, 20, 0.98);
+            background: #ffffff;
             flex-direction: column;
             gap: 2px;
             padding: 10px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border: 1px solid rgba(15,23,42,0.18);
             border-radius: 14px;
             display: flex;
             min-width: 200px;
@@ -193,7 +193,7 @@
         }
         .nav-links.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
         .nav-links a {
-            color: #cbd5e1;
+            color: #0f172a;
             text-decoration: none;
             font-weight: 600;
             font-size: 0.88em;
@@ -202,8 +202,15 @@
             padding: 8px 10px;
             border-radius: 8px;
         }
-        .nav-links a:hover { color: #fbbf24; background: rgba(255,255,255,0.08); }
-        .nav-links a.active { color: #fbbf24; background: rgba(251,191,36,0.12); }
+        .nav-links a:hover { color: #0f172a; background: rgba(15,23,42,0.08); }
+        .nav-links a.active { color: #0f172a; background: rgba(15,23,42,0.12); }
+        .search-results-wrap{max-width:1400px;margin:12px auto 0;padding:0 30px;}
+        .search-results{display:none;background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:12px;padding:12px 14px;box-shadow:0 8px 20px rgba(15,23,42,0.08);}
+        .search-results.show{display:block;}
+        .search-results h3{margin:0 0 8px;font-size:0.96em;color:#0f172a;}
+        .search-results p{margin:0 0 8px;color:#334155;font-size:0.88em;}
+        .search-results ul{margin:0;padding-left:18px;color:#0f172a;font-size:0.84em;display:grid;gap:5px;}
+        .search-results a{color:#0f172a;text-decoration:underline;}
         .nav-section-title { display: none; }
         .nav-divider { display: none; }
         .nav-donate-btn {
@@ -218,43 +225,43 @@
         .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
         .container { max-width: 1400px; margin: 0 auto; padding: 30px; }
         .footer {
-            border-top: 1px solid rgba(255,255,255,0.12);
+            border-top: 1px solid rgba(15,23,42,0.12);
             padding: 26px 30px;
             text-align: center;
-            color: #94a3b8;
+            color: #64748b;
             font-size: 0.85em;
         }
-        .footer a { color: #cbd5e1; text-decoration: none; }
-        .footer a:hover { color: #fbbf24; }
+        .footer a { color: #0f172a; text-decoration: none; }
+        .footer a:hover { color: #0f172a; text-decoration: underline; }
         .footer-logo {
             font-weight: 800;
             font-size: 1.05em;
             margin-bottom: 8px;
             display: block;
         }
-        .header { text-align:left; margin-bottom:16px; padding:20px 18px; border:1px solid rgba(255,255,255,0.1); border-radius:12px; position:relative; overflow:hidden; }
+        .header { text-align:left; margin-bottom:16px; padding:20px 18px; border:1px solid rgba(15,23,42,0.16); border-radius:12px; position:relative; overflow:hidden; background:#ffffff; }
         {% if sport_bg_image %}.header::before { content:''; position:absolute; inset:0; background:url('{{ sport_bg_image }}') center/cover no-repeat; z-index:0; }
         .header::after { content:''; position:absolute; inset:0; background:rgba(7,10,20,0.6); z-index:0; }
         .header>* { position:relative; z-index:1; }{% endif %}
-        h1 { font-size:1.85em; letter-spacing:0.2px; }
+        h1 { font-size:1.85em; letter-spacing:0.2px; color:#0f172a; }
         .section-tabs { display:flex; gap:8px; margin-bottom:16px; justify-content:center; flex-wrap:wrap; }
-        .tab { padding:9px 20px; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.9em; background:rgba(255,255,255,0.1); color:white; transition:all 0.2s; }
+        .tab { padding:9px 20px; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.9em; background:#fff; border:1px solid rgba(15,23,42,0.18); color:#0f172a; transition:all 0.2s; }
         .tab.active { background:linear-gradient(135deg,#3b82f6,#2563eb); }
-        .tab:hover { background:rgba(255,255,255,0.18); }
+        .tab:hover { background:rgba(15,23,42,0.06); }
         .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 14px; }
         .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
         .league-pill { background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#e2e8f0; text-decoration:none; display:inline-flex; align-items:center; }
         .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
         .league-pill:hover { border-color:#fbbf24; }
-        .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:rgba(255,255,255,0.05); border-radius:12px; }
+        .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }
         .nav-arrow { background:rgba(251,191,36,0.2); border:2px solid #fbbf24; color:#fbbf24; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
         .nav-arrow:hover { background:rgba(251,191,36,0.4); transform:scale(1.1); }
         .date-bubbles { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
-        .date-bubble { background:rgba(255,255,255,0.1); border:2px solid rgba(255,255,255,0.2); border-radius:22px; padding:9px 16px; min-width:105px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.86em; }
+        .date-bubble { background:#fff; border:2px solid rgba(15,23,42,0.18); border-radius:22px; padding:9px 16px; min-width:105px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.86em; color:#0f172a; }
         .date-bubble:hover { border-color:#fbbf24; }
         .date-bubble.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; font-weight:700; }
         .date-bubble.today { border-color:#10b981; color:#10b981; }
-        .date-bubble.active.today { background:#10b981; color:white; }
+        .date-bubble.active.today { background:#10b981; color:#fff; }
         .date-section { display:none; }
         .date-section.visible { display:block; }
         .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
@@ -264,13 +271,13 @@
         @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
 
         /* Card */
-        .game-card { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; transition:border-color 0.2s; }
+        .game-card { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:10px; overflow:hidden; transition:border-color 0.2s; }
         .game-card:hover { border-color:#fbbf24; }
         .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#fbbf24; background:rgba(251,191,36,0.12); }
         .game-status.final { color:#10b981; background:rgba(16,185,129,0.12); }
         .game-body { display:flex; padding:10px 12px; gap:10px; }
         .teams-section { flex:1; min-width:0; }
-        .team-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .team-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(15,23,42,0.06); }
         .team-row:last-child { border-bottom:none; }
         .team-name { font-size:0.94em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .team-name.winner { font-weight:700; }
@@ -288,14 +295,14 @@
         .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#10b981; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
 
         /* MLB pick confidence strip (each box = one model) */
-        .pick-conf-bar { border-top:1px solid rgba(255,255,255,0.08); padding:10px 12px 12px; background:rgba(0,0,0,0.22); }
+        .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
         .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
         .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
         @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
-        .pc-box { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+        .pc-box { background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
         .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
         .pc-name { font-size:0.68em; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; }
-        .pc-val { font-size:0.95em; font-weight:800; color:#fff; }
+        .pc-val { font-size:0.95em; font-weight:800; color:#0f172a; }
         .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; box-sizing:border-box; text-align:center; }
         .pc-side.home { color:#10b981; background:rgba(16,185,129,0.15); }
         .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
@@ -312,10 +319,10 @@
         /* Premium content — print-hidden only (text must be copiable for analysis) */
         @media print { .premium-protected { display:none !important; } }
         /* Score/Spread/Total footer */
-        .score-footer { border-top:1px solid rgba(255,255,255,0.07); padding:7px 12px; display:flex; gap:16px; flex-wrap:wrap; background:rgba(0,0,0,0.18); }
+        .score-footer { border-top:1px solid rgba(15,23,42,0.07); padding:7px 12px; display:flex; gap:16px; flex-wrap:wrap; background:rgba(15,23,42,0.03); }
         .sf-item { display:flex; flex-direction:column; gap:1px; }
         .sf-label { color:#94a3b8; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
-        .sf-val { font-weight:600; font-size:0.85em; color:#e2e8f0; }
+        .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
         .sf-fav { color:#10b981; }
         .sf-xgb { color:#f87171; }
         .no-data { text-align:center; padding:60px; opacity:0.7; font-size:1.2em; }
@@ -326,7 +333,7 @@
         /* Analysis toggle */
         .analysis-toggle { padding:6px 12px; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#a78bfa; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
         .analysis-toggle:hover { color:#c4b5fd; }
-        .analysis-panel { display:none; padding:8px 12px 12px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(15,23,42,0.6); }
+        .analysis-panel { display:none; padding:8px 12px 12px; border-top:1px solid rgba(15,23,42,0.08); background:rgba(15,23,42,0.03); }
         .analysis-panel.open { display:block; }
         .analysis-title { font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#94a3b8; margin-bottom:6px; }
         .analysis-empty { font-size:0.78em; color:#94a3b8; }
@@ -369,7 +376,7 @@
         <a href="/" class="logo">
             <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img">
         </a>
-        <form class="nav-search" action="/search" method="get" role="search">
+        <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
             <input type="text" name="query" placeholder="Search teams, leagues, matchups, or model performance..." aria-label="Search predictions and performance">
             <button type="submit">Search</button>
         </form>
@@ -400,6 +407,9 @@
             {% endif %}
         </div>
     </div>
+</div>
+<div class="search-results-wrap">
+    <div id="searchResultsPicks" class="search-results" aria-live="polite"></div>
 </div>
 <div class="container">
 
@@ -690,12 +700,49 @@
     }
     document.addEventListener('DOMContentLoaded', function() {
         const navLinks = document.getElementById('navLinks');
+        const searchForm = document.getElementById('navSearchFormPicks');
+        const resultsEl = document.getElementById('searchResultsPicks');
         if (!navLinks) return;
         navLinks.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', function() {
                 navLinks.classList.remove('active');
             });
         });
+        if (searchForm && resultsEl) {
+            searchForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const input = searchForm.querySelector('input[name="query"]');
+                const query = (input?.value || '').trim();
+                if (!query) {
+                    resultsEl.classList.remove('show');
+                    resultsEl.innerHTML = '';
+                    return;
+                }
+                resultsEl.classList.add('show');
+                resultsEl.innerHTML = '<p>Searching...</p>';
+                try {
+                    const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`, { headers: { 'Accept': 'application/json' } });
+                    const data = await resp.json();
+                    const modelLine = data.matched_model ? `<p><strong>Model:</strong> ${data.matched_model.public_name} -> ${data.matched_model.internal_name}${data.confidence_threshold ? ` (confidence >= ${data.confidence_threshold}%)` : ''}</p>` : '';
+                    const modelItems = (data.model_results || []).map(r => `<li>${r.sport}: ${r.record} (${r.accuracy}%)${r.filtered_games !== null && r.filtered_games !== undefined ? ` - ${r.filtered_games} games at threshold` : ''}</li>`).join('');
+                    const localTeamItems = (data.team_results || []).map(r => `<li>${r.sport}: ${r.away_team} vs ${r.home_team} (${r.game_date}) - pick: ${r.predicted_winner} (${r.win_probability}%)</li>`).join('');
+                    const espnItems = (data.espn_results || []).map(r => `<li>${r.sport}: ${r.away_team} at ${r.home_team} (${r.status})</li>`).join('');
+                    const routeLine = data.suggested_route ? `<p><strong>Suggested page:</strong> <a href="${data.suggested_route}">${data.suggested_route}</a></p>` : '';
+                    const empty = (!modelItems && !localTeamItems && !espnItems) ? '<p>No matches found yet. Try a team name, league, or model alias.</p>' : '';
+                    resultsEl.innerHTML = `
+                        <h3>Search Results</h3>
+                        ${modelLine}
+                        ${routeLine}
+                        ${modelItems ? `<p><strong>Model Performance</strong></p><ul>${modelItems}</ul>` : ''}
+                        ${localTeamItems ? `<p style="margin-top:10px;"><strong>Our Prediction Matches</strong></p><ul>${localTeamItems}</ul>` : ''}
+                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest ESPN Matchups</strong></p><ul>${espnItems}</ul>` : ''}
+                        ${empty}
+                    `;
+                } catch (_err) {
+                    resultsEl.innerHTML = '<p>Search temporarily unavailable. Please try again.</p>';
+                }
+            });
+        }
     });
     document.addEventListener('click', function(event) {
         const navLinks = document.getElementById('navLinks');
