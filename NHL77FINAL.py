@@ -1240,6 +1240,9 @@ def enforce_canonical_domain():
     is_https = request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https'
     needs_redirect = (host != target_host) or (not is_https)
     if not needs_redirect:
+        # Canonicalize noisy homepage query URLs seen by crawlers (/?q=...).
+        if request.path == '/' and request.args.get('q'):
+            return redirect(f"https://{target_host}/", code=301)
         return None
     # request.full_path includes trailing '?' when no query string; strip it.
     full_path = request.full_path[:-1] if request.full_path.endswith('?') else request.full_path
@@ -5014,7 +5017,7 @@ BASE_TEMPLATE = """
     <div class="navbar">
         <div class="navbar-content">
             <a href="/" class="logo">
-                <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img">
+                <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img" width="44" height="44">
             </a>
             <div class="hamburger" onclick="toggleMenu()">
                 <span></span>
@@ -5082,7 +5085,7 @@ BASE_TEMPLATE = """
     <footer class="site-footer">
         <div class="footer-inner">
             <div class="footer-left">
-                <a href="/"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
+                <a href="/"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img" width="32" height="32"></a>
                 <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
             </div>
             <div class="footer-center">
@@ -7155,7 +7158,7 @@ def landing_page():
         _slug = SPORT_SEO_SLUGS.get(_sport_key)
         if not _slug:
             continue
-        for _days_back in range(1, 8):
+        for _days_back in range(1, 4):
             _d = today - timedelta(days=_days_back)
             _m_name = _MONTH_NAMES.get(_d.month, 'january')
             seo_archive_links.append({
@@ -7376,7 +7379,10 @@ def landing_page():
         }
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-            background: #0f172a url('/static/Logo.PNG') center center / cover no-repeat;
+            background:
+                radial-gradient(1200px 600px at 70% -10%, rgba(251,191,36,0.12), transparent 60%),
+                radial-gradient(900px 500px at -10% 20%, rgba(16,185,129,0.08), transparent 60%),
+                #0f172a;
             color:#fff;
             min-height:100vh;
             overflow-x:hidden;
@@ -7645,10 +7651,11 @@ def landing_page():
             width:8px;height:8px;border-radius:50%;background:var(--green);
             box-shadow:0 0 0 3px rgba(16,185,129,.25);
             animation:pulse 1.8s infinite;
+            will-change:transform,opacity;
         }
         @keyframes pulse{
-            0%,100%{box-shadow:0 0 0 3px rgba(16,185,129,.25);}
-            50%{box-shadow:0 0 0 7px rgba(16,185,129,.0);}
+            0%,100%{transform:scale(1);opacity:1;}
+            50%{transform:scale(1.15);opacity:.55;}
         }
         .sport-icon{font-size:2.8em;margin-bottom:10px;}
         .sport-name{font-size:1.15em;font-weight:700;margin-bottom:4px;}
@@ -7752,7 +7759,7 @@ def landing_page():
         .footer-center a{color:#94a3b8;text-decoration:none;font-size:0.95em;}
         .footer-center a:hover{color:#fff;}
         .footer-center span{color:rgba(255,255,255,0.2);}
-        .footer-right{color:#64748b;font-size:0.9em;white-space:nowrap;}
+        .footer-right{color:#94a3b8;font-size:0.9em;white-space:nowrap;}
         .footer-socials{
             display:flex;
             align-items:center;
@@ -7781,9 +7788,7 @@ def landing_page():
                 background-attachment:scroll;
             }
             body::before{
-                background:
-                    linear-gradient(rgba(7,10,20,0.65), rgba(7,10,20,0.65)),
-                    url('/static/Logo.PNG') center 90px / cover no-repeat;
+                background:linear-gradient(rgba(7,10,20,0.65), rgba(7,10,20,0.65));
             }
         }
         @media (max-width: 768px) {
@@ -7820,8 +7825,8 @@ def landing_page():
 <!-- Navbar -->
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo">
-            <img src="/static/Logo.PNG" alt="underdogs.bet" class="logo-img">
+        <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#fff;letter-spacing:0.2px;">
+            underdogs.bet
         </a>
         <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="navLinks" style="background:transparent;border:none;cursor:pointer;padding:0;">
             <span></span>
@@ -7920,7 +7925,7 @@ def landing_page():
                 <div style="font-size:0.75em;color:#94a3b8;">Updates</div>
             </div>
         </div>
-        <p style="text-align:center;font-size:0.78em;color:#94a3b8;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#fbbf24;text-decoration:none;">View full results &rarr;</a></p>
+        <p style="text-align:center;font-size:0.78em;color:#94a3b8;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#fbbf24;text-decoration:underline;">View full results &rarr;</a></p>
     </div>
 </div>
 
@@ -7950,7 +7955,7 @@ def landing_page():
         {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
         <a href="/{{ tp.slug }}" style="display:block;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(255,255,255,0.14)';this.style.boxShadow='none';">
             <div style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;">{{ tp.sport }}</div>
-            <div style="font-weight:800;font-size:1.02em;color:#fff;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
+            <div style="font-weight:800;font-size:1.02em;color:#fff;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#94a3b8;font-weight:600;">vs</span> {{ tp.home }}</div>
             <div style="display:flex;align-items:baseline;gap:10px;">
                 <span style="color:#10b981;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
                 <span style="color:#fff;font-weight:800;">{{ _disp_pct }}%</span>
@@ -8009,17 +8014,14 @@ def landing_page():
 <!-- Daily Results Box (above How It Works) -->
 <div style="max-width:720px;margin:26px auto 24px;padding:0 24px;">
     <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(255,255,255,0.15);">
-        <div style="position:absolute;inset:0;background:url('/static/seth-hoffman-HwZTYUkIP6c-unsplash.jpg') center/cover no-repeat;"></div>
-        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.88),rgba(15,23,42,0.92));"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(7,10,20,0.95),rgba(15,23,42,0.95));"></div>
         <div style="position:relative;padding:32px 28px;text-align:center;">
-            <h2 style="font-size:1.5em;font-weight:900;background:linear-gradient(90deg,#fff 0%,#fbbf24 40%,#f59e0b 60%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shineText 3s linear infinite;">Daily Betting Results Report</h2>
+            <h2 style="font-size:1.5em;font-weight:900;color:#fbbf24;">Daily Betting Results Report</h2>
             <p style="color:#cbd5e1;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
             <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
         </div>
     </div>
 </div>
-<style>@keyframes shineText{to{background-position:200% center;}}</style>
-
 <!-- How it works -->
 <div class="how-section">
     <div class="section">
@@ -8131,7 +8133,7 @@ def landing_page():
 <!-- Why Different (above FAQ) -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;">
     <div style="max-width:900px;margin:0 auto;">
-        <img src="/static/IMG_2695.jpeg" alt="AI sports betting picks and data-driven predictions across NBA, NFL, MLB, NHL and soccer" style="width:100%;max-height:240px;object-fit:cover;border-radius:14px;margin-bottom:24px;display:block;" loading="lazy">
+        <div aria-hidden="true" style="width:100%;max-height:240px;height:220px;border-radius:14px;margin-bottom:24px;display:block;background:linear-gradient(135deg,rgba(251,191,36,0.18),rgba(245,158,11,0.08));border:1px solid rgba(251,191,36,0.28);"></div>
         <h2 class="section-title">Why Our Picks Are Different</h2>
         <div style="max-width:720px;margin:0 auto;color:#e2e8f0;line-height:1.75;font-size:0.95em;text-align:left;">
             <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
@@ -8220,7 +8222,7 @@ def landing_page():
 <!-- Recent archive links: same URLs for crawlers; collapsed by default for a cleaner home layout -->
 <div class="section" style="padding-top:0;padding-bottom:28px;text-align:center;">
     <details style="max-width:980px;margin:0 auto;text-align:left;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 14px;">
-        <summary style="cursor:pointer;font-size:0.95em;font-weight:700;color:#cbd5e1;list-style-position:outside;">Recent dated picks archive <span style="font-weight:500;opacity:0.75;">(last 7 days per league)</span></summary>
+        <summary style="cursor:pointer;font-size:0.95em;font-weight:700;color:#cbd5e1;list-style-position:outside;">Recent dated picks archive <span style="font-weight:500;opacity:0.75;">(last 3 days per league)</span></summary>
         <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">
             {% for _lnk in seo_archive_links %}
             <a href="{{ _lnk.url }}" style="color:#cbd5e1;text-decoration:none;font-size:0.82em;padding:6px 12px;border:1px solid rgba(255,255,255,0.14);border-radius:8px;">{{ _lnk.label }}</a>
@@ -8259,7 +8261,7 @@ def landing_page():
 <footer class="site-footer">
     <div class="footer-inner">
         <div class="footer-left">
-            <a href="/" aria-label="underdogs.bet home"><img src="/static/Logo.PNG" alt="underdogs.bet" class="footer-logo-img"></a>
+            <a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1em;color:#fff;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a>
             <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
         </div>
         <div class="footer-center">
@@ -8449,7 +8451,11 @@ def seo_picks_page(slug):
     # Check picks slugs
     sport = _SEO_SLUG_TO_SPORT.get(slug)
     if sport:
-        return sport_predictions(sport)
+        try:
+            return sport_predictions(sport)
+        except Exception as _seo_pick_err:
+            logger.exception(f"seo_picks_page fallback for {slug}: {_seo_pick_err}")
+            return _predictions_fallback_page(sport)
     # Check results slugs
     sport = _RESULTS_SLUG_TO_SPORT.get(slug)
     if sport:
@@ -8470,7 +8476,11 @@ def seo_daily_picks(slug, month, day, year):
         return "Invalid date", 404
     target_date = f"{year}-{month_num:02d}-{day:02d}"
     # Render the predictions page filtered to this date
-    return sport_predictions(sport, filter_date=target_date)
+    try:
+        return sport_predictions(sport, filter_date=target_date)
+    except Exception as _seo_daily_err:
+        logger.exception(f"seo_daily_picks fallback for {slug}-{target_date}: {_seo_daily_err}")
+        return _predictions_fallback_page(sport, filter_date=target_date)
 
 
 # ── 301 redirects from old URLs ───────────────────────────────────────────────
@@ -8817,6 +8827,38 @@ def soccer_predictions_league(league_slug):
 def soccer_results_league(league_slug):
     return redirect(f'/soccer-results?league={league_slug}', code=301)
 
+def _predictions_fallback_page(sport, filter_date=None):
+    """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
+    sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
+    safe_title = f"{sport_info['name']} Picks | underdogs.bet"
+    if filter_date:
+        safe_title = f"{sport_info['name']} Picks for {filter_date} | underdogs.bet"
+    return render_template_string("""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ safe_title }}</title>
+    <meta name="description" content="Daily AI-powered {{ sport_info.name }} picks and projections on underdogs.bet.">
+    <meta name="robots" content="noindex, follow">
+    <link rel="canonical" href="https://www.underdogs.bet/{{ sport_slug }}">
+    <style>
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;}
+        .card{max-width:680px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;text-align:center;}
+        a{color:#fbbf24;text-decoration:none;font-weight:700;}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1 style="margin-top:0;">{{ sport_info.icon }} {{ sport_info.name }} Picks</h1>
+        <p>We are refreshing this page right now. Please check the main picks feed below.</p>
+        <p><a href="/{{ sport_slug }}">Open {{ sport_info.name }} picks</a></p>
+    </div>
+</body>
+</html>
+    """, sport_info=sport_info, sport_slug=SPORT_SEO_SLUGS.get(sport, sport.lower() + '-picks'), safe_title=safe_title)
+
 def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
     log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
@@ -8944,25 +8986,28 @@ def sport_predictions(sport, filter_date=None):
 
     # soccer_leagues already computed above for soccer
     
-    # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
-    with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
-        espn_template = f.read()
-    
-    rendered = render_template_string(
-        espn_template,
-        page=sport,
-        sport=sport,
-        sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
-        sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
-        sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-        predictions=predictions,
-        prediction_error=prediction_error,
-        grouped_predictions=grouped_predictions,
-        sorted_dates=sorted_dates,
-        today_date=today_date,
-        group_by='week' if sport == 'NFL' else 'date',
-        soccer_leagues=soccer_leagues
-    )
+    try:
+        # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
+        with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
+            espn_template = f.read()
+        rendered = render_template_string(
+            espn_template,
+            page=sport,
+            sport=sport,
+            sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+            sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+            sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+            predictions=predictions,
+            prediction_error=prediction_error,
+            grouped_predictions=grouped_predictions,
+            sorted_dates=sorted_dates,
+            today_date=today_date,
+            group_by='week' if sport == 'NFL' else 'date',
+            soccer_leagues=soccer_leagues
+        )
+    except Exception as _pred_render_err:
+        logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
+        return _predictions_fallback_page(sport, filter_date=filter_date)
     if cache_key:
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
