@@ -5064,7 +5064,7 @@ BASE_TEMPLATE = """
 
 # Static HTML footers for picks / results / utility pages (no Jinja).
 _SEO_PICKS_PAGE_FOOTER = """
-    <div class="seo-picks-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#cbd5e1;line-height:1.75;font-size:0.95rem;">
+    <div class="seo-picks-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
         <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">How These AI Picks Are Generated</h2>
         <p style="margin-bottom:14px;">The picks on this page are generated using a data-driven sports betting model that analyzes market odds, historical performance, and team-level trends. Instead of relying on opinions or public sentiment, the model looks for pricing inefficiencies across sportsbooks to identify potential value.</p>
         <p style="margin-bottom:22px;">This approach is designed to stay consistent over time. While individual results can vary from day to day, the goal is long-term profitability based on disciplined, repeatable analysis.</p>
@@ -5100,7 +5100,7 @@ _SEO_RESULTS_PAGE_FOOTER = """
 """
 
 _SEO_UTILITY_FAQ_FOOTER = """
-    <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#cbd5e1;line-height:1.75;font-size:0.95rem;">
+    <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
         <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Frequently Asked Questions</h2>
         <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">How are the picks generated?</h3>
         <p style="margin-bottom:12px;">The picks are generated using a data-driven model that evaluates odds, trends, and market conditions to identify potential value.</p>
@@ -5123,7 +5123,7 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
         .rg-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;margin-bottom:18px;}
         .rg-card h1{font-size:1.8em;margin-bottom:12px;}
         .rg-card h2{font-size:1.2em;margin:6px 0 12px;color:#fbbf24;}
-        .rg-card p{color:#cbd5e1;line-height:1.7;margin-bottom:12px;}
+        .rg-card p{color:#334155;line-height:1.7;margin-bottom:12px;}
         .rg-card a{color:#fbbf24;text-decoration:none;font-weight:600;}
         .rg-card a:hover{text-decoration:underline;}
         .rg-resource{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:12px;}
@@ -5175,8 +5175,8 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
         .tutorial-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;margin-bottom:18px;}
         .tutorial-card h1{font-size:2em;margin-bottom:8px;}
         .tutorial-card h2{font-size:1.35em;margin:6px 0 8px;}
-        .tutorial-card p{color:#cbd5e1;line-height:1.7;}
-        .tutorial-card ul{margin:8px 0 0 20px;color:#cbd5e1;line-height:1.7;}
+        .tutorial-card p{color:#334155;line-height:1.7;}
+        .tutorial-card ul{margin:8px 0 0 20px;color:#334155;line-height:1.7;}
     """
 ).replace('{% block content %}{% endblock %}', """
     <div class="tutorial-wrap">
@@ -7917,7 +7917,7 @@ def landing_page():
 </div>
 <!-- Hero -->
 <main id="main-content">
-<div class="hero" style="text-align:left;padding:100px 40px 50px;">
+<div class="hero" style="text-align:left;padding:100px 40px 50px;background:#0f172a;border:1px solid rgba(15,23,42,0.22);border-radius:16px;margin:18px 24px 0;">
     <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Predictions<br>With Real Results</h1>
     <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
     <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
@@ -8202,7 +8202,7 @@ def landing_page():
 <div class="section" style="padding-top:10px;padding-bottom:40px;">
     <div style="max-width:900px;margin:0 auto;">
         <h2 class="section-title">Why Our Picks Are Different</h2>
-        <div style="max-width:720px;margin:0 auto;color:#e2e8f0;line-height:1.75;font-size:0.95em;text-align:left;">
+        <div style="max-width:720px;margin:0 auto;color:#1A1D23;line-height:1.75;font-size:0.95em;text-align:left;">
             <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
             <p style="margin-bottom:14px;">Our AI sports betting picks are built differently.</p>
             <p style="margin-bottom:14px;">We use a proprietary odds engine powered by four independent AI prediction models to analyze matchups, player performance, advanced team metrics, and real-time market movement. Instead of following sportsbook lines, we generate our own probabilities to uncover +EV betting opportunities the market often misprices.</p>
@@ -8219,54 +8219,54 @@ def landing_page():
 <div class="section" style="padding-top:10px;padding-bottom:20px;">
     <h2 class="section-title">Frequently Asked Questions</h2>
     <div style="max-width:920px;margin:0 auto;display:grid;gap:10px;">
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">How do your AI sports betting picks work?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions.</p>
-            <p style="margin-top:8px;color:#cbd5e1;">Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available.</p>
+            <p style="margin-top:10px;color:#334155;">Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions.</p>
+            <p style="margin-top:8px;color:#334155;">Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">What makes your picks different from sportsbooks?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">Sportsbooks set odds based on balancing action and public perception, not just true probability.</p>
-            <p style="margin-top:8px;color:#cbd5e1;">Our system creates projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential +EV opportunity.</p>
+            <p style="margin-top:10px;color:#334155;">Sportsbooks set odds based on balancing action and public perception, not just true probability.</p>
+            <p style="margin-top:8px;color:#334155;">Our system creates projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential +EV opportunity.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">How do you find value bets?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">We compare projections and market lines for moneyline, spread, and totals. Significant gaps indicate potential market mispricing.</p>
+            <p style="margin-top:10px;color:#334155;">We compare projections and market lines for moneyline, spread, and totals. Significant gaps indicate potential market mispricing.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">What does the probability percentage mean?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">Each model outputs win probability for each game. If our model probability is higher than sportsbook implied probability, it can indicate value.</p>
+            <p style="margin-top:10px;color:#334155;">Each model outputs win probability for each game. If our model probability is higher than sportsbook implied probability, it can indicate value.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Do your models agree on every pick?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">No. Each model uses a different methodology. We show individual predictions and consensus so confidence is transparent.</p>
+            <p style="margin-top:10px;color:#334155;">No. Each model uses a different methodology. We show individual predictions and consensus so confidence is transparent.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">What sports do you cover?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">We focus on major markets such as MLB, NBA, NFL, and other high-liquidity sports where data quality is strong.</p>
+            <p style="margin-top:10px;color:#334155;">We focus on major markets such as MLB, NBA, NFL, and other high-liquidity sports where data quality is strong.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Are your results tracked publicly?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">Yes. Every pick is tracked with full transparency, including wins, losses, and performance over time.</p>
+            <p style="margin-top:10px;color:#334155;">Yes. Every pick is tracked with full transparency, including wins, losses, and performance over time.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Is there a refund policy?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">Yes. Monthly plans have a 10-day return window and yearly plans have a 30-day return window.</p>
+            <p style="margin-top:10px;color:#334155;">Yes. Monthly plans have a 10-day return window and yearly plans have a 30-day return window.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Are your picks guaranteed to win?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">No system can guarantee wins. Sports betting includes variance; the goal is long-term +EV performance.</p>
+            <p style="margin-top:10px;color:#334155;">No system can guarantee wins. Sports betting includes variance; the goal is long-term +EV performance.</p>
         </details>
-        <details style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Who are these picks for?</summary>
-            <p style="margin-top:10px;color:#cbd5e1;">These picks are built for bettors who want a structured, data-driven process rather than guesswork.</p>
+            <p style="margin-top:10px;color:#334155;">These picks are built for bettors who want a structured, data-driven process rather than guesswork.</p>
         </details>
     </div>
 </div>
 
 <!-- SEO Text -->
 <div class="section" style="padding-top:0;padding-bottom:20px;">
-    <p style="max-width:760px;margin:0 auto;font-size:0.92em;color:#e2e8f0;line-height:1.8;text-align:center;">Free AI sports picks and predictions for NBA, NFL, MLB, NHL, soccer, and more. Our models generate daily projections for moneyline, spreads, and totals using real-time data and multi-model consensus &mdash; every pick tracked with full transparency so you can evaluate real performance over time.</p>
+    <p style="max-width:760px;margin:0 auto;font-size:0.92em;color:#334155;line-height:1.8;text-align:center;">Free AI sports picks and predictions for NBA, NFL, MLB, NHL, soccer, and more. Our models generate daily projections for moneyline, spreads, and totals using real-time data and multi-model consensus &mdash; every pick tracked with full transparency so you can evaluate real performance over time.</p>
 </div>
 
 <!-- SEO Internal Links -->
@@ -8760,6 +8760,50 @@ def api_performance_data():
                     'date': r['game_date'] or '',
                     'units': 1 if int(r['win_prediction_correct'] or 0) == 1 else -1,
                 })
+        # Fallback to backtest aggregates when graded prediction rows are unavailable.
+        if not rows_out:
+            conn = get_db_connection()
+            bt_rows = conn.execute(
+                """
+                SELECT sport, total_games, elo_correct, consensus_correct, xgboost_correct,
+                       elo_accuracy, consensus_accuracy, xgboost_accuracy, combined_accuracy
+                FROM model_backtest_results
+                """
+            ).fetchall()
+            conn.close()
+            model_map = (
+                ('Grinder2', 'elo_correct', 'elo_accuracy'),
+                ('Edge', 'elo_correct', 'elo_accuracy'),
+                ('Takedown', 'consensus_correct', 'consensus_accuracy'),
+                ('XSharp', 'xgboost_correct', 'xgboost_accuracy'),
+                ('Sharp Consensus', 'consensus_correct', 'combined_accuracy'),
+            )
+            for r in bt_rows:
+                total = int(r['total_games'] or 0)
+                if total <= 0:
+                    continue
+                for model, correct_col, acc_col in model_map:
+                    correct = int(r[correct_col] or 0)
+                    losses = max(total - correct, 0)
+                    conf = round(float(r[acc_col] or 0.0), 1)
+                    for _ in range(correct):
+                        rows_out.append({
+                            'model': model,
+                            'confidence': conf,
+                            'result': 'win',
+                            'sport': (r['sport'] or '').upper(),
+                            'date': '',
+                            'units': 1,
+                        })
+                    for _ in range(losses):
+                        rows_out.append({
+                            'model': model,
+                            'confidence': conf,
+                            'result': 'loss',
+                            'sport': (r['sport'] or '').upper(),
+                            'date': '',
+                            'units': -1,
+                        })
     except Exception:
         rows_out = []
     return jsonify({'rows': rows_out})
@@ -9311,6 +9355,26 @@ def _predictions_fallback_page(sport, filter_date=None):
 </html>
     """, sport_info=sport_info, sport_slug=SPORT_SEO_SLUGS.get(sport, sport.lower() + '-picks'), safe_title=safe_title)
 
+def _results_fallback_page(sport, message):
+    """Safe fallback HTML for results pages when processing fails."""
+    sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
+    return render_template_string(
+        BASE_TEMPLATE.replace('{% block content %}{% endblock %}', """
+        <div style="max-width:920px;margin:26px auto;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;">
+            <h1 style="margin:0 0 8px;">{{ sport_info.icon }} {{ sport_info.name }} Results</h1>
+            <p style="color:#334155;line-height:1.7;">{{ message }}</p>
+            <p style="margin-top:10px;"><a href="/{{ sport_results_slug }}" style="color:#00529B;font-weight:700;">Refresh results page</a></p>
+        </div>
+        """ + _SEO_RESULTS_PAGE_FOOTER + """
+        """),
+        page=sport,
+        sport=sport,
+        sport_info=sport_info,
+        sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+        sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+        message=message
+    )
+
 def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
     log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
@@ -9531,7 +9595,7 @@ def sport_results(sport):
             ''').fetchall()
             conn.close()
             if not completed_games:
-                return "<h1>NFL results are temporarily unavailable because no completed NFL games are stored yet.</h1>"
+                return _results_fallback_page(sport, "NFL moneyline results are temporarily unavailable because no completed NFL games are stored yet.")
 
             daily_results = defaultdict(lambda: {'games': []})
             today_date = datetime.now().strftime('%Y-%m-%d')
@@ -9631,7 +9695,7 @@ def sport_results(sport):
             weekly_results = calculate_nhl_weekly_performance()
             
             if not weekly_results:
-                return "<h1>NHL results could not be loaded because no completed NHL games were available for grading yet.</h1>"
+                return _results_fallback_page(sport, "NHL results could not be loaded because no completed NHL games were available for grading yet.")
             
             # Regroup by date instead of week
             daily_results = defaultdict(lambda: {'games': []})
@@ -9708,7 +9772,7 @@ def sport_results(sport):
                 weekly_results = calculate_nba_weekly_performance()
                 logger.info(f"NBA weekly_results: {weekly_results is not None}, weeks: {list(weekly_results.keys()) if weekly_results else 'None'}")
                 if not weekly_results:
-                    return "<h1>NBA results could not be loaded because no completed NBA games were available for grading yet.</h1>"
+                    return _results_fallback_page(sport, "NBA results could not be loaded because no completed NBA games were available for grading yet.")
                 
                 # Regroup by date instead of week
                 daily_results = defaultdict(lambda: {'games': []})
@@ -9826,10 +9890,10 @@ def sport_results(sport):
             
             if not completed_games:
                 # Show message for offseason sports
-                offseason_msg = "" 
+                offseason_msg = ""
                 if sport in ['MLB', 'WNBA']:
-                    offseason_msg = f"<p>The {SPORTS[sport]['name']} season has ended. Results from the 2025 season will be available next year.</p>"
-                return f"<h1>No {SPORTS[sport]['name']} results data available yet.</h1>{offseason_msg}<p><a href='/'>← Back to Home</a></p>"
+                    offseason_msg = f" The {SPORTS[sport]['name']} season has ended. Results from the 2025 season will be available next year."
+                return _results_fallback_page(sport, f"No {SPORTS[sport]['name']} results data available yet. {offseason_msg}")
             
             # Process into daily results format
             daily_results = defaultdict(lambda: {'games': []})
@@ -9977,9 +10041,9 @@ def sport_results(sport):
         )
     except Exception as e:
         logger.exception(f"Error loading /sport/{sport}/results: {e}")
-        return (
-            f"<h1>{sport} moneyline results are temporarily unavailable because the server hit an internal processing error.</h1>"
-            f"<p>Please refresh in 30-60 seconds. If it persists, the latest server traceback is now logged for diagnosis.</p>"
+        return _results_fallback_page(
+            sport,
+            f"{sport} moneyline results are temporarily unavailable because the server hit an internal processing error. Please refresh in 30-60 seconds."
         ), 200
 
 def get_upcoming_api_games_for_spreads(sport, days_ahead=7):
