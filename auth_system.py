@@ -746,7 +746,7 @@ PLANS_USES_BASE_TEMPLATE = True
 def plans_page():
     # Import BASE_TEMPLATE from main app to get consistent navbar
     try:
-        from NHL77FINAL import BASE_TEMPLATE, _SEO_UTILITY_FAQ_FOOTER
+        from NHL77FINAL import BASE_TEMPLATE
         plans_content = BASE_TEMPLATE.replace(
             '{% block extra_styles %}{% endblock %}',
             """
@@ -782,6 +782,14 @@ def plans_page():
             .free-section .free-copy{margin-bottom:14px;color:#475569;font-size:0.95em;line-height:1.55;}
             .free-features{display:flex;justify-content:center;gap:12px;margin-top:12px;flex-wrap:wrap;}
             .free-pill{background:#F4F7F9;border:1px solid #E0E4E8;border-radius:20px;padding:7px 16px;font-size:0.82em;color:#334155;font-weight:600;}
+            .plans-why-premium{max-width:920px;margin:28px auto 0;padding:28px 24px;background:#ffffff;border:1px solid #E0E4E8;border-radius:14px;}
+            .plans-why-title{font-size:1.35em;font-weight:900;color:#0f172a;margin:0 0 12px;text-align:center;}
+            .plans-why-lead{color:#475569;font-size:1em;line-height:1.75;margin:0 auto 16px;text-align:center;max-width:720px;}
+            .plans-why-list{margin:0 auto 18px;padding-left:22px;max-width:640px;color:#334155;line-height:1.7;font-size:0.95em;}
+            .plans-why-list li{margin-bottom:8px;}
+            .plans-why-foot{margin:0 auto;text-align:center;color:#475569;font-size:0.92em;line-height:1.65;max-width:680px;}
+            .plans-why-foot a{color:#00529B;font-weight:700;text-decoration:none;}
+            .plans-why-foot a:hover{text-decoration:underline;}
             @media(max-width:640px){.plans-grid{grid-template-columns:1fr;}.plans-hero-stats{flex-direction:column;align-items:center;gap:10px;}}
             """
         ).replace('{% block content %}{% endblock %}', """
@@ -848,8 +856,17 @@ def plans_page():
                     <div class="free-pill">All Sports Covered</div>
                 </div>
             </div>
+            <div class="plans-why-premium">
+                <h2 class="plans-why-title">Why upgrade to Premium?</h2>
+                <p class="plans-why-lead">Free picks already show which side our models favor. Premium is for bettors who want the <strong style="color:#0f172a;">full picture</strong>—spreads, totals, and projected scores—so you are not reverse-engineering an edge from a moneyline alone.</p>
+                <ul class="plans-why-list">
+                    <li><strong>Save time:</strong> projected scores and lines in one place for every slate you follow.</li>
+                    <li><strong>See model agreement:</strong> where the stack lines up (or splits) before you put capital at risk.</li>
+                    <li><strong>Same transparency:</strong> the same public grading you trust on free results, applied to every premium market we publish.</li>
+                </ul>
+                <p class="plans-why-foot">Still deciding? Read the <a href="/#faq">homepage FAQ</a>. Ready to try the edge—pick monthly or yearly above. Prefer to look around first? <a href="/signup">Create a free account</a>, then upgrade when you want spreads and totals unlocked.</p>
             </div>
-        """ + _SEO_UTILITY_FAQ_FOOTER + """
+            </div>
         """)
         return render_template_string(plans_content, page='plans')
     except Exception as e:

@@ -5130,19 +5130,9 @@ _SEO_RESULTS_PAGE_FOOTER = """
 """
 
 _SEO_UTILITY_FAQ_FOOTER = """
-    <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:26px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
-        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Frequently Asked Questions</h2>
-        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">How are the picks generated?</h3>
-        <p style="margin-bottom:12px;">The picks are generated using a data-driven model that evaluates odds, trends, and market conditions to identify potential value.</p>
-        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">Are the results verified?</h3>
-        <p style="margin-bottom:12px;">Yes, all picks and results are tracked publicly to ensure full transparency.</p>
-        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">Is this suitable for beginners?</h3>
-        <p style="margin-bottom:12px;">The platform is designed to be accessible, but users should understand basic sports betting concepts and always manage risk responsibly.</p>
-        <h3 style="color:#fbbf24;font-size:1rem;margin:16px 0 8px;">Do the picks guarantee wins?</h3>
-        <p style="margin-bottom:22px;">No. Sports betting always involves risk and variance. The model is designed for long-term consistency, not short-term guarantees.</p>
-        <h2 style="color:#fff;font-size:1.2rem;margin:0 0 12px;">Final Notes</h2>
-        <p style="margin-bottom:14px;">Users should always approach sports betting responsibly. The tools and information provided are intended to support informed decision-making, not replace it.</p>
-        <p style="margin:0;">Maintaining discipline, tracking results, and managing expectations are key to long-term success.</p>
+    <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:20px 22px;background:#f8fafc;border:1px solid #E0E4E8;border-radius:14px;color:#475569;line-height:1.75;font-size:0.93rem;">
+        <p style="margin:0 0 10px;"><strong style="color:#0f172a;">More answers:</strong> See the full <a href="/#faq" style="color:#00529B;font-weight:700;text-decoration:none;">Frequently Asked Questions</a> on the homepage.</p>
+        <p style="margin:0;">Bet responsibly: only risk what you can afford to lose. These tools support informed decisions—they do not replace judgment, discipline, or bankroll management.</p>
     </div>
 """
 
@@ -8288,13 +8278,14 @@ def landing_page():
 </div>
 
 <!-- FAQ -->
-<div class="section" style="padding-top:10px;padding-bottom:20px;">
+<div id="faq" class="section" style="padding-top:10px;padding-bottom:20px;">
     <h2 class="section-title">Frequently Asked Questions</h2>
     <div style="max-width:920px;margin:0 auto;display:grid;gap:10px;">
         <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">How do your AI sports betting picks work?</summary>
             <p style="margin-top:10px;color:#334155;">Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions.</p>
             <p style="margin-top:8px;color:#334155;">Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available.</p>
+            <p style="margin-top:8px;color:#334155;">The process is data-driven: we evaluate odds, line movement, and market-implied prices against our projections to highlight situations where the market may be mispriced.</p>
         </details>
         <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">What makes your picks different from sportsbooks?</summary>
@@ -8320,6 +8311,12 @@ def landing_page():
         <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Are your results tracked publicly?</summary>
             <p style="margin-top:10px;color:#334155;">Yes. Every pick is tracked with full transparency, including wins, losses, and performance over time.</p>
+            <p style="margin-top:8px;color:#334155;">Graded results are shown on our results pages as they finalize—there is no cherry-picking, editing picks after the fact, or hiding losses.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Is this suitable for beginners?</summary>
+            <p style="margin-top:10px;color:#334155;">The site is built to be readable and structured, but sports betting still requires basic concepts—odds, bet types, and bankroll limits—and a commitment to responsible play.</p>
+            <p style="margin-top:8px;color:#334155;">If you are new, start small, use free picks to learn how the models behave, and never wager more than you can afford to lose.</p>
         </details>
         <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Is there a refund policy?</summary>
@@ -8332,6 +8329,11 @@ def landing_page():
         <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Who are these picks for?</summary>
             <p style="margin-top:10px;color:#334155;">These picks are built for bettors who want a structured, data-driven process rather than guesswork.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Expectations, discipline, and responsible use</summary>
+            <p style="margin-top:10px;color:#334155;">Sports betting always involves risk and variance. Our tools are meant to support informed decision-making—not replace your judgment or encourage reckless stakes.</p>
+            <p style="margin-top:8px;color:#334155;">Maintaining discipline, tracking results honestly, and keeping expectations realistic are central to using any model over the long term.</p>
         </details>
     </div>
 </div>
