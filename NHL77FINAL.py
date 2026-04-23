@@ -8111,7 +8111,6 @@ def landing_page():
                 <option value="Sharp Consensus">Sharp Consensus</option>
             </select>
             <label style="font-size:0.82em;color:#334155;">Confidence >= <input id="perfConfidence" type="number" min="0" max="100" value="60" style="width:72px;"></label>
-            <label style="font-size:0.82em;color:#334155;">Consensus >= <input id="perfConsensus" type="number" min="0" max="100" value="60" style="width:72px;"></label>
             <select id="perfSport">
                 <option value="">All Sports</option>
                 <option value="NBA">NBA</option>
@@ -8536,7 +8535,6 @@ def landing_page():
         // Client-side performance dashboard
         const perfModel = document.getElementById('perfModel');
         const perfConfidence = document.getElementById('perfConfidence');
-        const perfConsensus = document.getElementById('perfConsensus');
         const perfSport = document.getElementById('perfSport');
         const perfApply = document.getElementById('perfApply');
         const perfAnswerTitle = document.getElementById('perfAnswerTitle');
@@ -8544,55 +8542,38 @@ def landing_page():
         const perfGrid = document.querySelector('.perf-grid');
         let perfRows = [];
         let perfLoaded = false;
-        const filterRows = (rows, model, minConf, minConsensus, sport) => {
-            const modelNorm = model.toLowerCase();
-            const sportNorm = sport.toLowerCase();
-            return rows.filter(p => {
-                const pm = String(p.model || '').toLowerCase();
-                const ps = String(p.sport || '').toLowerCase();
-                const modelOk = !modelNorm || pm === modelNorm;
-                const sportOk = !sportNorm || ps === sportNorm;
-                return modelOk &&
-                    (Number(p.confidence || 0) >= minConf) &&
-                    (Number(p.consensus || 0) >= minConsensus) &&
-                    sportOk;
-            });
-        };
-        const renderPerf = (reasonLabel) => {
+        const renderPerf = async (reasonLabel) => {
             if (!perfLoaded) return;
             const model = (perfModel?.value || '').trim();
             const minConf = Number(perfConfidence?.value || 60);
-            const minConsensus = Number(perfConsensus?.value || 60);
             const sport = (perfSport?.value || '').trim();
-            let filtered = filterRows(perfRows, model, minConf, minConsensus, sport);
-            console.log('[perf] total picks before filtering:', perfRows.length);
-            console.log('[perf] total picks after filtering:', filtered.length);
-            if (!filtered.length) {
-                // Progressive relaxation fallback so the section never appears broken.
-                const relaxed = [
-                    [Math.max(minConf - 5, 55), Math.max(minConsensus - 5, 55)],
-                    [Math.max(minConf - 10, 50), Math.max(minConsensus - 10, 50)],
-                    [Math.max(minConf - 15, 45), Math.max(minConsensus - 15, 45)],
-                ];
-                for (const [c, cs] of relaxed) {
-                    const candidate = filterRows(perfRows, model, c, cs, sport);
-                    if (candidate.length) {
-                        filtered = candidate;
-                        break;
-                    }
-                }
-                if (!filtered.length) {
-                    filtered = filterRows(perfRows, model, 0, 0, sport)
-                        .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))
-                        .slice(0, 8);
-                }
-            }
-            const total = filtered.length;
-            const wins = filtered.filter(p => p.result === 'win').length;
-            const losses = total - wins;
-            const units = filtered.reduce((acc, p) => acc + Number(p.units || 0), 0);
-            const winPct = total ? ((wins / total) * 100).toFixed(1) : '0.0';
             const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val); };
+            const params = new URLSearchParams();
+            if (model) params.set('model', model);
+            if (sport) params.set('sport', sport);
+            params.set('min_conf', String(minConf));
+            let filtered = [];
+            let summary = null;
+            try {
+                const resp = await fetch(`/api/performance-data?${params.toString()}`);
+                const payload = await resp.json();
+                perfRows = payload.rows || [];
+                filtered = payload.filtered_rows || [];
+                summary = payload.summary || {};
+                const meta = payload.meta || {};
+                console.log('[perf] predictions count:', Number(meta.predictions_count || 0));
+                console.log('[perf] matched results count:', Number(meta.matched_results_count || 0));
+                console.log('[perf] total picks before filtering:', perfRows.length);
+                console.log('[perf] total picks after filtering:', Number(meta.filtered_count || filtered.length));
+            } catch (_err) {
+                filtered = [];
+                summary = null;
+            }
+            const total = Number(summary?.total_bets || 0);
+            const wins = Number(summary?.wins || 0);
+            const losses = Number(summary?.losses || 0);
+            const unitsNum = Number(summary?.units || 0);
+            const winPct = summary?.win_pct;
             if (perfAnswerTitle) {
                 const label = reasonLabel || 'current filters';
                 perfAnswerTitle.textContent = `Answer for ${label}`;
@@ -8605,18 +8586,18 @@ def landing_page():
                     set('statLosses', '—');
                     set('statWinPct', '—');
                     set('statUnits', '—');
-                    perfAnswerList.innerHTML = '<div class="perf-empty"><strong>No high-confidence picks found for these filters today.</strong><br>Try adjusting filters or view full card.</div>';
+                    perfAnswerList.innerHTML = '<div class="perf-empty"><strong>No bets match current filters.</strong><br>Stats unavailable for current filter.</div>';
                 } else {
                     if (perfGrid) perfGrid.style.display = 'grid';
                     set('statTotal', total);
                     set('statWins', wins);
                     set('statLosses', losses);
-                    set('statWinPct', `${winPct}%`);
-                    set('statUnits', units > 0 ? `+${units}` : units);
+                    set('statWinPct', winPct !== null && winPct !== undefined ? `${winPct}%` : '—');
+                    set('statUnits', unitsNum > 0 ? `+${unitsNum}` : unitsNum);
                     const top = filtered.slice(0, 8);
                     perfAnswerList.innerHTML = top.map(p => {
                         const outcome = p.result === 'win' ? 'Win' : 'Loss';
-                        return `<div class="perf-answer-item"><span><strong>${p.sport}</strong> · ${p.model}</span><span>${p.confidence}% conf · ${p.consensus || p.confidence}% cons · ${outcome} · ${p.date || 'n/a'}</span></div>`;
+                        return `<div class="perf-answer-item"><span><strong>${p.sport}</strong> · ${p.model}</span><span>${p.confidence}% · ${outcome} · ${p.date || 'n/a'}</span></div>`;
                     }).join('');
                 }
             }
@@ -8625,19 +8606,16 @@ def landing_page():
         fetch('/api/performance-data').then(r => r.json()).then(data => {
             perfRows = data.rows || [];
             perfLoaded = true;
-            const meta = data.meta || {};
-            console.log('[perf] predictions count:', Number(meta.predictions_count || 0));
-            console.log('[perf] matched results count:', Number(meta.matched_results_count || 0));
             applyPerfFilters('current filters');
         }).catch(() => {
             perfRows = [];
             perfLoaded = true;
             applyPerfFilters('current filters');
         });
-        [perfModel, perfConfidence, perfConsensus, perfSport].forEach(el => {
+        [perfModel, perfConfidence, perfSport].forEach(el => {
             if (!el) return;
             el.addEventListener('change', () => applyPerfFilters('current filters'));
-            if (el === perfConfidence || el === perfConsensus) el.addEventListener('input', () => applyPerfFilters('current filters'));
+            if (el === perfConfidence) el.addEventListener('input', () => applyPerfFilters('current filters'));
         });
         if (perfApply) perfApply.addEventListener('click', () => applyPerfFilters('current filters'));
         document.querySelectorAll('[data-preset]').forEach(btn => {
@@ -8645,7 +8623,7 @@ def landing_page():
                 const p = btn.getAttribute('data-preset');
                 if (p === 'highConfidence') { if (perfConfidence) perfConfidence.value = '75'; }
                 if (p === 'agreement') { if (perfModel) perfModel.value = 'Edge'; if (perfConfidence) perfConfidence.value = '65'; }
-                if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; if (perfConsensus) perfConsensus.value = '70'; }
+                if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; }
                 const labels = {
                     highConfidence: 'High Confidence Picks',
                     agreement: 'Model Agreement',
@@ -8894,6 +8872,12 @@ def api_performance_data():
     """Per-model, per-game performance rows for client-side filtering UI."""
     rows_out = []
     meta = {'predictions_count': 0, 'matched_results_count': 0, 'rows_out_count': 0}
+    req_model = (request.args.get('model') or '').strip().lower()
+    req_sport = (request.args.get('sport') or '').strip().upper()
+    try:
+        req_min_conf = max(0.0, min(100.0, float(request.args.get('min_conf', 0) or 0)))
+    except Exception:
+        req_min_conf = 0.0
     try:
         conn = get_db_connection()
         try:
@@ -9020,8 +9004,36 @@ def api_performance_data():
                         })
     except Exception:
         rows_out = []
+    # Backend-enforced filtering for research queries.
+    filtered_rows = rows_out
+    if req_model:
+        filtered_rows = [r for r in filtered_rows if str(r.get('model', '')).lower() == req_model]
+    if req_sport:
+        filtered_rows = [r for r in filtered_rows if str(r.get('sport', '')).upper() == req_sport]
+    if req_min_conf > 0:
+        filtered_rows = [r for r in filtered_rows if float(r.get('confidence') or 0.0) >= req_min_conf]
+
+    wins = sum(1 for r in filtered_rows if r.get('result') == 'win')
+    total = len(filtered_rows)
+    losses = max(total - wins, 0)
+    units = sum(float(r.get('units') or 0) for r in filtered_rows)
+    win_pct = round((wins / total) * 100.0, 1) if total else None
+
     meta['rows_out_count'] = len(rows_out)
-    return jsonify({'rows': rows_out, 'meta': meta})
+    meta['filtered_count'] = total
+    meta['filters'] = {'model': req_model, 'sport': req_sport, 'min_conf': req_min_conf}
+    return jsonify({
+        'rows': rows_out,
+        'filtered_rows': filtered_rows,
+        'summary': {
+            'total_bets': total,
+            'wins': wins,
+            'losses': losses,
+            'win_pct': win_pct,
+            'units': units,
+        },
+        'meta': meta
+    })
 
 @app.route('/teams/<slug>')
 def team_lookup(slug):
