@@ -21,6 +21,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
         <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
             {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
@@ -147,12 +148,7 @@
         .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
         .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
         .auth-btn:hover { opacity:.9; }
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-decoration: none;
-        }
+        .logo { font-family:'Oswald',sans-serif; font-weight:700; font-size:28px; text-transform:uppercase; letter-spacing:0.5px; line-height:1; text-decoration:none; color:#0f172a; }
         .logo-img {
             height: 44px;
             width: auto;
@@ -425,7 +421,7 @@
 <body>
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">underdogs.bet</a>
+        <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
         <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
             <span></span>
             <span></span>
@@ -746,15 +742,6 @@
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
                 <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                 <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
-                <a href="/mlb-picks">MLB picks</a>
-                <a href="/nba-picks">NBA picks</a>
-                <a href="/nhl-picks">NHL picks</a>
-                <a href="/nfl-picks">NFL picks</a>
-                <a href="/ncaab-picks">NCAAB picks</a>
-                <a href="/ncaaw-picks">NCAAW picks</a>
-                <a href="/ncaaf-picks">NCAAF picks</a>
-                <a href="/wnba-picks">WNBA picks</a>
-                {% if soccer_enabled %}<a href="/soccer-picks">Soccer picks</a>{% endif %}
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>

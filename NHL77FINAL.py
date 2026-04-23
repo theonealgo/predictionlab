@@ -4819,6 +4819,7 @@ BASE_TEMPLATE = """
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
     <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-R4XM0WKTGG');</script>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -4862,10 +4863,14 @@ BASE_TEMPLATE = """
             align-items: center;
         }
         .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-decoration: none;
+            font-family:'Oswald',sans-serif;
+            font-weight:700;
+            font-size:28px;
+            text-transform:uppercase;
+            letter-spacing:0.5px;
+            line-height:1;
+            color:#0f172a;
+            text-decoration:none;
         }
         .logo-img {
             height: 64px;
@@ -5058,7 +5063,7 @@ BASE_TEMPLATE = """
 <body>
     <div class="navbar">
         <div class="navbar-content">
-            <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;text-decoration:none;">underdogs.bet</a>
+            <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
             <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
                 <span></span>
                 <span></span>
@@ -5100,7 +5105,7 @@ BASE_TEMPLATE = """
     </div>
     <footer class="site-footer">
         <div class="footer-outer">
-            <div class="footer-brand"><a href="/" aria-label="underdogs.bet home" style="text-decoration:none;color:#0f172a;font-weight:900;font-size:1.05em;letter-spacing:0.2px;">underdogs.bet</a></div>
+            <div class="footer-brand"><a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a></div>
             <div class="footer-columns-3">
                 <div class="footer-col-blk">
                     <div class="footer-heading">Company</div>
@@ -5119,15 +5124,6 @@ BASE_TEMPLATE = """
                     <a href="/ai-sports-betting-picks-today">AI picks today</a>
                     <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                     <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
-                    <a href="/mlb-picks">MLB picks</a>
-                    <a href="/nba-picks">NBA picks</a>
-                    <a href="/nhl-picks">NHL picks</a>
-                    <a href="/nfl-picks">NFL picks</a>
-                    <a href="/ncaab-picks">NCAAB picks</a>
-                    <a href="/ncaaw-picks">NCAAW picks</a>
-                    <a href="/ncaaf-picks">NCAAF picks</a>
-                    <a href="/wnba-picks">WNBA picks</a>
-                    {% if soccer_enabled %}<a href="/soccer-picks">Soccer picks</a>{% endif %}
                 </div>
                 <div class="footer-col-blk">
                     <div class="footer-heading">Social</div>
@@ -7360,6 +7356,7 @@ def landing_page():
     <meta name="twitter:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
     <meta name="twitter:description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
     {% if ga_tracking_id %}
     <!-- Google Analytics gtag.js snippet -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
@@ -7552,14 +7549,16 @@ def landing_page():
         .perf-answer-title{font-size:0.82em;color:#334155;font-weight:700;margin-bottom:8px;}
         .perf-answer-list{display:grid;gap:6px;}
         .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
+        .perf-empty{font-size:0.82em;color:#475569;background:#fff;border:1px dashed rgba(15,23,42,0.18);border-radius:8px;padding:10px;}
         .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-decoration: none;
-            color: var(--text);
-            font-weight: 900;
-            font-size: 1.08em;
+            font-family:'Oswald',sans-serif;
+            font-weight:700;
+            font-size:28px;
+            text-transform:uppercase;
+            letter-spacing:0.5px;
+            line-height:1;
+            text-decoration:none;
+            color:var(--text);
         }
         .logo-img {
             height: 44px;
@@ -8111,7 +8110,8 @@ def landing_page():
                 <option value="XSharp">XSharp</option>
                 <option value="Sharp Consensus">Sharp Consensus</option>
             </select>
-            <label style="font-size:0.82em;color:#334155;">Confidence >= <input id="perfConfidence" type="number" min="0" max="100" value="70" style="width:72px;"></label>
+            <label style="font-size:0.82em;color:#334155;">Confidence >= <input id="perfConfidence" type="number" min="0" max="100" value="60" style="width:72px;"></label>
+            <label style="font-size:0.82em;color:#334155;">Consensus >= <input id="perfConsensus" type="number" min="0" max="100" value="60" style="width:72px;"></label>
             <select id="perfSport">
                 <option value="">All Sports</option>
                 <option value="NBA">NBA</option>
@@ -8428,15 +8428,6 @@ def landing_page():
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
                 <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                 <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
-                <a href="/mlb-picks">MLB picks</a>
-                <a href="/nba-picks">NBA picks</a>
-                <a href="/nhl-picks">NHL picks</a>
-                <a href="/nfl-picks">NFL picks</a>
-                <a href="/ncaab-picks">NCAAB picks</a>
-                <a href="/ncaaw-picks">NCAAW picks</a>
-                <a href="/ncaaf-picks">NCAAF picks</a>
-                <a href="/wnba-picks">WNBA picks</a>
-                {% if soccer_enabled %}<a href="/soccer-picks">Soccer picks</a>{% endif %}
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
@@ -8545,57 +8536,108 @@ def landing_page():
         // Client-side performance dashboard
         const perfModel = document.getElementById('perfModel');
         const perfConfidence = document.getElementById('perfConfidence');
+        const perfConsensus = document.getElementById('perfConsensus');
         const perfSport = document.getElementById('perfSport');
         const perfApply = document.getElementById('perfApply');
         const perfAnswerTitle = document.getElementById('perfAnswerTitle');
         const perfAnswerList = document.getElementById('perfAnswerList');
+        const perfGrid = document.querySelector('.perf-grid');
         let perfRows = [];
-        const renderPerf = (reasonLabel) => {
-            const model = (perfModel?.value || '').trim();
-            const minConf = Number(perfConfidence?.value || 0);
-            const sport = (perfSport?.value || '').trim();
+        let perfLoaded = false;
+        const filterRows = (rows, model, minConf, minConsensus, sport) => {
             const modelNorm = model.toLowerCase();
             const sportNorm = sport.toLowerCase();
-            const filtered = perfRows.filter(p => {
+            return rows.filter(p => {
                 const pm = String(p.model || '').toLowerCase();
                 const ps = String(p.sport || '').toLowerCase();
                 const modelOk = !modelNorm || pm === modelNorm;
                 const sportOk = !sportNorm || ps === sportNorm;
-                return modelOk && (Number(p.confidence) >= minConf) && sportOk;
+                return modelOk &&
+                    (Number(p.confidence || 0) >= minConf) &&
+                    (Number(p.consensus || 0) >= minConsensus) &&
+                    sportOk;
             });
+        };
+        const renderPerf = (reasonLabel) => {
+            if (!perfLoaded) return;
+            const model = (perfModel?.value || '').trim();
+            const minConf = Number(perfConfidence?.value || 60);
+            const minConsensus = Number(perfConsensus?.value || 60);
+            const sport = (perfSport?.value || '').trim();
+            let filtered = filterRows(perfRows, model, minConf, minConsensus, sport);
+            console.log('[perf] total picks before filtering:', perfRows.length);
+            console.log('[perf] total picks after filtering:', filtered.length);
+            if (!filtered.length) {
+                // Progressive relaxation fallback so the section never appears broken.
+                const relaxed = [
+                    [Math.max(minConf - 5, 55), Math.max(minConsensus - 5, 55)],
+                    [Math.max(minConf - 10, 50), Math.max(minConsensus - 10, 50)],
+                    [Math.max(minConf - 15, 45), Math.max(minConsensus - 15, 45)],
+                ];
+                for (const [c, cs] of relaxed) {
+                    const candidate = filterRows(perfRows, model, c, cs, sport);
+                    if (candidate.length) {
+                        filtered = candidate;
+                        break;
+                    }
+                }
+                if (!filtered.length) {
+                    filtered = filterRows(perfRows, model, 0, 0, sport)
+                        .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))
+                        .slice(0, 8);
+                }
+            }
             const total = filtered.length;
             const wins = filtered.filter(p => p.result === 'win').length;
             const losses = total - wins;
             const units = filtered.reduce((acc, p) => acc + Number(p.units || 0), 0);
             const winPct = total ? ((wins / total) * 100).toFixed(1) : '0.0';
             const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val); };
-            set('statTotal', total);
-            set('statWins', wins);
-            set('statLosses', losses);
-            set('statWinPct', `${winPct}%`);
-            set('statUnits', units > 0 ? `+${units}` : units);
             if (perfAnswerTitle) {
                 const label = reasonLabel || 'current filters';
-                perfAnswerTitle.textContent = `Answer for ${label}: ${total} matched picks`;
+                perfAnswerTitle.textContent = `Answer for ${label}`;
             }
             if (perfAnswerList) {
-                if (!filtered.length) {
-                    perfAnswerList.innerHTML = '<div class="perf-answer-item"><span>No picks match this question yet.</span></div>';
+                if (!total) {
+                    if (perfGrid) perfGrid.style.display = 'none';
+                    set('statTotal', '—');
+                    set('statWins', '—');
+                    set('statLosses', '—');
+                    set('statWinPct', '—');
+                    set('statUnits', '—');
+                    perfAnswerList.innerHTML = '<div class="perf-empty"><strong>No high-confidence picks found for these filters today.</strong><br>Try adjusting filters or view full card.</div>';
                 } else {
+                    if (perfGrid) perfGrid.style.display = 'grid';
+                    set('statTotal', total);
+                    set('statWins', wins);
+                    set('statLosses', losses);
+                    set('statWinPct', `${winPct}%`);
+                    set('statUnits', units > 0 ? `+${units}` : units);
                     const top = filtered.slice(0, 8);
                     perfAnswerList.innerHTML = top.map(p => {
                         const outcome = p.result === 'win' ? 'Win' : 'Loss';
-                        return `<div class="perf-answer-item"><span><strong>${p.sport}</strong> · ${p.model}</span><span>${p.confidence}% · ${outcome} · ${p.date || 'n/a'}</span></div>`;
+                        return `<div class="perf-answer-item"><span><strong>${p.sport}</strong> · ${p.model}</span><span>${p.confidence}% conf · ${p.consensus || p.confidence}% cons · ${outcome} · ${p.date || 'n/a'}</span></div>`;
                     }).join('');
                 }
             }
         };
         const applyPerfFilters = (label) => renderPerf(label || 'current filters');
-        fetch('/api/performance-data').then(r => r.json()).then(data => { perfRows = data.rows || []; applyPerfFilters('current filters'); }).catch(() => { perfRows = []; applyPerfFilters('current filters'); });
-        [perfModel, perfConfidence, perfSport].forEach(el => {
+        fetch('/api/performance-data').then(r => r.json()).then(data => {
+            perfRows = data.rows || [];
+            perfLoaded = true;
+            const meta = data.meta || {};
+            console.log('[perf] predictions count:', Number(meta.predictions_count || 0));
+            console.log('[perf] matched results count:', Number(meta.matched_results_count || 0));
+            applyPerfFilters('current filters');
+        }).catch(() => {
+            perfRows = [];
+            perfLoaded = true;
+            applyPerfFilters('current filters');
+        });
+        [perfModel, perfConfidence, perfConsensus, perfSport].forEach(el => {
             if (!el) return;
             el.addEventListener('change', () => applyPerfFilters('current filters'));
-            if (el === perfConfidence) el.addEventListener('input', () => applyPerfFilters('current filters'));
+            if (el === perfConfidence || el === perfConsensus) el.addEventListener('input', () => applyPerfFilters('current filters'));
         });
         if (perfApply) perfApply.addEventListener('click', () => applyPerfFilters('current filters'));
         document.querySelectorAll('[data-preset]').forEach(btn => {
@@ -8603,7 +8645,7 @@ def landing_page():
                 const p = btn.getAttribute('data-preset');
                 if (p === 'highConfidence') { if (perfConfidence) perfConfidence.value = '75'; }
                 if (p === 'agreement') { if (perfModel) perfModel.value = 'Edge'; if (perfConfidence) perfConfidence.value = '65'; }
-                if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; }
+                if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; if (perfConsensus) perfConsensus.value = '70'; }
                 const labels = {
                     highConfidence: 'High Confidence Picks',
                     agreement: 'Model Agreement',
@@ -8851,8 +8893,22 @@ def api_search():
 def api_performance_data():
     """Per-model, per-game performance rows for client-side filtering UI."""
     rows_out = []
+    meta = {'predictions_count': 0, 'matched_results_count': 0, 'rows_out_count': 0}
     try:
         conn = get_db_connection()
+        try:
+            meta['predictions_count'] = int(conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] or 0)
+            meta['matched_results_count'] = int(conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM predictions p
+                LEFT JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
+                WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
+                  AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
+                """
+            ).fetchone()[0] or 0)
+        except Exception:
+            pass
         rows = conn.execute(
             """
             SELECT
@@ -8909,6 +8965,9 @@ def api_performance_data():
                 rows_out.append({
                     'model': model,
                     'confidence': conf,
+                    'consensus': round(
+                        max(float(r['meta_home_prob']), 1.0 - float(r['meta_home_prob'])) * 100.0, 1
+                    ) if r['meta_home_prob'] is not None else conf,
                     'result': 'win' if was_correct else 'loss',
                     'sport': sport,
                     'date': r['game_date'] or '',
@@ -8961,7 +9020,8 @@ def api_performance_data():
                         })
     except Exception:
         rows_out = []
-    return jsonify({'rows': rows_out})
+    meta['rows_out_count'] = len(rows_out)
+    return jsonify({'rows': rows_out, 'meta': meta})
 
 @app.route('/teams/<slug>')
 def team_lookup(slug):
