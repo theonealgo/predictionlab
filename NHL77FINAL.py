@@ -853,9 +853,6 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
     if sport == 'NFL':
         weekly_results = calculate_nfl_weekly_performance()
         return _daily_results_from_weekly(weekly_results) if weekly_results else None
-    if sport == 'NHL':
-        weekly_results = calculate_nhl_weekly_performance()
-        return _daily_results_from_weekly(weekly_results) if weekly_results else None
     if sport == 'NBA':
         weekly_results = calculate_nba_weekly_performance()
         return _daily_results_from_weekly(weekly_results) if weekly_results else None
@@ -1775,13 +1772,11 @@ def update_nhl_scores():
     Gets scores from the last 30 days (to catch any missing games).
     """
     try:
-        lookback_days = 10
-        logger.info(f"Fetching NHL scores from API (last {lookback_days} days)...")
+        default_lookback_days = 10
         
         # Fetch recent window to keep request latency low while still catching missed finals.
         from datetime import datetime, timedelta
         today = datetime.now()
-        start_date = today - timedelta(days=lookback_days)
         
         # NHL team abbreviation to full name mapping
         nhl_team_map = {
@@ -1800,6 +1795,29 @@ def update_nhl_scores():
         
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # Backfill from the most recent graded date forward so results never get stuck.
+        latest_row = cursor.execute(
+            """
+            SELECT MAX(date(game_date))
+            FROM games
+            WHERE sport = 'NHL'
+              AND home_score IS NOT NULL
+              AND away_score IS NOT NULL
+            """
+        ).fetchone()
+        latest_completed = latest_row[0] if latest_row else None
+        lookback_days = default_lookback_days
+        if latest_completed:
+            try:
+                latest_dt = datetime.strptime(str(latest_completed), '%Y-%m-%d')
+                gap_days = (today.date() - latest_dt.date()).days
+                lookback_days = max(default_lookback_days, gap_days + 2)
+            except Exception:
+                pass
+        lookback_days = min(max(lookback_days, default_lookback_days), 120)
+        logger.info(f"Fetching NHL scores from API (last {lookback_days} days)...")
+        start_date = today - timedelta(days=lookback_days)
         
         updates_count = 0
         current_date = start_date
@@ -1849,7 +1867,7 @@ def update_nhl_scores():
                                     cursor.execute("""
                                         INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
-                                    """, ('NHL', 'NHL', game_id, 2025, date_str, home_team, away_team, home_score, away_score))
+                                    """, ('NHL', 'NHL', game_id, int(str(date_str)[:4]), date_str, home_team, away_team, home_score, away_score))
                                     logger.info(f"Inserted new NHL game: {away_team} @ {home_team} ({date_str})")
                                 except Exception as insert_error:
                                     logger.error(f"Error inserting NHL game {game_id}: {insert_error}")
@@ -3724,8 +3742,8 @@ def calculate_nhl_weekly_performance():
             LEFT JOIN predictions p ON (p.sport = 'NHL' AND (p.game_id = g.game_id OR 
                 (date(p.game_date) = date(g.game_date) AND p.home_team_id = g.home_team_id AND p.away_team_id = g.away_team_id)))
             WHERE g.sport = 'NHL'
-              AND g.season = 2025 
               AND g.home_score IS NOT NULL
+              AND g.away_score IS NOT NULL
               AND date(g.game_date) <= ?
             ORDER BY g.game_date DESC
             LIMIT ?
@@ -3779,8 +3797,9 @@ def calculate_nhl_weekly_performance():
                     glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob
                 )
 
-            # Require full model availability so every card uses the same sample.
-            if any(prob is None for prob in [glicko2_prob, trueskill_prob, elo_prob, xgb_prob, meta_prob]):
+            # Keep recent completed games even if some model probs are missing.
+            # Tally logic already skips missing model fields per game.
+            if all(prob is None for prob in [glicko2_prob, trueskill_prob, elo_prob, xgb_prob, meta_prob]):
                 continue
 
             actual_home_win = game['home_score'] > game['away_score']
@@ -4861,6 +4880,7 @@ BASE_TEMPLATE = """
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
         }
         .logo {
             font-family:'Oswald',sans-serif;
@@ -4878,7 +4898,7 @@ BASE_TEMPLATE = """
             display: block;
         }
         .hamburger {
-            display: none;
+            display: flex;
             flex-direction: column;
             justify-content: center;
             gap: 5px;
@@ -4896,32 +4916,29 @@ BASE_TEMPLATE = """
             transition: 0.3s;
         }
         .nav-links {
-            position: static;
-            background: transparent;
-            flex-direction: row;
-            gap: 6px;
-            padding: 0;
-            border: none;
-            border-radius: 0;
-            display: flex;
-            min-width: 0;
-            box-shadow: none;
-            opacity: 1;
-            transform: none;
-            pointer-events: auto;
-            transition: none;
-            flex-wrap: wrap;
-            justify-content: center;
+            display:none;
+            position:absolute;
+            top:calc(100% + 8px);
+            left:0;
+            right:0;
+            flex-direction:column;
+            gap:0;
+            padding:8px;
+            border:1px solid #E0E4E8;
+            border-radius:12px;
+            background:#F4F7F9;
+            box-shadow:0 10px 24px rgba(15,23,42,0.12);
+            z-index:1100;
         }
-        .nav-links.active { opacity: 1; transform: none; pointer-events: auto; }
+        .nav-links.active { display:flex; }
         .nav-links a {
             color: #1A1D23;
             text-decoration: none;
             font-weight: 500;
             transition: all 0.2s;
-            white-space: nowrap;
-            padding: 7px 9px;
-            border-radius: 999px;
+            white-space: normal;
+            padding: 10px 12px;
+            border-radius: 8px;
             font-size: 0.82em;
         }
         .nav-section-title { display: none; }
@@ -5035,6 +5052,7 @@ BASE_TEMPLATE = """
             .nav-actions { grid-area: actions; width: 100%; justify-content: center; }
             .nav-links {
                 grid-area: links;
+                position: static;
                 display: none;
                 flex-direction: column;
                 flex-wrap: nowrap;
@@ -5042,7 +5060,9 @@ BASE_TEMPLATE = """
                 gap: 0;
                 width: 100%;
                 padding: 4px 0 10px;
-                border-top: 1px solid #E0E4E8;
+                border: 1px solid #E0E4E8;
+                box-shadow: none;
+                border-radius: 10px;
                 background: #F4F7F9;
             }
             .nav-links.active { display: flex; }
@@ -5539,7 +5559,7 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
     .page-title { font-size: 2.5em; margin-bottom: 30px; text-align: center; }
     .section-tabs { display: flex; gap: 10px; margin-bottom: 30px; justify-content: center; }
     .tab { padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; background: rgba(255, 255, 255, 0.1); color: white; }
-    .tab.active { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .tab.active { background: #bfdbfe; color: #0f172a; border: 1px solid #93c5fd; }
     .value-picks-container { background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 25px; }
     .pick-card { background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px; border-left: 4px solid; }
     .pick-card.HIGH { border-left-color: #00C076; }
@@ -5722,7 +5742,9 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
         color: white;
     }
     .tab.active {
-        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        background: #bfdbfe;
+        color: #0f172a;
+        border: 1px solid #93c5fd;
     }
     .predictions-table {
         background: rgba(255, 255, 255, 0.05);
@@ -5859,7 +5881,9 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         color: white;
     }
     .tab.active {
-        background: linear-gradient(135deg, #00C076, #059669);
+        background: #bfdbfe;
+        color: #0f172a;
+        border: 1px solid #93c5fd;
     }
     .results-table-container {
         background: rgba(255, 255, 255, 0.05);
@@ -5979,7 +6003,9 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         color: white;
     }
     .tab.active {
-        background: linear-gradient(135deg, #00C076, #059669);
+        background: #bfdbfe;
+        color: #0f172a;
+        border: 1px solid #93c5fd;
     }
     .results-container {
         background: rgba(255, 255, 255, 0.05);
@@ -6098,7 +6124,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .page-title { font-size: 2.2em; margin-bottom: 20px; text-align: center; padding:22px 18px; border:1px solid rgba(15,23,42,0.14); border-radius:12px; position:relative; overflow:hidden; z-index:1; background:#ffffff; color:#0f172a; }
     .section-tabs { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap; }
     .tab { padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; background: #ffffff; color: #0f172a; border:1px solid rgba(15,23,42,0.18); font-size: 0.9em; }
-    .tab.active { background: linear-gradient(135deg, #00C076, #059669); }
+    .tab.active { background: #bfdbfe; color: #0f172a; border: 1px solid #93c5fd; }
     /* Type toggle */
     .type-toggle { display:flex; gap:6px; justify-content:center; margin-bottom:16px; }
     .toggle-btn { padding:8px 18px; border-radius:6px; border:2px solid rgba(15,23,42,0.2); background:#fff; color:#0f172a; font-weight:600; font-size:0.85em; cursor:pointer; transition:all 0.2s; }
@@ -6591,7 +6617,9 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         color: #0f172a;
     }
     .tab.active {
-        background: linear-gradient(135deg, #00C076, #059669);
+        background: #bfdbfe;
+        color: #0f172a;
+        border: 1px solid #93c5fd;
     }
     .week-section {
         background: #ffffff;
@@ -7454,6 +7482,7 @@ def landing_page():
             justify-content: space-between;
             align-items: center;
             gap: 14px;
+            position: relative;
         }
         .nav-search {
             flex: 1;
@@ -7566,7 +7595,7 @@ def landing_page():
             display: block;
         }
         .hamburger {
-            display: none;
+            display: flex;
             flex-direction: column;
             justify-content: center;
             gap: 5px;
@@ -7585,33 +7614,30 @@ def landing_page():
             transition: 0.3s;
         }
         .nav-links {
-            position: static;
-            background: transparent;
-            flex-direction: row;
-            gap: 6px;
-            padding: 0;
-            border: none;
-            border-radius: 0;
-            display: flex;
-            min-width: 0;
-            box-shadow: none;
-            opacity: 1;
-            transform: none;
-            pointer-events: auto;
-            transition: none;
-            flex-wrap: wrap;
-            justify-content: center;
+            display:none;
+            position:absolute;
+            top:calc(100% + 8px);
+            left:0;
+            right:0;
+            flex-direction:column;
+            gap:0;
+            padding:8px;
+            border:1px solid #E0E4E8;
+            border-radius:12px;
+            background:#F4F7F9;
+            box-shadow:0 10px 24px rgba(15,23,42,0.12);
+            z-index:1100;
         }
-        .nav-links.active { opacity: 1; transform: none; pointer-events: auto; }
+        .nav-links.active { display:flex; }
         .nav-links a {
             color: var(--text);
             text-decoration: none;
             font-weight: 600;
             font-size: 0.82em;
             transition: all 0.2s;
-            white-space: nowrap;
-            padding: 7px 9px;
-            border-radius: 999px;
+            white-space: normal;
+            padding: 10px 12px;
+            border-radius: 8px;
         }
         .nav-links a:hover { color: var(--link); background: rgba(0,82,155,0.08); }
         .nav-links a.active { color: var(--link); background: rgba(0,82,155,0.12); }
@@ -7951,6 +7977,7 @@ def landing_page():
             .nav-actions { grid-area: actions; display: flex; justify-content: center; width: 100%; }
             .nav-links {
                 grid-area: links;
+                position: static;
                 display: none;
                 flex-direction: column;
                 flex-wrap: nowrap;
@@ -7958,7 +7985,9 @@ def landing_page():
                 gap: 0;
                 width: 100%;
                 padding: 4px 0 10px;
-                border-top: 1px solid var(--border);
+                border: 1px solid var(--border);
+                box-shadow: none;
+                border-radius: 10px;
                 background: #F4F7F9;
             }
             .nav-links.active { display: flex; }
@@ -8104,6 +8133,7 @@ def landing_page():
         <h3 style="margin:0;color:#0f172a;">Model Performance Filters</h3>
         <div class="perf-controls">
             <select id="perfModel">
+                <option value="">All Models</option>
                 <option value="Grinder2">Grinder2</option>
                 <option value="Takedown">Takedown</option>
                 <option value="Edge">Edge</option>
@@ -8111,6 +8141,7 @@ def landing_page():
                 <option value="Sharp Consensus">Sharp Consensus</option>
             </select>
             <label style="font-size:0.82em;color:#334155;">Confidence >= <input id="perfConfidence" type="number" min="0" max="100" value="60" style="width:72px;"></label>
+            <label style="font-size:0.82em;color:#334155;">Consensus >= <input id="perfConsensus" type="number" min="0" max="100" value="" placeholder="Any" style="width:72px;"></label>
             <select id="perfSport">
                 <option value="">All Sports</option>
                 <option value="NBA">NBA</option>
@@ -8535,6 +8566,7 @@ def landing_page():
         // Client-side performance dashboard
         const perfModel = document.getElementById('perfModel');
         const perfConfidence = document.getElementById('perfConfidence');
+        const perfConsensus = document.getElementById('perfConsensus');
         const perfSport = document.getElementById('perfSport');
         const perfApply = document.getElementById('perfApply');
         const perfAnswerTitle = document.getElementById('perfAnswerTitle');
@@ -8546,12 +8578,14 @@ def landing_page():
             if (!perfLoaded) return;
             const model = (perfModel?.value || '').trim();
             const minConf = Number(perfConfidence?.value || 60);
+            const consensusRaw = (perfConsensus?.value || '').trim();
             const sport = (perfSport?.value || '').trim();
             const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val); };
             const params = new URLSearchParams();
             if (model) params.set('model', model);
             if (sport) params.set('sport', sport);
             params.set('min_conf', String(minConf));
+            if (consensusRaw !== '') params.set('consensus', consensusRaw);
             let filtered = [];
             let summary = null;
             try {
@@ -8612,10 +8646,10 @@ def landing_page():
             perfLoaded = true;
             applyPerfFilters('current filters');
         });
-        [perfModel, perfConfidence, perfSport].forEach(el => {
+        [perfModel, perfConfidence, perfConsensus, perfSport].forEach(el => {
             if (!el) return;
             el.addEventListener('change', () => applyPerfFilters('current filters'));
-            if (el === perfConfidence) el.addEventListener('input', () => applyPerfFilters('current filters'));
+            if (el === perfConfidence || el === perfConsensus) el.addEventListener('input', () => applyPerfFilters('current filters'));
         });
         if (perfApply) perfApply.addEventListener('click', () => applyPerfFilters('current filters'));
         document.querySelectorAll('[data-preset]').forEach(btn => {
@@ -8623,7 +8657,7 @@ def landing_page():
                 const p = btn.getAttribute('data-preset');
                 if (p === 'highConfidence') { if (perfConfidence) perfConfidence.value = '75'; }
                 if (p === 'agreement') { if (perfModel) perfModel.value = 'Edge'; if (perfConfidence) perfConfidence.value = '65'; }
-                if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; }
+                if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; if (perfConsensus) perfConsensus.value = '70'; }
                 const labels = {
                     highConfidence: 'High Confidence Picks',
                     agreement: 'Model Agreement',
@@ -8871,30 +8905,27 @@ def api_search():
 def api_performance_data():
     """Per-model, per-game performance rows for client-side filtering UI."""
     rows_out = []
+    filtered_rows = []
     meta = {'predictions_count': 0, 'matched_results_count': 0, 'rows_out_count': 0}
-    req_model = (request.args.get('model') or '').strip().lower()
-    req_sport = (request.args.get('sport') or '').strip().upper()
+
+    raw_model = (request.args.get('model') or '').strip()
+    raw_sport = (request.args.get('sport') or '').strip()
+    raw_conf = (request.args.get('min_conf') or request.args.get('confidence') or '').strip()
+    raw_consensus = (request.args.get('consensus') or request.args.get('min_consensus') or '').strip()
+
+    req_model = '' if raw_model.lower() in ('', 'all', 'all models') else raw_model
+    req_sport = '' if raw_sport.lower() in ('', 'all') else raw_sport.upper()
     try:
-        req_min_conf = max(0.0, min(100.0, float(request.args.get('min_conf', 0) or 0)))
+        req_min_conf = max(0.0, min(100.0, float(raw_conf))) if raw_conf != '' else None
     except Exception:
-        req_min_conf = 0.0
+        req_min_conf = None
     try:
-        conn = get_db_connection()
-        try:
-            meta['predictions_count'] = int(conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] or 0)
-            meta['matched_results_count'] = int(conn.execute(
-                """
-                SELECT COUNT(*)
-                FROM predictions p
-                LEFT JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
-                WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
-                  AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
-                """
-            ).fetchone()[0] or 0)
-        except Exception:
-            pass
-        rows = conn.execute(
-            """
+        req_min_consensus = max(0.0, min(100.0, float(raw_consensus))) if raw_consensus != '' else None
+    except Exception:
+        req_min_consensus = None
+
+    base_sql = """
+        WITH joined AS (
             SELECT
                 p.sport,
                 p.game_date,
@@ -8912,106 +8943,219 @@ def api_performance_data():
              AND g.game_id = p.game_id
             WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
               AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
-            ORDER BY datetime(p.created_at) DESC
-            LIMIT 6000
-            """
-        ).fetchall()
-        conn.close()
-        per_sport_seen = defaultdict(int)
-        for r in rows:
-            sport = (r['sport'] or '').upper()
-            per_sport_seen[sport] += 1
-            if per_sport_seen[sport] > 200:
-                continue
-            for model, prob_col in (
-                ('Grinder2', 'catboost_home_prob'),
-                ('Edge', 'elo_home_prob'),
-                ('Takedown', 'logistic_home_prob'),
-                ('XSharp', 'xgboost_home_prob'),
-                ('Sharp Consensus', 'meta_home_prob'),
-            ):
-                p = r[prob_col]
-                if model == 'Grinder2' and p is None:
-                    # Keep Grinder2 usable when catboost values are missing.
-                    p = r['elo_home_prob']
-                if p is None:
-                    continue
-                home_score = r['home_score']
-                away_score = r['away_score']
-                if home_score is None or away_score is None:
-                    continue
-                if float(home_score) == float(away_score):
-                    continue
-                picked_home = float(p) >= 0.5
-                home_won = float(home_score) > float(away_score)
-                was_correct = picked_home == home_won
-                conf = round(max(float(p), 1.0 - float(p)) * 100.0, 1)
-                rows_out.append({
-                    'model': model,
-                    'confidence': conf,
-                    'consensus': round(
-                        max(float(r['meta_home_prob']), 1.0 - float(r['meta_home_prob'])) * 100.0, 1
-                    ) if r['meta_home_prob'] is not None else conf,
-                    'result': 'win' if was_correct else 'loss',
-                    'sport': sport,
-                    'date': r['game_date'] or '',
-                    'units': 1 if was_correct else -1,
-                })
-        # Fallback to backtest aggregates when graded prediction rows are unavailable.
-        if not rows_out:
-            conn = get_db_connection()
-            bt_rows = conn.execute(
-                """
-                SELECT sport, total_games, elo_correct, consensus_correct, xgboost_correct,
-                       elo_accuracy, consensus_accuracy, xgboost_accuracy, combined_accuracy
-                FROM model_backtest_results
-                """
-            ).fetchall()
-            conn.close()
-            model_map = (
-                ('Grinder2', 'elo_correct', 'elo_accuracy'),
-                ('Edge', 'elo_correct', 'elo_accuracy'),
-                ('Takedown', 'consensus_correct', 'consensus_accuracy'),
-                ('XSharp', 'xgboost_correct', 'xgboost_accuracy'),
-                ('Sharp Consensus', 'consensus_correct', 'combined_accuracy'),
-            )
-            for r in bt_rows:
-                total = int(r['total_games'] or 0)
-                if total <= 0:
-                    continue
-                for model, correct_col, _acc_col in model_map:
-                    correct = int(r[correct_col] or 0)
-                    losses = max(total - correct, 0)
-                    # Synthetic rows are not per-game confidence; use 100 so min-confidence
-                    # filters do not zero the dashboard when backtest accuracy is ~50–60%.
-                    for _ in range(correct):
-                        rows_out.append({
-                            'model': model,
-                            'confidence': 100.0,
-                            'result': 'win',
-                            'sport': (r['sport'] or '').upper(),
-                            'date': '',
-                            'units': 1,
-                        })
-                    for _ in range(losses):
-                        rows_out.append({
-                            'model': model,
-                            'confidence': 100.0,
-                            'result': 'loss',
-                            'sport': (r['sport'] or '').upper(),
-                            'date': '',
-                            'units': -1,
-                        })
-    except Exception:
-        rows_out = []
-    # Backend-enforced filtering for research queries.
-    filtered_rows = rows_out
-    if req_model:
-        filtered_rows = [r for r in filtered_rows if str(r.get('model', '')).lower() == req_model]
+        ),
+        ranked AS (
+            SELECT *,
+                   ROW_NUMBER() OVER (
+                     PARTITION BY UPPER(COALESCE(sport, ''))
+                     ORDER BY datetime(COALESCE(created_at, game_date)) DESC
+                   ) AS rn
+            FROM joined
+        ),
+        base AS (
+            SELECT * FROM ranked WHERE rn <= 200
+        ),
+        model_rows AS (
+            SELECT
+                UPPER(COALESCE(sport, '')) AS sport,
+                game_date AS date,
+                'Grinder2' AS model,
+                CASE WHEN MAX(COALESCE(catboost_home_prob, elo_home_prob), 1.0 - COALESCE(catboost_home_prob, elo_home_prob)) IS NULL
+                     THEN NULL
+                     ELSE ROUND(MAX(COALESCE(catboost_home_prob, elo_home_prob), 1.0 - COALESCE(catboost_home_prob, elo_home_prob)) * 100.0, 1)
+                END AS confidence,
+                CASE WHEN meta_home_prob IS NULL
+                     THEN ROUND(MAX(COALESCE(catboost_home_prob, elo_home_prob), 1.0 - COALESCE(catboost_home_prob, elo_home_prob)) * 100.0, 1)
+                     ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
+                END AS consensus,
+                CASE
+                    WHEN home_score = away_score THEN NULL
+                    WHEN (COALESCE(catboost_home_prob, elo_home_prob) >= 0.5 AND home_score > away_score)
+                      OR (COALESCE(catboost_home_prob, elo_home_prob) < 0.5 AND home_score < away_score)
+                    THEN 'win' ELSE 'loss'
+                END AS result,
+                CASE
+                    WHEN home_score = away_score THEN 0
+                    WHEN (COALESCE(catboost_home_prob, elo_home_prob) >= 0.5 AND home_score > away_score)
+                      OR (COALESCE(catboost_home_prob, elo_home_prob) < 0.5 AND home_score < away_score)
+                    THEN 1 ELSE -1
+                END AS units
+            FROM base
+            WHERE COALESCE(catboost_home_prob, elo_home_prob) IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                UPPER(COALESCE(sport, '')) AS sport,
+                game_date AS date,
+                'Edge' AS model,
+                ROUND(MAX(elo_home_prob, 1.0 - elo_home_prob) * 100.0, 1) AS confidence,
+                CASE WHEN meta_home_prob IS NULL
+                     THEN ROUND(MAX(elo_home_prob, 1.0 - elo_home_prob) * 100.0, 1)
+                     ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
+                END AS consensus,
+                CASE
+                    WHEN home_score = away_score THEN NULL
+                    WHEN (elo_home_prob >= 0.5 AND home_score > away_score)
+                      OR (elo_home_prob < 0.5 AND home_score < away_score)
+                    THEN 'win' ELSE 'loss'
+                END AS result,
+                CASE
+                    WHEN home_score = away_score THEN 0
+                    WHEN (elo_home_prob >= 0.5 AND home_score > away_score)
+                      OR (elo_home_prob < 0.5 AND home_score < away_score)
+                    THEN 1 ELSE -1
+                END AS units
+            FROM base
+            WHERE elo_home_prob IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                UPPER(COALESCE(sport, '')) AS sport,
+                game_date AS date,
+                'Takedown' AS model,
+                ROUND(MAX(logistic_home_prob, 1.0 - logistic_home_prob) * 100.0, 1) AS confidence,
+                CASE WHEN meta_home_prob IS NULL
+                     THEN ROUND(MAX(logistic_home_prob, 1.0 - logistic_home_prob) * 100.0, 1)
+                     ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
+                END AS consensus,
+                CASE
+                    WHEN home_score = away_score THEN NULL
+                    WHEN (logistic_home_prob >= 0.5 AND home_score > away_score)
+                      OR (logistic_home_prob < 0.5 AND home_score < away_score)
+                    THEN 'win' ELSE 'loss'
+                END AS result,
+                CASE
+                    WHEN home_score = away_score THEN 0
+                    WHEN (logistic_home_prob >= 0.5 AND home_score > away_score)
+                      OR (logistic_home_prob < 0.5 AND home_score < away_score)
+                    THEN 1 ELSE -1
+                END AS units
+            FROM base
+            WHERE logistic_home_prob IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                UPPER(COALESCE(sport, '')) AS sport,
+                game_date AS date,
+                'XSharp' AS model,
+                ROUND(MAX(xgboost_home_prob, 1.0 - xgboost_home_prob) * 100.0, 1) AS confidence,
+                CASE WHEN meta_home_prob IS NULL
+                     THEN ROUND(MAX(xgboost_home_prob, 1.0 - xgboost_home_prob) * 100.0, 1)
+                     ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
+                END AS consensus,
+                CASE
+                    WHEN home_score = away_score THEN NULL
+                    WHEN (xgboost_home_prob >= 0.5 AND home_score > away_score)
+                      OR (xgboost_home_prob < 0.5 AND home_score < away_score)
+                    THEN 'win' ELSE 'loss'
+                END AS result,
+                CASE
+                    WHEN home_score = away_score THEN 0
+                    WHEN (xgboost_home_prob >= 0.5 AND home_score > away_score)
+                      OR (xgboost_home_prob < 0.5 AND home_score < away_score)
+                    THEN 1 ELSE -1
+                END AS units
+            FROM base
+            WHERE xgboost_home_prob IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                UPPER(COALESCE(sport, '')) AS sport,
+                game_date AS date,
+                'Sharp Consensus' AS model,
+                ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1) AS confidence,
+                ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1) AS consensus,
+                CASE
+                    WHEN home_score = away_score THEN NULL
+                    WHEN (meta_home_prob >= 0.5 AND home_score > away_score)
+                      OR (meta_home_prob < 0.5 AND home_score < away_score)
+                    THEN 'win' ELSE 'loss'
+                END AS result,
+                CASE
+                    WHEN home_score = away_score THEN 0
+                    WHEN (meta_home_prob >= 0.5 AND home_score > away_score)
+                      OR (meta_home_prob < 0.5 AND home_score < away_score)
+                    THEN 1 ELSE -1
+                END AS units
+            FROM base
+            WHERE meta_home_prob IS NOT NULL
+        )
+        SELECT sport, date, model, confidence, consensus, result, units
+        FROM model_rows
+        WHERE result IS NOT NULL
+    """
+
+    where_conditions = []
+    sql_params = []
     if req_sport:
-        filtered_rows = [r for r in filtered_rows if str(r.get('sport', '')).upper() == req_sport]
-    if req_min_conf > 0:
-        filtered_rows = [r for r in filtered_rows if float(r.get('confidence') or 0.0) >= req_min_conf]
+        where_conditions.append("sport = ?")
+        sql_params.append(req_sport)
+    if req_model:
+        where_conditions.append("model = ?")
+        sql_params.append(req_model)
+    if req_min_conf is not None:
+        where_conditions.append("confidence >= ?")
+        sql_params.append(req_min_conf)
+    if req_min_consensus is not None:
+        where_conditions.append("consensus >= ?")
+        sql_params.append(req_min_consensus)
+
+    final_sql = base_sql
+    if where_conditions:
+        final_sql += " AND " + " AND ".join(where_conditions)
+    final_sql += " ORDER BY date DESC"
+
+    try:
+        conn = get_db_connection()
+        try:
+            meta['predictions_count'] = int(conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] or 0)
+            meta['matched_results_count'] = int(conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM predictions p
+                LEFT JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
+                WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
+                  AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
+                """
+            ).fetchone()[0] or 0)
+        except Exception:
+            pass
+
+        logger.info(f"[perf] SQL query: {final_sql}")
+        logger.info(f"[perf] SQL params: {sql_params}")
+
+        filtered_rows_db = conn.execute(final_sql, tuple(sql_params)).fetchall()
+        filtered_rows = [{
+            'sport': (r['sport'] or '').upper(),
+            'date': r['date'] or '',
+            'model': r['model'],
+            'confidence': float(r['confidence'] or 0),
+            'consensus': float(r['consensus'] or 0),
+            'result': r['result'],
+            'units': float(r['units'] or 0),
+        } for r in filtered_rows_db]
+
+        # Keep rows payload for UI/debug, unfiltered by request parameters.
+        all_rows_sql = base_sql + " ORDER BY date DESC"
+        rows_out_db = conn.execute(all_rows_sql).fetchall()
+        rows_out = [{
+            'sport': (r['sport'] or '').upper(),
+            'date': r['date'] or '',
+            'model': r['model'],
+            'confidence': float(r['confidence'] or 0),
+            'consensus': float(r['consensus'] or 0),
+            'result': r['result'],
+            'units': float(r['units'] or 0),
+        } for r in rows_out_db]
+        conn.close()
+    except Exception as e:
+        logger.exception(f"[perf] performance-data query failed: {e}")
+        rows_out = []
+        filtered_rows = []
 
     wins = sum(1 for r in filtered_rows if r.get('result') == 'win')
     total = len(filtered_rows)
@@ -9021,7 +9165,16 @@ def api_performance_data():
 
     meta['rows_out_count'] = len(rows_out)
     meta['filtered_count'] = total
-    meta['filters'] = {'model': req_model, 'sport': req_sport, 'min_conf': req_min_conf}
+    meta['filters'] = {
+        'model': req_model,
+        'sport': req_sport,
+        'min_conf': req_min_conf,
+        'min_consensus': req_min_consensus,
+    }
+    meta['sql'] = final_sql
+    meta['sql_params'] = sql_params
+    meta['message'] = 'No bets match current filters.' if total == 0 else None
+
     return jsonify({
         'rows': rows_out,
         'filtered_rows': filtered_rows,
@@ -9928,28 +10081,18 @@ def sport_results(sport):
                     _SPORT_RESULTS_CACHE[sync_key] = {'ts': now_ts}
             except Exception as e:
                 logger.error(f"NHL score sync failed (continuing with existing data): {e}")
-            weekly_results = calculate_nhl_weekly_performance()
-            
-            if not weekly_results:
+            yesterday_dt = datetime.now() - timedelta(days=1)
+            lookback_start_dt = yesterday_dt - timedelta(days=140)
+            daily_results = _banner_daily_results_for_range(sport, lookback_start_dt, yesterday_dt)
+            if not daily_results:
                 return _results_fallback_page(sport, "NHL results could not be loaded because no completed NHL games were available for grading yet.")
-            
-            # Regroup by date instead of week
-            daily_results = defaultdict(lambda: {'games': []})
+
             today_date = datetime.now().strftime('%Y-%m-%d')
-            
+
             try:
-                for week, week_data in weekly_results.items():
-                    for game in week_data['games']:
-                        date_key = game['date']
-                        daily_results[date_key]['games'].append(game)
-                
-                # Filter to only show recent dates up to yesterday.
-                # Keep overall stats from all games, but render fewer date sections
-                # so the page stays fast and doesn't block production workers.
-                yesterday_dt = datetime.now() - timedelta(days=1)
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-                
+
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
