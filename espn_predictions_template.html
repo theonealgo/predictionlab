@@ -227,20 +227,86 @@
         }
         .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
         .container { max-width: 1400px; margin: 0 auto; padding: 30px; }
-        .footer {
+        .site-footer {
+            background: #fff;
             border-top: 1px solid rgba(15,23,42,0.12);
-            padding: 26px 30px;
-            text-align: center;
+            padding: 22px 24px 28px;
             color: #475569;
-            font-size: 0.85em;
+            font-size: 0.88em;
         }
-        .footer a { color: #0f172a; text-decoration: none; }
-        .footer a:hover { color: #0f172a; text-decoration: underline; }
-        .footer-logo {
-            font-weight: 800;
+        .footer-outer { max-width: 1200px; margin: 0 auto; }
+        .footer-brand { margin-bottom: 18px; }
+        .footer-brand .logo {
+            font-weight: 900;
             font-size: 1.05em;
-            margin-bottom: 8px;
+            color: #0f172a;
+            letter-spacing: 0.2px;
+            text-decoration: none;
+        }
+        .footer-columns-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 28px 36px;
+            align-items: start;
+        }
+        .footer-heading {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.55px;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 12px;
+        }
+        .footer-col-blk a {
             display: block;
+            font-size: 0.88em;
+            line-height: 1.85;
+            color: #475569;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 2px 0;
+        }
+        .footer-col-blk a:hover { color: #00529B; text-decoration: underline; }
+        .footer-bottom {
+            margin-top: 22px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(15,23,42,0.1);
+            font-size: 0.82em;
+            color: #475569;
+        }
+        .footer-share {
+            margin: 0 0 20px;
+            padding: 0 0 18px;
+            border-bottom: 1px solid rgba(15,23,42,0.08);
+        }
+        .footer-share-title {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.55px;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 10px;
+        }
+        .footer-share-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 12px;
+        }
+        .footer-share-links a {
+            color: #475569;
+            font-size: 0.84em;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid #E0E4E8;
+            border-radius: 999px;
+            padding: 7px 12px;
+            line-height: 1.35;
+            white-space: normal;
+            text-align: center;
+        }
+        .footer-share-links a:hover { color: #00529B; border-color: #00529B; }
+        @media (max-width: 720px) {
+            .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
         }
         .header { text-align:left; margin-bottom:16px; padding:20px 18px; border:1px solid rgba(15,23,42,0.16); border-radius:12px; position:relative; overflow:hidden; background:#ffffff; }
         .header::before, .header::after { display:none !important; content:none !important; }
@@ -408,6 +474,7 @@
             {% if soccer_enabled %}
             <a href="/soccer-picks">Soccer</a>
             {% endif %}
+            <a href="/plans">Plans</a>
         </div>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
@@ -689,51 +756,49 @@
         <p style="margin:0;">This helps provide a clearer understanding of the strategy behind the picks and how they are generated.</p>
     </div>
 </div>
-<footer style="background:#ffffff;border-top:1px solid rgba(15,23,42,0.12);padding:18px 30px;color:#475569;font-size:0.78em;">
-    <div style="max-width:1200px;margin:0 auto;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;">
-            <a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a>
-        </div>
-        <div style="width:100%;max-width:1200px;margin:10px auto 0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:18px 24px;">
-            <div>
-                <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.45px;font-weight:800;color:#334155;margin-bottom:8px;">Site</div>
-                <a href="/tutorial" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Tutorial</a>
-                <a href="/privacy" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Privacy Center</a>
-                <a href="/terms" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Legal Terms</a>
-                <a href="/responsible-gaming" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Responsible Gaming</a>
-            </div>
-            <div>
-                <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.45px;font-weight:800;color:#334155;margin-bottom:8px;">Share underdogs.bet</div>
-                <a href="https://twitter.com/intent/tweet?text={{ (sport_info.name ~ ' AI picks and results on underdogs.bet')|urlencode }}&amp;url={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Share on X</a>
-                <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Share on Facebook</a>
-                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Share on LinkedIn</a>
-                <a href="https://wa.me/?text={{ (sport_info.name ~ ' AI picks and results: ' ~ request.url)|urlencode }}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Share on WhatsApp</a>
-                <a href="https://reddit.com/submit?url={{ request.url|urlencode }}&amp;title={{ (sport_info.name ~ ' AI picks and results')|urlencode }}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Share on Reddit</a>
-                <a href="mailto:?subject={{ (sport_info.name ~ ' AI picks and results')|urlencode }}&amp;body={{ request.url|urlencode }}" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Share by Email</a>
-            </div>
-            <div>
-                <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.45px;font-weight:800;color:#334155;margin-bottom:8px;">Social</div>
-                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Instagram</a>
-                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">TikTok</a>
-                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">YouTube</a>
-            </div>
-            <div>
-                <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.45px;font-weight:800;color:#334155;margin-bottom:8px;">Contact</div>
-                <a href="mailto:{{ contact_email }}" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">{{ contact_email }}</a>
-            </div>
-            <div>
-                <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.45px;font-weight:800;color:#334155;margin-bottom:8px;">Explore</div>
-                <a href="/mlb-picks" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">MLB AI Picks &amp; Projections</a>
-                <a href="/nba-picks" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">NBA AI Picks &amp; Projections</a>
-                <a href="/nhl-picks" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">NHL AI Picks &amp; Projections</a>
-                <a href="/nfl-picks" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">NFL AI Picks &amp; Projections</a>
-                <a href="/soccer-picks" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Soccer AI Picks &amp; Projections</a>
-                <a href="/ncaab-picks" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">NCAAB AI Picks &amp; Projections</a>
-                <a href="/wnba-picks" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">WNBA AI Picks &amp; Projections</a>
-                <a href="/daily-report" style="display:block;font-size:0.84em;line-height:1.7;color:#0f172a;text-decoration:none;">Daily Betting Results Report</a>
+<footer class="site-footer">
+    <div class="footer-outer">
+        <div class="footer-share">
+            <div class="footer-share-title">Share this page</div>
+            <div class="footer-share-links">
+                <a href="https://twitter.com/intent/tweet?text={{ (sport_info.name ~ ' AI picks and results on underdogs.bet')|urlencode }}&amp;url={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
+                <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer">Facebook</a>
+                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                <a href="https://wa.me/?text={{ (sport_info.name ~ ' AI picks and results: ' ~ request.url)|urlencode }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                <a href="https://reddit.com/submit?url={{ request.url|urlencode }}&amp;title={{ (sport_info.name ~ ' AI picks and results')|urlencode }}" target="_blank" rel="noopener noreferrer">Reddit</a>
+                <a href="mailto:?subject={{ (sport_info.name ~ ' AI picks and results')|urlencode }}&amp;body={{ request.url|urlencode }}">Email</a>
             </div>
         </div>
-        <div style="max-width:1200px;margin:10px auto 0;font-size:0.75em;color:#475569;">© 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+        <div class="footer-brand"><a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a></div>
+        <div class="footer-columns-3">
+            <div class="footer-col-blk">
+                <div class="footer-heading">Company</div>
+                <a href="/plans">Plans &amp; pricing</a>
+                <a href="/tutorial">How to read picks</a>
+                <a href="/contact">Contact us</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/responsible-gaming">Responsible gaming</a>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Product</div>
+                <a href="/#faq">FAQ</a>
+                <a href="/daily-report">Daily results report</a>
+                <a href="/search">Search</a>
+                <a href="/ai-sports-betting-picks-today">AI picks today</a>
+                <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
+                <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Social</div>
+                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
+                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer">Instagram</a>
+                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer">Facebook</a>
+                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer">TikTok</a>
+                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer">YouTube</a>
+            </div>
+        </div>
+        <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
 

@@ -1,28 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Sports Betting Picks Today | underdogs.bet</title>
-    <meta name="description" content="Daily AI sports betting picks powered by four independent prediction models and a proprietary odds engine.">
-    <link rel="canonical" href="https://www.underdogs.bet/ai-sports-betting-picks-today">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.75; }
-        .page { max-width: 920px; margin: 0 auto; padding: 42px 22px 70px; }
-        .top { margin-bottom: 22px; }
-        .top a { color: #93c5fd; text-decoration: none; font-weight: 700; }
-        h1 { color: #fff; margin-bottom: 14px; font-size: clamp(1.6rem, 4vw, 2.2rem); }
-        h2 { color: #fff; margin: 22px 0 10px; font-size: 1.2rem; }
-        p, li { color: #cbd5e1; font-size: 0.98rem; }
-        ul { margin: 8px 0 12px 22px; }
-        .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 26px; }
-    </style>
-</head>
-<body>
-    <div class="page">
-        <div class="top"><a href="/">← Home</a></div>
-        <div class="card">
+{% extends "underdogs_layout.html" %}
+{% block title %}AI Sports Betting Picks Today | underdogs.bet{% endblock %}
+{% block head_meta %}
+<meta name="description" content="Daily AI sports betting picks powered by four independent prediction models and a proprietary odds engine.">
+{% endblock %}
+{% block content %}
+<article class="legal-card">
             <h1>AI Sports Betting Picks Today</h1>
             <p>Our AI sports betting picks are generated daily using a proprietary odds engine powered by four independent prediction models. Each model analyzes matchups, player performance, team efficiency metrics, and real-time market movement to identify value across today&apos;s slate.</p>
 
@@ -51,8 +33,8 @@
             <h2>Transparency</h2>
             <p>All picks and results are tracked over time. We do not remove losing picks or selectively display results. Every outcome is recorded for full transparency.</p>
             <p>Check back daily for updated AI-generated betting opportunities.</p>
-        </div>
-        <div class="card" style="margin-top:22px;">
+</article>
+<article class="legal-card">
             <h2>How to Use These Picks Effectively</h2>
             <p>AI sports betting picks are most effective when used as part of a consistent, long-term strategy. Rather than focusing on individual wins or losses, users should evaluate performance across a larger sample of bets.</p>
             <p>Tracking results, managing risk, and avoiding emotional decisions are key factors in achieving sustainable outcomes.</p>
@@ -67,7 +49,5 @@
                 <li>Ongoing updates through daily reports</li>
             </ul>
             <p>These pages provide a complete view of how the model operates in real conditions.</p>
-        </div>
-    </div>
-</body>
-</html>
+</article>
+{% endblock %}

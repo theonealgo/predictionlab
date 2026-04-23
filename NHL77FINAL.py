@@ -1254,6 +1254,11 @@ def inject_globals():
     """Make global template variables available in every template automatically."""
     # Determine current sport from request args or view context
     _sport = request.view_args.get('sport', '') if request.view_args else ''
+    try:
+        from flask_login import current_user as _cu
+        _logged_in = getattr(_cu, 'is_authenticated', False) and _cu.is_authenticated
+    except Exception:
+        _logged_in = False
     return {
         'stripe_donation_url': STRIPE_DONATION_URL,
         'contact_email': CONTACT_EMAIL,
@@ -1262,6 +1267,7 @@ def inject_globals():
         'ga_tracking_id': GA_TRACKING_ID,
         'sport_seo_slug': SPORT_SEO_SLUGS.get(_sport, ''),
         'sport_results_slug': _SPORT_RESULTS_SLUGS.get(_sport, ''),
+        'is_logged_in': _logged_in,
     }
 
 @app.after_request
@@ -4939,6 +4945,27 @@ BASE_TEMPLATE = """
             white-space: nowrap;
         }
         .nav-donate-btn:hover { opacity: 0.9; color: #fff !important; }
+        .nav-search-wrap { position: relative; flex: 1; max-width: 620px; width: 100%; min-width: 0; }
+        .nav-search {
+            flex: 1;
+            max-width: 620px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            border: 1px solid #E0E4E8;
+            border-radius: 999px;
+            padding: 5px 8px 5px 14px;
+            box-shadow: 0 3px 10px rgba(26,29,35,0.08);
+        }
+        .nav-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: #0f172a; font-size: 0.9em; }
+        .nav-search input::placeholder { color: #475569; }
+        .nav-search button { border: 1px solid #E0E4E8; background: #ffffff; color: #00529B; border-radius: 999px; padding: 8px 14px; font-weight: 800; cursor: pointer; }
+        .nav-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .auth-btn { text-decoration: none; border-radius: 999px; font-weight: 800; font-size: 0.82em; padding: 9px 14px; transition: opacity 0.2s; white-space: nowrap; }
+        .auth-btn.signup { background: #00C076; color: #ffffff; border: 1px solid #00C076; }
+        .auth-btn.login { border: 1px solid #00529B; color: #00529B; background: #fff; }
+        .auth-btn:hover { opacity: 0.9; }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -4946,51 +4973,71 @@ BASE_TEMPLATE = """
         }
         .site-footer {
             background: #ffffff;
-            backdrop-filter: blur(16px);
             border-top: 1px solid rgba(15,23,42,0.12);
-            padding: 18px 30px;
+            padding: 22px 24px 28px;
             color: #475569;
-            font-size: 0.78em;
+            font-size: 0.88em;
         }
-        .footer-inner {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-            flex-wrap: wrap;
+        .footer-outer { max-width: 1200px; margin: 0 auto; }
+        .footer-brand { margin-bottom: 18px; }
+        .footer-columns-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 28px 36px;
+            align-items: start;
         }
-        .footer-left { display: flex; align-items: center; gap: 14px; }
-        .footer-logo-img { height: 32px; width: auto; }
-        .footer-email a { color: #475569; text-decoration: none; font-size: 0.95em; }
-        .footer-email a:hover { color: #0f172a; }
-        .footer-center { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .footer-center a { color: #475569; text-decoration: none; font-size: 0.95em; }
-        .footer-center a:hover { color: #0f172a; }
-        .footer-center span { color: rgba(15,23,42,0.2); }
-        .footer-right { color: #475569; font-size: 0.9em; white-space: nowrap; }
-        .footer-socials { display: flex; align-items: center; gap: 14px; }
-        .footer-socials a { display: flex; opacity: 0.6; transition: opacity 0.2s; }
-        .footer-socials a:hover { opacity: 1; }
-        @media (max-width: 700px) {
-            .footer-inner { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+        .footer-heading {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.55px;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 12px;
+        }
+        .footer-col-blk a {
+            display: block;
+            font-size: 0.88em;
+            line-height: 1.85;
+            color: #475569;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 2px 0;
+        }
+        .footer-col-blk a:hover { color: #00529B; text-decoration: underline; }
+        .footer-bottom { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(15,23,42,0.1); font-size: 0.82em; color: #475569; }
+        @media (max-width: 720px) {
+            .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
         }
         @media (max-width: 1100px) {
             .navbar-content { flex-wrap: wrap; justify-content: center; }
-            .nav-links { justify-content: center; }
+            .nav-search-wrap { order: 3; width: 100%; max-width: 100%; }
         }
         @media (max-width: 768px) {
-            .hamburger { display: flex; }
+            .navbar-content {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                grid-template-areas:
+                    "logo ham"
+                    "search search"
+                    "actions actions"
+                    "links links";
+                align-items: center;
+                gap: 10px 12px;
+            }
+            .navbar .logo { grid-area: logo; justify-self: start; }
+            .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
+            .nav-search-wrap { grid-area: search; width: 100%; max-width: none; order: unset; }
+            .nav-actions { grid-area: actions; width: 100%; justify-content: center; }
             .nav-links {
+                grid-area: links;
                 display: none;
-                flex-basis: 100%;
-                width: 100%;
                 flex-direction: column;
+                flex-wrap: nowrap;
                 align-items: stretch;
-                padding: 10px 0 4px;
+                gap: 0;
+                width: 100%;
+                padding: 4px 0 10px;
                 border-top: 1px solid #E0E4E8;
-                gap: 2px;
                 background: #F4F7F9;
             }
             .nav-links.active { display: flex; }
@@ -5011,23 +5058,38 @@ BASE_TEMPLATE = """
 <body>
     <div class="navbar">
         <div class="navbar-content">
-            <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;">underdogs.bet</a>
-            <div class="hamburger" onclick="toggleMenu()">
+            <a href="/" class="logo" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.1em;color:#0f172a;letter-spacing:0.2px;text-decoration:none;">underdogs.bet</a>
+            <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
                 <span></span>
                 <span></span>
                 <span></span>
             </div>
             <div class="nav-links" id="navLinks">
-                <a href="/nhl-picks">🏒 NHL</a>
-                <a href="/nba-picks">🏀 NBA</a>
-                <a href="/mlb-picks">⚾ MLB</a>
-                <a href="/nfl-picks">🏈 NFL</a>
-                <a href="/ncaab-picks">🎓 NCAAB</a>
-                <a href="/ncaaw-picks">🏀 NCAAW</a>
-                <a href="/ncaaf-picks">🏟️ NCAAF</a>
-                <a href="/wnba-picks">🏀 WNBA</a>
+                <a href="/nhl-picks">NHL</a>
+                <a href="/nba-picks">NBA</a>
+                <a href="/mlb-picks">MLB</a>
+                <a href="/nfl-picks">NFL</a>
+                <a href="/ncaab-picks">NCAAB</a>
+                <a href="/ncaaw-picks">NCAAW</a>
+                <a href="/ncaaf-picks">NCAAF</a>
+                <a href="/wnba-picks">WNBA</a>
                 {% if soccer_enabled %}
-                <a href="/soccer-picks">⚽ Soccer</a>
+                <a href="/soccer-picks">Soccer</a>
+                {% endif %}
+                <a href="/plans">Plans</a>
+            </div>
+            <div class="nav-search-wrap">
+                <form class="nav-search" action="/search" method="get" role="search">
+                    <input type="text" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search">
+                    <button type="submit">Search</button>
+                </form>
+            </div>
+            <div class="nav-actions">
+                {% if is_logged_in %}
+                <a href="/logout" class="auth-btn login">Logout</a>
+                {% else %}
+                <a href="/login" class="auth-btn login">Login</a>
+                <a href="/signup" class="auth-btn signup">Sign Up</a>
                 {% endif %}
             </div>
         </div>
@@ -5037,39 +5099,51 @@ BASE_TEMPLATE = """
         {% block content %}{% endblock %}
     </div>
     <footer class="site-footer">
-        <div class="footer-inner">
-            <div class="footer-left">
-                <a href="/" aria-label="underdogs.bet home" style="text-decoration:none;color:#0f172a;font-weight:900;font-size:1.02em;">underdogs.bet</a>
-                <div class="footer-email"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
+        <div class="footer-outer">
+            <div class="footer-brand"><a href="/" aria-label="underdogs.bet home" style="text-decoration:none;color:#0f172a;font-weight:900;font-size:1.05em;letter-spacing:0.2px;">underdogs.bet</a></div>
+            <div class="footer-columns-3">
+                <div class="footer-col-blk">
+                    <div class="footer-heading">Company</div>
+                    <a href="/plans">Plans &amp; pricing</a>
+                    <a href="/tutorial">How to read picks</a>
+                    <a href="/contact">Contact us</a>
+                    <a href="/privacy">Privacy</a>
+                    <a href="/terms">Terms</a>
+                    <a href="/responsible-gaming">Responsible gaming</a>
+                </div>
+                <div class="footer-col-blk">
+                    <div class="footer-heading">Product</div>
+                    <a href="/#faq">FAQ</a>
+                    <a href="/daily-report">Daily results report</a>
+                    <a href="/search">Search</a>
+                    <a href="/ai-sports-betting-picks-today">AI picks today</a>
+                    <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
+                    <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
+                </div>
+                <div class="footer-col-blk">
+                    <div class="footer-heading">Social</div>
+                    <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X (Twitter)</a>
+                    <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a>
+                    <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a>
+                    <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a>
+                    <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
+                </div>
             </div>
-            <div class="footer-center">
-                <a href="/tutorial">How to Read Picks</a><span>&middot;</span>
-                <a href="/privacy">Privacy</a><span>&middot;</span>
-                <a href="/terms">Terms</a><span>&middot;</span>
-                <a href="/responsible-gaming">Responsible Gaming</a>
-            </div>
-            <div class="footer-socials">
-                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener" title="X"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
-                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
-                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener" title="TikTok"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
-                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" title="YouTube" aria-label="underdogs.bet on YouTube"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0f172a" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
-            </div>
-            <div class="footer-right">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+            <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
         </div>
     </footer>
     
     <script>
         function toggleMenu() {
             const navLinks = document.getElementById('navLinks');
-            navLinks.classList.toggle('active');
+            if (navLinks) navLinks.classList.toggle('active');
         }
         
         // Close menu when clicking a link
         document.addEventListener('DOMContentLoaded', function() {
             const navLinks = document.getElementById('navLinks');
-            const links = navLinks.querySelectorAll('a');
-            links.forEach(link => {
+            if (!navLinks) return;
+            navLinks.querySelectorAll('a').forEach(link => {
                 link.addEventListener('click', function() {
                     navLinks.classList.remove('active');
                 });
@@ -5079,10 +5153,8 @@ BASE_TEMPLATE = """
         // Close menu when clicking outside
         document.addEventListener('click', function(event) {
             const navLinks = document.getElementById('navLinks');
-            const hamburger = document.querySelector('.hamburger');
             const navbar = document.querySelector('.navbar');
-            
-            // If click is outside navbar entirely, close menu
+            if (!navLinks || !navbar) return;
             if (!navbar.contains(event.target)) {
                 navLinks.classList.remove('active');
             }
@@ -5135,6 +5207,27 @@ _SEO_UTILITY_FAQ_FOOTER = """
         <p style="margin:0;">Bet responsibly: only risk what you can afford to lose. These tools support informed decisions—they do not replace judgment, discipline, or bankroll management.</p>
     </div>
 """
+
+CONTACT_PAGE_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+        .contact-wrap{max-width:720px;margin:0 auto;padding:8px 0 40px;}
+        .contact-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:28px 26px;}
+        .contact-card h1{font-size:1.75em;color:#0f172a;margin:0 0 16px;line-height:1.25;}
+        .contact-card p{color:#334155;line-height:1.75;margin:0 0 14px;font-size:1.02em;}
+        .contact-email{font-size:1.05em;font-weight:800;margin-top:18px;}
+        .contact-email a{color:#00529B;text-decoration:none;}
+        .contact-email a:hover{text-decoration:underline;}
+    """
+).replace('{% block content %}{% endblock %}', """
+    <div class="contact-wrap">
+        <div class="contact-card">
+            <h1>Questions, Suggestions, or Technical Issues?</h1>
+            <p>We want to make your experience using Underdogs.bet the best it can be. If you need help, find a bug, or have a suggestion, we want to hear about it! We are always looking for ways to ensure our customers have the best edge possible.</p>
+            <p class="contact-email">Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+        </div>
+    </div>
+""")
 
 RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
@@ -7762,105 +7855,52 @@ def landing_page():
         .units-pill.negative .up-units{color:#D93025;}
         .up-rec{color:#475569;font-size:0.82em;}
 
-        /* ── Footer ── */
+        /* ── Footer (matches site chrome) ── */
         .site-footer{
             background:#ffffff;
-            backdrop-filter:blur(16px);
             border-top:1px solid rgba(15,23,42,0.12);
-            padding:18px 30px 80px;
+            padding:22px 24px 28px;
             color:#475569;
-            font-size:0.78em;
+            font-size:0.88em;
         }
-        .footer-inner{
-            max-width:1200px;
-            margin:0 auto;
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:20px;
-            flex-wrap:wrap;
-        }
-        .footer-left{
-            display:flex;
-            align-items:center;
-            gap:14px;
-        }
-        .footer-logo-img{height:32px;width:auto;}
-        .footer-email a{color:#475569;text-decoration:none;font-size:0.95em;}
-        .footer-email a:hover{color:#0f172a;}
-        .footer-center{
-            display:flex;
-            align-items:center;
-            gap:12px;
-            flex-wrap:wrap;
-        }
-        .footer-center a{color:#475569;text-decoration:none;font-size:0.95em;}
-        .footer-center a:hover{color:#0f172a;}
-        .footer-center span{color:rgba(15,23,42,0.2);}
-        .footer-right{color:#475569;font-size:0.9em;white-space:nowrap;}
-        .footer-socials{
-            display:flex;
-            align-items:center;
-            gap:14px;
-        }
-        .footer-socials a{display:flex;opacity:0.6;transition:opacity 0.2s;}
-        .footer-socials a:hover{opacity:1;}
-        .footer-socials img{width:20px;height:20px;filter:none;}
-        .footer-columns{
-            width:100%;
-            max-width:1200px;
-            margin:10px auto 0;
+        .footer-outer{max-width:1200px;margin:0 auto;}
+        .footer-brand{margin-bottom:18px;}
+        .footer-columns-3{
             display:grid;
-            grid-template-columns:repeat(5,minmax(0,1fr));
-            gap:18px 24px;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:28px 36px;
+            align-items:start;
         }
-        .footer-col-title{
-            font-size:0.75em;
+        .footer-heading{
+            font-size:0.72em;
             text-transform:uppercase;
-            letter-spacing:0.45px;
+            letter-spacing:0.55px;
             font-weight:800;
-            color:#334155;
-            margin-bottom:8px;
+            color:#0f172a;
+            margin:0 0 12px;
         }
-        .footer-col a{
+        .footer-col-blk a{
             display:block;
-            font-size:0.84em;
-            line-height:1.7;
-            color:#0f172a;
+            font-size:0.88em;
+            line-height:1.85;
+            color:#475569;
             text-decoration:none;
+            font-weight:500;
+            padding:2px 0;
         }
-        .footer-col a:hover{text-decoration:underline;}
-        .footer-icon-links{
-            display:flex;
-            gap:10px;
-            flex-wrap:wrap;
-            align-items:center;
-        }
-        .footer-icon-links a{
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            width:30px;
-            height:30px;
-            border:1px solid rgba(15,23,42,0.16);
-            border-radius:999px;
-            background:#ffffff;
-            color:#0f172a;
-            text-decoration:none;
-        }
+        .footer-col-blk a:hover{color:#00529B;text-decoration:underline;}
+        .footer-bottom{margin-top:22px;padding-top:16px;border-top:1px solid rgba(15,23,42,0.1);font-size:0.82em;color:#475569;}
+        .footer-share-strip{margin-top:18px;padding-top:18px;border-top:1px solid #E0E4E8;}
+        .footer-share-strip .footer-subhead{font-size:0.72em;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:0.45px;margin-bottom:10px;}
+        .footer-icon-links{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+        .footer-icon-links a{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid rgba(15,23,42,0.16);border-radius:999px;background:#ffffff;color:#0f172a;text-decoration:none;}
         .footer-icon-links a:hover{background:#f4f7f9;}
         .footer-icon-links svg{width:16px;height:16px;fill:currentColor;}
-        .footer-note{
-            max-width:1200px;
-            margin:10px auto 0;
-            font-size:0.75em;
-            color:#475569;
-        }
+        .footer-note{max-width:1200px;margin:14px auto 0;font-size:0.75em;color:#475569;line-height:1.5;}
 
         /* ── Responsive ── */
-        @media(max-width:700px){
-            .footer-inner{flex-direction:column;align-items:center;text-align:center;gap:12px;}
-            .footer-columns{grid-template-columns:repeat(2,minmax(0,1fr));}
+        @media(max-width:720px){
+            .footer-columns-3{grid-template-columns:1fr;gap:22px;}
         }
         @media(max-width:640px){
             .hero{padding:60px 20px 40px;}
@@ -7955,6 +7995,7 @@ def landing_page():
             {% if soccer_enabled %}
             <a href="/soccer-picks">Soccer</a>
             {% endif %}
+            <a href="/plans">Plans</a>
         </div>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
@@ -8017,16 +8058,6 @@ def landing_page():
         <p style="text-align:center;font-size:0.78em;color:#475569;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#00529B;text-decoration:underline;font-weight:700;">View full results &rarr;</a></p>
     </div>
 </div>
-
-<!-- Sticky Bottom Bar -->
-<div style="position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(7,10,20,0.45);backdrop-filter:blur(16px);border-top:1px solid rgba(251,191,36,0.15);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
-    <div style="display:flex;align-items:center;gap:12px;">
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:1.1em;">🏆</div>
-        <span style="font-weight:700;color:#f8fafc;font-size:0.92em;">Premium Membership</span>
-    </div>
-    <a href="/plans" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 24px;border-radius:999px;font-weight:800;text-decoration:none;font-size:0.88em;box-shadow:0 4px 16px rgba(251,191,36,0.3);">Join Now</a>
-</div>
-<style>body{padding-bottom:66px;}</style>
 
 <!-- Today's AI Picks (live product preview) -->
 {% if todays_picks %}
@@ -8362,62 +8393,59 @@ def landing_page():
 
 <!-- Footer -->
 <footer class="site-footer">
-    <div class="footer-inner">
-        <div class="footer-left">
-            <a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a>
+    <div class="footer-outer">
+        <div class="footer-brand"><a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.05em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a></div>
+        <div class="footer-columns-3">
+            <div class="footer-col-blk">
+                <div class="footer-heading">Company</div>
+                <a href="/plans">Plans &amp; pricing</a>
+                <a href="/tutorial">How to read picks</a>
+                <a href="/contact">Contact us</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/responsible-gaming">Responsible gaming</a>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Product</div>
+                <a href="/#faq">FAQ</a>
+                <a href="/daily-report">Daily results report</a>
+                <a href="/search">Search</a>
+                <a href="/ai-sports-betting-picks-today">AI picks today</a>
+                <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
+                <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
+                <a href="/mlb-picks">MLB picks</a>
+                <a href="/nba-picks">NBA picks</a>
+                <a href="/nhl-picks">NHL picks</a>
+                <a href="/nfl-picks">NFL picks</a>
+                <a href="#" onclick="document.getElementById('footer-archive').style.display='block'; this.style.display='none'; return false;">Recent dated picks archive</a>
+                <div id="footer-archive" style="display:none;margin-top:10px;">
+                    {% for _lnk in seo_archive_links %}
+                    <a href="{{ _lnk.url }}">{{ _lnk.label }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Social</div>
+                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X (Twitter)</a>
+                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a>
+                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
+            </div>
         </div>
-        <div class="footer-columns">
-            <div class="footer-col">
-                <div class="footer-col-title">Site</div>
-                <a href="/tutorial">Tutorial</a>
-                <a href="/privacy">Privacy Center</a>
-                <a href="/terms">Legal Terms</a>
-                <a href="/responsible-gaming">Responsible Gaming</a>
-            </div>
-            <div class="footer-col">
-                <div class="footer-col-title">Share underdogs.bet</div>
-                <div class="footer-icon-links">
-                    <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
-                    <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12S0 5.446 0 12.073c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-                    <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.48 6S0 4.88 0 3.5 1.12 1 2.48 1s2.5 1.12 2.5 2.5zM.5 8h4v15h-4V8zm7 0h3.8v2.1h.1c.53-1 1.82-2.1 3.75-2.1 4 0 4.74 2.64 4.74 6.08V23h-4v-7.8c0-1.86-.03-4.25-2.59-4.25-2.59 0-2.99 2.02-2.99 4.12V23h-4V8z"/></svg></a>
-                    <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.52 3.48A11.93 11.93 0 0012.06 0C5.49 0 .14 5.35.14 11.92c0 2.1.55 4.16 1.6 5.98L0 24l6.28-1.64a11.9 11.9 0 005.78 1.48h.01c6.57 0 11.92-5.35 11.92-11.92 0-3.18-1.24-6.17-3.47-8.44zM12.07 21.8c-1.8 0-3.56-.48-5.11-1.39l-.37-.22-3.73.98 1-3.64-.24-.38a9.88 9.88 0 01-1.52-5.23c0-5.45 4.43-9.88 9.88-9.88 2.64 0 5.12 1.03 6.98 2.9a9.8 9.8 0 012.9 6.98c0 5.45-4.43 9.88-9.88 9.88zm5.42-7.42c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.27-.47-2.42-1.49a9.06 9.06 0 01-1.68-2.1c-.18-.3-.02-.46.14-.6.14-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.03-.53-.08-.15-.68-1.63-.93-2.23-.24-.58-.49-.5-.68-.5h-.58c-.2 0-.53.08-.8.38-.28.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.13 3.25 5.15 4.56.72.31 1.29.5 1.73.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.31.18-1.43-.08-.12-.28-.2-.58-.35z"/></svg></a>
-                    <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Reddit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12c0-1.47-1.2-2.67-2.67-2.67-.72 0-1.37.29-1.85.76-1.81-1.25-4.24-2.06-6.94-2.15l1.17-3.68 3.18.74a2.16 2.16 0 002.15 1.9c1.2 0 2.17-.97 2.17-2.17S20.24 2.56 19.04 2.56c-.86 0-1.6.5-1.95 1.22l-3.67-.86a.67.67 0 00-.79.44l-1.45 4.58c-2.84.04-5.39.86-7.27 2.16a2.65 2.65 0 00-1.9-.8A2.67 2.67 0 000 12a2.67 2.67 0 001.42 2.35c-.02.2-.03.4-.03.6 0 3.43 4.07 6.22 9.09 6.22s9.09-2.79 9.09-6.22c0-.18-.01-.36-.03-.54A2.66 2.66 0 0024 12zm-15.5 2.25a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm8 3.8c-.98.98-2.65 1.45-4.5 1.45-1.85 0-3.52-.47-4.5-1.45a.75.75 0 111.06-1.06c.62.62 1.8 1.01 3.44 1.01s2.82-.39 3.44-1.01a.75.75 0 111.06 1.06zm-.25-2.3a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg></a>
-                    <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" aria-label="Share by Email"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h20a1 1 0 011 1v14a1 1 0 01-1 1H2a1 1 0 01-1-1V5a1 1 0 011-1zm18.8 2H3.2L12 12.4 20.8 6zM3 18h18V7.2l-8.5 6.2a1 1 0 01-1.2 0L3 7.2V18z"/></svg></a>
-                </div>
-            </div>
-            <div class="footer-col">
-                <div class="footer-col-title">Social</div>
-                <div class="footer-icon-links">
-                    <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 2C4.46 2 2 4.46 2 7.5v9C2 19.54 4.46 22 7.5 22h9c3.04 0 5.5-2.46 5.5-5.5v-9C22 4.46 19.54 2 16.5 2h-9zm9 2c1.93 0 3.5 1.57 3.5 3.5v9c0 1.93-1.57 3.5-3.5 3.5h-9C5.57 20 4 18.43 4 16.5v-9C4 5.57 5.57 4 7.5 4h9zm-4.5 3a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6zm5.25-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z"/></svg></a>
-                    <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8.5c-1.9-.1-3.4-1.7-3.5-3.6V2h-3.2v13.1c0 1.4-1.1 2.5-2.5 2.5s-2.5-1.1-2.5-2.5 1.1-2.5 2.5-2.5c.3 0 .6.1.9.1V9.5c-.3 0-.6-.1-.9-.1-3.1 0-5.6 2.5-5.6 5.6s2.5 5.6 5.6 5.6 5.6-2.5 5.6-5.6V9.4c1 1 2.4 1.6 3.9 1.6V8.5z"/></svg></a>
-                    <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 00-2.1 2.1A31.4 31.4 0 000 12a31.4 31.4 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.4 31.4 0 0024 12a31.4 31.4 0 00-.5-5.8zM9.7 15.5V8.5l6.2 3.5-6.2 3.5z"/></svg></a>
-                </div>
-            </div>
-            <div class="footer-col">
-                <div class="footer-col-title">Contact</div>
-                <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
-            </div>
-            <div class="footer-col">
-                <div class="footer-col-title">Explore</div>
-                <a href="/mlb-picks">MLB AI Picks &amp; Projections</a>
-                <a href="/nba-picks">NBA AI Picks &amp; Projections</a>
-                <a href="/nhl-picks">NHL AI Picks &amp; Projections</a>
-                <a href="/nfl-picks">NFL AI Picks &amp; Projections</a>
-                <a href="/soccer-picks">Soccer AI Picks &amp; Projections</a>
-                <a href="/ncaab-picks">NCAAB AI Picks &amp; Projections</a>
-                <a href="/wnba-picks">WNBA AI Picks &amp; Projections</a>
-                <a href="/daily-report">Daily Betting Results Report</a>
-                <a href="#" onclick="document.getElementById('footer-archive').style.display='block'; this.style.display='none'; return false;">Recent dated picks archive (last 3 days per league)</a>
-            </div>
-            <div id="footer-archive" class="footer-col" style="display:none;grid-column:1/-1;">
-                <div class="footer-col-title">Recent dated picks archive (last 3 days per league)</div>
-                {% for _lnk in seo_archive_links %}
-                <a href="{{ _lnk.url }}">{{ _lnk.label }}</a>
-                {% endfor %}
+        <div class="footer-share-strip">
+            <div class="footer-subhead">Share this page</div>
+            <div class="footer-icon-links">
+                <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+                <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12S0 5.446 0 12.073c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.48 6S0 4.88 0 3.5 1.12 1 2.48 1s2.5 1.12 2.5 2.5zM.5 8h4v15h-4V8zm7 0h3.8v2.1h.1c.53-1 1.82-2.1 3.75-2.1 4 0 4.74 2.64 4.74 6.08V23h-4v-7.8c0-1.86-.03-4.25-2.59-4.25-2.59 0-2.99 2.02-2.99 4.12V23h-4V8z"/></svg></a>
+                <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.52 3.48A11.93 11.93 0 0012.06 0C5.49 0 .14 5.35.14 11.92c0 2.1.55 4.16 1.6 5.98L0 24l6.28-1.64a11.9 11.9 0 005.78 1.48h.01c6.57 0 11.92-5.35 11.92-11.92 0-3.18-1.24-6.17-3.47-8.44zM12.07 21.8c-1.8 0-3.56-.48-5.11-1.39l-.37-.22-3.73.98 1-3.64-.24-.38a9.88 9.88 0 01-1.52-5.23c0-5.45 4.43-9.88 9.88-9.88 2.64 0 5.12 1.03 6.98 2.9a9.8 9.8 0 012.9 6.98c0 5.45-4.43 9.88-9.88 9.88zm5.42-7.42c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.27-.47-2.42-1.49a9.06 9.06 0 01-1.68-2.1c-.18-.3-.02-.46.14-.6.14-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.03-.53-.08-.15-.68-1.63-.93-2.23-.24-.58-.49-.5-.68-.5h-.58c-.2 0-.53.08-.8.38-.28.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.13 3.25 5.15 4.56.72.31 1.29.5 1.73.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.31.18-1.43-.08-.12-.28-.2-.58-.35z"/></svg></a>
+                <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Reddit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12c0-1.47-1.2-2.67-2.67-2.67-.72 0-1.37.29-1.85.76-1.81-1.25-4.24-2.06-6.94-2.15l1.17-3.68 3.18.74a2.16 2.16 0 002.15 1.9c1.2 0 2.17-.97 2.17-2.17S20.24 2.56 19.04 2.56c-.86 0-1.6.5-1.95 1.22l-3.67-.86a.67.67 0 00-.79.44l-1.45 4.58c-2.84.04-5.39.86-7.27 2.16a2.65 2.65 0 00-1.9-.8A2.67 2.67 0 000 12a2.67 2.67 0 001.42 2.35c-.02.2-.03.4-.03.6 0 3.43 4.07 6.22 9.09 6.22s9.09-2.79 9.09-6.22c0-.18-.01-.36-.03-.54A2.66 2.66 0 0024 12zm-15.5 2.25a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm8 3.8c-.98.98-2.65 1.45-4.5 1.45-1.85 0-3.52-.47-4.5-1.45a.75.75 0 111.06-1.06c.62.62 1.8 1.01 3.44 1.01s2.82-.39 3.44-1.01a.75.75 0 111.06 1.06zm-.25-2.3a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg></a>
+                <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" aria-label="Share by Email"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h20a1 1 0 011 1v14a1 1 0 01-1 1H2a1 1 0 01-1-1V5a1 1 0 011-1zm18.8 2H3.2L12 12.4 20.8 6zM3 18h18V7.2l-8.5 6.2a1 1 0 01-1.2 0L3 7.2V18z"/></svg></a>
             </div>
         </div>
         <div class="footer-note">* Share buttons pre-fill {{ landing_share_title }} and sample NBA/NHL lines (same figures as the performance stats card on this page).</div>
-        <div class="footer-right">© 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+        <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
 
@@ -8809,24 +8837,55 @@ def api_search():
 
 @app.route('/api/performance-data')
 def api_performance_data():
-    """Lightweight performance rows for client-side filtering UI."""
+    """Per-model, per-game performance rows for client-side filtering UI."""
     rows_out = []
     try:
         conn = get_db_connection()
         rows = conn.execute(
             """
-            SELECT sport, game_date, win_prediction_correct,
-                   elo_home_prob, logistic_home_prob, xgboost_home_prob, meta_home_prob
-            FROM predictions
-            WHERE win_prediction_correct IS NOT NULL
-            ORDER BY created_at DESC
-            LIMIT 1500
+            WITH ranked_completed AS (
+                SELECT
+                    p.sport,
+                    p.game_date,
+                    p.created_at,
+                    p.elo_home_prob,
+                    p.logistic_home_prob,
+                    p.xgboost_home_prob,
+                    p.catboost_home_prob,
+                    p.meta_home_prob,
+                    COALESCE(p.actual_home_score, g.home_score) AS home_score,
+                    COALESCE(p.actual_away_score, g.away_score) AS away_score,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY p.sport
+                        ORDER BY datetime(p.created_at) DESC, p.game_date DESC
+                    ) AS sport_rank
+                FROM predictions p
+                LEFT JOIN games g
+                  ON g.sport = p.sport
+                 AND g.game_id = p.game_id
+                WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
+                  AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
+            )
+            SELECT
+                sport,
+                game_date,
+                created_at,
+                home_score,
+                away_score,
+                elo_home_prob,
+                logistic_home_prob,
+                xgboost_home_prob,
+                catboost_home_prob,
+                meta_home_prob
+            FROM ranked_completed
+            WHERE sport_rank <= 200
+            ORDER BY datetime(created_at) DESC, game_date DESC
             """
         ).fetchall()
         conn.close()
         for r in rows:
             for model, prob_col in (
-                ('Grinder2', 'elo_home_prob'),
+                ('Grinder2', 'catboost_home_prob'),
                 ('Edge', 'elo_home_prob'),
                 ('Takedown', 'logistic_home_prob'),
                 ('XSharp', 'xgboost_home_prob'),
@@ -8835,14 +8894,23 @@ def api_performance_data():
                 p = r[prob_col]
                 if p is None:
                     continue
+                home_score = r['home_score']
+                away_score = r['away_score']
+                if home_score is None or away_score is None:
+                    continue
+                if float(home_score) == float(away_score):
+                    continue
+                picked_home = float(p) >= 0.5
+                home_won = float(home_score) > float(away_score)
+                was_correct = picked_home == home_won
                 conf = round(max(float(p), 1.0 - float(p)) * 100.0, 1)
                 rows_out.append({
                     'model': model,
                     'confidence': conf,
-                    'result': 'win' if int(r['win_prediction_correct'] or 0) == 1 else 'loss',
+                    'result': 'win' if was_correct else 'loss',
                     'sport': (r['sport'] or '').upper(),
                     'date': r['game_date'] or '',
-                    'units': 1 if int(r['win_prediction_correct'] or 0) == 1 else -1,
+                    'units': 1 if was_correct else -1,
                 })
         # Fallback to backtest aggregates when graded prediction rows are unavailable.
         if not rows_out:
@@ -9378,6 +9446,15 @@ def responsible_gaming_page():
         page='responsible-gaming',
         page_title='Responsible Gaming Resources | underdogs.bet',
         page_description='Find responsible gaming resources and support in Canada and the United States. underdogs.bet promotes safe and responsible play.'
+    )
+
+@app.route('/contact')
+def contact_page():
+    return render_template_string(
+        CONTACT_PAGE_TEMPLATE,
+        page='contact',
+        page_title='Contact us | underdogs.bet',
+        page_description='Questions, suggestions, or technical issues for underdogs.bet — reach our team by email.',
     )
 
 @app.route('/privacy')

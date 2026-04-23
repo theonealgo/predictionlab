@@ -1,129 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy | underdogs.bet</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #ffffff;
-            color: #fff;
-            line-height: 1.7;
-            position: relative;
-        }
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background: rgba(7,10,20,0.88);
-            z-index: 0;
-        }
-        body > * { position: relative; z-index: 1; }
-        .page {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 48px 24px 80px;
-        }
-        .top-bar {
-            display: flex;
-            justify-content: flex-start;
-            margin-bottom: 24px;
-        }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255,255,255,0.08);
-            color: #fff;
-            text-decoration: none;
-            padding: 10px 16px;
-            border-radius: 10px;
-            font-weight: 700;
-            transition: background 0.2s;
-        }
-        .btn:hover { background: rgba(255,255,255,0.15); }
-        h1 {
-            font-size: clamp(1.6rem, 4vw, 2.2rem);
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            margin-bottom: 6px;
-        }
-        .sub {
-            color: #94a3b8;
-            margin-bottom: 32px;
-            font-size: 0.95rem;
-        }
-        .card {
-            background: rgba(15,23,42,0.85);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 16px;
-            padding: 36px 32px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            color: #e2e8f0;
-            backdrop-filter: blur(8px);
-        }
-        h2 {
-            font-size: 1.05rem;
-            font-weight: 700;
-            color: #fff;
-            margin: 28px 0 8px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid rgba(255,255,255,0.15);
-        }
-        h2:first-of-type { margin-top: 0; }
-        h3 {
-            font-size: 0.96rem;
-            font-weight: 700;
-            color: #e2e8f0;
-            margin: 16px 0 6px;
-        }
-        p {
-            font-size: 0.94rem;
-            color: #cbd5e1;
-            margin-bottom: 10px;
-            line-height: 1.75;
-        }
-        ul {
-            margin: 8px 0 12px 20px;
-            color: #cbd5e1;
-            font-size: 0.94rem;
-            line-height: 1.8;
-        }
-        .callout {
-            background: rgba(255,255,255,0.06);
-            border-left: 4px solid #10b981;
-            padding: 14px 18px;
-            border-radius: 8px;
-            margin: 14px 0;
-            font-weight: 600;
-            font-size: 0.93rem;
-            color: #e2e8f0;
-        }
-        .contact-block {
-            background: rgba(255,255,255,0.06);
-            border-radius: 10px;
-            padding: 16px 20px;
-            margin-top: 12px;
-            font-size: 0.94rem;
-            color: #e2e8f0;
-        }
-        .contact-block a { color: #60a5fa; text-decoration: none; }
-        .contact-block a:hover { text-decoration: underline; }
-    </style>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
-    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-R4XM0WKTGG');</script>
-</head>
-<body>
-    <div class="page">
-        <div class="top-bar">
-            <a class="btn" href="/">← Home</a>
-        </div>
-        <h1>Privacy Policy &mdash; Underdogs.bet</h1>
-        <p class="sub">Last Updated: April 7, 2026</p>
-
-        <div class="card">
+{% extends "underdogs_layout.html" %}
+{% block title %}Privacy Policy | underdogs.bet{% endblock %}
+{% block head_meta %}
+<meta name="description" content="Privacy policy for underdogs.bet: how we collect, use, store, and protect your information.">
+{% endblock %}
+{% block content %}
+<article class="legal-card">
+            <h1>Privacy Policy &mdash; Underdogs.bet</h1>
+            <p class="legal-sub">Last Updated: April 7, 2026</p>
 
             <h2>1. Introduction</h2>
             <p>This Privacy Policy explains how Underdogs.bet (&ldquo;we,&rdquo; &ldquo;us,&rdquo; &ldquo;our&rdquo;) collects, uses, stores, and protects your personal information when you access our website, platform, or related services (&ldquo;Services&rdquo;).</p>
@@ -211,7 +94,7 @@
 
             <h2>9. Children&rsquo;s Privacy</h2>
             <p>Underdogs.bet does not knowingly collect information from individuals under <strong>21 years of age</strong>.</p>
-            <p>If we discover data belonging to a minor, we will delete it promptly. If you believe a minor has used our Services, contact us at <a href="mailto:underdogsbetemail@gmail.com" style="color:#2563eb;">underdogsbetemail@gmail.com</a>.</p>
+            <p>If we discover data belonging to a minor, we will delete it promptly. If you believe a minor has used our Services, please reach us through our <a href="/contact">contact page</a>.</p>
 
             <h2>10. Your Privacy Rights</h2>
             <p>Depending on your location, you may have rights such as:</p>
@@ -222,7 +105,7 @@
                 <li>Withdrawing consent</li>
                 <li>Requesting a copy of your data</li>
             </ul>
-            <p>To exercise these rights, contact us at <a href="mailto:underdogsbetemail@gmail.com" style="color:#2563eb;">underdogsbetemail@gmail.com</a>. We will respond in accordance with applicable privacy laws.</p>
+            <p>To exercise these rights, <a href="/contact">contact us</a>. We will respond in accordance with applicable privacy laws.</p>
 
             <h2>11. Do&#8209;Not&#8209;Track Signals</h2>
             <p>Our Services do not currently respond to Do&#8209;Not&#8209;Track (DNT) signals due to the lack of a universal standard.</p>
@@ -231,18 +114,10 @@
             <p>We may update this Privacy Policy periodically. The &ldquo;Last Updated&rdquo; date reflects the most recent revision. Significant changes may be communicated through email or platform notifications.</p>
 
             <h2>13. Contact Us</h2>
-            <p>For questions or concerns about this Privacy Policy, contact us at:</p>
-            <div class="contact-block">
-                &#128231; <a href="mailto:underdogsbetemail@gmail.com">underdogsbetemail@gmail.com</a>
-            </div>
+            <p>For questions or concerns about this Privacy Policy, please use our <a href="/contact">contact page</a>.</p>
 
             <h2>14. Requesting Data Access or Deletion</h2>
-            <p>To request access, updates, or deletion of your personal information, email:</p>
-            <div class="contact-block">
-                &#128231; <a href="mailto:underdogsbetemail@gmail.com">underdogsbetemail@gmail.com</a>
-            </div>
+            <p>To request access, updates, or deletion of your personal information, reach out through our <a href="/contact">contact page</a>.</p>
 
-        </div>
-    </div>
-</body>
-</html>
+</article>
+{% endblock %}
