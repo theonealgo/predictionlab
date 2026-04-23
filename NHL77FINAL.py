@@ -5119,6 +5119,15 @@ BASE_TEMPLATE = """
                     <a href="/ai-sports-betting-picks-today">AI picks today</a>
                     <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                     <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
+                    <a href="/mlb-picks">MLB picks</a>
+                    <a href="/nba-picks">NBA picks</a>
+                    <a href="/nhl-picks">NHL picks</a>
+                    <a href="/nfl-picks">NFL picks</a>
+                    <a href="/ncaab-picks">NCAAB picks</a>
+                    <a href="/ncaaw-picks">NCAAW picks</a>
+                    <a href="/ncaaf-picks">NCAAF picks</a>
+                    <a href="/wnba-picks">WNBA picks</a>
+                    {% if soccer_enabled %}<a href="/soccer-picks">Soccer picks</a>{% endif %}
                 </div>
                 <div class="footer-col-blk">
                     <div class="footer-heading">Social</div>
@@ -7418,6 +7427,7 @@ def landing_page():
             background:#ffffff;
             color:var(--text);
             min-height:100vh;
+            padding-bottom:58px;
             overflow-x:hidden;
             position:relative;
         }
@@ -7890,13 +7900,13 @@ def landing_page():
         }
         .footer-col-blk a:hover{color:#00529B;text-decoration:underline;}
         .footer-bottom{margin-top:22px;padding-top:16px;border-top:1px solid rgba(15,23,42,0.1);font-size:0.82em;color:#475569;}
-        .footer-share-strip{margin-top:18px;padding-top:18px;border-top:1px solid #E0E4E8;}
-        .footer-share-strip .footer-subhead{font-size:0.72em;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:0.45px;margin-bottom:10px;}
-        .footer-icon-links{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-        .footer-icon-links a{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid rgba(15,23,42,0.16);border-radius:999px;background:#ffffff;color:#0f172a;text-decoration:none;}
-        .footer-icon-links a:hover{background:#f4f7f9;}
-        .footer-icon-links svg{width:16px;height:16px;fill:currentColor;}
-        .footer-note{max-width:1200px;margin:14px auto 0;font-size:0.75em;color:#475569;line-height:1.5;}
+        .join-premium-bar{position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
+        .join-premium-inner{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+        .join-premium-copy{color:#e2e8f0;font-size:0.86em;font-weight:600;line-height:1.35;}
+        .join-premium-actions{display:flex;align-items:center;gap:8px;}
+        .join-premium-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.82em;}
+        .join-premium-close{border:1px solid rgba(255,255,255,0.3);background:transparent;color:#fff;border-radius:999px;width:28px;height:28px;line-height:1;cursor:pointer;font-size:18px;}
+        .join-premium-close:hover{background:rgba(255,255,255,0.1);}
 
         /* ── Responsive ── */
         @media(max-width:720px){
@@ -7907,6 +7917,8 @@ def landing_page():
             .free-banner{flex-direction:column;}
             .donate-card{padding:36px 24px;}
             .weekly-banner{margin:0 16px;}
+            .join-premium-inner{padding:8px 12px;}
+            .join-premium-copy{font-size:0.8em;}
         }
         @media (min-width: 769px) {
             body{background-attachment:fixed;}
@@ -8035,7 +8047,7 @@ def landing_page():
 </style>
 
 <!-- Proof Section -->
-<div style="max-width:800px;margin:0 auto;padding:0 24px 20px;">
+<div style="max-width:800px;margin:22px auto 0;padding:0 24px 20px;">
     <div style="background:#f8fafc;border:1px solid #E0E4E8;border-radius:14px;padding:20px 24px;">
         <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;text-align:center;">
             <div style="min-width:120px;">
@@ -8126,6 +8138,9 @@ def landing_page():
         <div class="perf-answer">
             <div class="perf-answer-title" id="perfAnswerTitle">Answers for current filters</div>
             <div class="perf-answer-list" id="perfAnswerList"></div>
+        </div>
+        <div style="margin-top:12px;text-align:center;">
+            <a href="/plans" style="display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.84em;">Join Premium for Full Card</a>
         </div>
     </div>
 </div>
@@ -8417,12 +8432,11 @@ def landing_page():
                 <a href="/nba-picks">NBA picks</a>
                 <a href="/nhl-picks">NHL picks</a>
                 <a href="/nfl-picks">NFL picks</a>
-                <a href="#" onclick="document.getElementById('footer-archive').style.display='block'; this.style.display='none'; return false;">Recent dated picks archive</a>
-                <div id="footer-archive" style="display:none;margin-top:10px;">
-                    {% for _lnk in seo_archive_links %}
-                    <a href="{{ _lnk.url }}">{{ _lnk.label }}</a>
-                    {% endfor %}
-                </div>
+                <a href="/ncaab-picks">NCAAB picks</a>
+                <a href="/ncaaw-picks">NCAAW picks</a>
+                <a href="/ncaaf-picks">NCAAF picks</a>
+                <a href="/wnba-picks">WNBA picks</a>
+                {% if soccer_enabled %}<a href="/soccer-picks">Soccer picks</a>{% endif %}
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
@@ -8433,21 +8447,19 @@ def landing_page():
                 <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
             </div>
         </div>
-        <div class="footer-share-strip">
-            <div class="footer-subhead">Share this page</div>
-            <div class="footer-icon-links">
-                <a href="https://twitter.com/intent/tweet?text={{ landing_share_tweet|urlencode }}&amp;url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
-                <a href="https://www.facebook.com/sharer/sharer.php?u={{ landing_share_url|urlencode }}&amp;quote={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12S0 5.446 0 12.073c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ landing_share_url|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.48 6S0 4.88 0 3.5 1.12 1 2.48 1s2.5 1.12 2.5 2.5zM.5 8h4v15h-4V8zm7 0h3.8v2.1h.1c.53-1 1.82-2.1 3.75-2.1 4 0 4.74 2.64 4.74 6.08V23h-4v-7.8c0-1.86-.03-4.25-2.59-4.25-2.59 0-2.99 2.02-2.99 4.12V23h-4V8z"/></svg></a>
-                <a href="https://wa.me/?text={{ landing_share_tweet|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.52 3.48A11.93 11.93 0 0012.06 0C5.49 0 .14 5.35.14 11.92c0 2.1.55 4.16 1.6 5.98L0 24l6.28-1.64a11.9 11.9 0 005.78 1.48h.01c6.57 0 11.92-5.35 11.92-11.92 0-3.18-1.24-6.17-3.47-8.44zM12.07 21.8c-1.8 0-3.56-.48-5.11-1.39l-.37-.22-3.73.98 1-3.64-.24-.38a9.88 9.88 0 01-1.52-5.23c0-5.45 4.43-9.88 9.88-9.88 2.64 0 5.12 1.03 6.98 2.9a9.8 9.8 0 012.9 6.98c0 5.45-4.43 9.88-9.88 9.88zm5.42-7.42c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.27-.47-2.42-1.49a9.06 9.06 0 01-1.68-2.1c-.18-.3-.02-.46.14-.6.14-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.03-.53-.08-.15-.68-1.63-.93-2.23-.24-.58-.49-.5-.68-.5h-.58c-.2 0-.53.08-.8.38-.28.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.13 3.25 5.15 4.56.72.31 1.29.5 1.73.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.31.18-1.43-.08-.12-.28-.2-.58-.35z"/></svg></a>
-                <a href="https://reddit.com/submit?url={{ landing_share_url|urlencode }}&amp;title={{ landing_share_title|urlencode }}" target="_blank" rel="noopener noreferrer" aria-label="Share on Reddit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12c0-1.47-1.2-2.67-2.67-2.67-.72 0-1.37.29-1.85.76-1.81-1.25-4.24-2.06-6.94-2.15l1.17-3.68 3.18.74a2.16 2.16 0 002.15 1.9c1.2 0 2.17-.97 2.17-2.17S20.24 2.56 19.04 2.56c-.86 0-1.6.5-1.95 1.22l-3.67-.86a.67.67 0 00-.79.44l-1.45 4.58c-2.84.04-5.39.86-7.27 2.16a2.65 2.65 0 00-1.9-.8A2.67 2.67 0 000 12a2.67 2.67 0 001.42 2.35c-.02.2-.03.4-.03.6 0 3.43 4.07 6.22 9.09 6.22s9.09-2.79 9.09-6.22c0-.18-.01-.36-.03-.54A2.66 2.66 0 0024 12zm-15.5 2.25a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm8 3.8c-.98.98-2.65 1.45-4.5 1.45-1.85 0-3.52-.47-4.5-1.45a.75.75 0 111.06-1.06c.62.62 1.8 1.01 3.44 1.01s2.82-.39 3.44-1.01a.75.75 0 111.06 1.06zm-.25-2.3a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg></a>
-                <a href="mailto:?subject={{ landing_share_title|urlencode }}&amp;body={{ landing_share_body|urlencode }}" aria-label="Share by Email"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h20a1 1 0 011 1v14a1 1 0 01-1 1H2a1 1 0 01-1-1V5a1 1 0 011-1zm18.8 2H3.2L12 12.4 20.8 6zM3 18h18V7.2l-8.5 6.2a1 1 0 01-1.2 0L3 7.2V18z"/></svg></a>
-            </div>
-        </div>
-        <div class="footer-note">* Share buttons pre-fill {{ landing_share_title }} and sample NBA/NHL lines (same figures as the performance stats card on this page).</div>
         <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
+
+<div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
+    <div class="join-premium-inner">
+        <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
+        <div class="join-premium-actions">
+            <a href="/plans" class="join-premium-btn">Join Now</a>
+            <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
+        </div>
+    </div>
+</div>
 
 <script>
     function toggleMenu() {
@@ -8843,47 +8855,34 @@ def api_performance_data():
         conn = get_db_connection()
         rows = conn.execute(
             """
-            WITH ranked_completed AS (
-                SELECT
-                    p.sport,
-                    p.game_date,
-                    p.created_at,
-                    p.elo_home_prob,
-                    p.logistic_home_prob,
-                    p.xgboost_home_prob,
-                    p.catboost_home_prob,
-                    p.meta_home_prob,
-                    COALESCE(p.actual_home_score, g.home_score) AS home_score,
-                    COALESCE(p.actual_away_score, g.away_score) AS away_score,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY p.sport
-                        ORDER BY datetime(p.created_at) DESC, p.game_date DESC
-                    ) AS sport_rank
-                FROM predictions p
-                LEFT JOIN games g
-                  ON g.sport = p.sport
-                 AND g.game_id = p.game_id
-                WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
-                  AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
-            )
             SELECT
-                sport,
-                game_date,
-                created_at,
-                home_score,
-                away_score,
-                elo_home_prob,
-                logistic_home_prob,
-                xgboost_home_prob,
-                catboost_home_prob,
-                meta_home_prob
-            FROM ranked_completed
-            WHERE sport_rank <= 200
-            ORDER BY datetime(created_at) DESC, game_date DESC
+                p.sport,
+                p.game_date,
+                p.created_at,
+                COALESCE(p.actual_home_score, g.home_score) AS home_score,
+                COALESCE(p.actual_away_score, g.away_score) AS away_score,
+                p.elo_home_prob,
+                p.logistic_home_prob,
+                p.xgboost_home_prob,
+                p.catboost_home_prob,
+                p.meta_home_prob
+            FROM predictions p
+            LEFT JOIN games g
+              ON g.sport = p.sport
+             AND g.game_id = p.game_id
+            WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
+              AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
+            ORDER BY datetime(p.created_at) DESC
+            LIMIT 6000
             """
         ).fetchall()
         conn.close()
+        per_sport_seen = defaultdict(int)
         for r in rows:
+            sport = (r['sport'] or '').upper()
+            per_sport_seen[sport] += 1
+            if per_sport_seen[sport] > 200:
+                continue
             for model, prob_col in (
                 ('Grinder2', 'catboost_home_prob'),
                 ('Edge', 'elo_home_prob'),
@@ -8892,6 +8891,9 @@ def api_performance_data():
                 ('Sharp Consensus', 'meta_home_prob'),
             ):
                 p = r[prob_col]
+                if model == 'Grinder2' and p is None:
+                    # Keep Grinder2 usable when catboost values are missing.
+                    p = r['elo_home_prob']
                 if p is None:
                     continue
                 home_score = r['home_score']
@@ -8908,7 +8910,7 @@ def api_performance_data():
                     'model': model,
                     'confidence': conf,
                     'result': 'win' if was_correct else 'loss',
-                    'sport': (r['sport'] or '').upper(),
+                    'sport': sport,
                     'date': r['game_date'] or '',
                     'units': 1 if was_correct else -1,
                 })

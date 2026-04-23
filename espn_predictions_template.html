@@ -274,37 +274,6 @@
             font-size: 0.82em;
             color: #475569;
         }
-        .footer-share {
-            margin: 0 0 20px;
-            padding: 0 0 18px;
-            border-bottom: 1px solid rgba(15,23,42,0.08);
-        }
-        .footer-share-title {
-            font-size: 0.72em;
-            text-transform: uppercase;
-            letter-spacing: 0.55px;
-            font-weight: 800;
-            color: #0f172a;
-            margin: 0 0 10px;
-        }
-        .footer-share-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px 12px;
-        }
-        .footer-share-links a {
-            color: #475569;
-            font-size: 0.84em;
-            font-weight: 600;
-            text-decoration: none;
-            border: 1px solid #E0E4E8;
-            border-radius: 999px;
-            padding: 7px 12px;
-            line-height: 1.35;
-            white-space: normal;
-            text-align: center;
-        }
-        .footer-share-links a:hover { color: #00529B; border-color: #00529B; }
         @media (max-width: 720px) {
             .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
         }
@@ -758,17 +727,6 @@
 </div>
 <footer class="site-footer">
     <div class="footer-outer">
-        <div class="footer-share">
-            <div class="footer-share-title">Share this page</div>
-            <div class="footer-share-links">
-                <a href="https://twitter.com/intent/tweet?text={{ (sport_info.name ~ ' AI picks and results on underdogs.bet')|urlencode }}&amp;url={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
-                <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer">Facebook</a>
-                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-                <a href="https://wa.me/?text={{ (sport_info.name ~ ' AI picks and results: ' ~ request.url)|urlencode }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-                <a href="https://reddit.com/submit?url={{ request.url|urlencode }}&amp;title={{ (sport_info.name ~ ' AI picks and results')|urlencode }}" target="_blank" rel="noopener noreferrer">Reddit</a>
-                <a href="mailto:?subject={{ (sport_info.name ~ ' AI picks and results')|urlencode }}&amp;body={{ request.url|urlencode }}">Email</a>
-            </div>
-        </div>
         <div class="footer-brand"><a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a></div>
         <div class="footer-columns-3">
             <div class="footer-col-blk">
@@ -788,6 +746,15 @@
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
                 <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                 <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
+                <a href="/mlb-picks">MLB picks</a>
+                <a href="/nba-picks">NBA picks</a>
+                <a href="/nhl-picks">NHL picks</a>
+                <a href="/nfl-picks">NFL picks</a>
+                <a href="/ncaab-picks">NCAAB picks</a>
+                <a href="/ncaaw-picks">NCAAW picks</a>
+                <a href="/ncaaf-picks">NCAAF picks</a>
+                <a href="/wnba-picks">WNBA picks</a>
+                {% if soccer_enabled %}<a href="/soccer-picks">Soccer picks</a>{% endif %}
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
