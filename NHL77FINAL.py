@@ -11,6 +11,8 @@ from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
 import re
+import csv
+import io
 from collections import defaultdict
 from flask_cors import CORS
 import sqlite3
@@ -58,6 +60,8 @@ import copy as _copy
 _API_CACHE: dict = {}
 _API_TTL = 900  # seconds
 _PREDICTIONS_CACHE: dict = {}
+_V2_PREDICTION_CACHE: dict = {}
+_V2_PREDICTION_TTL_SECONDS = 900
 _PREDICTIONS_TTL_BY_SPORT = {
     'NHL': 180,
     'NBA': 180,
@@ -100,7 +104,7 @@ _SPORT_PREDICTIONS_PAGE_TTL = {
     'WNBA': 240,
 }
 _MANUAL_BANNER_ITEMS = [
-    {'label': '⭐ Grinder2', 'pct': '83.3%', 'record': '40-8'},
+    {'label': 'NHL ⭐ Grinder2', 'pct': '83.3%', 'record': '40-8'},
     {'label': '🎲 NBA O/U (XSharp)', 'pct': '82.6%', 'record': '247/299'},
     {'label': 'MLB 🎯 Moneyline (Consensus)', 'pct': '60.0%', 'record': '60-40'},
     {'label': 'NHL 📊 Edge', 'pct': '56.5%', 'record': '113-87'},
@@ -601,6 +605,179 @@ _INJURY_OUT_POINTS_PER_STARTER = {
     'NFL': 3.0, 'NCAAF': 3.0,
     'NHL': 0.25, 'MLB': 0.4, 'SOCCER': 0.15,
 }
+# MLB decision-layer parameters (no model retraining).
+_MLB_EDGE_THRESHOLD = 0.05
+_MLB_FAVORITE_EDGE_THRESHOLD = 0.08
+_MLB_UNDERDOG_MIN_PROB = 0.42
+_MLB_NOISE_MODEL_GAP = 0.02
+_MLB_INJURY_CONF_DEFAULT = 0.75
+_MLB_BULLPEN_FATIGUE_CACHE: dict = {}
+
+
+def _american_to_implied_prob(odds):
+    """Convert American odds to implied probability."""
+    try:
+        o = float(odds)
+    except Exception:
+        return None
+    if o == 0:
+        return None
+    if o > 0:
+        return 100.0 / (o + 100.0)
+    return abs(o) / (abs(o) + 100.0)
+
+
+def _mlb_pitcher_quality_tier(era, xera=None, whip=None, kbb=None, recent_form=None):
+    """Return pitcher tier + score using available run-prevention indicators."""
+    score = 0.0
+    count = 0
+    for v in (era, xera):
+        if v is None:
+            continue
+        count += 1
+        if v <= 3.15:
+            score += 1.0
+        elif v <= 3.7:
+            score += 0.75
+        elif v <= 4.3:
+            score += 0.5
+        elif v <= 4.9:
+            score += 0.3
+        else:
+            score += 0.1
+    if whip is not None:
+        count += 1
+        if whip <= 1.10:
+            score += 1.0
+        elif whip <= 1.22:
+            score += 0.75
+        elif whip <= 1.32:
+            score += 0.5
+        elif whip <= 1.45:
+            score += 0.3
+        else:
+            score += 0.1
+    if kbb is not None:
+        count += 1
+        if kbb >= 4.0:
+            score += 1.0
+        elif kbb >= 3.0:
+            score += 0.75
+        elif kbb >= 2.2:
+            score += 0.5
+        elif kbb >= 1.6:
+            score += 0.3
+        else:
+            score += 0.1
+    if recent_form is not None:
+        count += 1
+        if recent_form <= 2.8:
+            score += 1.0
+        elif recent_form <= 3.5:
+            score += 0.75
+        elif recent_form <= 4.2:
+            score += 0.5
+        elif recent_form <= 5.0:
+            score += 0.3
+        else:
+            score += 0.1
+    avg = (score / count) if count else 0.5
+    if avg >= 0.86:
+        return 'elite', avg
+    if avg >= 0.67:
+        return 'above_avg', avg
+    if avg >= 0.45:
+        return 'average', avg
+    if avg >= 0.30:
+        return 'below_avg', avg
+    return 'replacement', avg
+
+
+def _mlb_recent_pitcher_form(pitcher_name):
+    """Approximate last-3-start form from recent game logs in local DB."""
+    if not pitcher_name:
+        return None
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            '''
+            SELECT ERA
+            FROM player_game_logs
+            WHERE sport='MLB' AND player_name=?
+            ORDER BY game_date DESC
+            LIMIT 3
+            ''',
+            (pitcher_name,),
+        ).fetchall()
+        conn.close()
+        vals = []
+        for r in rows:
+            try:
+                vals.append(float(r['ERA']))
+            except Exception:
+                continue
+        if not vals:
+            return None
+        return sum(vals) / len(vals)
+    except Exception:
+        return None
+
+
+def _mlb_lineup_tier(position):
+    p = str(position or '').upper()
+    if p in {'SS', 'CF', '1B', '3B', 'DH'}:
+        return 1
+    if p in {'2B', 'LF', 'RF', 'C'}:
+        return 2
+    return 3
+
+
+def _mlb_bullpen_fatigue_boost(team_name, game_date):
+    """Estimate bullpen fatigue from prior game timing + runs allowed."""
+    if not team_name or not game_date:
+        return 0.0, 0.0, False
+    gday = str(game_date)[:10]
+    cache_key = f"{team_name}|{gday}"
+    cached = _MLB_BULLPEN_FATIGUE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            '''
+            SELECT date(game_date) AS d,
+                   CASE WHEN home_team_id=? THEN away_score ELSE home_score END AS runs_allowed
+            FROM games
+            WHERE sport='MLB'
+              AND (home_team_id=? OR away_team_id=?)
+              AND home_score IS NOT NULL
+              AND away_score IS NOT NULL
+              AND date(game_date) < date(?)
+            ORDER BY date(game_date) DESC
+            LIMIT 1
+            ''',
+            (team_name, team_name, team_name, gday),
+        ).fetchone()
+        conn.close()
+        if not row or not row['d']:
+            _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (0.0, 0.0, False)
+            return 0.0, 0.0, False
+        prev = datetime.strptime(row['d'], '%Y-%m-%d')
+        cur = datetime.strptime(gday, '%Y-%m-%d')
+        is_b2b = (cur - prev).days <= 1
+        runs_allowed = float(row['runs_allowed']) if row['runs_allowed'] is not None else 4.0
+        boost = 0.0
+        total_adj = 0.0
+        if is_b2b and runs_allowed >= 6:
+            boost = 0.02
+            total_adj = 0.5
+        elif is_b2b:
+            boost = 0.01
+            total_adj = 0.5
+        _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (boost, total_adj, is_b2b)
+        return boost, total_adj, is_b2b
+    except Exception:
+        return 0.0, 0.0, False
 # Rest (back-to-back) penalty applied to each team if their prior completed game
 # was the day before the current game.
 _B2B_PENALTY = {
@@ -1256,6 +1433,10 @@ def inject_globals():
         _logged_in = getattr(_cu, 'is_authenticated', False) and _cu.is_authenticated
     except Exception:
         _logged_in = False
+    try:
+        _wnba_status, _wnba_live = get_season_status('WNBA')
+    except Exception:
+        _wnba_live = True
     return {
         'stripe_donation_url': STRIPE_DONATION_URL,
         'contact_email': CONTACT_EMAIL,
@@ -1265,6 +1446,7 @@ def inject_globals():
         'sport_seo_slug': SPORT_SEO_SLUGS.get(_sport, ''),
         'sport_results_slug': _SPORT_RESULTS_SLUGS.get(_sport, ''),
         'is_logged_in': _logged_in,
+        'wnba_enabled': _wnba_live,
     }
 
 @app.after_request
@@ -2368,18 +2550,25 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
     if not HAS_V2_SYSTEM or model_sport not in V2_PREDICTORS:
         return None
     
+    cache_date = (game_date or datetime.now().strftime('%Y-%m-%d'))
+    cache_key = f"{model_sport}|{home_team}|{away_team}|{cache_date}"
+    now_ts = _time.time()
+    cached = _V2_PREDICTION_CACHE.get(cache_key)
+    if cached and (now_ts - cached['ts']) < _V2_PREDICTION_TTL_SECONDS:
+        return _copy.deepcopy(cached['data'])
+
     try:
         predictor = V2_PREDICTORS[model_sport]
         game_df = pd.DataFrame([{
             'home_team': home_team,
             'away_team': away_team,
-            'date': game_date or datetime.now().strftime('%Y-%m-%d')
+            'date': cache_date
         }])
         
         pred = predictor.predict(game_df)
         row = pred.iloc[0]
         
-        return {
+        result = {
             'home_prob': row['home_win_prob'],
             'away_prob': row['away_win_prob'],
             'confidence': row['confidence'],
@@ -2401,6 +2590,8 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
             
             'is_v2': True,
         }
+        _V2_PREDICTION_CACHE[cache_key] = {'ts': now_ts, 'data': _copy.deepcopy(result)}
+        return result
     except Exception as e:
         logger.warning(f"V2 prediction failed for {away_team} @ {home_team}: {e}")
         return None
@@ -2557,7 +2748,7 @@ def _fetch_injuries(sport: str) -> dict:
         try:
             conn = get_db_connection()
             rows = conn.execute('''
-                SELECT team_name, player_name, status, injury_type
+                SELECT team_name, player_name, position, status, injury_type
                 FROM injuries
                 WHERE sport = ?
             ''', (sport,)).fetchall()
@@ -2572,6 +2763,7 @@ def _fetch_injuries(sport: str) -> dict:
                     continue
                 result.setdefault(team, []).append({
                     'name': row['player_name'] or '?',
+                    'position': row['position'] or '',
                     'status': status,
                     'reason': row['injury_type'] or ''
                 })
@@ -2592,12 +2784,13 @@ def _fetch_injuries(sport: str) -> dict:
                     continue
                 athlete = inj.get('athlete', {})
                 short_name = athlete.get('shortName', athlete.get('displayName', '?'))
+                pos = (athlete.get('position') or {}).get('abbreviation', '')
                 # Extract injury body part from shortComment e.g. "Player (knee) is out..."
                 comment = inj.get('shortComment', '')
                 import re as _re
                 match = _re.search(r'\(([^)]{1,20})\)', comment)
                 reason = match.group(1) if match else ''
-                players.append({'name': short_name, 'status': status, 'reason': reason})
+                players.append({'name': short_name, 'position': pos, 'status': status, 'reason': reason})
             if players:
                 result[team_name] = players
         if result:
@@ -3113,7 +3306,7 @@ def get_upcoming_predictions(sport, days=365):
         'NCAAF': datetime(2024, 8, 30),
         'NCAAB': datetime(2024, 11, 4),
         'NCAAW': datetime(2024, 11, 4),
-        'WNBA': datetime(2025, 5, 14),
+        'WNBA': datetime(2026, 5, 8),
         'SOCCER': datetime(2024, 8, 1),
     }
     season_start = season_starts.get(sport, datetime(2025, 1, 1))
@@ -3122,13 +3315,19 @@ def get_upcoming_predictions(sport, days=365):
     # Use module-level datetime/timedelta imports to avoid local shadowing
     today = datetime.now()
     future_window_days = {
-        'NBA': 120,
+        'NBA': 30,
     }
     future_cutoff = today + timedelta(days=future_window_days.get(sport, 30))
     
     predictions = []
     # Fetch injuries once for the whole request (15-min cache keeps it fast)
     _injuries = _fetch_injuries(sport)
+    # Build heavy model objects once per page render (not once per game row).
+    _xgb_model_page = None
+    try:
+        _xgb_model_page = _get_xgb_spread_model(sport)
+    except Exception:
+        _xgb_model_page = None
 
     for game_date, game in all_games_with_dates:
         # Show games from season start up to one month from today
@@ -3152,7 +3351,8 @@ def get_upcoming_predictions(sport, days=365):
                     soccer_note = "Soccer models are unavailable."
 
             v2_pred = None
-            if sport != 'SOCCER':
+            is_completed = game.get('home_score') is not None
+            if sport != 'SOCCER' and not is_completed:
                 v2_pred = get_v2_prediction(
                         sport, 
                         game.get('home_team_id') or game.get('home_team_name'),
@@ -3343,10 +3543,9 @@ def get_upcoming_predictions(sport, days=365):
             game_dict['puck_line_fav_side'] = None
             game_dict['spread_total_note']  = None
 
-            # Spread / Total score predictions are computed for EVERY game
-            # (upcoming and final) so the predictions card continues to show
-            # Our Spread / Our Total even after the final score is posted.
-            if sport == 'SOCCER':
+            # Compute expensive spread/total projections for upcoming games only.
+            # Completed-game cards rely on stored lines/results and should render fast.
+            if game_dict.get('home_score') is None and sport == 'SOCCER':
                 if soccer_pred and soccer_pred.get('expected_home_score') is not None:
                     exp_home = soccer_pred.get('expected_home_score')
                     exp_away = soccer_pred.get('expected_away_score')
@@ -3375,7 +3574,7 @@ def get_upcoming_predictions(sport, days=365):
                     game_dict['spread_total_note'] = soccer_note or (
                         "Soccer spread/total requires team scoring rates; data not ready yet."
                     )
-            else:
+            elif game_dict.get('home_score') is None:
                 try:
                     from score_predictor import ScorePredictor
                     _sp = _score_predictor_instance(sport)
@@ -3411,20 +3610,20 @@ def get_upcoming_predictions(sport, days=365):
                     except Exception as _ve:
                         logger.debug(f"VegasScorePredictor error: {_ve}")
 
-            try:
-                _xm = _get_xgb_spread_model(sport)
-                if _xm:
-                    result = _xm.predict(
-                        game_dict.get('home_team_id', ''),
-                        game_dict.get('away_team_id', ''),
-                    )
-                    if result and result[0] is not None:
-                        game_dict['xgb_home_score'] = result[0]
-                        game_dict['xgb_away_score'] = result[1]
-                        game_dict['xgb_spread'] = result[2]
-                        game_dict['xgb_total'] = result[3]
-            except Exception as _e:
-                logger.debug(f"XGBSpread error: {_e}")
+            if game_dict.get('home_score') is None:
+                try:
+                    if _xgb_model_page:
+                        result = _xgb_model_page.predict(
+                            game_dict.get('home_team_id', ''),
+                            game_dict.get('away_team_id', ''),
+                        )
+                        if result and result[0] is not None:
+                            game_dict['xgb_home_score'] = result[0]
+                            game_dict['xgb_away_score'] = result[1]
+                            game_dict['xgb_spread'] = result[2]
+                            game_dict['xgb_total'] = result[3]
+                except Exception as _e:
+                    logger.debug(f"XGBSpread error: {_e}")
 
             if game_dict.get('home_score') is None:
                 # ── MLB: pitching-enhanced prediction (upcoming games only
@@ -3435,6 +3634,16 @@ def get_upcoming_predictions(sport, days=365):
                         import math as _math
                         _ht = game_dict.get('home_team_id', '')
                         _at = game_dict.get('away_team_id', '')
+                        _gdate = game_dict.get('game_date')
+                        _home_mkt = _to_float_safe(game_dict.get('home_implied_prob'))
+                        _away_mkt = _to_float_safe(game_dict.get('away_implied_prob'))
+                        _home_ml = _to_float_safe(game_dict.get('home_moneyline'))
+                        _away_ml = _to_float_safe(game_dict.get('away_moneyline'))
+                        if _home_mkt is None and _home_ml is not None:
+                            _home_mkt = _american_to_implied_prob(_home_ml)
+                        if _away_mkt is None and _away_ml is not None:
+                            _away_mkt = _american_to_implied_prob(_away_ml)
+
                         # 1. ML correction: runs model spread → probability
                         _ml_prob = 0.5
                         _mlbm = _get_mlb_model(DATABASE)
@@ -3449,23 +3658,265 @@ def get_upcoming_predictions(sport, days=365):
                                 _ml_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2))))
                         # 2. Pitching adjustment (cached, single ESPN API call)
                         _pitch_prob = 0.5
+                        _pitch = {}
                         try:
                             from mlb_pitching import get_mlb_pitching_adjustment as _get_pitching
                             _pitch = _get_pitching(_ht, _at)
                             _pitch_prob = _pitch.get('pitching_prob', 0.5)
                         except Exception:
                             pass
-                        # 3. Elo baseline
+
+                        # 3. Elo / v2 baselines (dynamic weighting for MLB)
                         _elo_base = elo_prob
-                        # 4. Blend: 35% Elo + 45% Pitching + 20% ML
-                        _blended = 0.35 * _elo_base + 0.45 * _pitch_prob + 0.20 * _ml_prob
+
+                        _g2_prob = _to_float_safe(game.get('glicko2_prob'), _elo_base)
+                        _ts_prob = _to_float_safe(game.get('trueskill_prob'), _elo_base)
+                        _xgb_prob = _to_float_safe(_ml_prob, _elo_base)
+                        _ens_prob = _to_float_safe(ensemble_prob, _elo_base)
+
+                        # Rule #5: MLB dynamic model weighting.
+                        # Increase XGB + TrueSkill, reduce Elo + Glicko-2 influence.
+                        _weights = {
+                            'xgb': 0.35,
+                            'trueskill': 0.27,
+                            'ensemble': 0.23,
+                            'elo': 0.08,
+                            'glicko2': 0.07,
+                        }
+
+                        # Rule #2: Value underdog boosts XGB + Ensemble, reduces rating systems.
+                        _pre_blended = (
+                            _weights['xgb'] * _xgb_prob
+                            + _weights['trueskill'] * _ts_prob
+                            + _weights['ensemble'] * _ens_prob
+                            + _weights['elo'] * _elo_base
+                            + _weights['glicko2'] * _g2_prob
+                        )
+                        _value_underdog = False
+                        if _home_mkt is not None and _away_mkt is not None:
+                            _market_pick_home = (_home_mkt <= _away_mkt)
+                            _model_pick_home = _pre_blended >= 0.5
+                            if _model_pick_home != _market_pick_home:
+                                _dog_model_prob = _pre_blended if _model_pick_home else (1.0 - _pre_blended)
+                                _dog_market_prob = _home_mkt if _model_pick_home else _away_mkt
+                                if (_dog_model_prob - _dog_market_prob) >= _MLB_EDGE_THRESHOLD and _dog_model_prob >= _MLB_UNDERDOG_MIN_PROB:
+                                    _value_underdog = True
+                                    _weights.update({'xgb': 0.40, 'ensemble': 0.28, 'trueskill': 0.22, 'elo': 0.06, 'glicko2': 0.04})
+
+                        _blended = (
+                            _weights['xgb'] * _xgb_prob
+                            + _weights['trueskill'] * _ts_prob
+                            + _weights['ensemble'] * _ens_prob
+                            + _weights['elo'] * _elo_base
+                            + _weights['glicko2'] * _g2_prob
+                        )
+
+                        # Rule #10: role-based injury adjustment layer.
+                        _inj_conf = _MLB_INJURY_CONF_DEFAULT
+                        if not (_pitch.get('home_sp_name') and _pitch.get('away_sp_name')):
+                            _inj_conf = 0.55
+                        elif not (game_dict.get('home_injuries') or game_dict.get('away_injuries')):
+                            _inj_conf = 0.65
+
+                        _home_inj = game_dict.get('home_injuries') or []
+                        _away_inj = game_dict.get('away_injuries') or []
+                        _home_adj = 0.0
+                        _away_adj = 0.0
+                        _total_adj = 0.0
+
+                        def _apply_pitcher_scratch(injury_list, sp_name, side_quality):
+                            if not sp_name:
+                                return 0.0, 0.0, False
+                            scratched = False
+                            for inj in injury_list:
+                                name = (inj.get('name') or '').lower()
+                                pos = (inj.get('position') or '').upper()
+                                status = inj.get('status') or ''
+                                if status not in _INJURY_OUT_STATUSES and status not in _INJURY_DOUBTFUL_STATUSES:
+                                    continue
+                                if 'P' not in pos and 'PITCH' not in (inj.get('reason') or '').upper():
+                                    continue
+                                if sp_name.lower() in name or name in sp_name.lower():
+                                    scratched = True
+                                    break
+                            if not scratched:
+                                return 0.0, 0.0, False
+                            # Elite -> replacement is largest delta.
+                            if side_quality in ('elite',):
+                                return 0.15, 1.5, True
+                            if side_quality in ('above_avg',):
+                                return 0.09, 1.0, True
+                            if side_quality in ('average',):
+                                return 0.05, 0.7, True
+                            return 0.02, 0.5, True
+
+                        _home_tier, _home_q = _mlb_pitcher_quality_tier(
+                            _pitch.get('home_sp_era'),
+                            _pitch.get('home_sp_xera'),
+                            _pitch.get('home_sp_whip'),
+                            _pitch.get('home_sp_kbb'),
+                            _mlb_recent_pitcher_form(_pitch.get('home_sp_name')),
+                        )
+                        _away_tier, _away_q = _mlb_pitcher_quality_tier(
+                            _pitch.get('away_sp_era'),
+                            _pitch.get('away_sp_xera'),
+                            _pitch.get('away_sp_whip'),
+                            _pitch.get('away_sp_kbb'),
+                            _mlb_recent_pitcher_form(_pitch.get('away_sp_name')),
+                        )
+
+                        # If home SP scratched, boost away win prob (and vice versa).
+                        _away_boost, _away_total_bump, _home_sp_scratched = _apply_pitcher_scratch(_home_inj, _pitch.get('home_sp_name'), _home_tier)
+                        _home_boost, _home_total_bump, _away_sp_scratched = _apply_pitcher_scratch(_away_inj, _pitch.get('away_sp_name'), _away_tier)
+                        _away_adj += _away_boost
+                        _home_adj += _home_boost
+                        _total_adj += (_away_total_bump + _home_total_bump)
+
+                        def _lineup_adjustments(injury_list):
+                            t1 = t2 = 0
+                            for inj in injury_list:
+                                pos = (inj.get('position') or '').upper()
+                                status = inj.get('status') or ''
+                                if status not in _INJURY_OUT_STATUSES and status not in _INJURY_DOUBTFUL_STATUSES:
+                                    continue
+                                if pos in {'P', 'SP', 'RP', 'CP', 'CL'}:
+                                    continue
+                                tier = _mlb_lineup_tier(pos)
+                                if tier == 1:
+                                    t1 += 1
+                                elif tier == 2:
+                                    t2 += 1
+                            boost = t1 * 0.025 + t2 * 0.012
+                            if t1 >= 2:
+                                boost += 0.02
+                            return boost, t1, t2
+
+                        _away_lineup_boost, _home_t1, _home_t2 = _lineup_adjustments(_home_inj)
+                        _home_lineup_boost, _away_t1, _away_t2 = _lineup_adjustments(_away_inj)
+                        _away_adj += _away_lineup_boost
+                        _home_adj += _home_lineup_boost
+
+                        def _bullpen_adjustments(injury_list, team_name):
+                            key_relief = 0
+                            for inj in injury_list:
+                                status = inj.get('status') or ''
+                                if status not in _INJURY_OUT_STATUSES and status not in _INJURY_DOUBTFUL_STATUSES:
+                                    continue
+                                pos = (inj.get('position') or '').upper()
+                                if pos in {'RP', 'CP', 'CL'}:
+                                    key_relief += 1
+                            boost = min(0.03, key_relief * 0.012)
+                            fat_boost, fat_total, _ = _mlb_bullpen_fatigue_boost(team_name, _gdate)
+                            return boost + fat_boost, fat_total, key_relief
+
+                        _away_bp_boost, _home_bp_total, _home_relief_out = _bullpen_adjustments(_home_inj, _ht)
+                        _home_bp_boost, _away_bp_total, _away_relief_out = _bullpen_adjustments(_away_inj, _at)
+                        _away_adj += _away_bp_boost
+                        _home_adj += _home_bp_boost
+                        _total_adj += (_home_bp_total + _away_bp_total)
+
+                        _raw_delta = (_home_adj - _away_adj) * _inj_conf
+
+                        # Rule #10D: scale adjustment when market already moved.
+                        _market_scale = 1.0
+                        if _home_mkt is not None:
+                            _observed_move = abs(_home_mkt - _pre_blended)
+                            _expected_move = max(0.001, abs(_raw_delta))
+                            if _observed_move >= 0.7 * _expected_move:
+                                _market_scale = 0.4
+                        _adj_delta = _raw_delta * _market_scale
+                        _blended = max(0.05, min(0.95, _blended + _adj_delta))
+                        if game_dict.get('xgb_total') is not None:
+                            game_dict['xgb_total'] = round(float(game_dict['xgb_total']) + _total_adj * _inj_conf * _market_scale, 2)
+
+                        # Rule #1 + #3 + #4 + #6 + #8 decision layer.
+                        _implied = _home_mkt if _blended >= 0.5 else _away_mkt
+                        _model_pick_prob = _blended if _blended >= 0.5 else (1.0 - _blended)
+                        _edge = (_model_pick_prob - _implied) if _implied is not None else 0.0
+                        _is_favorite_pick = False
+                        _pick_odds = _home_ml if _blended >= 0.5 else _away_ml
+                        if _pick_odds is not None:
+                            _is_favorite_pick = _pick_odds <= -170
+
+                        _mvals = [_xgb_prob, _ts_prob, _ens_prob, _elo_base, _g2_prob]
+                        _mvals = [v for v in _mvals if v is not None]
+                        _low_conf_noise = False
+                        if len(_mvals) >= 3:
+                            _mvals_sorted = sorted(_mvals, reverse=True)
+                            _low_conf_noise = abs(_mvals_sorted[0] - _mvals_sorted[2]) < _MLB_NOISE_MODEL_GAP
+
+                        _bet_type = 'ML'
+                        if _blended >= 0.60 and game_dict.get('xgb_spread') is not None and abs(float(game_dict['xgb_spread'])) >= 1.4:
+                            _bet_type = 'Run Line'
+
+                        _pass_reason = None
+                        if _implied is not None and _edge < _MLB_EDGE_THRESHOLD:
+                            _pass_reason = 'edge_below_threshold'
+                        if _is_favorite_pick and _edge < _MLB_FAVORITE_EDGE_THRESHOLD:
+                            _pass_reason = 'favorite_edge_too_small'
+                        if _low_conf_noise:
+                            _pass_reason = 'low_confidence_model_noise'
+
+                        _tier = 'Tier 3'
+                        _units = 0.0
+                        if _pass_reason:
+                            _bet_type = 'Pass'
+                            _tier = 'No Bet'
+                        elif _edge >= 0.08:
+                            _tier = 'Tier 1'
+                            _units = 1.0
+                        elif _edge >= _MLB_EDGE_THRESHOLD:
+                            _tier = 'Tier 2'
+                            _units = 0.5
+                        else:
+                            _bet_type = 'Pass'
+                            _tier = 'No Bet'
+
+                        _conf = int(round(min(100.0, max(0.0, 50.0 + (_edge * 500.0) + (_inj_conf * 20.0) + (5.0 if _value_underdog else 0.0) - (8.0 if _low_conf_noise else 0.0)))))
+
                         _blended = max(0.05, min(0.95, _blended))
                         game_dict['elo_prob']       = round(_elo_base * 100, 1)
-                        game_dict['xgb_prob']       = round(_ml_prob * 100, 1)
-                        game_dict['glicko2_prob']   = round(_pitch_prob * 100, 1)
-                        game_dict['trueskill_prob'] = round(_pitch_prob * 100, 1)
+                        game_dict['xgb_prob']       = round(_xgb_prob * 100, 1)
+                        game_dict['glicko2_prob']   = round(_g2_prob * 100, 1)
+                        game_dict['trueskill_prob'] = round(_ts_prob * 100, 1)
                         game_dict['ensemble_prob']  = round(_blended * 100, 1)
                         game_dict['predicted_winner'] = _ht if _blended > 0.5 else _at
+                        game_dict['model_win_pct'] = round(_model_pick_prob * 100.0, 1)
+                        game_dict['implied_win_pct'] = round((_implied or 0.0) * 100.0, 1) if _implied is not None else None
+                        game_dict['edge_pct'] = round(_edge * 100.0, 2)
+                        game_dict['adjusted_edge_pct'] = round(_edge * 100.0, 2)
+                        game_dict['bet_tier'] = _tier
+                        game_dict['bet_units'] = _units
+                        game_dict['bet_type'] = _bet_type
+                        game_dict['confidence_score'] = _conf
+                        game_dict['value_underdog'] = _value_underdog
+                        game_dict['mlb_low_confidence'] = _low_conf_noise
+                        game_dict['mlb_pass_reason'] = _pass_reason
+                        game_dict['injury_confidence_factor'] = round(_inj_conf, 2)
+                        game_dict['injury_market_scale'] = round(_market_scale, 2)
+                        game_dict['injury_adjustment_home_pct'] = round((_home_adj * _inj_conf * _market_scale) * 100.0, 2)
+                        game_dict['injury_adjustment_away_pct'] = round((_away_adj * _inj_conf * _market_scale) * 100.0, 2)
+                        game_dict['mlb_pitcher_tiers'] = {'home': _home_tier, 'away': _away_tier}
+                        game_dict['mlb_lineup_absences'] = {
+                            'home_tier1': _home_t1, 'home_tier2': _home_t2,
+                            'away_tier1': _away_t1, 'away_tier2': _away_t2,
+                        }
+                        game_dict['mlb_bullpen_flags'] = {
+                            'home_key_relief_out': _home_relief_out,
+                            'away_key_relief_out': _away_relief_out,
+                        }
+
+                        # Rule #7 tracking placeholders (for later close update job).
+                        game_dict['opening_home_moneyline'] = _home_ml
+                        game_dict['opening_away_moneyline'] = _away_ml
+                        game_dict['closing_home_moneyline'] = _home_ml
+                        game_dict['closing_away_moneyline'] = _away_ml
+                        game_dict['opening_home_implied_prob'] = _home_mkt
+                        game_dict['opening_away_implied_prob'] = _away_mkt
+                        game_dict['closing_home_implied_prob'] = _home_mkt
+                        game_dict['closing_away_implied_prob'] = _away_mkt
+                        game_dict['clv_home'] = 0.0
+                        game_dict['clv_away'] = 0.0
                     except Exception as _mlbe:
                         logger.debug(f"MLB enhanced prediction error: {_mlbe}")
 
@@ -4320,18 +4771,22 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'rest': round(rest_adj, 2),
                         'park': round(park_adj, 2),
                     }
-                    # Grading line: Vegas → H2H → sport benchmark. Ensures every
-                    # game produces an OVER/UNDER pick (the count matches games played).
+                    # Grading line: Vegas → H2H → sport benchmark.
+                    # Fallback totals are shown but not graded for ROI/record cards.
+                    total_fallback_used = False
                     if mt is None:
                         if our_total_h2h is not None:
                             mt = round(float(our_total_h2h), 1)
                             g['market_total_reason'] = "H2H last-10 (fallback)"
+                            total_fallback_used = True
                         elif _OU_BENCH.get(sport):
                             mt = float(_OU_BENCH[sport])
                             g['market_total_reason'] = "sport benchmark (fallback)"
+                            total_fallback_used = True
                         elif adj_xt is not None:
                             mt = round(adj_xt, 1)
                             g['market_total_reason'] = "XSharp total (fallback)"
+                            total_fallback_used = True
                     g['market_total'] = mt
                     if mt is None:
                         g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
@@ -4341,12 +4796,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     else:
                         edge = adj_xt - mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
-                        if abs(at - mt) >= 1e-9:
+                        if (not total_fallback_used) and abs(at - mt) >= 1e-9:
                             aou = 'OVER' if at > mt else 'UNDER'
                             tp_ok = (tp_disp == aou)
                             tt_gr += 1
                             if tp_ok:
                                 tt_cor += 1
+                        elif total_fallback_used:
+                            g['total_pick_reason'] = "fallback total line (not graded)"
                         strong = False
                         if our_total_h2h is not None:
                             h2h_edge = our_total_h2h - mt
@@ -4374,16 +4831,21 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'park': round(park_adj, 2),
                     }
                     # Grading line fallback for O/U: Vegas → H2H → sport benchmark.
+                    # Fallback totals are shown but not graded for ROI/record cards.
+                    total_fallback_used = False
                     if mt is None:
                         if our_total_h2h is not None:
                             mt = round(float(our_total_h2h), 1)
                             g['market_total_reason'] = "H2H last-10 (fallback)"
+                            total_fallback_used = True
                         elif _OU_BENCH.get(sport):
                             mt = float(_OU_BENCH[sport])
                             g['market_total_reason'] = "sport benchmark (fallback)"
+                            total_fallback_used = True
                         elif adj_xt is not None:
                             mt = round(adj_xt, 1)
                             g['market_total_reason'] = "XSharp total (fallback)"
+                            total_fallback_used = True
                     g['market_spread'] = ms
                     g['market_total'] = mt
                     if ms is None:
@@ -4418,12 +4880,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     if adj_xt is not None and mt is not None:
                         edge = adj_xt - mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
-                        if abs(at - mt) >= 1e-9:
+                        if (not total_fallback_used) and abs(at - mt) >= 1e-9:
                             aou = 'OVER' if at > mt else 'UNDER'
                             tp_ok = (tp_disp == aou)
                             tt_gr += 1
                             if tp_ok:
                                 tt_cor += 1
+                        elif total_fallback_used:
+                            g['total_pick_reason'] = "fallback total line (not graded)"
                         strong = False
                         if our_total_h2h is not None:
                             h2h_edge = our_total_h2h - mt
@@ -4907,6 +5371,8 @@ BASE_TEMPLATE = """
             border-radius: 10px;
             border: 1px solid #E0E4E8;
             background: #ffffff;
+            margin-left: auto;
+            order: 4;
         }
         .hamburger span {
             width: 24px;
@@ -4919,15 +5385,15 @@ BASE_TEMPLATE = """
             display:none;
             position:absolute;
             top:calc(100% + 8px);
-            left:0;
             right:0;
+            width:min(180px,calc(100vw - 36px));
             flex-direction:column;
             gap:0;
             padding:8px;
-            border:1px solid #E0E4E8;
+            border:1px solid #cbd5e1;
             border-radius:12px;
-            background:#F4F7F9;
-            box-shadow:0 10px 24px rgba(15,23,42,0.12);
+            background:#ffffff;
+            box-shadow:0 14px 28px rgba(15,23,42,0.18);
             z-index:1100;
         }
         .nav-links.active { display:flex; }
@@ -4967,7 +5433,7 @@ BASE_TEMPLATE = """
             white-space: nowrap;
         }
         .nav-donate-btn:hover { opacity: 0.9; color: #fff !important; }
-        .nav-search-wrap { position: relative; flex: 1; max-width: 620px; width: 100%; min-width: 0; }
+        .nav-search-wrap { position: relative; flex: 1; max-width: 620px; width: 100%; min-width: 0; margin-left: 14px; }
         .nav-search {
             flex: 1;
             max-width: 620px;
@@ -4983,7 +5449,7 @@ BASE_TEMPLATE = """
         .nav-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: #0f172a; font-size: 0.9em; }
         .nav-search input::placeholder { color: #475569; }
         .nav-search button { border: 1px solid #E0E4E8; background: #ffffff; color: #00529B; border-radius: 999px; padding: 8px 14px; font-weight: 800; cursor: pointer; }
-        .nav-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .nav-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
         .auth-btn { text-decoration: none; border-radius: 999px; font-weight: 800; font-size: 0.82em; padding: 9px 14px; transition: opacity 0.2s; white-space: nowrap; }
         .auth-btn.signup { background: #00C076; color: #ffffff; border: 1px solid #00C076; }
         .auth-btn.login { border: 1px solid #00529B; color: #00529B; background: #fff; }
@@ -5027,6 +5493,14 @@ BASE_TEMPLATE = """
         }
         .footer-col-blk a:hover { color: #00529B; text-decoration: underline; }
         .footer-bottom { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(15,23,42,0.1); font-size: 0.82em; color: #475569; }
+        .share-strip { max-width: 1200px; margin: 0 auto 10px; padding: 10px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; background: rgba(244,247,249,0.7); border: 1px solid rgba(15,23,42,0.1); border-radius: 12px; }
+        .share-strip-label { font-size: 0.82em; font-weight: 800; color: #0f172a; letter-spacing: 0.2px; }
+        .share-icons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .share-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid rgba(15,23,42,0.14); background: #fff; }
+        .share-icon img { width: 16px; height: 16px; display: block; }
+        .share-icon img { width: 16px; height: 16px; display: block; }
+        .share-icon .txt { display:none; font-size: 0.64rem; font-weight: 800; line-height: 1; color: #0f172a; letter-spacing: 0.1px; }
+        .share-icon:hover { border-color: #00529B; background: rgba(0,82,155,0.08); }
         @media (max-width: 720px) {
             .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
         }
@@ -5051,19 +5525,26 @@ BASE_TEMPLATE = """
             .nav-search-wrap { grid-area: search; width: 100%; max-width: none; order: unset; }
             .nav-actions { grid-area: actions; width: 100%; justify-content: center; }
             .nav-links {
-                grid-area: links;
-                position: static;
+                grid-area: unset;
+                position: absolute;
+                top: calc(100% + 8px);
+                right: 0;
+                left: auto;
                 display: none;
                 flex-direction: column;
                 flex-wrap: nowrap;
                 align-items: stretch;
                 gap: 0;
-                width: 100%;
-                padding: 4px 0 10px;
-                border: 1px solid #E0E4E8;
-                box-shadow: none;
-                border-radius: 10px;
-                background: #F4F7F9;
+                width: min(240px, calc(100vw - 24px));
+                max-height: 70vh;
+                overflow: auto;
+                padding: 8px;
+                border: 1px solid #cbd5e1;
+                box-shadow: 0 16px 34px rgba(15,23,42,0.20);
+                border-radius: 12px;
+                background: rgba(255,255,255,0.98);
+                backdrop-filter: blur(6px);
+                z-index: 1200;
             }
             .nav-links.active { display: flex; }
             .nav-links a { font-size: 0.88em; padding: 10px 12px; white-space: normal; border-radius: 8px; }
@@ -5101,7 +5582,8 @@ BASE_TEMPLATE = """
                 {% if soccer_enabled %}
                 <a href="/soccer-picks">Soccer</a>
                 {% endif %}
-                <a href="/plans">Plans</a>
+                <a href="/player-props">Player Props</a>
+                <a href="/plans">Pricing</a>
             </div>
             <div class="nav-search-wrap">
                 <form class="nav-search" action="/search" method="get" role="search">
@@ -5123,6 +5605,20 @@ BASE_TEMPLATE = """
     <div class="container">
         {% block content %}{% endblock %}
     </div>
+    <div class="share-strip">
+        <span class="share-strip-label">Share on social media</span>
+        <div class="share-icons">
+            <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+            <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+            <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+            <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+            <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+            <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+            <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+            <a class="share-icon" href="https://api.whatsapp.com/send?text={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+            <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+        </div>
+    </div>
     <footer class="site-footer">
         <div class="footer-outer">
             <div class="footer-brand"><a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a></div>
@@ -5141,6 +5637,7 @@ BASE_TEMPLATE = """
                     <a href="/#faq">FAQ</a>
                     <a href="/daily-report">Daily results report</a>
                     <a href="/search">Search</a>
+                    <a href="/performance">Model performance</a>
                     <a href="/ai-sports-betting-picks-today">AI picks today</a>
                     <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                     <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
@@ -5227,7 +5724,7 @@ _SEO_RESULTS_PAGE_FOOTER = """
 """
 
 _SEO_UTILITY_FAQ_FOOTER = """
-    <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:20px 22px;background:#f8fafc;border:1px solid #E0E4E8;border-radius:14px;color:#475569;line-height:1.75;font-size:0.93rem;">
+    <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:20px 22px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:14px;color:#475569;line-height:1.75;font-size:0.93rem;">
         <p style="margin:0 0 10px;"><strong style="color:#0f172a;">More answers:</strong> See the full <a href="/#faq" style="color:#00529B;font-weight:700;text-decoration:none;">Frequently Asked Questions</a> on the homepage.</p>
         <p style="margin:0;">Bet responsibly: only risk what you can afford to lose. These tools support informed decisions—they do not replace judgment, discipline, or bankroll management.</p>
     </div>
@@ -5237,7 +5734,7 @@ CONTACT_PAGE_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
         .contact-wrap{max-width:720px;margin:0 auto;padding:8px 0 40px;}
-        .contact-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:28px 26px;}
+        .contact-card{background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:28px 26px;}
         .contact-card h1{font-size:1.75em;color:#0f172a;margin:0 0 16px;line-height:1.25;}
         .contact-card p{color:#334155;line-height:1.75;margin:0 0 14px;font-size:1.02em;}
         .contact-email{font-size:1.05em;font-weight:800;margin-top:18px;}
@@ -5397,6 +5894,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     body>*{position:relative;z-index:1;}
     @media(max-width:768px){body{background-attachment:scroll !important;}}
     .rpt-wrap{max-width:760px;margin:0 auto;padding:10px 0 60px;}
+    
     .rpt-header{text-align:center;margin-bottom:28px;}
     .rpt-header h1{font-size:1.8em;margin-bottom:6px;}
     .rpt-header .rpt-date{color:#fbbf24;font-size:1.15em;font-weight:700;}
@@ -5419,14 +5917,11 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     .rpt-actions{display:flex;gap:10px;justify-content:center;margin-top:28px;flex-wrap:wrap;}
     .rpt-btn{padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:0.88em;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;border:none;}
     .rpt-btn:hover{opacity:0.85;transform:translateY(-1px);}
-    .rpt-btn-x{background:#ffffff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);}
-    .rpt-btn-fb{background:#1877f2;color:#fff;}
-    .rpt-btn-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;}
-    .rpt-btn-tk{background:#ffffff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);}
     .rpt-btn-copy{background:#ffffff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);cursor:pointer;}
     .rpt-btn-copy.copied{background:#00C076;border-color:#00C076;}
     .rpt-btn-cta{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;}
     .rpt-share-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
+    .rpt-save-help{font-size:0.84em;color:#334155;text-align:center;margin:0 0 8px;}
     .rpt-cta-row{display:flex;justify-content:center;}
     .rpt-sharing{font-size:0.78em;color:#334155;text-align:center;margin-top:6px;}
     @media(max-width:500px){.rpt-grid{grid-template-columns:repeat(3,1fr);}.rpt-acc{font-size:1.1em;}.rpt-sou-row{grid-template-columns:1fr;}}
@@ -5446,7 +5941,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
         {% else %}
 
         {% for st in sport_tallies %}
-        <div class="rpt-sport-block">
+        <div class="rpt-sport-block" id="sportCapture{{ loop.index0 }}" data-sport-name="{{ st.info.name }}">
             <div class="rpt-sport-title">{{ st.info.icon }} <span>{{ st.info.name }}</span> &mdash; {{ st.tally.games }} games</div>
 
             <div class="rpt-cat-label">Moneyline</div>
@@ -5495,12 +5990,11 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
         {% endif %}
     </div>
     <div class="rpt-actions" style="flex-direction:column;align-items:center;">
+        <div class="rpt-save-help">Share an image of our results.</div>
         <div class="rpt-share-row">
-            <button class="rpt-btn rpt-btn-x" onclick="shareScreenshot('x')" title="Share on X"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></button>
-            <button class="rpt-btn rpt-btn-fb" onclick="shareScreenshot('fb')" title="Share on Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></button>
-            <button class="rpt-btn rpt-btn-ig" onclick="shareScreenshot('ig')" title="Share on Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></button>
-            <button class="rpt-btn rpt-btn-tk" onclick="shareScreenshot('tk')" title="Share on TikTok"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></button>
-            <button class="rpt-btn rpt-btn-copy" onclick="shareScreenshot('save')" title="Save Image"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+            {% for st in sport_tallies %}
+            <button class="rpt-btn rpt-btn-copy" onclick="saveSportScreenshot({{ loop.index0 }}, '{{ st.info.name|replace(\"'\", \"\") }}')">Share {{ st.info.name }} Results Image</button>
+            {% endfor %}
         </div>
         <div class="rpt-sharing" id="shareStatus"></div>
         <div class="rpt-cta-row" style="margin-top:12px;">
@@ -5511,40 +6005,22 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
-    function shareScreenshot(platform){
+    function saveSportScreenshot(index, sportName){
         var status=document.getElementById('shareStatus');
         status.textContent='Generating image...';
-        var el=document.getElementById('reportCapture');
+        var el=document.getElementById('sportCapture'+index);
+        if(!el){status.textContent='Could not find that sport block.';return;}
         html2canvas(el,{backgroundColor:'#ffffff',scale:2,useCORS:true}).then(function(canvas){
             canvas.toBlob(function(blob){
-                var file=new File([blob],'underdogs-daily-report.png',{type:'image/png'});
-                if(platform==='save'){
-                    var a=document.createElement('a');
-                    a.href=URL.createObjectURL(blob);
-                    a.download='underdogs-daily-report.png';
-                    a.click();
-                    status.textContent='Image saved!';
-                } else if(navigator.canShare && navigator.canShare({files:[file]})){
-                    navigator.share({files:[file],title:'underdogs.bet Daily Report',url:'https://www.underdogs.bet/daily-report'}).then(function(){status.textContent='Shared!';}).catch(function(){fallbackShare(platform,blob,status);});
-                } else {
-                    fallbackShare(platform,blob,status);
-                }
+                var safeSport=(sportName||'sport').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+                var fileName='daily-results-'+safeSport+'.png';
+                var a=document.createElement('a');
+                a.href=URL.createObjectURL(blob);
+                a.download=fileName;
+                a.click();
+                status.textContent='Saved '+(sportName||'sport')+' image.';
             },'image/png');
         }).catch(function(err){status.textContent='Screenshot failed: '+err;});
-    }
-    function fallbackShare(platform,blob,status){
-        var url='https://www.underdogs.bet/daily-report';
-        var text=encodeURIComponent('underdogs.bet Daily Results Report — check our AI picks performance');
-        // Save image to downloads
-        var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='underdogs-daily-report.png';a.click();
-        // Copy image to clipboard
-        try{navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);}catch(e){}
-        // Open the platform
-        if(platform==='x') window.open('https://twitter.com/intent/tweet?text='+text+'&url='+encodeURIComponent(url),'_blank');
-        else if(platform==='fb') window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(url),'_blank');
-        else if(platform==='ig') window.open('https://instagram.com/underdogs.bet','_blank');
-        else if(platform==='tk') window.open('https://tiktok.com/@underdog.bet','_blank');
-        status.textContent='Image saved & copied to clipboard — paste it into your post!';
     }
     </script>
 """)
@@ -6158,7 +6634,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .teams-section { flex:1; min-width:0; }
     .team-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(15,23,42,0.08); }
     .team-row:last-child { border-bottom:none; }
-    .team-name { font-size:0.95em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .team-name { font-size:0.95em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
     .team-name.winner { font-weight:700; }
     .score-box { font-size:1.05em; font-weight:700; color:#fbbf24; margin-left:8px; }
     .model-panel { background:#ffffff; border:1px solid rgba(139,92,246,0.35); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:170px; max-width:200px; display:flex; flex-direction:column; gap:4px; }
@@ -6177,15 +6653,15 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     /* Pick confidence grid (results cards) */
     .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#ffffff; }
     .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-    .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+    .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
     @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
-    .pc-box { background:#f8fafc; border:1px solid rgba(15,23,42,0.1); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+    .pc-box { background:#f8fafc; border:1px solid rgba(15,23,42,0.1); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:3px; min-width:0; min-height:86px; }
     .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
     .pc-box.correct { border-color:rgba(16,185,129,0.5); }
     .pc-box.wrong { border-color:rgba(239,68,68,0.45); }
-    .pc-name { font-size:0.68em; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; }
+    .pc-name { font-size:0.68em; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.3px; white-space:normal; overflow:visible; text-overflow:clip; max-width:100%; width:100%; line-height:1.15; word-break:break-word; min-height:28px; display:flex; align-items:center; justify-content:center; }
     .pc-val { font-size:0.95em; font-weight:800; color:#0f172a; }
-    .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; box-sizing:border-box; text-align:center; }
+    .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:3px; white-space:normal; overflow:visible; text-overflow:clip; max-width:100%; width:100%; box-sizing:border-box; text-align:center; line-height:1.15; word-break:break-word; min-height:24px; }
     .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
     .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
     .section-ml, .section-spread, .section-total { display:block; }
@@ -6870,8 +7346,12 @@ _SEASON_WINDOWS = {
     'NCAAF': ((8, 15), (1, 20)),
     'NCAAB': ((11, 1), (4, 15)),
     'NCAAW': ((11, 1), (4, 15)),
-    'WNBA':  ((5, 1), (10, 15)),
+    'WNBA':  ((5, 8), (10, 15)),
     'SOCCER':((8, 1), (6, 30)),
+}
+
+_SPORT_MIN_LIVE_DATES = {
+    'WNBA': datetime(2026, 5, 8),
 }
 _LANDING_SPORT_ORDER = ['NHL', 'NBA', 'NCAAB', 'NCAAW', 'MLB', 'SOCCER', 'NFL', 'NCAAF', 'WNBA']
 _LANDING_SPORT_SHORT = {
@@ -6904,6 +7384,10 @@ def _season_window_for_date(sport, today):
 
 def get_season_status(sport, today=None):
     today = today or datetime.now()
+    min_live = _SPORT_MIN_LIVE_DATES.get(sport)
+    if min_live and today < min_live:
+        days_until = (min_live - today).days
+        return ('Starting Soon' if days_until <= 60 else 'Offseason'), False
     start, end = _season_window_for_date(sport, today)
     if not start or not end:
         return 'Live Now', True
@@ -7467,7 +7951,7 @@ def landing_page():
 
         /* ── Navbar ── */
         .navbar{
-            background:#F4F7F9;
+            background:#ffffff;
             padding: 14px 28px;
             border-bottom: 1px solid var(--border);
             box-shadow: 0 2px 8px rgba(26,29,35,0.05);
@@ -7516,17 +8000,17 @@ def landing_page():
             font-weight: 800;
             cursor: pointer;
         }
-        .nav-search-wrap{position:relative;flex:1;max-width:760px;width:100%;}
+        .nav-search-wrap{position:relative;flex:1;max-width:760px;width:100%;margin-left:14px;}
         .search-autocomplete{
-            display:none;position:absolute;top:48px;left:0;right:0;z-index:1100;
+            display:none;position:absolute;top:48px;right:0;width:min(180px,calc(100vw - 36px));z-index:1100;
             background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:10px;
-            box-shadow:0 10px 24px rgba(15,23,42,0.12);padding:6px;
+            box-shadow:0 14px 28px rgba(15,23,42,0.18);padding:6px;
         }
         .search-autocomplete.show{display:block;}
         .search-item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#0f172a;}
         .search-item:hover{background:rgba(15,23,42,0.06);}
         .search-item small{color:#475569;}
-        .nav-actions { display:flex; align-items:center; gap:10px; }
+        .nav-actions { display:flex; align-items:center; gap:14px; }
         .auth-btn {
             text-decoration:none;
             border-radius:999px;
@@ -7604,6 +8088,8 @@ def landing_page():
             border-radius: 10px;
             border: 1px solid var(--border);
             background: #ffffff;
+            margin-left: auto;
+            order: 4;
         }
         .hamburger:hover { background: #f8fafc; }
         .hamburger span {
@@ -7617,15 +8103,15 @@ def landing_page():
             display:none;
             position:absolute;
             top:calc(100% + 8px);
-            left:0;
             right:0;
+            width:min(180px,calc(100vw - 36px));
             flex-direction:column;
             gap:0;
             padding:8px;
-            border:1px solid #E0E4E8;
+            border:1px solid #cbd5e1;
             border-radius:12px;
-            background:#F4F7F9;
-            box-shadow:0 10px 24px rgba(15,23,42,0.12);
+            background:#ffffff;
+            box-shadow:0 14px 28px rgba(15,23,42,0.18);
             z-index:1100;
         }
         .nav-links.active { display:flex; }
@@ -7892,11 +8378,12 @@ def landing_page():
 
         /* ── Footer (matches site chrome) ── */
         .site-footer{
-            background:#ffffff;
+            background:rgba(255,255,255,0.72);
             border-top:1px solid rgba(15,23,42,0.12);
             padding:22px 24px 28px;
             color:#475569;
             font-size:0.88em;
+            backdrop-filter:saturate(140%) blur(2px);
         }
         .footer-outer{max-width:1200px;margin:0 auto;}
         .footer-brand{margin-bottom:18px;}
@@ -7924,7 +8411,14 @@ def landing_page():
             padding:2px 0;
         }
         .footer-col-blk a:hover{color:#00529B;text-decoration:underline;}
-        .footer-bottom{margin-top:22px;padding-top:16px;border-top:1px solid rgba(15,23,42,0.1);font-size:0.82em;color:#475569;}
+        .footer-bottom{margin-top:22px;padding-top:16px;border-top:1px solid rgba(15,23,42,0.1);font-size:0.82em;color:#475569;opacity:0.78;}
+        .share-strip{max-width:1200px;margin:0 auto 10px;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;background:rgba(244,247,249,0.7);border:1px solid rgba(15,23,42,0.1);border-radius:12px;}
+        .share-strip-label{font-size:0.82em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
+        .share-icons{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .share-icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(15,23,42,0.14);background:#fff;}
+                        .share-icon img{width:16px;height:16px;display:block;}
+        .share-icon .txt{display:none;font-size:0.64rem;font-weight:800;line-height:1;color:#0f172a;letter-spacing:0.1px;}
+                .share-icon:hover{border-color:#00529B;background:rgba(0,82,155,0.08);}
         .join-premium-bar{position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
         .join-premium-inner{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
         .join-premium-copy{color:#e2e8f0;font-size:0.86em;font-weight:600;line-height:1.35;}
@@ -7976,19 +8470,26 @@ def landing_page():
             .nav-search-wrap { grid-area: search; width: 100%; max-width: none; }
             .nav-actions { grid-area: actions; display: flex; justify-content: center; width: 100%; }
             .nav-links {
-                grid-area: links;
-                position: static;
+                grid-area: unset;
+                position: absolute;
+                top: calc(100% + 8px);
+                right: 0;
+                left: auto;
                 display: none;
                 flex-direction: column;
                 flex-wrap: nowrap;
                 align-items: stretch;
                 gap: 0;
-                width: 100%;
-                padding: 4px 0 10px;
-                border: 1px solid var(--border);
-                box-shadow: none;
-                border-radius: 10px;
-                background: #F4F7F9;
+                width: min(240px, calc(100vw - 24px));
+                max-height: 70vh;
+                overflow: auto;
+                padding: 8px;
+                border: 1px solid #cbd5e1;
+                box-shadow: 0 16px 34px rgba(15,23,42,0.20);
+                border-radius: 12px;
+                background: rgba(255,255,255,0.98);
+                backdrop-filter: blur(6px);
+                z-index: 1200;
             }
             .nav-links.active { display: flex; }
             .nav-links a {
@@ -8035,7 +8536,8 @@ def landing_page():
             {% if soccer_enabled %}
             <a href="/soccer-picks">Soccer</a>
             {% endif %}
-            <a href="/plans">Plans</a>
+            <a href="/player-props">Player Props</a>
+            <a href="/plans">Pricing</a>
         </div>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
@@ -8076,7 +8578,7 @@ def landing_page():
 
 <!-- Proof Section -->
 <div style="max-width:800px;margin:22px auto 0;padding:0 24px 20px;">
-    <div style="background:#f8fafc;border:1px solid #E0E4E8;border-radius:14px;padding:20px 24px;">
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:14px;padding:20px 24px;">
         <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;text-align:center;">
             <div style="min-width:120px;">
                 <div style="font-size:1.8em;font-weight:900;color:#00C076;">{{ games_graded }}+</div>
@@ -8128,53 +8630,6 @@ def landing_page():
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
 {% endif %}
 
-<div class="search-results-wrap" style="margin:26px auto 34px;">
-    <div class="perf-dashboard" id="perfDashboard">
-        <h3 style="margin:0;color:#0f172a;">Model Performance Filters</h3>
-        <div class="perf-controls">
-            <select id="perfModel">
-                <option value="">All Models</option>
-                <option value="Grinder2">Grinder2</option>
-                <option value="Takedown">Takedown</option>
-                <option value="Edge">Edge</option>
-                <option value="XSharp">XSharp</option>
-                <option value="Sharp Consensus">Sharp Consensus</option>
-            </select>
-            <label style="font-size:0.82em;color:#334155;">Confidence >= <input id="perfConfidence" type="number" min="0" max="100" value="60" style="width:72px;"></label>
-            <label style="font-size:0.82em;color:#334155;">Consensus >= <input id="perfConsensus" type="number" min="0" max="100" value="" placeholder="Any" style="width:72px;"></label>
-            <select id="perfSport">
-                <option value="">All Sports</option>
-                <option value="NBA">NBA</option>
-                <option value="NHL">NHL</option>
-                <option value="MLB">MLB</option>
-                <option value="NFL">NFL</option>
-                <option value="NCAAB">NCAAB</option>
-                <option value="NCAAF">NCAAF</option>
-            </select>
-            <button type="button" id="perfApply" class="perf-apply-btn">Apply Filters</button>
-        </div>
-        <div class="question-buttons">
-            <button type="button" data-preset="highConfidence">High Confidence Picks</button>
-            <button type="button" data-preset="agreement">Model Agreement</button>
-            <button type="button" data-preset="consensus">Consensus > 70%</button>
-        </div>
-        <div class="perf-grid">
-            <div class="perf-stat"><div class="perf-label">Total Bets</div><div class="perf-value" id="statTotal">0</div></div>
-            <div class="perf-stat"><div class="perf-label">Wins</div><div class="perf-value" id="statWins">0</div></div>
-            <div class="perf-stat"><div class="perf-label">Losses</div><div class="perf-value" id="statLosses">0</div></div>
-            <div class="perf-stat"><div class="perf-label">Win %</div><div class="perf-value" id="statWinPct">0%</div></div>
-            <div class="perf-stat"><div class="perf-label">Units</div><div class="perf-value" id="statUnits">0</div></div>
-        </div>
-        <div class="perf-answer">
-            <div class="perf-answer-title" id="perfAnswerTitle">Answers for current filters</div>
-            <div class="perf-answer-list" id="perfAnswerList"></div>
-        </div>
-        <div style="margin-top:12px;text-align:center;">
-            <a href="/plans" style="display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.84em;">Join Premium for Full Card</a>
-        </div>
-    </div>
-</div>
-
 <!-- Sports grid -->
 <div class="section">
     <h2 class="section-title">Today’s Picks by Sport</h2>
@@ -8190,6 +8645,24 @@ def landing_page():
             <div style="margin-top:4px;font-size:0.78em;color:#fbbf24;font-weight:700;">View Picks →</div>
         </a>
         {% endfor %}
+    </div>
+</div>
+
+<!-- Model Performance -->
+<div class="section" style="padding-top:10px;padding-bottom:10px;">
+    <div style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:18px 20px;">
+        <h2 style="font-size:1.2rem;font-weight:900;color:#0f172a;margin:0 0 8px;">Model Performance</h2>
+        <p style="color:#334155;font-size:0.9em;line-height:1.7;margin:0 0 12px;">See completed-game performance by model and confidence bucket, with sample sizes and color-coded hit rates.</p>
+        {% if weekly_banner_messages %}
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+            {% for item in weekly_banner_messages[:3] %}
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(15,23,42,0.14);background:#f8fafc;color:#0f172a;font-size:0.78em;font-weight:700;">
+                <span style="color:#00529B;">Live</span> {{ item.label }} {{ item.pct }} ({{ item.record }})
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <a href="/performance" style="display:inline-flex;align-items:center;justify-content:center;background:#00529B;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-size:0.88em;font-weight:800;">Open Model Performance</a>
     </div>
 </div>
 
@@ -8296,6 +8769,7 @@ def landing_page():
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model-generated win probability for every game</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Proprietary AI odds engine pricing (not public consensus)</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Multi-model consensus signal strength</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Expanded dataset weighting (injuries, pace, efficiency, market movement)</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Fully tracked historical performance (transparent results)</span></li>
             </ul>
             <a href="/nba-picks" class="landing-price-cta landing-price-cta--light" style="text-align:center;background:#fff;color:#0f172a;border:1px solid rgba(15,23,42,0.32);border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 2px 8px rgba(15,23,42,0.08);">View Free Picks</a>
@@ -8308,7 +8782,8 @@ def landing_page():
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Over/Under totals with projected game flow</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Predicted final scores (simulation-based outputs)</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Enhanced multi-model consensus signals</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Expanded dataset weighting (injuries, pace, efficiency, market movement)</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Player props picks and projections</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model performance page access</span></li>
             </ul>
             <a href="/plans" class="landing-price-cta landing-price-cta--gold" style="text-align:center;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Unlock Model Edge</a>
         </div>
@@ -8357,56 +8832,56 @@ def landing_page():
 <div id="faq" class="section" style="padding-top:10px;padding-bottom:20px;">
     <h2 class="section-title">Frequently Asked Questions</h2>
     <div style="max-width:920px;margin:0 auto;display:grid;gap:10px;">
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">How do your AI sports betting picks work?</summary>
             <p style="margin-top:10px;color:#334155;">Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions.</p>
             <p style="margin-top:8px;color:#334155;">Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available.</p>
             <p style="margin-top:8px;color:#334155;">The process is data-driven: we evaluate odds, line movement, and market-implied prices against our projections to highlight situations where the market may be mispriced.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">What makes your picks different from sportsbooks?</summary>
             <p style="margin-top:10px;color:#334155;">Sportsbooks set odds based on balancing action and public perception, not just true probability.</p>
             <p style="margin-top:8px;color:#334155;">Our system creates projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential +EV opportunity.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">How do you find value bets?</summary>
             <p style="margin-top:10px;color:#334155;">We compare projections and market lines for moneyline, spread, and totals. Significant gaps indicate potential market mispricing.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">What does the probability percentage mean?</summary>
             <p style="margin-top:10px;color:#334155;">Each model outputs win probability for each game. If our model probability is higher than sportsbook implied probability, it can indicate value.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Do your models agree on every pick?</summary>
             <p style="margin-top:10px;color:#334155;">No. Each model uses a different methodology. We show individual predictions and consensus so confidence is transparent.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">What sports do you cover?</summary>
             <p style="margin-top:10px;color:#334155;">We focus on major markets such as MLB, NBA, NFL, and other high-liquidity sports where data quality is strong.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Are your results tracked publicly?</summary>
             <p style="margin-top:10px;color:#334155;">Yes. Every pick is tracked with full transparency, including wins, losses, and performance over time.</p>
             <p style="margin-top:8px;color:#334155;">Graded results are shown on our results pages as they finalize—there is no cherry-picking, editing picks after the fact, or hiding losses.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Is this suitable for beginners?</summary>
             <p style="margin-top:10px;color:#334155;">The site is built to be readable and structured, but sports betting still requires basic concepts—odds, bet types, and bankroll limits—and a commitment to responsible play.</p>
             <p style="margin-top:8px;color:#334155;">If you are new, start small, use free picks to learn how the models behave, and never wager more than you can afford to lose.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Is there a refund policy?</summary>
             <p style="margin-top:10px;color:#334155;">Yes. Monthly plans have a 10-day return window and yearly plans have a 30-day return window.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Are your picks guaranteed to win?</summary>
             <p style="margin-top:10px;color:#334155;">No system can guarantee wins. Sports betting includes variance; the goal is long-term +EV performance.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Who are these picks for?</summary>
             <p style="margin-top:10px;color:#334155;">These picks are built for bettors who want a structured, data-driven process rather than guesswork.</p>
         </details>
-        <details style="background:#ffffff;border:1px solid #E0E4E8;border-radius:10px;padding:12px 14px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
             <summary style="cursor:pointer;font-weight:700;">Expectations, discipline, and responsible use</summary>
             <p style="margin-top:10px;color:#334155;">Sports betting always involves risk and variance. Our tools are meant to support informed decision-making—not replace your judgment or encourage reckless stakes.</p>
             <p style="margin-top:8px;color:#334155;">Maintaining discipline, tracking results honestly, and keeping expectations realistic are central to using any model over the long term.</p>
@@ -8422,21 +8897,42 @@ def landing_page():
 <!-- SEO Internal Links -->
 <div class="section" style="padding-top:10px;padding-bottom:40px;text-align:center;">
     <h3 style="font-size:1.15em;font-weight:800;margin-bottom:14px;color:#0f172a;">Browse AI Picks by League</h3>
-    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
+    <div class="browse-league-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;max-width:1100px;margin:0 auto;">
         <a href="/mlb-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">MLB AI Picks &amp; Projections</a>
         <a href="/nba-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NBA AI Picks &amp; Projections</a>
         <a href="/nhl-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NHL AI Picks &amp; Projections</a>
         <a href="/nfl-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NFL AI Picks &amp; Projections</a>
         <a href="/soccer-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">Soccer AI Picks &amp; Projections</a>
         <a href="/ncaab-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NCAAB AI Picks &amp; Projections</a>
+        <a href="/ncaaf-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NCAAF AI Picks &amp; Projections</a>
+        <a href="/ncaaw-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NCAAW AI Picks &amp; Projections</a>
         <a href="/wnba-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">WNBA AI Picks &amp; Projections</a>
         <a href="/daily-report" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">Daily Betting Results Report</a>
     </div>
+    <style>
+        @media (max-width: 980px) {
+            .browse-league-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+        }
+    </style>
 </div>
 
 </main>
 
 <!-- Footer -->
+<div class="share-strip">
+    <span class="share-strip-label">Share on social media</span>
+    <div class="share-icons">
+        <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+        <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+        <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+        <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+        <a class="share-icon" href="https://api.whatsapp.com/send?text={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+        <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+    </div>
+</div>
 <footer class="site-footer">
     <div class="footer-outer">
         <div class="footer-brand"><a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.05em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a></div>
@@ -8455,6 +8951,7 @@ def landing_page():
                 <a href="/#faq">FAQ</a>
                 <a href="/daily-report">Daily results report</a>
                 <a href="/search">Search</a>
+                <a href="/performance">Model performance</a>
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
                 <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                 <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
@@ -8563,109 +9060,6 @@ def landing_page():
                 }
             });
         }
-        // Client-side performance dashboard
-        const perfModel = document.getElementById('perfModel');
-        const perfConfidence = document.getElementById('perfConfidence');
-        const perfConsensus = document.getElementById('perfConsensus');
-        const perfSport = document.getElementById('perfSport');
-        const perfApply = document.getElementById('perfApply');
-        const perfAnswerTitle = document.getElementById('perfAnswerTitle');
-        const perfAnswerList = document.getElementById('perfAnswerList');
-        const perfGrid = document.querySelector('.perf-grid');
-        let perfRows = [];
-        let perfLoaded = false;
-        const renderPerf = async (reasonLabel) => {
-            if (!perfLoaded) return;
-            const model = (perfModel?.value || '').trim();
-            const minConf = Number(perfConfidence?.value || 60);
-            const consensusRaw = (perfConsensus?.value || '').trim();
-            const sport = (perfSport?.value || '').trim();
-            const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val); };
-            const params = new URLSearchParams();
-            if (model) params.set('model', model);
-            if (sport) params.set('sport', sport);
-            params.set('min_conf', String(minConf));
-            if (consensusRaw !== '') params.set('consensus', consensusRaw);
-            let filtered = [];
-            let summary = null;
-            try {
-                const resp = await fetch(`/api/performance-data?${params.toString()}`);
-                const payload = await resp.json();
-                perfRows = payload.rows || [];
-                filtered = payload.filtered_rows || [];
-                summary = payload.summary || {};
-                const meta = payload.meta || {};
-                console.log('[perf] predictions count:', Number(meta.predictions_count || 0));
-                console.log('[perf] matched results count:', Number(meta.matched_results_count || 0));
-                console.log('[perf] total picks before filtering:', perfRows.length);
-                console.log('[perf] total picks after filtering:', Number(meta.filtered_count || filtered.length));
-            } catch (_err) {
-                filtered = [];
-                summary = null;
-            }
-            const total = Number(summary?.total_bets || 0);
-            const wins = Number(summary?.wins || 0);
-            const losses = Number(summary?.losses || 0);
-            const unitsNum = Number(summary?.units || 0);
-            const winPct = summary?.win_pct;
-            if (perfAnswerTitle) {
-                const label = reasonLabel || 'current filters';
-                perfAnswerTitle.textContent = `Answer for ${label}`;
-            }
-            if (perfAnswerList) {
-                if (!total) {
-                    if (perfGrid) perfGrid.style.display = 'none';
-                    set('statTotal', '—');
-                    set('statWins', '—');
-                    set('statLosses', '—');
-                    set('statWinPct', '—');
-                    set('statUnits', '—');
-                    perfAnswerList.innerHTML = '<div class="perf-empty"><strong>No bets match current filters.</strong><br>Stats unavailable for current filter.</div>';
-                } else {
-                    if (perfGrid) perfGrid.style.display = 'grid';
-                    set('statTotal', total);
-                    set('statWins', wins);
-                    set('statLosses', losses);
-                    set('statWinPct', winPct !== null && winPct !== undefined ? `${winPct}%` : '—');
-                    set('statUnits', unitsNum > 0 ? `+${unitsNum}` : unitsNum);
-                    const top = filtered.slice(0, 8);
-                    perfAnswerList.innerHTML = top.map(p => {
-                        const outcome = p.result === 'win' ? 'Win' : 'Loss';
-                        return `<div class="perf-answer-item"><span><strong>${p.sport}</strong> · ${p.model}</span><span>${p.confidence}% · ${outcome} · ${p.date || 'n/a'}</span></div>`;
-                    }).join('');
-                }
-            }
-        };
-        const applyPerfFilters = (label) => renderPerf(label || 'current filters');
-        fetch('/api/performance-data').then(r => r.json()).then(data => {
-            perfRows = data.rows || [];
-            perfLoaded = true;
-            applyPerfFilters('current filters');
-        }).catch(() => {
-            perfRows = [];
-            perfLoaded = true;
-            applyPerfFilters('current filters');
-        });
-        [perfModel, perfConfidence, perfConsensus, perfSport].forEach(el => {
-            if (!el) return;
-            el.addEventListener('change', () => applyPerfFilters('current filters'));
-            if (el === perfConfidence || el === perfConsensus) el.addEventListener('input', () => applyPerfFilters('current filters'));
-        });
-        if (perfApply) perfApply.addEventListener('click', () => applyPerfFilters('current filters'));
-        document.querySelectorAll('[data-preset]').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const p = btn.getAttribute('data-preset');
-                if (p === 'highConfidence') { if (perfConfidence) perfConfidence.value = '75'; }
-                if (p === 'agreement') { if (perfModel) perfModel.value = 'Edge'; if (perfConfidence) perfConfidence.value = '65'; }
-                if (p === 'consensus') { if (perfModel) perfModel.value = 'Sharp Consensus'; if (perfConfidence) perfConfidence.value = '70'; if (perfConsensus) perfConsensus.value = '70'; }
-                const labels = {
-                    highConfidence: 'High Confidence Picks',
-                    agreement: 'Model Agreement',
-                    consensus: 'Consensus > 70%'
-                };
-                applyPerfFilters(labels[p] || 'current filters');
-            });
-        });
     });
     document.addEventListener('click', function(event) {
         const navLinks = document.getElementById('navLinks');
@@ -8904,6 +9298,10 @@ def api_search():
 @app.route('/api/performance-data')
 def api_performance_data():
     """Per-model, per-game performance rows for client-side filtering UI."""
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
     rows_out = []
     filtered_rows = []
     meta = {'predictions_count': 0, 'matched_results_count': 0, 'rows_out_count': 0}
@@ -8924,58 +9322,98 @@ def api_performance_data():
     except Exception:
         req_min_consensus = None
 
-    base_sql = """
-        WITH joined AS (
+    games_where = ["g.home_score IS NOT NULL", "g.away_score IS NOT NULL"]
+    games_params = []
+    if req_sport:
+        games_where.append("UPPER(g.sport) = ?")
+        games_params.append(req_sport)
+
+    # Base dataset is last 200 completed games per sport (or for selected sport).
+    base_sql = f"""
+        WITH ranked_games AS (
             SELECT
-                p.sport,
-                p.game_date,
-                p.created_at,
-                COALESCE(p.actual_home_score, g.home_score) AS home_score,
-                COALESCE(p.actual_away_score, g.away_score) AS away_score,
+                g.sport,
+                g.game_id,
+                date(g.game_date) AS game_date,
+                g.home_team_id,
+                g.away_team_id,
+                g.home_score,
+                g.away_score,
+                ROW_NUMBER() OVER (
+                    PARTITION BY UPPER(g.sport)
+                    ORDER BY date(g.game_date) DESC
+                ) AS rn
+            FROM games g
+            WHERE {' AND '.join(games_where)}
+        ),
+        selected_games AS (
+            SELECT *
+            FROM ranked_games
+            WHERE rn <= 200
+        ),
+        game_pred_ranked AS (
+            SELECT
+                sg.sport,
+                sg.game_id,
+                sg.game_date,
+                sg.home_team_id,
+                sg.away_team_id,
+                sg.home_score,
+                sg.away_score,
                 p.elo_home_prob,
                 p.logistic_home_prob,
                 p.xgboost_home_prob,
                 p.catboost_home_prob,
-                p.meta_home_prob
-            FROM predictions p
-            LEFT JOIN games g
-              ON g.sport = p.sport
-             AND g.game_id = p.game_id
-            WHERE COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
-              AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
-        ),
-        ranked AS (
-            SELECT *,
-                   ROW_NUMBER() OVER (
-                     PARTITION BY UPPER(COALESCE(sport, ''))
-                     ORDER BY datetime(COALESCE(created_at, game_date)) DESC
-                   ) AS rn
-            FROM joined
+                p.meta_home_prob,
+                ROW_NUMBER() OVER (
+                    PARTITION BY sg.sport, sg.game_id, sg.game_date, sg.home_team_id, sg.away_team_id
+                    ORDER BY datetime(COALESCE(p.created_at, p.game_date)) DESC
+                ) AS pred_rn
+            FROM selected_games sg
+            LEFT JOIN predictions p
+              ON UPPER(p.sport) = UPPER(sg.sport)
+             AND (
+                p.game_id = sg.game_id
+                OR (
+                    date(p.game_date) = sg.game_date
+                    AND p.home_team_id = sg.home_team_id
+                    AND p.away_team_id = sg.away_team_id
+                )
+             )
         ),
         base AS (
-            SELECT * FROM ranked WHERE rn <= 200
+            SELECT
+                UPPER(sport) AS sport,
+                game_date AS date,
+                home_score,
+                away_score,
+                elo_home_prob,
+                logistic_home_prob,
+                xgboost_home_prob,
+                catboost_home_prob,
+                meta_home_prob
+            FROM game_pred_ranked
+            WHERE pred_rn = 1
+              AND home_score IS NOT NULL
+              AND away_score IS NOT NULL
+              AND home_score != away_score
         ),
         model_rows AS (
             SELECT
-                UPPER(COALESCE(sport, '')) AS sport,
-                game_date AS date,
+                sport,
+                date,
                 'Grinder2' AS model,
-                CASE WHEN MAX(COALESCE(catboost_home_prob, elo_home_prob), 1.0 - COALESCE(catboost_home_prob, elo_home_prob)) IS NULL
-                     THEN NULL
-                     ELSE ROUND(MAX(COALESCE(catboost_home_prob, elo_home_prob), 1.0 - COALESCE(catboost_home_prob, elo_home_prob)) * 100.0, 1)
-                END AS confidence,
+                ROUND(MAX(COALESCE(catboost_home_prob, elo_home_prob), 1.0 - COALESCE(catboost_home_prob, elo_home_prob)) * 100.0, 1) AS confidence,
                 CASE WHEN meta_home_prob IS NULL
                      THEN ROUND(MAX(COALESCE(catboost_home_prob, elo_home_prob), 1.0 - COALESCE(catboost_home_prob, elo_home_prob)) * 100.0, 1)
                      ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
                 END AS consensus,
                 CASE
-                    WHEN home_score = away_score THEN NULL
                     WHEN (COALESCE(catboost_home_prob, elo_home_prob) >= 0.5 AND home_score > away_score)
                       OR (COALESCE(catboost_home_prob, elo_home_prob) < 0.5 AND home_score < away_score)
                     THEN 'win' ELSE 'loss'
                 END AS result,
                 CASE
-                    WHEN home_score = away_score THEN 0
                     WHEN (COALESCE(catboost_home_prob, elo_home_prob) >= 0.5 AND home_score > away_score)
                       OR (COALESCE(catboost_home_prob, elo_home_prob) < 0.5 AND home_score < away_score)
                     THEN 1 ELSE -1
@@ -8986,8 +9424,8 @@ def api_performance_data():
             UNION ALL
 
             SELECT
-                UPPER(COALESCE(sport, '')) AS sport,
-                game_date AS date,
+                sport,
+                date,
                 'Edge' AS model,
                 ROUND(MAX(elo_home_prob, 1.0 - elo_home_prob) * 100.0, 1) AS confidence,
                 CASE WHEN meta_home_prob IS NULL
@@ -8995,13 +9433,11 @@ def api_performance_data():
                      ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
                 END AS consensus,
                 CASE
-                    WHEN home_score = away_score THEN NULL
                     WHEN (elo_home_prob >= 0.5 AND home_score > away_score)
                       OR (elo_home_prob < 0.5 AND home_score < away_score)
                     THEN 'win' ELSE 'loss'
                 END AS result,
                 CASE
-                    WHEN home_score = away_score THEN 0
                     WHEN (elo_home_prob >= 0.5 AND home_score > away_score)
                       OR (elo_home_prob < 0.5 AND home_score < away_score)
                     THEN 1 ELSE -1
@@ -9012,8 +9448,8 @@ def api_performance_data():
             UNION ALL
 
             SELECT
-                UPPER(COALESCE(sport, '')) AS sport,
-                game_date AS date,
+                sport,
+                date,
                 'Takedown' AS model,
                 ROUND(MAX(logistic_home_prob, 1.0 - logistic_home_prob) * 100.0, 1) AS confidence,
                 CASE WHEN meta_home_prob IS NULL
@@ -9021,13 +9457,11 @@ def api_performance_data():
                      ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
                 END AS consensus,
                 CASE
-                    WHEN home_score = away_score THEN NULL
                     WHEN (logistic_home_prob >= 0.5 AND home_score > away_score)
                       OR (logistic_home_prob < 0.5 AND home_score < away_score)
                     THEN 'win' ELSE 'loss'
                 END AS result,
                 CASE
-                    WHEN home_score = away_score THEN 0
                     WHEN (logistic_home_prob >= 0.5 AND home_score > away_score)
                       OR (logistic_home_prob < 0.5 AND home_score < away_score)
                     THEN 1 ELSE -1
@@ -9038,8 +9472,8 @@ def api_performance_data():
             UNION ALL
 
             SELECT
-                UPPER(COALESCE(sport, '')) AS sport,
-                game_date AS date,
+                sport,
+                date,
                 'XSharp' AS model,
                 ROUND(MAX(xgboost_home_prob, 1.0 - xgboost_home_prob) * 100.0, 1) AS confidence,
                 CASE WHEN meta_home_prob IS NULL
@@ -9047,13 +9481,11 @@ def api_performance_data():
                      ELSE ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1)
                 END AS consensus,
                 CASE
-                    WHEN home_score = away_score THEN NULL
                     WHEN (xgboost_home_prob >= 0.5 AND home_score > away_score)
                       OR (xgboost_home_prob < 0.5 AND home_score < away_score)
                     THEN 'win' ELSE 'loss'
                 END AS result,
                 CASE
-                    WHEN home_score = away_score THEN 0
                     WHEN (xgboost_home_prob >= 0.5 AND home_score > away_score)
                       OR (xgboost_home_prob < 0.5 AND home_score < away_score)
                     THEN 1 ELSE -1
@@ -9064,19 +9496,17 @@ def api_performance_data():
             UNION ALL
 
             SELECT
-                UPPER(COALESCE(sport, '')) AS sport,
-                game_date AS date,
+                sport,
+                date,
                 'Sharp Consensus' AS model,
                 ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1) AS confidence,
                 ROUND(MAX(meta_home_prob, 1.0 - meta_home_prob) * 100.0, 1) AS consensus,
                 CASE
-                    WHEN home_score = away_score THEN NULL
                     WHEN (meta_home_prob >= 0.5 AND home_score > away_score)
                       OR (meta_home_prob < 0.5 AND home_score < away_score)
                     THEN 'win' ELSE 'loss'
                 END AS result,
                 CASE
-                    WHEN home_score = away_score THEN 0
                     WHEN (meta_home_prob >= 0.5 AND home_score > away_score)
                       OR (meta_home_prob < 0.5 AND home_score < away_score)
                     THEN 1 ELSE -1
@@ -9086,11 +9516,11 @@ def api_performance_data():
         )
         SELECT sport, date, model, confidence, consensus, result, units
         FROM model_rows
-        WHERE result IS NOT NULL
+        WHERE 1=1
     """
 
     where_conditions = []
-    sql_params = []
+    sql_params = list(games_params)
     if req_sport:
         where_conditions.append("sport = ?")
         sql_params.append(req_sport)
@@ -9141,7 +9571,7 @@ def api_performance_data():
 
         # Keep rows payload for UI/debug, unfiltered by request parameters.
         all_rows_sql = base_sql + " ORDER BY date DESC"
-        rows_out_db = conn.execute(all_rows_sql).fetchall()
+        rows_out_db = conn.execute(all_rows_sql, tuple(games_params)).fetchall()
         rows_out = [{
             'sport': (r['sport'] or '').upper(),
             'date': r['date'] or '',
@@ -9156,6 +9586,122 @@ def api_performance_data():
         logger.exception(f"[perf] performance-data query failed: {e}")
         rows_out = []
         filtered_rows = []
+
+    # If stored prediction joins are sparse for a selected sport/model, fall back
+    # to v2 probabilities across the same last 200 completed games.
+    fallback_used = False
+    if req_sport and req_model and len(filtered_rows) < 20:
+        try:
+            conn = get_db_connection()
+            fallback_games = conn.execute(
+                """
+                SELECT
+                    date(g.game_date) AS game_date,
+                    g.home_team_id,
+                    g.away_team_id,
+                    g.home_score,
+                    g.away_score,
+                    p.elo_home_prob,
+                    p.logistic_home_prob,
+                    p.xgboost_home_prob,
+                    p.catboost_home_prob,
+                    p.meta_home_prob
+                FROM games g
+                LEFT JOIN predictions p
+                  ON UPPER(p.sport) = UPPER(g.sport)
+                 AND (
+                    p.game_id = g.game_id
+                    OR (
+                        date(p.game_date) = date(g.game_date)
+                        AND p.home_team_id = g.home_team_id
+                        AND p.away_team_id = g.away_team_id
+                    )
+                 )
+                WHERE UPPER(g.sport) = ?
+                  AND g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                  AND g.home_score != g.away_score
+                ORDER BY date(g.game_date) DESC
+                LIMIT 200
+                """,
+                (req_sport,)
+            ).fetchall()
+            conn.close()
+
+            def _f(v):
+                try:
+                    return float(v) if v is not None else None
+                except Exception:
+                    return None
+
+            fallback_rows = []
+            for g in fallback_games:
+                date_key = g['game_date']
+                home = g['home_team_id']
+                away = g['away_team_id']
+                home_score = _f(g['home_score'])
+                away_score = _f(g['away_score'])
+                if home_score is None or away_score is None or home_score == away_score:
+                    continue
+
+                v2 = None
+                try:
+                    v2 = get_v2_prediction(req_sport, home, away, date_key)
+                except Exception:
+                    v2 = None
+
+                glicko2_prob = _f(v2.get('glicko2_prob')) if v2 else None
+                trueskill_prob = _f(v2.get('trueskill_prob')) if v2 else None
+                elo_prob = _f(g['elo_home_prob'])
+                logistic_prob = _f(g['logistic_home_prob'])
+                xgb_prob = _f(g['xgboost_home_prob'])
+                catboost_prob = _f(g['catboost_home_prob'])
+                if v2:
+                    xgb_prob = _f(v2.get('xgboost_prob')) if _f(v2.get('xgboost_prob')) is not None else xgb_prob
+                if elo_prob is None:
+                    elo_prob = catboost_prob or glicko2_prob or xgb_prob
+                if catboost_prob is None:
+                    catboost_prob = glicko2_prob or elo_prob
+                meta_prob = _f(g['meta_home_prob'])
+                if meta_prob is None:
+                    meta_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob or 0.5)
+
+                model_prob_map = {
+                    'Grinder2': glicko2_prob if glicko2_prob is not None else catboost_prob,
+                    'Takedown': trueskill_prob if trueskill_prob is not None else logistic_prob,
+                    'Edge': elo_prob,
+                    'XSharp': xgb_prob,
+                    'Sharp Consensus': meta_prob,
+                }
+                prob = model_prob_map.get(req_model)
+                if prob is None:
+                    continue
+
+                confidence = round(max(prob, 1.0 - prob) * 100.0, 1)
+                consensus = round(max(meta_prob, 1.0 - meta_prob) * 100.0, 1) if meta_prob is not None else confidence
+                if req_min_conf is not None and confidence < req_min_conf:
+                    continue
+                if req_min_consensus is not None and consensus < req_min_consensus:
+                    continue
+
+                home_won = home_score > away_score
+                picked_home = prob >= 0.5
+                was_correct = picked_home == home_won
+                fallback_rows.append({
+                    'sport': req_sport,
+                    'date': date_key,
+                    'model': req_model,
+                    'confidence': confidence,
+                    'consensus': consensus,
+                    'result': 'win' if was_correct else 'loss',
+                    'units': 1.0 if was_correct else -1.0,
+                })
+
+            if len(fallback_rows) > len(filtered_rows):
+                filtered_rows = fallback_rows
+                fallback_used = True
+        except Exception as e:
+            logger.debug(f"[perf] v2 fallback failed: {e}")
 
     wins = sum(1 for r in filtered_rows if r.get('result') == 'win')
     total = len(filtered_rows)
@@ -9173,6 +9719,7 @@ def api_performance_data():
     }
     meta['sql'] = final_sql
     meta['sql_params'] = sql_params
+    meta['v2_fallback_used'] = fallback_used
     meta['message'] = 'No bets match current filters.' if total == 0 else None
 
     return jsonify({
@@ -9187,6 +9734,497 @@ def api_performance_data():
         },
         'meta': meta
     })
+
+
+_PERF_MODEL_ORDER = ['Grinder2', 'Takedown', 'Edge', 'XSharp', 'Consensus']
+_PERF_BUCKET_ORDER = [
+    '85%+',
+    '80-84%',
+    '75-79%',
+    '70-74%',
+    '65-69%',
+    '60-64%',
+    '55-59%',
+    '50-54%',
+    '45-49%',
+    '40-44%',
+    '35-39%',
+    '30-34%',
+    '25-29%',
+    '20-24%',
+    '<20%',
+]
+_PERF_SPORT_OPTIONS = ['NBA', 'NHL', 'MLB', 'NFL', 'NCAAB', 'NCAAF']
+_PERF_ENABLE_V2_FALLBACK = (_os.environ.get('PERFORMANCE_V2_FALLBACK', '0').strip().lower() in ('1', 'true', 'yes', 'on'))
+
+
+def _build_performance_page_data(sport_filter: str = '', last_n: int | None = None):
+    """
+    Build performance using Excel-style logic:
+      - Confidence bucket from picked-side confidence (max(p, 1-p) * 100)
+      - Wins/Losses counted from binary correctness
+      - Base set is last N UNIQUE completed games (from games table first)
+    """
+    where_parts = ["g.home_score IS NOT NULL", "g.away_score IS NOT NULL", "g.home_score != g.away_score"]
+    params = []
+    if _PERF_SPORT_OPTIONS:
+        placeholders = ",".join(["?"] * len(_PERF_SPORT_OPTIONS))
+        where_parts.append(f"UPPER(g.sport) IN ({placeholders})")
+        params.extend(_PERF_SPORT_OPTIONS)
+    if sport_filter:
+        where_parts.append("UPPER(g.sport) = ?")
+        params.append(sport_filter)
+
+    game_sql = f"""
+        SELECT
+            UPPER(g.sport) AS sport,
+            g.game_id,
+            date(g.game_date) AS game_date,
+            g.home_team_id,
+            g.away_team_id,
+            g.home_score,
+            g.away_score
+        FROM games g
+        WHERE {' AND '.join(where_parts)}
+        ORDER BY date(g.game_date) DESC, g.game_id DESC
+        {('LIMIT ?' if last_n else '')}
+    """
+    game_params = list(params)
+    if last_n:
+        game_params.append(int(last_n))
+
+    conn = get_db_connection()
+    games = conn.execute(game_sql, tuple(game_params)).fetchall()
+
+    def _flt(v):
+        try:
+            return float(v) if v is not None else None
+        except Exception:
+            return None
+
+    def _bucket_for_conf(confidence):
+        if confidence >= 85: return '85%+'
+        if confidence >= 80: return '80-84%'
+        if confidence >= 75: return '75-79%'
+        if confidence >= 70: return '70-74%'
+        if confidence >= 65: return '65-69%'
+        if confidence >= 60: return '60-64%'
+        if confidence >= 55: return '55-59%'
+        if confidence >= 50: return '50-54%'
+        if confidence >= 45: return '45-49%'
+        if confidence >= 40: return '40-44%'
+        if confidence >= 35: return '35-39%'
+        if confidence >= 30: return '30-34%'
+        if confidence >= 25: return '25-29%'
+        if confidence >= 20: return '20-24%'
+        return '<20%'
+
+    # Aggregate containers
+    main_rollup = {}
+    sport_rows = {}
+    team_rows = {}
+
+    pred_sql_exact = """
+        SELECT elo_home_prob, logistic_home_prob, xgboost_home_prob, catboost_home_prob, meta_home_prob
+        FROM predictions
+        WHERE UPPER(sport) = ? AND game_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    """
+
+    for g in games:
+        sport = (g['sport'] or '').upper()
+        game_id = g['game_id']
+        date_key = g['game_date']
+        home = g['home_team_id']
+        away = g['away_team_id']
+        hs = _flt(g['home_score'])
+        aw = _flt(g['away_score'])
+        if hs is None or aw is None or hs == aw:
+            continue
+        home_won = hs > aw
+
+        pred = conn.execute(pred_sql_exact, (sport, game_id)).fetchone()
+
+        elo_prob = _flt(pred['elo_home_prob']) if pred else None
+        logi_prob = _flt(pred['logistic_home_prob']) if pred else None
+        xgb_prob = _flt(pred['xgboost_home_prob']) if pred else None
+        cat_prob = _flt(pred['catboost_home_prob']) if pred else None
+        meta_prob = _flt(pred['meta_home_prob']) if pred else None
+
+        # Keep unique game matching, but restore model fallbacks so sparse stored
+        # probability columns don't zero-out entire models.
+        v2 = None
+        if _PERF_ENABLE_V2_FALLBACK:
+            try:
+                v2 = get_v2_prediction(sport, home, away, date_key)
+            except Exception:
+                v2 = None
+
+        glicko2_prob = _flt(v2.get('glicko2_prob')) if v2 else None
+        trueskill_prob = _flt(v2.get('trueskill_prob')) if v2 else None
+        if xgb_prob is None and v2:
+            xgb_prob = _flt(v2.get('xgboost_prob'))
+        if elo_prob is None:
+            elo_prob = cat_prob or glicko2_prob or xgb_prob
+        if cat_prob is None:
+            cat_prob = glicko2_prob or elo_prob
+        if logi_prob is None:
+            logi_prob = trueskill_prob
+        if meta_prob is None:
+            meta_prob = _compute_ensemble_prob(
+                glicko2_prob,
+                trueskill_prob,
+                xgb_prob,
+                elo_prob,
+                fallback=elo_prob or 0.5
+            )
+
+        model_prob = {
+            'Grinder2': glicko2_prob if glicko2_prob is not None else cat_prob,
+            'Takedown': trueskill_prob if trueskill_prob is not None else logi_prob,
+            'Edge': elo_prob,
+            'XSharp': xgb_prob,
+            'Consensus': meta_prob,
+        }
+
+        for model in _PERF_MODEL_ORDER:
+            p = model_prob.get(model)
+            if p is None:
+                continue
+            # Match CSV/Excel workflow exactly: bucket on rounded confidence value.
+            confidence = round(max(p, 1.0 - p) * 100.0, 1)
+            bucket = _bucket_for_conf(confidence)
+            if bucket not in _PERF_BUCKET_ORDER:
+                continue
+            picked_team = home if p >= 0.5 else away
+            correct = 1 if ((p >= 0.5) == home_won) else 0
+
+            main_key = (model, bucket)
+            if main_key not in main_rollup:
+                main_rollup[main_key] = {'total': 0, 'wins': 0, 'losses': 0}
+            main_rollup[main_key]['total'] += 1
+            main_rollup[main_key]['wins'] += correct
+            main_rollup[main_key]['losses'] += (1 - correct)
+
+            sport_key = (sport, model, bucket)
+            if sport_key not in sport_rows:
+                sport_rows[sport_key] = {'total': 0, 'wins': 0, 'losses': 0}
+            sport_rows[sport_key]['total'] += 1
+            sport_rows[sport_key]['wins'] += correct
+            sport_rows[sport_key]['losses'] += (1 - correct)
+
+            # Team-specific rollup (picked team + confidence bucket)
+            team_key = (sport, picked_team, model, bucket)
+            if team_key not in team_rows:
+                team_rows[team_key] = {'total': 0, 'wins': 0, 'losses': 0}
+            team_rows[team_key]['total'] += 1
+            team_rows[team_key]['wins'] += correct
+            team_rows[team_key]['losses'] += (1 - correct)
+
+    conn.close()
+
+    def _cell(data):
+        if not data or data['total'] <= 0:
+            return None
+        total = data['total']
+        wins = data['wins']
+        losses = data['losses']
+        win_pct = round((wins / total) * 100.0, 1) if total else None
+        return {'n': total, 'wins': wins, 'losses': losses, 'win_pct': win_pct}
+
+    main_table = {b: {m: _cell(main_rollup.get((m, b))) for m in _PERF_MODEL_ORDER} for b in _PERF_BUCKET_ORDER}
+    sports_present = sorted({k[0] for k in sport_rows.keys() if k[0]})
+    sport_tables = {
+        sport: {b: {m: _cell(sport_rows.get((sport, m, b))) for m in _PERF_MODEL_ORDER} for b in _PERF_BUCKET_ORDER}
+        for sport in sports_present
+    }
+
+    # Team cards: one row per team with per-model record and win %
+    team_model_rollup = {}
+    for (sport, team, model, _bucket), vals in team_rows.items():
+        key = (sport, team, model)
+        if key not in team_model_rollup:
+            team_model_rollup[key] = {'total': 0, 'wins': 0, 'losses': 0}
+        team_model_rollup[key]['total'] += vals['total']
+        team_model_rollup[key]['wins'] += vals['wins']
+        team_model_rollup[key]['losses'] += vals['losses']
+
+    by_team = {}
+    for (sport, team, model), vals in team_model_rollup.items():
+        if sport_filter and sport != sport_filter:
+            continue
+        team_key = (sport, team)
+        if team_key not in by_team:
+            by_team[team_key] = {'sport': sport, 'team': team, 'models': {}, 'total_n': 0}
+        n = vals['total']
+        w = vals['wins']
+        l = vals['losses']
+        by_team[team_key]['models'][model] = {
+            'n': n,
+            'wins': w,
+            'losses': l,
+            'win_pct': round((w / n) * 100.0, 1) if n else 0.0,
+        }
+        by_team[team_key]['total_n'] += n
+
+    team_chart_rows = []
+    for _, row in by_team.items():
+        ordered_models = {}
+        for m in _PERF_MODEL_ORDER:
+            ordered_models[m] = row['models'].get(m)
+        row['models'] = ordered_models
+        team_chart_rows.append(row)
+
+    team_chart_rows.sort(key=lambda x: (-x['total_n'], x['team']))
+    team_chart_rows = team_chart_rows[:120]
+    return main_table, sport_tables, team_chart_rows
+
+
+@app.route('/player-props')
+def player_props_page():
+    """Player Props launcher with local-safe fallback."""
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    ext = (_os.environ.get('PLAYER_PROPS_URL') or '').strip()
+    # Guard against accidental backend-health targets (e.g. :8101/health),
+    # which show JSON instead of the props UI.
+    _bad_local_targets = ('127.0.0.1:8101', 'localhost:8101', '/health')
+    if ext and not any(tok in ext for tok in _bad_local_targets):
+        return redirect(ext)
+    # Local development: render embedded app inside site chrome.
+    if _os.environ.get('FLASK_ENV', '').lower() == 'development' or request.host.startswith(('127.0.0.1', 'localhost')):
+        return render_template('player_props_embed.html', embed_src='http://localhost:5179/')
+    return render_template('player_props_hub.html')
+
+
+@app.route('/performance')
+def performance_page():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    sport = (request.args.get('sport') or '').strip().upper()
+    if sport not in _PERF_SPORT_OPTIONS:
+        sport = ''
+    last_n_raw = (request.args.get('last_n') or '').strip().lower()
+    last_n = None
+    if last_n_raw in ('50', '100', '200'):
+        last_n = int(last_n_raw)
+
+    main_table, sport_tables, team_chart_rows = _build_performance_page_data(sport_filter=sport, last_n=last_n)
+    return render_template(
+        'performance.html',
+        page='performance',
+        selected_sport=sport,
+        selected_last_n=(str(last_n) if last_n else ''),
+        sport_options=_PERF_SPORT_OPTIONS,
+        model_order=_PERF_MODEL_ORDER,
+        bucket_order=_PERF_BUCKET_ORDER,
+        main_table=main_table,
+        sport_tables=sport_tables,
+        team_chart_rows=team_chart_rows,
+    )
+
+
+@app.route('/performance/audit.csv')
+def performance_audit_csv():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    sport = (request.args.get('sport') or '').strip().upper()
+    if sport not in _PERF_SPORT_OPTIONS:
+        sport = ''
+    try:
+        last_n = int((request.args.get('last_n') or '50').strip())
+    except Exception:
+        last_n = 50
+    last_n = max(1, min(500, last_n))
+
+    where_parts = [
+        "g.home_score IS NOT NULL",
+        "g.away_score IS NOT NULL",
+        "g.home_score != g.away_score",
+    ]
+    params = []
+    if _PERF_SPORT_OPTIONS:
+        placeholders = ",".join(["?"] * len(_PERF_SPORT_OPTIONS))
+        where_parts.append(f"UPPER(g.sport) IN ({placeholders})")
+        params.extend(_PERF_SPORT_OPTIONS)
+    if sport:
+        where_parts.append("UPPER(g.sport) = ?")
+        params.append(sport)
+
+    sql = f"""
+        SELECT
+            UPPER(g.sport) AS sport,
+            g.game_id,
+            date(g.game_date) AS game_date,
+            g.home_team_id,
+            g.away_team_id,
+            g.home_score,
+            g.away_score
+        FROM games g
+        WHERE {' AND '.join(where_parts)}
+        ORDER BY date(g.game_date) DESC, g.game_id DESC
+        LIMIT ?
+    """
+    params.append(last_n)
+    conn = get_db_connection()
+    rows = conn.execute(sql, tuple(params)).fetchall()
+
+    def _flt(v):
+        try:
+            return float(v) if v is not None else None
+        except Exception:
+            return None
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+    # Column layout intentionally matches your Excel formulas:
+    # H = picked_team, I = confidence_pct, K = correct_binary
+    writer.writerow([
+        'sport',                 # A
+        'game_date',             # B
+        'game_id',               # C
+        'model',                 # D
+        'away_team',             # E
+        'home_team',             # F
+        'actual_winner',         # G
+        'picked_team',           # H
+        'confidence_pct',        # I
+        'confidence_bucket',     # J
+        'correct_binary',        # K
+        'away_score',            # L
+        'home_score',            # M
+        'model_home_prob',       # N
+        'prob_source',           # O
+    ])
+
+    pred_sql_exact = """
+        SELECT
+            elo_home_prob,
+            logistic_home_prob,
+            xgboost_home_prob,
+            catboost_home_prob,
+            meta_home_prob
+        FROM predictions
+        WHERE UPPER(sport) = ? AND game_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    """
+
+    def _bucket_for_conf(confidence):
+        if confidence >= 85: return '85%+'
+        if confidence >= 80: return '80-84%'
+        if confidence >= 75: return '75-79%'
+        if confidence >= 70: return '70-74%'
+        if confidence >= 65: return '65-69%'
+        if confidence >= 60: return '60-64%'
+        if confidence >= 55: return '55-59%'
+        if confidence >= 50: return '50-54%'
+        if confidence >= 45: return '45-49%'
+        if confidence >= 40: return '40-44%'
+        if confidence >= 35: return '35-39%'
+        if confidence >= 30: return '30-34%'
+        if confidence >= 25: return '25-29%'
+        if confidence >= 20: return '20-24%'
+        return '<20%'
+
+    for r in rows:
+        row_sport = (r['sport'] or '').upper()
+        home = r['home_team_id']
+        away = r['away_team_id']
+        hs = _flt(r['home_score'])
+        aw = _flt(r['away_score'])
+        if hs is None or aw is None or hs == aw:
+            continue
+        home_won = hs > aw
+        actual_winner = home if home_won else away
+
+        pred = conn.execute(pred_sql_exact, (row_sport, r['game_id'])).fetchone()
+        elo_prob = _flt(pred['elo_home_prob']) if pred else None
+        logi_prob = _flt(pred['logistic_home_prob']) if pred else None
+        xgb_prob = _flt(pred['xgboost_home_prob']) if pred else None
+        cat_prob = _flt(pred['catboost_home_prob']) if pred else None
+        meta_prob = _flt(pred['meta_home_prob']) if pred else None
+
+        v2 = None
+        if _PERF_ENABLE_V2_FALLBACK:
+            try:
+                v2 = get_v2_prediction(row_sport, home, away, r['game_date'])
+            except Exception:
+                v2 = None
+        glicko2_prob = _flt(v2.get('glicko2_prob')) if v2 else None
+        trueskill_prob = _flt(v2.get('trueskill_prob')) if v2 else None
+        if xgb_prob is None and v2:
+            xgb_prob = _flt(v2.get('xgboost_prob'))
+        if elo_prob is None:
+            elo_prob = cat_prob or glicko2_prob or xgb_prob
+        if cat_prob is None:
+            cat_prob = glicko2_prob or elo_prob
+        if logi_prob is None:
+            logi_prob = trueskill_prob
+        if meta_prob is None:
+            meta_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob or 0.5)
+
+        model_prob = {
+            'grinder2': glicko2_prob if glicko2_prob is not None else cat_prob,
+            'takedown': trueskill_prob if trueskill_prob is not None else logi_prob,
+            'edge': elo_prob,
+            'xsharp': xgb_prob,
+            'consensus': meta_prob,
+        }
+
+        for model_name in ['grinder2', 'takedown', 'edge', 'xsharp', 'consensus']:
+            prob = model_prob.get(model_name)
+            if prob is None:
+                continue
+            pick_home = prob >= 0.5
+            picked_team = home if pick_home else away
+            confidence = round(max(prob, 1.0 - prob) * 100.0, 1)
+            bucket = _bucket_for_conf(confidence)
+            correct = 1 if picked_team == actual_winner else 0
+            source = 'stored'
+            if model_name == 'grinder2' and glicko2_prob is not None:
+                source = 'v2_glicko2'
+            elif model_name == 'takedown' and trueskill_prob is not None:
+                source = 'v2_trueskill'
+            elif model_name == 'xsharp' and v2 and (pred is None or _flt(pred['xgboost_home_prob']) is None):
+                source = 'v2_xgboost'
+            elif model_name == 'consensus' and (pred is None or _flt(pred['meta_home_prob']) is None):
+                source = 'computed_ensemble'
+
+            writer.writerow([
+                row_sport,                 # A
+                r['game_date'],            # B
+                r['game_id'],              # C
+                model_name,                # D
+                away,                      # E
+                home,                      # F
+                actual_winner,             # G
+                picked_team,               # H
+                confidence,                # I
+                bucket,                    # J
+                correct,                   # K
+                int(aw),                   # L
+                int(hs),                   # M
+                round(prob, 6),            # N
+                source,                    # O
+            ])
+
+    csv_body = out.getvalue()
+    out.close()
+    conn.close()
+    file_sport = sport if sport else 'ALL'
+    return Response(
+        csv_body,
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="performance_audit_{file_sport}_{last_n}.csv"'},
+    )
 
 @app.route('/teams/<slug>')
 def team_lookup(slug):
@@ -9480,10 +10518,15 @@ def daily_report_page():
         logger.debug(f'Daily report Soccer sync: {_soc_e}')
 
     # Query DB for yesterday's completed games only (fast, no external API calls)
+    _daily_today = datetime.now()
     for sport_key in ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']:
         if sport_key == 'SOCCER' and not SOCCER_ENABLED:
             continue
         if sport_key not in SPORTS:
+            continue
+        # Daily report must only include active in-season sports.
+        _status, _is_live = get_season_status(sport_key, today=_daily_today)
+        if not _is_live:
             continue
         try:
             conn = get_db_connection()
@@ -9793,12 +10836,6 @@ def sport_predictions(sport, filter_date=None):
             "Please refresh in a minute."
         )
 
-    if sport != 'SOCCER':
-        try:
-            _attach_engine_odds_to_predictions(sport, predictions)
-        except Exception as _odds_err:
-            logger.debug(f"Odds attachment failed for {sport}: {_odds_err}")
-
     for pred in predictions:
         for _k in (
             'market_spread',
@@ -9852,15 +10889,56 @@ def sport_predictions(sport, filter_date=None):
             }
             for lg in soccer_league_list
         ]
-    
-    # Group predictions by date for NHL/NBA, by week for NFL
-    from collections import defaultdict
-    grouped_predictions = defaultdict(list)
+
     try:
         today_date = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
     except Exception:
         today_date = datetime.now().strftime('%Y-%m-%d')
+
+    # Social-share image payload: top 3 unique upcoming predictions from today's slate
+    # (fallback to next available date if no games today).
+    shareable_by_matchup = {}
+    for pred in predictions:
+        if pred.get('home_score') is not None:
+            continue
+        game_date = pred.get('game_date') or ''
+        away_team = pred.get('away_team_id') or ''
+        home_team = pred.get('home_team_id') or ''
+        matchup_key = f"{game_date}|{'|'.join(sorted([away_team, home_team]))}"
+        base_prob = pred.get('ensemble_prob')
+        if base_prob is None:
+            base_prob = pred.get('elo_prob')
+        if base_prob is None:
+            base_prob = pred.get('xgb_prob')
+        try:
+            prob_val = float(base_prob)
+        except Exception:
+            continue
+        pick_side = 'home' if prob_val >= 50.0 else 'away'
+        candidate = {
+            'away_team': away_team,
+            'home_team': home_team,
+            'game_date': game_date,
+            'pick_side': pick_side,
+            'pick_team': (home_team if pick_side == 'home' else away_team),
+            'confidence': round(prob_val if prob_val >= 50.0 else (100.0 - prob_val), 1),
+        }
+        existing = shareable_by_matchup.get(matchup_key)
+        if (not existing) or (candidate['confidence'] > existing['confidence']):
+            shareable_by_matchup[matchup_key] = candidate
+
+    shareable_pool = list(shareable_by_matchup.values())
+    date_pool = {}
+    for item in shareable_pool:
+        date_pool.setdefault(item['game_date'], []).append(item)
+    target_date = today_date if today_date in date_pool else (sorted(date_pool.keys())[0] if date_pool else '')
+    shareable_cards = date_pool.get(target_date, [])
+    shareable_cards.sort(key=lambda x: (-x['confidence'], x['away_team'], x['home_team']))
+    shareable_cards = shareable_cards[:3]
     
+    # Group predictions by date for NHL/NBA, by week for NFL
+    from collections import defaultdict
+    grouped_predictions = defaultdict(list)
     if sport in ['NHL', 'NBA']:
         # Group by date
         for pred in predictions:
@@ -9908,7 +10986,8 @@ def sport_predictions(sport, filter_date=None):
             sorted_dates=sorted_dates,
             today_date=today_date,
             group_by='week' if sport == 'NFL' else 'date',
-            soccer_leagues=soccer_leagues
+            soccer_leagues=soccer_leagues,
+            shareable_cards=shareable_cards,
         )
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
@@ -10209,6 +11288,13 @@ def sport_results(sport):
 
         # Handle NCAAB
         if sport in ['NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA', 'SOCCER']:
+            min_live = _SPORT_MIN_LIVE_DATES.get(sport)
+            if min_live and datetime.now() < min_live:
+                launch_txt = min_live.strftime('%B %-d, %Y')
+                return _results_fallback_page(
+                    sport,
+                    f"{SPORTS[sport]['name']} regular season results will appear once games begin on {launch_txt}."
+                )
             selected_league = None
             selected_slug = None
             if sport == 'SOCCER':

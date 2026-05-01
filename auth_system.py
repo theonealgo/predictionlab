@@ -42,7 +42,7 @@ except ImportError:
 
 from flask import (
     Blueprint, request, redirect, url_for, session,
-    render_template_string, jsonify, flash, g
+    render_template, render_template_string, jsonify, flash, g
 )
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user,
@@ -284,7 +284,11 @@ def _setup_google_oauth(app):
 def google_login():
     if not _oauth:
         return "Google login not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 500
-    redirect_uri = url_for('auth.google_callback', _external=True)
+    redirect_uri = (
+        os.environ.get('GOOGLE_REDIRECT_URI')
+        or url_for('auth.google_callback', _external=True)
+    )
+    logger.info(f"[auth] Google OAuth redirect_uri={redirect_uri}")
     return _oauth.google.authorize_redirect(redirect_uri)
 
 
@@ -348,10 +352,12 @@ def login_page():
         'session_expired': 'Your session was ended because your account was logged in on another device.',
     }.get(error, '')
 
-    return render_template_string(LOGIN_TEMPLATE,
-                                  error_msg=error_msg,
-                                  google_enabled=bool(GOOGLE_CLIENT_ID),
-                                  page='login')
+    return render_template(
+        'login.html',
+        error_msg=error_msg,
+        google_enabled=bool(GOOGLE_CLIENT_ID),
+        page='login',
+    )
 
 
 @auth_bp.route('/login', methods=['POST'])
@@ -384,9 +390,17 @@ def login_submit():
 
 @auth_bp.route('/signup', methods=['GET'])
 def signup_page():
-    return render_template_string(SIGNUP_TEMPLATE,
-                                  google_enabled=bool(GOOGLE_CLIENT_ID),
-                                  page='signup')
+    error = request.args.get('error', '')
+    error_msg = {
+        'invalid': 'Please enter a valid email and password.',
+        'mismatch': 'Passwords do not match.',
+    }.get(error, '')
+    return render_template(
+        'signup.html',
+        error_msg=error_msg,
+        google_enabled=bool(GOOGLE_CLIENT_ID),
+        page='signup',
+    )
 
 
 @auth_bp.route('/signup', methods=['POST'])
@@ -823,6 +837,8 @@ def plans_page():
                         <li>Every Total Pick (Our Strongest Edge)</li>
                         <li>Projected Scores for Every Game</li>
                         <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>Player Props Picks &amp; Projections</li>
+                        <li>Model Performance Calculator Access</li>
                         <li>All Sports Covered</li>
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
@@ -839,6 +855,8 @@ def plans_page():
                         <li>Every Total Pick (Our Strongest Edge)</li>
                         <li>Projected Scores for Every Game</li>
                         <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>Player Props Picks &amp; Projections</li>
+                        <li>Model Performance Calculator Access</li>
                         <li>All Sports Covered</li>
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
