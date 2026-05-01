@@ -5300,9 +5300,31 @@ BASE_TEMPLATE = """
     <meta name="author" content="underdogs.bet">
     <meta name="publisher" content="GoodsandMore Inc.">
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
-    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-R4XM0WKTGG');</script>
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <script>
+    (function(){
+        function initGA(){
+            if (window.__gaLoaded) return;
+            window.__gaLoaded = true;
+            var s = document.createElement('script');
+            s.async = true;
+            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG';
+            document.head.appendChild(s);
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+            gtag('js', new Date());
+            gtag('config', 'G-R4XM0WKTGG');
+        }
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(initGA, { timeout: 2500 });
+        } else {
+            window.addEventListener('load', function(){ setTimeout(initGA, 800); }, { once: true });
+        }
+    })();
+    </script>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -5565,11 +5587,11 @@ BASE_TEMPLATE = """
     <div class="navbar">
         <div class="navbar-content">
             <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
-            <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
+            <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
                 <span></span>
                 <span></span>
                 <span></span>
-            </div>
+            </button>
             <div class="nav-links" id="navLinks">
                 <a href="/nhl-picks">NHL</a>
                 <a href="/nba-picks">NBA</a>
@@ -7868,15 +7890,31 @@ def landing_page():
     <meta name="twitter:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
     <meta name="twitter:description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
     {% if ga_tracking_id %}
-    <!-- Google Analytics gtag.js snippet -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-R4XM0WKTGG');
+      (function(){
+        function initGA(){
+          if (window.__gaLoaded) return;
+          window.__gaLoaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}';
+          document.head.appendChild(s);
+          window.dataLayer = window.dataLayer || [];
+          window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+          gtag('js', new Date());
+          gtag('config', '{{ ga_tracking_id }}');
+        }
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(initGA, { timeout: 2500 });
+        } else {
+          window.addEventListener('load', function(){ setTimeout(initGA, 800); }, { once: true });
+        }
+      })();
     </script>
     {% endif %}
     <script type="application/ld+json">
@@ -8419,7 +8457,7 @@ def landing_page():
                         .share-icon img{width:16px;height:16px;display:block;}
         .share-icon .txt{display:none;font-size:0.64rem;font-weight:800;line-height:1;color:#0f172a;letter-spacing:0.1px;}
                 .share-icon:hover{border-color:#00529B;background:rgba(0,82,155,0.08);}
-        .join-premium-bar{position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
+        .join-premium-bar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
         .join-premium-inner{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
         .join-premium-copy{color:#e2e8f0;font-size:0.86em;font-weight:600;line-height:1.35;}
         .join-premium-actions{display:flex;align-items:center;gap:8px;}
@@ -8519,11 +8557,11 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
-        <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
+        <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
             <span></span>
             <span></span>
             <span></span>
-        </div>
+        </button>
         <div class="nav-links" id="navLinks">
             <a href="/nhl-picks">NHL</a>
             <a href="/nba-picks">NBA</a>
@@ -8982,14 +9020,24 @@ def landing_page():
 <script>
     function toggleMenu() {
         const navLinks = document.getElementById('navLinks');
-        if (navLinks) navLinks.classList.toggle('active');
+        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
+        if (navLinks) {
+            navLinks.classList.toggle('active');
+            if (burger) burger.setAttribute('aria-expanded', navLinks.classList.contains('active') ? 'true' : 'false');
+        }
     }
     document.addEventListener('DOMContentLoaded', function() {
         const navLinks = document.getElementById('navLinks');
+        const premiumBar = document.getElementById('joinPremiumBar');
         const searchForm = document.getElementById('navSearchForm');
         const searchInput = document.getElementById('navSearchInput');
         const autocompleteEl = document.getElementById('searchAutocomplete');
         const resultsEl = document.getElementById('searchResults');
+        if (premiumBar) {
+            const showBar = function(){ premiumBar.style.display = 'block'; };
+            if ('requestIdleCallback' in window) requestIdleCallback(showBar, { timeout: 1800 });
+            else setTimeout(showBar, 1200);
+        }
         const teams = [
             { name: "Detroit Pistons", sport: "NBA", slug: "detroit-pistons" },
             { name: "Detroit Red Wings", sport: "NHL", slug: "detroit-red-wings" },
@@ -9064,9 +9112,11 @@ def landing_page():
     document.addEventListener('click', function(event) {
         const navLinks = document.getElementById('navLinks');
         const navbar = document.querySelector('.navbar');
+        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
         if (!navLinks || !navbar) return;
         if (!navbar.contains(event.target)) {
             navLinks.classList.remove('active');
+            if (burger) burger.setAttribute('aria-expanded', 'false');
         }
     });
     function scrollSports(direction) {

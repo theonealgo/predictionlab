@@ -21,16 +21,32 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
-        <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
-            {% if ga_tracking_id %}
-    <!-- Google Analytics gtag.js snippet -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
+    {% if ga_tracking_id %}
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', '{{ ga_tracking_id }}');
+      (function(){
+        function initGA(){
+          if (window.__gaLoaded) return;
+          window.__gaLoaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}';
+          document.head.appendChild(s);
+          window.dataLayer = window.dataLayer || [];
+          window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+          gtag('js', new Date());
+          gtag('config', '{{ ga_tracking_id }}');
+        }
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(initGA, { timeout: 2500 });
+        } else {
+          window.addEventListener('load', function(){ setTimeout(initGA, 800); }, { once: true });
+        }
+      })();
     </script>
     {% endif %}
     <script type="application/ld+json">
@@ -508,11 +524,11 @@
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
-        <div class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu">
+        <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
             <span></span>
             <span></span>
             <span></span>
-        </div>
+        </button>
         <div class="nav-links" id="navLinks">
             <a href="/nhl-picks">NHL</a>
             <a href="/nba-picks">NBA</a>
@@ -902,12 +918,36 @@
         });
     }
 
+    function _renderStoryJpegCanvas(sourceCanvas) {
+        const out = document.createElement('canvas');
+        out.width = 1080;
+        out.height = 1920; // 9:16 portrait for Instagram/TikTok
+        const ctx = out.getContext('2d');
+        if (!ctx) throw new Error('Canvas context unavailable.');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, out.width, out.height);
+
+        const padding = 60;
+        const maxWidth = out.width - (padding * 2);
+        const maxHeight = out.height - (padding * 2);
+        const scale = Math.min(maxWidth / sourceCanvas.width, maxHeight / sourceCanvas.height);
+        const drawW = Math.round(sourceCanvas.width * scale);
+        const drawH = Math.round(sourceCanvas.height * scale);
+        const drawX = Math.round((out.width - drawW) / 2);
+        const drawY = Math.round((out.height - drawH) / 2);
+        ctx.drawImage(sourceCanvas, drawX, drawY, drawW, drawH);
+
+        return out;
+    }
+
     async function downloadPredictionsImage() {
         try {
-            const canvas = await _renderPredictionsImageCanvas();
+            const cardCanvas = await _renderPredictionsImageCanvas();
+            const storyCanvas = _renderStoryJpegCanvas(cardCanvas);
             const link = document.createElement('a');
-            link.href = canvas.toDataURL('image/png');
-            link.download = '{{ sport|lower }}-predictions.png';
+            link.href = storyCanvas.toDataURL('image/jpeg', 0.92);
+            link.download = '{{ sport|lower }}-predictions-1080x1920.jpg';
             link.click();
         } catch (_err) {
             alert('Unable to create image right now. Please try again.');
@@ -916,17 +956,18 @@
 
     async function sharePredictionsImage() {
         try {
-            const canvas = await _renderPredictionsImageCanvas();
-            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+            const cardCanvas = await _renderPredictionsImageCanvas();
+            const storyCanvas = _renderStoryJpegCanvas(cardCanvas);
+            const blob = await new Promise((resolve) => storyCanvas.toBlob(resolve, 'image/jpeg', 0.92));
             if (!blob) throw new Error('Image export failed');
-            const file = new File([blob], '{{ sport|lower }}-predictions.png', { type: 'image/png' });
+            const file = new File([blob], '{{ sport|lower }}-predictions-1080x1920.jpg', { type: 'image/jpeg' });
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({ files: [file] });
                 return;
             }
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = '{{ sport|lower }}-predictions.png';
+            link.download = '{{ sport|lower }}-predictions-1080x1920.jpg';
             link.click();
             URL.revokeObjectURL(link.href);
         } catch (_err) {
@@ -936,7 +977,11 @@
 
     function toggleMenu() {
         const navLinks = document.getElementById('navLinks');
-        if (navLinks) navLinks.classList.toggle('active');
+        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
+        if (navLinks) {
+            navLinks.classList.toggle('active');
+            if (burger) burger.setAttribute('aria-expanded', navLinks.classList.contains('active') ? 'true' : 'false');
+        }
     }
     document.addEventListener('DOMContentLoaded', function() {
         const navLinks = document.getElementById('navLinks');
@@ -1017,9 +1062,11 @@
     document.addEventListener('click', function(event) {
         const navLinks = document.getElementById('navLinks');
         const navbar = document.querySelector('.navbar');
+        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
         if (!navLinks || !navbar) return;
         if (!navbar.contains(event.target)) {
             navLinks.classList.remove('active');
+            if (burger) burger.setAttribute('aria-expanded', 'false');
         }
     });
     const allDates = {{ sorted_dates|tojson }};

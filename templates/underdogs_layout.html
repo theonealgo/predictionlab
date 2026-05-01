@@ -6,9 +6,31 @@
     <title>{% block title %}underdogs.bet{% endblock %}</title>
     {% block head_meta %}{% endblock %}
     <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
-    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-R4XM0WKTGG');</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <script>
+    (function(){
+        function initGA(){
+            if (window.__gaLoaded) return;
+            window.__gaLoaded = true;
+            var s = document.createElement('script');
+            s.async = true;
+            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG';
+            document.head.appendChild(s);
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+            gtag('js', new Date());
+            gtag('config', 'G-R4XM0WKTGG');
+        }
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(initGA, { timeout: 2500 });
+        } else {
+            window.addEventListener('load', function(){ setTimeout(initGA, 800); }, { once: true });
+        }
+    })();
+    </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:#0f172a;min-height:100vh;}
@@ -80,7 +102,7 @@
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
-        <div class="hamburger" onclick="toggleUdMenu()" aria-label="Open navigation menu"><span></span><span></span><span></span></div>
+        <button type="button" class="hamburger" onclick="toggleUdMenu()" aria-label="Open navigation menu" aria-controls="udNavLinks" aria-expanded="false"><span></span><span></span><span></span></button>
         <div class="nav-links" id="udNavLinks">
             <a href="/nhl-picks">NHL</a>
             <a href="/nba-picks">NBA</a>
@@ -161,7 +183,13 @@
     </div>
 </footer>
 <script>
-function toggleUdMenu(){var n=document.getElementById('udNavLinks');if(n)n.classList.toggle('active');}
+function toggleUdMenu(){
+    var n=document.getElementById('udNavLinks');
+    var b=document.querySelector('.hamburger[aria-controls="udNavLinks"]');
+    if(!n)return;
+    n.classList.toggle('active');
+    if(b)b.setAttribute('aria-expanded', n.classList.contains('active') ? 'true' : 'false');
+}
 document.addEventListener('DOMContentLoaded',function(){
     var n=document.getElementById('udNavLinks');
     if(n)n.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){n.classList.remove('active');});});
@@ -169,8 +197,12 @@ document.addEventListener('DOMContentLoaded',function(){
 document.addEventListener('click',function(e){
     var nav=document.querySelector('.navbar');
     var links=document.getElementById('udNavLinks');
+    var b=document.querySelector('.hamburger[aria-controls="udNavLinks"]');
     if(!nav||!links)return;
-    if(!nav.contains(e.target))links.classList.remove('active');
+    if(!nav.contains(e.target)){
+        links.classList.remove('active');
+        if(b)b.setAttribute('aria-expanded','false');
+    }
 });
 </script>
 {% block scripts %}{% endblock %}
