@@ -13,6 +13,7 @@ import json
 import re
 import csv
 import io
+import uuid
 from collections import defaultdict
 from flask_cors import CORS
 import sqlite3
@@ -55,6 +56,12 @@ logger = logging.getLogger(__name__)
 
 import time as _time
 import copy as _copy
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _HAS_PIL = True
+except Exception:
+    Image = ImageDraw = ImageFont = None
+    _HAS_PIL = False
 
 # ── Module-level HTTP request cache (15-min TTL) ──────────────────────────────
 _API_CACHE: dict = {}
@@ -109,6 +116,154 @@ _MANUAL_BANNER_ITEMS = [
     {'label': 'MLB 🎯 Moneyline (Consensus)', 'pct': '60.0%', 'record': '60-40'},
     {'label': 'NHL 📊 Edge', 'pct': '56.5%', 'record': '113-87'},
 ]
+_SHARE_IMAGE_CACHE: dict = {}
+_SHARE_IMAGE_TTL_SECONDS = 3600
+_SHARE_IMAGE_MAX_ITEMS = 500
+
+
+def _cleanup_share_image_cache():
+    now_ts = _time.time()
+    stale_keys = [k for k, v in _SHARE_IMAGE_CACHE.items() if (now_ts - v.get('ts', 0)) > _SHARE_IMAGE_TTL_SECONDS]
+    for k in stale_keys:
+        _SHARE_IMAGE_CACHE.pop(k, None)
+    if len(_SHARE_IMAGE_CACHE) > _SHARE_IMAGE_MAX_ITEMS:
+        for token, _ in sorted(_SHARE_IMAGE_CACHE.items(), key=lambda item: item[1].get('ts', 0))[: len(_SHARE_IMAGE_CACHE) - _SHARE_IMAGE_MAX_ITEMS]:
+            _SHARE_IMAGE_CACHE.pop(token, None)
+
+
+def _register_share_image(payload: dict) -> str:
+    _cleanup_share_image_cache()
+    token = uuid.uuid4().hex
+    _SHARE_IMAGE_CACHE[token] = {'ts': _time.time(), 'payload': payload}
+    return token
+
+
+def _get_share_font(size: int, bold: bool = False):
+    if not _HAS_PIL:
+        return None
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/Library/Fonts/Arial Bold.ttf" if bold else "/Library/Fonts/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf" if bold else "/System/Library/Fonts/Supplemental/Arial.ttf",
+    ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except Exception:
+            continue
+    try:
+        return ImageFont.load_default()
+    except Exception:
+        return None
+
+
+def _fit_text_font(draw, text: str, max_width: int, start_size: int, min_size: int = 20, bold: bool = True):
+    if not text:
+        return _get_share_font(start_size, bold=bold), text
+    cleaned = str(text)
+    for size in range(start_size, min_size - 1, -1):
+        font = _get_share_font(size, bold=bold)
+        if not font:
+            continue
+        bbox = draw.textbbox((0, 0), cleaned, font=font)
+        if (bbox[2] - bbox[0]) <= max_width:
+            return font, cleaned
+    return _get_share_font(min_size, bold=bold), cleaned
+
+
+def _render_predictions_share_image(payload: dict, fmt: str):
+    if not _HAS_PIL:
+        return None, None
+    width, height = 1600, 900
+    image = Image.new("RGB", (width, height), color=(255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    title_font = _get_share_font(62, bold=True)
+    sub_font = _get_share_font(34, bold=True)
+    vs_font = _get_share_font(34, bold=True)
+    check_font = _get_share_font(32, bold=True)
+    draw.text((70, 48), f"{payload.get('sport', '')} Predictions", fill=(15, 23, 42), font=title_font)
+    draw.text((70, 124), str(payload.get('date', '')), fill=(71, 85, 105), font=sub_font)
+    rows = payload.get('cards') or []
+    row_top = 220
+    row_height = 180
+    left_start = 80
+    left_end = 720
+    right_start = 880
+    right_end = 1520
+    for idx, item in enumerate(rows[:3]):
+        y = row_top + (idx * row_height)
+        draw.rounded_rectangle((50, y - 12, 1550, y + 132), radius=22, outline=(203, 213, 225), width=2, fill=(255, 255, 255))
+        away = str(item.get('away_team') or '')
+        home = str(item.get('home_team') or '')
+        away_font, away_text = _fit_text_font(draw, away, max_width=(left_end - left_start - 64), start_size=44, min_size=24, bold=True)
+        home_font, home_text = _fit_text_font(draw, home, max_width=(right_end - right_start - 64), start_size=44, min_size=24, bold=True)
+        away_bbox = draw.textbbox((0, 0), away_text, font=away_font)
+        home_bbox = draw.textbbox((0, 0), home_text, font=home_font)
+        away_h = away_bbox[3] - away_bbox[1]
+        home_h = home_bbox[3] - home_bbox[1]
+        draw.text((left_start + 40, y + 54 - (away_h // 2)), away_text, fill=(15, 23, 42), font=away_font)
+        home_w = home_bbox[2] - home_bbox[0]
+        draw.text((right_end - 40 - home_w, y + 54 - (home_h // 2)), home_text, fill=(15, 23, 42), font=home_font)
+        draw.text((770, y + 40), "VS", fill=(100, 116, 139), font=vs_font)
+        if item.get('pick_side') == 'away':
+            draw.rounded_rectangle((left_start, y + 26, left_start + 28, y + 54), radius=6, fill=(34, 197, 94))
+            draw.text((left_start + 6, y + 23), "✓", fill=(255, 255, 255), font=check_font)
+        if item.get('pick_side') == 'home':
+            draw.rounded_rectangle((right_end - 28, y + 26, right_end, y + 54), radius=6, fill=(34, 197, 94))
+            draw.text((right_end - 22, y + 23), "✓", fill=(255, 255, 255), font=check_font)
+    output = io.BytesIO()
+    out_fmt = 'JPEG' if fmt in ('jpg', 'jpeg') else 'PNG'
+    if out_fmt == 'JPEG':
+        image.save(output, format=out_fmt, quality=92, optimize=True)
+        mimetype = 'image/jpeg'
+    else:
+        image.save(output, format=out_fmt, optimize=True)
+        mimetype = 'image/png'
+    output.seek(0)
+    return output.getvalue(), mimetype
+
+
+def _render_daily_report_share_image(payload: dict, fmt: str):
+    if not _HAS_PIL:
+        return None, None
+    width, height = 1600, 900
+    image = Image.new("RGB", (width, height), color=(255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    title_font = _get_share_font(56, bold=True)
+    sub_font = _get_share_font(34, bold=True)
+    label_font = _get_share_font(30, bold=True)
+    val_font = _get_share_font(44, bold=True)
+    draw.text((70, 44), f"{payload.get('sport_name', '')} Results", fill=(15, 23, 42), font=title_font)
+    draw.text((70, 112), str(payload.get('report_display', '')), fill=(71, 85, 105), font=sub_font)
+    draw.text((70, 160), f"Games graded: {payload.get('games', 0)}", fill=(15, 23, 42), font=sub_font)
+    x = 70
+    y = 240
+    card_w = 280
+    card_h = 180
+    gap = 20
+    models = payload.get('models') or []
+    for idx, model in enumerate(models[:5]):
+        card_x = x + idx * (card_w + gap)
+        draw.rounded_rectangle((card_x, y, card_x + card_w, y + card_h), radius=20, outline=(203, 213, 225), width=2, fill=(248, 250, 252))
+        draw.text((card_x + 16, y + 18), model.get('label', ''), fill=(51, 65, 85), font=label_font)
+        draw.text((card_x + 16, y + 74), model.get('acc', '—'), fill=(15, 23, 42), font=val_font)
+        draw.text((card_x + 16, y + 130), model.get('record', ''), fill=(71, 85, 105), font=sub_font)
+    spread = payload.get('spread') or {}
+    ou = payload.get('ou') or {}
+    if spread.get('label'):
+        draw.text((70, 470), f"Spread: {spread.get('label')}", fill=(15, 23, 42), font=sub_font)
+    if ou.get('label'):
+        draw.text((70, 530), f"Over/Under: {ou.get('label')}", fill=(15, 23, 42), font=sub_font)
+    output = io.BytesIO()
+    out_fmt = 'JPEG' if fmt in ('jpg', 'jpeg') else 'PNG'
+    if out_fmt == 'JPEG':
+        image.save(output, format=out_fmt, quality=92, optimize=True)
+        mimetype = 'image/jpeg'
+    else:
+        image.save(output, format=out_fmt, optimize=True)
+        mimetype = 'image/png'
+    output.seek(0)
+    return output.getvalue(), mimetype
 
 
 def _cached_get(url: str, timeout: int = 10):
@@ -6012,39 +6167,17 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
         {% endif %}
     </div>
     <div class="rpt-actions" style="flex-direction:column;align-items:center;">
-        <div class="rpt-save-help">Share an image of our results.</div>
+        <div class="rpt-save-help">Download or share a 16:9 image for each sport.</div>
         <div class="rpt-share-row">
             {% for st in sport_tallies %}
-            <button class="rpt-btn rpt-btn-copy" onclick="saveSportScreenshot({{ loop.index0 }}, '{{ st.info.name|replace(\"'\", \"\") }}')">Share {{ st.info.name }} Results Image</button>
+            <a class="rpt-btn rpt-btn-copy" href="{{ st.share_image_url }}" target="_blank" rel="noopener">Download/Share {{ st.info.name }} Image</a>
             {% endfor %}
         </div>
-        <div class="rpt-sharing" id="shareStatus"></div>
         <div class="rpt-cta-row" style="margin-top:12px;">
             <a class="rpt-btn rpt-btn-cta" href="/">View Today's Picks &rarr;</a>
         </div>
     </div>
 """ + _SEO_RESULTS_PAGE_FOOTER + """
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script>
-    function saveSportScreenshot(index, sportName){
-        var status=document.getElementById('shareStatus');
-        status.textContent='Generating image...';
-        var el=document.getElementById('sportCapture'+index);
-        if(!el){status.textContent='Could not find that sport block.';return;}
-        html2canvas(el,{backgroundColor:'#ffffff',scale:2,useCORS:true}).then(function(canvas){
-            canvas.toBlob(function(blob){
-                var safeSport=(sportName||'sport').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
-                var fileName='daily-results-'+safeSport+'.png';
-                var a=document.createElement('a');
-                a.href=URL.createObjectURL(blob);
-                a.download=fileName;
-                a.click();
-                status.textContent='Saved '+(sportName||'sport')+' image.';
-            },'image/png');
-        }).catch(function(err){status.textContent='Screenshot failed: '+err;});
-    }
-    </script>
 """)
 
 # ============================================================================
@@ -10648,7 +10781,32 @@ def daily_report_page():
             tally = compute_daily_model_tally(daily_results, report_date)
             if not tally or tally.get('games', 0) == 0:
                 continue
-            sport_tallies.append({'sport': sport_key, 'info': SPORTS[sport_key], 'tally': tally})
+            _model_payload = []
+            for mk in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
+                mt = tally.get(mk, {}) or {}
+                total_m = mt.get('total', 0) or 0
+                correct_m = mt.get('correct', 0) or 0
+                _model_payload.append({
+                    'label': mk.upper(),
+                    'acc': f"{mt.get('accuracy', 0)}%" if total_m > 0 else "—",
+                    'record': f"{correct_m}-{max(total_m - correct_m, 0)}" if total_m > 0 else "",
+                })
+            _daily_payload = {
+                'type': 'daily-report',
+                'sport_name': SPORTS[sport_key]['name'],
+                'report_display': report_display,
+                'games': tally.get('games', 0),
+                'models': _model_payload,
+                'spread': {'label': f"{tally.get('spread', {}).get('accuracy', 0)}%" if (tally.get('spread', {}).get('total', 0) or 0) > 0 else ''},
+                'ou': {'label': f"{tally.get('total_ou', {}).get('accuracy', 0)}%" if (tally.get('total_ou', {}).get('total', 0) or 0) > 0 else ''},
+            }
+            _daily_token = _register_share_image(_daily_payload)
+            sport_tallies.append({
+                'sport': sport_key,
+                'info': SPORTS[sport_key],
+                'tally': tally,
+                'share_image_url': url_for('share_daily_report_image', token=_daily_token, fmt='jpg'),
+            })
             total_games += tally.get('games', 0)
             for mk in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
                 mt = tally.get(mk, {})
@@ -10705,6 +10863,40 @@ def daily_report_page():
     )
     _DAILY_REPORT_CACHE.update({'ts': _time.time(), 'date': report_date, 'html': rendered})
     return rendered
+
+
+@app.route('/share/predictions/<token>.<fmt>')
+def share_predictions_image(token, fmt):
+    fmt = (fmt or '').lower()
+    if fmt not in ('jpg', 'jpeg', 'png'):
+        return "Unsupported format", 400
+    entry = _SHARE_IMAGE_CACHE.get(token)
+    if not entry:
+        return "Image not found", 404
+    payload = entry.get('payload') or {}
+    if payload.get('type') != 'predictions':
+        return "Image not found", 404
+    img_bytes, mimetype = _render_predictions_share_image(payload, fmt)
+    if not img_bytes:
+        return "Image engine unavailable", 503
+    return Response(img_bytes, mimetype=mimetype)
+
+
+@app.route('/share/daily-report/<token>.<fmt>')
+def share_daily_report_image(token, fmt):
+    fmt = (fmt or '').lower()
+    if fmt not in ('jpg', 'jpeg', 'png'):
+        return "Unsupported format", 400
+    entry = _SHARE_IMAGE_CACHE.get(token)
+    if not entry:
+        return "Image not found", 404
+    payload = entry.get('payload') or {}
+    if payload.get('type') != 'daily-report':
+        return "Image not found", 404
+    img_bytes, mimetype = _render_daily_report_share_image(payload, fmt)
+    if not img_bytes:
+        return "Image engine unavailable", 503
+    return Response(img_bytes, mimetype=mimetype)
 
 
 @app.route('/tutorial')
@@ -10985,6 +11177,16 @@ def sport_predictions(sport, filter_date=None):
     shareable_cards = date_pool.get(target_date, [])
     shareable_cards.sort(key=lambda x: (-x['confidence'], x['away_team'], x['home_team']))
     shareable_cards = shareable_cards[:3]
+    share_image_url = None
+    if shareable_cards:
+        _pred_payload = {
+            'type': 'predictions',
+            'sport': SPORTS.get(sport, {}).get('name', sport),
+            'date': target_date or today_date,
+            'cards': shareable_cards,
+        }
+        _pred_token = _register_share_image(_pred_payload)
+        share_image_url = url_for('share_predictions_image', token=_pred_token, fmt='jpg')
     
     # Group predictions by date for NHL/NBA, by week for NFL
     from collections import defaultdict
@@ -11038,6 +11240,7 @@ def sport_predictions(sport, filter_date=None):
             group_by='week' if sport == 'NFL' else 'date',
             soccer_leagues=soccer_leagues,
             shareable_cards=shareable_cards,
+            share_image_url=share_image_url,
         )
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")

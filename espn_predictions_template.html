@@ -85,7 +85,6 @@
     {% endfor %}
     {% endfor %}
     {% endif %}
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -454,35 +453,14 @@
         .injury-list { display:flex; flex-wrap:wrap; gap:6px; }
         .injury-pill { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.72em; font-weight:600; }
         .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(146,64,14,0.45); color:#92400e; }
-        .social-export-wrap{max-width:680px;margin:24px auto 0;padding:0 6px;}
+        .social-export-wrap{max-width:960px;margin:24px auto 0;padding:0 8px;}
         .social-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
         .social-export-title{font-size:0.9em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
         .social-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
         .social-export-btn{border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 12px;font-size:0.76em;font-weight:800;cursor:pointer;}
         .social-export-btn.primary{background:#00529B;color:#fff;}
-        .social-image-card{width:min(100%,640px);margin:0 auto;background:#ffffff;border:1px solid rgba(15,23,42,0.14);border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(15,23,42,0.08);}
-        .social-image-head{padding:10px 12px;border-bottom:1px solid rgba(15,23,42,0.1);display:flex;justify-content:space-between;align-items:center;gap:8px;}
-        .social-image-label{font-size:0.8em;font-weight:800;color:#0f172a;}
-        .social-image-date{font-size:0.72em;color:#64748b;font-weight:700;}
-        .social-game-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;column-gap:6px;padding:10px 10px;border-bottom:1px solid rgba(15,23,42,0.08);}
-        .social-game-row:last-child{border-bottom:none;}
-        .social-team{display:flex;align-items:center;gap:6px;min-width:0;color:#0f172a;font-size:0.86em;font-weight:700;line-height:1.25;}
-        .social-team.home{justify-content:flex-end;text-align:right;}
-        .social-team.away{justify-content:flex-start;text-align:left;}
-        .social-team-name{
-            display:-webkit-box;
-            -webkit-line-clamp:2;
-            -webkit-box-orient:vertical;
-            overflow:hidden;
-            white-space:normal;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-            font-size:clamp(0.66rem,2.2vw,0.84rem);
-            line-height:1.18;
-        }
-        .social-vs{flex:0 0 auto;font-size:0.7em;color:#64748b;font-weight:800;letter-spacing:0.35px;text-transform:uppercase;padding:0 2px;}
-        .social-check{width:20px;height:20px;border-radius:6px;background:#22c55e;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.78em;font-weight:900;line-height:1;flex-shrink:0;}
-        .social-check.placeholder{visibility:hidden;background:transparent;}
+        .social-image-link{display:block;width:min(100%,900px);margin:0 auto;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:1px solid rgba(15,23,42,0.14);box-shadow:0 6px 18px rgba(15,23,42,0.08);background:#ffffff;}
+        .social-image-link img{display:block;width:100%;height:100%;object-fit:cover;}
         @media (max-width: 1100px) {
             .navbar-content { flex-wrap:wrap; justify-content:center; }
             .nav-search-wrap { order:3; width:100%; max-width:100%; }
@@ -837,34 +815,18 @@
     </div>
 </div>
 
-{% if shareable_cards %}
+{% if share_image_url %}
 <div class="social-export-wrap">
     <div class="social-export-head">
         <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
         <div class="social-export-actions">
-            <button type="button" class="social-export-btn" onclick="downloadPredictionsImage()">Take Screenshot</button>
-            <button type="button" class="social-export-btn primary" onclick="sharePredictionsImage()">Share Image</button>
+            <a class="social-export-btn" href="{{ share_image_url }}" target="_blank" rel="noopener" download>Download Image</a>
+            <a class="social-export-btn primary" href="{{ share_image_url }}" target="_blank" rel="noopener">Share Image</a>
         </div>
     </div>
-    <div id="predictionsShareCard" class="social-image-card">
-        <div class="social-image-head">
-            <span class="social-image-label">{{ sport_info.name }} Predictions</span>
-            <span class="social-image-date">{{ today_date }}</span>
-        </div>
-        {% for item in shareable_cards %}
-        <div class="social-game-row">
-            <div class="social-team away">
-                {% if item.pick_side == 'away' %}<span class="social-check">✓</span>{% else %}<span class="social-check placeholder">✓</span>{% endif %}
-                <span class="social-team-name">{{ item.away_team }}</span>
-            </div>
-            <div class="social-vs">VS</div>
-            <div class="social-team home">
-                <span class="social-team-name">{{ item.home_team }}</span>
-                {% if item.pick_side == 'home' %}<span class="social-check">✓</span>{% else %}<span class="social-check placeholder">✓</span>{% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+    <a class="social-image-link" href="{{ share_image_url }}" target="_blank" rel="noopener">
+        <img src="{{ share_image_url }}" alt="{{ sport_info.name }} predictions image">
+    </a>
 </div>
 {% endif %}
 <div class="share-strip">
@@ -918,118 +880,6 @@
 </footer>
 
 <script>
-    async function _renderPredictionsImageCanvas() {
-        const target = document.getElementById('predictionsShareCard');
-        if (!target || typeof window.html2canvas !== 'function') {
-            throw new Error('Image renderer is unavailable.');
-        }
-        return window.html2canvas(target, {
-            backgroundColor: '#ffffff',
-            scale: _isIOSDevice() ? 1.6 : 2,
-            useCORS: true
-        });
-    }
-
-    function _renderStoryJpegCanvas(sourceCanvas) {
-        const out = document.createElement('canvas');
-        out.width = 1920;
-        out.height = 1080; // 16:9 landscape screenshot
-        const ctx = out.getContext('2d');
-        if (!ctx) throw new Error('Canvas context unavailable.');
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, out.width, out.height);
-
-        const padding = 60;
-        const maxWidth = out.width - (padding * 2);
-        const maxHeight = out.height - (padding * 2);
-        const scale = Math.min(maxWidth / sourceCanvas.width, maxHeight / sourceCanvas.height);
-        const drawW = Math.round(sourceCanvas.width * scale);
-        const drawH = Math.round(sourceCanvas.height * scale);
-        const drawX = Math.round((out.width - drawW) / 2);
-        const drawY = Math.round((out.height - drawH) / 2);
-        ctx.drawImage(sourceCanvas, drawX, drawY, drawW, drawH);
-
-        return out;
-    }
-
-    function _isIOSDevice() {
-        return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    }
-
-    async function _canvasToJpegBlob(canvas) {
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-        if (blob) return blob;
-        // iOS Safari occasionally returns null from toBlob; fallback through data URL.
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        const fetched = await fetch(dataUrl);
-        return fetched.blob();
-    }
-
-    async function _createPredictionsJpegBlob() {
-        const cardCanvas = await _renderPredictionsImageCanvas();
-        const storyCanvas = _renderStoryJpegCanvas(cardCanvas);
-        const blob = await _canvasToJpegBlob(storyCanvas);
-        if (!blob) throw new Error('Image export failed');
-        return blob;
-    }
-
-    async function downloadPredictionsImage() {
-        try {
-            const blob = await _createPredictionsJpegBlob();
-            const fileName = '{{ sport|lower }}-predictions-1920x1080.jpg';
-            const file = new File([blob], fileName, { type: 'image/jpeg' });
-
-            // iOS Safari downloads default to Files; prefer share sheet/new-tab image for Photos save.
-            if (_isIOSDevice()) {
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ files: [file], title: '{{ sport_info.name }} Predictions' });
-                    return;
-                }
-                const iosUrl = URL.createObjectURL(blob);
-                window.open(iosUrl, '_blank');
-                setTimeout(() => URL.revokeObjectURL(iosUrl), 45000);
-                alert('Image opened in a new tab. Long-press the image and tap "Save to Photos".');
-                return;
-            }
-
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = fileName;
-            link.click();
-            URL.revokeObjectURL(link.href);
-        } catch (_err) {
-            alert('Unable to create image right now. Please try again.');
-        }
-    }
-
-    async function sharePredictionsImage() {
-        try {
-            const blob = await _createPredictionsJpegBlob();
-            const fileName = '{{ sport|lower }}-predictions-1920x1080.jpg';
-            const file = new File([blob], fileName, { type: 'image/jpeg' });
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file] });
-                return;
-            }
-            if (_isIOSDevice()) {
-                const iosUrl = URL.createObjectURL(blob);
-                window.open(iosUrl, '_blank');
-                setTimeout(() => URL.revokeObjectURL(iosUrl), 45000);
-                alert('Image opened in a new tab. Long-press the image and choose Share.');
-                return;
-            }
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = fileName;
-            link.click();
-            URL.revokeObjectURL(link.href);
-        } catch (_err) {
-            // Keep Share button functional by falling back to the screenshot flow.
-            await downloadPredictionsImage();
-        }
-    }
-
     function toggleMenu() {
         const navLinks = document.getElementById('navLinks');
         const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
