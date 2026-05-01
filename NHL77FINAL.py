@@ -6,14 +6,17 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
 """
 
-from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response
+from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
+import sys
 import re
 import csv
 import io
 import uuid
+import importlib
+import importlib.util
 from collections import defaultdict
 from flask_cors import CORS
 import sqlite3
@@ -119,6 +122,8 @@ _MANUAL_BANNER_ITEMS = [
 _SHARE_IMAGE_CACHE: dict = {}
 _SHARE_IMAGE_TTL_SECONDS = 3600
 _SHARE_IMAGE_MAX_ITEMS = 500
+_PROPS_ENGINE_MODULE = None
+_PROPS_CONFIG_MODULE = None
 
 
 def _cleanup_share_image_cache():
@@ -129,6 +134,23 @@ def _cleanup_share_image_cache():
     if len(_SHARE_IMAGE_CACHE) > _SHARE_IMAGE_MAX_ITEMS:
         for token, _ in sorted(_SHARE_IMAGE_CACHE.items(), key=lambda item: item[1].get('ts', 0))[: len(_SHARE_IMAGE_CACHE) - _SHARE_IMAGE_MAX_ITEMS]:
             _SHARE_IMAGE_CACHE.pop(token, None)
+
+
+def _load_props_modules():
+    global _PROPS_ENGINE_MODULE, _PROPS_CONFIG_MODULE
+    if _PROPS_ENGINE_MODULE and _PROPS_CONFIG_MODULE:
+        return _PROPS_ENGINE_MODULE, _PROPS_CONFIG_MODULE
+    backend_root = _os.path.join(_BASE_DIR, "standalone-player-props", "backend")
+    app_root = _os.path.join(backend_root, "app")
+    if not _os.path.isdir(app_root):
+        raise RuntimeError("Standalone props backend missing.")
+    if backend_root not in sys.path:
+        sys.path.append(backend_root)
+    cfg_mod = importlib.import_module("app.config")
+    eng_mod = importlib.import_module("app.engine")
+    _PROPS_CONFIG_MODULE = cfg_mod
+    _PROPS_ENGINE_MODULE = eng_mod
+    return _PROPS_ENGINE_MODULE, _PROPS_CONFIG_MODULE
 
 
 def _register_share_image(payload: dict) -> str:
@@ -10166,21 +10188,118 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
 
 @app.route('/player-props')
 def player_props_page():
-    """Player Props launcher with local-safe fallback."""
+    """Serve integrated player props frontend from main app."""
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
-    ext = (_os.environ.get('PLAYER_PROPS_URL') or '').strip()
-    # Guard against accidental backend-health targets (e.g. :8101/health),
-    # which show JSON instead of the props UI.
-    _bad_local_targets = ('127.0.0.1:8101', 'localhost:8101', '/health')
-    if ext and not any(tok in ext for tok in _bad_local_targets):
-        return redirect(ext)
-    # Local development: render embedded app inside site chrome.
-    if _os.environ.get('FLASK_ENV', '').lower() == 'development' or request.host.startswith(('127.0.0.1', 'localhost')):
-        return render_template('player_props_embed.html', embed_src='http://localhost:5179/')
-    return render_template('player_props_hub.html')
+    dist_dir = _os.path.join(_BASE_DIR, 'standalone-player-props', 'frontend', 'dist')
+    index_path = _os.path.join(dist_dir, 'index.html')
+    if not _os.path.isfile(index_path):
+        return render_template('player_props_hub.html')
+    try:
+        with open(index_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+        html = html.replace('src="/assets/', 'src="/player-props/assets/').replace('href="/assets/', 'href="/player-props/assets/')
+        return Response(html, mimetype='text/html')
+    except Exception:
+        return render_template('player_props_hub.html')
+
+
+@app.route('/player-props/assets/<path:asset_path>')
+def player_props_assets(asset_path):
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    assets_dir = _os.path.join(_BASE_DIR, 'standalone-player-props', 'frontend', 'dist', 'assets')
+    return send_from_directory(assets_dir, asset_path)
+
+
+@app.route('/player-props-api/leagues')
+def player_props_api_leagues():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    try:
+        _, config_mod = _load_props_modules()
+        return jsonify({'leagues': list(getattr(config_mod, 'SUPPORTED_LEAGUES', []))})
+    except Exception as exc:
+        return jsonify({'detail': f'Props API unavailable: {exc}'}), 503
+
+
+@app.route('/player-props-api/players')
+def player_props_api_players():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    league = (request.args.get('league') or '').strip().upper()
+    try:
+        engine_mod, config_mod = _load_props_modules()
+        supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
+        if league not in supported:
+            return jsonify({'detail': f'Unsupported league: {league}'}), 400
+        data = engine_mod.get_league_data(league)
+        resp = {'league': league, 'count': len(data.get('players', [])), 'items': data.get('players', [])}
+        if 'excluded_players' in data:
+            resp['excluded_players'] = data['excluded_players']
+        return jsonify(resp)
+    except Exception as exc:
+        return jsonify({'detail': str(exc)}), 500
+
+
+@app.route('/player-props-api/props')
+def player_props_api_props():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    league = (request.args.get('league') or '').strip().upper()
+    prop_type = (request.args.get('prop_type') or '').strip() or None
+    side = (request.args.get('side') or '').strip() or None
+    min_ev_raw = (request.args.get('min_ev') or '').strip()
+    min_ev = None
+    if min_ev_raw:
+        try:
+            min_ev = float(min_ev_raw)
+        except Exception:
+            min_ev = None
+    try:
+        engine_mod, config_mod = _load_props_modules()
+        supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
+        if league not in supported:
+            return jsonify({'detail': f'Unsupported league: {league}'}), 400
+        data = engine_mod.get_league_data(league)
+        rows = engine_mod.filter_props(data.get('props', []), prop_type=prop_type, side=side, min_ev=min_ev)
+        resp = {'league': league, 'count': len(rows), 'items': rows}
+        if 'excluded_players' in data:
+            resp['excluded_players'] = data['excluded_players']
+        if 'model_variance' in data:
+            resp['model_variance'] = data['model_variance']
+        if 'sanity_flags' in data:
+            resp['sanity_flags'] = data['sanity_flags']
+        return jsonify(resp)
+    except Exception as exc:
+        return jsonify({'detail': str(exc)}), 500
+
+
+@app.route('/player-props-api/results')
+def player_props_api_results():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    league = (request.args.get('league') or '').strip().upper()
+    try:
+        engine_mod, config_mod = _load_props_modules()
+        supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
+        if league not in supported:
+            return jsonify({'detail': f'Unsupported league: {league}'}), 400
+        return jsonify(engine_mod.get_league_results(league))
+    except Exception as exc:
+        return jsonify({'detail': str(exc)}), 500
 
 
 @app.route('/performance')
