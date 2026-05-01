@@ -9299,7 +9299,7 @@ def api_search():
 def api_performance_data():
     """Per-model, per-game performance rows for client-side filtering UI."""
     if not current_user.is_authenticated:
-        return redirect(url_for('auth.login', next=request.path))
+        return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
     rows_out = []
@@ -9985,7 +9985,7 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
 def player_props_page():
     """Player Props launcher with local-safe fallback."""
     if not current_user.is_authenticated:
-        return redirect(url_for('auth.login', next=request.path))
+        return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
     ext = (_os.environ.get('PLAYER_PROPS_URL') or '').strip()
@@ -10003,7 +10003,7 @@ def player_props_page():
 @app.route('/performance')
 def performance_page():
     if not current_user.is_authenticated:
-        return redirect(url_for('auth.login', next=request.path))
+        return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
     sport = (request.args.get('sport') or '').strip().upper()
@@ -10032,7 +10032,7 @@ def performance_page():
 @app.route('/performance/audit.csv')
 def performance_audit_csv():
     if not current_user.is_authenticated:
-        return redirect(url_for('auth.login', next=request.path))
+        return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
     sport = (request.args.get('sport') or '').strip().upper()

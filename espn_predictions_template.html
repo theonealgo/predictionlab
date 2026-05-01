@@ -69,6 +69,7 @@
     {% endfor %}
     {% endfor %}
     {% endif %}
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -78,7 +79,7 @@
         }
         .hamburger:hover { background: rgba(255, 255, 255, 0.08); }
         .navbar {
-            background:#F4F7F9;
+            background:#ffffff;
             padding: 14px 28px;
             border-bottom: 1px solid #E0E4E8;
             box-shadow: 0 2px 8px rgba(26,29,35,0.05);
@@ -128,9 +129,9 @@
         }
         .nav-search-wrap{position:relative;flex:1;max-width:620px;}
         .search-autocomplete{
-            display:none;position:absolute;top:48px;left:0;right:0;z-index:1100;
+            display:none;position:absolute;top:48px;right:0;width:min(250px,calc(100vw - 36px));z-index:1100;
             background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:10px;
-            box-shadow:0 10px 24px rgba(15,23,42,0.12);padding:6px;
+            box-shadow:0 14px 28px rgba(15,23,42,0.18);padding:6px;
         }
         .search-autocomplete.show{display:block;}
         .search-item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#0f172a;}
@@ -165,6 +166,8 @@
             border-radius: 10px;
             border: 1px solid #E0E4E8;
             background: #ffffff;
+            margin-left: auto;
+            order: 4;
         }
         .hamburger span {
             width: 24px;
@@ -182,10 +185,10 @@
             flex-direction:column;
             gap:0;
             padding:8px;
-            border:1px solid #E0E4E8;
+            border:1px solid #cbd5e1;
             border-radius:12px;
-            background:#F4F7F9;
-            box-shadow:0 10px 24px rgba(15,23,42,0.12);
+            background:#ffffff;
+            box-shadow:0 14px 28px rgba(15,23,42,0.18);
             z-index:1100;
         }
         .nav-links.active { display:flex; }
@@ -222,11 +225,12 @@
         .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
         .container { max-width: 1400px; margin: 0 auto; padding: 30px; }
         .site-footer {
-            background: #fff;
+            background: rgba(255,255,255,0.72);
             border-top: 1px solid rgba(15,23,42,0.12);
             padding: 22px 24px 28px;
             color: #475569;
             font-size: 0.88em;
+            backdrop-filter: saturate(140%) blur(2px);
         }
         .footer-outer { max-width: 1200px; margin: 0 auto; }
         .footer-brand { margin-bottom: 18px; }
@@ -267,7 +271,14 @@
             border-top: 1px solid rgba(15,23,42,0.1);
             font-size: 0.82em;
             color: #475569;
+            opacity: 0.78;
         }
+        .share-strip { max-width: 1200px; margin: 0 auto 10px; padding: 10px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; background: rgba(244,247,249,0.7); border: 1px solid rgba(15,23,42,0.1); border-radius: 12px; }
+        .share-strip-label { font-size: 0.82em; font-weight: 800; color: #0f172a; letter-spacing: 0.2px; }
+        .share-icons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .share-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid rgba(15,23,42,0.14); background: #fff; }
+        .share-icon img { width: 16px; height: 16px; display: block; }
+        .share-icon:hover { border-color: #00529B; background: rgba(0,82,155,0.08); }
         @media (max-width: 720px) {
             .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
         }
@@ -309,7 +320,7 @@
         .teams-section { flex:1; min-width:0; }
         .team-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(15,23,42,0.06); }
         .team-row:last-child { border-bottom:none; }
-        .team-name { font-size:0.94em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .team-name { font-size:0.94em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
         .team-name.winner { font-weight:700; }
         .team-odds { font-size:0.82em; font-weight:700; margin-left:6px; flex-shrink:0; }
         .team-odds.fav { color:#00C076; }
@@ -327,13 +338,70 @@
         /* MLB pick confidence strip (each box = one model) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
         .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
         @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
-        .pc-box { background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+        .pc-box {
+            background:#fff;
+            border:1px solid rgba(15,23,42,0.12);
+            border-radius:8px;
+            padding:6px 4px;
+            text-align:center;
+            display:grid;
+            grid-template-rows:30px 26px 32px;
+            align-content:stretch;
+            justify-items:center;
+            gap:2px;
+            min-width:0;
+            min-height:92px;
+            height:100%;
+        }
         .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
-        .pc-name { font-size:0.68em; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; }
-        .pc-val { font-size:0.95em; font-weight:800; color:#0f172a; }
-        .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; width:100%; box-sizing:border-box; text-align:center; }
+        .pc-name {
+            font-size:0.68em;
+            font-weight:700;
+            color:#cbd5e1;
+            text-transform:uppercase;
+            letter-spacing:0.3px;
+            width:100%;
+            max-width:100%;
+            min-height:30px;
+            line-height:1.15;
+            display:flex;
+            align-items:flex-start;
+            justify-content:center;
+            text-align:center;
+            word-break:break-word;
+            overflow-wrap:anywhere;
+        }
+        .pc-val {
+            font-size:0.95em;
+            font-weight:800;
+            color:#0f172a;
+            min-height:24px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            line-height:1.1;
+        }
+        .pc-side {
+            font-size:0.6em;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:0.3px;
+            padding:2px 6px;
+            border-radius:4px;
+            width:100%;
+            max-width:100%;
+            min-height:30px;
+            box-sizing:border-box;
+            text-align:center;
+            line-height:1.15;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            word-break:break-word;
+            overflow-wrap:anywhere;
+        }
         .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
         .pc-side.away { color:#92400e; background:rgba(146,64,14,0.1); }
 
@@ -370,6 +438,23 @@
         .injury-list { display:flex; flex-wrap:wrap; gap:6px; }
         .injury-pill { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.72em; font-weight:600; }
         .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(146,64,14,0.45); color:#92400e; }
+        .social-export-wrap{max-width:400px;margin:24px auto 0;padding:0 4px;}
+        .social-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+        .social-export-title{font-size:0.9em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
+        .social-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .social-export-btn{border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 12px;font-size:0.76em;font-weight:800;cursor:pointer;}
+        .social-export-btn.primary{background:#00529B;color:#fff;}
+        .social-image-card{max-width:360px;margin:0 auto;background:#ffffff;border:1px solid rgba(15,23,42,0.14);border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(15,23,42,0.08);}
+        .social-image-head{padding:10px 12px;border-bottom:1px solid rgba(15,23,42,0.1);display:flex;justify-content:space-between;align-items:center;gap:8px;}
+        .social-image-label{font-size:0.8em;font-weight:800;color:#0f172a;}
+        .social-image-date{font-size:0.72em;color:#64748b;font-weight:700;}
+        .social-game-row{display:flex;align-items:center;justify-content:center;gap:4px 6px;padding:10px 10px;border-bottom:1px solid rgba(15,23,42,0.08);}
+        .social-game-row:last-child{border-bottom:none;}
+        .social-team{display:flex;align-items:center;gap:6px;min-width:0;flex:0 1 auto;max-width:42%;color:#0f172a;font-size:0.86em;font-weight:700;line-height:1.25;word-break:break-word;}
+        .social-team.home{justify-content:flex-end;text-align:right;}
+        .social-team.away{justify-content:flex-start;text-align:left;}
+        .social-vs{flex:0 0 auto;font-size:0.7em;color:#64748b;font-weight:800;letter-spacing:0.35px;text-transform:uppercase;padding:0 2px;}
+        .social-check{width:20px;height:20px;border-radius:6px;background:#22c55e;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.78em;font-weight:900;line-height:1;flex-shrink:0;}
         @media (max-width: 1100px) {
             .navbar-content { flex-wrap:wrap; justify-content:center; }
             .nav-search-wrap { order:3; width:100%; max-width:100%; }
@@ -440,7 +525,8 @@
             {% if soccer_enabled %}
             <a href="/soccer-picks">Soccer</a>
             {% endif %}
-            <a href="/plans">Plans</a>
+            <a href="/player-props">Player Props</a>
+            <a href="/plans">Pricing</a>
         </div>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
@@ -722,6 +808,51 @@
         <p style="margin:0;">This helps provide a clearer understanding of the strategy behind the picks and how they are generated.</p>
     </div>
 </div>
+
+{% if shareable_cards %}
+<div class="social-export-wrap">
+    <div class="social-export-head">
+        <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
+        <div class="social-export-actions">
+            <button type="button" class="social-export-btn" onclick="downloadPredictionsImage()">Save Image</button>
+            <button type="button" class="social-export-btn primary" onclick="sharePredictionsImage()">Share Image</button>
+        </div>
+    </div>
+    <div id="predictionsShareCard" class="social-image-card">
+        <div class="social-image-head">
+            <span class="social-image-label">{{ sport_info.name }} Predictions</span>
+            <span class="social-image-date">{{ today_date }}</span>
+        </div>
+        {% for item in shareable_cards %}
+        <div class="social-game-row">
+            <div class="social-team away">
+                {% if item.pick_side == 'away' %}<span class="social-check">✓</span>{% endif %}
+                <span>{{ item.away_team }}</span>
+            </div>
+            <div class="social-vs">VS</div>
+            <div class="social-team home">
+                <span>{{ item.home_team }}</span>
+                {% if item.pick_side == 'home' %}<span class="social-check">✓</span>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+<div class="share-strip">
+    <span class="share-strip-label">Share on social media</span>
+    <div class="share-icons">
+        <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+        <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+        <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+        <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+        <a class="share-icon" href="https://api.whatsapp.com/send?text={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+        <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+    </div>
+</div>
 <footer class="site-footer">
     <div class="footer-outer">
         <div class="footer-brand"><a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a></div>
@@ -740,6 +871,7 @@
                 <a href="/#faq">FAQ</a>
                 <a href="/daily-report">Daily results report</a>
                 <a href="/search">Search</a>
+                <a href="/performance">Model performance</a>
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
                 <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                 <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
@@ -758,6 +890,50 @@
 </footer>
 
 <script>
+    async function _renderPredictionsImageCanvas() {
+        const target = document.getElementById('predictionsShareCard');
+        if (!target || typeof window.html2canvas !== 'function') {
+            throw new Error('Image renderer is unavailable.');
+        }
+        return window.html2canvas(target, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            useCORS: true
+        });
+    }
+
+    async function downloadPredictionsImage() {
+        try {
+            const canvas = await _renderPredictionsImageCanvas();
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = '{{ sport|lower }}-predictions.png';
+            link.click();
+        } catch (_err) {
+            alert('Unable to create image right now. Please try again.');
+        }
+    }
+
+    async function sharePredictionsImage() {
+        try {
+            const canvas = await _renderPredictionsImageCanvas();
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('Image export failed');
+            const file = new File([blob], '{{ sport|lower }}-predictions.png', { type: 'image/png' });
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file] });
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '{{ sport|lower }}-predictions.png';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        } catch (_err) {
+            alert('Unable to share image right now. Try Save Image first.');
+        }
+    }
+
     function toggleMenu() {
         const navLinks = document.getElementById('navLinks');
         if (navLinks) navLinks.classList.toggle('active');

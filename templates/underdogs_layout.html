@@ -12,25 +12,26 @@
     <style>
         *{margin:0;padding:0;box-sizing:border-box;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:#0f172a;min-height:100vh;}
-        .navbar{background:#F4F7F9;padding:14px 28px;border-bottom:1px solid #E0E4E8;box-shadow:0 2px 8px rgba(26,29,35,0.05);position:sticky;top:0;z-index:1000;}
-        .navbar-content{max-width:1400px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:14px;}
+        .navbar{background:#ffffff;padding:14px 28px;border-bottom:1px solid #E0E4E8;box-shadow:0 2px 8px rgba(26,29,35,0.05);position:sticky;top:0;z-index:1000;}
+        .navbar-content{max-width:1400px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:20px;position:relative;}
         .logo{font-family:'Oswald',sans-serif;font-weight:700;font-size:28px;text-transform:uppercase;letter-spacing:0.5px;line-height:1;color:#0f172a;text-decoration:none;}
-        .hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid #E0E4E8;background:#fff;}
+        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;margin-left:auto;order:4;}
         .hamburger span{width:24px;height:2px;background:#0f172a;border-radius:2px;}
-        .nav-links{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
-        .nav-links a{color:#1A1D23;text-decoration:none;font-weight:600;font-size:0.82em;padding:7px 9px;border-radius:999px;white-space:nowrap;}
+        .nav-links{display:none;position:absolute;top:calc(100% + 8px);right:0;width:min(180px,calc(100vw - 36px));flex-direction:column;gap:0;padding:8px;border:1px solid #cbd5e1;border-radius:12px;background:#ffffff;box-shadow:0 14px 28px rgba(15,23,42,0.18);z-index:1100;}
+        .nav-links.active{display:flex;}
+        .nav-links a{color:#1A1D23;text-decoration:none;font-weight:600;font-size:0.82em;padding:10px 12px;border-radius:8px;white-space:normal;}
         .nav-links a:hover{color:#00529B;background:rgba(0,82,155,0.08);}
-        .nav-search-wrap{position:relative;flex:1;max-width:620px;width:100%;min-width:0;}
-        .nav-search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #E0E4E8;border-radius:999px;padding:5px 8px 5px 14px;box-shadow:0 3px 10px rgba(26,29,35,0.08);}
+        .nav-search-wrap{position:relative;flex:1;max-width:620px;width:100%;min-width:0;margin-left:14px;}
+        .nav-search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #cbd5e1;border-radius:999px;padding:5px 8px 5px 14px;box-shadow:0 3px 10px rgba(26,29,35,0.08);}
         .nav-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;color:#0f172a;font-size:0.9em;}
         .nav-search input::placeholder{color:#475569;}
-        .nav-search button{border:1px solid #E0E4E8;background:#fff;color:#00529B;border-radius:999px;padding:8px 14px;font-weight:800;cursor:pointer;}
-        .nav-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+        .nav-search button{border:1px solid #cbd5e1;background:#fff;color:#00529B;border-radius:999px;padding:8px 14px;font-weight:800;cursor:pointer;}
+        .nav-actions{display:flex;align-items:center;gap:14px;flex-shrink:0;}
         .auth-btn{text-decoration:none;border-radius:999px;font-weight:800;font-size:0.82em;padding:9px 14px;}
         .auth-btn.signup{background:#00C076;color:#fff;border:1px solid #00C076;}
         .auth-btn.login{border:1px solid #00529B;color:#00529B;background:#fff;}
         .layout-main{max-width:920px;margin:0 auto;padding:28px 20px 48px;}
-        .legal-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:28px 26px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
+        .legal-card{background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:28px 26px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
         .legal-card h1{font-size:clamp(1.5rem,4vw,2rem);margin:0 0 10px;color:#0f172a;}
         .legal-card h2{font-size:1.1rem;margin:22px 0 8px;color:#0f172a;border-bottom:1px solid #E0E4E8;padding-bottom:6px;}
         .legal-card h3{font-size:0.98rem;margin:14px 0 6px;color:#334155;}
@@ -43,25 +44,31 @@
         .legal-card .penalty{background:rgba(239,68,68,0.08);border-left:4px solid #dc2626;padding:14px 18px;border-radius:8px;margin:14px 0;color:#991b1b;}
         .legal-card .penalty ul{margin:8px 0 0 20px;}
         .legal-card .penalty li{color:#991b1b;}
-        .legal-card .contact-block{background:#f8fafc;border:1px solid #E0E4E8;border-radius:10px;padding:16px 20px;margin-top:12px;color:#334155;}
+        .legal-card .contact-block{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:16px 20px;margin-top:12px;color:#334155;}
         .legal-card + .legal-card{margin-top:22px;}
-        .site-footer{background:#fff;border-top:1px solid rgba(15,23,42,0.12);padding:22px 24px 28px;color:#475569;font-size:0.88em;}
+        .site-footer{background:rgba(255,255,255,0.72);border-top:1px solid rgba(15,23,42,0.12);padding:22px 24px 28px;color:#475569;font-size:0.88em;backdrop-filter:saturate(140%) blur(2px);}
         .footer-outer{max-width:1200px;margin:0 auto;}
         .footer-brand{margin-bottom:18px;}
         .footer-columns-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 36px;align-items:start;}
         .footer-heading{font-size:0.72em;text-transform:uppercase;letter-spacing:0.55px;font-weight:800;color:#0f172a;margin:0 0 12px;}
         .footer-col-blk a{display:block;font-size:0.88em;line-height:1.85;color:#475569;text-decoration:none;font-weight:500;padding:2px 0;}
         .footer-col-blk a:hover{color:#00529B;text-decoration:underline;}
-        .footer-bottom{margin-top:22px;padding-top:16px;border-top:1px solid rgba(15,23,42,0.1);font-size:0.82em;color:#475569;}
+        .footer-bottom{margin-top:22px;padding-top:16px;border-top:1px solid rgba(15,23,42,0.1);font-size:0.82em;color:#475569;opacity:0.78;}
+        .share-strip{max-width:1200px;margin:0 auto 10px;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;background:rgba(244,247,249,0.7);border:1px solid rgba(15,23,42,0.1);border-radius:12px;}
+        .share-strip-label{font-size:0.82em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
+        .share-icons{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .share-icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(15,23,42,0.14);background:#fff;}
+                        .share-icon img{width:16px;height:16px;display:block;}
+        .share-icon .txt{display:none;font-size:0.64rem;font-weight:800;line-height:1;color:#0f172a;letter-spacing:0.1px;}
+                .share-icon:hover{border-color:#00529B;background:rgba(0,82,155,0.08);}
         @media(max-width:1100px){.navbar-content{flex-wrap:wrap;}.nav-search-wrap{order:3;width:100%;max-width:100%;}}
         @media(max-width:768px){
-            .hamburger{display:flex;}
             .navbar-content{display:grid;grid-template-columns:1fr auto;grid-template-areas:"logo ham""search search""actions actions""links links";gap:10px 12px;align-items:center;}
             .navbar .logo{grid-area:logo;justify-self:start;}
             .navbar .hamburger{grid-area:ham;justify-self:end;}
             .nav-search-wrap{grid-area:search;width:100%;max-width:none;order:unset;}
             .nav-actions{grid-area:actions;width:100%;justify-content:center;}
-            .nav-links{grid-area:links;display:none;flex-direction:column;width:100%;padding:4px 0 10px;border-top:1px solid #E0E4E8;background:#F4F7F9;}
+            .nav-links{grid-area:unset;position:absolute;top:calc(100% + 8px);right:0;left:auto;border:1px solid #cbd5e1;box-shadow:0 16px 34px rgba(15,23,42,0.20);border-radius:12px;width:min(240px,calc(100vw - 24px));max-height:70vh;overflow:auto;padding:8px;background:rgba(255,255,255,0.98);backdrop-filter:blur(6px);z-index:1200;}
             .nav-links.active{display:flex;}
             .nav-links a{white-space:normal;border-radius:8px;padding:10px 12px;}
         }
@@ -84,7 +91,8 @@
             <a href="/ncaaf-picks">NCAAF</a>
             <a href="/wnba-picks">WNBA</a>
             {% if soccer_enabled %}<a href="/soccer-picks">Soccer</a>{% endif %}
-            <a href="/plans">Plans</a>
+            <a href="/player-props">Player Props</a>
+            <a href="/plans">Pricing</a>
         </div>
         <div class="nav-search-wrap">
             <form class="nav-search" action="/search" method="get" role="search">
@@ -103,6 +111,20 @@
     </div>
 </div>
 <main class="layout-main">{% block content %}{% endblock %}</main>
+<div class="share-strip">
+    <span class="share-strip-label">Share on social media</span>
+    <div class="share-icons">
+        <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+        <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+        <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+        <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+        <a class="share-icon" href="https://api.whatsapp.com/send?text={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+        <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+    </div>
+</div>
 <footer class="site-footer">
     <div class="footer-outer">
         <div class="footer-brand"><a href="/" class="logo">underdogs.bet</a></div>
@@ -121,6 +143,7 @@
                 <a href="/#faq">FAQ</a>
                 <a href="/daily-report">Daily results report</a>
                 <a href="/search">Search</a>
+                <a href="/performance">Model performance</a>
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
                 <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
                 <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>

@@ -1,0 +1,202 @@
+{% extends "underdogs_layout.html" %}
+
+{% block title %}Model Performance - underdogs.bet{% endblock %}
+
+{% block extra_styles %}
+.perf-wrap{max-width:1180px;margin:0 auto;}
+.perf-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:20px 18px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
+.perf-head{margin-bottom:14px;}
+.perf-head h1{font-size:1.7rem;color:#0f172a;margin:0 0 8px;}
+.perf-head p{color:#475569;font-size:0.94rem;margin:0;}
+.perf-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:14px 0 18px;}
+.perf-filters label{display:flex;flex-direction:column;gap:6px;font-size:0.82rem;color:#334155;font-weight:700;}
+.perf-filters select{min-width:170px;padding:9px 10px;border:1px solid #E0E4E8;border-radius:10px;background:#fff;color:#0f172a;}
+.perf-filters button{padding:10px 14px;border-radius:10px;border:1px solid #00529B;background:#00529B;color:#fff;font-weight:800;cursor:pointer;}
+.perf-table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #E0E4E8;border-radius:12px;}
+.perf-table th,.perf-table td{padding:10px;border-bottom:1px solid #E0E4E8;border-right:1px solid #E0E4E8;text-align:center;vertical-align:middle;}
+.perf-table tr:last-child td{border-bottom:none;}
+.perf-table th:last-child,.perf-table td:last-child{border-right:none;}
+.perf-table thead th{background:#F4F7F9;color:#0f172a;font-size:0.83rem;font-weight:800;}
+.bucket-cell{font-weight:800;color:#0f172a;background:#f8fafc;font-size:0.84rem;}
+.perf-stat{display:flex;flex-direction:column;gap:2px;line-height:1.2;min-height:72px;align-items:center;justify-content:center;border-radius:8px;}
+.perf-win{font-size:1.04rem;font-weight:900;color:#0f172a;}
+.perf-rec{font-size:0.82rem;font-weight:700;color:#334155;}
+.perf-n{font-size:0.74rem;color:#64748b;}
+.perf-red{background:rgba(239,68,68,0.16);}
+.perf-yellow{background:rgba(251,191,36,0.2);}
+.perf-green{background:rgba(16,185,129,0.18);}
+.perf-gray{background:#f1f5f9;color:#94a3b8;}
+.perf-gray .perf-win,.perf-gray .perf-rec,.perf-gray .perf-n{color:#94a3b8;}
+.perf-note{margin-top:10px;color:#475569;font-size:0.84rem;}
+.perf-tools{margin-top:10px;display:flex;justify-content:flex-end;}
+.perf-tools a{font-size:0.83rem;text-decoration:none;color:#00529B;font-weight:800;}
+.perf-tools a:hover{text-decoration:underline;}
+.sport-block{margin-top:18px;}
+.sport-title{font-size:1.02rem;font-weight:900;color:#0f172a;margin:0 0 8px;}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;}
+.team-explainer{
+    margin:0 0 12px;
+    color:#475569;
+    font-size:0.84rem;
+    line-height:1.55;
+}
+.team-card{border:1px solid #E0E4E8;border-radius:12px;padding:12px;background:#fff;}
+.team-card h3{margin:0 0 8px;font-size:0.98rem;color:#0f172a;}
+.team-mini{width:100%;border-collapse:collapse;}
+.team-mini th,.team-mini td{padding:5px 6px;font-size:0.78rem;border-bottom:1px solid #E0E4E8;text-align:left;color:#334155;}
+.team-mini th{font-weight:800;color:#0f172a;background:#F8FAFC;}
+.team-mini tr:last-child td{border-bottom:none;}
+{% endblock %}
+
+{% block content %}
+<div class="perf-wrap">
+    <div class="perf-card">
+        <div class="perf-head">
+            <h1>Model Performance</h1>
+            <p>Historical completed-game performance by confidence bucket and sport.</p>
+        </div>
+
+        <form method="GET" action="/performance" class="perf-filters">
+            <label>Sport
+                <select name="sport">
+                    <option value="" {% if not selected_sport %}selected{% endif %}>All</option>
+                    {% for s in sport_options %}
+                    <option value="{{ s }}" {% if selected_sport == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Last Number of Games
+                <select name="last_n">
+                    <option value="" {% if not selected_last_n %}selected{% endif %}>All</option>
+                    <option value="50" {% if selected_last_n == '50' %}selected{% endif %}>Last 50</option>
+                    <option value="100" {% if selected_last_n == '100' %}selected{% endif %}>Last 100</option>
+                    <option value="200" {% if selected_last_n == '200' %}selected{% endif %}>Last 200</option>
+                </select>
+            </label>
+            <button type="submit">Apply</button>
+        </form>
+
+        <table class="perf-table">
+            <thead>
+                <tr>
+                    <th>Confidence</th>
+                    {% for model in model_order %}
+                    <th>{{ model }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for bucket in bucket_order %}
+                <tr>
+                    <td class="bucket-cell">{{ bucket }}</td>
+                    {% for model in model_order %}
+                        {% set cell = main_table[bucket][model] %}
+                        {% if not cell %}
+                        <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
+                        {% elif cell.n < 10 %}
+                        <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                        {% else %}
+                            {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
+                        <td><div class="perf-stat {{ cls }}"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="perf-note">52.4% is the break-even win rate for standard -110 lines.</div>
+        <div class="perf-tools">
+            <a href="/performance/audit.csv?sport={{ selected_sport }}&last_n={{ selected_last_n or '50' }}">Download audit CSV (Excel)</a>
+        </div>
+    </div>
+
+    {% if not selected_sport %}
+    <div class="perf-card sport-block">
+        <h2 class="sport-title">Sport Breakdown</h2>
+        {% for sport, table_data in sport_tables.items() %}
+        <div class="sport-block">
+            <h3 class="sport-title">{{ sport }}</h3>
+            <table class="perf-table">
+                <thead>
+                    <tr>
+                        <th>Confidence</th>
+                        {% for model in model_order %}
+                        <th>{{ model }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bucket in bucket_order %}
+                    <tr>
+                        <td class="bucket-cell">{{ bucket }}</td>
+                        {% for model in model_order %}
+                            {% set cell = table_data[bucket][model] %}
+                            {% if not cell %}
+                            <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
+                            {% elif cell.n < 10 %}
+                            <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                            {% else %}
+                                {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
+                            <td><div class="perf-stat {{ cls }}"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:#64748b;">No completed game data found for current filters.</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="perf-card sport-block">
+        <h2 class="sport-title">Team Model Performance</h2>
+        <p class="team-explainer">
+            This table shows how each model has performed on all predictions involving each team.
+            Includes spreads, totals, and moneyline picks.
+            Timeframe: current season (regular season + playoffs).
+            Multiple picks per game may result in sample sizes greater than 82.
+        </p>
+        {% if team_chart_rows %}
+        <div class="team-grid">
+            {% for row in team_chart_rows %}
+            <div class="team-card">
+                <h3>{{ row.team }} <span style="color:#64748b;font-size:0.8rem;">({{ row.sport }})</span></h3>
+                <table class="team-mini">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Record</th>
+                            <th>Win %</th>
+                            <th title="Total number of model predictions involving this team. May exceed total games due to multiple bet types per game.">Sample Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for model in model_order %}
+                            {% set md = row.models[model] %}
+                        <tr>
+                            <td>{{ model }}</td>
+                            {% if md %}
+                            <td>{{ md.wins }}-{{ md.losses }}</td>
+                            <td>{{ md.win_pct }}%</td>
+                            <td>{{ md.n }}</td>
+                            {% else %}
+                            <td>&mdash;</td>
+                            <td>&mdash;</td>
+                            <td>0</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:#64748b;">No team-specific rows for current filters.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "underdogs_layout.html" %}
+{% block title %}Player Props (dev) | underdogs.bet{% endblock %}
+{% block head_meta %}
+<meta name="description" content="Run the standalone AI Player Props app locally, or open the hosted app when configured.">
+{% endblock %}
+{% block content %}
+<article class="legal-card">
+    <h1>AI Player Props</h1>
+    <p>The props tool is a <strong>separate</strong> app (FastAPI + Vite). The main site does not serve it on the same port, so you need both processes running on your machine, or set a hosted URL in production.</p>
+
+    <h2>If you see “connection refused” on port 5179</h2>
+    <p>Nothing is listening there yet. Start the backend, then the frontend (two terminals).</p>
+
+    <h3>1. Backend (port 8101)</h3>
+    <pre style="overflow:auto;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:10px;font-size:0.85em;">cd standalone-player-props/backend
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8101</pre>
+
+    <h3>2. Frontend (port 5179)</h3>
+    <pre style="overflow:auto;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:10px;font-size:0.85em;">cd standalone-player-props/frontend
+npm install
+npm run dev</pre>
+
+    <p>When Vite prints <code>Local: http://localhost:5179/</code>, use that exact URL in the browser. In dev mode the UI talks to the API through Vite’s <code>/api</code> proxy to <code>127.0.0.1:8101</code>, so keep <strong>both</strong> uvicorn and <code>npm run dev</code> running. If you see <strong>connection refused</strong> on a link, either the dev server is not running or Flask has <code>PLAYER_PROPS_URL</code> set to a dead URL—unset it for local work or set it to a live props URL.</p>
+    <p>Advanced: set <code>VITE_PROPS_API_BASE</code> in <code>frontend/.env</code> to override the API base (skips the proxy when set).</p>
+
+    <h2>Production</h2>
+    <p>Set environment variable <code>PLAYER_PROPS_URL</code> on the Flask app to your deployed props URL. Visiting <code>/player-props</code> will then redirect there instead of showing this page.</p>
+</article>
+{% endblock %}
