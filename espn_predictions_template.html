@@ -464,13 +464,15 @@
         .social-image-head{padding:10px 12px;border-bottom:1px solid rgba(15,23,42,0.1);display:flex;justify-content:space-between;align-items:center;gap:8px;}
         .social-image-label{font-size:0.8em;font-weight:800;color:#0f172a;}
         .social-image-date{font-size:0.72em;color:#64748b;font-weight:700;}
-        .social-game-row{display:flex;align-items:center;justify-content:center;gap:4px 6px;padding:10px 10px;border-bottom:1px solid rgba(15,23,42,0.08);}
+        .social-game-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;column-gap:6px;padding:10px 10px;border-bottom:1px solid rgba(15,23,42,0.08);}
         .social-game-row:last-child{border-bottom:none;}
-        .social-team{display:flex;align-items:center;gap:6px;min-width:0;flex:0 1 auto;max-width:42%;color:#0f172a;font-size:0.86em;font-weight:700;line-height:1.25;word-break:break-word;}
+        .social-team{display:flex;align-items:center;gap:6px;min-width:0;color:#0f172a;font-size:0.86em;font-weight:700;line-height:1.25;}
         .social-team.home{justify-content:flex-end;text-align:right;}
         .social-team.away{justify-content:flex-start;text-align:left;}
+        .social-team-name{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .social-vs{flex:0 0 auto;font-size:0.7em;color:#64748b;font-weight:800;letter-spacing:0.35px;text-transform:uppercase;padding:0 2px;}
         .social-check{width:20px;height:20px;border-radius:6px;background:#22c55e;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.78em;font-weight:900;line-height:1;flex-shrink:0;}
+        .social-check.placeholder{visibility:hidden;background:transparent;}
         @media (max-width: 1100px) {
             .navbar-content { flex-wrap:wrap; justify-content:center; }
             .nav-search-wrap { order:3; width:100%; max-width:100%; }
@@ -830,7 +832,7 @@
     <div class="social-export-head">
         <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
         <div class="social-export-actions">
-            <button type="button" class="social-export-btn" onclick="downloadPredictionsImage()">Save Image</button>
+            <button type="button" class="social-export-btn" onclick="downloadPredictionsImage()">Take Screenshot</button>
             <button type="button" class="social-export-btn primary" onclick="sharePredictionsImage()">Share Image</button>
         </div>
     </div>
@@ -842,13 +844,13 @@
         {% for item in shareable_cards %}
         <div class="social-game-row">
             <div class="social-team away">
-                {% if item.pick_side == 'away' %}<span class="social-check">✓</span>{% endif %}
-                <span>{{ item.away_team }}</span>
+                {% if item.pick_side == 'away' %}<span class="social-check">✓</span>{% else %}<span class="social-check placeholder">✓</span>{% endif %}
+                <span class="social-team-name">{{ item.away_team }}</span>
             </div>
             <div class="social-vs">VS</div>
             <div class="social-team home">
-                <span>{{ item.home_team }}</span>
-                {% if item.pick_side == 'home' %}<span class="social-check">✓</span>{% endif %}
+                <span class="social-team-name">{{ item.home_team }}</span>
+                {% if item.pick_side == 'home' %}<span class="social-check">✓</span>{% else %}<span class="social-check placeholder">✓</span>{% endif %}
             </div>
         </div>
         {% endfor %}
@@ -920,8 +922,8 @@
 
     function _renderStoryJpegCanvas(sourceCanvas) {
         const out = document.createElement('canvas');
-        out.width = 1080;
-        out.height = 1920; // 9:16 portrait for Instagram/TikTok
+        out.width = 1920;
+        out.height = 1080; // 16:9 landscape screenshot
         const ctx = out.getContext('2d');
         if (!ctx) throw new Error('Canvas context unavailable.');
 
@@ -941,14 +943,42 @@
         return out;
     }
 
+    function _isIOSDevice() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+
+    async function _createPredictionsJpegBlob() {
+        const cardCanvas = await _renderPredictionsImageCanvas();
+        const storyCanvas = _renderStoryJpegCanvas(cardCanvas);
+        const blob = await new Promise((resolve) => storyCanvas.toBlob(resolve, 'image/jpeg', 0.92));
+        if (!blob) throw new Error('Image export failed');
+        return blob;
+    }
+
     async function downloadPredictionsImage() {
         try {
-            const cardCanvas = await _renderPredictionsImageCanvas();
-            const storyCanvas = _renderStoryJpegCanvas(cardCanvas);
+            const blob = await _createPredictionsJpegBlob();
+            const fileName = '{{ sport|lower }}-predictions-1920x1080.jpg';
+            const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+            // iOS Safari downloads default to Files; prefer share sheet/new-tab image for Photos save.
+            if (_isIOSDevice()) {
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: '{{ sport_info.name }} Predictions' });
+                    return;
+                }
+                const iosUrl = URL.createObjectURL(blob);
+                window.open(iosUrl, '_blank');
+                setTimeout(() => URL.revokeObjectURL(iosUrl), 45000);
+                alert('Image opened in a new tab. Long-press the image and tap "Save to Photos".');
+                return;
+            }
+
             const link = document.createElement('a');
-            link.href = storyCanvas.toDataURL('image/jpeg', 0.92);
-            link.download = '{{ sport|lower }}-predictions-1080x1920.jpg';
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
             link.click();
+            URL.revokeObjectURL(link.href);
         } catch (_err) {
             alert('Unable to create image right now. Please try again.');
         }
@@ -956,18 +986,16 @@
 
     async function sharePredictionsImage() {
         try {
-            const cardCanvas = await _renderPredictionsImageCanvas();
-            const storyCanvas = _renderStoryJpegCanvas(cardCanvas);
-            const blob = await new Promise((resolve) => storyCanvas.toBlob(resolve, 'image/jpeg', 0.92));
-            if (!blob) throw new Error('Image export failed');
-            const file = new File([blob], '{{ sport|lower }}-predictions-1080x1920.jpg', { type: 'image/jpeg' });
+            const blob = await _createPredictionsJpegBlob();
+            const fileName = '{{ sport|lower }}-predictions-1920x1080.jpg';
+            const file = new File([blob], fileName, { type: 'image/jpeg' });
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({ files: [file] });
                 return;
             }
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = '{{ sport|lower }}-predictions-1080x1920.jpg';
+            link.download = fileName;
             link.click();
             URL.revokeObjectURL(link.href);
         } catch (_err) {
