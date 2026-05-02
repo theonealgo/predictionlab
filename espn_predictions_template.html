@@ -299,7 +299,7 @@
         }
         .header { text-align:left; margin-bottom:16px; padding:20px 18px; border:1px solid rgba(15,23,42,0.16); border-radius:12px; position:relative; overflow:hidden; background:#ffffff; }
         .header::before, .header::after { display:none !important; content:none !important; }
-        h1 { font-size:1.85em; letter-spacing:0.2px; color:#0f172a; }
+        h1 { font-size:1.85em; letter-spacing:0.2px; color:#0F172A; font-weight:700; }
         .section-tabs { display:flex; gap:8px; margin-bottom:16px; justify-content:center; flex-wrap:wrap; }
         .tab { padding:9px 20px; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.9em; background:#fff; border:1px solid rgba(15,23,42,0.18); color:#0f172a; transition:all 0.2s; }
         .tab.active { background:#bfdbfe; color:#0f172a; border:1px solid #93c5fd; }
@@ -322,13 +322,23 @@
         .date-section.visible { display:block; }
         .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
         .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-        .date-header { font-size:1.25em; margin-bottom:14px; color:#92400e; font-weight:600; }
+        .date-header { font-size:1.25em; margin-bottom:14px; color:#0F172A; font-weight:700; }
         .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; margin-bottom:22px; }
         @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
 
-        /* Card */
-        .game-card { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:10px; overflow:hidden; transition:border-color 0.2s; }
-        .game-card:hover { border-color:#b45309; }
+        /* Card — floating white tile */
+        .game-card {
+            background:#ffffff;
+            border:1px solid #E2E8F0;
+            border-radius:12px;
+            overflow:hidden;
+            box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06);
+            transition:border-color 0.2s, box-shadow 0.2s;
+        }
+        .game-card:hover {
+            border-color:#cbd5e1;
+            box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08);
+        }
         .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#92400e; background:rgba(146,64,14,0.1); }
         .game-status.final { color:#00C076; background:rgba(16,185,129,0.12); }
         .game-body { display:flex; padding:10px 12px; gap:10px; }
@@ -344,7 +354,7 @@
         .score-box { font-size:1.05em; font-weight:700; color:#92400e; margin-left:8px; flex-shrink:0; }
         .prediction-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:120px; max-width:168px; display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
         @media(max-width:400px){ .game-body{flex-direction:column;} .prediction-panel{max-width:none;min-width:0;border-left:none;border-top:3px solid #8b5cf6;} }
-        .panel-title { font-size:0.66em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
+        .panel-title { font-size:0.66em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
         .model-row { display:flex; justify-content:space-between; font-size:0.81em; padding:2px 0; }
         .model-lbl { opacity:0.85; }
         .model-val { font-weight:600; }
@@ -352,12 +362,12 @@
 
         /* MLB pick confidence strip (each box = one model) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
-        .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
+        .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
         .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
         @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
         .pc-box {
-            background:#fff;
-            border:1px solid rgba(15,23,42,0.12);
+            background:#ffffff;
+            border:1px solid #E2E8F0;
             border-radius:8px;
             padding:6px 4px;
             text-align:center;
@@ -374,7 +384,7 @@
         .pc-name {
             font-size:0.68em;
             font-weight:700;
-            color:#cbd5e1;
+            color:#0F172A;
             text-transform:uppercase;
             letter-spacing:0.3px;
             width:100%;
@@ -459,7 +469,8 @@
         .social-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
         .social-export-btn{border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 12px;font-size:0.76em;font-weight:800;cursor:pointer;}
         .social-export-btn.primary{background:#00529B;color:#fff;}
-        .social-image-link{display:block;width:min(100%,900px);margin:0 auto;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:1px solid rgba(15,23,42,0.14);box-shadow:0 6px 18px rgba(15,23,42,0.08);background:#ffffff;}
+        .social-export-hint{margin:0 0 10px;font-size:0.82em;color:#475569;line-height:1.45;}
+        .social-image-link{display:block;width:min(100%,min(420px,90vw));margin:0 auto;aspect-ratio:9/16;border-radius:14px;overflow:hidden;border:1px solid rgba(15,23,42,0.14);box-shadow:0 6px 18px rgba(15,23,42,0.08);background:#ffffff;}
         .social-image-link img{display:block;width:100%;height:100%;object-fit:cover;}
         @media (max-width: 1100px) {
             .navbar-content { flex-wrap:wrap; justify-content:center; }
@@ -815,17 +826,18 @@
     </div>
 </div>
 
-{% if share_image_url %}
+{% if share_image_src %}
 <div class="social-export-wrap">
     <div class="social-export-head">
         <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
         <div class="social-export-actions">
-            <a class="social-export-btn" href="{{ share_image_url }}" target="_blank" rel="noopener" download>Download Image</a>
-            <a class="social-export-btn primary" href="{{ share_image_url }}" target="_blank" rel="noopener">Share Image</a>
+            <a class="social-export-btn" href="{{ share_image_src }}" download="underdogs-picks.jpg">Download image</a>
+            <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="noopener">Open fullscreen</a>
         </div>
     </div>
-    <a class="social-image-link" href="{{ share_image_url }}" target="_blank" rel="noopener">
-        <img src="{{ share_image_url }}" alt="{{ sport_info.name }} predictions image">
+    <p class="social-export-hint">For TikTok: use <strong>Download</strong> and upload from Photos so no browser URL appears in your recording.</p>
+    <a class="social-image-link" href="{{ share_image_view_url }}" target="_blank" rel="noopener">
+        <img src="{{ share_image_src }}" alt="">
     </a>
 </div>
 {% endif %}

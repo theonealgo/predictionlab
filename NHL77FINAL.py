@@ -6,7 +6,7 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
 """
 
-from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory
+from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory, abort
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
@@ -17,6 +17,7 @@ import io
 import uuid
 import importlib
 import importlib.util
+import types
 from collections import defaultdict
 from flask_cors import CORS
 import sqlite3
@@ -119,21 +120,84 @@ _MANUAL_BANNER_ITEMS = [
     {'label': 'MLB 🎯 Moneyline (Consensus)', 'pct': '60.0%', 'record': '60-40'},
     {'label': 'NHL 📊 Edge', 'pct': '56.5%', 'record': '113-87'},
 ]
-_SHARE_IMAGE_CACHE: dict = {}
+_SHARE_IMAGE_CACHE_DIR = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'share_images')
+_SHARE_TOKEN_RE = re.compile(r'^[a-f0-9]{32}$')
 _SHARE_IMAGE_TTL_SECONDS = 3600
 _SHARE_IMAGE_MAX_ITEMS = 500
 _PROPS_ENGINE_MODULE = None
 _PROPS_CONFIG_MODULE = None
+# Standalone props live under backend/app; must not use top-level name "app" (root app.py shadows it).
+_STANDALONE_PROPS_PKG = "_standalone_player_props"
 
 
 def _cleanup_share_image_cache():
+    """Remove stale or excess share-image JSON files (disk-backed for multi-worker processes)."""
+    try:
+        _os.makedirs(_SHARE_IMAGE_CACHE_DIR, exist_ok=True)
+    except OSError:
+        return
     now_ts = _time.time()
-    stale_keys = [k for k, v in _SHARE_IMAGE_CACHE.items() if (now_ts - v.get('ts', 0)) > _SHARE_IMAGE_TTL_SECONDS]
-    for k in stale_keys:
-        _SHARE_IMAGE_CACHE.pop(k, None)
-    if len(_SHARE_IMAGE_CACHE) > _SHARE_IMAGE_MAX_ITEMS:
-        for token, _ in sorted(_SHARE_IMAGE_CACHE.items(), key=lambda item: item[1].get('ts', 0))[: len(_SHARE_IMAGE_CACHE) - _SHARE_IMAGE_MAX_ITEMS]:
-            _SHARE_IMAGE_CACHE.pop(token, None)
+    paths = []
+    try:
+        for fn in _os.listdir(_SHARE_IMAGE_CACHE_DIR):
+            if not fn.endswith('.json'):
+                continue
+            path = _os.path.join(_SHARE_IMAGE_CACHE_DIR, fn)
+            try:
+                st = _os.stat(path)
+                paths.append((st.st_mtime, path))
+            except OSError:
+                continue
+    except OSError:
+        return
+    for mtime, path in paths:
+        if now_ts - mtime > _SHARE_IMAGE_TTL_SECONDS:
+            try:
+                _os.unlink(path)
+            except OSError:
+                pass
+    paths = []
+    try:
+        for fn in _os.listdir(_SHARE_IMAGE_CACHE_DIR):
+            if not fn.endswith('.json'):
+                continue
+            path = _os.path.join(_SHARE_IMAGE_CACHE_DIR, fn)
+            try:
+                st = _os.stat(path)
+                paths.append((st.st_mtime, path))
+            except OSError:
+                continue
+    except OSError:
+        return
+    paths.sort(key=lambda x: x[0])
+    while len(paths) > _SHARE_IMAGE_MAX_ITEMS:
+        _, oldest = paths.pop(0)
+        try:
+            _os.unlink(oldest)
+        except OSError:
+            pass
+
+
+def _get_share_cache_entry(token: str):
+    """Load share payload written by any worker; validates token shape and TTL."""
+    if not token or not _SHARE_TOKEN_RE.match(token):
+        return None
+    path = _os.path.join(_SHARE_IMAGE_CACHE_DIR, f'{token}.json')
+    if not _os.path.isfile(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    ts = float(data.get('ts') or 0)
+    if _time.time() - ts > _SHARE_IMAGE_TTL_SECONDS:
+        try:
+            _os.unlink(path)
+        except OSError:
+            pass
+        return None
+    return data
 
 
 def _load_props_modules():
@@ -141,13 +205,19 @@ def _load_props_modules():
     if _PROPS_ENGINE_MODULE and _PROPS_CONFIG_MODULE:
         return _PROPS_ENGINE_MODULE, _PROPS_CONFIG_MODULE
     backend_root = _os.path.join(_BASE_DIR, "standalone-player-props", "backend")
-    app_root = _os.path.join(backend_root, "app")
-    if not _os.path.isdir(app_root):
+    app_dir = _os.path.join(backend_root, "app")
+    if not _os.path.isdir(app_dir):
         raise RuntimeError("Standalone props backend missing.")
-    if backend_root not in sys.path:
-        sys.path.append(backend_root)
-    cfg_mod = importlib.import_module("app.config")
-    eng_mod = importlib.import_module("app.engine")
+    pkg_name = _STANDALONE_PROPS_PKG
+    if pkg_name not in sys.modules:
+        pkg = types.ModuleType(pkg_name)
+        pkg.__path__ = [app_dir]
+        pkg.__package__ = pkg_name
+        sys.modules[pkg_name] = pkg
+    importlib.import_module(f"{pkg_name}.config")
+    importlib.import_module(f"{pkg_name}.data_sources")
+    cfg_mod = sys.modules[f"{pkg_name}.config"]
+    eng_mod = importlib.import_module(f"{pkg_name}.engine")
     _PROPS_CONFIG_MODULE = cfg_mod
     _PROPS_ENGINE_MODULE = eng_mod
     return _PROPS_ENGINE_MODULE, _PROPS_CONFIG_MODULE
@@ -156,7 +226,24 @@ def _load_props_modules():
 def _register_share_image(payload: dict) -> str:
     _cleanup_share_image_cache()
     token = uuid.uuid4().hex
-    _SHARE_IMAGE_CACHE[token] = {'ts': _time.time(), 'payload': payload}
+    try:
+        _os.makedirs(_SHARE_IMAGE_CACHE_DIR, exist_ok=True)
+    except OSError:
+        pass
+    path = _os.path.join(_SHARE_IMAGE_CACHE_DIR, f'{token}.json')
+    data = {'ts': _time.time(), 'payload': payload}
+    tmp = path + '.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        _os.replace(tmp, path)
+    except OSError:
+        try:
+            if _os.path.isfile(tmp):
+                _os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     return token
 
 
@@ -196,47 +283,70 @@ def _fit_text_font(draw, text: str, max_width: int, start_size: int, min_size: i
 def _render_predictions_share_image(payload: dict, fmt: str):
     if not _HAS_PIL:
         return None, None
-    width, height = 1600, 900
+    # 1080×1920, 9:16 vertical — fills a phone screen on TikTok/Reels (landscape 16:9 letterboxes on mobile).
+    width, height = 1080, 1920
+    pad = 44
+    cx = width // 2
     image = Image.new("RGB", (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
-    title_font = _get_share_font(62, bold=True)
-    sub_font = _get_share_font(34, bold=True)
-    vs_font = _get_share_font(34, bold=True)
-    check_font = _get_share_font(32, bold=True)
-    draw.text((70, 48), f"{payload.get('sport', '')} Predictions", fill=(15, 23, 42), font=title_font)
-    draw.text((70, 124), str(payload.get('date', '')), fill=(71, 85, 105), font=sub_font)
-    rows = payload.get('cards') or []
-    row_top = 220
-    row_height = 180
-    left_start = 80
-    left_end = 720
-    right_start = 880
-    right_end = 1520
-    for idx, item in enumerate(rows[:3]):
-        y = row_top + (idx * row_height)
-        draw.rounded_rectangle((50, y - 12, 1550, y + 132), radius=22, outline=(203, 213, 225), width=2, fill=(255, 255, 255))
-        away = str(item.get('away_team') or '')
-        home = str(item.get('home_team') or '')
-        away_font, away_text = _fit_text_font(draw, away, max_width=(left_end - left_start - 64), start_size=44, min_size=24, bold=True)
-        home_font, home_text = _fit_text_font(draw, home, max_width=(right_end - right_start - 64), start_size=44, min_size=24, bold=True)
-        away_bbox = draw.textbbox((0, 0), away_text, font=away_font)
-        home_bbox = draw.textbbox((0, 0), home_text, font=home_font)
-        away_h = away_bbox[3] - away_bbox[1]
-        home_h = home_bbox[3] - home_bbox[1]
-        draw.text((left_start + 40, y + 54 - (away_h // 2)), away_text, fill=(15, 23, 42), font=away_font)
-        home_w = home_bbox[2] - home_bbox[0]
-        draw.text((right_end - 40 - home_w, y + 54 - (home_h // 2)), home_text, fill=(15, 23, 42), font=home_font)
-        draw.text((770, y + 40), "VS", fill=(100, 116, 139), font=vs_font)
-        if item.get('pick_side') == 'away':
-            draw.rounded_rectangle((left_start, y + 26, left_start + 28, y + 54), radius=6, fill=(34, 197, 94))
-            draw.text((left_start + 6, y + 23), "✓", fill=(255, 255, 255), font=check_font)
-        if item.get('pick_side') == 'home':
-            draw.rounded_rectangle((right_end - 28, y + 26, right_end, y + 54), radius=6, fill=(34, 197, 94))
-            draw.text((right_end - 22, y + 23), "✓", fill=(255, 255, 255), font=check_font)
+    title_font = _get_share_font(92, bold=True)
+    sub_font = _get_share_font(56, bold=True)
+    rows = [r for r in (payload.get('cards') or [])[:3]]
+    n = len(rows)
+    title = f"{payload.get('sport', '')} Predictions"
+    ht = 64
+    draw.text((pad, ht), title, fill=(15, 23, 42), font=title_font)
+    draw.text((pad, ht + 98), str(payload.get('date', '')), fill=(71, 85, 105), font=sub_font)
+    header_bottom = ht + 98 + 62
+    bottom_reserve = 48
+    available = max(200, height - header_bottom - bottom_reserve)
+    gap = 20
+    max_name_w = width - 2 * pad - 32
+    if n > 0:
+        total_gap = gap * (n - 1)
+        raw_slot = (available - total_gap) // n
+        slot_height = max(380, min(560, raw_slot))
+        block_h = n * slot_height + total_gap
+        if block_h > available:
+            slot_height = max(340, (available - total_gap) // n)
+            block_h = n * slot_height + total_gap
+        row_top = header_bottom + max(0, (available - block_h) // 2)
+        vs_font = _get_share_font(52, bold=True)
+        check_font = _get_share_font(48, bold=True)
+        team_start = max(58, int(slot_height * 0.11))
+        team_min = max(36, int(slot_height * 0.065))
+        for idx, item in enumerate(rows):
+            y1 = row_top + idx * (slot_height + gap)
+            y2 = y1 + slot_height
+            draw.rounded_rectangle((pad, y1, width - pad, y2), radius=24, outline=(203, 213, 225), width=3, fill=(255, 255, 255))
+            away = str(item.get('away_team') or '')
+            home = str(item.get('home_team') or '')
+            away_font, away_text = _fit_text_font(draw, away, max_width=max_name_w, start_size=team_start, min_size=team_min, bold=True)
+            home_font, home_text = _fit_text_font(draw, home, max_width=max_name_w, start_size=team_start, min_size=team_min, bold=True)
+            away_bbox = draw.textbbox((0, 0), away_text, font=away_font)
+            home_bbox = draw.textbbox((0, 0), home_text, font=home_font)
+            away_w = away_bbox[2] - away_bbox[0]
+            home_w = home_bbox[2] - home_bbox[0]
+            away_y = y1 + int(slot_height * 0.12)
+            vs_bbox = draw.textbbox((0, 0), "VS", font=vs_font)
+            vs_w = vs_bbox[2] - vs_bbox[0]
+            vs_y = y1 + int(slot_height * 0.42)
+            home_y = y1 + int(slot_height * 0.66)
+            draw.text((cx - away_w // 2, away_y), away_text, fill=(15, 23, 42), font=away_font)
+            draw.text((cx - vs_w // 2, vs_y), "VS", fill=(100, 116, 139), font=vs_font)
+            draw.text((cx - home_w // 2, home_y), home_text, fill=(15, 23, 42), font=home_font)
+            if item.get('pick_side') == 'away':
+                ax = cx - away_w // 2 - 54
+                draw.rounded_rectangle((ax, away_y - 10, ax + 44, away_y + 38), radius=8, fill=(34, 197, 94))
+                draw.text((ax + 9, away_y - 8), "✓", fill=(255, 255, 255), font=check_font)
+            if item.get('pick_side') == 'home':
+                hx = cx - home_w // 2 - 54
+                draw.rounded_rectangle((hx, home_y - 10, hx + 44, home_y + 38), radius=8, fill=(34, 197, 94))
+                draw.text((hx + 9, home_y - 8), "✓", fill=(255, 255, 255), font=check_font)
     output = io.BytesIO()
     out_fmt = 'JPEG' if fmt in ('jpg', 'jpeg') else 'PNG'
     if out_fmt == 'JPEG':
-        image.save(output, format=out_fmt, quality=92, optimize=True)
+        image.save(output, format=out_fmt, quality=93, optimize=True, subsampling=0)
         mimetype = 'image/jpeg'
     else:
         image.save(output, format=out_fmt, optimize=True)
@@ -248,38 +358,48 @@ def _render_predictions_share_image(payload: dict, fmt: str):
 def _render_daily_report_share_image(payload: dict, fmt: str):
     if not _HAS_PIL:
         return None, None
-    width, height = 1600, 900
+    width, height = 1080, 1920
+    pad = 48
     image = Image.new("RGB", (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
-    title_font = _get_share_font(56, bold=True)
-    sub_font = _get_share_font(34, bold=True)
-    label_font = _get_share_font(30, bold=True)
-    val_font = _get_share_font(44, bold=True)
-    draw.text((70, 44), f"{payload.get('sport_name', '')} Results", fill=(15, 23, 42), font=title_font)
-    draw.text((70, 112), str(payload.get('report_display', '')), fill=(71, 85, 105), font=sub_font)
-    draw.text((70, 160), f"Games graded: {payload.get('games', 0)}", fill=(15, 23, 42), font=sub_font)
-    x = 70
-    y = 240
-    card_w = 280
-    card_h = 180
-    gap = 20
+    title_font = _get_share_font(78, bold=True)
+    sub_font = _get_share_font(48, bold=True)
+    label_font = _get_share_font(42, bold=True)
+    val_font = _get_share_font(58, bold=True)
+    meta_font = _get_share_font(46, bold=True)
+    y = 72
+    draw.text((pad, y), f"{payload.get('sport_name', '')} Results", fill=(15, 23, 42), font=title_font)
+    y += 100
+    draw.text((pad, y), str(payload.get('report_display', '')), fill=(71, 85, 105), font=sub_font)
+    y += 72
+    draw.text((pad, y), f"Games graded: {payload.get('games', 0)}", fill=(15, 23, 42), font=sub_font)
+    y += 100
+    card_h = 148
+    gap = 18
     models = payload.get('models') or []
     for idx, model in enumerate(models[:5]):
-        card_x = x + idx * (card_w + gap)
-        draw.rounded_rectangle((card_x, y, card_x + card_w, y + card_h), radius=20, outline=(203, 213, 225), width=2, fill=(248, 250, 252))
-        draw.text((card_x + 16, y + 18), model.get('label', ''), fill=(51, 65, 85), font=label_font)
-        draw.text((card_x + 16, y + 74), model.get('acc', '—'), fill=(15, 23, 42), font=val_font)
-        draw.text((card_x + 16, y + 130), model.get('record', ''), fill=(71, 85, 105), font=sub_font)
+        cy = y + idx * (card_h + gap)
+        draw.rounded_rectangle((pad, cy, width - pad, cy + card_h), radius=22, outline=(203, 213, 225), width=3, fill=(248, 250, 252))
+        draw.text((pad + 22, cy + 18), model.get('label', ''), fill=(51, 65, 85), font=label_font)
+        acc = str(model.get('acc', '—'))
+        rec = str(model.get('record', ''))
+        acc_bbox = draw.textbbox((0, 0), acc, font=val_font)
+        acc_w = acc_bbox[2] - acc_bbox[0]
+        draw.text((width - pad - 22 - acc_w, cy + 28), acc, fill=(15, 23, 42), font=val_font)
+        if rec:
+            draw.text((pad + 22, cy + 86), rec, fill=(71, 85, 105), font=sub_font)
+    y = y + min(len(models), 5) * (card_h + gap) + 36
     spread = payload.get('spread') or {}
     ou = payload.get('ou') or {}
     if spread.get('label'):
-        draw.text((70, 470), f"Spread: {spread.get('label')}", fill=(15, 23, 42), font=sub_font)
+        draw.text((pad, y), f"Spread: {spread.get('label')}", fill=(15, 23, 42), font=meta_font)
+        y += 64
     if ou.get('label'):
-        draw.text((70, 530), f"Over/Under: {ou.get('label')}", fill=(15, 23, 42), font=sub_font)
+        draw.text((pad, y), f"Over/Under: {ou.get('label')}", fill=(15, 23, 42), font=meta_font)
     output = io.BytesIO()
     out_fmt = 'JPEG' if fmt in ('jpg', 'jpeg') else 'PNG'
     if out_fmt == 'JPEG':
-        image.save(output, format=out_fmt, quality=92, optimize=True)
+        image.save(output, format=out_fmt, quality=93, optimize=True, subsampling=0)
         mimetype = 'image/jpeg'
     else:
         image.save(output, format=out_fmt, optimize=True)
@@ -6119,7 +6239,8 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     .rpt-btn-copy{background:#ffffff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);cursor:pointer;}
     .rpt-btn-copy.copied{background:#00C076;border-color:#00C076;}
     .rpt-btn-cta{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;}
-    .rpt-share-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
+    .rpt-share-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
+    .rpt-btn-group{display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px;}
     .rpt-save-help{font-size:0.84em;color:#334155;text-align:center;margin:0 0 8px;}
     .rpt-cta-row{display:flex;justify-content:center;}
     .rpt-sharing{font-size:0.78em;color:#334155;text-align:center;margin-top:6px;}
@@ -6189,10 +6310,13 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
         {% endif %}
     </div>
     <div class="rpt-actions" style="flex-direction:column;align-items:center;">
-        <div class="rpt-save-help">Download or share a 16:9 image for each sport.</div>
+        <div class="rpt-save-help">Use <strong>Download</strong> to save the image for TikTok (no URL in frame). <strong>Open fullscreen</strong> shows only the graphic—still hide the browser bar when screen-recording or use Download → Photos.</div>
         <div class="rpt-share-row">
             {% for st in sport_tallies %}
-            <a class="rpt-btn rpt-btn-copy" href="{{ st.share_image_url }}" target="_blank" rel="noopener">Download/Share {{ st.info.name }} Image</a>
+            <span class="rpt-btn-group">
+                <a class="rpt-btn rpt-btn-copy" href="{{ st.share_image_src }}" download="daily-results.jpg">Download {{ st.info.name }}</a>
+                <a class="rpt-btn rpt-btn-copy" href="{{ st.share_image_view_url }}" target="_blank" rel="noopener">Fullscreen {{ st.info.name }}</a>
+            </span>
             {% endfor %}
         </div>
         <div class="rpt-cta-row" style="margin-top:12px;">
@@ -6801,11 +6925,18 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     /* Date sections */
     .date-section { display:none; background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
-    .date-header { color:#0f172a; font-size:1.3em; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid rgba(15,23,42,0.15); }
+    .date-header { color:#0F172A; font-size:1.3em; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #E2E8F0; }
     .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(420px, 100%),1fr)); gap:16px; }
     @media(max-width:480px){ .results-grid { grid-template-columns:1fr; } .result-card { max-width:100%; } }
-    .result-card { background:#f8fafc; border:1px solid rgba(15,23,42,0.12); border-radius:12px; overflow:hidden; transition:border-color 0.2s; }
-    .result-card:hover { border-color:#fbbf24; }
+    .result-card {
+        background:#ffffff;
+        border:1px solid #E2E8F0;
+        border-radius:12px;
+        overflow:hidden;
+        box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06);
+        transition:border-color 0.2s, box-shadow 0.2s;
+    }
+    .result-card:hover { border-color:#cbd5e1; box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08); }
     .result-status { padding:6px 14px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#00C076; background:rgba(16,185,129,0.12); }
     .result-body { display:flex; padding:12px 14px; gap:12px; }
     .teams-section { flex:1; min-width:0; }
@@ -6815,7 +6946,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .team-name.winner { font-weight:700; }
     .score-box { font-size:1.05em; font-weight:700; color:#fbbf24; margin-left:8px; }
     .model-panel { background:#ffffff; border:1px solid rgba(139,92,246,0.35); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:170px; max-width:200px; display:flex; flex-direction:column; gap:4px; }
-    .panel-title { font-size:0.66em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
+    .panel-title { font-size:0.66em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
     .model-row { display:flex; justify-content:space-between; font-size:0.82em; padding:2px 0; }
     .model-lbl { opacity:0.85; }
     .model-right { display:flex; align-items:center; gap:6px; }
@@ -6829,14 +6960,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .pick-no { color:#D93025; font-weight:700; }
     /* Pick confidence grid (results cards) */
     .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#ffffff; }
-    .pick-conf-title { font-size:0.68em; color:#a78bfa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
+    .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
     .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
     @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
-    .pc-box { background:#f8fafc; border:1px solid rgba(15,23,42,0.1); border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:3px; min-width:0; min-height:86px; }
+    .pc-box { background:#ffffff; border:1px solid #E2E8F0; border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:3px; min-width:0; min-height:86px; box-shadow:0 1px 4px rgba(15,23,42,0.05); }
     .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
     .pc-box.correct { border-color:rgba(16,185,129,0.5); }
     .pc-box.wrong { border-color:rgba(239,68,68,0.45); }
-    .pc-name { font-size:0.68em; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.3px; white-space:normal; overflow:visible; text-overflow:clip; max-width:100%; width:100%; line-height:1.15; word-break:break-word; min-height:28px; display:flex; align-items:center; justify-content:center; }
+    .pc-name { font-size:0.68em; font-weight:700; color:#0F172A; text-transform:uppercase; letter-spacing:0.3px; white-space:normal; overflow:visible; text-overflow:clip; max-width:100%; width:100%; line-height:1.15; word-break:break-word; min-height:28px; display:flex; align-items:center; justify-content:center; }
     .pc-val { font-size:0.95em; font-weight:800; color:#0f172a; }
     .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:3px; white-space:normal; overflow:visible; text-overflow:clip; max-width:100%; width:100%; box-sizing:border-box; text-align:center; line-height:1.15; word-break:break-word; min-height:24px; }
     .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
@@ -6844,15 +6975,15 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .section-ml, .section-spread, .section-total { display:block; }
     .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
     @media(max-width:900px){ .model-grid { grid-template-columns:repeat(3,1fr); } }
-    .model-card { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:10px; padding:12px; text-align:center; }
+    .model-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:12px; text-align:center; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
     .model-card.highlight { border:2px solid #fbbf24; }
     .model-label { font-size:0.78em; opacity:0.8; margin-bottom:4px; }
     .model-acc { font-size:1.4em; font-weight:700; color:#00C076; }
     .model-rec { font-size:0.82em; opacity:0.85; }
-    .daily-tally { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:16px; margin-bottom:16px; }
-    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.15em; color:#fbbf24; }
+    .daily-tally { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
+    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.15em; color:#0F172A; font-weight:700; }
     .daily-tally-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
-    .daily-tally-card { background:#f8fafc; border:1px solid rgba(15,23,42,0.1); border-radius:8px; padding:10px; text-align:center; }
+    .daily-tally-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:10px; padding:10px; text-align:center; box-shadow:0 2px 12px rgba(15,23,42,0.06); }
     .daily-tally-card.highlight { border:2px solid #fbbf24; }
     .daily-model { font-size:0.78em; opacity:0.85; margin-bottom:4px; }
     .daily-acc { font-size:1.35em; font-weight:700; }
@@ -7311,10 +7442,10 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         border: 2px solid #00C076;
         background: rgba(16, 185, 129, 0.1);
     }
-    .daily-tally { background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:16px; margin-bottom:20px; }
-    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.2em; color:#fbbf24; }
+    .daily-tally { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:20px; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
+    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.2em; color:#0F172A; font-weight:700; }
     .daily-tally-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
-    .daily-tally-card { background:#f8fafc; border:1px solid rgba(15,23,42,0.1); border-radius:8px; padding:10px; text-align:center; }
+    .daily-tally-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:10px; padding:10px; text-align:center; box-shadow:0 2px 12px rgba(15,23,42,0.06); }
     .daily-tally-card.highlight { border:2px solid #fbbf24; }
     .daily-model { font-size:0.78em; opacity:0.85; margin-bottom:4px; }
     .daily-acc { font-size:1.35em; font-weight:700; }
@@ -10924,7 +11055,8 @@ def daily_report_page():
                 'sport': sport_key,
                 'info': SPORTS[sport_key],
                 'tally': tally,
-                'share_image_url': url_for('share_daily_report_image', token=_daily_token, fmt='jpg'),
+                'share_image_src': url_for('share_daily_report_image', token=_daily_token, fmt='jpg'),
+                'share_image_view_url': url_for('share_daily_report_view', token=_daily_token),
             })
             total_games += tally.get('games', 0)
             for mk in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
@@ -10989,7 +11121,7 @@ def share_predictions_image(token, fmt):
     fmt = (fmt or '').lower()
     if fmt not in ('jpg', 'jpeg', 'png'):
         return "Unsupported format", 400
-    entry = _SHARE_IMAGE_CACHE.get(token)
+    entry = _get_share_cache_entry(token)
     if not entry:
         return "Image not found", 404
     payload = entry.get('payload') or {}
@@ -10998,7 +11130,36 @@ def share_predictions_image(token, fmt):
     img_bytes, mimetype = _render_predictions_share_image(payload, fmt)
     if not img_bytes:
         return "Image engine unavailable", 503
-    return Response(img_bytes, mimetype=mimetype)
+    return Response(
+        img_bytes,
+        mimetype=mimetype,
+        headers={
+            'Cache-Control': 'private, max-age=300',
+            'Content-Disposition': 'inline; filename="picks.jpg"',
+        },
+    )
+
+
+@app.route('/share/predictions/view/<token>')
+def share_predictions_view(token: str):
+    """Minimal full-view page: image only (no site chrome in the document). For TikTok, still prefer Download and upload from Photos to avoid the browser address bar in recordings."""
+    if not _SHARE_TOKEN_RE.match(token or ''):
+        abort(404)
+    entry = _get_share_cache_entry(token)
+    if not entry or (entry.get('payload') or {}).get('type') != 'predictions':
+        abort(404)
+    img_href = url_for('share_predictions_image', token=token, fmt='jpg')
+    html = (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=4">'
+        '<meta name="robots" content="noindex,nofollow">'
+        '<title>\u200b</title>'
+        '<style>html,body{margin:0;padding:0;height:100%;background:#fff}'
+        '.w{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:0}'
+        'img{display:block;width:100vmin;max-width:100%;height:auto;max-height:100vh;object-fit:contain}</style></head>'
+        f'<body><div class="w"><img src="{img_href}" alt="" decoding="async" fetchpriority="high"></div></body></html>'
+    )
+    return Response(html, mimetype='text/html; charset=utf-8', headers={'Cache-Control': 'private, max-age=120'})
 
 
 @app.route('/share/daily-report/<token>.<fmt>')
@@ -11006,7 +11167,7 @@ def share_daily_report_image(token, fmt):
     fmt = (fmt or '').lower()
     if fmt not in ('jpg', 'jpeg', 'png'):
         return "Unsupported format", 400
-    entry = _SHARE_IMAGE_CACHE.get(token)
+    entry = _get_share_cache_entry(token)
     if not entry:
         return "Image not found", 404
     payload = entry.get('payload') or {}
@@ -11015,7 +11176,35 @@ def share_daily_report_image(token, fmt):
     img_bytes, mimetype = _render_daily_report_share_image(payload, fmt)
     if not img_bytes:
         return "Image engine unavailable", 503
-    return Response(img_bytes, mimetype=mimetype)
+    return Response(
+        img_bytes,
+        mimetype=mimetype,
+        headers={
+            'Cache-Control': 'private, max-age=300',
+            'Content-Disposition': 'inline; filename="results.jpg"',
+        },
+    )
+
+
+@app.route('/share/daily-report/view/<token>')
+def share_daily_report_view(token: str):
+    if not _SHARE_TOKEN_RE.match(token or ''):
+        abort(404)
+    entry = _get_share_cache_entry(token)
+    if not entry or (entry.get('payload') or {}).get('type') != 'daily-report':
+        abort(404)
+    img_href = url_for('share_daily_report_image', token=token, fmt='jpg')
+    html = (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=4">'
+        '<meta name="robots" content="noindex,nofollow">'
+        '<title>\u200b</title>'
+        '<style>html,body{margin:0;padding:0;height:100%;background:#fff}'
+        '.w{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:0}'
+        'img{display:block;width:100vmin;max-width:100%;height:auto;max-height:100vh;object-fit:contain}</style></head>'
+        f'<body><div class="w"><img src="{img_href}" alt="" decoding="async" fetchpriority="high"></div></body></html>'
+    )
+    return Response(html, mimetype='text/html; charset=utf-8', headers={'Cache-Control': 'private, max-age=120'})
 
 
 @app.route('/tutorial')
@@ -11296,7 +11485,8 @@ def sport_predictions(sport, filter_date=None):
     shareable_cards = date_pool.get(target_date, [])
     shareable_cards.sort(key=lambda x: (-x['confidence'], x['away_team'], x['home_team']))
     shareable_cards = shareable_cards[:3]
-    share_image_url = None
+    share_image_src = None
+    share_image_view_url = None
     if shareable_cards:
         _pred_payload = {
             'type': 'predictions',
@@ -11305,8 +11495,9 @@ def sport_predictions(sport, filter_date=None):
             'cards': shareable_cards,
         }
         _pred_token = _register_share_image(_pred_payload)
-        share_image_url = url_for('share_predictions_image', token=_pred_token, fmt='jpg')
-    
+        share_image_src = url_for('share_predictions_image', token=_pred_token, fmt='jpg')
+        share_image_view_url = url_for('share_predictions_view', token=_pred_token)
+
     # Group predictions by date for NHL/NBA, by week for NFL
     from collections import defaultdict
     grouped_predictions = defaultdict(list)
@@ -11359,7 +11550,8 @@ def sport_predictions(sport, filter_date=None):
             group_by='week' if sport == 'NFL' else 'date',
             soccer_leagues=soccer_leagues,
             shareable_cards=shareable_cards,
-            share_image_url=share_image_url,
+            share_image_src=share_image_src,
+            share_image_view_url=share_image_view_url,
         )
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
