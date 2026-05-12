@@ -244,6 +244,23 @@ def init_auth(app, db_path=None):
     # Create users table
     _ensure_users_table()
 
+    # Auto-seed admin password from env var (set ADMIN_PASSWORD in Render)
+    _admin_pw = os.environ.get('ADMIN_PASSWORD', '').strip()
+    if _admin_pw:
+        try:
+            _conn = _get_db()
+            _pw_hash = generate_password_hash(_admin_pw)
+            for _adm_email in ADMIN_EMAILS:
+                _existing = _conn.execute('SELECT id FROM users WHERE email = ?', (_adm_email,)).fetchone()
+                if _existing:
+                    _conn.execute('UPDATE users SET password_hash = ?, is_premium = 1 WHERE email = ?', (_pw_hash, _adm_email))
+                else:
+                    _conn.execute('INSERT INTO users (email, name, password_hash, is_premium) VALUES (?, ?, ?, 1)', (_adm_email, _adm_email.split('@')[0], _pw_hash))
+            _conn.commit()
+            _conn.close()
+        except Exception as _e:
+            logger.warning(f"Auto-seed admin failed: {_e}")
+
     # Register auth blueprint
     app.register_blueprint(auth_bp)
 
