@@ -9,6 +9,7 @@
     {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks today. AI-powered predictions with projected scores, spreads, and totals. Updated daily.' %}
     {% endif %}
     <title>{{ _meta_title }}</title>
+    <link rel="icon" href="/static/css/UnderdogsLogo.svg" type="image/svg+xml">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ _meta_desc }}">
@@ -56,11 +57,11 @@
       "name": "predictionlab.io",
       "url": "https://predictionlab.io",
       "sameAs": [
-        "https://x.com/underdogs_bet",
+        "https://x.com/predictionlab_io",
         "https://instagram.com/predictionlab.io",
         "https://facebook.com/predictionlab.io",
-        "https://tiktok.com/@underdog.bet",
-        "https://www.youtube.com/@Underdogsbet"
+        "https://tiktok.com/@predictionlab.io",
+        "https://www.youtube.com/@PredictionLab"
       ]
     }
     </script>
@@ -871,7 +872,7 @@
     <div class="social-export-head">
         <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
         <div class="social-export-actions">
-            <a class="social-export-btn" href="{{ share_image_src }}" download="underdogs-picks.jpg">Download image</a>
+            <a class="social-export-btn" href="{{ share_image_src }}" download="predictionlab-picks.jpg">Download image</a>
             <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="noopener">Open fullscreen</a>
         </div>
     </div>
@@ -887,7 +888,7 @@
         <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
         <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
         <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
-        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
         <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
         <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
         <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
@@ -920,11 +921,11 @@
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
-                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
                 <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener noreferrer">Instagram</a>
                 <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener noreferrer">Facebook</a>
-                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer">TikTok</a>
-                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer">YouTube</a>
+                <a href="https://tiktok.com/@predictionlab.io" target="_blank" rel="noopener noreferrer">TikTok</a>
+                <a href="https://www.youtube.com/@PredictionLab" target="_blank" rel="noopener noreferrer">YouTube</a>
             </div>
         </div>
         <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
