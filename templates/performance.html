@@ -1,6 +1,6 @@
 {% extends "underdogs_layout.html" %}
 
-{% block title %}Model Performance - underdogs.bet{% endblock %}
+{% block title %}Model Performance - predictionlab.io{% endblock %}
 
 {% block extra_styles %}
 .perf-wrap{max-width:1180px;margin:0 auto;}
@@ -107,6 +107,8 @@
         <div class="perf-note">52.4% is the break-even win rate for standard -110 lines.</div>
         <div class="perf-tools">
             <a href="/performance/audit.csv?sport={{ selected_sport }}&last_n={{ selected_last_n or '50' }}">Download audit CSV (Excel)</a>
+            &nbsp;&nbsp;
+            <a href="/results/export.csv{% if selected_sport %}?sport={{ selected_sport }}{% endif %}">Download results export CSV</a>
         </div>
     </div>
 

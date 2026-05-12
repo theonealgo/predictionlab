@@ -3,9 +3,9 @@ import { fetchProps, fetchResults } from "./api";
 
 const LEAGUES = ["NBA", "NHL", "NFL", "MLB", "SOCCER", "NCAAB", "WNBA", "NCAAF", "NCAAW"];
 const MODEL_LABELS = [
-  ["glicko2", "Glicko-2"],
-  ["trueskill", "TrueSkill"],
-  ["xgboost", "XGBoost"],
+  ["glicko2", "Grinder2"],
+  ["trueskill", "Takedown"],
+  ["xgboost", "Edge"],
   ["xsharp", "XSharp"],
   ["sharp_consensus", "Sharp Consensus"],
 ];
@@ -278,7 +278,7 @@ export default function App() {
                         <td>{formatPropType(r.prop_type)}</td>
                         <td>{r.line ?? "-"}</td>
                         <td>{r.projection}</td>
-                        <td>{r.picked_side}</td>
+                        <td className={r.picked_side === 'OVER' ? 'pick-over' : r.picked_side === 'UNDER' ? 'pick-under' : ''}>{r.picked_side}</td>
                         {MODEL_LABELS.map(([key]) => (
                           <td key={`${r.player_id}-${r.prop_type}-${key}`}>
                             {r.model_confidence?.[key] != null ? `${r.model_confidence[key]}%` : "-"}
@@ -307,10 +307,10 @@ export default function App() {
                         <td>{r.player_name}</td>
                         <td>{r.team}</td>
                         <td>{formatPropType(r.prop_type)}</td>
-                        <td>{r.pick}</td>
+                        <td className={r.pick === 'OVER' ? 'pick-over' : r.pick === 'UNDER' ? 'pick-under' : ''}>{r.pick}</td>
                         <td>{r.line}</td>
                         <td>{r.actual}</td>
-                        <td>{r.result}</td>
+                        <td><span className={r.result === 'WIN' ? 'result-win' : r.result === 'LOSS' ? 'result-loss' : r.result === 'PUSH' ? 'result-push' : ''}>{r.result}</span></td>
                       </tr>
                     ))}
                   </tbody>

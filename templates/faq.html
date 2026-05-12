@@ -1,0 +1,74 @@
+{% extends "underdogs_layout.html" %}
+{% block title %}FAQ | predictionlab.io{% endblock %}
+{% block head_meta %}
+<meta name="description" content="Frequently asked questions about predictionlab.io — how our AI sports betting picks work, what makes them different from sportsbook lines, value-bet methodology, refund policy, and more.">
+<link rel="canonical" href="https://predictionlab.io/faq">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do your AI sports betting picks work?","acceptedAnswer":{"@type":"Answer","text":"Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions. Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available."}},{"@type":"Question","name":"What makes your picks different from sportsbooks?","acceptedAnswer":{"@type":"Answer","text":"Sportsbooks set odds based on balancing action and public perception, not just true probability. Our system creates its own projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential positive expected value opportunity."}},{"@type":"Question","name":"How do you find value bets?","acceptedAnswer":{"@type":"Answer","text":"We compare model projections against sportsbook lines for moneyline, spread, and totals markets. When the difference is significant, the market may be mispricing the game."}},{"@type":"Question","name":"What does the probability percentage mean?","acceptedAnswer":{"@type":"Answer","text":"Each model outputs a win probability for every game. For example, if our model gives a team a 60 percent chance to win but the sportsbook implies 50 percent, that creates value."}},{"@type":"Question","name":"Do your models agree on every pick?","acceptedAnswer":{"@type":"Answer","text":"No. Each of our four AI models has a different methodology. We display individual model predictions and a consensus view so users can see where agreement is strongest."}},{"@type":"Question","name":"What sports do you cover?","acceptedAnswer":{"@type":"Answer","text":"We currently focus on major markets like MLB, NBA, NFL, and other high-liquidity sports where data quality is strong and inefficiencies can be identified."}},{"@type":"Question","name":"Are your results tracked publicly?","acceptedAnswer":{"@type":"Answer","text":"Yes. Every pick is tracked with full transparency including wins, losses, and performance over time."}},{"@type":"Question","name":"Is there a refund policy?","acceptedAnswer":{"@type":"Answer","text":"Yes. Monthly plan has a 10-day return window and yearly plan has a 30-day return window."}},{"@type":"Question","name":"Are your picks guaranteed to win?","acceptedAnswer":{"@type":"Answer","text":"No system can guarantee wins. Sports betting involves variance, and even strong positive expected value strategies will have losing streaks."}},{"@type":"Question","name":"Who are these picks for?","acceptedAnswer":{"@type":"Answer","text":"These picks are designed for bettors who want a structured, data-driven approach rather than guesswork or public trends."}}]}
+</script>
+{% endblock %}
+{% block content %}
+<div id="faq" class="section" style="padding-top:10px;padding-bottom:20px;max-width:980px;margin:0 auto;">
+    <h1 class="section-title" style="font-size:1.8rem;margin-bottom:6px;">Frequently Asked Questions</h1>
+    <p style="text-align:center;color:#475569;margin:0 auto 18px;max-width:720px;font-size:0.95em;">Everything about how our AI picks work, how we find value, and what to expect from the models.</p>
+    <div style="max-width:920px;margin:0 auto;display:grid;gap:10px;">
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">How do your AI sports betting picks work?</summary>
+            <p style="margin-top:10px;color:#334155;">Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions.</p>
+            <p style="margin-top:8px;color:#334155;">Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available.</p>
+            <p style="margin-top:8px;color:#334155;">The process is data-driven: we evaluate odds, line movement, and market-implied prices against our projections to highlight situations where the market may be mispriced.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">What makes your picks different from sportsbooks?</summary>
+            <p style="margin-top:10px;color:#334155;">Sportsbooks set odds based on balancing action and public perception, not just true probability.</p>
+            <p style="margin-top:8px;color:#334155;">Our system creates projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential +EV opportunity.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">How do you find value bets?</summary>
+            <p style="margin-top:10px;color:#334155;">We compare projections and market lines for moneyline, spread, and totals. Significant gaps indicate potential market mispricing.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">What does the probability percentage mean?</summary>
+            <p style="margin-top:10px;color:#334155;">Each model outputs win probability for each game. If our model probability is higher than sportsbook implied probability, it can indicate value.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Do your models agree on every pick?</summary>
+            <p style="margin-top:10px;color:#334155;">No. Each model uses a different methodology. We show individual predictions and consensus so confidence is transparent.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">What sports do you cover?</summary>
+            <p style="margin-top:10px;color:#334155;">We focus on major markets such as MLB, NBA, NFL, and other high-liquidity sports where data quality is strong.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Are your results tracked publicly?</summary>
+            <p style="margin-top:10px;color:#334155;">Yes. Every pick is tracked with full transparency, including wins, losses, and performance over time.</p>
+            <p style="margin-top:8px;color:#334155;">Graded results are shown on our results pages as they finalize&mdash;there is no cherry-picking, editing picks after the fact, or hiding losses.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Is this suitable for beginners?</summary>
+            <p style="margin-top:10px;color:#334155;">The site is built to be readable and structured, but sports betting still requires basic concepts&mdash;odds, bet types, and bankroll limits&mdash;and a commitment to responsible play.</p>
+            <p style="margin-top:8px;color:#334155;">If you are new, start small, use free picks to learn how the models behave, and never wager more than you can afford to lose.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Is there a refund policy?</summary>
+            <p style="margin-top:10px;color:#334155;">Yes. Monthly plans have a 10-day return window and yearly plans have a 30-day return window.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Are your picks guaranteed to win?</summary>
+            <p style="margin-top:10px;color:#334155;">No system can guarantee wins. Sports betting includes variance; the goal is long-term +EV performance.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Who are these picks for?</summary>
+            <p style="margin-top:10px;color:#334155;">These picks are built for bettors who want a structured, data-driven process rather than guesswork.</p>
+        </details>
+        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
+            <summary style="cursor:pointer;font-weight:700;">Expectations, discipline, and responsible use</summary>
+            <p style="margin-top:10px;color:#334155;">Sports betting always involves risk and variance. Our tools are meant to support informed decision-making&mdash;not replace your judgment or encourage reckless stakes.</p>
+            <p style="margin-top:8px;color:#334155;">Maintaining discipline, tracking results honestly, and keeping expectations realistic are central to using any model over the long term.</p>
+        </details>
+    </div>
+    <div style="text-align:center;margin-top:24px;">
+        <a href="/" style="color:#00529B;font-weight:600;text-decoration:none;">&larr; Back to home</a>
+    </div>
+</div>
+{% endblock %}

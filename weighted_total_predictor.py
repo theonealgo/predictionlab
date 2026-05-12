@@ -24,18 +24,70 @@ _WT_CACHE: dict = {}
 _WT_TTL = 900  # seconds
 
 
-def _wt_cached_get(url: str, timeout: int = 5):
+def _wt_cached_get(url: str, timeout: int = 3):
     """Cached requests.get with 15-minute TTL."""
     now = time.time()
     entry = _WT_CACHE.get(url)
     if entry and (now - entry['ts']) < _WT_TTL:
         return entry['data']
-    r = requests.get(url, timeout=timeout)
+    try:
+        r = requests.get(url, timeout=timeout)
+    except requests.exceptions.RequestException:
+        # Cache the miss briefly so we don't keep retrying a flaky endpoint.
+        _WT_CACHE[url] = {'data': None, 'ts': now}
+        return None
     if r.status_code == 200:
         data = r.json()
         _WT_CACHE[url] = {'data': data, 'ts': now}
         return data
+    _WT_CACHE[url] = {'data': None, 'ts': now}
     return None
+
+
+def prefetch_recent_scoreboards(sport: str = 'NBA', days: int = 14, max_workers: int = 8):
+    """Warm `_WT_CACHE` for the last `days` ESPN scoreboards in parallel.
+
+    Call this once before iterating predictions. Subsequent calls to
+    fetch_team_last3_games() then run against an entirely warm cache, turning
+    what was a sequential string of HTTP calls into local dict lookups.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    espn_paths = {
+        'NBA':   'basketball/nba',
+        'WNBA':  'basketball/wnba',
+        'NCAAB': 'basketball/mens-college-basketball',
+        'NHL':   'hockey/nhl',
+        'NFL':   'football/nfl',
+        'NCAAF': 'football/college-football',
+        'MLB':   'baseball/mlb',
+    }
+    path = espn_paths.get(sport)
+    if not path:
+        return
+
+    today = datetime.now()
+    urls = []
+    for d in range(1, days + 1):
+        date_str = (today - timedelta(days=d)).strftime('%Y%m%d')
+        url = f"https://site.api.espn.com/apis/site/v2/sports/{path}/scoreboard?dates={date_str}"
+        # Skip URLs we already have in cache & still fresh.
+        entry = _WT_CACHE.get(url)
+        if entry and (time.time() - entry['ts']) < _WT_TTL:
+            continue
+        urls.append(url)
+
+    if not urls:
+        return
+
+    def _fetch(u):
+        try:
+            _wt_cached_get(u, timeout=3)
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(_fetch, urls))
 
 
 def fetch_team_last3_games(
@@ -253,6 +305,96 @@ def calculate_weighted_average_total(
         "teamA_avg":           round(teamA_avg, 1),
         "teamB_avg":           round(teamB_avg, 1),
         "error":               None,
+    }
+
+
+def compute_team_avg_projection(
+    home_team: str,
+    away_team: str,
+    sport: str = 'NBA',
+    xsharp_total: Optional[float] = None,
+    xsharp_spread: Optional[float] = None,
+    n_games: int = 3,
+    max_lookback_days: int = 28,
+) -> Optional[Dict]:
+    """Per-team last-N projection used for "Our Spread" / "Our Total".
+
+    Algorithm (per the original spec):
+      1. Pull each team's last `n_games` completed non-OT games via ESPN.
+      2. teamA_avg = mean of that team's OWN scores across those games (pure
+         scoring average — NOT a pace proxy).
+      3. projected_total  = home_avg + away_avg
+         projected_spread = home_avg - away_avg
+            >0  → home favored by that much
+            <0  → away favored by abs(value)
+      4. Trend records vs the CURRENT XSharp lines for tonight's game:
+            total_record   = "X-Y Over" — count of the 6 games whose total
+                             went over `xsharp_total`.
+            spread_record  = "X-Y ATS"  — count of the 6 games where the team
+                             covered THEIR side of `xsharp_spread`. The home
+                             team is on `xsharp_spread`'s home side; the away
+                             team is on the inverted side.
+
+    Returns None if either team has fewer than `n_games` recent games.
+    """
+    home_games = fetch_team_last3_games(home_team, sport, max_lookback_days, n=n_games)
+    away_games = fetch_team_last3_games(away_team, sport, max_lookback_days, n=n_games)
+
+    if len(home_games) < n_games or len(away_games) < n_games:
+        return None
+
+    # ── Pure team scoring average (not pace proxy) ─────────────────────────
+    home_avg = sum(s for s, _ in home_games) / len(home_games)
+    away_avg = sum(s for s, _ in away_games) / len(away_games)
+
+    # Round to nearest 0.5, matching how the efficiency path (and books) display.
+    def _half_round(v):
+        return round(v * 2) / 2.0
+
+    projected_total  = _half_round(home_avg + away_avg)
+    projected_spread = _half_round(home_avg - away_avg)  # >0 home favored
+
+    # ── Trend record vs CURRENT XSharp total ──────────────────────────────
+    total_over = total_under = 0
+    if xsharp_total is not None:
+        for s, o in (home_games + away_games):
+            game_total = s + o
+            if game_total > float(xsharp_total):
+                total_over += 1
+            elif game_total < float(xsharp_total):
+                total_under += 1
+            # exact push: neither over nor under
+
+    # ── Trend record vs CURRENT XSharp spread ─────────────────────────────
+    # Convention: xsharp_spread > 0 ⇒ home favored by that amount.
+    # Home team covers in a past game when home_margin > xsharp_spread.
+    # Away team covers in a past game when away_margin > -xsharp_spread.
+    spread_covers = spread_no_covers = 0
+    if xsharp_spread is not None:
+        xs = float(xsharp_spread)
+        for s, o in home_games:
+            margin = s - o  # home team's margin in their own past game
+            if margin > xs:
+                spread_covers += 1
+            elif margin < xs:
+                spread_no_covers += 1
+        for s, o in away_games:
+            margin = s - o  # away team's margin in their own past game
+            if margin > -xs:
+                spread_covers += 1
+            elif margin < -xs:
+                spread_no_covers += 1
+
+    return {
+        'home_avg':         round(home_avg, 1),
+        'away_avg':         round(away_avg, 1),
+        'projected_total':  round(projected_total, 1),
+        'projected_spread': round(projected_spread, 1),
+        'home_games':       home_games,
+        'away_games':       away_games,
+        'games_used':       len(home_games) + len(away_games),
+        'total_record':     (total_over, total_under),
+        'spread_record':    (spread_covers, spread_no_covers),
     }
 
 

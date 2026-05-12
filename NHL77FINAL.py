@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-underdogs.bet - Multi-Sport Prediction Platform
+predictionlab.io - Multi-Sport Prediction Platform
 ==================================================
 Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
@@ -911,6 +911,69 @@ _MLB_INJURY_CONF_DEFAULT = 0.75
 _MLB_BULLPEN_FATIGUE_CACHE: dict = {}
 
 
+def _round_to_half(value):
+    """Round to nearest 0.5 (standard sportsbook increment)."""
+    try:
+        return round(float(value) * 2) / 2
+    except (TypeError, ValueError):
+        return value
+
+
+def _odds_to_implied(odds):
+    """American odds → raw implied probability (vig still included)."""
+    try:
+        o = float(odds)
+    except (TypeError, ValueError):
+        return None
+    if o == 0:
+        return None
+    return abs(o) / (abs(o) + 100.0) if o < 0 else 100.0 / (o + 100.0)
+
+
+def calculate_ev(model_prob, american_odds, stake=100):
+    """
+    EV% using model probability vs actual payout at given American odds.
+    Positive = value bet. Formula: (p * net_payout - (1-p)) * 100.
+    """
+    try:
+        p = float(model_prob)
+        o = float(american_odds)
+    except (TypeError, ValueError):
+        return None
+    if o == 0:
+        return None
+    net_payout = o / 100.0 if o > 0 else 100.0 / abs(o)
+    return round((p * net_payout - (1.0 - p)) * 100.0, 1)
+
+
+def calculate_ev_devigged(model_prob, pick_odds, opp_odds):
+    """
+    EV% with de-vigged market probability as baseline.
+    Steps:
+      1. Convert both sides to implied prob (with vig).
+      2. Normalize (remove vig) → true no-vig probability.
+      3. EV = (model_p * net_payout - (1 - model_p)) * 100.
+    Returns (ev_pct, devig_prob, implied_prob, vig_pct) for debugging.
+    """
+    p_impl_pick = _odds_to_implied(pick_odds)
+    p_impl_opp  = _odds_to_implied(opp_odds)
+    if p_impl_pick is None or p_impl_opp is None:
+        return None, None, None, None
+    total_impl = p_impl_pick + p_impl_opp
+    if total_impl <= 0:
+        return None, None, None, None
+    vig_pct     = round((total_impl - 1.0) * 100.0, 2)
+    devig_prob  = round(p_impl_pick / total_impl, 4)   # true no-vig probability
+    try:
+        p = float(model_prob)
+        o = float(pick_odds)
+    except (TypeError, ValueError):
+        return None, devig_prob, round(p_impl_pick, 4), vig_pct
+    net_payout = o / 100.0 if o > 0 else 100.0 / abs(o)
+    ev_pct = round((p * net_payout - (1.0 - p)) * 100.0, 1)
+    return ev_pct, devig_prob, round(p_impl_pick, 4), vig_pct
+
+
 def _american_to_implied_prob(odds):
     """Convert American odds to implied probability."""
     try:
@@ -1693,20 +1756,20 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 CORS(app, origins=[
     'https://underdogs.bet',
-    'https://www.underdogs.bet',
+    'https://predictionlab.io',
     'http://localhost:3000',
     'http://localhost:5000',
 ])
 
-_CANONICAL_HOST = 'www.underdogs.bet'
+_CANONICAL_HOST = 'predictionlab.io'
 
 @app.before_request
 def enforce_canonical_domain():
-    """Redirect underdogs.bet/http variants to canonical https://www.underdogs.bet."""
+    """Redirect underdogs.bet/http variants to canonical https://predictionlab.io."""
     host = (request.host or '').split(':')[0].lower()
     if not host or host in {'localhost', '127.0.0.1'} or host.endswith('.local'):
         return None
-    if not host.endswith('underdogs.bet'):
+    if not (host.endswith('underdogs.bet') or host.endswith('predictionlab.io')):
         return None
     target_host = _CANONICAL_HOST
     is_https = request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https'
@@ -1751,7 +1814,7 @@ def add_header(response):
     """Add headers to allow iframe embedding from underdogs.bet"""
     response.headers['X-Frame-Options'] = 'ALLOWALL'
     response.headers['Content-Security-Policy'] = (
-        "frame-ancestors 'self' https://underdogs.bet https://www.underdogs.bet "
+        "frame-ancestors 'self' https://underdogs.bet https://predictionlab.io "
         "http://localhost:3000"
     )
     return response
@@ -2701,6 +2764,10 @@ def init_db():
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(sport, team_name, player_name)
         );
+        CREATE INDEX IF NOT EXISTS idx_pred_home_team ON predictions(home_team_id);
+        CREATE INDEX IF NOT EXISTS idx_pred_away_team ON predictions(away_team_id);
+        CREATE INDEX IF NOT EXISTS idx_pred_sport ON predictions(sport);
+        CREATE INDEX IF NOT EXISTS idx_pred_game_date ON predictions(game_date);
     ''')
     conn.commit()
     conn.close()
@@ -3915,10 +3982,10 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict.get('away_team_id', ''),
                         )
                         if result and result[0] is not None:
-                            game_dict['xgb_home_score'] = result[0]
-                            game_dict['xgb_away_score'] = result[1]
-                            game_dict['xgb_spread'] = result[2]
-                            game_dict['xgb_total'] = result[3]
+                            game_dict['xgb_home_score'] = round(result[0])
+                            game_dict['xgb_away_score'] = round(result[1])
+                            game_dict['xgb_spread'] = _round_to_half(result[2]) if result[2] is not None else None
+                            game_dict['xgb_total'] = _round_to_half(result[3]) if result[3] is not None else None
                 except Exception as _e:
                     logger.debug(f"XGBSpread error: {_e}")
 
@@ -3947,10 +4014,10 @@ def get_upcoming_predictions(sport, days=365):
                         if _mlbm:
                             _mlb_result = _mlbm.predict(_ht, _at)
                             if _mlb_result and _mlb_result[0] is not None:
-                                game_dict['xgb_home_score'] = _mlb_result[0]
-                                game_dict['xgb_away_score'] = _mlb_result[1]
-                                game_dict['xgb_spread']     = _mlb_result[2]
-                                game_dict['xgb_total']      = _mlb_result[3]
+                                game_dict['xgb_home_score'] = round(_mlb_result[0])
+                                game_dict['xgb_away_score'] = round(_mlb_result[1])
+                                game_dict['xgb_spread']     = _round_to_half(_mlb_result[2]) if _mlb_result[2] is not None else None
+                                game_dict['xgb_total']      = _round_to_half(_mlb_result[3]) if _mlb_result[3] is not None else None
                                 _mlb_spread = float(_mlb_result[2])
                                 _ml_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2))))
                         # 2. Pitching adjustment (cached, single ESPN API call)
@@ -4313,6 +4380,167 @@ def get_upcoming_predictions(sport, days=365):
         _attach_h2h_projection_to_predictions(sport, predictions, n=10)
     except Exception as _h2he:
         logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
+
+    # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
+    # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
+    # the books use). Pre-computes every team in tonight's slate IN PARALLEL
+    # with a 10s wall-clock budget so a slow ESPN response can never freeze
+    # the page. Falls back to per-team last-3 scoring averages when box-score
+    # data isn't usable.
+    if sport == 'NBA':
+        _nba_t0 = _time.time()
+        try:
+            from team_efficiency import (
+                precompute_team_efficiencies,
+                compute_efficiency_projection_from,
+            )
+            from weighted_total_predictor import (
+                compute_team_avg_projection,
+                prefetch_recent_scoreboards,
+            )
+
+            # 1) Warm scoreboard cache in parallel (≤2s typical)
+            prefetch_recent_scoreboards(sport='NBA', days=14)
+
+            # 2) Pre-compute efficiency for every unique team, in parallel,
+            #    with a HARD 10s budget. Teams that don't finish → None →
+            #    will fall back to per-team-avg in the prediction loop below.
+            unique_teams = []
+            seen = set()
+            for pred in predictions:
+                for t in (pred.get('home_team_id'), pred.get('away_team_id')):
+                    if t and t not in seen:
+                        seen.add(t)
+                        unique_teams.append(t)
+
+            eff_map = precompute_team_efficiencies(
+                unique_teams, sport='NBA', n_games=5,
+                max_lookback_days=14, total_budget_seconds=10.0, max_workers=16,
+            )
+
+            # 3) Attach to each prediction
+            eff_hits = eff_misses = 0
+            for pred in predictions:
+                ht = pred.get('home_team_id')
+                at = pred.get('away_team_id')
+                if not (ht and at):
+                    continue
+                xs_total  = pred.get('xgb_total')
+                xs_spread = pred.get('xgb_spread')
+                home_eff = eff_map.get(ht)
+                away_eff = eff_map.get(at)
+
+                if home_eff and away_eff:
+                    proj = compute_efficiency_projection_from(
+                        home_eff, away_eff, sport='NBA',
+                        xsharp_total=xs_total, xsharp_spread=xs_spread,
+                    )
+                    pred['our_total']    = _round_to_half(proj['projected_total'])
+                    pred['our_spread']   = _round_to_half(proj['projected_spread'])
+                    pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
+                    pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
+                    pred['our_home_eff'] = home_eff
+                    pred['our_away_eff'] = away_eff
+                    pred['our_pace']     = proj['avg_pace']
+                    pred['our_method']   = 'efficiency'
+                    eff_hits += 1
+                    continue
+
+                # Fallback: per-team last-3 scoring average
+                try:
+                    fb = compute_team_avg_projection(
+                        home_team=ht, away_team=at, sport='NBA',
+                        xsharp_total=xs_total, xsharp_spread=xs_spread,
+                        n_games=3, max_lookback_days=14,
+                    )
+                except Exception as _fb_e:
+                    fb = None
+                    logger.debug(f"[team-avg fallback] {ht} vs {at}: {_fb_e}")
+                if fb:
+                    pred['our_total']       = fb['projected_total']
+                    pred['our_spread']      = fb['projected_spread']
+                    pred['our_home_avg']    = fb['home_avg']
+                    pred['our_away_avg']    = fb['away_avg']
+                    pred['our_total_games'] = fb['games_used']
+                    pred['our_method']      = 'team-avg-fallback'
+                    if xs_total is not None:
+                        o, u = fb['total_record']
+                        pred['total_trend_record']  = f"{o}-{u} Over"
+                    if xs_spread is not None:
+                        c, n = fb['spread_record']
+                        pred['spread_trend_record'] = f"{c}-{n} ATS"
+                eff_misses += 1
+
+            logger.info(
+                f"[NBA proj] efficiency={eff_hits} fallback={eff_misses} "
+                f"total_time={_time.time() - _nba_t0:.2f}s"
+            )
+        except Exception as _nbae:
+            logger.debug(f"[NBA projection] attach failed: {_nbae}")
+
+    # ── EV calculations for NBA / WNBA upcoming games ────────────────────────
+    if sport in ('NBA', 'WNBA'):
+        import math as _math_ev
+        _SPREAD_SIGMA = 12.0
+        _TOTAL_SIGMA  = 20.0
+        for _pred in predictions:
+            if _pred.get('home_score') is not None:
+                _pred.setdefault('ml_ev', None)
+                _pred.setdefault('spread_ev', None)
+                _pred.setdefault('total_ev', None)
+                _pred.setdefault('best_ev_pick', None)
+                continue
+
+            # ── per-game local variables only ──
+            _ens_pct   = _to_float_safe(_pred.get('ensemble_prob'))
+            _model_p   = (_ens_pct / 100.0) if _ens_pct is not None else None
+            _home_picked = (_model_p is not None and _model_p >= 0.5)
+            _pick_p    = _model_p if _home_picked else ((1.0 - _model_p) if _model_p is not None else None)
+            _home_ml   = _to_float_safe(_pred.get('home_moneyline'))
+            _away_ml   = _to_float_safe(_pred.get('away_moneyline'))
+            _pick_ml   = _home_ml if _home_picked else _away_ml
+            _opp_ml    = _away_ml if _home_picked else _home_ml
+            _ht        = _pred.get('home_team_id', '?')
+            _at        = _pred.get('away_team_id', '?')
+
+            # ── ML EV with de-vig ──
+            _ml_ev = None
+            if _pick_p is not None and _pick_ml is not None and _opp_ml is not None:
+                _ml_ev, _devig, _impl, _vig = calculate_ev_devigged(_pick_p, _pick_ml, _opp_ml)
+                logger.debug(
+                    f"[EV] {_at}@{_ht} | model={round(_pick_p*100,1)}% "
+                    f"implied={round((_impl or 0)*100,1)}% devig={round((_devig or 0)*100,1)}% "
+                    f"vig={_vig}% odds={_pick_ml} EV={_ml_ev}%"
+                )
+
+            # ── Spread EV ──
+            _our_sp  = _to_float_safe(_pred.get('our_spread'))
+            _mkt_sp  = _to_float_safe(_pred.get('market_spread'))
+            _spread_ev = None
+            if _pick_p is not None and _mkt_sp is not None and _our_sp is not None:
+                _sp_edge    = abs(_our_sp) - abs(_mkt_sp)
+                _sp_cover_p = 0.5 * (1.0 + _math_ev.erf(_sp_edge / (_SPREAD_SIGMA * _math_ev.sqrt(2))))
+                _spread_ev  = calculate_ev(_sp_cover_p, -110)
+
+            # ── Total EV ──
+            _our_tot = _to_float_safe(_pred.get('our_total'))
+            _mkt_tot = _to_float_safe(_pred.get('market_total'))
+            _total_ev = None
+            if _our_tot is not None and _mkt_tot is not None:
+                _tot_edge  = _our_tot - _mkt_tot
+                _over_p    = 0.5 * (1.0 + _math_ev.erf(_tot_edge / (_TOTAL_SIGMA * _math_ev.sqrt(2))))
+                _actual_p  = _over_p if _tot_edge >= 0 else (1.0 - _over_p)
+                _total_ev  = calculate_ev(_actual_p, -110)
+
+            _pred['ml_ev']     = _ml_ev
+            _pred['spread_ev'] = _spread_ev
+            _pred['total_ev']  = _total_ev
+
+            _ev_map = {}
+            if _ml_ev     is not None and _ml_ev     > 0: _ev_map['Spread'] = _ml_ev
+            if _spread_ev is not None and _spread_ev > 0: _ev_map['Spread'] = _spread_ev
+            if _total_ev  is not None and _total_ev  > 0: _ev_map['Total']  = _total_ev
+            _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
 
     _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
     return predictions
@@ -4699,6 +4927,8 @@ def calculate_nba_weekly_performance():
             trueskill_prob = v2.get('trueskill_prob') if v2 else None
             if v2:
                 xgb_prob = v2.get('xgboost_prob', xgb_prob)
+                if elo_prob is None:
+                    elo_prob = v2.get('home_prob')
                 ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
 
             actual_home_win = home_score > away_score
@@ -5270,21 +5500,11 @@ def compute_overall_stats_from_daily(daily_results):
         for game in date_data.get('games', []):
             if game.get('skip_grading'):
                 continue
-            # Only count games where ALL models have probability data
-            # This ensures fair comparison across all models
-            all_models_have_data = all(
-                game.get(prob_key) is not None 
-                for _, _, prob_key in model_configs
-            )
-            
-            if not all_models_have_data:
-                continue  # Skip games where any model is missing data
-            
-            # Now count this game for ALL models (fair comparison)
             for model_name, correct_key, prob_key in model_configs:
-                correct_val = game.get(correct_key)
+                if game.get(prob_key) is None:
+                    continue
                 overall[model_name]['total'] += 1
-                if correct_val:
+                if game.get(correct_key):
                     overall[model_name]['correct'] += 1
     
     for model_name, _, _ in model_configs:
@@ -5578,8 +5798,8 @@ BASE_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% if page_title is defined and page_title %}{% set _meta_title = page_title %}
-    {% elif sport_info is defined %}{% set _meta_title = sport_info.name ~ ' — underdogs.bet' %}
-    {% else %}{% set _meta_title = 'underdogs.bet' %}{% endif %}
+    {% elif sport_info is defined %}{% set _meta_title = sport_info.name ~ ' — predictionlab.io' %}
+    {% else %}{% set _meta_title = 'predictionlab.io' %}{% endif %}
     {% if page_description is defined and page_description %}{% set _meta_desc = page_description %}
     {% elif sport_info is defined %}{% set _meta_desc = sport_info.name ~ ' predictions, results, spreads, and totals powered by AI.' %}
     {% else %}{% set _meta_desc = 'AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA, and Soccer.' %}{% endif %}
@@ -5588,13 +5808,13 @@ BASE_TEMPLATE = """
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.underdogs.bet{{ request.path }}">
-    <meta property="og:site_name" content="underdogs.bet">
+    <meta property="og:url" content="https://predictionlab.io{{ request.path }}">
+    <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
-    <meta name="author" content="underdogs.bet">
+    <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
+    <meta name="author" content="predictionlab.io">
     <meta name="publisher" content="GoodsandMore Inc.">
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -5626,12 +5846,12 @@ BASE_TEMPLATE = """
     {
       "@context": "https://schema.org",
       "@type": "Organization",
-      "name": "underdogs.bet",
-      "url": "https://www.underdogs.bet",
+      "name": "predictionlab.io",
+      "url": "https://predictionlab.io",
       "sameAs": [
         "https://x.com/underdogs_bet",
-        "https://instagram.com/underdogs.bet",
-        "https://facebook.com/underdogs.bet",
+        "https://instagram.com/predictionlab.io",
+        "https://facebook.com/predictionlab.io",
         "https://tiktok.com/@underdog.bet",
         "https://www.youtube.com/@Underdogsbet"
       ]
@@ -5883,7 +6103,7 @@ BASE_TEMPLATE = """
 <body>
     <div class="navbar">
         <div class="navbar-content">
-            <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
+            <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
             <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
                 <span></span>
                 <span></span>
@@ -5929,7 +6149,7 @@ BASE_TEMPLATE = """
         <div class="share-icons">
             <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
             <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-            <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+            <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
             <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
             <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
             <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
@@ -5940,7 +6160,7 @@ BASE_TEMPLATE = """
     </div>
     <footer class="site-footer">
         <div class="footer-outer">
-            <div class="footer-brand"><a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a></div>
+            <div class="footer-brand"><a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a></div>
             <div class="footer-columns-3">
                 <div class="footer-col-blk">
                     <div class="footer-heading">Company</div>
@@ -5953,7 +6173,7 @@ BASE_TEMPLATE = """
                 </div>
                 <div class="footer-col-blk">
                     <div class="footer-heading">Product</div>
-                    <a href="/#faq">FAQ</a>
+                    <a href="/faq">FAQ</a>
                     <a href="/daily-report">Daily results report</a>
                     <a href="/search">Search</a>
                     <a href="/performance">Model performance</a>
@@ -5964,13 +6184,13 @@ BASE_TEMPLATE = """
                 <div class="footer-col-blk">
                     <div class="footer-heading">Social</div>
                     <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X (Twitter)</a>
-                    <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a>
-                    <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a>
+                    <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                    <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
                     <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a>
                     <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
                 </div>
             </div>
-            <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+            <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
         </div>
     </footer>
     
@@ -6044,7 +6264,7 @@ _SEO_RESULTS_PAGE_FOOTER = """
 
 _SEO_UTILITY_FAQ_FOOTER = """
     <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:20px 22px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:14px;color:#475569;line-height:1.75;font-size:0.93rem;">
-        <p style="margin:0 0 10px;"><strong style="color:#0f172a;">More answers:</strong> See the full <a href="/#faq" style="color:#00529B;font-weight:700;text-decoration:none;">Frequently Asked Questions</a> on the homepage.</p>
+        <p style="margin:0 0 10px;"><strong style="color:#0f172a;">More answers:</strong> See the full <a href="/faq" style="color:#00529B;font-weight:700;text-decoration:none;">Frequently Asked Questions</a>.</p>
         <p style="margin:0;">Bet responsibly: only risk what you can afford to lose. These tools support informed decisions—they do not replace judgment, discipline, or bankroll management.</p>
     </div>
 """
@@ -6064,7 +6284,7 @@ CONTACT_PAGE_TEMPLATE = BASE_TEMPLATE.replace(
     <div class="contact-wrap">
         <div class="contact-card">
             <h1>Questions, Suggestions, or Technical Issues?</h1>
-            <p>We want to make your experience using Underdogs.bet the best it can be. If you need help, find a bug, or have a suggestion, we want to hear about it! We are always looking for ways to ensure our customers have the best edge possible.</p>
+            <p>We want to make your experience using predictionlab.io the best it can be. If you need help, find a bug, or have a suggestion, we want to hear about it! We are always looking for ways to ensure our customers have the best edge possible.</p>
             <p class="contact-email">Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
         </div>
     </div>
@@ -6088,7 +6308,7 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
     <div class="rg-wrap">
         <div class="rg-card">
             <h1>Responsible Gaming &amp; Resources</h1>
-            <p>underdogs.bet provides data-driven sports predictions for informational purposes. We do not promote irresponsible gambling. If betting is becoming a concern, support resources are available below. Please bet responsibly and only wager what you can afford to lose.</p>
+            <p>predictionlab.io provides data-driven sports predictions for informational purposes. We do not promote irresponsible gambling. If betting is becoming a concern, support resources are available below. Please bet responsibly and only wager what you can afford to lose.</p>
         </div>
         <div class="rg-card">
             <h2>Canada Support Resources</h2>
@@ -6310,7 +6530,6 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
         {% endif %}
     </div>
     <div class="rpt-actions" style="flex-direction:column;align-items:center;">
-        <div class="rpt-save-help">Use <strong>Download</strong> to save the image for TikTok (no URL in frame). <strong>Open fullscreen</strong> shows only the graphic—still hide the browser bar when screen-recording or use Download → Photos.</div>
         <div class="rpt-share-row">
             {% for st in sport_tallies %}
             <span class="rpt-btn-group">
@@ -7293,14 +7512,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">H2H Last 10</span>
                             <span class="sf-val">{% if game.our_total is defined and game.our_total is not none %}{{ "%.1f"|format(game.our_total) }}{% else %}—{% endif %}</span>
                         </div>
+                        {% if game.market_total is not none %}
                         <div class="sf-item">
-                            <span class="sf-label">Vegas Line</span>
-                            <span class="sf-val">
-                                {% if game.market_total is not none %}{{ "%.1f"|format(game.market_total) }}
-                                {% elif game.market_total_reason is defined and game.market_total_reason %}{{ game.market_total_reason }}
-                                {% else %}—{% endif %}
-                            </span>
+                            <span class="sf-label">Market Total</span>
+                            <span class="sf-val">{{ "%.1f"|format(game.market_total) }}</span>
                         </div>
+                        {% endif %}
                         <div class="sf-item">
                             <span class="sf-label">Actual Total</span>
                             <span class="sf-val">{{ "%.1f"|format(actual_total) }}</span>
@@ -7789,8 +8006,8 @@ _SOCIAL_ICONS = {
 }
 SOCIAL_LINKS = [
     {'label': 'X', 'url': 'https://x.com/underdogs_bet', 'icon': _SOCIAL_ICONS['X']},
-    {'label': 'Instagram', 'url': 'https://instagram.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Instagram']},
-    {'label': 'Facebook', 'url': 'https://facebook.com/underdogs.bet', 'icon': _SOCIAL_ICONS['Facebook']},
+    {'label': 'Instagram', 'url': 'https://instagram.com/predictionlab.io', 'icon': _SOCIAL_ICONS['Instagram']},
+    {'label': 'Facebook', 'url': 'https://facebook.com/predictionlab.io', 'icon': _SOCIAL_ICONS['Facebook']},
     {'label': 'TikTok', 'url': 'https://tiktok.com/@underdog.bet', 'icon': _SOCIAL_ICONS['TikTok']},
     {'label': 'YouTube', 'url': 'https://www.youtube.com/@Underdogsbet', 'icon': _SOCIAL_ICONS['YouTube']},
 ]
@@ -8030,8 +8247,8 @@ def landing_page():
                 'label': f"{_sport_key} picks {_d.strftime('%b')} {_d.day}, {_d.year}",
             })
 
-    _landing_share_url = 'https://www.underdogs.bet/'
-    _landing_share_title = 'Underdogs.bet Performance Stats'
+    _landing_share_url = 'https://predictionlab.io/'
+    _landing_share_title = 'predictionlab.io Performance Stats'
     _landing_share_body = (
         f"{_landing_share_title}\n\n"
         "NBA Totals (2025/2026): 704-500 (+204u)\n"
@@ -8042,7 +8259,7 @@ def landing_page():
         f"{_landing_share_url}"
     )
     _landing_share_tweet = (
-        "Underdogs.bet Performance Stats — NBA Totals 704-500 (+204u), NBA Spreads +427u, "
+        "predictionlab.io Performance Stats — NBA Totals 704-500 (+204u), NBA Spreads +427u, "
         "NHL Spreads +59u, NHL Totals 8-1 (+7u). Tracked AI picks & results: "
         + _landing_share_url
     )
@@ -8170,12 +8387,12 @@ def landing_page():
     <meta property="og:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
     <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.underdogs.bet/">
-    <meta property="og:site_name" content="underdogs.bet">
+    <meta property="og:url" content="https://predictionlab.io/">
+    <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
     <meta name="twitter:description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
-    <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
+    <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -8207,8 +8424,8 @@ def landing_page():
     {
       "@context": "https://schema.org",
       "@type": "Organization",
-      "name": "underdogs.bet",
-      "url": "https://www.underdogs.bet",
+      "name": "predictionlab.io",
+      "url": "https://predictionlab.io",
       "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
       "email": "underdogsbetemail@gmail.com",
       "telephone": "+1-519-992-8484",
@@ -8226,24 +8443,23 @@ def landing_page():
       },
       "sameAs": [
         "https://x.com/underdogs_bet",
-        "https://instagram.com/underdogs.bet",
-        "https://facebook.com/underdogs.bet",
+        "https://instagram.com/predictionlab.io",
+        "https://facebook.com/predictionlab.io",
         "https://tiktok.com/@underdog.bet",
         "https://www.youtube.com/@Underdogsbet"
       ]
     }
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"WebSite","name":"underdogs.bet","url":"https://www.underdogs.bet","potentialAction":{"@type":"SearchAction","target":"https://www.underdogs.bet/search?query={search_term_string}","query-input":"required name=search_term_string"}}
+    {"@context":"https://schema.org","@type":"WebSite","name":"predictionlab.io","url":"https://predictionlab.io","potentialAction":{"@type":"SearchAction","target":"https://predictionlab.io/search?query={search_term_string}","query-input":"required name=search_term_string"}}
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"LocalBusiness","name":"underdogs.bet","url":"https://www.underdogs.bet","email":"underdogsbetemail@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
+    {"@context":"https://schema.org","@type":"LocalBusiness","name":"predictionlab.io","url":"https://predictionlab.io","email":"underdogsbetemail@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
     </script>
+    <!-- FAQPage schema lives on /faq now (dedicated page). -->
+
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do your AI sports betting picks work?","acceptedAnswer":{"@type":"Answer","text":"Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions. Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available."}},{"@type":"Question","name":"What makes your picks different from sportsbooks?","acceptedAnswer":{"@type":"Answer","text":"Sportsbooks set odds based on balancing action and public perception, not just true probability. Our system creates its own projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential positive expected value opportunity."}},{"@type":"Question","name":"How do you find value bets?","acceptedAnswer":{"@type":"Answer","text":"We compare model projections against sportsbook lines for moneyline, spread, and totals markets. When the difference is significant, the market may be mispricing the game."}},{"@type":"Question","name":"What does the probability percentage mean?","acceptedAnswer":{"@type":"Answer","text":"Each model outputs a win probability for every game. For example, if our model gives a team a 60 percent chance to win but the sportsbook implies 50 percent, that creates value."}},{"@type":"Question","name":"Do your models agree on every pick?","acceptedAnswer":{"@type":"Answer","text":"No. Each of our four AI models has a different methodology. We display individual model predictions and a consensus view so users can see where agreement is strongest."}},{"@type":"Question","name":"What sports do you cover?","acceptedAnswer":{"@type":"Answer","text":"We currently focus on major markets like MLB, NBA, NFL, and other high-liquidity sports where data quality is strong and inefficiencies can be identified."}},{"@type":"Question","name":"Are your results tracked publicly?","acceptedAnswer":{"@type":"Answer","text":"Yes. Every pick is tracked with full transparency including wins, losses, and performance over time."}},{"@type":"Question","name":"Is there a refund policy?","acceptedAnswer":{"@type":"Answer","text":"Yes. Monthly plan has a 10-day return window and yearly plan has a 30-day return window."}},{"@type":"Question","name":"Are your picks guaranteed to win?","acceptedAnswer":{"@type":"Answer","text":"No system can guarantee wins. Sports betting involves variance, and even strong positive expected value strategies will have losing streaks."}},{"@type":"Question","name":"Who are these picks for?","acceptedAnswer":{"@type":"Answer","text":"These picks are designed for bettors who want a structured, data-driven approach rather than guesswork or public trends."}}]}
-    </script>
-    <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Product","name":"Underdogs Edge Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"underdogs.bet"},"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"underdogs.bet user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://www.underdogs.bet/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
+    {"@context":"https://schema.org","@type":"Product","name":"Prediction Lab Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"predictionlab.io"},"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"predictionlab.io user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -8842,7 +9058,7 @@ def landing_page():
 <!-- Navbar -->
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
+        <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
         <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
             <span></span>
             <span></span>
@@ -8974,11 +9190,11 @@ def landing_page():
 
 <!-- Model Performance -->
 <div class="section" style="padding-top:10px;padding-bottom:10px;">
-    <div style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:18px 20px;">
+    <div style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:18px 20px;text-align:center;">
         <h2 style="font-size:1.2rem;font-weight:900;color:#0f172a;margin:0 0 8px;">Model Performance</h2>
         <p style="color:#334155;font-size:0.9em;line-height:1.7;margin:0 0 12px;">See completed-game performance by model and confidence bucket, with sample sizes and color-coded hit rates.</p>
         {% if weekly_banner_messages %}
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;justify-content:center;">
             {% for item in weekly_banner_messages[:3] %}
             <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(15,23,42,0.14);background:#f8fafc;color:#0f172a;font-size:0.78em;font-weight:700;">
                 <span style="color:#00529B;">Live</span> {{ item.label }} {{ item.pct }} ({{ item.record }})
@@ -9114,7 +9330,7 @@ def landing_page():
     </div>
     <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">Free moneyline picks and premium spreads, totals, and scores are all updated daily as schedules, injuries, and markets change.</p>
     <div style="max-width:860px;margin:16px auto 0;background:#ffffff;border:1px solid rgba(15,23,42,0.2);border-radius:14px;padding:16px 18px;">
-        <h3 style="font-size:1.1em;font-weight:800;color:#92400e;margin:0 0 14px;text-align:center;letter-spacing:0.02em;">Underdogs.bet Performance Stats</h3>
+        <h3 style="font-size:1.1em;font-weight:800;color:#92400e;margin:0 0 14px;text-align:center;letter-spacing:0.02em;">predictionlab.io Performance Stats</h3>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;color:#0f172a;font-size:0.88em;font-weight:700;">
             <div>NBA Totals (2025/2026): 704-500 (+204u)</div>
             <div>NBA Spreads: 822-395 (+427u)</div>
@@ -9152,66 +9368,7 @@ def landing_page():
     </div>
 </div>
 
-<!-- FAQ -->
-<div id="faq" class="section" style="padding-top:10px;padding-bottom:20px;">
-    <h2 class="section-title">Frequently Asked Questions</h2>
-    <div style="max-width:920px;margin:0 auto;display:grid;gap:10px;">
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">How do your AI sports betting picks work?</summary>
-            <p style="margin-top:10px;color:#334155;">Our picks are generated using a proprietary odds engine powered by four independent AI prediction models. Each model analyzes matchups, player performance, advanced team metrics, and real-time market data to produce probability-based predictions.</p>
-            <p style="margin-top:8px;color:#334155;">Instead of relying on opinions or trends, every pick is backed by data and continuously updated as new information becomes available.</p>
-            <p style="margin-top:8px;color:#334155;">The process is data-driven: we evaluate odds, line movement, and market-implied prices against our projections to highlight situations where the market may be mispriced.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">What makes your picks different from sportsbooks?</summary>
-            <p style="margin-top:10px;color:#334155;">Sportsbooks set odds based on balancing action and public perception, not just true probability.</p>
-            <p style="margin-top:8px;color:#334155;">Our system creates projected odds and compares them directly to sportsbook lines. When there is a discrepancy, it signals a potential +EV opportunity.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">How do you find value bets?</summary>
-            <p style="margin-top:10px;color:#334155;">We compare projections and market lines for moneyline, spread, and totals. Significant gaps indicate potential market mispricing.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">What does the probability percentage mean?</summary>
-            <p style="margin-top:10px;color:#334155;">Each model outputs win probability for each game. If our model probability is higher than sportsbook implied probability, it can indicate value.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">Do your models agree on every pick?</summary>
-            <p style="margin-top:10px;color:#334155;">No. Each model uses a different methodology. We show individual predictions and consensus so confidence is transparent.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">What sports do you cover?</summary>
-            <p style="margin-top:10px;color:#334155;">We focus on major markets such as MLB, NBA, NFL, and other high-liquidity sports where data quality is strong.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">Are your results tracked publicly?</summary>
-            <p style="margin-top:10px;color:#334155;">Yes. Every pick is tracked with full transparency, including wins, losses, and performance over time.</p>
-            <p style="margin-top:8px;color:#334155;">Graded results are shown on our results pages as they finalize—there is no cherry-picking, editing picks after the fact, or hiding losses.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">Is this suitable for beginners?</summary>
-            <p style="margin-top:10px;color:#334155;">The site is built to be readable and structured, but sports betting still requires basic concepts—odds, bet types, and bankroll limits—and a commitment to responsible play.</p>
-            <p style="margin-top:8px;color:#334155;">If you are new, start small, use free picks to learn how the models behave, and never wager more than you can afford to lose.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">Is there a refund policy?</summary>
-            <p style="margin-top:10px;color:#334155;">Yes. Monthly plans have a 10-day return window and yearly plans have a 30-day return window.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">Are your picks guaranteed to win?</summary>
-            <p style="margin-top:10px;color:#334155;">No system can guarantee wins. Sports betting includes variance; the goal is long-term +EV performance.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">Who are these picks for?</summary>
-            <p style="margin-top:10px;color:#334155;">These picks are built for bettors who want a structured, data-driven process rather than guesswork.</p>
-        </details>
-        <details style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;">
-            <summary style="cursor:pointer;font-weight:700;">Expectations, discipline, and responsible use</summary>
-            <p style="margin-top:10px;color:#334155;">Sports betting always involves risk and variance. Our tools are meant to support informed decision-making—not replace your judgment or encourage reckless stakes.</p>
-            <p style="margin-top:8px;color:#334155;">Maintaining discipline, tracking results honestly, and keeping expectations realistic are central to using any model over the long term.</p>
-        </details>
-    </div>
-</div>
+<!-- FAQ moved to /faq — link is in the footer only. -->
 
 <!-- SEO Text -->
 <div class="section" style="padding-top:0;padding-bottom:20px;">
@@ -9248,7 +9405,7 @@ def landing_page():
     <div class="share-icons">
         <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
         <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
         <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
         <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
         <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
@@ -9259,7 +9416,7 @@ def landing_page():
 </div>
 <footer class="site-footer">
     <div class="footer-outer">
-        <div class="footer-brand"><a href="/" aria-label="underdogs.bet home" style="font-weight:900;font-size:1.05em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">underdogs.bet</a></div>
+        <div class="footer-brand"><a href="/" aria-label="Prediction Lab home" style="font-weight:900;font-size:1.05em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">Prediction Lab</a></div>
         <div class="footer-columns-3">
             <div class="footer-col-blk">
                 <div class="footer-heading">Company</div>
@@ -9272,7 +9429,7 @@ def landing_page():
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Product</div>
-                <a href="/#faq">FAQ</a>
+                <a href="/faq">FAQ</a>
                 <a href="/daily-report">Daily results report</a>
                 <a href="/search">Search</a>
                 <a href="/performance">Model performance</a>
@@ -9283,16 +9440,17 @@ def landing_page():
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
                 <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X (Twitter)</a>
-                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a>
-                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
                 <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a>
                 <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
             </div>
         </div>
-        <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+        <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
 
+{% if not is_logged_in %}
 <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
     <div class="join-premium-inner">
         <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
@@ -9302,6 +9460,7 @@ def landing_page():
         </div>
     </div>
 </div>
+{% endif %}
 
 <script>
     function toggleMenu() {
@@ -9430,7 +9589,7 @@ def landing_page():
          landing_share_body=_landing_share_body,
          landing_share_tweet=_landing_share_tweet)
 
-_SITE_DOMAIN = 'https://www.underdogs.bet'
+_SITE_DOMAIN = 'https://predictionlab.io'
 
 _PUBLIC_TO_INTERNAL_MODEL = {
     'grinder2': 'Glicko-2',
@@ -10659,6 +10818,169 @@ def performance_audit_csv():
         headers={'Content-Disposition': f'attachment; filename="performance_audit_{file_sport}_{last_n}.csv"'},
     )
 
+@app.route('/picks/export.csv')
+def picks_export_csv():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    sport = (request.args.get('sport') or '').strip().upper() or None
+    try:
+        conn = get_db_connection()
+        query = '''
+            SELECT g.game_date, g.sport, g.home_team_id, g.away_team_id,
+                   g.home_score, g.away_score,
+                   p.elo_home_prob, p.xgboost_home_prob, p.win_probability,
+                   bl.spread AS market_spread, bl.total AS market_total
+            FROM games g
+            LEFT JOIN predictions p ON (
+                p.sport = g.sport AND (
+                    p.game_id = g.game_id OR (
+                        date(p.game_date) = date(g.game_date)
+                        AND p.home_team_id = g.home_team_id
+                        AND p.away_team_id = g.away_team_id
+                    )
+                )
+            )
+            LEFT JOIN betting_lines bl ON bl.game_id = g.game_id
+        '''
+        params = []
+        if sport:
+            query += ' WHERE g.sport = ?'
+            params.append(sport)
+        query += ' ORDER BY g.game_date DESC LIMIT 500'
+        rows = conn.execute(query, params).fetchall()
+        conn.close()
+    except Exception as exc:
+        return Response(f'Export failed: {exc}', status=500, mimetype='text/plain')
+    import io as _io2, csv as _csv2
+    out = _io2.StringIO()
+    w = _csv2.writer(out)
+    w.writerow(['date','sport','home_team','away_team','home_score','away_score','result',
+                'elo_prob','xgb_prob','ensemble_prob','market_spread','market_total'])
+    for r in rows:
+        hs = _to_float_safe(r['home_score'])
+        aws = _to_float_safe(r['away_score'])
+        result = ''
+        if hs is not None and aws is not None:
+            result = 'home_win' if hs > aws else ('away_win' if aws > hs else 'draw')
+        w.writerow([r['game_date'], r['sport'], r['home_team_id'], r['away_team_id'],
+                    r['home_score'], r['away_score'], result,
+                    r['elo_home_prob'], r['xgboost_home_prob'], r['win_probability'],
+                    r['market_spread'], r['market_total']])
+    body = out.getvalue()
+    out.close()
+    fname = f"picks_export_{sport or 'ALL'}.csv"
+    return Response(body, mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+
+@app.route('/results/export.csv')
+def results_export_csv():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    sport = (request.args.get('sport') or '').strip().upper() or None
+    date_from = (request.args.get('from') or '').strip() or None
+    date_to = (request.args.get('to') or '').strip() or None
+    try:
+        conn = get_db_connection()
+        where_clauses = ["g.home_score IS NOT NULL AND g.away_score IS NOT NULL"]
+        params = []
+        if sport:
+            where_clauses.append("g.sport = ?")
+            params.append(sport)
+        if date_from:
+            where_clauses.append("date(g.game_date) >= date(?)")
+            params.append(date_from)
+        if date_to:
+            where_clauses.append("date(g.game_date) <= date(?)")
+            params.append(date_to)
+        where_sql = ' AND '.join(where_clauses)
+        query = f'''
+            SELECT g.game_date, g.sport, g.home_team_id, g.away_team_id,
+                   g.home_score, g.away_score,
+                   p.win_probability, p.elo_home_prob, p.xgboost_home_prob,
+                   p.glicko2_home_prob, p.trueskill_home_prob,
+                   bl.spread AS market_spread, bl.total AS market_total,
+                   bl.home_ml, bl.away_ml
+            FROM games g
+            LEFT JOIN predictions p ON (
+                p.sport = g.sport AND (
+                    p.game_id = g.game_id OR (
+                        date(p.game_date) = date(g.game_date)
+                        AND p.home_team_id = g.home_team_id
+                        AND p.away_team_id = g.away_team_id
+                    )
+                )
+            )
+            LEFT JOIN betting_lines bl ON bl.game_id = g.game_id
+            WHERE {where_sql}
+            ORDER BY g.game_date DESC
+            LIMIT 2000
+        '''
+        rows = conn.execute(query, params).fetchall()
+        conn.close()
+    except Exception as exc:
+        return Response(f'Export failed: {exc}', status=500, mimetype='text/plain')
+    import io as _io3, csv as _csv3
+    out = _io3.StringIO()
+    w = _csv3.writer(out)
+    w.writerow([
+        'date', 'sport', 'home_team', 'away_team',
+        'home_score', 'away_score', 'winner',
+        'ml_pick', 'ml_correct',
+        'market_spread', 'ats_cover', 'market_total', 'ou_result',
+        'ensemble_prob', 'elo_prob', 'xgb_prob', 'glicko2_prob', 'trueskill_prob',
+        'home_ml', 'away_ml',
+    ])
+    for r in rows:
+        hs = _to_float_safe(r['home_score'])
+        aws = _to_float_safe(r['away_score'])
+        if hs is None or aws is None:
+            continue
+        winner = 'home' if hs > aws else ('away' if aws > hs else 'draw')
+        ens = _to_float_safe(r['win_probability'])
+        ml_pick = 'home' if (ens or 0) >= 0.5 else 'away'
+        ml_correct = 'yes' if ml_pick == winner else ('push' if winner == 'draw' else 'no')
+        spread = _to_float_safe(r['market_spread'])
+        ats_cover = ''
+        if spread is not None:
+            margin = hs - aws
+            if margin + spread > 0:
+                ats_cover = 'home_covered'
+            elif margin + spread < 0:
+                ats_cover = 'away_covered'
+            else:
+                ats_cover = 'push'
+        total = _to_float_safe(r['market_total'])
+        ou_result = ''
+        if total is not None:
+            combined = hs + aws
+            if combined > total:
+                ou_result = 'over'
+            elif combined < total:
+                ou_result = 'under'
+            else:
+                ou_result = 'push'
+        w.writerow([
+            r['game_date'], r['sport'], r['home_team_id'], r['away_team_id'],
+            hs, aws, winner,
+            ml_pick, ml_correct,
+            spread, ats_cover, total, ou_result,
+            r['win_probability'], r['elo_home_prob'], r['xgboost_home_prob'],
+            r['glicko2_home_prob'], r['trueskill_home_prob'],
+            r['home_ml'], r['away_ml'],
+        ])
+    body = out.getvalue()
+    out.close()
+    sport_tag = sport or 'ALL'
+    fname = f"results_export_{sport_tag}.csv"
+    return Response(body, mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+
 @app.route('/teams/<slug>')
 def team_lookup(slug):
     """Team slug route (Next.js-style equivalent) -> best sport page."""
@@ -10693,14 +11015,14 @@ Sitemap: {_SITE_DOMAIN}/sitemap.xml
 
 @app.route('/llms.txt')
 def llms_txt():
-    body = """# underdogs.bet
+    body = """# predictionlab.io
 
 > AI-powered sports betting picks and probability-based projections.
 
 ## About
-- Brand: underdogs.bet
+- Brand: predictionlab.io
 - Parent organization: GoodsandMore Inc. (Canada)
-- URL: https://www.underdogs.bet
+- URL: https://predictionlab.io
 - Contact: underdogsbetemail@gmail.com
 
 ## What We Offer
@@ -10709,14 +11031,14 @@ def llms_txt():
 - Multi-model AI consensus and transparent tracking
 
 ## Core Pages
-- Home: https://www.underdogs.bet/
-- Daily report: https://www.underdogs.bet/daily-report
-- Plans: https://www.underdogs.bet/plans
-- AI picks today: https://www.underdogs.bet/ai-sports-betting-picks-today
-- What are AI picks: https://www.underdogs.bet/what-are-ai-sports-betting-picks
-- Model vs sportsbooks: https://www.underdogs.bet/our-model-vs-sportsbooks
-- Privacy: https://www.underdogs.bet/privacy
-- Terms: https://www.underdogs.bet/terms
+- Home: https://predictionlab.io/
+- Daily report: https://predictionlab.io/daily-report
+- Plans: https://predictionlab.io/plans
+- AI picks today: https://predictionlab.io/ai-sports-betting-picks-today
+- What are AI picks: https://predictionlab.io/what-are-ai-sports-betting-picks
+- Model vs sportsbooks: https://predictionlab.io/our-model-vs-sportsbooks
+- Privacy: https://predictionlab.io/privacy
+- Terms: https://predictionlab.io/terms
 
 ## Notes
 - Picks are informational and educational, not guaranteed outcomes.
@@ -10731,8 +11053,8 @@ def ai_txt():
 Allow: /
 
 # AI discovery
-LLMs: https://www.underdogs.bet/llms.txt
-Sitemap: https://www.underdogs.bet/sitemap.xml
+LLMs: https://predictionlab.io/llms.txt
+Sitemap: https://predictionlab.io/sitemap.xml
 
 # Canonical contact for AI indexing
 Contact: underdogsbetemail@gmail.com
@@ -11092,11 +11414,11 @@ def daily_report_page():
         ('ensemble', '🏆 Consensus'),
     ]
 
-    share_text = f"underdogs.bet Daily Report — {report_display}%0A"
+    share_text = f"predictionlab.io Daily Report — {report_display}%0A"
     ens = agg_models.get('ensemble', {})
     if ens.get('total', 0) > 0:
         share_text += f"Consensus: {ens['accuracy']}% ({ens['correct']}-{ens['total'] - ens['correct']})%0A"
-    share_text += f"{total_games} games graded%0Ahttps://www.underdogs.bet/daily-report"
+    share_text += f"{total_games} games graded%0Ahttps://predictionlab.io/daily-report"
 
     rendered = render_template_string(DAILY_REPORT_TEMPLATE,
         page='daily-report',
@@ -11264,8 +11586,8 @@ def donate_shortcut():
 def responsible_gaming_page():
     return render_template_string(RESPONSIBLE_GAMING_TEMPLATE,
         page='responsible-gaming',
-        page_title='Responsible Gaming Resources | underdogs.bet',
-        page_description='Find responsible gaming resources and support in Canada and the United States. underdogs.bet promotes safe and responsible play.'
+        page_title='Responsible Gaming Resources | predictionlab.io',
+        page_description='Find responsible gaming resources and support in Canada and the United States. predictionlab.io promotes safe and responsible play.'
     )
 
 @app.route('/contact')
@@ -11273,8 +11595,8 @@ def contact_page():
     return render_template_string(
         CONTACT_PAGE_TEMPLATE,
         page='contact',
-        page_title='Contact us | underdogs.bet',
-        page_description='Questions, suggestions, or technical issues for underdogs.bet — reach our team by email.',
+        page_title='Contact us | predictionlab.io',
+        page_description='Questions, suggestions, or technical issues for predictionlab.io — reach our team by email.',
     )
 
 @app.route('/privacy')
@@ -11297,6 +11619,11 @@ def what_are_ai_picks_page():
 def model_vs_sportsbooks_page():
     return render_template('model_vs_sportsbooks.html')
 
+@app.route('/faq')
+def faq_page():
+    log_site_visit('/faq')
+    return render_template('faq.html')
+
 @app.route('/sport/SOCCER/predictions/<league_slug>')
 def soccer_predictions_league(league_slug):
     return redirect(f'/soccer-picks?league={league_slug}', code=301)
@@ -11308,9 +11635,9 @@ def soccer_results_league(league_slug):
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
     sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
-    safe_title = f"{sport_info['name']} Picks | underdogs.bet"
+    safe_title = f"{sport_info['name']} Picks | predictionlab.io"
     if filter_date:
-        safe_title = f"{sport_info['name']} Picks for {filter_date} | underdogs.bet"
+        safe_title = f"{sport_info['name']} Picks for {filter_date} | predictionlab.io"
     return render_template_string("""
 <!DOCTYPE html>
 <html lang="en">
@@ -11318,9 +11645,9 @@ def _predictions_fallback_page(sport, filter_date=None):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ safe_title }}</title>
-    <meta name="description" content="Daily AI-powered {{ sport_info.name }} picks and projections on underdogs.bet.">
+    <meta name="description" content="Daily AI-powered {{ sport_info.name }} picks and projections on predictionlab.io.">
     <meta name="robots" content="noindex, follow">
-    <link rel="canonical" href="https://www.underdogs.bet/{{ sport_slug }}">
+    <link rel="canonical" href="https://predictionlab.io/{{ sport_slug }}">
     <style>
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;}
         .card{max-width:680px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;text-align:center;}
@@ -12397,7 +12724,7 @@ if __name__ == '__main__':
                 port += 1
 
     print("\n" + "="*60)
-    print("🎯 underdogs.bet - Multi-Sport Prediction Platform")
+    print("🎯 predictionlab.io - Multi-Sport Prediction Platform")
     print("="*60)
     print(f"🌐 Visit http://0.0.0.0:{port}")
     print("="*60 + "\n")

@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}underdogs.bet{% endblock %}</title>
+    <title>{% block title %}predictionlab.io{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap"></noscript>
     <style>
         *{margin:0;padding:0;box-sizing:border-box;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:#0f172a;min-height:100vh;}
         .navbar{background:#ffffff;padding:14px 28px;border-bottom:1px solid #E0E4E8;box-shadow:0 2px 8px rgba(26,29,35,0.05);position:sticky;top:0;z-index:1000;}
         .navbar-content{max-width:1400px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:20px;position:relative;}
-        .logo{font-family:'Oswald',sans-serif;font-weight:700;font-size:28px;text-transform:uppercase;letter-spacing:0.5px;line-height:1;color:#0f172a;text-decoration:none;}
+        .logo{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:28px;text-transform:uppercase;letter-spacing:0.5px;line-height:1;color:#0f172a;text-decoration:none;}
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;margin-left:auto;order:4;}
         .hamburger span{width:24px;height:2px;background:#0f172a;border-radius:2px;}
-        .nav-links{display:none;position:absolute;top:calc(100% + 8px);right:0;width:min(180px,calc(100vw - 36px));flex-direction:column;gap:0;padding:8px;border:1px solid #cbd5e1;border-radius:12px;background:#ffffff;box-shadow:0 14px 28px rgba(15,23,42,0.18);z-index:1100;}
+        .nav-links{display:none;position:absolute;top:calc(100% + 8px);right:0;width:min(180px,calc(100vw - 36px));flex-direction:column;gap:0;padding:8px;border:1px solid #cbd5e1;border-radius:12px;background:rgba(255,255,255,0.82);backdrop-filter:saturate(160%) blur(10px);-webkit-backdrop-filter:saturate(160%) blur(10px);box-shadow:0 14px 28px rgba(15,23,42,0.18);z-index:1100;}
         .nav-links.active{display:flex;}
         .nav-links a{color:#1A1D23;text-decoration:none;font-weight:600;font-size:0.82em;padding:10px 12px;border-radius:8px;white-space:normal;}
         .nav-links a:hover{color:#00529B;background:rgba(0,82,155,0.08);}
@@ -66,7 +66,7 @@
 <body>
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
+        <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
         <button type="button" class="hamburger" onclick="toggleBaseMenu()" aria-label="Open navigation menu" aria-controls="baseNavLinks" aria-expanded="false"><span></span><span></span><span></span></button>
         <div class="nav-links" id="baseNavLinks">
             <a href="/nhl-picks">NHL</a>
@@ -112,7 +112,7 @@
     <div class="share-icons">
         <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
         <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
         <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
         <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
         <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
@@ -123,7 +123,7 @@
 </div>
 <footer class="site-footer">
     <div class="footer-outer">
-        <div class="footer-brand"><a href="/" class="logo">underdogs.bet</a></div>
+        <div class="footer-brand"><a href="/" class="logo">predictionlab.io</a></div>
         <div class="footer-columns-3">
             <div class="footer-col-blk">
                 <div class="footer-heading">Company</div>
@@ -136,7 +136,7 @@
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Product</div>
-                <a href="/#faq">FAQ</a>
+                <a href="/faq">FAQ</a>
                 <a href="/daily-report">Daily results report</a>
                 <a href="/search">Search</a>
                 <a href="/performance">Model performance</a>
@@ -147,13 +147,13 @@
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
                 <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X (Twitter)</a>
-                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener">Instagram</a>
-                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener">Facebook</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
                 <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a>
                 <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
             </div>
         </div>
-        <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+        <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
 <script>

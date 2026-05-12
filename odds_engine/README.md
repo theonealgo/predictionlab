@@ -19,6 +19,7 @@ Services:
 - `GET /health`
 - `GET /games`
 - `GET /odds?gameId=...` or `GET /odds?sport=...&home=...&away=...`
+- `POST /player-props/batch` (body: `{ sport, items: [{ player_id, player_name, team, prop_type }] }`)
 - `GET /model?gameId=...`
 - `POST /bet` (body: `{ gameId, market, side, stake }`)
 - `GET /risk?gameId=...`

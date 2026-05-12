@@ -23,7 +23,13 @@ body { margin: 0; font-family: Inter, -apple-system, Segoe UI, Roboto, sans-seri
 table { width: 100%; min-width: 0; border-collapse: collapse; table-layout: auto; }
 th, td { border-bottom: 1px solid #e2e8f0; padding: 5px 6px; font-size: 0.72rem; white-space: nowrap; text-align: left; line-height: 1.15; vertical-align: middle; }
 th { background: #f8fafc; color: #334155; }
-tbody tr:hover { background: #f8fbff; }
+tbody tr:nth-child(even) { background: #f8fafc; }
+tbody tr:hover { background: #edf4ff; }
+.pick-over { color: #15803d; font-weight: 700; }
+.pick-under { color: #b91c1c; font-weight: 700; }
+.result-win { background: #dcfce7; color: #15803d; font-weight: 700; border-radius: 4px; padding: 1px 5px; }
+.result-loss { background: #fee2e2; color: #b91c1c; font-weight: 700; border-radius: 4px; padding: 1px 5px; }
+.result-push { background: #f1f5f9; color: #64748b; font-weight: 700; border-radius: 4px; padding: 1px 5px; }
 .results-summary { margin: 0 0 10px; color: #334155; font-size: 0.8rem; }
 .share-panel { margin-top: 8px; }
 .share-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }

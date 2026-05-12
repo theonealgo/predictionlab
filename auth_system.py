@@ -1,5 +1,5 @@
 """
-Auth & Premium System for underdogs.bet
+Auth & Premium System for predictionlab.io
 =========================================
 Google OAuth + Email/Password login + Stripe subscriptions.
 
@@ -660,20 +660,20 @@ _AUTH_STYLES = """
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login — underdogs.bet</title>
+<title>Login — predictionlab.io</title>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
-<meta name="description" content="Log in to your underdogs.bet account to access AI-powered sports picks, spreads, and totals.">
-<meta property="og:title" content="Login — underdogs.bet">
+<meta name="description" content="Log in to your predictionlab.io account to access AI-powered sports picks, spreads, and totals.">
+<meta property="og:title" content="Login — predictionlab.io">
 <meta property="og:description" content="Log in to access AI-powered sports picks.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://www.underdogs.bet/login">
-<link rel="canonical" href="https://www.underdogs.bet/login">
+<meta property="og:url" content="https://predictionlab.io/login">
+<link rel="canonical" href="https://predictionlab.io/login">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
 <div class="auth-container">
-    <h1 style="position:absolute;left:-9999px;">Log in to underdogs.bet AI sports picks platform</h1>
+    <h1 style="position:absolute;left:-9999px;">Log in to predictionlab.io AI sports picks platform</h1>
     <div class="auth-title">🔐 Login</div>
     {% if error_msg %}<div class="auth-error">{{ error_msg }}</div>{% endif %}
     {% if google_enabled %}
@@ -697,20 +697,20 @@ LOGIN_TEMPLATE = """
 SIGNUP_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign Up — underdogs.bet</title>
+<title>Sign Up — predictionlab.io</title>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
-<meta name="description" content="Create a free underdogs.bet account to access AI-powered sports picks. Upgrade for spreads, totals, and score predictions.">
-<meta property="og:title" content="Sign Up — underdogs.bet">
+<meta name="description" content="Create a free predictionlab.io account to access AI-powered sports picks. Upgrade for spreads, totals, and score predictions.">
+<meta property="og:title" content="Sign Up — predictionlab.io">
 <meta property="og:description" content="Create a free account for AI-powered sports picks.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://www.underdogs.bet/signup">
-<link rel="canonical" href="https://www.underdogs.bet/signup">
+<meta property="og:url" content="https://predictionlab.io/signup">
+<link rel="canonical" href="https://predictionlab.io/signup">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
 <div class="auth-container">
-    <h1 style="position:absolute;left:-9999px;">Sign up for underdogs.bet AI sports picks access</h1>
+    <h1 style="position:absolute;left:-9999px;">Sign up for predictionlab.io AI sports picks access</h1>
     <div class="auth-title">Create Account</div>
     <p style="text-align:center;color:#cbd5e1;font-size:0.85em;margin-bottom:18px;">Sign up to access free picks. Upgrade anytime for Spreads, Totals &amp; Score Predictions.</p>
     {% if google_enabled %}
@@ -735,7 +735,7 @@ SIGNUP_TEMPLATE = """
 SUCCESS_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Welcome to Premium — underdogs.bet</title>
+<title>Welcome to Premium — predictionlab.io</title>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="robots" content="noindex, nofollow">

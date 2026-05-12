@@ -2,10 +2,10 @@
 <html>
 <head>
     {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
-    {% set _meta_title = sport_info.name ~ ' Picks for ' ~ sorted_dates[0] ~ ' | underdogs.bet' %}
+    {% set _meta_title = sport_info.name ~ ' Picks for ' ~ sorted_dates[0] ~ ' | predictionlab.io' %}
     {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks for ' ~ sorted_dates[0] ~ '. AI-powered predictions with projected scores, spreads, and totals.' %}
     {% else %}
-    {% set _meta_title = sport_info.name ~ ' Picks Today | underdogs.bet' %}
+    {% set _meta_title = sport_info.name ~ ' Picks Today | predictionlab.io' %}
     {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks today. AI-powered predictions with projected scores, spreads, and totals. Updated daily.' %}
     {% endif %}
     <title>{{ _meta_title }}</title>
@@ -16,16 +16,16 @@
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.underdogs.bet{{ request.path }}">
-        <meta property="og:site_name" content="underdogs.bet">
+    <meta property="og:url" content="https://predictionlab.io{{ request.path }}">
+        <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
-    <link rel="canonical" href="https://www.underdogs.bet{{ request.path }}">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
     {% if ga_tracking_id %}
     <script>
       (function(){
@@ -53,12 +53,12 @@
     {
       "@context": "https://schema.org",
       "@type": "Organization",
-      "name": "underdogs.bet",
-      "url": "https://www.underdogs.bet",
+      "name": "predictionlab.io",
+      "url": "https://predictionlab.io",
       "sameAs": [
         "https://x.com/underdogs_bet",
-        "https://instagram.com/underdogs.bet",
-        "https://facebook.com/underdogs.bet",
+        "https://instagram.com/predictionlab.io",
+        "https://facebook.com/predictionlab.io",
         "https://tiktok.com/@underdog.bet",
         "https://www.youtube.com/@Underdogsbet"
       ]
@@ -69,8 +69,8 @@
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       "itemListElement": [
-        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.underdogs.bet/"},
-        {"@type": "ListItem", "position": 2, "name": "{{ sport_info.name }} Picks", "item": "https://www.underdogs.bet/{{ sport_seo_slug }}"}
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://predictionlab.io/"},
+        {"@type": "ListItem", "position": 2, "name": "{{ sport_info.name }} Picks", "item": "https://predictionlab.io/{{ sport_seo_slug }}"}
       ]
     }
     </script>
@@ -79,7 +79,7 @@
     {% for pred in grouped_predictions[date] %}
     {% if pred.home_score is none and pred.home_team_id != 'TBD' and pred.away_team_id != 'TBD' and pred.home_team_id and pred.away_team_id %}
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} at {{ pred.home_team_id }}","description":"{{ sport_info.name }} game: {{ pred.away_team_id }} at {{ pred.home_team_id }}. AI predictions and picks at underdogs.bet.","startDate":"{{ date }}T19:00:00-04:00","endDate":"{{ date }}T22:00:00-04:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","location":{"@type":"Place","name":"{{ pred.home_team_id }} Home Venue","address":{"@type":"PostalAddress","addressCountry":"US"}},"homeTeam":{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"},"awayTeam":{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},"organizer":{"@type":"Organization","name":"{{ sport_info.name }}","url":"https://www.underdogs.bet/{{ sport_seo_slug }}"},"offers":{"@type":"Offer","url":"https://www.underdogs.bet/{{ sport_seo_slug }}","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","validFrom":"{{ date }}"}}
+    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} at {{ pred.home_team_id }}","description":"{{ sport_info.name }} game: {{ pred.away_team_id }} at {{ pred.home_team_id }}. AI predictions and picks at predictionlab.io.","startDate":"{{ date }}T19:00:00-04:00","endDate":"{{ date }}T22:00:00-04:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","location":{"@type":"Place","name":"{{ pred.home_team_id }} Home Venue","address":{"@type":"PostalAddress","addressCountry":"US"}},"homeTeam":{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"},"awayTeam":{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},"organizer":{"@type":"Organization","name":"{{ sport_info.name }}","url":"https://predictionlab.io/{{ sport_seo_slug }}"},"offers":{"@type":"Offer","url":"https://predictionlab.io/{{ sport_seo_slug }}","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","validFrom":"{{ date }}"}}
     </script>
     {% endif %}
     {% endfor %}
@@ -165,7 +165,7 @@
         .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
         .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
         .auth-btn:hover { opacity:.9; }
-        .logo { font-family:'Oswald',sans-serif; font-weight:700; font-size:28px; text-transform:uppercase; letter-spacing:0.5px; line-height:1; text-decoration:none; color:#0f172a; }
+        .logo { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:28px; text-transform:uppercase; letter-spacing:0.5px; line-height:1; text-decoration:none; color:#0f172a; }
         .logo-img {
             height: 44px;
             width: auto;
@@ -524,7 +524,7 @@
 <body>
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a>
+        <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
         <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
             <span></span>
             <span></span>
@@ -671,7 +671,7 @@
                             {% if pred.xgb_spread is not none %}
                             <div class="premium-row">
                                 <span class="sf-label">XSharp Spread</span>
-                                <span class="sf-val sf-xgb">{% if home_picked %}{{ pred.home_team_id }} -{{ pred.xgb_spread|abs }}{% else %}{{ pred.away_team_id }} -{{ pred.xgb_spread|abs }}{% endif %}</span>
+                                <span class="sf-val sf-xgb">{% set _xs = pred.xgb_spread|float %}{% if _xs == 0 %}PK{% elif home_picked %}{{ pred.home_team_id }} -{{ "%.1f"|format(_xs|abs) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(_xs|abs) }}{% endif %}</span>
                             </div>
                             {% endif %}
                             {% if pred.xgb_total is not none %}
@@ -714,8 +714,13 @@
                             {% endfor %}
                         </div>
                     </div>
-                    {% set _spread_val = pred.market_spread if pred.market_spread is not none else (pred.xgb_spread if pred.xgb_spread is not none else pred.naive_spread) %}
-                    {% set _total_val = pred.our_total if pred.our_total is not none else (pred.market_total if pred.market_total is not none else (pred.xgb_total if pred.xgb_total is not none else pred.naive_total)) %}
+                    {# Our Spread / Our Total — prefer our own projection (last-3 per-team avg for NBA),
+                       fall back to xgb / market / naive only when missing. #}
+                    {% set _our_spread = pred.our_spread if pred.our_spread is not none else (pred.xgb_spread if pred.xgb_spread is not none else (pred.market_spread if pred.market_spread is not none else pred.naive_spread)) %}
+                    {% set _spread_val = _our_spread %}
+                    {% set _total_val = pred.our_total if pred.our_total is not none else (pred.xgb_total if pred.xgb_total is not none else (pred.market_total if pred.market_total is not none else pred.naive_total)) %}
+                    {# Sign convention: our_spread > 0 ⇒ home favored by that much. #}
+                    {% set _spread_home_favored = (_our_spread is not none) and (_our_spread > 0) %}
                     {% if _spread_val is not none or _total_val is not none or (sport == 'NHL' and pred.puck_line_tag is not none) or is_final %}
                     <div class="score-footer premium-protected">
                         {% if sport == 'NHL' and pred.puck_line_tag is not none %}
@@ -741,16 +746,30 @@
                         {% endif %}
                         {% if _spread_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#92400e;">{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} -{{ _spread_val|abs }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#92400e;">{% set _sv = _spread_val|float %}{% if _sv == 0 %}PK{% elif _spread_home_favored %}{{ pred.home_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% endif %}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% endif %}
                         {% if _total_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#92400e;">{{ _total_val }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#92400e;">{{ "%.1f"|format(_total_val) }}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
+                        {% endif %}
+                        {% endif %}
+                        {% if not is_final and is_premium and (pred.ml_ev is defined or pred.spread_ev is defined or pred.total_ev is defined) %}
+                        {% if pred.ml_ev is defined and pred.ml_ev is not none %}
+                        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if pred.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if pred.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(pred.ml_ev) }}%</span></div>
+                        {% endif %}
+                        {% if pred.spread_ev is defined and pred.spread_ev is not none %}
+                        <div class="sf-item"><span class="sf-label">Spread EV</span><span class="sf-val" style="color:{% if pred.spread_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if pred.spread_ev > 0 %}+{% endif %}{{ "%.1f"|format(pred.spread_ev) }}%</span></div>
+                        {% endif %}
+                        {% if pred.total_ev is defined and pred.total_ev is not none %}
+                        <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if pred.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if pred.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(pred.total_ev) }}%</span></div>
+                        {% endif %}
+                        {% if pred.best_ev_pick is defined and pred.best_ev_pick is not none %}
+                        <div class="sf-item"><span class="sf-label">Best EV Pick</span><span class="sf-val" style="color:#1d4ed8;font-weight:800;">{{ pred.best_ev_pick }}</span></div>
                         {% endif %}
                         {% endif %}
                         {% if is_final and is_premium %}
@@ -763,6 +782,27 @@
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
                     <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
                     <div id="{{ analysis_id }}" class="analysis-panel">
+                        {% if pred.our_method == 'efficiency' and pred.our_home_eff and pred.our_away_eff %}
+                        <div class="analysis-title">Efficiency-based projection (last 5 games)</div>
+                        <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
+                            <div>{{ pred.home_team_id }}: ORtg <strong>{{ pred.our_home_eff.ortg }}</strong> · DRtg <strong>{{ pred.our_home_eff.drtg }}</strong> · Pace <strong>{{ pred.our_home_eff.pace }}</strong></div>
+                            <div>{{ pred.away_team_id }}: ORtg <strong>{{ pred.our_away_eff.ortg }}</strong> · DRtg <strong>{{ pred.our_away_eff.drtg }}</strong> · Pace <strong>{{ pred.our_away_eff.pace }}</strong></div>
+                            <div style="margin-top:4px;">Projected score: <strong>{{ pred.home_team_id.split()[-1] }} {{ pred.our_home_pts }} &mdash; {{ pred.our_away_pts }} {{ pred.away_team_id.split()[-1] }}</strong> &nbsp;·&nbsp; Game pace ~{{ pred.our_pace }}</div>
+                        </div>
+                        {% elif pred.total_trend_record is defined or pred.spread_trend_record is defined %}
+                        <div class="analysis-title">Last 3-Game Trend (vs current XSharp lines)</div>
+                        <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
+                            {% if pred.our_home_avg is defined and pred.our_away_avg is defined %}
+                            <div>{{ pred.home_team_id }} avg (last 3): <strong>{{ pred.our_home_avg }}</strong> &nbsp;·&nbsp; {{ pred.away_team_id }} avg (last 3): <strong>{{ pred.our_away_avg }}</strong></div>
+                            {% endif %}
+                            {% if pred.total_trend_record is defined %}
+                            <div>Combined record vs XSharp total ({{ pred.xgb_total }}): <strong>{{ pred.total_trend_record }}</strong></div>
+                            {% endif %}
+                            {% if pred.spread_trend_record is defined %}
+                            <div>Combined record vs XSharp spread ({{ "%+.1f"|format(pred.xgb_spread) }}): <strong>{{ pred.spread_trend_record }}</strong></div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         <div class="analysis-title">Injuries</div>
                         {% if pred.away_injuries or pred.home_injuries %}
                         <div class="injury-list">
@@ -846,7 +886,7 @@
     <div class="share-icons">
         <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
         <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/underdogs.bet' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
         <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
         <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
         <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
@@ -857,7 +897,7 @@
 </div>
 <footer class="site-footer">
     <div class="footer-outer">
-        <div class="footer-brand"><a href="/" class="logo" aria-label="underdogs.bet home">underdogs.bet</a></div>
+        <div class="footer-brand"><a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a></div>
         <div class="footer-columns-3">
             <div class="footer-col-blk">
                 <div class="footer-heading">Company</div>
@@ -881,13 +921,13 @@
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
                 <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
-                <a href="https://instagram.com/underdogs.bet" target="_blank" rel="noopener noreferrer">Instagram</a>
-                <a href="https://facebook.com/underdogs.bet" target="_blank" rel="noopener noreferrer">Facebook</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener noreferrer">Instagram</a>
+                <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener noreferrer">Facebook</a>
                 <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener noreferrer">TikTok</a>
                 <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener noreferrer">YouTube</a>
             </div>
         </div>
-        <div class="footer-bottom">&copy; 2026 underdogs.bet. ALL RIGHTS RESERVED.</div>
+        <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
 
