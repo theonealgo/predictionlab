@@ -81,3 +81,5 @@ TelegramExporter/
 uv.lock
 *.txt.bak
 debug_*.html
+.claude/
+.props_backfill_*

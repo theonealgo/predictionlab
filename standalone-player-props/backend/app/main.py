@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .config import SUPPORTED_LEAGUES
-from .engine import filter_props, get_league_data, get_league_results
+from .engine import filter_props, get_diagnostics, get_league_data, get_league_results
 from .models import PlayersResponse, PropsResponse
 
 
@@ -95,3 +95,11 @@ def results(league: str = Query(...)):
     if league not in SUPPORTED_LEAGUES:
         raise HTTPException(status_code=400, detail=f"Unsupported league: {league}")
     return get_league_results(league)
+
+
+@app.get("/diagnostics")
+def diagnostics(league: str = Query("NBA")):
+    league = league.upper()
+    if league not in SUPPORTED_LEAGUES:
+        raise HTTPException(status_code=400, detail=f"Unsupported league: {league}")
+    return get_diagnostics(league)

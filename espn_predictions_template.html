@@ -803,13 +803,28 @@
                             {% endif %}
                         </div>
                         {% endif %}
-                        <div class="analysis-title">Injuries</div>
-                        {% if pred.away_injuries or pred.home_injuries %}
+                        {% set _away_suspended = pred.away_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _home_suspended = pred.home_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _away_injured = pred.away_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _home_injured = pred.home_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
+                        {% if _away_suspended or _home_suspended %}
+                        <div class="analysis-title" style="color:#ef4444;">Suspensions</div>
                         <div class="injury-list">
-                            {% for inj in pred.away_injuries %}
+                            {% for inj in _away_suspended %}
+                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ pred.away_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
+                            {% endfor %}
+                            {% for inj in _home_suspended %}
+                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ pred.home_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="analysis-title">Injuries</div>
+                        {% if _away_injured or _home_injured %}
+                        <div class="injury-list">
+                            {% for inj in _away_injured %}
                             <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.away_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
                             {% endfor %}
-                            {% for inj in pred.home_injuries %}
+                            {% for inj in _home_injured %}
                             <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.home_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
                             {% endfor %}
                         </div>

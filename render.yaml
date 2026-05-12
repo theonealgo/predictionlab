@@ -1,13 +1,32 @@
 services:
   - type: web
-    name: underdogs-bet
+    name: predictionlab
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn NHL77FINAL:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    buildCommand: >
+      pip install -r requirements.txt &&
+      pip install -r standalone-player-props/backend/requirements.txt &&
+      cd standalone-player-props/frontend && npm ci && npm run build && cd ../..
+    startCommand: bash render_start.sh
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.0"
+      # ── Required — set these in the Render dashboard ──────────────────
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # ── Optional ──────────────────────────────────────────────────────
+      - key: GA_TRACKING_ID
+        sync: false
+      - key: GA_PROPERTY_ID
+        sync: false
     disk:
       name: app-data
       mountPath: /data
-      sizeGB: 1
+      sizeGB: 5

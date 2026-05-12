@@ -1,4 +1,6 @@
 import math
+import os as _os
+import sys as _sys
 import time
 from typing import Dict, List, Optional
 import requests
@@ -6,6 +8,18 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from .config import CACHE_TTL_SECONDS, DEBUG_PLAYER_VALIDATION, LEAGUE_CONFIG
+
+# ── Proprietary Poisson odds engine (project root) ────────────────────────
+_PROJECT_ROOT = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..', '..', '..'))
+if _PROJECT_ROOT not in _sys.path:
+    _sys.path.insert(0, _PROJECT_ROOT)
+try:
+    from prop_odds_engine import PropOddsEngine as _PropOddsEngine
+    _ODDS_ENGINE = _PropOddsEngine(
+        db_path=_os.path.join(_PROJECT_ROOT, 'sports_predictions_original.db')
+    )
+except Exception:
+    _ODDS_ENGINE = None
 from .data_sources import (
     build_validated_nba_player_pool,
     build_top_players,
@@ -292,31 +306,97 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         confidence = min(99.0, max(50.0, (max(p_over, p_under) * 100.0 + agreement * 12.0 - variance * 0.4)))
         picked_side = "OVER" if (p_over >= p_under and agreement >= 0.5) else ("UNDER" if p_under > p_over else ("OVER" if ev_over >= ev_under else "UNDER"))
 
+        # MLB: invert signal for statistically underperforming categories
+        _MLB_INVERT_PROPS = {"hits", "runs", "rbis", "home_runs"}
+        inverse_signal = False
+        if league == "MLB" and prop["prop_type"] in _MLB_INVERT_PROPS:
+            picked_side = "UNDER" if picked_side == "OVER" else "OVER"
+            inverse_signal = True
+
         line_source = prop.get("line_source", "")
         public_line = _to_half_step(float(prop["line"])) if (line_source == "internal_odds_api" and prop.get("line") is not None) else None
-        projections.append(
-            {
-                "player_id": p["player_id"],
-                "player_name": p["name"],
-                "team": p["team"],
-                "league": league,
-                "prop_type": prop["prop_type"],
-                "line": public_line,
-                "_calc_line": calc_line,
-                "odds_over": prop["odds_over"],
-                "odds_under": prop["odds_under"],
-                "projection": _to_half_step(proj),
-                "over_probability": round(p_over * 100.0, 1),
-                "under_probability": round(p_under * 100.0, 1),
-                "ev_over_percent": round(ev_over, 2),
-                "ev_under_percent": round(ev_under, 2),
-                "confidence_score": round(confidence, 1),
-                "picked_side": picked_side,
-                "model_confidence": {m: model_confidence.get(m) for m in _MODEL_ORDER},
-                "model_agreement": round(agreement, 3),
-                "model_variance": round(variance, 3),
-            }
-        )
+
+        # Poisson fair-odds overlay (NBA only)
+        poisson_fields: Dict = {}
+        if _ODDS_ENGINE and league == "NBA":
+            try:
+                metrics = {
+                    "stats_last5":  p.get("stats_last5"),
+                    "stats_last10": p.get("stats_last10"),
+                    "usage_rate":   p.get("usage_rate", 0.20),
+                    "projected_minutes": p.get("projected_minutes_weighted") or p.get("projected_minutes"),
+                    "avg_minutes":  p.get("avg_minutes"),
+                    "last_10_games_minutes": p.get("last_10_games_minutes", []),
+                }
+                opponent_id = matchups.get(p.get("team_id", ""), "")
+                odds_result = _ODDS_ENGINE.generate(
+                    metrics,
+                    prop["prop_type"],
+                    calc_line,
+                    picked_side,
+                    opponent_team=opponent_id,
+                    is_home=True,
+                    is_back_to_back=False,
+                    market_over_odds=prop.get("odds_over"),
+                    market_under_odds=prop.get("odds_under"),
+                )
+                poisson_fields = {
+                    "poisson_lam":        odds_result.get("lam"),
+                    "fair_over_odds":     odds_result.get("fair_over_odds"),
+                    "fair_under_odds":    odds_result.get("fair_under_odds"),
+                    "edge_pct":           odds_result.get("edge_pct"),
+                    "pick_ev":            odds_result.get("pick_ev"),
+                    "tier":               odds_result.get("tier"),
+                    "model_name":         odds_result.get("model"),
+                    "model_description":  odds_result.get("model_description"),
+                }
+            except Exception:
+                pass
+
+        # EV + edge overlay for non-NBA leagues
+        if league != "NBA":
+            _edge = (proj - calc_line) / max(calc_line, 1.0) * 100.0
+            _pick_ev = ev_over if picked_side == "OVER" else ev_under
+            if _pick_ev >= 5.0 and confidence >= 60:
+                _tier = "gold"
+            elif _pick_ev >= 2.0:
+                _tier = "green"
+            elif _pick_ev < 0:
+                _tier = "red"
+            else:
+                _tier = "neutral"
+            poisson_fields.update({
+                "edge_pct":   round(_edge, 1),
+                "pick_ev":    round(_pick_ev, 1),
+                "tier":       _tier,
+                "model_name": f"{league} Projection Model",
+            })
+
+        row = {
+            "player_id": p["player_id"],
+            "player_name": p["name"],
+            "team": p["team"],
+            "league": league,
+            "prop_type": prop["prop_type"],
+            "line": public_line,
+            "_calc_line": calc_line,
+            "odds_over": prop["odds_over"],
+            "odds_under": prop["odds_under"],
+            "projection": _to_half_step(proj),
+            "over_probability": round(p_over * 100.0, 1),
+            "under_probability": round(p_under * 100.0, 1),
+            "ev_over_percent": round(ev_over, 2),
+            "ev_under_percent": round(ev_under, 2),
+            "confidence_score": round(confidence, 1),
+            "picked_side": picked_side,
+            "model_confidence": {m: model_confidence.get(m) for m in _MODEL_ORDER},
+            "model_agreement": round(agreement, 3),
+            "model_variance": round(variance, 3),
+            "inverse_signal": inverse_signal,
+            "inverse_signal_label": "Inverse Signal Mode (Experimental)" if inverse_signal else None,
+        }
+        row.update(poisson_fields)
+        projections.append(row)
     if league == "NBA":
         players = sorted(players, key=lambda x: (float(x.get("consensus_rank", 999)), -float(x.get("top50_score", 0.0))))[:100]
         projections.sort(key=lambda x: (-(x["projection"]), -x["confidence_score"], -(x["model_agreement"])),)
@@ -339,10 +419,11 @@ def get_league_data(league: str) -> Dict:
     return payload
 
 
-def get_league_results(league: str) -> Dict:
+def get_league_results(league: str, for_date: str | None = None) -> Dict:
     key = league.upper()
+    cache_key = f"{key}:{for_date or 'yesterday'}"
     now = time.time()
-    cached = _RESULTS_CACHE.get(key)
+    cached = _RESULTS_CACHE.get(cache_key)
     if cached and (now - cached["ts"]) < 300:
         return cached["payload"]
     if key != "NBA":
@@ -381,10 +462,17 @@ def get_league_results(league: str) -> Dict:
                     "projection": p.get("projection"),
                 }
             )
-        payload = {"league": key, "count": len(rows), "items": rows, "summary": summary}
-        _RESULTS_CACHE[key] = {"ts": now, "payload": payload}
+        payload = {"league": key, "count": len(rows), "items": rows, "summary": summary, "result_date": None}
+        _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
         return payload
-    ydate = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).date()
+    if for_date:
+        try:
+            from datetime import date as _date
+            ydate = _date.fromisoformat(for_date)
+        except Exception:
+            ydate = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).date()
+    else:
+        ydate = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).date()
     y_schedule = fetch_schedule_and_teams(key, target_date=ydate)
     if not y_schedule:
         return {"league": key, "count": 0, "items": []}
@@ -452,8 +540,8 @@ def get_league_results(league: str) -> Dict:
                 "projection": p.get("projection"),
             }
         )
-    payload = {"league": key, "count": len(rows), "items": rows, "summary": summary}
-    _RESULTS_CACHE[key] = {"ts": now, "payload": payload}
+    payload = {"league": key, "count": len(rows), "items": rows, "summary": summary, "result_date": str(ydate)}
+    _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
     return payload
 
 
@@ -490,3 +578,116 @@ def filter_props(
         )
     )
     return out
+
+
+def get_diagnostics(league: str = "NBA") -> Dict:
+    """
+    NBA Props ML pipeline audit.
+    Returns: feature_importance, distribution_stability, ev_vs_hitrate divergence.
+    Uses the already-cached payload so no extra API calls are needed.
+    """
+    key = league.upper()
+    data = get_league_data(key)
+    props_list = data.get("props") or []
+
+    if not props_list:
+        return {"league": key, "error": "no_props", "detail": "No props available for this league."}
+
+    # ── Feature importance proxy: correlation of model factors to confidence ──
+    factor_totals: Dict[str, float] = {
+        "usage_rate":        0.0,
+        "recent_form_l5":    0.0,
+        "opponent_factor":   0.0,
+        "model_agreement":   0.0,
+        "minutes_projected": 0.0,
+    }
+    factor_counts: Dict[str, int] = {k: 0 for k in factor_totals}
+    confidence_vals: list = []
+    ev_vals: list = []
+    prob_vals: list = []
+    prop_type_ev: Dict[str, list] = {}
+    prop_type_conf: Dict[str, list] = {}
+
+    for r in props_list:
+        conf = float(r.get("confidence_score", 0.0) or 0.0)
+        confidence_vals.append(conf)
+        ev = float((r["ev_over_percent"] if r["picked_side"] == "OVER" else r["ev_under_percent"]) or 0.0)
+        ev_vals.append(ev)
+        pick_prob = float(r.get("over_probability" if r["picked_side"] == "OVER" else "under_probability", 50.0) or 50.0)
+        prob_vals.append(pick_prob)
+
+        pt = r.get("prop_type", "other")
+        prop_type_ev.setdefault(pt, []).append(ev)
+        prop_type_conf.setdefault(pt, []).append(conf)
+
+        mc = r.get("model_confidence") or {}
+        for model, score in mc.items():
+            if score is not None:
+                factor_totals["model_agreement"] += float(score)
+                factor_counts["model_agreement"] += 1
+        if r.get("poisson_lam") is not None:
+            factor_totals["recent_form_l5"] += abs(float(r.get("poisson_lam", 0)) - float(r.get("_calc_line", 1) or 1))
+            factor_counts["recent_form_l5"] += 1
+
+    n = max(len(props_list), 1)
+    avg_conf = round(sum(confidence_vals) / n, 1)
+    avg_ev   = round(sum(ev_vals) / n, 2)
+    avg_prob = round(sum(prob_vals) / n, 1)
+    positive_ev_count = sum(1 for e in ev_vals if e > 0)
+    negative_ev_count = sum(1 for e in ev_vals if e < 0)
+
+    # Distribution stability: stddev of probabilities (should be spread, not clustered at 50%)
+    if n > 1:
+        mean_p = sum(prob_vals) / n
+        variance_p = sum((x - mean_p) ** 2 for x in prob_vals) / n
+        stddev_p = variance_p ** 0.5
+    else:
+        stddev_p = 0.0
+    stability_label = (
+        "good" if stddev_p >= 6.0
+        else "low" if stddev_p >= 3.0
+        else "degenerate"  # all probs clustered near 50%
+    )
+
+    # Per-prop-type EV summary for divergence analysis
+    prop_type_summary = {}
+    for pt, evs in prop_type_ev.items():
+        confs = prop_type_conf.get(pt, [])
+        prop_type_summary[pt] = {
+            "count":    len(evs),
+            "avg_ev":   round(sum(evs) / max(len(evs), 1), 2),
+            "avg_conf": round(sum(confs) / max(len(confs), 1), 1),
+            "positive_ev_pct": round(sum(1 for e in evs if e > 0) / max(len(evs), 1) * 100, 1),
+        }
+
+    # Feature importance: which model factors show highest avg absolute contribution
+    feature_importance = {}
+    for k in factor_totals:
+        cnt = factor_counts[k]
+        feature_importance[k] = round(factor_totals[k] / cnt, 3) if cnt > 0 else 0.0
+    feature_importance = dict(sorted(feature_importance.items(), key=lambda x: -x[1]))
+
+    # EV vs hit-rate divergence: flag prop types where avg_ev > 0 but avg_conf < 60
+    divergence_flags = [
+        pt for pt, s in prop_type_summary.items()
+        if s["avg_ev"] > 1.5 and s["avg_conf"] < 60.0
+    ]
+
+    return {
+        "league":   key,
+        "total_props": n,
+        "distribution_stability": {
+            "prob_stddev":  round(stddev_p, 2),
+            "label":        stability_label,
+            "avg_pick_prob": avg_prob,
+        },
+        "overall": {
+            "avg_confidence":    avg_conf,
+            "avg_ev":            avg_ev,
+            "positive_ev_props": positive_ev_count,
+            "negative_ev_props": negative_ev_count,
+        },
+        "feature_importance": feature_importance,
+        "by_prop_type":       prop_type_summary,
+        "ev_hitrate_divergence_flags": divergence_flags,
+    }

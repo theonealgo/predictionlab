@@ -2764,6 +2764,21 @@ def init_db():
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(sport, team_name, player_name)
         );
+        CREATE TABLE IF NOT EXISTS player_prop_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            league TEXT NOT NULL,
+            result_date TEXT NOT NULL,
+            player_name TEXT NOT NULL,
+            team TEXT,
+            prop_type TEXT NOT NULL,
+            pick TEXT NOT NULL,
+            line REAL NOT NULL,
+            projection REAL,
+            actual REAL,
+            result TEXT NOT NULL,
+            UNIQUE(league, result_date, player_name, prop_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ppr_league_date ON player_prop_results(league, result_date);
         CREATE INDEX IF NOT EXISTS idx_pred_home_team ON predictions(home_team_id);
         CREATE INDEX IF NOT EXISTS idx_pred_away_team ON predictions(away_team_id);
         CREATE INDEX IF NOT EXISTS idx_pred_sport ON predictions(sport);
@@ -2842,6 +2857,58 @@ try:
     _maybe_backfill_soccer_on_startup()
 except Exception as _sbe:
     logger.debug(f"[soccer-backfill] hook error: {_sbe}")
+
+
+def _maybe_backfill_props_on_startup():
+    """Run the NBA props backfill in a background thread if yesterday's data is missing.
+
+    Checks if the DB already has graded props for the past 7 days before spawning
+    a thread; guards against repeated runs within the same calendar day via a flag file.
+    """
+    try:
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            """SELECT COUNT(*) AS n FROM player_prop_results
+               WHERE league='NBA'
+                 AND result_date >= date('now','-7 days')"""
+        ).fetchone()
+        conn.close()
+        recent_n = row['n'] if row else 0
+    except Exception as _e:
+        logger.debug(f"[props-backfill] count check failed: {_e}")
+        return
+
+    if recent_n >= 50:
+        return  # already populated
+
+    from datetime import date as _date2
+    today_str = str(_date2.today())
+    flag_path = _os.path.join(_os.path.dirname(DATABASE), f'.props_backfill_{today_str}')
+    if _os.path.exists(flag_path):
+        return  # already ran today
+
+    import threading
+    def _run():
+        try:
+            logger.info("[props-backfill] starting…")
+            from backfill_props import run as _bf_run
+            _bf_run(dry_run=False)
+            try:
+                open(flag_path, 'w').write('done')
+            except Exception:
+                pass
+            logger.info("[props-backfill] finished.")
+        except Exception as _be:
+            logger.warning(f"[props-backfill] failed: {_be}")
+    threading.Thread(target=_run, daemon=True, name='props-backfill').start()
+
+
+try:
+    _maybe_backfill_props_on_startup()
+except Exception as _pbe:
+    logger.debug(f"[props-backfill] hook error: {_pbe}")
+
 
 def parse_date(date_str):
     """Parse date string from multiple formats (DD/MM/YYYY or YYYY-MM-DD)"""
@@ -4478,8 +4545,8 @@ def get_upcoming_predictions(sport, days=365):
         except Exception as _nbae:
             logger.debug(f"[NBA projection] attach failed: {_nbae}")
 
-    # ── EV calculations for NBA / WNBA upcoming games ────────────────────────
-    if sport in ('NBA', 'WNBA'):
+    # ── EV calculations for NBA / WNBA / NHL / MLB / NFL upcoming games ─────
+    if sport in ('NBA', 'WNBA', 'NHL', 'MLB', 'NFL'):
         import math as _math_ev
         _SPREAD_SIGMA = 12.0
         _TOTAL_SIGMA  = 20.0
@@ -9163,6 +9230,7 @@ def landing_page():
                 <span style="color:#0f172a;font-weight:800;">{{ _disp_pct }}%</span>
                 <span style="color:#64748b;font-size:0.78em;font-weight:600;">Moneyline</span>
             </div>
+            <button onclick="event.stopPropagation();event.preventDefault();window.open('/{{ tp.slug }}','_blank');" style="margin-top:10px;width:100%;padding:7px 0;border:1px solid rgba(15,23,42,0.15);border-radius:8px;background:transparent;color:#475569;font-size:0.78em;font-weight:700;letter-spacing:0.3px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='rgba(15,23,42,0.05)';" onmouseout="this.style.background='transparent';">Open in Browser &#x2197;</button>
         </a>
         {% endfor %}
     </div>
@@ -9329,16 +9397,6 @@ def landing_page():
         </div>
     </div>
     <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">Free moneyline picks and premium spreads, totals, and scores are all updated daily as schedules, injuries, and markets change.</p>
-    <div style="max-width:860px;margin:16px auto 0;background:#ffffff;border:1px solid rgba(15,23,42,0.2);border-radius:14px;padding:16px 18px;">
-        <h3 style="font-size:1.1em;font-weight:800;color:#92400e;margin:0 0 14px;text-align:center;letter-spacing:0.02em;">predictionlab.io Performance Stats</h3>
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;color:#0f172a;font-size:0.88em;font-weight:700;">
-            <div>NBA Totals (2025/2026): 704-500 (+204u)</div>
-            <div>NBA Spreads: 822-395 (+427u)</div>
-            <div>NHL Spreads: 124-65 (+59u)</div>
-            <div>NHL Totals (7 days): 8-1 (+7u)</div>
-        </div>
-        <p style="margin-top:12px;color:#334155;font-size:0.86em;line-height:1.7;">Our models are continuously evaluated across seasons to detect market inefficiencies and pricing edges.</p>
-    </div>
     <style>
         .landing-pricing-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:860px; margin:0 auto; }
         .landing-price-card { display:flex; flex-direction:column; min-height:100%; }
@@ -10250,7 +10308,43 @@ _PERF_BUCKET_ORDER = [
     '<20%',
 ]
 _PERF_SPORT_OPTIONS = ['NBA', 'NHL', 'MLB', 'NFL', 'NCAAB', 'NCAAF']
-_PERF_ENABLE_V2_FALLBACK = (_os.environ.get('PERFORMANCE_V2_FALLBACK', '0').strip().lower() in ('1', 'true', 'yes', 'on'))
+
+
+# ── Frozen prediction output — exact copy from March 8 reference (NHL77FINAL.py) ──
+# DO NOT modify this function. It is the reference model output as-shipped.
+def _frozen_get_v2_prediction(sport, home_team, away_team, game_date=None):
+    """Frozen reference: prediction output logic as of March 8 2026."""
+    if not HAS_V2_SYSTEM or sport not in V2_PREDICTORS:
+        return None
+    try:
+        predictor = V2_PREDICTORS[sport]
+        game_df = pd.DataFrame([{
+            'home_team': home_team,
+            'away_team': away_team,
+            'date': game_date or datetime.now().strftime('%Y-%m-%d')
+        }])
+        pred = predictor.predict(game_df)
+        row = pred.iloc[0]
+        return {
+            'home_prob':           row['home_win_prob'],
+            'away_prob':           row['away_win_prob'],
+            'confidence':          row['confidence'],
+            'model_agreement':     row['model_agreement'],
+            'predicted_winner':    row['predicted_winner'],
+            'expected_home_score': row.get('expected_home_score'),
+            'expected_away_score': row.get('expected_away_score'),
+            'glicko2_prob':        row.get('glicko2_prob'),
+            'trueskill_prob':      row.get('trueskill_prob'),
+            'xgboost_prob':        row.get('xgboost_prob'),
+            'home_glicko2':        row.get('home_glicko2'),
+            'away_glicko2':        row.get('away_glicko2'),
+            'home_trueskill_mu':   row.get('home_trueskill_mu'),
+            'away_trueskill_mu':   row.get('away_trueskill_mu'),
+            'is_v2': True,
+        }
+    except Exception as _fe:
+        logger.warning(f"[frozen_v2] {away_team} @ {home_team}: {_fe}")
+        return None
 
 
 def _build_performance_page_data(sport_filter: str = '', last_n: int | None = None):
@@ -10347,19 +10441,15 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
         cat_prob = _flt(pred['catboost_home_prob']) if pred else None
         meta_prob = _flt(pred['meta_home_prob']) if pred else None
 
-        # Keep unique game matching, but restore model fallbacks so sparse stored
-        # probability columns don't zero-out entire models.
-        v2 = None
-        if _PERF_ENABLE_V2_FALLBACK:
-            try:
-                v2 = get_v2_prediction(sport, home, away, date_key)
-            except Exception:
-                v2 = None
-
+        # Always use frozen reference prediction output (March 8 model, unconditional)
+        _ms = 'NCAAB' if sport == 'NCAAW' else sport
+        v2 = _frozen_get_v2_prediction(_ms, home, away, date_key)
         glicko2_prob = _flt(v2.get('glicko2_prob')) if v2 else None
         trueskill_prob = _flt(v2.get('trueskill_prob')) if v2 else None
-        if xgb_prob is None and v2:
-            xgb_prob = _flt(v2.get('xgboost_prob'))
+        if v2:
+            if xgb_prob is None:
+                xgb_prob = _flt(v2.get('xgboost_prob'))
+            meta_prob = _flt(v2.get('home_prob')) if _flt(v2.get('home_prob')) is not None else meta_prob
         if elo_prob is None:
             elo_prob = cat_prob or glicko2_prob or xgb_prob
         if cat_prob is None:
@@ -10478,22 +10568,12 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
 
 @app.route('/player-props')
 def player_props_page():
-    """Serve integrated player props frontend from main app."""
+    """Player props page — wired into the main app via /player-props-api/ routes."""
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
-    dist_dir = _os.path.join(_BASE_DIR, 'standalone-player-props', 'frontend', 'dist')
-    index_path = _os.path.join(dist_dir, 'index.html')
-    if not _os.path.isfile(index_path):
-        return render_template('player_props_hub.html')
-    try:
-        with open(index_path, 'r', encoding='utf-8') as f:
-            html = f.read()
-        html = html.replace('src="/assets/', 'src="/player-props/assets/').replace('href="/assets/', 'href="/player-props/assets/')
-        return Response(html, mimetype='text/html')
-    except Exception:
-        return render_template('player_props_hub.html')
+    return render_template('player_props.html')
 
 
 @app.route('/player-props/assets/<path:asset_path>')
@@ -10575,6 +10655,118 @@ def player_props_api_props():
         return jsonify({'detail': str(exc)}), 500
 
 
+def _grade_and_store_props(league: str, for_date_str: str):
+    """Grade props for a given date using the engine and persist to DB."""
+    engine_mod, _ = _load_props_modules()
+    graded = engine_mod.get_league_results(league, for_date=for_date_str)
+    rows = graded.get('items') or []
+    if not rows:
+        return
+    conn = get_db_connection()
+    try:
+        for r in rows:
+            conn.execute(
+                '''INSERT OR REPLACE INTO player_prop_results
+                   (league, result_date, player_name, team, prop_type, pick, line, projection, actual, result)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                (league, for_date_str,
+                 r.get('player_name'), r.get('team'), r.get('prop_type'),
+                 r.get('pick'), r.get('line'), r.get('projection'),
+                 r.get('actual'), r.get('result'))
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _query_prop_results(league: str, for_date: str | None = None):
+    """Return items + summary for a date (default yesterday) + cumulative stats."""
+    from datetime import date as _date, timedelta as _td
+    today = datetime.now(ZoneInfo("America/New_York")).date()
+    if for_date:
+        try:
+            target = _date.fromisoformat(for_date)
+        except Exception:
+            target = today - _td(days=1)
+    else:
+        target = today - _td(days=1)
+    target_str = str(target)
+
+    # Try to grade+store today's target if not already stored
+    try:
+        _grade_and_store_props(league, target_str)
+    except Exception:
+        pass
+
+    conn = get_db_connection()
+    try:
+        # Night rows for display
+        rows = conn.execute(
+            'SELECT * FROM player_prop_results WHERE league=? AND result_date=? ORDER BY player_name, prop_type',
+            (league, target_str)
+        ).fetchall()
+        items = [dict(r) for r in rows]
+
+        # Summary for the target date
+        def _tally(rr):
+            hits = sum(1 for r in rr if r['result'] == 'HIT')
+            misses = sum(1 for r in rr if r['result'] == 'MISS')
+            by_pt = {}
+            for r in rr:
+                pt = r['prop_type']
+                b = by_pt.setdefault(pt, {'wins': 0, 'losses': 0})
+                if r['result'] == 'HIT': b['wins'] += 1
+                else: b['losses'] += 1
+            return {'wins': hits, 'losses': misses, 'by_prop_type': by_pt}
+
+        night_summary = _tally(items)
+
+        # Last 7 days
+        week_start = str(target - _td(days=6))
+        week_rows = [dict(r) for r in conn.execute(
+            'SELECT * FROM player_prop_results WHERE league=? AND result_date BETWEEN ? AND ?',
+            (league, week_start, target_str)
+        ).fetchall()]
+        week_summary = _tally(week_rows)
+
+        # All-time totals + by prop type
+        agg = conn.execute(
+            "SELECT MIN(result_date) as earliest, "
+            "SUM(result='HIT') as hits, SUM(result='MISS') as misses "
+            "FROM player_prop_results WHERE league=?", (league,)
+        ).fetchone()
+        season_hits    = agg['hits']    or 0
+        season_misses  = agg['misses']  or 0
+        tracking_since = agg['earliest'] or None
+
+        # All-time breakdown by prop type
+        pt_rows = conn.execute(
+            "SELECT prop_type, "
+            "SUM(result='HIT') as hits, SUM(result='MISS') as misses "
+            "FROM player_prop_results WHERE league=? "
+            "GROUP BY prop_type ORDER BY (hits+misses) DESC",
+            (league,)
+        ).fetchall()
+        season_by_prop = {r['prop_type']: {'wins': r['hits'] or 0, 'losses': r['misses'] or 0} for r in pt_rows}
+
+        return {
+            'league': league,
+            'result_date': target_str,
+            'count': len(items),
+            'items': items,
+            'summary': {
+                'overall': {'wins': night_summary['wins'], 'losses': night_summary['losses']},
+                'by_prop_type': night_summary['by_prop_type'],
+            },
+            'week_summary': {'wins': week_summary['wins'], 'losses': week_summary['losses']},
+            'season_summary': {'wins': season_hits, 'losses': season_misses},
+            'season_by_prop': season_by_prop,
+            'tracking_since': tracking_since,
+        }
+    finally:
+        conn.close()
+
+
 @app.route('/player-props-api/results')
 def player_props_api_results():
     if not current_user.is_authenticated:
@@ -10582,12 +10774,30 @@ def player_props_api_results():
     if not is_premium_user():
         return redirect('/plans')
     league = (request.args.get('league') or '').strip().upper()
+    for_date = (request.args.get('date') or '').strip() or None
     try:
         engine_mod, config_mod = _load_props_modules()
         supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
         if league not in supported:
             return jsonify({'detail': f'Unsupported league: {league}'}), 400
-        return jsonify(engine_mod.get_league_results(league))
+        return jsonify(_query_prop_results(league, for_date))
+    except Exception as exc:
+        return jsonify({'detail': str(exc)}), 500
+
+
+@app.route('/player-props-api/diagnostics')
+def player_props_api_diagnostics():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    league = (request.args.get('league') or 'NBA').strip().upper()
+    try:
+        engine_mod, config_mod = _load_props_modules()
+        supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
+        if league not in supported:
+            return jsonify({'detail': f'Unsupported league: {league}'}), 400
+        return jsonify(engine_mod.get_diagnostics(league))
     except Exception as exc:
         return jsonify({'detail': str(exc)}), 500
 
@@ -10744,16 +10954,16 @@ def performance_audit_csv():
         cat_prob = _flt(pred['catboost_home_prob']) if pred else None
         meta_prob = _flt(pred['meta_home_prob']) if pred else None
 
-        v2 = None
-        if _PERF_ENABLE_V2_FALLBACK:
-            try:
-                v2 = get_v2_prediction(row_sport, home, away, r['game_date'])
-            except Exception:
-                v2 = None
+        # Always use frozen reference prediction output (March 8 model, unconditional)
+        _model_sport = 'NCAAB' if row_sport == 'NCAAW' else row_sport
+        v2 = _frozen_get_v2_prediction(_model_sport, home, away, r['game_date'])
         glicko2_prob = _flt(v2.get('glicko2_prob')) if v2 else None
         trueskill_prob = _flt(v2.get('trueskill_prob')) if v2 else None
-        if xgb_prob is None and v2:
-            xgb_prob = _flt(v2.get('xgboost_prob'))
+        if v2:
+            if xgb_prob is None:
+                xgb_prob = _flt(v2.get('xgboost_prob'))
+            # Use calibrated ensemble from frozen model directly (March 8 behaviour)
+            meta_prob = _flt(v2.get('home_prob')) if _flt(v2.get('home_prob')) is not None else meta_prob
         if elo_prob is None:
             elo_prob = cat_prob or glicko2_prob or xgb_prob
         if cat_prob is None:
@@ -10857,16 +11067,33 @@ def picks_export_csv():
     out = _io2.StringIO()
     w = _csv2.writer(out)
     w.writerow(['date','sport','home_team','away_team','home_score','away_score','result',
-                'elo_prob','xgb_prob','ensemble_prob','market_spread','market_total'])
+                'glicko2_prob','trueskill_prob','xgb_prob','ensemble_prob',
+                'ml_pick','ml_correct','market_spread','market_total'])
+    _picks_v2_cache = {}
     for r in rows:
         hs = _to_float_safe(r['home_score'])
         aws = _to_float_safe(r['away_score'])
         result = ''
         if hs is not None and aws is not None:
             result = 'home_win' if hs > aws else ('away_win' if aws > hs else 'draw')
+        _ps = (r['sport'] or '').upper()
+        _pm = 'NCAAB' if _ps == 'NCAAW' else _ps
+        _ck = f"{_pm}|{r['home_team_id']}|{r['away_team_id']}|{r['game_date']}"
+        if _ck not in _picks_v2_cache:
+            _picks_v2_cache[_ck] = _frozen_get_v2_prediction(_pm, r['home_team_id'], r['away_team_id'], r['game_date'])
+        _v2 = _picks_v2_cache[_ck]
+        _g2  = round(_v2['glicko2_prob']  * 100, 1) if _v2 and _v2.get('glicko2_prob')  is not None else None
+        _ts  = round(_v2['trueskill_prob'] * 100, 1) if _v2 and _v2.get('trueskill_prob') is not None else None
+        _xgb = round((_v2.get('xgboost_prob') or 0) * 100, 1) if _v2 else None
+        _ens = round(_v2['home_prob'] * 100, 1) if _v2 and _v2.get('home_prob') is not None else _to_float_safe(r['win_probability'])
+        _ens_raw = (_v2['home_prob'] if _v2 and _v2.get('home_prob') is not None else _to_float_safe(r['win_probability'])) or 0.5
+        ml_pick = 'home' if _ens_raw >= 0.5 else 'away'
+        ml_correct = ''
+        if result:
+            ml_correct = 'yes' if (ml_pick == 'home' and result == 'home_win') or (ml_pick == 'away' and result == 'away_win') else 'no'
         w.writerow([r['game_date'], r['sport'], r['home_team_id'], r['away_team_id'],
                     r['home_score'], r['away_score'], result,
-                    r['elo_home_prob'], r['xgboost_home_prob'], r['win_probability'],
+                    _g2, _ts, _xgb, _ens, ml_pick, ml_correct,
                     r['market_spread'], r['market_total']])
     body = out.getvalue()
     out.close()
@@ -10932,17 +11159,28 @@ def results_export_csv():
         'home_score', 'away_score', 'winner',
         'ml_pick', 'ml_correct',
         'market_spread', 'ats_cover', 'market_total', 'ou_result',
-        'ensemble_prob', 'elo_prob', 'xgb_prob', 'glicko2_prob', 'trueskill_prob',
+        'ensemble_prob', 'glicko2_prob', 'trueskill_prob', 'xgb_prob',
         'home_ml', 'away_ml',
     ])
+    _res_v2_cache = {}
     for r in rows:
         hs = _to_float_safe(r['home_score'])
         aws = _to_float_safe(r['away_score'])
         if hs is None or aws is None:
             continue
         winner = 'home' if hs > aws else ('away' if aws > hs else 'draw')
-        ens = _to_float_safe(r['win_probability'])
-        ml_pick = 'home' if (ens or 0) >= 0.5 else 'away'
+        _rs = (r['sport'] or '').upper()
+        _rm = 'NCAAB' if _rs == 'NCAAW' else _rs
+        _rk = f"{_rm}|{r['home_team_id']}|{r['away_team_id']}|{r['game_date']}"
+        if _rk not in _res_v2_cache:
+            _res_v2_cache[_rk] = _frozen_get_v2_prediction(_rm, r['home_team_id'], r['away_team_id'], r['game_date'])
+        _v2 = _res_v2_cache[_rk]
+        _ens_raw = (_v2['home_prob'] if _v2 and _v2.get('home_prob') is not None else _to_float_safe(r['win_probability'])) or 0.5
+        _ens   = round(_ens_raw * 100, 1)
+        _g2    = round(_v2['glicko2_prob']  * 100, 1) if _v2 and _v2.get('glicko2_prob')  is not None else None
+        _ts    = round(_v2['trueskill_prob'] * 100, 1) if _v2 and _v2.get('trueskill_prob') is not None else None
+        _xgb   = round((_v2.get('xgboost_prob') or 0) * 100, 1) if _v2 else None
+        ml_pick = 'home' if _ens_raw >= 0.5 else 'away'
         ml_correct = 'yes' if ml_pick == winner else ('push' if winner == 'draw' else 'no')
         spread = _to_float_safe(r['market_spread'])
         ats_cover = ''
@@ -10969,8 +11207,7 @@ def results_export_csv():
             hs, aws, winner,
             ml_pick, ml_correct,
             spread, ats_cover, total, ou_result,
-            r['win_probability'], r['elo_home_prob'], r['xgboost_home_prob'],
-            r['glicko2_home_prob'], r['trueskill_home_prob'],
+            _ens, _g2, _ts, _xgb,
             r['home_ml'], r['away_ml'],
         ])
     body = out.getvalue()
