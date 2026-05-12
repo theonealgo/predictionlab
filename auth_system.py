@@ -461,6 +461,30 @@ def logout():
     return redirect('/')
 
 
+@auth_bp.route('/admin-reset')
+def admin_reset():
+    """One-time admin password reset. Visit /admin-reset?token=YOUR_ADMIN_PASSWORD"""
+    token = request.args.get('token', '').strip()
+    expected = os.environ.get('ADMIN_PASSWORD', '').strip()
+    if not token or not expected or token != expected:
+        return 'Unauthorized', 403
+    try:
+        pw_hash = generate_password_hash(token)
+        conn = _get_db()
+        for adm_email in ADMIN_EMAILS:
+            existing = conn.execute('SELECT id FROM users WHERE email = ?', (adm_email,)).fetchone()
+            if existing:
+                conn.execute('UPDATE users SET password_hash = ?, is_premium = 1 WHERE email = ?', (pw_hash, adm_email))
+            else:
+                conn.execute('INSERT INTO users (email, name, password_hash, is_premium) VALUES (?, ?, ?, 1)',
+                             (adm_email, adm_email.split('@')[0], pw_hash))
+        conn.commit()
+        conn.close()
+        return f'<h2>Done.</h2><p>Admin accounts updated. <a href="/login">Login now</a> with your ADMIN_PASSWORD.</p>'
+    except Exception as e:
+        return f'Error: {e}', 500
+
+
 # ─── Stripe Payments ──────────────────────────────────────────────────────────
 
 @auth_bp.route('/checkout/<plan>')
