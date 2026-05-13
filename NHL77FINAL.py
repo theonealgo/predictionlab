@@ -8954,7 +8954,8 @@ def landing_page():
             .footer-columns-3{grid-template-columns:1fr;gap:22px;}
         }
         @media(max-width:640px){
-            .hero{padding:60px 20px 40px;}
+            .hero{width:calc(100% - 32px) !important;margin:12px auto 0 !important;}
+            .hero>div{padding:60px 24px 40px !important;}
             .free-banner{flex-direction:column;}
             .donate-card{padding:36px 24px;}
             .weekly-banner{margin:0 16px;}
@@ -9082,13 +9083,15 @@ def landing_page():
 </div>
 <!-- Hero -->
 <main id="main-content">
-<div class="hero" style="text-align:left;padding:100px 40px 50px;background:#0f172a;border:1px solid rgba(15,23,42,0.22);border-radius:16px;margin:18px 24px 0;">
-    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">See The Edge First.</h1>
-    <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks updated daily across every major sport.</p>
-    <div class="hero-slide" style="display:flex;gap:12px;margin-top:24px;animation:slideIn 0.8s ease-out 0.4s both;">
-        <a href="/signup" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;border:1px solid rgba(255,255,255,0.3);box-shadow:0 6px 20px rgba(0,0,0,0.2);">Get Started Free</a>
+<div class="hero" style="background:#0f172a;border:1px solid rgba(15,23,42,0.22);border-radius:16px;margin:18px auto 0;max-width:1200px;width:calc(100% - 48px);padding:0;">
+    <div style="max-width:1100px;margin:0 auto;padding:100px 60px 50px;text-align:left;">
+        <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">See The Edge First.</h1>
+        <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks updated daily across every major sport.</p>
+        <div class="hero-slide" style="display:flex;gap:12px;margin-top:24px;animation:slideIn 0.8s ease-out 0.4s both;">
+            <a href="/signup" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;border:1px solid rgba(255,255,255,0.3);box-shadow:0 6px 20px rgba(0,0,0,0.2);">Get Started Free</a>
+        </div>
+        <p class="hero-slide" style="font-size:0.76em;color:#94a3b8;margin-top:10px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
     </div>
-    <p class="hero-slide" style="font-size:0.76em;color:#94a3b8;margin-top:10px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
 </div>
 <style>
 @keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
