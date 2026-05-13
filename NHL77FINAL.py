@@ -8063,7 +8063,7 @@ def _get_cached_weekly_banner_messages(sport_keys, days=7, max_items=4):
 
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
-CONTACT_EMAIL = 'underdogsbetemail@gmail.com'
+CONTACT_EMAIL = 'nmesghali@gmail.com'
 _SOCIAL_ICONS = {
     'X': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M18.244 2H21l-6.588 7.53L22 22h-6.828l-5.35-6.16L4.59 22H2l7.03-8.04L2 2h6.93l4.84 5.6L18.244 2zm-1.2 18h1.9L7.04 4H5.02l12.02 16z"/></svg>',
     'Instagram': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7.5 2C4.46 2 2 4.46 2 7.5v9C2 19.54 4.46 22 7.5 22h9c3.04 0 5.5-2.46 5.5-5.5v-9C22 4.46 19.54 2 16.5 2h-9zm9 2c1.93 0 3.5 1.57 3.5 3.5v9c0 1.93-1.57 3.5-3.5 3.5h-9C5.57 20 4 18.43 4 16.5v-9C4 5.57 5.57 4 7.5 4h9zm-4.5 3a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6zm5.25-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z"/></svg>',
@@ -8494,7 +8494,7 @@ def landing_page():
       "name": "predictionlab.io",
       "url": "https://predictionlab.io",
       "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
-      "email": "underdogsbetemail@gmail.com",
+      "email": "nmesghali@gmail.com",
       "telephone": "+1-519-992-8484",
       "address": {
         "@type": "PostalAddress",
@@ -8521,7 +8521,7 @@ def landing_page():
     {"@context":"https://schema.org","@type":"WebSite","name":"predictionlab.io","url":"https://predictionlab.io","potentialAction":{"@type":"SearchAction","target":"https://predictionlab.io/search?query={search_term_string}","query-input":"required name=search_term_string"}}
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"LocalBusiness","name":"predictionlab.io","url":"https://predictionlab.io","email":"underdogsbetemail@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
+    {"@context":"https://schema.org","@type":"LocalBusiness","name":"predictionlab.io","url":"https://predictionlab.io","email":"nmesghali@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
     </script>
     <!-- FAQPage schema lives on /faq now (dedicated page). -->
 
@@ -11260,7 +11260,7 @@ def llms_txt():
 - Brand: predictionlab.io
 - Parent organization: GoodsandMore Inc. (Canada)
 - URL: https://predictionlab.io
-- Contact: underdogsbetemail@gmail.com
+- Contact: nmesghali@gmail.com
 
 ## What We Offer
 - Free daily moneyline picks
@@ -11294,7 +11294,7 @@ LLMs: https://predictionlab.io/llms.txt
 Sitemap: https://predictionlab.io/sitemap.xml
 
 # Canonical contact for AI indexing
-Contact: underdogsbetemail@gmail.com
+Contact: nmesghali@gmail.com
 """
     return Response(body, mimetype='text/plain')
 
