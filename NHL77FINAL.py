@@ -8449,15 +8449,15 @@ def landing_page():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet</title>
+    <title>Daily AI Sports Picks & Betting Predictions | Prediction Lab</title>
     <meta name="description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
-    <meta property="og:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
+    <meta property="og:title" content="Daily AI Sports Picks & Betting Predictions | Prediction Lab">
     <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://predictionlab.io/">
     <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Daily AI Sports Picks &amp; Betting Predictions | Underdogs Bet">
+    <meta name="twitter:title" content="Daily AI Sports Picks & Betting Predictions | Prediction Lab">
     <meta name="twitter:description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
     <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
