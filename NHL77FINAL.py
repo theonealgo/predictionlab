@@ -8631,14 +8631,19 @@ def landing_page():
         .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
         .perf-empty{font-size:0.82em;color:#475569;background:#fff;border:1px dashed rgba(15,23,42,0.18);border-radius:8px;padding:10px;}
         .logo {
-            font-family:'Oswald',sans-serif;
-            font-weight:700;
-            font-size:28px;
-            text-transform:uppercase;
-            letter-spacing:0.5px;
-            line-height:1;
-            text-decoration:none;
-            color:var(--text);
+            display:flex;align-items:center;gap:8px;text-decoration:none;
+        }
+        .logo-mark {
+            width:36px;height:36px;border-radius:9px;
+            background:linear-gradient(135deg,#00529B 0%,#0ea5e9 100%);
+            display:flex;align-items:center;justify-content:center;
+            font-family:'Oswald',sans-serif;font-weight:700;font-size:15px;
+            color:#fff;letter-spacing:0.5px;flex-shrink:0;
+            box-shadow:0 2px 10px rgba(0,82,155,0.28);
+        }
+        .logo-text {
+            font-family:'Oswald',sans-serif;font-weight:700;font-size:17px;
+            text-transform:uppercase;letter-spacing:1px;color:var(--text);line-height:1;
         }
         .logo-img {
             height: 44px;
@@ -8655,8 +8660,8 @@ def landing_page():
             border-radius: 10px;
             border: 1px solid var(--border);
             background: #ffffff;
-            margin-left: auto;
-            order: 4;
+            order: 0;
+            margin-right: 6px;
         }
         .hamburger:hover { background: #f8fafc; }
         .hamburger span {
@@ -9028,19 +9033,16 @@ def landing_page():
             }
             .navbar-content {
                 display: grid;
-                grid-template-columns: 1fr auto;
+                grid-template-columns: auto auto 1fr auto;
                 grid-template-areas:
-                    "logo ham"
-                    "search search"
-                    "actions actions"
-                    "links links";
+                    "ham logo search actions";
                 align-items: center;
-                gap: 10px 12px;
+                gap: 0 10px;
             }
+            .navbar .hamburger { grid-area: ham; display: flex; margin-right: 0; }
             .navbar .logo { grid-area: logo; justify-self: start; }
-            .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
             .nav-search-wrap { grid-area: search; width: 100%; max-width: none; }
-            .nav-actions { grid-area: actions; display: flex; justify-content: center; width: 100%; }
+            .nav-actions { grid-area: actions; display: flex; justify-content: end; }
         }
         .nav-group { position: relative; }
         .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
@@ -9061,8 +9063,8 @@ def landing_page():
 <!-- Navbar -->
 <div class="navbar">
     <div class="navbar-content">
-        <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
+        <a href="/" class="logo" aria-label="Prediction Lab home"><span class="logo-mark">PL</span><span class="logo-text">Prediction Lab</span></a>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
                 <input type="text" id="navSearchInput" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
@@ -9107,13 +9109,12 @@ def landing_page():
 <!-- Hero -->
 <main id="main-content">
 <div class="hero" style="text-align:left;padding:100px 40px 50px;background:#0f172a;border:1px solid rgba(15,23,42,0.22);border-radius:16px;margin:18px 24px 0;">
-    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">AI Sports Predictions<br>With Real Results</h1>
-    <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks across {{ sports_covered }} sports &mdash; tracked, transparent, and updated daily. Every prediction graded with full results history.</p>
-    <div class="hero-slide" style="display:flex;gap:12px;margin-top:20px;animation:slideIn 0.8s ease-out 0.4s both;">
-        <a href="/nba-picks" style="background:#ffffff;color:#0f172a;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid rgba(15,23,42,0.2);box-shadow:0 6px 18px rgba(15,23,42,0.12);">View Today's Picks</a>
-        <a href="/plans" style="background:#00529B;color:#ffffff;padding:14px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;border:1px solid #00529B;box-shadow:0 6px 18px rgba(0,82,155,0.28);">Go Premium</a>
+    <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">See The Edge First.</h1>
+    <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks updated daily across every major sport.</p>
+    <div class="hero-slide" style="display:flex;gap:12px;margin-top:24px;animation:slideIn 0.8s ease-out 0.4s both;">
+        <a href="/signup" style="background:#00C076;color:#ffffff;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;border:1px solid #00C076;box-shadow:0 6px 20px rgba(0,192,118,0.32);">Get Started Free</a>
     </div>
-    <p class="hero-slide" style="font-size:0.78em;color:#e2e8f0;margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Today's picks update daily &mdash; full history available.</p>
+    <p class="hero-slide" style="font-size:0.76em;color:#94a3b8;margin-top:10px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
 </div>
 <style>
 @keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
