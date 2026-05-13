@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}predictionlab.io{% endblock %}</title>
     {% block head_meta %}{% endblock %}
@@ -32,19 +33,76 @@
     })();
     </script>
     <style>
-        *{margin:0;padding:0;box-sizing:border-box;}
+    *{margin:0;padding:0;box-sizing:border-box;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:#0f172a;min-height:100vh;}
-        .navbar{background:#ffffff;padding:12px 24px;border-bottom:1px solid #E0E4E8;box-shadow:0 2px 8px rgba(26,29,35,0.05);position:sticky;top:0;z-index:1000;}
-        .navbar-content{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:12px;position:relative;}
-        .logo{font-family:'Inter',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.5px;line-height:1;color:#0f172a;text-decoration:none;flex-shrink:0;}
-        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:0;}
-        .hamburger:hover{background:#f8fafc;}
-        .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
-        /* TradingView-style menu */
-        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
-        .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
-        .tv-drawer.open{transform:translateX(0);}
+        
+        /* ── Navbar ── */
+        .navbar {
+            background: #ffffff !important;
+            padding: 10px 0;
+            border-bottom: 1px solid #E0E3EB;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(26,29,35,0.05);
+        }
+
+        .navbar-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            gap: 12px;
+        }
+
+        /* Surgical Layout Order */
+        .hamburger { order: 1; display: flex; flex-direction: column; justify-content: center; gap: 5px; cursor: pointer; padding: 7px 9px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; flex-shrink: 0; }
+        .hamburger:hover { background: #f8fafc; }
+        .hamburger span { width: 20px; height: 1.5px; background: #0f172a; border-radius: 2px; transition: all .2s; }
+        
+        .logo { order: 2; display: inline-flex; align-items: center; text-decoration: none; flex-shrink: 0; }
+        .logo img { display: block; height: 30px; width: auto; }
+
+        .nav-search-wrap { order: 3; flex: 1; max-width: 560px; width: 100%; min-width: 0; margin: 0 20px; }
+        
+        .nav-actions { order: 4; display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
+
+        /* Search Bar Components */
+        .nav-search { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 7px 14px; cursor: text; transition: all .15s; }
+        .nav-search:hover { border-color: #cbd5e1; }
+        .nav-search svg { color: #94a3b8; flex-shrink: 0; }
+        .nav-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: #0f172a; font-size: 0.88em; cursor: text; }
+
+        /* Account & CTA styling */
+        .acct-wrap { position: relative; display: flex; align-items: center; }
+        .acct-btn { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid #e2e8f0; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+        .acct-btn:hover { border-color: #00529B; background: #f0f7ff; }
+        .acct-btn svg { color: #475569; }
+
+        .nav-cta {
+            display: inline-flex;
+            align-items: center;
+            padding: 9px 20px;
+            border-radius: 999px;
+            background: linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);
+            color: #fff;
+            font-size: 0.84em;
+            font-weight: 700;
+            text-decoration: none;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            transition: all .15s;
+            box-shadow: 0 4px 16px rgba(99,102,241,0.45);
+        }
+        .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(99,102,241,0.6); }
+
+        /*  Menu Core Styles */
+        .tv-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 1998; backdrop-filter: blur(2px); }
+        .tv-overlay.open { display: block; }
+        .tv-drawer { position: fixed; top: 0; left: 0; height: 100%; width: min(280px, 100vw); background: #fff; z-index: 1999; transform: translateX(-100%); transition: transform .28s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; box-shadow: 4px 0 32px rgba(15,23,42,0.18); }
+        .tv-drawer.open { transform: translateX(0); }
         .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
         .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
         .tv-header-btns{display:flex;gap:8px;align-items:center;}
@@ -158,7 +216,7 @@
 <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
-        <a href="/" class="logo" aria-label="Prediction Lab home">PL</a>
+        <a href="/" class="logo" aria-label="Prediction Lab home"><img src="/static/pl-logo.svg" alt="PL"></a>
         <div class="nav-search-wrap">
             <div class="nav-search" onclick="openSrch()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -180,6 +238,7 @@
                     <div class="acct-menu-divider"></div>
                     <a href="/faq">Help</a>
                 </div>
+                <a href="/signup" class="nav-cta">Get Started</a>
             </div>
         </div>
     </div>
@@ -267,7 +326,7 @@
             <div class="footer-col-blk">
                 <div class="footer-heading">Company</div>
                 <a href="/plans">Plans &amp; pricing</a>
-                <a href="/tutorial">How to read picks</a>
+                <a href="/tutorial">Tutorial</a>
                 <a href="/contact">Contact us</a>
                 <a href="/privacy">Privacy</a>
                 <a href="/terms">Terms</a>
@@ -299,7 +358,7 @@
 /* ── Drawer ── */
 var TV_MENUS={
   picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},
-  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'How to Read Picks',h:'/tutorial'}]},
+  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
   results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},
   community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
   company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}

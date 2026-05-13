@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 80" fill="none">
+  <!-- L drawn first (behind P) -->
+  <rect x="44" y="8" width="17" height="64" fill="#0f172a"/>
+  <rect x="44" y="60" width="38" height="12" fill="#0f172a"/>
+  <!-- P stem: rectangular top, triangular bottom (right side angles in at bottom) -->
+  <path d="M 4 8 L 21 8 L 21 64 L 4 77 Z" fill="#0f172a" stroke="white" stroke-width="3" stroke-linejoin="miter"/>
+  <!-- P bowl: outer r=28 center(21,36) → top(21,8) bottom(21,64) -->
+  <!-- inner r=11 center(21,36) → top(21,25) bottom(21,47) -->
+  <path d="M 21 8 A 28 28 0 0 1 21 64 L 21 47 A 11 11 0 0 0 21 25 Z" fill="#0f172a" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+</svg>

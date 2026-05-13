@@ -872,9 +872,15 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
                 pred['our_total_games'] = proj['games_used']
                 pred['our_avg_home'] = proj['avg_home']
                 pred['our_avg_away'] = proj['avg_away']
+                # Keep H2H reference for UI (results page labels this "H2H Last 10";
+                # NBA may later replace our_total with an efficiency projection).
+                pred['h2h_last10_total'] = proj['our_total']
+                pred['h2h_last10_games'] = proj['games_used']
             else:
                 pred.setdefault('our_total', None)
                 pred.setdefault('our_total_games', 0)
+                pred.setdefault('h2h_last10_total', None)
+                pred.setdefault('h2h_last10_games', 0)
     finally:
         try:
             conn.close()
@@ -5863,6 +5869,7 @@ BASE_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% if page_title is defined and page_title %}{% set _meta_title = page_title %}
     {% elif sport_info is defined %}{% set _meta_title = sport_info.name ~ ' — predictionlab.io' %}
@@ -5881,6 +5888,7 @@ BASE_TEMPLATE = """
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
+    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
     <meta name="author" content="predictionlab.io">
     <meta name="publisher" content="GoodsandMore Inc.">
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
@@ -5936,9 +5944,9 @@ BASE_TEMPLATE = """
             min-height: 100vh;
         }
         .navbar {
-            background: #F4F7F9;
-            padding: 14px 28px;
-            border-bottom: 1px solid #E0E4E8;
+            background: #ffffff !important;
+            padding: 10px 0;
+            border-bottom: 1px solid #E0E3EB;
             box-shadow: 0 2px 8px rgba(26,29,35,0.05);
             position: sticky;
             top: 0;
@@ -5951,9 +5959,15 @@ BASE_TEMPLATE = """
             justify-content: space-between;
             align-items: center;
             position: relative;
+            gap: 12px;
+            padding: 0 20px;
         }
-        .logo{font-family:'Inter',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.5px;line-height:1;color:#0f172a;text-decoration:none;flex-shrink:0;}
-        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:0;}
+        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;}
+        .logo img{display:block;height:30px;width:auto;}
+        .nav-cta{display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);color:#fff;font-size:0.84em;font-weight:700;text-decoration:none;letter-spacing:0.3px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 16px rgba(99,102,241,0.45),inset 0 1px 0 rgba(255,255,255,0.15);}
+        .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.6),inset 0 1px 0 rgba(255,255,255,0.15);}
+        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}}
+        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:1;}
         .hamburger:hover{background:#f8fafc;}
         .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
         .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
@@ -5988,14 +6002,14 @@ BASE_TEMPLATE = """
         .tv-sub-link:hover{background:#f1f5f9;color:#00529B;}
         .tv-sub-link.highlight{color:#00529B;font-weight:800;}
         .tv-sub-link .ext{font-size:0.7em;color:#94a3b8;margin-left:2px;}
-        .nav-search-wrap{position:relative;flex:1;max-width:560px;width:100%;min-width:0;}
+        .nav-search-wrap{position:relative;flex:1;max-width:560px;width:100%;min-width:0;margin:0 20px;order:3;}
         .nav-search{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:7px 14px;cursor:text;transition:border-color .15s;}
         .nav-search:hover{border-color:#cbd5e1;}
         .nav-search svg{color:#94a3b8;flex-shrink:0;}
         .nav-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;color:#0f172a;font-size:0.88em;cursor:text;}
         .nav-search input::placeholder{color:#94a3b8;}
-        .nav-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
-        .acct-wrap{position:relative;}
+        .nav-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;order:4;}
+        .acct-wrap{position:relative;display:flex;align-items:center;gap:8px;}
         .acct-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;}
         .acct-btn:hover{border-color:#00529B;background:#f0f7ff;}
         .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:160px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
@@ -6086,34 +6100,41 @@ BASE_TEMPLATE = """
 </head>
 <body>
     <div class="navbar">
-        <div class="navbar-content">
-            <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
-            <a href="/" class="logo" aria-label="Prediction Lab home">PL</a>
-            <div class="nav-search-wrap">
-                <div class="nav-search" onclick="openSrch()">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
-                </div>
+    <div class="navbar-content">
+        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
+        <a href="/" class="logo" aria-label="Prediction Lab home">
+            <img src="/static/pl-logo.svg" alt="PL">
+        </a>
+
+        <div class="nav-search-wrap">
+            <div class="nav-search" onclick="openSrch()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
             </div>
-            <div class="nav-actions">
-                <div class="acct-wrap">
-                    <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    </button>
-                    <div class="acct-menu" id="acctMenu">
-                        {% if is_logged_in %}
-                        <a href="/logout">Sign Out</a>
-                        {% else %}
-                        <a href="/login">Sign In</a>
-                        <a href="/signup">Sign Up</a>
-                        {% endif %}
-                        <div class="acct-menu-divider"></div>
-                        <a href="/faq">Help</a>
-                    </div>
+        </div>
+
+        <div class="nav-actions">
+            <div class="acct-wrap">
+                <button type="button" class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </button>
+                <div class="acct-menu" id="acctMenu">
+                    {% if is_logged_in %}
+                    <a href="/logout">Sign Out</a>
+                    {% else %}
+                    <a href="/login">Sign In</a>
+                    <a href="/signup">Sign Up</a>
+                    {% endif %}
+                    <div class="acct-menu-divider"></div>
+                    <a href="/faq">Help</a>
                 </div>
+                {% if not is_logged_in %}
+                <a href="/signup" class="nav-cta">Get Started</a>
+                {% endif %}
             </div>
         </div>
     </div>
+</div>
     
     <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
     <div class="tv-drawer" id="tvDrawer">
@@ -6123,7 +6144,7 @@ BASE_TEMPLATE = """
       </div>
       <div class="tv-panels">
         <div class="tv-panel visible" id="tvMain">
-          {% if todays_picks %}
+          {% if todays_picks is defined and todays_picks %}
           <div class="tv-today-strip">
             <div class="tv-today-label">&#9889; Today\'s Best Picks</div>
             <div class="tv-today-picks">
@@ -6192,7 +6213,7 @@ BASE_TEMPLATE = """
                 <div class="footer-col-blk">
                     <div class="footer-heading">Company</div>
                     <a href="/plans">Plans &amp; pricing</a>
-                    <a href="/tutorial">How to read picks</a>
+                    <a href="/tutorial">Tutorial</a>
                     <a href="/contact">Contact us</a>
                     <a href="/privacy">Privacy</a>
                     <a href="/terms">Terms</a>
@@ -6222,16 +6243,16 @@ BASE_TEMPLATE = """
     </footer>
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
-function tvOpen(){document.getElementById('tvOverlay').classList.add('open');document.getElementById('tvDrawer').classList.add('open');document.body.style.overflow='hidden';}
-function tvClose(){document.getElementById('tvOverlay').classList.remove('open');document.getElementById('tvDrawer').classList.remove('open');document.body.style.overflow='';setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
+function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
 function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
 function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
 document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
 var _srchFilter='all';
-var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
 function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
 function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
 function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
@@ -6360,20 +6381,17 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
 TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
     """
-        body{background:#ffffff !important;}
-        body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.85);z-index:0;}
-        body>*{position:relative;z-index:1;}
         .tutorial-wrap{max-width:900px;margin:0 auto;padding:20px 0 60px;}
-        .tutorial-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;margin-bottom:18px;}
-        .tutorial-card h1{font-size:2em;margin-bottom:8px;}
-        .tutorial-card h2{font-size:1.35em;margin:6px 0 8px;}
+        .tutorial-card{background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:24px;margin-bottom:18px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
+        .tutorial-card h1{font-size:2em;margin-bottom:8px;color:#0f172a;}
+        .tutorial-card h2{font-size:1.35em;margin:6px 0 8px;color:#0f172a;}
         .tutorial-card p{color:#334155;line-height:1.7;}
         .tutorial-card ul{margin:8px 0 0 20px;color:#334155;line-height:1.7;}
     """
 ).replace('{% block content %}{% endblock %}', """
     <div class="tutorial-wrap">
         <div class="tutorial-card">
-            <h1>📊 How to Read Our Picks</h1>
+            <h1>Tutorial</h1>
             <p>Each game card shows our AI predictions. Here’s what each section means.</p>
         </div>
 
@@ -8399,6 +8417,7 @@ def landing_page():
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily AI Sports Picks & Betting Predictions | Prediction Lab</title>
     <meta name="description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
@@ -8413,8 +8432,8 @@ def landing_page():
     <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Bebas+Neue&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Bebas+Neue&display=swap"></noscript>
     {% if ga_tracking_id %}
     <script>
       (function(){
@@ -8506,73 +8525,130 @@ def landing_page():
             z-index:0;
         }
         body > *{position:relative;z-index:1;}
+/* ── Navbar ── */
+.navbar {
+    background: #ffffff !important;
+    padding: 10px 0;
+    border-bottom: 1px solid #E0E3EB;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
 
-        /* ── Navbar ── */
-        .navbar{
-            background:#ffffff;
-            padding: 14px 28px;
-            border-bottom: 1px solid var(--border);
-            box-shadow: 0 2px 8px rgba(26,29,35,0.05);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-        .navbar-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            position: relative;
-        }
-        .nav-search {
-            flex: 1;
-            max-width: 620px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 5px 8px 5px 14px;
-            box-shadow: 0 3px 10px rgba(26,29,35,0.08);
-        }
-        .nav-search input {
-            flex: 1;
-            min-width: 0;
-            border: none;
-            outline: none;
-            background: transparent;
-            color: var(--text);
-            font-size: 0.9em;
-        }
-        .nav-search input::placeholder { color: #475569; }
-        .nav-search button {
-            border: none;
-            background: #ffffff;
-            color: var(--link);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 8px 14px;
-            font-weight: 800;
-            cursor: pointer;
-        }
-        .nav-search-wrap{position:relative;flex:1;max-width:560px;width:100%;min-width:0;}
-        .nav-search{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:7px 14px;cursor:text;}
-        .nav-search:hover{border-color:#cbd5e1;}
-        .nav-search svg{color:#94a3b8;flex-shrink:0;}
-        .nav-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;color:#0f172a;font-size:0.88em;cursor:text;}
-        .nav-search input::placeholder{color:#94a3b8;}
-        .nav-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
-        .acct-wrap{position:relative;}
-        .acct-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-        .acct-btn:hover{border-color:#00529B;background:#f0f7ff;}
-        .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:160px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
-        .acct-menu.open{display:block;}
-        .acct-menu a{display:block;padding:9px 12px;font-size:0.85em;font-weight:600;color:#1e293b;text-decoration:none;border-radius:8px;}
-        .acct-menu a:hover{background:#f1f5f9;color:#00529B;}
-        .acct-menu-divider{height:1px;background:#f1f5f9;margin:4px 0;}
+.navbar-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+}
+
+.logo {
+    order: 1; /* Logo on far left */
+}
+
+.nav-search-wrap {
+    order: 2; /* Search in middle */
+    flex: 1;
+    max-width: 600px;
+    display: flex;
+    justify-content: center;
+}
+
+.nav-actions {
+    order: 3; /* Buttons on far right */
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.nav-search {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f0f3fa;
+    border: 1px solid #e0e3eb;
+    border-radius: 999px;
+    padding: 8px 16px;
+    cursor: text;
+}
+
+.nav-search svg {
+    color: #131722;
+}
+
+.nav-search input {
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #131722;
+    width: 100%;
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.acct-wrap {
+    position: relative;
+}
+
+.acct-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid #e0e3eb;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #131722;
+}
+
+.acct-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 160px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.12);
+    z-index: 1100;
+    padding: 6px;
+}
+
+.acct-menu.open {
+    display: block;
+}
+
+.acct-menu a {
+    display: block;
+    padding: 9px 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #1e293b;
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+.acct-menu-divider {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 4px 0;
+}
+        .nav-cta{display:inline-flex;align-items:center;padding:9px 22px;border-radius:999px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);color:#fff;font-size:0.84em;font-weight:700;text-decoration:none;letter-spacing:0.3px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 16px rgba(99,102,241,0.5),inset 0 1px 0 rgba(255,255,255,0.15);}
+        .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.65),inset 0 1px 0 rgba(255,255,255,0.15);}
+        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}}
         .srch-overlay{display:none;position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);}
         .srch-overlay.open{display:block;}
         .srch-box{position:absolute;top:70px;left:50%;transform:translateX(-50%);width:min(680px,96vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,0.18);overflow:hidden;}
@@ -8632,10 +8708,11 @@ def landing_page():
         .perf-answer-list{display:grid;gap:6px;}
         .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
         .perf-empty{font-size:0.82em;color:#475569;background:#fff;border:1px dashed rgba(15,23,42,0.18);border-radius:8px;padding:10px;}
-        .logo{font-family:'Inter',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.5px;line-height:1;color:#fff;text-decoration:none;flex-shrink:0;}
-        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.08);flex-shrink:0;order:0;}
-        .hamburger:hover{background:rgba(255,255,255,0.14);}
-        .hamburger span{width:20px;height:1.5px;background:#fff;border-radius:2px;transition:all .2s;}
+        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;}
+        .logo img{display:block;height:30px;width:auto;}
+        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
+        .hamburger:hover{background:#f8fafc;}
+        .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
         .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
         .tv-overlay.open{display:block;}
         .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
@@ -8955,7 +9032,8 @@ def landing_page():
         }
         @media(max-width:640px){
             .hero{width:calc(100% - 32px) !important;margin:12px auto 0 !important;}
-            .hero>div{padding:60px 24px 40px !important;}
+            .hero>div{padding:70px 28px 52px !important;}
+            .hero>div>div[style*="gap:40px"]{gap:24px !important;}
             .free-banner{flex-direction:column;}
             .donate-card{padding:36px 24px;}
             .weekly-banner{margin:0 16px;}
@@ -9009,14 +9087,14 @@ def landing_page():
 <!-- Navbar -->
 <div class="navbar">
     <div class="navbar-content">
-        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
-        <a href="/" class="logo" aria-label="Prediction Lab home">PL</a>
+        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
         <div class="nav-search-wrap">
             <div class="nav-search" onclick="openSrch()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
             </div>
         </div>
+        <a href="/" class="logo" aria-label="Prediction Lab home"><img src="/static/pl-logo.svg" alt="PL"></a>
         <div class="nav-actions">
             <div class="acct-wrap">
                 <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
@@ -9033,6 +9111,7 @@ def landing_page():
                     <a href="/faq">Help</a>
                 </div>
             </div>
+            <a href="/signup" class="nav-cta">Get Started</a>
         </div>
     </div>
 </div>
@@ -9083,14 +9162,32 @@ def landing_page():
 </div>
 <!-- Hero -->
 <main id="main-content">
-<div class="hero" style="background:#0f172a;border:1px solid rgba(15,23,42,0.22);border-radius:16px;margin:18px auto 0;max-width:1200px;width:calc(100% - 48px);padding:0;">
-    <div style="max-width:1100px;margin:0 auto;padding:100px 60px 50px;text-align:left;">
+<div class="hero" style="background:#0f172a;border:1px solid rgba(255,255,255,0.07);border-radius:16px;margin:18px auto 0;max-width:1200px;width:calc(100% - 48px);padding:0;">
+    <div style="max-width:1100px;margin:0 auto;padding:calc(130px + 0.5in) 60px calc(90px + 0.5in);text-align:left;">
         <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">See The Edge First.</h1>
         <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks updated daily across every major sport.</p>
-        <div class="hero-slide" style="display:flex;gap:12px;margin-top:24px;animation:slideIn 0.8s ease-out 0.4s both;">
-            <a href="/signup" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;border:1px solid rgba(255,255,255,0.3);box-shadow:0 6px 20px rgba(0,0,0,0.2);">Get Started Free</a>
+        <div class="hero-slide" style="display:flex;gap:12px;margin-top:28px;animation:slideIn 0.8s ease-out 0.4s both;">
+            <a href="/signup" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;box-shadow:0 6px 20px rgba(0,0,0,0.25);">Get Started Free</a>
         </div>
-        <p class="hero-slide" style="font-size:0.76em;color:#94a3b8;margin-top:10px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
+        <p class="hero-slide" style="font-size:0.76em;color:rgba(255,255,255,0.38);margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
+        <div class="hero-slide" style="display:flex;gap:40px;margin-top:64px;padding-top:40px;border-top:1px solid rgba(255,255,255,0.08);flex-wrap:wrap;animation:slideIn 0.8s ease-out 0.6s both;">
+            <div>
+                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">{{ games_graded }}+</div>
+                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">Games Graded</div>
+            </div>
+            <div>
+                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">{{ sports_covered }}</div>
+                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">Sports Covered</div>
+            </div>
+            <div>
+                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">5</div>
+                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">AI Models</div>
+            </div>
+            <div>
+                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">Daily</div>
+                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">Updates</div>
+            </div>
+        </div>
     </div>
 </div>
 <style>
@@ -9098,34 +9195,9 @@ def landing_page():
 .hero-slide{opacity:0;}
 </style>
 
-<!-- Proof Section -->
-<div style="max-width:800px;margin:22px auto 0;padding:0 24px 20px;">
-    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:14px;padding:20px 24px;">
-        <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;text-align:center;">
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#00C076;">{{ games_graded }}+</div>
-                <div style="font-size:0.75em;color:#475569;font-weight:600;">Games Graded</div>
-            </div>
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#00C076;">{{ sports_covered }}</div>
-                <div style="font-size:0.75em;color:#475569;font-weight:600;">Sports Covered</div>
-            </div>
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#00C076;">5</div>
-                <div style="font-size:0.75em;color:#475569;font-weight:600;">AI Models</div>
-            </div>
-            <div style="min-width:120px;">
-                <div style="font-size:1.8em;font-weight:900;color:#00C076;">Daily</div>
-                <div style="font-size:0.75em;color:#475569;font-weight:600;">Updates</div>
-            </div>
-        </div>
-        <p style="text-align:center;font-size:0.78em;color:#475569;margin-top:12px;">All results are tracked and updated daily. <a href="/results" style="color:#00529B;text-decoration:underline;font-weight:700;">View full results &rarr;</a></p>
-    </div>
-</div>
-
 <!-- Today's AI Picks (live product preview) -->
 {% if todays_picks %}
-<div class="section" style="padding-top:24px;padding-bottom:8px;">
+<div class="section" style="margin-top:1.5in;padding-top:24px;padding-bottom:8px;">
     <div style="text-align:center;margin-bottom:8px;">
         <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#00C076;font-size:0.78em;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;padding:5px 14px;border-radius:999px;">
             <span style="display:inline-block;width:8px;height:8px;background:#00C076;border-radius:50%;animation:pulseDot 1.6s infinite;"></span>
@@ -9394,7 +9466,7 @@ def landing_page():
             <div class="footer-col-blk">
                 <div class="footer-heading">Company</div>
                 <a href="/plans">Plans &amp; pricing</a>
-                <a href="/tutorial">How to read picks</a>
+                <a href="/tutorial">Tutorial</a>
                 <a href="/contact">Contact us</a>
                 <a href="/privacy">Privacy</a>
                 <a href="/terms">Terms</a>
@@ -9436,16 +9508,16 @@ def landing_page():
 {% endif %}
 
 <script>
-    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
-    function tvOpen(){document.getElementById('tvOverlay').classList.add('open');document.getElementById('tvDrawer').classList.add('open');document.body.style.overflow='hidden';}
-    function tvClose(){document.getElementById('tvOverlay').classList.remove('open');document.getElementById('tvDrawer').classList.remove('open');document.body.style.overflow='';setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
+    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+    function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
+    function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
     function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
     function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
     function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
     function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
     document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
     var _srchFilter='all';
-    var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+    var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
     function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
     function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
     function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
@@ -11676,8 +11748,8 @@ def tutorial_page():
     return render_template_string(
         TUTORIAL_TEMPLATE,
         page='tutorial',
-        page_title='How to Use This Page',
-        page_description='Learn how to read model predictions, scores, spreads, and totals on the picks pages.'
+        page_title='Tutorial | predictionlab.io',
+        page_description='How to read model predictions, scores, spreads, and totals on the picks pages.'
     )
 
 @app.route('/nhl')
@@ -11866,9 +11938,19 @@ def sport_predictions(sport, filter_date=None):
             'total_over_price',
             'total_under_price',
             'odds_reason',
+            # espn_predictions_template uses pred.our_spread / pred.xgb_spread / …;
+            # missing keys on plain dicts raise in Jinja (NBA paths always had these).
+            'our_spread',
+            'our_total',
+            'xgb_spread',
+            'xgb_total',
+            'naive_spread',
+            'naive_total',
+            'h2h_last10_total',
+            'h2h_last10_games',
         ):
             if _k not in pred:
-                pred[_k] = None
+                pred[_k] = None if _k != 'h2h_last10_games' else 0
 
     soccer_leagues = None
     selected_league = None
@@ -11973,17 +12055,17 @@ def sport_predictions(sport, filter_date=None):
     if sport in ['NHL', 'NBA']:
         # Group by date
         for pred in predictions:
-            date_key = pred['game_date']
+            date_key = pred.get('game_date') or 'TBD'
             grouped_predictions[date_key].append(pred)
     elif sport == 'NFL':
         # Group by date (ESPN data doesn't have week numbers)
         for pred in predictions:
-            date_key = pred['game_date']
+            date_key = pred.get('game_date') or 'TBD'
             grouped_predictions[date_key].append(pred)
     else:
         # Default: group by date
         for pred in predictions:
-            date_key = pred['game_date']
+            date_key = pred.get('game_date') or 'TBD'
             grouped_predictions[date_key].append(pred)
     
     # Sort dates
@@ -11998,8 +12080,24 @@ def sport_predictions(sport, filter_date=None):
             grouped_predictions = {}
             sorted_dates = []
 
+    # Nested efficiency payloads are plain dicts for some sports; Jinja attribute access
+    # (pred.our_home_eff.ortg) fails on dicts — wrap as SimpleNamespace for template compatibility.
+    for pred in predictions:
+        if not isinstance(pred, dict):
+            continue
+        for _eff_key in ('our_home_eff', 'our_away_eff'):
+            _v = pred.get(_eff_key)
+            if isinstance(_v, dict):
+                pred[_eff_key] = types.SimpleNamespace(**_v)
+
     # soccer_leagues already computed above for soccer
-    
+
+    try:
+        from flask_login import current_user as _cu
+        _pred_li = getattr(_cu, 'is_authenticated', False) and _cu.is_authenticated
+    except Exception:
+        _pred_li = False
+
     try:
         # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
         with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
@@ -12021,6 +12119,10 @@ def sport_predictions(sport, filter_date=None):
             shareable_cards=shareable_cards,
             share_image_src=share_image_src,
             share_image_view_url=share_image_view_url,
+            is_logged_in=_pred_li,
+            soccer_enabled=SOCCER_ENABLED,
+            ga_tracking_id=GA_TRACKING_ID,
+            todays_picks=[],
         )
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")

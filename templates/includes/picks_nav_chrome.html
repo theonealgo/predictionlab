@@ -1,0 +1,148 @@
+{# Shared with espn_predictions_template.html — keep in sync with templates/base.html chrome #}
+<div class="navbar">
+    <div class="navbar-content">
+        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
+        <a href="/" class="logo" aria-label="Prediction Lab home"><img src="/static/pl-logo.svg" alt="Prediction Lab"></a>
+        <div class="nav-search-wrap">
+            <div class="nav-search" onclick="openSrch()" role="search">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" placeholder="Search teams, leagues, or matchups..." readonly onclick="openSrch()" aria-label="Search">
+            </div>
+        </div>
+        <div class="nav-actions">
+            <div class="acct-wrap">
+                <button type="button" class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </button>
+                <div class="acct-menu" id="acctMenu">
+                    {% if is_logged_in %}
+                    <a href="/logout">Sign Out</a>
+                    {% else %}
+                    <a href="/login">Sign In</a>
+                    <a href="/signup">Sign Up</a>
+                    {% endif %}
+                    <div class="acct-menu-divider"></div>
+                    <a href="/faq">Help</a>
+                </div>
+                {% if not is_logged_in %}
+                <a href="/signup" class="nav-cta">Get Started</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+<div class="tv-drawer" id="tvDrawer">
+  <div class="tv-drawer-header">
+    <div class="tv-header-btns"><button type="button" class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+    <button type="button" class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+  </div>
+  <div class="tv-panels">
+    <div class="tv-panel visible" id="tvMain">
+      {% if todays_picks is defined and todays_picks %}
+      <div class="tv-today-strip">
+        <div class="tv-today-label">&#9889; Today's Best Picks</div>
+        <div class="tv-today-picks">
+          {% for tp in todays_picks[:3] %}
+          {% set _pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
+          <a class="tv-today-pick" href="/{{ tp.slug }}">
+            <span class="tv-pick-match">{{ tp.sport }} &middot; {{ tp.away }} vs {{ tp.home }}</span>
+            <span class="tv-pick-edge">{{ _pct }}% edge</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      <div class="tv-menu-list">
+        <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
+        <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
+          <button type="button" class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('community')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
+          <button type="button" class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('company')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="tv-panel hidden-right" id="tvSub"></div>
+  </div>
+</div>
+<div class="srch-overlay" id="srchOverlay" onclick="closeSrchOutside(event)">
+  <div class="srch-box">
+    <form class="srch-input-row" action="/search" method="get" role="search" onclick="event.stopPropagation()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="query" id="srchInput" placeholder="Search teams, leagues, or matchups..." autocomplete="off" aria-label="Search query">
+      <button type="button" class="srch-close" onclick="closeSrch()">&#x2715;</button>
+    </form>
+    <div class="srch-filters">
+      <button type="button" class="srch-filter active" data-s="all">All</button>
+      <button type="button" class="srch-filter" data-s="nba">NBA</button>
+      <button type="button" class="srch-filter" data-s="nfl">NFL</button>
+      <button type="button" class="srch-filter" data-s="mlb">MLB</button>
+      <button type="button" class="srch-filter" data-s="nhl">NHL</button>
+      <button type="button" class="srch-filter" data-s="ncaab">NCAAB</button>
+      <button type="button" class="srch-filter" data-s="ncaaf">NCAAF</button>
+      <button type="button" class="srch-filter" data-s="wnba">WNBA</button>
+      <button type="button" class="srch-filter" data-s="props">Props</button>
+    </div>
+    <div class="srch-items" id="srchItems"></div>
+  </div>
+</div>
+<script>
+var TV_MENUS={
+  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-picks'}{%- endif -%},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},
+  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
+  results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},
+  community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
+  company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
+};
+function tvOpen(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';
+  if(h)h.setAttribute('aria-expanded','true');
+}
+function tvClose(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';
+  if(h)h.setAttribute('aria-expanded','false');
+  setTimeout(function(){
+    var m=document.getElementById('tvMain'),s=document.getElementById('tvSub'),b=document.getElementById('tvBackBtn'),t=document.getElementById('tvDrawerTitle');
+    if(m)m.className='tv-panel visible';if(s)s.className='tv-panel hidden-right';if(b)b.style.display='none';if(t)t.textContent='Menu';
+  },280);
+}
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
+function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
+function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
+document.addEventListener('click',function(){var a=document.getElementById('acctMenu');if(a)a.classList.remove('open');});
+var _srchFilter='all';
+var _srchDefaults=[
+  {l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},
+  {l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},
+  {l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},
+  {l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{%- if soccer_enabled -%},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{%- endif -%},
+  {l:'Player Props',h:'/player-props',s:'props'},
+  {l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}
+];
+function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){var i=document.getElementById('srchInput');if(i){i.focus();}},60);renderSrchItems('');}
+function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';var i=document.getElementById('srchInput');if(i)i.value='';}
+function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
+function renderSrchItems(q){
+  var items=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&(!q||i.l.toLowerCase().includes(q.toLowerCase()));});
+  var el=document.getElementById('srchItems');
+  if(!items.length){el.innerHTML='<div class="srch-empty">No results found</div>';return;}
+  el.innerHTML=items.map(function(i){return'<a class="srch-item" href="'+i.h+'"><span class="srch-item-label">'+i.l+'</span><span class="srch-item-sport">'+i.s.toUpperCase()+'</span></a>';}).join('');
+}
+document.addEventListener('DOMContentLoaded',function(){
+  var inp=document.getElementById('srchInput');
+  if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}
+  document.querySelectorAll('.srch-filter').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});
+      this.classList.add('active');_srchFilter=this.dataset.s;
+      renderSrchItems(document.getElementById('srchInput').value);
+    });
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
+</script>

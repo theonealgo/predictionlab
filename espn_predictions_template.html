@@ -92,25 +92,10 @@
             background:#ffffff;
             color:#1A1D23;
         }
-        .hamburger:hover { background: rgba(255, 255, 255, 0.08); }
-        .navbar {
-            background:#ffffff;
-            padding: 14px 28px;
-            border-bottom: 1px solid #E0E4E8;
-            box-shadow: 0 2px 8px rgba(26,29,35,0.05);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-        .navbar-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            position: relative;
-        }
+        /* Top nav chrome: templates/includes/picks_nav_chrome.html + /static/css/picks-nav-overrides.css
+           (aligned with templates/base.html). Do not restyle .navbar / .hamburger here — inline CSS
+           loads after picks-nav-overrides and was overriding hamburger to the right. */
+        .hamburger:hover { background: #f8fafc; }
         .nav-search {
             flex: 1;
             max-width: 620px;
@@ -170,26 +155,6 @@
             height: 44px;
             width: auto;
             display: block;
-        }
-        .hamburger {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 5px;
-            cursor: pointer;
-            padding: 8px 10px;
-            border-radius: 10px;
-            border: 1px solid #E0E4E8;
-            background: #ffffff;
-            margin-left: auto;
-            order: 4;
-        }
-        .hamburger span {
-            width: 24px;
-            height: 2px;
-            background: #0f172a;
-            border-radius: 2px;
-            transition: 0.3s;
         }
         .nav-links {
             display:none;
@@ -472,43 +437,7 @@
         .social-export-hint{margin:0 0 10px;font-size:0.82em;color:#475569;line-height:1.45;}
         .social-image-link{display:block;width:min(100%,min(420px,90vw));margin:0 auto;aspect-ratio:9/16;border-radius:14px;overflow:hidden;border:1px solid rgba(15,23,42,0.14);box-shadow:0 6px 18px rgba(15,23,42,0.08);background:#ffffff;}
         .social-image-link img{display:block;width:100%;height:100%;object-fit:cover;}
-        @media (max-width: 1100px) {
-            .navbar-content { flex-wrap:wrap; justify-content:center; }
-            .nav-search-wrap { order:3; width:100%; max-width:100%; }
-        }
         @media (max-width: 768px) {
-            .navbar-content {
-                display: grid;
-                grid-template-columns: 1fr auto;
-                grid-template-areas:
-                    "logo ham"
-                    "search search"
-                    "actions actions"
-                    "links links";
-                align-items: center;
-                gap: 10px 12px;
-            }
-            .navbar .logo { grid-area: logo; justify-self: start; }
-            .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
-            .nav-search-wrap { grid-area: search; width: 100%; max-width: none; }
-            .nav-actions { grid-area: actions; display: flex; justify-content: center; width: 100%; }
-            .nav-links {
-                grid-area: links;
-                position: static;
-                display: none;
-                flex-direction: column;
-                flex-wrap: nowrap;
-                align-items: stretch;
-                gap: 0;
-                width: 100%;
-                padding: 4px 0 10px;
-                border: 1px solid #E0E4E8;
-                box-shadow: none;
-                border-radius: 10px;
-                background: #F4F7F9;
-            }
-            .nav-links.active { display: flex; }
-            .nav-links a { font-size: 0.88em; padding: 10px 12px; white-space: normal; border-radius: 8px; }
             .container { padding: 20px 10px; }
             .games-grid { grid-template-columns:1fr !important; }
         }
@@ -520,48 +449,10 @@
         .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
         .nav-group-items a:hover { opacity: 1; color: #00529B; }
     </style>
+    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
 </head>
 <body>
-<div class="navbar">
-    <div class="navbar-content">
-        <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
-        <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <div class="nav-links" id="navLinks">
-            <a href="/nhl-picks">NHL</a>
-            <a href="/nba-picks">NBA</a>
-            <a href="/mlb-picks">MLB</a>
-            <a href="/nfl-picks">NFL</a>
-            <a href="/ncaab-picks">NCAAB</a>
-            <a href="/ncaaw-picks">NCAAW</a>
-            <a href="/ncaaf-picks">NCAAF</a>
-            <a href="/wnba-picks">WNBA</a>
-            {% if soccer_enabled %}
-            <a href="/soccer-picks">Soccer</a>
-            {% endif %}
-            <a href="/player-props">Player Props</a>
-            <a href="/plans">Pricing</a>
-        </div>
-        <div class="nav-search-wrap">
-            <form class="nav-search" id="navSearchFormPicks" action="/search" method="get" role="search">
-                <input type="text" id="navSearchInputPicks" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
-                <button type="submit">Search</button>
-            </form>
-            <div id="searchAutocompletePicks" class="search-autocomplete" aria-live="polite"></div>
-        </div>
-        <div class="nav-actions">
-            {% if is_logged_in %}
-            <a href="/logout" class="auth-btn login">Logout</a>
-            {% else %}
-            <a href="/login" class="auth-btn login">Login</a>
-            <a href="/signup" class="auth-btn signup">Sign Up</a>
-            {% endif %}
-        </div>
-    </div>
-</div>
+{% include 'includes/picks_nav_chrome.html' %}
 <div class="search-results-wrap">
     <div id="searchResultsPicks" class="search-results" aria-live="polite"></div>
 </div>
@@ -637,7 +528,12 @@
             </div>
             <div class="games-grid">
                 {% set _prev_league = namespace(val='') %}
-                {% for pred in grouped_predictions[date]|sort(attribute='league') %}
+                {% if sport == 'SOCCER' %}
+                {% set _date_preds = grouped_predictions[date]|sort(attribute='league') %}
+                {% else %}
+                {% set _date_preds = grouped_predictions[date] %}
+                {% endif %}
+                {% for pred in _date_preds %}
                 {% if sport == 'SOCCER' and pred.league and pred.league != _prev_league.val %}
                 {% set _prev_league.val = pred.league %}
                 <div style="grid-column:1/-1;font-size:0.88em;font-weight:700;color:#92400e;padding:10px 0 4px;border-top:1px solid rgba(15,23,42,0.1);margin-top:6px;">{{ pred.league }}</div>
@@ -751,6 +647,13 @@
                         <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% endif %}
+                        {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
+                        {% if is_premium %}
+                        <div class="sf-item"><span class="sf-label">H2H Last 10</span><span class="sf-val" style="color:#475569;">{{ "%.1f"|format(pred.h2h_last10_total) }}{% if pred.h2h_last10_games is defined and pred.h2h_last10_games %} <span style="font-size:0.78em;color:#94a3b8;font-weight:600;">({{ pred.h2h_last10_games }} game{% if pred.h2h_last10_games != 1 %}s{% endif %})</span>{% endif %}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">H2H Last 10</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
+                        {% endif %}
+                        {% endif %}
                         {% if _total_val is not none %}
                         {% if is_premium %}
                         <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#92400e;">{{ "%.1f"|format(_total_val) }}</span></div>
@@ -785,8 +688,8 @@
                         {% if pred.our_method == 'efficiency' and pred.our_home_eff and pred.our_away_eff %}
                         <div class="analysis-title">Efficiency-based projection (last 5 games)</div>
                         <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
-                            <div>{{ pred.home_team_id }}: ORtg <strong>{{ pred.our_home_eff.ortg }}</strong> · DRtg <strong>{{ pred.our_home_eff.drtg }}</strong> · Pace <strong>{{ pred.our_home_eff.pace }}</strong></div>
-                            <div>{{ pred.away_team_id }}: ORtg <strong>{{ pred.our_away_eff.ortg }}</strong> · DRtg <strong>{{ pred.our_away_eff.drtg }}</strong> · Pace <strong>{{ pred.our_away_eff.pace }}</strong></div>
+                            <div>{{ pred.home_team_id }}: ORtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['ortg'] }}{% else %}{{ pred.our_home_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['drtg'] }}{% else %}{{ pred.our_home_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['pace'] }}{% else %}{{ pred.our_home_eff.pace }}{% endif %}</strong></div>
+                            <div>{{ pred.away_team_id }}: ORtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['ortg'] }}{% else %}{{ pred.our_away_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['drtg'] }}{% else %}{{ pred.our_away_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['pace'] }}{% else %}{{ pred.our_away_eff.pace }}{% endif %}</strong></div>
                             <div style="margin-top:4px;">Projected score: <strong>{{ pred.home_team_id.split()[-1] }} {{ pred.our_home_pts }} &mdash; {{ pred.our_away_pts }} {{ pred.away_team_id.split()[-1] }}</strong> &nbsp;·&nbsp; Game pace ~{{ pred.our_pace }}</div>
                         </div>
                         {% elif pred.total_trend_record is defined or pred.spread_trend_record is defined %}
@@ -803,10 +706,12 @@
                             {% endif %}
                         </div>
                         {% endif %}
-                        {% set _away_suspended = pred.away_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
-                        {% set _home_suspended = pred.home_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
-                        {% set _away_injured = pred.away_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
-                        {% set _home_injured = pred.home_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _away_injuries = pred.away_injuries if pred.away_injuries is not none else [] %}
+                        {% set _home_injuries = pred.home_injuries if pred.home_injuries is not none else [] %}
+                        {% set _away_suspended = _away_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _home_suspended = _home_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _away_injured = _away_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _home_injured = _home_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
                         {% if _away_suspended or _home_suspended %}
                         <div class="analysis-title" style="color:#ef4444;">Suspensions</div>
                         <div class="injury-list">
@@ -917,7 +822,7 @@
             <div class="footer-col-blk">
                 <div class="footer-heading">Company</div>
                 <a href="/plans">Plans &amp; pricing</a>
-                <a href="/tutorial">How to read picks</a>
+                <a href="/tutorial">Tutorial</a>
                 <a href="/contact">Contact us</a>
                 <a href="/privacy">Privacy</a>
                 <a href="/terms">Terms</a>
@@ -947,14 +852,6 @@
 </footer>
 
 <script>
-    function toggleMenu() {
-        const navLinks = document.getElementById('navLinks');
-        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
-        if (navLinks) {
-            navLinks.classList.toggle('active');
-            if (burger) burger.setAttribute('aria-expanded', navLinks.classList.contains('active') ? 'true' : 'false');
-        }
-    }
     document.addEventListener('DOMContentLoaded', function() {
         const navLinks = document.getElementById('navLinks');
         const searchForm = document.getElementById('navSearchFormPicks');
@@ -967,12 +864,13 @@
             { name: "Detroit Tigers", sport: "MLB", slug: "detroit-tigers" },
             { name: "Boston Celtics", sport: "NBA", slug: "boston-celtics" },
         ];
-        if (!navLinks) return;
+        if (navLinks) {
         navLinks.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', function() {
                 navLinks.classList.remove('active');
             });
         });
+        }
         if (searchForm && resultsEl) {
             let debounceTimer = null;
             if (searchInput && autocompleteEl) {

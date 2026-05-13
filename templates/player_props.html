@@ -1,9 +1,10 @@
-{% extends "underdogs_layout.html" %}
+{% extends "base.html" %}
 {% block title %}Player Props | Prediction Lab{% endblock %}
 {% block head_meta %}
 <meta name="description" content="AI-powered player prop projections — points, rebounds, assists, threes and steals for tonight's games.">
 {% endblock %}
 {% block extra_styles %}
+<style>
 .props-wrap{max-width:1400px;margin:0 auto;padding:0 16px 48px;}
 .props-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:12px 16px;margin-bottom:20px;box-shadow:0 2px 8px rgba(15,23,42,0.06);}
 .controls-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
@@ -131,6 +132,7 @@
 .rr-result.hit{background:rgba(16,185,129,0.15);color:#059669;}
 .rr-result.miss{background:rgba(239,68,68,0.12);color:#dc2626;}
 @media(max-width:440px){.result-row{grid-template-columns:1fr 50px 58px 58px 54px;padding:8px 12px;gap:3px;font-size:0.77rem;}}
+</style>
 {% endblock %}
 {% block content %}
 <div class="props-wrap">

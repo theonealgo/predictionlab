@@ -1,8 +1,9 @@
-{% extends "underdogs_layout.html" %}
+{% extends "base.html" %}
 
 {% block title %}Model Performance - predictionlab.io{% endblock %}
 
 {% block extra_styles %}
+<style>
 .perf-wrap{max-width:1180px;margin:0 auto;}
 .perf-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:20px 18px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
 .perf-head{margin-bottom:14px;}
@@ -46,6 +47,7 @@
 .team-mini th,.team-mini td{padding:5px 6px;font-size:0.78rem;border-bottom:1px solid #E0E4E8;text-align:left;color:#334155;}
 .team-mini th{font-weight:800;color:#0f172a;background:#F8FAFC;}
 .team-mini tr:last-child td{border-bottom:none;}
+</style>
 {% endblock %}
 
 {% block content %}

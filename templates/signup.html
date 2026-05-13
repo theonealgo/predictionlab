@@ -1,8 +1,9 @@
-{% extends "underdogs_layout.html" %}
+{% extends "base.html" %}
 
 {% block title %}Sign Up - predictionlab.io{% endblock %}
 
 {% block extra_styles %}
+<style>
 .auth-wrap{max-width:460px;margin:28px auto 10px;}
 .auth-card{background:#ffffff;border:1px solid #E0E4E8;border-radius:16px;padding:28px 24px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
 .auth-title{font-size:1.8em;text-align:center;margin-bottom:8px;color:#0f172a;font-weight:800;}
@@ -23,6 +24,7 @@
 .auth-link a{color:#00529B;text-decoration:none;font-weight:700;}
 .auth-link a:hover{text-decoration:underline;}
 .auth-error{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);color:#991b1b;padding:10px 12px;border-radius:10px;margin-bottom:12px;font-size:.92em;}
+</style>
 {% endblock %}
 
 {% block content %}
