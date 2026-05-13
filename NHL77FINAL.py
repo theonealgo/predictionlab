@@ -5952,44 +5952,13 @@ BASE_TEMPLATE = """
             align-items: center;
             position: relative;
         }
-        .logo {
-            font-family:'Oswald',sans-serif;
-            font-weight:700;
-            font-size:28px;
-            text-transform:uppercase;
-            letter-spacing:0.5px;
-            line-height:1;
-            color:#0f172a;
-            text-decoration:none;
-        }
-        .logo-img {
-            height: 64px;
-            width: auto;
-            display: block;
-        }
-        .hamburger {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 5px;
-            cursor: pointer;
-            padding: 8px 10px;
-            border-radius: 10px;
-            border: 1px solid #E0E4E8;
-            background: #ffffff;
-            margin-left: auto;
-            order: 4;
-        }
-        .hamburger span {
-            width: 24px;
-            height: 2px;
-            background: #0f172a;
-            border-radius: 2px;
-            transition: 0.3s;
-        }
+        .logo{font-family:'Inter',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.5px;line-height:1;color:#0f172a;text-decoration:none;flex-shrink:0;}
+        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:0;}
+        .hamburger:hover{background:#f8fafc;}
+        .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
         .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
         .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(360px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
+        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
         .tv-drawer.open{transform:translateX(0);}
         .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
         .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
@@ -6011,48 +5980,48 @@ BASE_TEMPLATE = """
         .tv-pick-match{font-size:0.78em;font-weight:700;color:#0f172a;}
         .tv-pick-edge{font-size:0.72em;font-weight:800;color:#00C076;background:#f0fdf4;border-radius:6px;padding:2px 7px;}
         .tv-menu-list{padding:8px;}
-        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:14px;padding:13px 14px;border:none;background:none;cursor:pointer;border-radius:10px;text-align:left;transition:background .15s;}
+        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;cursor:pointer;border-radius:8px;text-align:left;transition:background .15s;}
         .tv-menu-btn:hover{background:#f1f5f9;}
-        .tv-menu-btn.active-section{background:#f0f7ff;}
-        .tv-menu-icon{font-size:1.1rem;width:28px;text-align:center;flex-shrink:0;}
-        .tv-menu-label{flex:1;font-size:0.95rem;font-weight:700;color:#0f172a;}
+        .tv-menu-label{flex:1;font-size:0.9rem;font-weight:700;color:#0f172a;}
         .tv-menu-arrow{color:#94a3b8;font-size:1rem;}
-        .tv-sub-section-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;padding:14px 14px 6px;}
-        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:11px 14px;text-decoration:none;color:#1e293b;font-size:0.9rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
+        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:10px 14px;text-decoration:none;color:#1e293b;font-size:0.88rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
         .tv-sub-link:hover{background:#f1f5f9;color:#00529B;}
         .tv-sub-link.highlight{color:#00529B;font-weight:800;}
         .tv-sub-link .ext{font-size:0.7em;color:#94a3b8;margin-left:2px;}
-        .nav-donate-btn {
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            color: #fff !important;
-            font-weight: 800 !important;
-            padding: 8px 14px;
-            border-radius: 10px;
-            transition: opacity 0.2s !important;
-            white-space: nowrap;
-        }
-        .nav-donate-btn:hover { opacity: 0.9; color: #fff !important; }
-        .nav-search-wrap { position: relative; flex: 1; max-width: 620px; width: 100%; min-width: 0; margin-left: 14px; }
-        .nav-search {
-            flex: 1;
-            max-width: 620px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: #ffffff;
-            border: 1px solid #E0E4E8;
-            border-radius: 999px;
-            padding: 5px 8px 5px 14px;
-            box-shadow: 0 3px 10px rgba(26,29,35,0.08);
-        }
-        .nav-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: #0f172a; font-size: 0.9em; }
-        .nav-search input::placeholder { color: #475569; }
-        .nav-search button { border: 1px solid #E0E4E8; background: #ffffff; color: #00529B; border-radius: 999px; padding: 8px 14px; font-weight: 800; cursor: pointer; }
-        .nav-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-        .auth-btn { text-decoration: none; border-radius: 999px; font-weight: 800; font-size: 0.82em; padding: 9px 14px; transition: opacity 0.2s; white-space: nowrap; }
-        .auth-btn.signup { background: #00C076; color: #ffffff; border: 1px solid #00C076; }
-        .auth-btn.login { border: 1px solid #00529B; color: #00529B; background: #fff; }
-        .auth-btn:hover { opacity: 0.9; }
+        .nav-search-wrap{position:relative;flex:1;max-width:560px;width:100%;min-width:0;}
+        .nav-search{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:7px 14px;cursor:text;transition:border-color .15s;}
+        .nav-search:hover{border-color:#cbd5e1;}
+        .nav-search svg{color:#94a3b8;flex-shrink:0;}
+        .nav-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;color:#0f172a;font-size:0.88em;cursor:text;}
+        .nav-search input::placeholder{color:#94a3b8;}
+        .nav-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
+        .acct-wrap{position:relative;}
+        .acct-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+        .acct-btn:hover{border-color:#00529B;background:#f0f7ff;}
+        .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:160px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
+        .acct-menu.open{display:block;}
+        .acct-menu a{display:block;padding:9px 12px;font-size:0.85em;font-weight:600;color:#1e293b;text-decoration:none;border-radius:8px;}
+        .acct-menu a:hover{background:#f1f5f9;color:#00529B;}
+        .acct-menu-divider{height:1px;background:#f1f5f9;margin:4px 0;}
+        .srch-overlay{display:none;position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);}
+        .srch-overlay.open{display:block;}
+        .srch-box{position:absolute;top:70px;left:50%;transform:translateX(-50%);width:min(680px,96vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,0.18);overflow:hidden;}
+        .srch-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f1f5f9;}
+        .srch-input-row svg{color:#94a3b8;flex-shrink:0;}
+        .srch-input-row input{flex:1;border:none;outline:none;font-size:1rem;color:#0f172a;}
+        .srch-input-row input::placeholder{color:#94a3b8;}
+        .srch-close{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.1rem;padding:4px 6px;border-radius:6px;}
+        .srch-close:hover{background:#f1f5f9;color:#0f172a;}
+        .srch-filters{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid #f1f5f9;scrollbar-width:none;}
+        .srch-filters::-webkit-scrollbar{display:none;}
+        .srch-filter{flex-shrink:0;padding:5px 12px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:0.78em;font-weight:700;cursor:pointer;color:#475569;}
+        .srch-filter.active,.srch-filter:hover{background:#0f172a;color:#fff;border-color:#0f172a;}
+        .srch-items{max-height:340px;overflow-y:auto;padding:8px 0;}
+        .srch-item{display:flex;align-items:center;gap:10px;padding:10px 16px;text-decoration:none;color:#1e293b;}
+        .srch-item:hover{background:#f8fafc;}
+        .srch-item-label{font-size:0.88em;font-weight:600;flex:1;}
+        .srch-item-sport{font-size:0.72em;font-weight:700;color:#94a3b8;text-transform:uppercase;}
+        .srch-empty{padding:24px 16px;text-align:center;font-size:0.85em;color:#94a3b8;}
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -6103,28 +6072,7 @@ BASE_TEMPLATE = """
         @media (max-width: 720px) {
             .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
         }
-        @media (max-width: 1100px) {
-            .navbar-content { flex-wrap: wrap; justify-content: center; }
-            .nav-search-wrap { order: 3; width: 100%; max-width: 100%; }
-        }
-        @media (max-width: 768px) {
-            .navbar-content {
-                display: grid;
-                grid-template-columns: 1fr auto;
-                grid-template-areas:
-                    "logo ham"
-                    "search search"
-                    "actions actions"
-                    "links links";
-                align-items: center;
-                gap: 10px 12px;
-            }
-            .navbar .logo { grid-area: logo; justify-self: start; }
-            .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
-            .nav-search-wrap { grid-area: search; width: 100%; max-width: none; order: unset; }
-            .nav-actions { grid-area: actions; width: 100%; justify-content: center; }
-            .container { padding: 20px 15px; }
-        }
+        @media (max-width: 768px) { .nav-search-wrap{display:none;} .container{padding:20px 15px;} }
         /* Nav dropdown groups */
         .nav-group { position: relative; }
         .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
@@ -6139,21 +6087,30 @@ BASE_TEMPLATE = """
 <body>
     <div class="navbar">
         <div class="navbar-content">
-            <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
             <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
+            <a href="/" class="logo" aria-label="Prediction Lab home">PL</a>
             <div class="nav-search-wrap">
-                <form class="nav-search" action="/search" method="get" role="search">
-                    <input type="text" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search">
-                    <button type="submit">Search</button>
-                </form>
+                <div class="nav-search" onclick="openSrch()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
+                </div>
             </div>
             <div class="nav-actions">
-                {% if is_logged_in %}
-                <a href="/logout" class="auth-btn login">Logout</a>
-                {% else %}
-                <a href="/login" class="auth-btn login">Login</a>
-                <a href="/signup" class="auth-btn signup">Sign Up</a>
-                {% endif %}
+                <div class="acct-wrap">
+                    <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </button>
+                    <div class="acct-menu" id="acctMenu">
+                        {% if is_logged_in %}
+                        <a href="/logout">Sign Out</a>
+                        {% else %}
+                        <a href="/login">Sign In</a>
+                        <a href="/signup">Sign Up</a>
+                        {% endif %}
+                        <div class="acct-menu-divider"></div>
+                        <a href="/faq">Help</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -6177,14 +6134,38 @@ BASE_TEMPLATE = """
           </div>
           {% endif %}
           <div class="tv-menu-list">
-            <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-icon">&#127942;</span><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
-            <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-icon">&#128202;</span><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
-            <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-icon">&#128200;</span><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
-            <button class="tv-menu-btn" onclick="tvSub(\'community\')"><span class="tv-menu-icon">&#128101;</span><span class="tv-menu-label">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
-            <button class="tv-menu-btn" onclick="tvSub(\'company\')"><span class="tv-menu-icon">&#8505;</span><span class="tv-menu-label">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
+            <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
+              <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'community\')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
+              <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'company\')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+            </div>
           </div>
         </div>
         <div class="tv-panel hidden-right" id="tvSub"></div>
+      </div>
+    </div>
+    <div class="srch-overlay" id="srchOverlay" onclick="closeSrchOutside(event)">
+      <div class="srch-box">
+        <div class="srch-input-row">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="srchInput" placeholder="Search teams, leagues, or matchups...">
+          <button class="srch-close" onclick="closeSrch()">&#x2715;</button>
+        </div>
+        <div class="srch-filters">
+          <button class="srch-filter active" data-s="all">All</button>
+          <button class="srch-filter" data-s="nba">NBA</button>
+          <button class="srch-filter" data-s="nfl">NFL</button>
+          <button class="srch-filter" data-s="mlb">MLB</button>
+          <button class="srch-filter" data-s="nhl">NHL</button>
+          <button class="srch-filter" data-s="ncaab">NCAAB</button>
+          <button class="srch-filter" data-s="ncaaf">NCAAF</button>
+          <button class="srch-filter" data-s="wnba">WNBA</button>
+          <button class="srch-filter" data-s="props">Props</button>
+        </div>
+        <div class="srch-items" id="srchItems"></div>
       </div>
     </div>
     <div class="container">
@@ -6241,12 +6222,22 @@ BASE_TEMPLATE = """
     </footer>
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA AI Picks',h:'/nba-picks'},{l:'MLB AI Picks',h:'/mlb-picks'},{l:'NHL AI Picks',h:'/nhl-picks'},{l:'NFL AI Picks',h:'/nfl-picks'},{l:'Soccer AI Picks',h:'/soccer-picks'},{l:'NCAAB AI Picks',h:'/ncaab-picks'},{l:'NCAAF AI Picks',h:'/ncaaf-picks'},{l:'NCAAW AI Picks',h:'/ncaaw-picks'},{l:'WNBA AI Picks',h:'/wnba-picks'},{l:'View All Sports →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results Report',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'What Are AI Picks?',h:'/what-are-ai-sports-betting-picks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Betting Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'},{l:'Top Value Picks',h:'/'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://predictionlab.io',ext:true},{l:'YouTube',h:'https://predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact Us',h:'/contact'},{l:'Privacy Policy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){document.getElementById('tvOverlay').classList.add('open');document.getElementById('tvDrawer').classList.add('open');document.body.style.overflow='hidden';}
 function tvClose(){document.getElementById('tvOverlay').classList.remove('open');document.getElementById('tvDrawer').classList.remove('open');document.body.style.overflow='';setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
 function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
-document.addEventListener('keydown',function(e){if(e.key==='Escape')tvClose();});
+function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
+function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
+document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
+var _srchFilter='all';
+var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
+function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
+function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
+function renderSrchItems(q){var items=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&(!q||i.l.toLowerCase().includes(q.toLowerCase()));});var el=document.getElementById('srchItems');if(!items.length){el.innerHTML='<div class="srch-empty">No results found</div>';return;}el.innerHTML=items.map(function(i){return'<a class="srch-item" href="'+i.h+'"><span class="srch-item-label">'+i.l+'</span><span class="srch-item-sport">'+i.s.toUpperCase()+'</span></a>';}).join('');}
+document.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('srchInput');if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}document.querySelectorAll('.srch-filter').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});this.classList.add('active');_srchFilter=this.dataset.s;renderSrchItems(document.getElementById('srchInput').value);});});});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
     </script>
 </body>
 </html>
@@ -8567,29 +8558,40 @@ def landing_page():
             font-weight: 800;
             cursor: pointer;
         }
-        .nav-search-wrap{position:relative;flex:1;max-width:760px;width:100%;margin-left:14px;}
-        .search-autocomplete{
-            display:none;position:absolute;top:48px;right:0;width:min(180px,calc(100vw - 36px));z-index:1100;
-            background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:10px;
-            box-shadow:0 14px 28px rgba(15,23,42,0.18);padding:6px;
-        }
-        .search-autocomplete.show{display:block;}
-        .search-item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#0f172a;}
-        .search-item:hover{background:rgba(15,23,42,0.06);}
-        .search-item small{color:#475569;}
-        .nav-actions { display:flex; align-items:center; gap:14px; }
-        .auth-btn {
-            text-decoration:none;
-            border-radius:999px;
-            font-weight:800;
-            font-size:0.82em;
-            padding:9px 14px;
-            transition:opacity .2s ease;
-            white-space:nowrap;
-        }
-        .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
-        .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
-        .auth-btn:hover { opacity:.9; }
+        .nav-search-wrap{position:relative;flex:1;max-width:560px;width:100%;min-width:0;}
+        .nav-search{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:7px 14px;cursor:text;}
+        .nav-search:hover{border-color:#cbd5e1;}
+        .nav-search svg{color:#94a3b8;flex-shrink:0;}
+        .nav-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;color:#0f172a;font-size:0.88em;cursor:text;}
+        .nav-search input::placeholder{color:#94a3b8;}
+        .nav-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
+        .acct-wrap{position:relative;}
+        .acct-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+        .acct-btn:hover{border-color:#00529B;background:#f0f7ff;}
+        .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:160px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
+        .acct-menu.open{display:block;}
+        .acct-menu a{display:block;padding:9px 12px;font-size:0.85em;font-weight:600;color:#1e293b;text-decoration:none;border-radius:8px;}
+        .acct-menu a:hover{background:#f1f5f9;color:#00529B;}
+        .acct-menu-divider{height:1px;background:#f1f5f9;margin:4px 0;}
+        .srch-overlay{display:none;position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);}
+        .srch-overlay.open{display:block;}
+        .srch-box{position:absolute;top:70px;left:50%;transform:translateX(-50%);width:min(680px,96vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,0.18);overflow:hidden;}
+        .srch-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f1f5f9;}
+        .srch-input-row svg{color:#94a3b8;flex-shrink:0;}
+        .srch-input-row input{flex:1;border:none;outline:none;font-size:1rem;color:#0f172a;}
+        .srch-input-row input::placeholder{color:#94a3b8;}
+        .srch-close{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.1rem;padding:4px 6px;border-radius:6px;}
+        .srch-close:hover{background:#f1f5f9;color:#0f172a;}
+        .srch-filters{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid #f1f5f9;scrollbar-width:none;}
+        .srch-filters::-webkit-scrollbar{display:none;}
+        .srch-filter{flex-shrink:0;padding:5px 12px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:0.78em;font-weight:700;cursor:pointer;color:#475569;}
+        .srch-filter.active,.srch-filter:hover{background:#0f172a;color:#fff;border-color:#0f172a;}
+        .srch-items{max-height:340px;overflow-y:auto;padding:8px 0;}
+        .srch-item{display:flex;align-items:center;gap:10px;padding:10px 16px;text-decoration:none;color:#1e293b;}
+        .srch-item:hover{background:#f8fafc;}
+        .srch-item-label{font-size:0.88em;font-weight:600;flex:1;}
+        .srch-item-sport{font-size:0.72em;font-weight:700;color:#94a3b8;text-transform:uppercase;}
+        .srch-empty{padding:24px 16px;text-align:center;font-size:0.85em;color:#94a3b8;}
         .search-results-wrap{
             max-width:1200px;
             margin:14px auto 0;
@@ -8630,50 +8632,13 @@ def landing_page():
         .perf-answer-list{display:grid;gap:6px;}
         .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
         .perf-empty{font-size:0.82em;color:#475569;background:#fff;border:1px dashed rgba(15,23,42,0.18);border-radius:8px;padding:10px;}
-        .logo {
-            display:flex;align-items:center;gap:8px;text-decoration:none;
-        }
-        .logo-mark {
-            width:36px;height:36px;border-radius:9px;
-            background:linear-gradient(135deg,#00529B 0%,#0ea5e9 100%);
-            display:flex;align-items:center;justify-content:center;
-            font-family:'Oswald',sans-serif;font-weight:700;font-size:15px;
-            color:#fff;letter-spacing:0.5px;flex-shrink:0;
-            box-shadow:0 2px 10px rgba(0,82,155,0.28);
-        }
-        .logo-text {
-            font-family:'Oswald',sans-serif;font-weight:700;font-size:17px;
-            text-transform:uppercase;letter-spacing:1px;color:var(--text);line-height:1;
-        }
-        .logo-img {
-            height: 44px;
-            width: auto;
-            display: block;
-        }
-        .hamburger {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 5px;
-            cursor: pointer;
-            padding: 8px 10px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: #ffffff;
-            order: 0;
-            margin-right: 6px;
-        }
-        .hamburger:hover { background: #f8fafc; }
-        .hamburger span {
-            width: 24px;
-            height: 2px;
-            background: #0f172a;
-            border-radius: 2px;
-            transition: 0.3s;
-        }
+        .logo{font-family:'Inter',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.5px;line-height:1;color:#fff;text-decoration:none;flex-shrink:0;}
+        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.08);flex-shrink:0;order:0;}
+        .hamburger:hover{background:rgba(255,255,255,0.14);}
+        .hamburger span{width:20px;height:1.5px;background:#fff;border-radius:2px;transition:all .2s;}
         .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
         .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(360px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
+        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
         .tv-drawer.open{transform:translateX(0);}
         .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
         .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
@@ -8687,35 +8652,15 @@ def landing_page():
         .tv-panel.hidden-left{transform:translateX(-100%);}
         .tv-panel.hidden-right{transform:translateX(100%);}
         .tv-panel.visible{transform:translateX(0);}
-        .tv-today-strip{padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
-        .tv-today-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:8px;}
-        .tv-today-picks{display:flex;flex-direction:column;gap:6px;}
-        .tv-today-pick{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;text-decoration:none;color:inherit;}
-        .tv-today-pick:hover{border-color:#00529B;background:#f0f7ff;}
-        .tv-pick-match{font-size:0.78em;font-weight:700;color:#0f172a;}
-        .tv-pick-edge{font-size:0.72em;font-weight:800;color:#00C076;background:#f0fdf4;border-radius:6px;padding:2px 7px;}
         .tv-menu-list{padding:8px;}
-        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:14px;padding:13px 14px;border:none;background:none;cursor:pointer;border-radius:10px;text-align:left;transition:background .15s;}
+        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;cursor:pointer;border-radius:8px;text-align:left;transition:background .15s;}
         .tv-menu-btn:hover{background:#f1f5f9;}
-        .tv-menu-btn.active-section{background:#f0f7ff;}
-        .tv-menu-icon{font-size:1.1rem;width:28px;text-align:center;flex-shrink:0;}
-        .tv-menu-label{flex:1;font-size:0.95rem;font-weight:700;color:#0f172a;}
+        .tv-menu-label{flex:1;font-size:0.9rem;font-weight:700;color:#0f172a;}
         .tv-menu-arrow{color:#94a3b8;font-size:1rem;}
-        .tv-sub-section-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;padding:14px 14px 6px;}
-        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:11px 14px;text-decoration:none;color:#1e293b;font-size:0.9rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
+        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:10px 14px;text-decoration:none;color:#1e293b;font-size:0.88rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
         .tv-sub-link:hover{background:#f1f5f9;color:#00529B;}
         .tv-sub-link.highlight{color:#00529B;font-weight:800;}
         .tv-sub-link .ext{font-size:0.7em;color:#94a3b8;margin-left:2px;}
-        .nav-donate-btn {
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            color: #fff !important;
-            font-weight: 800 !important;
-            padding: 8px 14px;
-            border-radius: 10px;
-            transition: opacity 0.2s !important;
-            white-space: nowrap;
-        }
-        .nav-donate-btn:hover { opacity: 0.9; color: #fff !important; }
 
         /* ── Hero ── */
         .hero{
@@ -9064,21 +9009,29 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
-        <a href="/" class="logo" aria-label="Prediction Lab home"><span class="logo-mark">PL</span><span class="logo-text">Prediction Lab</span></a>
+        <a href="/" class="logo" aria-label="Prediction Lab home">PL</a>
         <div class="nav-search-wrap">
-            <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
-                <input type="text" id="navSearchInput" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
-                <button type="submit">Search</button>
-            </form>
-            <div id="searchAutocomplete" class="search-autocomplete" aria-live="polite"></div>
+            <div class="nav-search" onclick="openSrch()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
+            </div>
         </div>
         <div class="nav-actions">
-            {% if is_logged_in %}
-            <a href="/logout" class="auth-btn login">Logout</a>
-            {% else %}
-            <a href="/login" class="auth-btn login">Login</a>
-            <a href="/signup" class="auth-btn signup">Sign Up</a>
-            {% endif %}
+            <div class="acct-wrap">
+                <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </button>
+                <div class="acct-menu" id="acctMenu">
+                    {% if is_logged_in %}
+                    <a href="/logout">Sign Out</a>
+                    {% else %}
+                    <a href="/login">Sign In</a>
+                    <a href="/signup">Sign Up</a>
+                    {% endif %}
+                    <div class="acct-menu-divider"></div>
+                    <a href="/faq">Help</a>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -9092,19 +9045,40 @@ def landing_page():
   <div class="tv-panels">
     <div class="tv-panel visible" id="tvMain">
       <div class="tv-menu-list">
-        <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-icon">&#127942;</span><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-icon">&#128202;</span><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-icon">&#128200;</span><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button class="tv-menu-btn" onclick="tvSub(\'community\')"><span class="tv-menu-icon">&#128101;</span><span class="tv-menu-label">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button class="tv-menu-btn" onclick="tvSub(\'company\')"><span class="tv-menu-icon">&#8505;</span><span class="tv-menu-label">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
+        <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
+          <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'community\')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
+          <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'company\')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+        </div>
       </div>
     </div>
     <div class="tv-panel hidden-right" id="tvSub"></div>
   </div>
 </div>
 
-<div class="search-results-wrap">
-    <div id="searchResults" class="search-results" aria-live="polite"></div>
+<div class="srch-overlay" id="srchOverlay" onclick="closeSrchOutside(event)">
+  <div class="srch-box">
+    <div class="srch-input-row">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="srchInput" placeholder="Search teams, leagues, or matchups...">
+      <button class="srch-close" onclick="closeSrch()">&#x2715;</button>
+    </div>
+    <div class="srch-filters">
+      <button class="srch-filter active" data-s="all">All</button>
+      <button class="srch-filter" data-s="nba">NBA</button>
+      <button class="srch-filter" data-s="nfl">NFL</button>
+      <button class="srch-filter" data-s="mlb">MLB</button>
+      <button class="srch-filter" data-s="nhl">NHL</button>
+      <button class="srch-filter" data-s="ncaab">NCAAB</button>
+      <button class="srch-filter" data-s="ncaaf">NCAAF</button>
+      <button class="srch-filter" data-s="wnba">WNBA</button>
+      <button class="srch-filter" data-s="props">Props</button>
+    </div>
+    <div class="srch-items" id="srchItems"></div>
+  </div>
 </div>
 <!-- Hero -->
 <main id="main-content">
@@ -9112,7 +9086,7 @@ def landing_page():
     <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">See The Edge First.</h1>
     <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks updated daily across every major sport.</p>
     <div class="hero-slide" style="display:flex;gap:12px;margin-top:24px;animation:slideIn 0.8s ease-out 0.4s both;">
-        <a href="/signup" style="background:#00C076;color:#ffffff;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;border:1px solid #00C076;box-shadow:0 6px 20px rgba(0,192,118,0.32);">Get Started Free</a>
+        <a href="/signup" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;border:1px solid rgba(255,255,255,0.3);box-shadow:0 6px 20px rgba(0,0,0,0.2);">Get Started Free</a>
     </div>
     <p class="hero-slide" style="font-size:0.76em;color:#94a3b8;margin-top:10px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
 </div>
@@ -9459,12 +9433,22 @@ def landing_page():
 {% endif %}
 
 <script>
-    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA AI Picks',h:'/nba-picks'},{l:'MLB AI Picks',h:'/mlb-picks'},{l:'NHL AI Picks',h:'/nhl-picks'},{l:'NFL AI Picks',h:'/nfl-picks'},{l:'Soccer AI Picks',h:'/soccer-picks'},{l:'NCAAB AI Picks',h:'/ncaab-picks'},{l:'NCAAF AI Picks',h:'/ncaaf-picks'},{l:'NCAAW AI Picks',h:'/ncaaw-picks'},{l:'WNBA AI Picks',h:'/wnba-picks'},{l:'View All Sports →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results Report',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'What Are AI Picks?',h:'/what-are-ai-sports-betting-picks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Betting Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'},{l:'Top Value Picks',h:'/'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://predictionlab.io',ext:true},{l:'YouTube',h:'https://predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact Us',h:'/contact'},{l:'Privacy Policy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
+    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
     function tvOpen(){document.getElementById('tvOverlay').classList.add('open');document.getElementById('tvDrawer').classList.add('open');document.body.style.overflow='hidden';}
     function tvClose(){document.getElementById('tvOverlay').classList.remove('open');document.getElementById('tvDrawer').classList.remove('open');document.body.style.overflow='';setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
     function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
     function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
-    document.addEventListener('keydown',function(e){if(e.key==='Escape')tvClose();});
+    function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
+    function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
+    document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
+    var _srchFilter='all';
+    var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+    function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
+    function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
+    function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
+    function renderSrchItems(q){var items=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&(!q||i.l.toLowerCase().includes(q.toLowerCase()));});var el=document.getElementById('srchItems');if(!items.length){el.innerHTML='<div class="srch-empty">No results found</div>';return;}el.innerHTML=items.map(function(i){return'<a class="srch-item" href="'+i.h+'"><span class="srch-item-label">'+i.l+'</span><span class="srch-item-sport">'+i.s.toUpperCase()+'</span></a>';}).join('');}
+    document.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('srchInput');if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}document.querySelectorAll('.srch-filter').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});this.classList.add('active');_srchFilter=this.dataset.s;renderSrchItems(document.getElementById('srchInput').value);});});});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
     document.addEventListener('DOMContentLoaded', function() {
         const premiumBar = document.getElementById('joinPremiumBar');
         const searchForm = document.getElementById('navSearchForm');
