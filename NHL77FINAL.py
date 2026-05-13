@@ -5987,48 +5987,41 @@ BASE_TEMPLATE = """
             border-radius: 2px;
             transition: 0.3s;
         }
-        .nav-links {
-            display:none;
-            position:absolute;
-            top:calc(100% + 8px);
-            right:0;
-            width:min(180px,calc(100vw - 36px));
-            flex-direction:column;
-            gap:0;
-            padding:8px;
-            border:1px solid #cbd5e1;
-            border-radius:12px;
-            background:#ffffff;
-            box-shadow:0 14px 28px rgba(15,23,42,0.18);
-            z-index:1100;
-        }
-        .nav-links.active { display:flex; }
-        .nav-links a {
-            color: #1A1D23;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.2s;
-            white-space: normal;
-            padding: 10px 12px;
-            border-radius: 8px;
-            font-size: 0.82em;
-        }
-        .nav-section-title { display: none; }
-        .nav-divider { display: none; }
-        .nav-section-title {
-            font-size: 0.65em;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            color: #475569;
-            padding: 6px 8px;
-        }
-        .nav-divider {
-            height: 1px;
-            background: rgba(255, 255, 255, 0.1);
-            margin: 6px 0;
-        }
-        .nav-links a:hover { color: #00529B; background: rgba(0,82,155,0.08); }
-        .nav-links a.active { color: #00529B; background: rgba(0,82,155,0.12); }
+        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
+        .tv-overlay.open{display:block;}
+        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(360px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
+        .tv-drawer.open{transform:translateX(0);}
+        .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
+        .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
+        .tv-header-btns{display:flex;gap:8px;align-items:center;}
+        .tv-back-btn{background:none;border:none;font-size:1.3rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
+        .tv-back-btn:hover{background:#f1f5f9;}
+        .tv-close-btn{background:none;border:none;font-size:1.1rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
+        .tv-close-btn:hover{background:#f1f5f9;}
+        .tv-panels{flex:1;overflow:hidden;position:relative;}
+        .tv-panel{position:absolute;inset:0;overflow-y:auto;transition:transform .25s cubic-bezier(.4,0,.2,1);}
+        .tv-panel.hidden-left{transform:translateX(-100%);}
+        .tv-panel.hidden-right{transform:translateX(100%);}
+        .tv-panel.visible{transform:translateX(0);}
+        .tv-today-strip{padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+        .tv-today-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:8px;}
+        .tv-today-picks{display:flex;flex-direction:column;gap:6px;}
+        .tv-today-pick{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;text-decoration:none;color:inherit;}
+        .tv-today-pick:hover{border-color:#00529B;background:#f0f7ff;}
+        .tv-pick-match{font-size:0.78em;font-weight:700;color:#0f172a;}
+        .tv-pick-edge{font-size:0.72em;font-weight:800;color:#00C076;background:#f0fdf4;border-radius:6px;padding:2px 7px;}
+        .tv-menu-list{padding:8px;}
+        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:14px;padding:13px 14px;border:none;background:none;cursor:pointer;border-radius:10px;text-align:left;transition:background .15s;}
+        .tv-menu-btn:hover{background:#f1f5f9;}
+        .tv-menu-btn.active-section{background:#f0f7ff;}
+        .tv-menu-icon{font-size:1.1rem;width:28px;text-align:center;flex-shrink:0;}
+        .tv-menu-label{flex:1;font-size:0.95rem;font-weight:700;color:#0f172a;}
+        .tv-menu-arrow{color:#94a3b8;font-size:1rem;}
+        .tv-sub-section-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;padding:14px 14px 6px;}
+        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:11px 14px;text-decoration:none;color:#1e293b;font-size:0.9rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
+        .tv-sub-link:hover{background:#f1f5f9;color:#00529B;}
+        .tv-sub-link.highlight{color:#00529B;font-weight:800;}
+        .tv-sub-link .ext{font-size:0.7em;color:#94a3b8;margin-left:2px;}
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             color: #fff !important;
@@ -6130,30 +6123,6 @@ BASE_TEMPLATE = """
             .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
             .nav-search-wrap { grid-area: search; width: 100%; max-width: none; order: unset; }
             .nav-actions { grid-area: actions; width: 100%; justify-content: center; }
-            .nav-links {
-                grid-area: unset;
-                position: absolute;
-                top: calc(100% + 8px);
-                right: 0;
-                left: auto;
-                display: none;
-                flex-direction: column;
-                flex-wrap: nowrap;
-                align-items: stretch;
-                gap: 0;
-                width: min(240px, calc(100vw - 24px));
-                max-height: 70vh;
-                overflow: auto;
-                padding: 8px;
-                border: 1px solid #cbd5e1;
-                box-shadow: 0 16px 34px rgba(15,23,42,0.20);
-                border-radius: 12px;
-                background: rgba(255,255,255,0.98);
-                backdrop-filter: blur(6px);
-                z-index: 1200;
-            }
-            .nav-links.active { display: flex; }
-            .nav-links a { font-size: 0.88em; padding: 10px 12px; white-space: normal; border-radius: 8px; }
             .container { padding: 20px 15px; }
         }
         /* Nav dropdown groups */
@@ -6171,26 +6140,7 @@ BASE_TEMPLATE = """
     <div class="navbar">
         <div class="navbar-content">
             <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
-            <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-            <div class="nav-links" id="navLinks">
-                <a href="/nhl-picks">NHL</a>
-                <a href="/nba-picks">NBA</a>
-                <a href="/mlb-picks">MLB</a>
-                <a href="/nfl-picks">NFL</a>
-                <a href="/ncaab-picks">NCAAB</a>
-                <a href="/ncaaw-picks">NCAAW</a>
-                <a href="/ncaaf-picks">NCAAF</a>
-                <a href="/wnba-picks">WNBA</a>
-                {% if soccer_enabled %}
-                <a href="/soccer-picks">Soccer</a>
-                {% endif %}
-                <a href="/player-props">Player Props</a>
-                <a href="/plans">Pricing</a>
-            </div>
+            <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
             <div class="nav-search-wrap">
                 <form class="nav-search" action="/search" method="get" role="search">
                     <input type="text" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search">
@@ -6208,6 +6158,35 @@ BASE_TEMPLATE = """
         </div>
     </div>
     
+    <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+    <div class="tv-drawer" id="tvDrawer">
+      <div class="tv-drawer-header">
+        <div class="tv-header-btns"><button class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+        <button class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+      </div>
+      <div class="tv-panels">
+        <div class="tv-panel visible" id="tvMain">
+          {% if todays_picks %}
+          <div class="tv-today-strip">
+            <div class="tv-today-label">&#9889; Today\'s Best Picks</div>
+            <div class="tv-today-picks">
+              {% for tp in todays_picks[:3] %}{% set _pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
+              <a class="tv-today-pick" href="/{{ tp.slug }}"><span class="tv-pick-match">{{ tp.sport }} &middot; {{ tp.away }} vs {{ tp.home }}</span><span class="tv-pick-edge">{{ _pct }}%</span></a>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          <div class="tv-menu-list">
+            <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-icon">&#127942;</span><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-icon">&#128202;</span><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-icon">&#128200;</span><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub(\'community\')"><span class="tv-menu-icon">&#128101;</span><span class="tv-menu-label">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub(\'company\')"><span class="tv-menu-icon">&#8505;</span><span class="tv-menu-label">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+          </div>
+        </div>
+        <div class="tv-panel hidden-right" id="tvSub"></div>
+      </div>
+    </div>
     <div class="container">
         {% block content %}{% endblock %}
     </div>
@@ -6262,31 +6241,12 @@ BASE_TEMPLATE = """
     </footer>
     
     <script>
-        function toggleMenu() {
-            const navLinks = document.getElementById('navLinks');
-            if (navLinks) navLinks.classList.toggle('active');
-        }
-        
-        // Close menu when clicking a link
-        document.addEventListener('DOMContentLoaded', function() {
-            const navLinks = document.getElementById('navLinks');
-            if (!navLinks) return;
-            navLinks.querySelectorAll('a').forEach(link => {
-                link.addEventListener('click', function() {
-                    navLinks.classList.remove('active');
-                });
-            });
-        });
-        
-        // Close menu when clicking outside
-        document.addEventListener('click', function(event) {
-            const navLinks = document.getElementById('navLinks');
-            const navbar = document.querySelector('.navbar');
-            if (!navLinks || !navbar) return;
-            if (!navbar.contains(event.target)) {
-                navLinks.classList.remove('active');
-            }
-        });
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA AI Picks',h:'/nba-picks'},{l:'MLB AI Picks',h:'/mlb-picks'},{l:'NHL AI Picks',h:'/nhl-picks'},{l:'NFL AI Picks',h:'/nfl-picks'},{l:'Soccer AI Picks',h:'/soccer-picks'},{l:'NCAAB AI Picks',h:'/ncaab-picks'},{l:'NCAAF AI Picks',h:'/ncaaf-picks'},{l:'NCAAW AI Picks',h:'/ncaaw-picks'},{l:'WNBA AI Picks',h:'/wnba-picks'},{l:'View All Sports →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results Report',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'What Are AI Picks?',h:'/what-are-ai-sports-betting-picks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Betting Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'},{l:'Top Value Picks',h:'/'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://predictionlab.io',ext:true},{l:'YouTube',h:'https://predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact Us',h:'/contact'},{l:'Privacy Policy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
+function tvOpen(){document.getElementById('tvOverlay').classList.add('open');document.getElementById('tvDrawer').classList.add('open');document.body.style.overflow='hidden';}
+function tvClose(){document.getElementById('tvOverlay').classList.remove('open');document.getElementById('tvDrawer').classList.remove('open');document.body.style.overflow='';setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')tvClose();});
     </script>
 </body>
 </html>
@@ -8706,36 +8666,41 @@ def landing_page():
             border-radius: 2px;
             transition: 0.3s;
         }
-        .nav-links {
-            display:none;
-            position:absolute;
-            top:calc(100% + 8px);
-            right:0;
-            width:min(180px,calc(100vw - 36px));
-            flex-direction:column;
-            gap:0;
-            padding:8px;
-            border:1px solid #cbd5e1;
-            border-radius:12px;
-            background:#ffffff;
-            box-shadow:0 14px 28px rgba(15,23,42,0.18);
-            z-index:1100;
-        }
-        .nav-links.active { display:flex; }
-        .nav-links a {
-            color: var(--text);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.82em;
-            transition: all 0.2s;
-            white-space: normal;
-            padding: 10px 12px;
-            border-radius: 8px;
-        }
-        .nav-links a:hover { color: var(--link); background: rgba(0,82,155,0.08); }
-        .nav-links a.active { color: var(--link); background: rgba(0,82,155,0.12); }
-        .nav-section-title { display: none; }
-        .nav-divider { display: none; }
+        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
+        .tv-overlay.open{display:block;}
+        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(360px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
+        .tv-drawer.open{transform:translateX(0);}
+        .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
+        .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
+        .tv-header-btns{display:flex;gap:8px;align-items:center;}
+        .tv-back-btn{background:none;border:none;font-size:1.3rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
+        .tv-back-btn:hover{background:#f1f5f9;}
+        .tv-close-btn{background:none;border:none;font-size:1.1rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
+        .tv-close-btn:hover{background:#f1f5f9;}
+        .tv-panels{flex:1;overflow:hidden;position:relative;}
+        .tv-panel{position:absolute;inset:0;overflow-y:auto;transition:transform .25s cubic-bezier(.4,0,.2,1);}
+        .tv-panel.hidden-left{transform:translateX(-100%);}
+        .tv-panel.hidden-right{transform:translateX(100%);}
+        .tv-panel.visible{transform:translateX(0);}
+        .tv-today-strip{padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+        .tv-today-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:8px;}
+        .tv-today-picks{display:flex;flex-direction:column;gap:6px;}
+        .tv-today-pick{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;text-decoration:none;color:inherit;}
+        .tv-today-pick:hover{border-color:#00529B;background:#f0f7ff;}
+        .tv-pick-match{font-size:0.78em;font-weight:700;color:#0f172a;}
+        .tv-pick-edge{font-size:0.72em;font-weight:800;color:#00C076;background:#f0fdf4;border-radius:6px;padding:2px 7px;}
+        .tv-menu-list{padding:8px;}
+        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:14px;padding:13px 14px;border:none;background:none;cursor:pointer;border-radius:10px;text-align:left;transition:background .15s;}
+        .tv-menu-btn:hover{background:#f1f5f9;}
+        .tv-menu-btn.active-section{background:#f0f7ff;}
+        .tv-menu-icon{font-size:1.1rem;width:28px;text-align:center;flex-shrink:0;}
+        .tv-menu-label{flex:1;font-size:0.95rem;font-weight:700;color:#0f172a;}
+        .tv-menu-arrow{color:#94a3b8;font-size:1rem;}
+        .tv-sub-section-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;padding:14px 14px 6px;}
+        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:11px 14px;text-decoration:none;color:#1e293b;font-size:0.9rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
+        .tv-sub-link:hover{background:#f1f5f9;color:#00529B;}
+        .tv-sub-link.highlight{color:#00529B;font-weight:800;}
+        .tv-sub-link .ext{font-size:0.7em;color:#94a3b8;margin-left:2px;}
         .nav-donate-btn {
             background: linear-gradient(135deg, #fbbf24, #f59e0b);
             color: #fff !important;
@@ -9076,35 +9041,6 @@ def landing_page():
             .navbar .hamburger { grid-area: ham; display: flex; justify-self: end; }
             .nav-search-wrap { grid-area: search; width: 100%; max-width: none; }
             .nav-actions { grid-area: actions; display: flex; justify-content: center; width: 100%; }
-            .nav-links {
-                grid-area: unset;
-                position: absolute;
-                top: calc(100% + 8px);
-                right: 0;
-                left: auto;
-                display: none;
-                flex-direction: column;
-                flex-wrap: nowrap;
-                align-items: stretch;
-                gap: 0;
-                width: min(240px, calc(100vw - 24px));
-                max-height: 70vh;
-                overflow: auto;
-                padding: 8px;
-                border: 1px solid #cbd5e1;
-                box-shadow: 0 16px 34px rgba(15,23,42,0.20);
-                border-radius: 12px;
-                background: rgba(255,255,255,0.98);
-                backdrop-filter: blur(6px);
-                z-index: 1200;
-            }
-            .nav-links.active { display: flex; }
-            .nav-links a {
-                white-space: normal;
-                border-radius: 8px;
-                padding: 10px 12px;
-                font-size: 0.88em;
-            }
         }
         .nav-group { position: relative; }
         .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
@@ -9126,26 +9062,7 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a>
-        <button type="button" class="hamburger" onclick="toggleMenu()" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <div class="nav-links" id="navLinks">
-            <a href="/nhl-picks">NHL</a>
-            <a href="/nba-picks">NBA</a>
-            <a href="/mlb-picks">MLB</a>
-            <a href="/nfl-picks">NFL</a>
-            <a href="/ncaab-picks">NCAAB</a>
-            <a href="/ncaaw-picks">NCAAW</a>
-            <a href="/ncaaf-picks">NCAAF</a>
-            <a href="/wnba-picks">WNBA</a>
-            {% if soccer_enabled %}
-            <a href="/soccer-picks">Soccer</a>
-            {% endif %}
-            <a href="/player-props">Player Props</a>
-            <a href="/plans">Pricing</a>
-        </div>
+        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
         <div class="nav-search-wrap">
             <form class="nav-search" id="navSearchForm" action="/search" method="get" role="search">
                 <input type="text" id="navSearchInput" name="query" placeholder="Search teams, leagues, or matchups..." aria-label="Search predictions and performance">
@@ -9162,6 +9079,26 @@ def landing_page():
             {% endif %}
         </div>
     </div>
+</div>
+
+<div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+<div class="tv-drawer" id="tvDrawer">
+  <div class="tv-drawer-header">
+    <div class="tv-header-btns"><button class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+    <button class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+  </div>
+  <div class="tv-panels">
+    <div class="tv-panel visible" id="tvMain">
+      <div class="tv-menu-list">
+        <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-icon">&#127942;</span><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-icon">&#128202;</span><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-icon">&#128200;</span><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvSub(\'community\')"><span class="tv-menu-icon">&#128101;</span><span class="tv-menu-label">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button class="tv-menu-btn" onclick="tvSub(\'company\')"><span class="tv-menu-icon">&#8505;</span><span class="tv-menu-label">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+      </div>
+    </div>
+    <div class="tv-panel hidden-right" id="tvSub"></div>
+  </div>
 </div>
 
 <div class="search-results-wrap">
@@ -9521,16 +9458,13 @@ def landing_page():
 {% endif %}
 
 <script>
-    function toggleMenu() {
-        const navLinks = document.getElementById('navLinks');
-        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
-        if (navLinks) {
-            navLinks.classList.toggle('active');
-            if (burger) burger.setAttribute('aria-expanded', navLinks.classList.contains('active') ? 'true' : 'false');
-        }
-    }
+    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA AI Picks',h:'/nba-picks'},{l:'MLB AI Picks',h:'/mlb-picks'},{l:'NHL AI Picks',h:'/nhl-picks'},{l:'NFL AI Picks',h:'/nfl-picks'},{l:'Soccer AI Picks',h:'/soccer-picks'},{l:'NCAAB AI Picks',h:'/ncaab-picks'},{l:'NCAAF AI Picks',h:'/ncaaf-picks'},{l:'NCAAW AI Picks',h:'/ncaaw-picks'},{l:'WNBA AI Picks',h:'/wnba-picks'},{l:'View All Sports →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results Report',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'What Are AI Picks?',h:'/what-are-ai-sports-betting-picks'},{l:'How to Read Picks',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Betting Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'},{l:'Top Value Picks',h:'/'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://predictionlab.io',ext:true},{l:'YouTube',h:'https://predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact Us',h:'/contact'},{l:'Privacy Policy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
+    function tvOpen(){document.getElementById('tvOverlay').classList.add('open');document.getElementById('tvDrawer').classList.add('open');document.body.style.overflow='hidden';}
+    function tvClose(){document.getElementById('tvOverlay').classList.remove('open');document.getElementById('tvDrawer').classList.remove('open');document.body.style.overflow='';setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
+    function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+    function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')tvClose();});
     document.addEventListener('DOMContentLoaded', function() {
-        const navLinks = document.getElementById('navLinks');
         const premiumBar = document.getElementById('joinPremiumBar');
         const searchForm = document.getElementById('navSearchForm');
         const searchInput = document.getElementById('navSearchInput');
@@ -9547,13 +9481,6 @@ def landing_page():
             { name: "Detroit Tigers", sport: "MLB", slug: "detroit-tigers" },
             { name: "Boston Celtics", sport: "NBA", slug: "boston-celtics" },
         ];
-        if (navLinks) {
-            navLinks.querySelectorAll('a').forEach(link => {
-                link.addEventListener('click', function() {
-                    navLinks.classList.remove('active');
-                });
-            });
-        }
         if (searchForm && resultsEl) {
             let debounceTimer = null;
             if (searchInput && autocompleteEl) {
@@ -9610,16 +9537,6 @@ def landing_page():
                     resultsEl.innerHTML = '<p>Search temporarily unavailable. Please try again.</p>';
                 }
             });
-        }
-    });
-    document.addEventListener('click', function(event) {
-        const navLinks = document.getElementById('navLinks');
-        const navbar = document.querySelector('.navbar');
-        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
-        if (!navLinks || !navbar) return;
-        if (!navbar.contains(event.target)) {
-            navLinks.classList.remove('active');
-            if (burger) burger.setAttribute('aria-expanded', 'false');
         }
     });
     function scrollSports(direction) {
