@@ -3788,34 +3788,13 @@ def get_upcoming_predictions(sport, days=365):
                     soccer_note = "Soccer models are unavailable."
 
             v2_pred = None
-            is_completed = game.get('home_score') is not None
-            # V2 is expensive per row. Always use it for upcoming games; for finals,
-            # only re-run it for a short lookback so the page stays within worker
-            # timeouts while Grinder2/Takedown still show on recent results.
-            _completed_v2_lookback_days = 21
-            if sport != 'SOCCER':
-                _run_v2 = True
-                if is_completed:
-                    _run_v2 = False
-                    try:
-                        _gday = game_date.date() if hasattr(game_date, 'date') else game_date
-                        _run_v2 = (today.date() - _gday).days <= _completed_v2_lookback_days
-                    except Exception:
-                        _run_v2 = False
-                if _run_v2:
-                    try:
-                        v2_pred = get_v2_prediction(
-                            sport,
-                            game.get('home_team_id') or game.get('home_team_name'),
-                            game.get('away_team_id') or game.get('away_team_name'),
-                            game.get('game_date'),
-                        )
-                    except Exception as _v2_row_err:
-                        logger.warning(
-                            f"V2 row skip {sport} {game.get('game_date')} "
-                            f"{game.get('away_team_id')}@{game.get('home_team_id')}: {_v2_row_err}"
-                        )
-                        v2_pred = None
+            if sport != 'SOCCER' and game.get('home_score') is None:
+                v2_pred = get_v2_prediction(
+                        sport,
+                        game.get('home_team_id') or game.get('home_team_name'),
+                        game.get('away_team_id') or game.get('away_team_name'),
+                        game.get('game_date')
+                    )
 
             if soccer_pred:
                 elo_prob = soccer_pred.get('elo_prob')
@@ -3863,8 +3842,7 @@ def get_upcoming_predictions(sport, days=365):
                     away_rating = get_elo(game.get('away_team_id', ''))
                     elo_prob = expected_score(home_rating, away_rating)
                 _xgb_raw = v2_pred.get('xgboost_prob')
-                _hp = v2_pred.get('home_prob')
-                xgb_prob = _xgb_raw if _xgb_raw is not None else (_hp if _hp is not None else 0.5)
+                xgb_prob = _xgb_raw if _xgb_raw is not None else v2_pred['home_prob']
 
                 # Build ensemble from individual model probs.
                 # The meta-learner (v2_pred['home_prob']) frequently defaults to ~0.49
@@ -3872,16 +3850,12 @@ def get_upcoming_predictions(sport, days=365):
                 _g2 = v2_pred.get('glicko2_prob')
                 _ts = v2_pred.get('trueskill_prob')
                 _wp = []
-                if _g2 is not None: _wp.append((_g2, 0.30))
-                if _ts is not None: _wp.append((_ts, 0.30))
-                if _xgb_raw is not None: _wp.append((_xgb_raw, 0.25))
-                if elo_prob is not None:
-                    _wp.append((elo_prob, 0.15))
+                if _g2       is not None: _wp.append((_g2,      0.30))
+                if _ts       is not None: _wp.append((_ts,      0.30))
+                if _xgb_raw  is not None: _wp.append((_xgb_raw, 0.25))
+                _wp.append((elo_prob, 0.15))
                 _tw = sum(w for _, w in _wp)
-                if _tw > 0:
-                    ensemble_prob = sum((p or 0.0) * w for p, w in _wp) / _tw
-                else:
-                    ensemble_prob = float(_hp) if _hp is not None else float(elo_prob or 0.5)
+                ensemble_prob = sum(p * w for p, w in _wp) / _tw
 
                 # Store model probabilities for display (Glicko-2 and TrueSkill only)
                 game['glicko2_prob'] = v2_pred.get('glicko2_prob')
@@ -3925,22 +3899,6 @@ def get_upcoming_predictions(sport, days=365):
                 
                 if sport == 'NFL':
                     ensemble_prob = elo_prob
-
-            # Finished games: restore the published Elo / XSharp / ensemble snapshot
-            # from the predictions row so displayed picks cannot drift after the final.
-            if is_completed and sport != 'SOCCER':
-                _fp_se = game.get('stored_ensemble_prob')
-                _fp_sx = game.get('stored_xgb_prob')
-                _fp_selo = game.get('stored_elo_prob')
-                if _fp_selo is not None:
-                    elo_prob = float(_fp_selo)
-                if _fp_sx is not None:
-                    xgb_prob = float(_fp_sx)
-                if _fp_se is not None:
-                    ensemble_prob = float(_fp_se)
-                if v2_pred:
-                    game['glicko2_prob'] = v2_pred.get('glicko2_prob')
-                    game['trueskill_prob'] = v2_pred.get('trueskill_prob')
             
             # Add predictions to game dict
             game_dict = dict(game)
