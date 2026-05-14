@@ -13,6 +13,8 @@ services:
       # ── Required — set these in the Render dashboard ──────────────────
       - key: SECRET_KEY
         generateValue: true
+      # In Google Cloud Console, add redirect URI for your *public* host, e.g.
+      # https://predictionlab.io/auth/google/callback (not only *.onrender.com).
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

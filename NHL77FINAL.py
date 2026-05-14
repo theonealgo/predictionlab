@@ -8227,6 +8227,114 @@ def _get_sport_ml_units_banner():
     return items
 
 
+def build_todays_top_picks():
+    """Up to four ranked value picks for landing + /promo/top-picks-today."""
+    todays_picks = []
+    try:
+        _tp_tz = ZoneInfo('America/New_York')
+        _tp_today = datetime.now(_tp_tz).strftime('%Y-%m-%d')
+    except Exception:
+        _tp_today = datetime.now().strftime('%Y-%m-%d')
+    try:
+        _tp_conn = get_db_connection()
+        _tp_rows = _tp_conn.execute('''
+            SELECT p.game_id, p.sport, p.home_team_id, p.away_team_id, p.win_probability,
+                   p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob,
+                   b.home_implied_prob, b.away_implied_prob
+            FROM predictions p
+            LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport
+            LEFT JOIN betting_odds b ON p.game_id = b.game_id
+            WHERE date(p.game_date) = ?
+              AND (g.home_score IS NULL OR g.game_id IS NULL)
+              AND p.win_probability IS NOT NULL
+              AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
+            ORDER BY p.game_date ASC
+            LIMIT 80
+        ''', (_tp_today,)).fetchall()
+        _tp_conn.close()
+        _candidates = []
+        for _tp in _tp_rows:
+            _ens_home = float(_tp['win_probability'])
+            _home = _tp['home_team_id']
+            _away = _tp['away_team_id']
+            _home_picked = _ens_home >= 0.5
+            _pick_prob = _ens_home if _home_picked else (1.0 - _ens_home)
+            _pick = _home if _home_picked else _away
+
+            _model_vals = []
+            for _k in ('elo_home_prob', 'xgboost_home_prob', 'logistic_home_prob', 'meta_home_prob', 'win_probability'):
+                _v = _tp[_k]
+                if _v is None:
+                    continue
+                try:
+                    _model_vals.append(float(_v))
+                except Exception:
+                    continue
+            _agreement_bonus = 0.0
+            if len(_model_vals) >= 2:
+                _aligned = [v if _home_picked else (1.0 - v) for v in _model_vals]
+                _spread = max(_aligned) - min(_aligned)
+                _agreement_bonus = max(0.0, 0.18 - _spread) * 120.0
+
+            _implied = _tp['home_implied_prob'] if _home_picked else _tp['away_implied_prob']
+            _edge_bonus = 0.0
+            if _implied is not None:
+                try:
+                    _edge_bonus = (_pick_prob - float(_implied)) * 160.0
+                except Exception:
+                    _edge_bonus = 0.0
+
+            _conf_bonus = (_pick_prob - 0.5) * 55.0
+            _heavy_penalty = max(0.0, _pick_prob - 0.77) * 130.0
+            _quality_score = _conf_bonus + _edge_bonus + _agreement_bonus - _heavy_penalty
+
+            _candidates.append({
+                'game_id': _tp['game_id'],
+                'away': _away,
+                'home': _home,
+                'pick': _pick,
+                'prob': round(_pick_prob * 100, 1),
+                'sport': _tp['sport'],
+                'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
+                'quality_score': _quality_score,
+                'fallback_score': abs(_ens_home - 0.5),
+            })
+
+        _seen_game_ids = set()
+        _scored = sorted(_candidates, key=lambda x: x['quality_score'], reverse=True)
+        for _row in _scored:
+            _gid = _row.get('game_id') or f"{_row['sport']}::{_row['away']}::{_row['home']}"
+            if _gid in _seen_game_ids:
+                continue
+            _seen_game_ids.add(_gid)
+            todays_picks.append({
+                'away': _row['away'], 'home': _row['home'],
+                'pick': _row['pick'], 'prob': _row['prob'],
+                'sport': _row['sport'], 'slug': _row['slug'],
+            })
+            if len(todays_picks) >= 4:
+                break
+
+        if len(todays_picks) < 4:
+            _picked_keys = {f"{p['sport']}::{p['away']}::{p['home']}" for p in todays_picks}
+            _fallback = sorted(_candidates, key=lambda x: x['fallback_score'], reverse=True)
+            for _row in _fallback:
+                _key = f"{_row['sport']}::{_row['away']}::{_row['home']}"
+                if _key in _picked_keys:
+                    continue
+                _picked_keys.add(_key)
+                todays_picks.append({
+                    'away': _row['away'], 'home': _row['home'],
+                    'pick': _row['pick'], 'prob': _row['prob'],
+                    'sport': _row['sport'], 'slug': _row['slug'],
+                })
+                if len(todays_picks) >= 4:
+                    break
+    except Exception as _tp_err:
+        logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
+    return todays_picks
+
+
 @app.route('/')
 def landing_page():
     """Landing page — redesigned with hero, stats, donation, and sport cards"""
@@ -8300,117 +8408,7 @@ def landing_page():
         + _landing_share_url
     )
 
-    # Build "Today's Top Picks" from stored predictions in DB (lightweight).
-    # Ranking emphasizes value/consensus quality over pure heavy-favorite confidence.
-    # We still always return 4 picks (fallback ranking fills gaps).
-    todays_picks = []
-    try:
-        _tp_tz = ZoneInfo('America/New_York')
-        _tp_today = datetime.now(_tp_tz).strftime('%Y-%m-%d')
-    except Exception:
-        _tp_today = datetime.now().strftime('%Y-%m-%d')
-    try:
-        _tp_conn = get_db_connection()
-        _tp_rows = _tp_conn.execute('''
-            SELECT p.game_id, p.sport, p.home_team_id, p.away_team_id, p.win_probability,
-                   p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob,
-                   b.home_implied_prob, b.away_implied_prob
-            FROM predictions p
-            LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport
-            LEFT JOIN betting_odds b ON p.game_id = b.game_id
-            WHERE date(p.game_date) = ?
-              AND (g.home_score IS NULL OR g.game_id IS NULL)
-              AND p.win_probability IS NOT NULL
-              AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
-            ORDER BY p.game_date ASC
-            LIMIT 80
-        ''', (_tp_today,)).fetchall()
-        _tp_conn.close()
-        _candidates = []
-        for _tp in _tp_rows:
-            _ens_home = float(_tp['win_probability'])
-            _home = _tp['home_team_id']
-            _away = _tp['away_team_id']
-            _home_picked = _ens_home >= 0.5
-            _pick_prob = _ens_home if _home_picked else (1.0 - _ens_home)
-            _pick = _home if _home_picked else _away
-
-            # Model agreement score: lower spread between models = higher quality.
-            _model_vals = []
-            for _k in ('elo_home_prob', 'xgboost_home_prob', 'logistic_home_prob', 'meta_home_prob', 'win_probability'):
-                _v = _tp[_k]
-                if _v is None:
-                    continue
-                try:
-                    _model_vals.append(float(_v))
-                except Exception:
-                    continue
-            _agreement_bonus = 0.0
-            if len(_model_vals) >= 2:
-                _aligned = [v if _home_picked else (1.0 - v) for v in _model_vals]
-                _spread = max(_aligned) - min(_aligned)
-                _agreement_bonus = max(0.0, 0.18 - _spread) * 120.0
-
-            # Market edge bonus where odds exist.
-            _implied = _tp['home_implied_prob'] if _home_picked else _tp['away_implied_prob']
-            _edge_bonus = 0.0
-            if _implied is not None:
-                try:
-                    _edge_bonus = (_pick_prob - float(_implied)) * 160.0
-                except Exception:
-                    _edge_bonus = 0.0
-
-            # Moderate-confidence sweet spot; penalize ultra-heavy favorites.
-            _conf_bonus = (_pick_prob - 0.5) * 55.0
-            _heavy_penalty = max(0.0, _pick_prob - 0.77) * 130.0
-            _quality_score = _conf_bonus + _edge_bonus + _agreement_bonus - _heavy_penalty
-
-            _candidates.append({
-                'game_id': _tp['game_id'],
-                'away': _away,
-                'home': _home,
-                'pick': _pick,
-                'prob': round(_pick_prob * 100, 1),
-                'sport': _tp['sport'],
-                'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
-                'quality_score': _quality_score,
-                'fallback_score': abs(_ens_home - 0.5),
-            })
-
-        # Deduplicate by game and pick the strongest quality candidates first.
-        _seen_game_ids = set()
-        _scored = sorted(_candidates, key=lambda x: x['quality_score'], reverse=True)
-        for _row in _scored:
-            _gid = _row.get('game_id') or f"{_row['sport']}::{_row['away']}::{_row['home']}"
-            if _gid in _seen_game_ids:
-                continue
-            _seen_game_ids.add(_gid)
-            todays_picks.append({
-                'away': _row['away'], 'home': _row['home'],
-                'pick': _row['pick'], 'prob': _row['prob'],
-                'sport': _row['sport'], 'slug': _row['slug'],
-            })
-            if len(todays_picks) >= 4:
-                break
-
-        # Always keep 4 picks: fallback to strongest confidence if quality list is short.
-        if len(todays_picks) < 4:
-            _picked_keys = {f"{p['sport']}::{p['away']}::{p['home']}" for p in todays_picks}
-            _fallback = sorted(_candidates, key=lambda x: x['fallback_score'], reverse=True)
-            for _row in _fallback:
-                _key = f"{_row['sport']}::{_row['away']}::{_row['home']}"
-                if _key in _picked_keys:
-                    continue
-                _picked_keys.add(_key)
-                todays_picks.append({
-                    'away': _row['away'], 'home': _row['home'],
-                    'pick': _row['pick'], 'prob': _row['prob'],
-                    'sport': _row['sport'], 'slug': _row['slug'],
-                })
-                if len(todays_picks) >= 4:
-                    break
-    except Exception as _tp_err:
-        logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
+    todays_picks = build_todays_top_picks()
 
     return render_template_string("""
 <!DOCTYPE html>
@@ -9217,9 +9215,12 @@ def landing_page():
                 <span style="color:#0f172a;font-weight:800;">{{ _disp_pct }}%</span>
                 <span style="color:#64748b;font-size:0.78em;font-weight:600;">Moneyline</span>
             </div>
-            <button onclick="event.stopPropagation();event.preventDefault();window.open('/{{ tp.slug }}','_blank');" style="margin-top:10px;width:100%;padding:7px 0;border:1px solid rgba(15,23,42,0.15);border-radius:8px;background:transparent;color:#475569;font-size:0.78em;font-weight:700;letter-spacing:0.3px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='rgba(15,23,42,0.05)';" onmouseout="this.style.background='transparent';">Open in Browser &#x2197;</button>
         </a>
         {% endfor %}
+    </div>
+    <div style="max-width:600px;margin:16px auto 0;text-align:center;">
+        <a href="/promo/top-picks-today" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 22px;border-radius:10px;background:#0f172a;color:#fff;font-weight:800;font-size:0.88em;text-decoration:none;border:1px solid rgba(15,23,42,0.4);box-shadow:0 4px 14px rgba(15,23,42,0.15);">Open all picks for screenshots &#x2197;</a>
+        <div style="font-size:0.72em;color:#64748b;margin-top:8px;line-height:1.45;">One page with all four top picks — easy to screenshot for social ads.</div>
     </div>
 </div>
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
@@ -11326,6 +11327,69 @@ def sitemap_xml():
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urlset}\n</urlset>'
     return Response(xml, mimetype='application/xml')
 
+# ── Promo (screenshot-friendly; not indexed) ──────────────────────────────────
+
+PROMO_TOP_PICKS_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Top value picks today — predictionlab.io</title>
+    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #0f172a; padding: 28px 18px 40px; }
+        h1 { text-align: center; font-size: 1.35rem; font-weight: 900; margin: 0 0 6px; letter-spacing: -0.02em; }
+        .sub { text-align: center; font-size: 0.82rem; color: #64748b; margin: 0 0 22px; }
+        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; max-width: 820px; margin: 0 auto; }
+        @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: #fff; border: 1px solid rgba(15,23,42,0.14); border-radius: 14px; padding: 16px 16px 14px; box-shadow: 0 6px 20px rgba(15,23,42,0.08); }
+        .sport { font-size: 0.65rem; color: #f59e0b; text-transform: uppercase; font-weight: 800; letter-spacing: 0.55px; margin-bottom: 8px; }
+        .match { font-weight: 800; font-size: 0.98rem; line-height: 1.35; margin-bottom: 10px; }
+        .row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        .pick { color: #00C076; font-weight: 800; font-size: 0.88rem; }
+        .pct { font-weight: 800; font-size: 0.95rem; }
+        .ml { font-size: 0.74rem; color: #64748b; font-weight: 600; }
+        .foot { text-align: center; margin-top: 22px; font-size: 0.78rem; color: #94a3b8; }
+        .foot a { color: #00529B; font-weight: 700; text-decoration: none; }
+        .empty { text-align: center; max-width: 420px; margin: 40px auto; color: #64748b; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <h1>Top value picks today</h1>
+    <p class="sub">Moneyline — ranked for edge &amp; model agreement</p>
+    {% if picks %}
+    <div class="grid">
+        {% for tp in picks[:4] %}
+        {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
+        <div class="card">
+            <div class="sport">{{ tp.sport }}</div>
+            <div class="match">{{ tp.away }} <span style="color:#94a3b8;font-weight:600;">vs</span> {{ tp.home }}</div>
+            <div class="row">
+                <span class="pick">▶ {{ tp.pick }}</span>
+                <span class="pct">{{ _disp_pct }}%</span>
+                <span class="ml">Moneyline</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No top picks loaded yet. Check back after today&rsquo;s predictions are published.</p>
+    {% endif %}
+    <div class="foot"><a href="https://predictionlab.io/">predictionlab.io</a></div>
+</body>
+</html>"""
+
+
+@app.route('/promo/top-picks-today')
+def promo_top_picks_today():
+    """Single tab with all four top value picks — for screenshots and ads."""
+    log_site_visit('/promo/top-picks-today')
+    picks = build_todays_top_picks()
+    return render_template_string(PROMO_TOP_PICKS_TEMPLATE, picks=picks)
+
+
 # ── SEO picks routes ──────────────────────────────────────────────────────────
 
 @app.route('/<slug>')
@@ -12500,82 +12564,99 @@ def sport_results(sport):
             today_date = datetime.now().strftime('%Y-%m-%d')
             
             for game in completed_games:
-                home_score = _to_float_safe(game['home_score'])
-                away_score = _to_float_safe(game['away_score'])
-                if home_score is None or away_score is None:
+                try:
+                    home_score = _to_float_safe(game['home_score'])
+                    away_score = _to_float_safe(game['away_score'])
+                    if home_score is None or away_score is None:
+                        continue
+                    home_won = home_score > away_score
+                    is_draw = False
+                    if sport == 'SOCCER' and abs(home_score - away_score) < 1e-9:
+                        is_draw = True
+                        home_won = None
+                    home_team = game['home_team_id']
+                    away_team = game['away_team_id']
+                    _raw_date = _to_date_str(game['game_date'])
+                    game_date = _raw_date[:10] if _raw_date else None
+                    try:
+                        if isinstance(game, dict):
+                            league_name = game.get('league')
+                        else:
+                            league_name = game['league'] if 'league' in game.keys() else None
+                    except Exception:
+                        league_name = None
+                    if league_name is None and sport != 'SOCCER':
+                        league_name = sport
+                    if sport == 'SOCCER':
+                        league_name = _canonical_soccer_league_name(league_name) or league_name
+                        if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
+                            continue
+                        if selected_league and league_name != selected_league:
+                            continue
+
+                    # Stored DB probs
+                    elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                    xgb_prob = _to_float_safe(game['xgboost_home_prob'])
+                    if xgb_prob is None:
+                        xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                    ens_prob = _to_float_safe(game['win_probability'])
+                    if ens_prob is None:
+                        ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+
+                    soccer_pred = None
+                    model_note = None
+                    if sport == 'SOCCER' and soccer_bundle and getattr(soccer_bundle, 'ready', False):
+                        soccer_pred = soccer_bundle.predict(home_team, away_team)
+                    elif sport == 'SOCCER' and soccer_bundle:
+                        model_note = soccer_bundle.reason
+
+                    if soccer_pred:
+                        glicko2_prob = soccer_pred.get('poisson_xg_prob')
+                        trueskill_prob = soccer_pred.get('markov_prob')
+                        elo_prob = soccer_pred.get('elo_prob') or elo_prob
+                        xgb_prob = soccer_pred.get('poisson_reg_prob') or xgb_prob or elo_prob
+                        ens_prob = soccer_pred.get('ensemble_prob') or ens_prob or elo_prob
+                    else:
+                        v2 = get_v2_prediction(sport, home_team, away_team, game_date) if sport != 'SOCCER' else None
+                        glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
+                        trueskill_prob = v2.get('trueskill_prob') if v2 else None
+                        if v2:
+                            xgb_prob = v2.get('xgboost_prob', xgb_prob)
+                            ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
+                        if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
+                            model_note = model_note or "Soccer model outputs are unavailable for this matchup."
+                    game_info = {
+                        'game_id':         game['game_id'],
+                        'date':             game_date or 'Unknown',
+                        'home':             home_team,
+                        'away':             away_team,
+                        'league':           league_name or sport,
+                        'home_score':       int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
+                        'away_score':       int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
+                        'home_win':         home_won,
+                        'is_draw':          is_draw,
+                        'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
+                        'trueskill_prob':   round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
+                        'elo_prob':         round(elo_prob  * 100, 1),
+                        'xgb_prob':         round(xgb_prob  * 100, 1),
+                        'ens_prob':         round(ens_prob  * 100, 1),
+                        'glicko2_correct':   (glicko2_prob   >= 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
+                        'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
+                        'elo_correct':       (elo_prob  >= 0.5) == home_won if home_won is not None else None,
+                        'xgb_correct':       (xgb_prob  >= 0.5) == home_won if home_won is not None else None,
+                        'ens_correct':       (ens_prob  >= 0.5) == home_won if home_won is not None else None,
+                        'skip_grading':      True if home_won is None else False,
+                        'model_data_note':   model_note,
+                    }
+                    daily_results[game_info['date']]['games'].append(game_info)
+                except Exception as _row_err:
+                    _gid = None
+                    try:
+                        _gid = game['game_id']
+                    except Exception:
+                        pass
+                    logger.warning(f"Skipping {sport} results row (game_id={_gid}): {_row_err}")
                     continue
-                home_won = home_score > away_score
-                is_draw = False
-                if sport == 'SOCCER' and abs(home_score - away_score) < 1e-9:
-                    is_draw = True
-                    home_won = None
-                home_team = game['home_team_id']
-                away_team = game['away_team_id']
-                _raw_date = _to_date_str(game['game_date'])
-                game_date = _raw_date[:10] if _raw_date else None
-                league_name = game.get('league') if isinstance(game, dict) else game['league']
-                if sport == 'SOCCER':
-                    league_name = _canonical_soccer_league_name(league_name) or league_name
-                    if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
-                        continue
-                    if selected_league and league_name != selected_league:
-                        continue
-
-                # Stored DB probs
-                elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-                xgb_prob = _to_float_safe(game['xgboost_home_prob'])
-                if xgb_prob is None:
-                    xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-                ens_prob = _to_float_safe(game['win_probability'])
-                if ens_prob is None:
-                    ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-
-                soccer_pred = None
-                model_note = None
-                if sport == 'SOCCER' and soccer_bundle and getattr(soccer_bundle, 'ready', False):
-                    soccer_pred = soccer_bundle.predict(home_team, away_team)
-                elif sport == 'SOCCER' and soccer_bundle:
-                    model_note = soccer_bundle.reason
-
-                if soccer_pred:
-                    glicko2_prob = soccer_pred.get('poisson_xg_prob')
-                    trueskill_prob = soccer_pred.get('markov_prob')
-                    elo_prob = soccer_pred.get('elo_prob') or elo_prob
-                    xgb_prob = soccer_pred.get('poisson_reg_prob') or xgb_prob or elo_prob
-                    ens_prob = soccer_pred.get('ensemble_prob') or ens_prob or elo_prob
-                else:
-                    v2 = get_v2_prediction(sport, home_team, away_team, game_date) if sport != 'SOCCER' else None
-                    glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
-                    trueskill_prob = v2.get('trueskill_prob') if v2 else None
-                    if v2:
-                        xgb_prob = v2.get('xgboost_prob', xgb_prob)
-                        ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
-                    if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
-                        model_note = model_note or "Soccer model outputs are unavailable for this matchup."
-                game_info = {
-                    'game_id':         game['game_id'],
-                    'date':             game_date or 'Unknown',
-                    'home':             home_team,
-                    'away':             away_team,
-                    'league':           league_name or sport,
-                    'home_score':       int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
-                    'away_score':       int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
-                    'home_win':         home_won,
-                    'is_draw':          is_draw,
-                    'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
-                    'trueskill_prob':   round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
-                    'elo_prob':         round(elo_prob  * 100, 1),
-                    'xgb_prob':         round(xgb_prob  * 100, 1),
-                    'ens_prob':         round(ens_prob  * 100, 1),
-                    'glicko2_correct':   (glicko2_prob   >= 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
-                    'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-                    'elo_correct':       (elo_prob  >= 0.5) == home_won if home_won is not None else None,
-                    'xgb_correct':       (xgb_prob  >= 0.5) == home_won if home_won is not None else None,
-                    'ens_correct':       (ens_prob  >= 0.5) == home_won if home_won is not None else None,
-                    'skip_grading':      True if home_won is None else False,
-                    'model_data_note':   model_note,
-                }
-                daily_results[game_info['date']]['games'].append(game_info)
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
             overall_stats = compute_overall_stats_from_daily(daily_results)

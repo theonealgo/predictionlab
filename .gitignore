@@ -83,3 +83,5 @@ uv.lock
 debug_*.html
 .claude/
 .props_backfill_*
+# Generated book-odds comparison samples (run src/odds/sample_today_book_odds.py)
+src/odds/samples/*.json

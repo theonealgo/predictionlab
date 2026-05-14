@@ -8,8 +8,22 @@ Usage:
     init_auth(app)  # call once after Flask app is created
 
 Env vars needed:
-    GOOGLE_CLIENT_ID        - from console.cloud.google.com
+    GOOGLE_CLIENT_ID        - from console.cloud.google.com (OAuth 2.0 *Web application*)
     GOOGLE_CLIENT_SECRET    - from console.cloud.google.com
+    GOOGLE_REDIRECT_URI     - optional; if unset, Flask builds it from the request host.
+                              Must match Google Console *exactly* (scheme, host, path, no stray slash).
+
+    Google Cloud Console (APIs & Services → Credentials → your OAuth client):
+    - *Authorized JavaScript origins*: your public site origin, e.g. ``https://predictionlab.io``
+      (add ``https://www.predictionlab.io`` only if you serve that host).
+    - *Authorized redirect URIs*: must match **byte-for-byte** what the app sends
+      (``Error 400: redirect_uri_mismatch`` means this list is wrong or missing an entry).
+      After deploy, click “Continue with Google” once and check Render logs for
+      ``[auth] Google OAuth redirect_uri=...`` — paste that **exact** URL into Google Console.
+    - Typical values: ``https://predictionlab.io/auth/google/callback`` and/or
+      ``https://<your-service>.onrender.com/auth/google/callback`` if users hit Render URL.
+    - If you set ``GOOGLE_REDIRECT_URI`` on Render, it must equal the same string you add
+      in Google Console (or remove the env var and rely on auto-generated URLs).
     STRIPE_SECRET_KEY       - from dashboard.stripe.com/apikeys
     STRIPE_WEBHOOK_SECRET   - from Stripe webhook settings
     STRIPE_PRICE_MONTHLY    - Stripe Price ID for $9.99/mo
@@ -60,6 +74,8 @@ auth_bp = Blueprint('auth', __name__)
 
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '').strip()
+# Show Google button only when both are set (matches _setup_google_oauth gate).
+GOOGLE_OAUTH_READY = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '').strip()
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
 STRIPE_PRICE_MONTHLY = os.environ.get('STRIPE_PRICE_MONTHLY', '').strip()
@@ -265,7 +281,7 @@ def init_auth(app, db_path=None):
     app.register_blueprint(auth_bp)
 
     # Google OAuth setup (if credentials available)
-    if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+    if GOOGLE_OAUTH_READY:
         _setup_google_oauth(app)
 
     # Inject is_premium into all templates
@@ -284,6 +300,32 @@ def init_auth(app, db_path=None):
 
 _oauth = None
 
+
+def _google_redirect_uri():
+    """
+    Callback URL sent to Google on authorize and token exchange.
+    Must match an entry under *Authorized redirect URIs* in Google Cloud Console exactly.
+    """
+    explicit = (os.environ.get('GOOGLE_REDIRECT_URI') or '').strip()
+    if explicit:
+        uri = explicit
+    else:
+        uri = url_for('auth.google_callback', _external=True)
+    uri = (uri or '').strip()
+
+    # Behind Render / other proxies, scheme can be http while the public URL is https;
+    # Google only allows https for production hosts → mismatch if we send http://...
+    host = (request.host or '').split(':')[0].lower()
+    local = host in {'localhost', '127.0.0.1'} or host.endswith('.local')
+    if uri.startswith('http://') and not local:
+        xfp = (request.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip().lower()
+        if xfp == 'https':
+            uri = 'https://' + uri[len('http://') :]
+        elif host.endswith('onrender.com') or host.endswith('predictionlab.io') or host.endswith('underdogs.bet'):
+            uri = 'https://' + uri[len('http://') :]
+    return uri
+
+
 def _setup_google_oauth(app):
     global _oauth
     from authlib.integrations.flask_client import OAuth
@@ -301,10 +343,7 @@ def _setup_google_oauth(app):
 def google_login():
     if not _oauth:
         return "Google login not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 500
-    redirect_uri = (
-        os.environ.get('GOOGLE_REDIRECT_URI')
-        or url_for('auth.google_callback', _external=True)
-    )
+    redirect_uri = _google_redirect_uri()
     logger.info(f"[auth] Google OAuth redirect_uri={redirect_uri}")
     return _oauth.google.authorize_redirect(redirect_uri)
 
@@ -320,11 +359,10 @@ def google_callback():
             userinfo = _oauth.google.get('https://openidconnect.googleapis.com/v1/userinfo').json()
 
         email = userinfo.get('email')
-        name = userinfo.get('name', email.split('@')[0])
-        google_id = userinfo.get('sub')
-
         if not email:
             return redirect(url_for('auth.login_page', error='no_email'))
+        name = userinfo.get('name') or email.split('@')[0]
+        google_id = userinfo.get('sub')
 
         # Find or create user
         user = _load_user_by_email(email)
@@ -350,8 +388,8 @@ def google_callback():
         _set_session_token(user.id)
         return redirect(request.args.get('next', '/'))
 
-    except Exception as e:
-        logger.error(f"Google OAuth error: {e}")
+    except Exception:
+        logger.exception("Google OAuth callback failed")
         return redirect(url_for('auth.login_page', error='oauth_failed'))
 
 
@@ -372,7 +410,7 @@ def login_page():
     return render_template(
         'login.html',
         error_msg=error_msg,
-        google_enabled=bool(GOOGLE_CLIENT_ID),
+        google_enabled=GOOGLE_OAUTH_READY,
         page='login',
     )
 
@@ -415,7 +453,7 @@ def signup_page():
     return render_template(
         'signup.html',
         error_msg=error_msg,
-        google_enabled=bool(GOOGLE_CLIENT_ID),
+        google_enabled=GOOGLE_OAUTH_READY,
         page='signup',
     )
 
