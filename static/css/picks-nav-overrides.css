@@ -43,8 +43,22 @@
     font-size: inherit;
     text-transform: none;
     letter-spacing: normal;
+    border-radius: 10px;
 }
-.navbar-content > .logo img { display: block; height: 30px; width: auto; }
+.navbar-content > .logo img,
+.navbar-content > .logo .pl-brand-logo__img {
+    display: block;
+    height: 36px;
+    width: auto;
+    max-height: 42px;
+    max-width: min(220px, 42vw);
+    object-fit: contain;
+}
+a.pl-brand-logo.pl-brand-logo--holding {
+    outline: 2px solid rgba(0, 82, 155, 0.35);
+    outline-offset: 2px;
+    border-radius: 10px;
+}
 .nav-search-wrap {
     order: 3;
     position: relative;

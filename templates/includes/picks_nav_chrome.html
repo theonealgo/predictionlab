@@ -2,7 +2,7 @@
 <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
-        <a href="/" class="logo" aria-label="Prediction Lab home"><img src="/static/pl-logo.svg" alt="Prediction Lab"></a>
+        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
         <div class="nav-search-wrap">
             <div class="nav-search" onclick="openSrch()" role="search">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -146,3 +146,4 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
 </script>
+<script src="/static/js/pl-header-logo.js" defer></script>

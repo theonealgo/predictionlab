@@ -2,11 +2,11 @@
 <html>
 <head>
     {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
-    {% set _meta_title = sport_info.name ~ ' Picks for ' ~ sorted_dates[0] ~ ' | predictionlab.io' %}
-    {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks for ' ~ sorted_dates[0] ~ '. AI-powered predictions with projected scores, spreads, and totals.' %}
+    {% set _meta_title = sport_info.name ~ ' Predictions for ' ~ sorted_dates[0] ~ ' | predictionlab.io' %}
+    {% set _meta_desc = 'AI-powered ' ~ sport_info.name ~ ' predictions and game forecasts for ' ~ sorted_dates[0] ~ ' — model projections and matchup analysis on predictionlab.io.' %}
     {% else %}
-    {% set _meta_title = sport_info.name ~ ' Picks Today | predictionlab.io' %}
-    {% set _meta_desc = 'Free ' ~ sport_info.name ~ ' picks today. AI-powered predictions with projected scores, spreads, and totals. Updated daily.' %}
+    {% set _meta_title = sport_info.name ~ ' Predictions Today | predictionlab.io' %}
+    {% set _meta_desc = 'Daily AI-powered ' ~ sport_info.name ~ ' predictions, game forecasts, model projections, and matchup analysis — updated on predictionlab.io.' %}
     {% endif %}
     <title>{{ _meta_title }}</title>
     <meta charset="UTF-8">

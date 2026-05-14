@@ -5872,11 +5872,11 @@ BASE_TEMPLATE = """
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% if page_title is defined and page_title %}{% set _meta_title = page_title %}
-    {% elif sport_info is defined %}{% set _meta_title = sport_info.name ~ ' — predictionlab.io' %}
-    {% else %}{% set _meta_title = 'predictionlab.io' %}{% endif %}
+    {% elif sport_info is defined %}{% set _meta_title = sport_info.name ~ ' Predictions | predictionlab.io' %}
+    {% else %}{% set _meta_title = 'AI Sports Predictions & Game Forecasts | predictionlab.io' %}{% endif %}
     {% if page_description is defined and page_description %}{% set _meta_desc = page_description %}
-    {% elif sport_info is defined %}{% set _meta_desc = sport_info.name ~ ' predictions, results, spreads, and totals powered by AI.' %}
-    {% else %}{% set _meta_desc = 'AI-powered sports predictions for NHL, NBA, NFL, MLB, NCAAB, NCAAW, NCAAF, WNBA, and Soccer.' %}{% endif %}
+    {% elif sport_info is defined %}{% set _meta_desc = sport_info.name ~ ' AI predictions, game forecasts, and model projections — predictionlab.io.' %}
+    {% else %}{% set _meta_desc = 'Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.' %}{% endif %}
     <title>{{ _meta_title }}</title>
     <meta name="description" content="{{ _meta_desc }}">
     <meta property="og:title" content="{{ _meta_title }}">
@@ -5962,8 +5962,9 @@ BASE_TEMPLATE = """
             gap: 12px;
             padding: 0 20px;
         }
-        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;}
-        .logo img{display:block;height:30px;width:auto;}
+        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;border-radius:10px;}
+        .logo img,.logo .pl-brand-logo__img{display:block;height:36px;width:auto;max-height:42px;max-width:min(220px,42vw);object-fit:contain;}
+        a.pl-brand-logo.pl-brand-logo--holding{outline:2px solid rgba(0,82,155,0.35);outline-offset:2px;}
         .nav-cta{display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);color:#fff;font-size:0.84em;font-weight:700;text-decoration:none;letter-spacing:0.3px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 16px rgba(99,102,241,0.45),inset 0 1px 0 rgba(255,255,255,0.15);}
         .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.6),inset 0 1px 0 rgba(255,255,255,0.15);}
         @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}}
@@ -6102,8 +6103,8 @@ BASE_TEMPLATE = """
     <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
-        <a href="/" class="logo" aria-label="Prediction Lab home">
-            <img src="/static/pl-logo.svg" alt="PL">
+        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality">
+            <img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false">
         </a>
 
         <div class="nav-search-wrap">
@@ -6260,6 +6261,7 @@ function renderSrchItems(q){var items=_srchDefaults.filter(function(i){return(_s
 document.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('srchInput');if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}document.querySelectorAll('.srch-filter').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});this.classList.add('active');_srchFilter=this.dataset.s;renderSrchItems(document.getElementById('srchInput').value);});});});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
     </script>
+    <script src="/static/js/pl-header-logo.js" defer></script>
 </body>
 </html>
 """
@@ -8417,16 +8419,16 @@ def landing_page():
     <meta charset="UTF-8">
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily AI Sports Picks & Betting Predictions | Prediction Lab</title>
-    <meta name="description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
-    <meta property="og:title" content="Daily AI Sports Picks & Betting Predictions | Prediction Lab">
-    <meta property="og:description" content="AI-powered daily picks for NHL, NBA, MLB, NFL and more. Spreads, totals, score predictions. Free moneyline picks — premium for full card.">
+    <title>AI Sports Predictions & Game Forecasts | predictionlab.io</title>
+    <meta name="description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
+    <meta property="og:title" content="AI Sports Predictions & Game Forecasts | predictionlab.io">
+    <meta property="og:description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://predictionlab.io/">
     <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Daily AI Sports Picks & Betting Predictions | Prediction Lab">
-    <meta name="twitter:description" content="Daily AI sports picks for NHL, NBA, MLB, NFL and more with probabilities, spreads, totals, and transparent tracked results.">
+    <meta name="twitter:title" content="AI Sports Predictions & Game Forecasts | predictionlab.io">
+    <meta name="twitter:description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
     <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -8461,7 +8463,7 @@ def landing_page():
       "@type": "Organization",
       "name": "predictionlab.io",
       "url": "https://predictionlab.io",
-      "description": "Free AI-powered sports picks and betting predictions for NBA, NHL, MLB and more.",
+      "description": "Daily AI-powered sports predictions, game forecasts, and model projections across major sports.",
       "email": "nmesghali@gmail.com",
       "telephone": "+1-519-992-8484",
       "address": {
@@ -8494,7 +8496,7 @@ def landing_page():
     <!-- FAQPage schema lives on /faq now (dedicated page). -->
 
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Product","name":"Prediction Lab Premium","description":"AI-powered sports betting picks with spreads, totals, and score projections across 9 sports.","brand":{"@type":"Brand","name":"predictionlab.io"},"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"predictionlab.io user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Accurate AI picks with full transparency. Spreads and totals are consistently on point."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
+    {"@context":"https://schema.org","@type":"Product","name":"Prediction Lab Premium","description":"AI-powered sports predictions with spreads, totals, and score projections across major sports.","brand":{"@type":"Brand","name":"predictionlab.io"},"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"predictionlab.io user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Strong model transparency and useful projections across spreads and totals."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -8706,8 +8708,9 @@ def landing_page():
         .perf-answer-list{display:grid;gap:6px;}
         .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
         .perf-empty{font-size:0.82em;color:#475569;background:#fff;border:1px dashed rgba(15,23,42,0.18);border-radius:8px;padding:10px;}
-        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;}
-        .logo img{display:block;height:30px;width:auto;}
+        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;border-radius:10px;}
+        .logo img,.logo .pl-brand-logo__img{display:block;height:36px;width:auto;max-height:42px;max-width:min(220px,42vw);object-fit:contain;}
+        a.pl-brand-logo.pl-brand-logo--holding{outline:2px solid rgba(0,82,155,0.35);outline-offset:2px;}
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
         .hamburger:hover{background:#f8fafc;}
         .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
@@ -9092,7 +9095,7 @@ def landing_page():
                 <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
             </div>
         </div>
-        <a href="/" class="logo" aria-label="Prediction Lab home"><img src="/static/pl-logo.svg" alt="PL"></a>
+        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
         <div class="nav-actions">
             <div class="acct-wrap">
                 <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
@@ -9219,8 +9222,8 @@ def landing_page():
         {% endfor %}
     </div>
     <div style="max-width:600px;margin:16px auto 0;text-align:center;">
-        <a href="/promo/top-picks-today" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 22px;border-radius:10px;background:#0f172a;color:#fff;font-weight:800;font-size:0.88em;text-decoration:none;border:1px solid rgba(15,23,42,0.4);box-shadow:0 4px 14px rgba(15,23,42,0.15);">Open all picks for screenshots &#x2197;</a>
-        <div style="font-size:0.72em;color:#64748b;margin-top:8px;line-height:1.45;">One page with all four top picks — easy to screenshot for social ads.</div>
+        <a href="/promo/top-picks-today" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 22px;border-radius:10px;background:#0f172a;color:#fff;font-weight:800;font-size:0.88em;text-decoration:none;border:1px solid rgba(15,23,42,0.4);box-shadow:0 4px 14px rgba(15,23,42,0.15);">Share Picks &#x2197;</a>
+        <div style="font-size:0.72em;color:#64748b;margin-top:8px;line-height:1.45;">Daily picks in one shareable page.</div>
     </div>
 </div>
 <style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
@@ -9610,6 +9613,7 @@ def landing_page():
         // banner is static list now
     });
 </script>
+    <script src="/static/js/pl-header-logo.js" defer></script>
 
 </body>
 </html>
@@ -11335,7 +11339,7 @@ PROMO_TOP_PICKS_TEMPLATE = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex,nofollow">
-    <title>Top value picks today — predictionlab.io</title>
+    <title>Today&apos;s top projections — predictionlab.io</title>
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <style>
         * { box-sizing: border-box; }
@@ -11913,9 +11917,9 @@ def soccer_results_league(league_slug):
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
     sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
-    safe_title = f"{sport_info['name']} Picks | predictionlab.io"
+    safe_title = f"{sport_info['name']} Predictions | predictionlab.io"
     if filter_date:
-        safe_title = f"{sport_info['name']} Picks for {filter_date} | predictionlab.io"
+        safe_title = f"{sport_info['name']} Predictions for {filter_date} | predictionlab.io"
     return render_template_string("""
 <!DOCTYPE html>
 <html lang="en">
@@ -11923,7 +11927,7 @@ def _predictions_fallback_page(sport, filter_date=None):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ safe_title }}</title>
-    <meta name="description" content="Daily AI-powered {{ sport_info.name }} picks and projections on predictionlab.io.">
+    <meta name="description" content="Daily AI-powered {{ sport_info.name }} predictions, game forecasts, and model projections on predictionlab.io.">
     <meta name="robots" content="noindex, follow">
     <link rel="canonical" href="https://predictionlab.io/{{ sport_slug }}">
     <style>

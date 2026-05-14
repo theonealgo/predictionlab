@@ -744,7 +744,7 @@ LOGIN_TEMPLATE = """
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="description" content="Log in to your predictionlab.io account to access AI-powered sports picks, spreads, and totals.">
 <meta property="og:title" content="Login — predictionlab.io">
-<meta property="og:description" content="Log in to access AI-powered sports picks.">
+<meta property="og:description" content="Log in to access AI-powered sports predictions and forecasts.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://predictionlab.io/login">
 <link rel="canonical" href="https://predictionlab.io/login">
@@ -781,7 +781,7 @@ SIGNUP_TEMPLATE = """
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="description" content="Create a free predictionlab.io account to access AI-powered sports picks. Upgrade for spreads, totals, and score predictions.">
 <meta property="og:title" content="Sign Up — predictionlab.io">
-<meta property="og:description" content="Create a free account for AI-powered sports picks.">
+<meta property="og:description" content="Create a free account for AI-powered sports predictions and forecasts.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://predictionlab.io/signup">
 <link rel="canonical" href="https://predictionlab.io/signup">

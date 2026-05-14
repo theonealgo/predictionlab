@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}predictionlab.io{% endblock %}</title>
+    <title>{% block title %}AI Sports Predictions & Game Forecasts | predictionlab.io{% endblock %}</title>
     {% block head_meta %}{% endblock %}
     <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,8 +62,10 @@
         .hamburger:hover { background: #f8fafc; }
         .hamburger span { width: 20px; height: 1.5px; background: #0f172a; border-radius: 2px; transition: all .2s; }
         
-        .logo { order: 2; display: inline-flex; align-items: center; text-decoration: none; flex-shrink: 0; }
-        .logo img { display: block; height: 30px; width: auto; }
+        .logo { order: 2; display: inline-flex; align-items: center; text-decoration: none; flex-shrink: 0; border-radius: 10px; }
+        .logo img,
+        .logo .pl-brand-logo__img { display: block; height: 36px; width: auto; max-height: 42px; max-width: min(220px, 42vw); object-fit: contain; }
+        a.pl-brand-logo.pl-brand-logo--holding { outline: 2px solid rgba(0, 82, 155, 0.35); outline-offset: 2px; }
 
         .nav-search-wrap { order: 3; flex: 1; max-width: 560px; width: 100%; min-width: 0; margin: 0 20px; }
         
@@ -216,7 +218,7 @@
 <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button>
-        <a href="/" class="logo" aria-label="Prediction Lab home"><img src="/static/pl-logo.svg" alt="PL"></a>
+        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
         <div class="nav-search-wrap">
             <div class="nav-search" onclick="openSrch()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -404,6 +406,7 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
 </script>
+<script src="/static/js/pl-header-logo.js" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
