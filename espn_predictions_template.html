@@ -601,7 +601,7 @@
                                 <div class="pc-name">{{ m.name }}</div>
                                 {% if m.prob is not none %}
                                 <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
-                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}">{% if m.prob >= 50 %}{{ pred.home_team_id.split()[-1] }}{% else %}{{ pred.away_team_id.split()[-1] }}{% endif %}</div>
+                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}">{% if m.prob >= 50 %}{{ (pred.home_team_id|string).split()[-1] }}{% else %}{{ (pred.away_team_id|string).split()[-1] }}{% endif %}</div>
                                 {% else %}
                                 <div class="pc-val" style="color:#475569;">—</div>
                                 <div class="pc-side" style="color:#475569;background:transparent;">—</div>
@@ -690,7 +690,7 @@
                         <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
                             <div>{{ pred.home_team_id }}: ORtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['ortg'] }}{% else %}{{ pred.our_home_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['drtg'] }}{% else %}{{ pred.our_home_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['pace'] }}{% else %}{{ pred.our_home_eff.pace }}{% endif %}</strong></div>
                             <div>{{ pred.away_team_id }}: ORtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['ortg'] }}{% else %}{{ pred.our_away_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['drtg'] }}{% else %}{{ pred.our_away_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['pace'] }}{% else %}{{ pred.our_away_eff.pace }}{% endif %}</strong></div>
-                            <div style="margin-top:4px;">Projected score: <strong>{{ pred.home_team_id.split()[-1] }} {{ pred.our_home_pts }} &mdash; {{ pred.our_away_pts }} {{ pred.away_team_id.split()[-1] }}</strong> &nbsp;·&nbsp; Game pace ~{{ pred.our_pace }}</div>
+                            <div style="margin-top:4px;">Projected score: <strong>{{ (pred.home_team_id|string).split()[-1] }} {{ pred.our_home_pts }} &mdash; {{ pred.our_away_pts }} {{ (pred.away_team_id|string).split()[-1] }}</strong> &nbsp;·&nbsp; Game pace ~{{ pred.our_pace }}</div>
                         </div>
                         {% elif pred.total_trend_record is defined or pred.spread_trend_record is defined %}
                         <div class="analysis-title">Last 3-Game Trend (vs current XSharp lines)</div>
@@ -716,10 +716,10 @@
                         <div class="analysis-title" style="color:#ef4444;">Suspensions</div>
                         <div class="injury-list">
                             {% for inj in _away_suspended %}
-                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ pred.away_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
+                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ (pred.away_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
                             {% endfor %}
                             {% for inj in _home_suspended %}
-                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ pred.home_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
+                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ (pred.home_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
                             {% endfor %}
                         </div>
                         {% endif %}
@@ -727,10 +727,10 @@
                         {% if _away_injured or _home_injured %}
                         <div class="injury-list">
                             {% for inj in _away_injured %}
-                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.away_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
+                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ (pred.away_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
                             {% endfor %}
                             {% for inj in _home_injured %}
-                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ pred.home_team_id.split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
+                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ (pred.home_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
                             {% endfor %}
                         </div>
                         {% else %}
