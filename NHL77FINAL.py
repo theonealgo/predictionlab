@@ -3789,7 +3789,10 @@ def get_upcoming_predictions(sport, days=365):
 
             v2_pred = None
             is_completed = game.get('home_score') is not None
-            if sport != 'SOCCER' and not is_completed:
+            # Always run V2 for non-soccer sports (including finished games) so
+            # Grinder2 / Takedown probabilities stay on the card; see frozen DB
+            # snapshot block below so moneyline stack does not drift after scores.
+            if sport != 'SOCCER':
                 v2_pred = get_v2_prediction(
                         sport, 
                         game.get('home_team_id') or game.get('home_team_name'),
@@ -3900,6 +3903,22 @@ def get_upcoming_predictions(sport, days=365):
                 
                 if sport == 'NFL':
                     ensemble_prob = elo_prob
+
+            # Finished games: restore the published Elo / XSharp / ensemble snapshot
+            # from the predictions row so displayed picks cannot drift after the final.
+            if is_completed and sport != 'SOCCER':
+                _fp_se = game.get('stored_ensemble_prob')
+                _fp_sx = game.get('stored_xgb_prob')
+                _fp_selo = game.get('stored_elo_prob')
+                if _fp_selo is not None:
+                    elo_prob = float(_fp_selo)
+                if _fp_sx is not None:
+                    xgb_prob = float(_fp_sx)
+                if _fp_se is not None:
+                    ensemble_prob = float(_fp_se)
+                if v2_pred:
+                    game['glicko2_prob'] = v2_pred.get('glicko2_prob')
+                    game['trueskill_prob'] = v2_pred.get('trueskill_prob')
             
             # Add predictions to game dict
             game_dict = dict(game)
@@ -8545,24 +8564,27 @@ def landing_page():
     gap: 20px;
 }
 
-.logo {
-    order: 1; /* Logo on far left */
-}
-
+/* Flex order must stay unique: a later .logo rule set order:2 while this
+   block left search at order:2, which tied and followed DOM order
+   (search before logo) — logo jumped to the right of the search bar. */
+.navbar .hamburger { order: 1; flex-shrink: 0; }
+.navbar .logo { order: 2; flex-shrink: 0; }
 .nav-search-wrap {
-    order: 2; /* Search in middle */
+    order: 3;
     flex: 1;
     max-width: 600px;
+    min-width: 0;
+    margin: 0 16px;
     display: flex;
     justify-content: center;
 }
-
 .nav-actions {
-    order: 3; /* Buttons on far right */
+    order: 4;
     display: flex;
     align-items: center;
     gap: 12px;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 .nav-search {
@@ -8587,13 +8609,6 @@ def landing_page():
     background: transparent;
     color: #131722;
     width: 100%;
-}
-
-.nav-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
 }
 
 .acct-wrap {
@@ -8708,7 +8723,7 @@ def landing_page():
         .perf-answer-list{display:grid;gap:6px;}
         .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
         .perf-empty{font-size:0.82em;color:#475569;background:#fff;border:1px dashed rgba(15,23,42,0.18);border-radius:8px;padding:10px;}
-        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;border-radius:10px;}
+        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;border-radius:10px;}
         .logo img,.logo .pl-brand-logo__img{display:block;height:36px;width:auto;max-height:42px;max-width:min(220px,42vw);object-fit:contain;}
         a.pl-brand-logo.pl-brand-logo--holding{outline:2px solid rgba(0,82,155,0.35);outline-offset:2px;}
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
@@ -9045,8 +9060,8 @@ def landing_page():
             body{background-attachment:fixed;}
         }
         @media (max-width: 1100px) {
-            .navbar-content { flex-wrap: wrap; justify-content: center; }
-            .nav-search-wrap { order: 3; width: 100%; max-width: 100%; }
+            .navbar-content { flex-wrap: nowrap; align-items: center; }
+            .nav-search-wrap { flex: 1; min-width: 0; max-width: 100%; }
         }
         @media (max-width: 768px) {
             body{
@@ -9089,13 +9104,13 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
+        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
         <div class="nav-search-wrap">
             <div class="nav-search" onclick="openSrch()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
             </div>
         </div>
-        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
         <div class="nav-actions">
             <div class="acct-wrap">
                 <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">

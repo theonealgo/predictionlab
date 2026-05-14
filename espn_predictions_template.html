@@ -96,6 +96,7 @@
            (aligned with templates/base.html). Do not restyle .navbar / .hamburger here — inline CSS
            loads after picks-nav-overrides and was overriding hamburger to the right. */
         .hamburger:hover { background: #f8fafc; }
+        /* Do not style header a.logo here — conflicts with picks-nav flex order */
         .nav-search {
             flex: 1;
             max-width: 620px;
@@ -150,12 +151,6 @@
         .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
         .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
         .auth-btn:hover { opacity:.9; }
-        .logo { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:28px; text-transform:uppercase; letter-spacing:0.5px; line-height:1; text-decoration:none; color:#0f172a; }
-        .logo-img {
-            height: 44px;
-            width: auto;
-            display: block;
-        }
         .nav-links {
             display:none;
             position:absolute;
