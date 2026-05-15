@@ -3788,13 +3788,34 @@ def get_upcoming_predictions(sport, days=365):
                     soccer_note = "Soccer models are unavailable."
 
             v2_pred = None
-            if sport != 'SOCCER' and game.get('home_score') is None:
-                v2_pred = get_v2_prediction(
-                        sport,
-                        game.get('home_team_id') or game.get('home_team_name'),
-                        game.get('away_team_id') or game.get('away_team_name'),
-                        game.get('game_date')
-                    )
+            is_completed = game.get('home_score') is not None
+            # V2 is expensive per row. Always use it for upcoming games; for finals,
+            # only re-run it for a short lookback so the page stays within worker
+            # timeouts while Grinder2/Takedown still show on recent results.
+            _completed_v2_lookback_days = 21
+            if sport != 'SOCCER':
+                _run_v2 = True
+                if is_completed:
+                    _run_v2 = False
+                    try:
+                        _gday = game_date.date() if hasattr(game_date, 'date') else game_date
+                        _run_v2 = (today.date() - _gday).days <= _completed_v2_lookback_days
+                    except Exception:
+                        _run_v2 = False
+                if _run_v2:
+                    try:
+                        v2_pred = get_v2_prediction(
+                            sport,
+                            game.get('home_team_id') or game.get('home_team_name'),
+                            game.get('away_team_id') or game.get('away_team_name'),
+                            game.get('game_date'),
+                        )
+                    except Exception as _v2_row_err:
+                        logger.warning(
+                            f"V2 row skip {sport} {game.get('game_date')} "
+                            f"{game.get('away_team_id')}@{game.get('home_team_id')}: {_v2_row_err}"
+                        )
+                        v2_pred = None
 
             if soccer_pred:
                 elo_prob = soccer_pred.get('elo_prob')
@@ -3842,7 +3863,8 @@ def get_upcoming_predictions(sport, days=365):
                     away_rating = get_elo(game.get('away_team_id', ''))
                     elo_prob = expected_score(home_rating, away_rating)
                 _xgb_raw = v2_pred.get('xgboost_prob')
-                xgb_prob = _xgb_raw if _xgb_raw is not None else v2_pred['home_prob']
+                _hp = v2_pred.get('home_prob')
+                xgb_prob = _xgb_raw if _xgb_raw is not None else (_hp if _hp is not None else 0.5)
 
                 # Build ensemble from individual model probs.
                 # The meta-learner (v2_pred['home_prob']) frequently defaults to ~0.49
@@ -3850,12 +3872,15 @@ def get_upcoming_predictions(sport, days=365):
                 _g2 = v2_pred.get('glicko2_prob')
                 _ts = v2_pred.get('trueskill_prob')
                 _wp = []
-                if _g2       is not None: _wp.append((_g2,      0.30))
-                if _ts       is not None: _wp.append((_ts,      0.30))
-                if _xgb_raw  is not None: _wp.append((_xgb_raw, 0.25))
-                _wp.append((elo_prob, 0.15))
+                if _g2      is not None: _wp.append((_g2,      0.30))
+                if _ts      is not None: _wp.append((_ts,      0.30))
+                if _xgb_raw is not None: _wp.append((_xgb_raw, 0.25))
+                if elo_prob is not None: _wp.append((elo_prob,  0.15))
                 _tw = sum(w for _, w in _wp)
-                ensemble_prob = sum(p * w for p, w in _wp) / _tw
+                if _tw > 0:
+                    ensemble_prob = sum((p or 0.0) * w for p, w in _wp) / _tw
+                else:
+                    ensemble_prob = float(_hp) if _hp is not None else float(elo_prob or 0.5)
 
                 # Store model probabilities for display (Glicko-2 and TrueSkill only)
                 game['glicko2_prob'] = v2_pred.get('glicko2_prob')
@@ -3899,7 +3924,23 @@ def get_upcoming_predictions(sport, days=365):
                 
                 if sport == 'NFL':
                     ensemble_prob = elo_prob
-            
+
+            # Finished games: restore the published Elo / XSharp / ensemble snapshot
+            # from the predictions row so displayed picks cannot drift after the final.
+            if is_completed and sport != 'SOCCER':
+                _fp_se = game.get('stored_ensemble_prob')
+                _fp_sx = game.get('stored_xgb_prob')
+                _fp_selo = game.get('stored_elo_prob')
+                if _fp_selo is not None:
+                    elo_prob = float(_fp_selo)
+                if _fp_sx is not None:
+                    xgb_prob = float(_fp_sx)
+                if _fp_se is not None:
+                    ensemble_prob = float(_fp_se)
+                if v2_pred:
+                    game['glicko2_prob'] = v2_pred.get('glicko2_prob')
+                    game['trueskill_prob'] = v2_pred.get('trueskill_prob')
+
             # Add predictions to game dict
             game_dict = dict(game)
             for _k in (
@@ -7521,7 +7562,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">Our Spread</span>
                             <span class="sf-val">
                                 {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
-                                {% elif game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
+                                {% elif game.market_spread is defined and game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
                                 {% elif game.market_spread_reason is defined and game.market_spread_reason %}{{ game.market_spread_reason }}
                                 {% else %}—{% endif %}
                             </span>
@@ -7549,7 +7590,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">H2H Last 10</span>
                             <span class="sf-val">{% if game.our_total is defined and game.our_total is not none %}{{ "%.1f"|format(game.our_total) }}{% else %}—{% endif %}</span>
                         </div>
-                        {% if game.market_total is not none %}
+                        {% if game.market_total is defined and game.market_total is not none %}
                         <div class="sf-item">
                             <span class="sf-label">Market Total</span>
                             <span class="sf-val">{{ "%.1f"|format(game.market_total) }}</span>
@@ -12443,7 +12484,26 @@ def sport_results(sport):
                 yesterday_dt = datetime.now() - timedelta(days=1)
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-                
+
+                # Defensively ensure all template-required keys exist on every game dict.
+                # Without this, if _compute_spread_total_for_daily exits early (no XGB model),
+                # Jinja2 creates Undefined objects that raise AttributeError when formatted.
+                _GAME_KEY_DEFAULTS = {
+                    'market_spread': None, 'market_total': None,
+                    'market_spread_label': None, 'market_spread_reason': None,
+                    'market_total_reason': None,
+                    'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
+                    'our_total': None, 'our_total_games': 0,
+                    'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
+                    'spread_correct': None,
+                    'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
+                    'total_correct': None, 'strong_ou': False,
+                }
+                for _dd in daily_results.values():
+                    for _gg in _dd.get('games', []):
+                        for _k, _dv in _GAME_KEY_DEFAULTS.items():
+                            _gg.setdefault(_k, _dv)
+
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _cache_market_lines_for_results(sport, daily_results, limit=20)
@@ -12481,7 +12541,8 @@ def sport_results(sport):
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
             except Exception as e:
-                logger.error(f"Error processing NBA results: {e}")
+                import traceback as _tb
+                logger.error(f"Error processing NBA results: {e}\n{_tb.format_exc()}")
                 return f"<h1>NBA results page failed to render because of a processing error: {str(e)}</h1>"
 
         # Handle NCAAB
