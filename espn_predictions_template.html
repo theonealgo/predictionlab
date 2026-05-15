@@ -606,10 +606,11 @@
                         </div>
                     </div>
                     {# Our Spread / Our Total — prefer our own projection (last-3 per-team avg for NBA),
-                       fall back to xgb / market / naive only when missing. #}
-                    {% set _our_spread = pred.our_spread if pred.our_spread is not none else (pred.xgb_spread if pred.xgb_spread is not none else (pred.market_spread if pred.market_spread is not none else pred.naive_spread)) %}
+                       fall back to xgb / market / naive only when missing.
+                       Always use `is defined and is not none` to avoid Jinja2 Undefined short-circuits. #}
+                    {% set _our_spread = pred.our_spread if (pred.our_spread is defined and pred.our_spread is not none) else (pred.xgb_spread if (pred.xgb_spread is defined and pred.xgb_spread is not none) else (pred.market_spread if (pred.market_spread is defined and pred.market_spread is not none) else (pred.naive_spread if (pred.naive_spread is defined and pred.naive_spread is not none) else none))) %}
                     {% set _spread_val = _our_spread %}
-                    {% set _total_val = pred.our_total if pred.our_total is not none else (pred.xgb_total if pred.xgb_total is not none else (pred.market_total if pred.market_total is not none else pred.naive_total)) %}
+                    {% set _total_val = pred.our_total if (pred.our_total is defined and pred.our_total is not none) else (pred.xgb_total if (pred.xgb_total is defined and pred.xgb_total is not none) else (pred.market_total if (pred.market_total is defined and pred.market_total is not none) else (pred.naive_total if (pred.naive_total is defined and pred.naive_total is not none) else none))) %}
                     {# Sign convention: our_spread > 0 ⇒ home favored by that much. #}
                     {% set _spread_home_favored = (_our_spread is not none) and (_our_spread > 0) %}
                     {% if _spread_val is not none or _total_val is not none or (sport == 'NHL' and pred.puck_line_tag is not none) or is_final %}
@@ -654,6 +655,15 @@
                         <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#92400e;">{{ "%.1f"|format(_total_val) }}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
+                        {% endif %}
+                        {% endif %}
+                        {% set _est_home = pred.our_home_pts if (pred.our_home_pts is defined and pred.our_home_pts is not none) else (pred.xgb_home_score if (pred.xgb_home_score is defined and pred.xgb_home_score is not none) else none) %}
+                        {% set _est_away = pred.our_away_pts if (pred.our_away_pts is defined and pred.our_away_pts is not none) else (pred.xgb_away_score if (pred.xgb_away_score is defined and pred.xgb_away_score is not none) else none) %}
+                        {% if _est_home is not none and _est_away is not none %}
+                        {% if is_premium %}
+                        <div class="sf-item"><span class="sf-label">Est. Score</span><span class="sf-val" style="color:#92400e;font-weight:700;">{{ _est_away }} – {{ _est_home }}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">Est. Score</span><span class="sf-val" style="color:#475569;">🔒</span></div>
                         {% endif %}
                         {% endif %}
                         {% if not is_final and is_premium and (pred.ml_ev is defined or pred.spread_ev is defined or pred.total_ev is defined) %}

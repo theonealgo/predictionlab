@@ -12061,10 +12061,16 @@ def sport_predictions(sport, filter_date=None):
             # missing keys on plain dicts raise in Jinja (NBA paths always had these).
             'our_spread',
             'our_total',
+            'our_home_pts',
+            'our_away_pts',
             'xgb_spread',
             'xgb_total',
+            'xgb_home_score',
+            'xgb_away_score',
             'naive_spread',
             'naive_total',
+            'naive_home_score',
+            'naive_away_score',
             'h2h_last10_total',
             'h2h_last10_games',
         ):
