@@ -12,7 +12,7 @@ import requests
 from .config import LEAGUE_CONFIG, ODDS_API_BASE, ODDS_API_KEY, ODDS_ENGINE_URL
 
 _LEAGUE_PROP_TYPES = {
-    "NBA": ["points", "rebounds", "assists", "threes"],
+    "NBA": ["points", "rebounds", "assists", "threes", "steals"],
     "WNBA": ["points", "rebounds", "assists", "threes"],
     "NCAAB": ["points", "rebounds", "assists", "threes"],
     "NCAAW": ["points", "rebounds", "assists", "threes"],
@@ -28,6 +28,7 @@ _PROP_LINE_RANGES = {
     "rebounds": (3.5, 12.5),
     "assists": (2.5, 10.5),
     "threes": (0.5, 4.5),
+    "steals": (0.5, 2.5),
     "shots_on_goal": (1.5, 4.5),
     "goals": (0.5, 1.5),
     "hits": (0.5, 2.5),
@@ -364,7 +365,7 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
                 if ev.get("stats"):
                     events.append(ev)
         mins, usage_raw = [], []
-        pts_vals, reb_vals, ast_vals, thr_vals = [], [], [], []
+        pts_vals, reb_vals, ast_vals, thr_vals, stl_vals = [], [], [], [], []
         for ev in events:
             stats = ev.get("stats") or []
             if not stats:
@@ -377,6 +378,7 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
             reb = _num(stats[idx["REB"]]) if "REB" in idx and idx["REB"] < len(stats) else 0.0
             ast = _num(stats[idx["AST"]]) if "AST" in idx and idx["AST"] < len(stats) else 0.0
             thr = _parse_attempts(stats[idx["3PT"]]) if "3PT" in idx and idx["3PT"] < len(stats) else 0.0
+            stl = _num(stats[idx["STL"]]) if "STL" in idx and idx["STL"] < len(stats) else 0.0
             if m > 0:
                 mins.append(m)
                 usage_raw.append((fg + 0.44 * ft + to) / max(m, 1.0))
@@ -384,6 +386,7 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
                 reb_vals.append(reb)
                 ast_vals.append(ast)
                 thr_vals.append(thr)
+                stl_vals.append(stl)
         if len(mins) >= 5:
             last5_m = mins[:5]
             last10_m = mins[:10]
@@ -410,18 +413,21 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
                     "rebounds": round(_avg(reb_vals[:5]), 2),
                     "assists": round(_avg(ast_vals[:5]), 2),
                     "threes": round(_avg(thr_vals[:5]), 2),
+                    "steals": round(_avg(stl_vals[:5]), 2),
                 },
                 "stats_last10": {
                     "points": round(_avg(pts_vals[:10]), 2),
                     "rebounds": round(_avg(reb_vals[:10]), 2),
                     "assists": round(_avg(ast_vals[:10]), 2),
                     "threes": round(_avg(thr_vals[:10]), 2),
+                    "steals": round(_avg(stl_vals[:10]), 2),
                 },
                 "stats_weighted": {
                     "points": round(_weighted(pts_vals), 2),
                     "rebounds": round(_weighted(reb_vals), 2),
                     "assists": round(_weighted(ast_vals), 2),
                     "threes": round(_weighted(thr_vals), 2),
+                    "steals": round(_weighted(stl_vals), 2),
                 },
                 "insufficient_data": False,
             }

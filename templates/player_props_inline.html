@@ -1,0 +1,19 @@
+{% extends "underdogs_layout.html" %}
+{% block title %}Player Props | Prediction Lab{% endblock %}
+{% block head_meta %}
+<meta name="description" content="AI-powered player prop projections for tonight's NBA, NHL, NFL, and MLB games.">
+{% for href in prop_css %}
+<link rel="stylesheet" crossorigin href="{{ href }}">
+{% endfor %}
+{% endblock %}
+{% block extra_styles %}
+#root { min-height: 60vh; }
+{% endblock %}
+{% block content %}
+<div id="root"></div>
+{% endblock %}
+{% block scripts %}
+{% for src in prop_js %}
+<script type="module" crossorigin src="{{ src }}"></script>
+{% endfor %}
+{% endblock %}

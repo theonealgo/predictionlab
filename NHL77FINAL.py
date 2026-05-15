@@ -5849,11 +5849,11 @@ BASE_TEMPLATE = """
       "name": "predictionlab.io",
       "url": "https://predictionlab.io",
       "sameAs": [
-        "https://x.com/underdogs_bet",
+        "https://x.com/predictionlab_io",
         "https://instagram.com/predictionlab.io",
         "https://facebook.com/predictionlab.io",
-        "https://tiktok.com/@underdog.bet",
-        "https://www.youtube.com/@Underdogsbet"
+        "https://tiktok.com/@predictionlab.io",
+        "https://www.youtube.com/@PredictionLab"
       ]
     }
     </script>
@@ -6150,7 +6150,7 @@ BASE_TEMPLATE = """
             <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
             <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
             <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
-            <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+            <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
             <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
             <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
             <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
@@ -6183,11 +6183,11 @@ BASE_TEMPLATE = """
                 </div>
                 <div class="footer-col-blk">
                     <div class="footer-heading">Social</div>
-                    <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X (Twitter)</a>
+                    <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X (Twitter)</a>
                     <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
                     <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
-                    <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a>
-                    <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
+                    <a href="https://tiktok.com/@predictionlab.io" target="_blank" rel="noopener">TikTok</a>
+                    <a href="https://www.youtube.com/@PredictionLab" target="_blank" rel="noopener">YouTube</a>
                 </div>
             </div>
             <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
@@ -8005,11 +8005,11 @@ _SOCIAL_ICONS = {
     'YouTube': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 00-2.1 2.1A31.4 31.4 0 000 12a31.4 31.4 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.4 31.4 0 0024 12a31.4 31.4 0 00-.5-5.8zM9.7 15.5V8.5l6.2 3.5-6.2 3.5z"/></svg>',
 }
 SOCIAL_LINKS = [
-    {'label': 'X', 'url': 'https://x.com/underdogs_bet', 'icon': _SOCIAL_ICONS['X']},
+    {'label': 'X', 'url': 'https://x.com/predictionlab_io', 'icon': _SOCIAL_ICONS['X']},
     {'label': 'Instagram', 'url': 'https://instagram.com/predictionlab.io', 'icon': _SOCIAL_ICONS['Instagram']},
     {'label': 'Facebook', 'url': 'https://facebook.com/predictionlab.io', 'icon': _SOCIAL_ICONS['Facebook']},
-    {'label': 'TikTok', 'url': 'https://tiktok.com/@underdog.bet', 'icon': _SOCIAL_ICONS['TikTok']},
-    {'label': 'YouTube', 'url': 'https://www.youtube.com/@Underdogsbet', 'icon': _SOCIAL_ICONS['YouTube']},
+    {'label': 'TikTok', 'url': 'https://tiktok.com/@predictionlab.io', 'icon': _SOCIAL_ICONS['TikTok']},
+    {'label': 'YouTube', 'url': 'https://www.youtube.com/@PredictionLab', 'icon': _SOCIAL_ICONS['YouTube']},
 ]
 GA_TRACKING_ID = _os.environ.get('GA_TRACKING_ID', 'G-R4XM0WKTGG')
 GA_PROPERTY_ID = _os.environ.get('GA_PROPERTY_ID', '530749291')
@@ -8442,11 +8442,11 @@ def landing_page():
         "name": "GoodsandMore Inc."
       },
       "sameAs": [
-        "https://x.com/underdogs_bet",
+        "https://x.com/predictionlab_io",
         "https://instagram.com/predictionlab.io",
         "https://facebook.com/predictionlab.io",
-        "https://tiktok.com/@underdog.bet",
-        "https://www.youtube.com/@Underdogsbet"
+        "https://tiktok.com/@predictionlab.io",
+        "https://www.youtube.com/@PredictionLab"
       ]
     }
     </script>
@@ -9406,7 +9406,7 @@ def landing_page():
         <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
         <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
         <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
-        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@underdog.bet' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://tiktok.com/@predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
         <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
         <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
         <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
@@ -9439,11 +9439,11 @@ def landing_page():
             </div>
             <div class="footer-col-blk">
                 <div class="footer-heading">Social</div>
-                <a href="https://x.com/underdogs_bet" target="_blank" rel="noopener">X (Twitter)</a>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X (Twitter)</a>
                 <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
                 <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
-                <a href="https://tiktok.com/@underdog.bet" target="_blank" rel="noopener">TikTok</a>
-                <a href="https://www.youtube.com/@Underdogsbet" target="_blank" rel="noopener">YouTube</a>
+                <a href="https://tiktok.com/@predictionlab.io" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://www.youtube.com/@PredictionLab" target="_blank" rel="noopener">YouTube</a>
             </div>
         </div>
         <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
@@ -9742,7 +9742,11 @@ def _search_espn_team_matches(query_text: str):
             continue
     return matches
 
+_SEARCH_CACHE: dict = {}
+_SEARCH_CACHE_TTL = 60  # seconds
+
 def _build_search_payload(raw_query: str):
+    import time as _time_mod
     q = (raw_query or '').strip()
     if not q:
         return {
@@ -9754,6 +9758,10 @@ def _build_search_payload(raw_query: str):
             'espn_results': [],
             'suggested_route': '/',
         }
+    cache_key = q.lower()
+    cached = _SEARCH_CACHE.get(cache_key)
+    if cached and (_time_mod.time() - cached['ts']) < _SEARCH_CACHE_TTL:
+        return cached['payload']
     public_model, internal_model = _parse_search_model(q)
     threshold = _parse_confidence_threshold(q)
     payload = {
@@ -9784,6 +9792,7 @@ def _build_search_payload(raw_query: str):
         payload['suggested_route'] = _SPORT_TO_ROUTE.get(top_sport)
     elif internal_model or threshold is not None:
         payload['suggested_route'] = '/results'
+    _SEARCH_CACHE[cache_key] = {'ts': _time_mod.time(), 'payload': payload}
     return payload
 
 @app.route('/api/search')
@@ -10478,22 +10487,12 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
 
 @app.route('/player-props')
 def player_props_page():
-    """Serve integrated player props frontend from main app."""
+    """Player props page — wired into the main app via /player-props-api/ routes."""
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
-    dist_dir = _os.path.join(_BASE_DIR, 'standalone-player-props', 'frontend', 'dist')
-    index_path = _os.path.join(dist_dir, 'index.html')
-    if not _os.path.isfile(index_path):
-        return render_template('player_props_hub.html')
-    try:
-        with open(index_path, 'r', encoding='utf-8') as f:
-            html = f.read()
-        html = html.replace('src="/assets/', 'src="/player-props/assets/').replace('href="/assets/', 'href="/player-props/assets/')
-        return Response(html, mimetype='text/html')
-    except Exception:
-        return render_template('player_props_hub.html')
+    return render_template('player_props.html')
 
 
 @app.route('/player-props/assets/<path:asset_path>')
@@ -10977,6 +10976,113 @@ def results_export_csv():
     out.close()
     sport_tag = sport or 'ALL'
     fname = f"results_export_{sport_tag}.csv"
+    return Response(body, mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+
+@app.route('/model/export.csv')
+def model_export_csv():
+    """Full model calculation export: probabilities, market lines, and EV (NBA/WNBA only).
+    Premium-gated. Returns up to 500 rows ordered by most recent."""
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    sport = (request.args.get('sport') or '').strip().upper() or None
+    try:
+        conn = get_db_connection()
+        where_clauses = []
+        params = []
+        if sport:
+            where_clauses.append("g.sport = ?")
+            params.append(sport)
+        where_sql = ('WHERE ' + ' AND '.join(where_clauses)) if where_clauses else ''
+        query = f'''
+            SELECT g.game_date, g.sport,
+                   g.home_team_id, g.away_team_id,
+                   g.home_score, g.away_score,
+                   p.elo_home_prob, p.xgboost_home_prob,
+                   p.glicko2_home_prob, p.trueskill_home_prob,
+                   p.win_probability,
+                   bl.spread AS market_spread, bl.total AS market_total,
+                   bl.home_ml, bl.away_ml
+            FROM games g
+            LEFT JOIN predictions p ON (
+                p.sport = g.sport AND (
+                    p.game_id = g.game_id OR (
+                        date(p.game_date) = date(g.game_date)
+                        AND p.home_team_id = g.home_team_id
+                        AND p.away_team_id = g.away_team_id
+                    )
+                )
+            )
+            LEFT JOIN betting_lines bl ON bl.game_id = g.game_id
+            {where_sql}
+            ORDER BY g.game_date DESC
+            LIMIT 500
+        '''
+        rows = conn.execute(query, params).fetchall()
+        conn.close()
+    except Exception as exc:
+        return Response(f'Export failed: {exc}', status=500, mimetype='text/plain')
+
+    import io as _io_ev, csv as _csv_ev
+    out = _io_ev.StringIO()
+    w = _csv_ev.writer(out)
+    w.writerow([
+        'date', 'sport', 'home_team', 'away_team',
+        'home_score', 'away_score', 'result',
+        'market_spread', 'market_total', 'home_ml', 'away_ml',
+        'elo_prob', 'xgb_prob', 'glicko2_prob', 'trueskill_prob', 'ensemble_prob',
+        'ml_ev_pct', 'spread_ev_pct', 'devig_market_prob',
+        'notes',
+    ])
+    for r in rows:
+        hs = _to_float_safe(r['home_score'])
+        aws = _to_float_safe(r['away_score'])
+        result = ''
+        if hs is not None and aws is not None:
+            result = 'home_win' if hs > aws else ('away_win' if aws > hs else 'draw')
+
+        ens = _to_float_safe(r['win_probability'])
+        home_ml = _to_float_safe(r['home_ml'])
+        away_ml = _to_float_safe(r['away_ml'])
+        market_spread = _to_float_safe(r['market_spread'])
+        market_total = _to_float_safe(r['market_total'])
+
+        ml_ev = ''
+        spread_ev = ''
+        devig_prob = ''
+        notes = ''
+        sport_upper = (r['sport'] or '').upper()
+        if sport_upper in ('NBA', 'WNBA') and ens is not None and home_ml is not None and away_ml is not None:
+            try:
+                ml_ev_val, dv, _, _ = calculate_ev_devigged(ens, home_ml, away_ml)
+                ml_ev = round(ml_ev_val, 1)
+                devig_prob = round(dv * 100, 2)
+            except Exception:
+                notes = 'ev_calc_error'
+            if market_spread is not None and ens is not None:
+                try:
+                    spread_ev = round(calculate_ev(ens, -110), 1)
+                except Exception:
+                    pass
+        elif sport_upper not in ('NBA', 'WNBA'):
+            notes = 'EV not calculated for this sport'
+
+        w.writerow([
+            r['game_date'], r['sport'], r['home_team_id'], r['away_team_id'],
+            hs, aws, result,
+            market_spread, market_total, home_ml, away_ml,
+            r['elo_home_prob'], r['xgboost_home_prob'],
+            r['glicko2_home_prob'], r['trueskill_home_prob'], ens,
+            ml_ev, spread_ev, devig_prob,
+            notes,
+        ])
+    body = out.getvalue()
+    out.close()
+    sport_tag = sport or 'ALL'
+    fname = f"model_export_{sport_tag}.csv"
     return Response(body, mimetype='text/csv',
                     headers={'Content-Disposition': f'attachment; filename="{fname}"'})
 

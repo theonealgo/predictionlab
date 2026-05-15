@@ -1,0 +1,242 @@
+{% extends "underdogs_layout.html" %}
+{% block title %}Player Props | Prediction Lab{% endblock %}
+{% block head_meta %}
+<meta name="description" content="AI-powered player prop projections — points, rebounds, assists, threes and steals for tonight's games.">
+{% endblock %}
+{% block extra_styles %}
+.props-wrap{max-width:1400px;margin:0 auto;padding:0 16px 48px;}
+.props-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:12px 16px;margin-bottom:20px;box-shadow:0 2px 8px rgba(15,23,42,0.06);}
+.tab-group{display:flex;background:#f1f5f9;border-radius:10px;padding:3px;gap:2px;}
+.tab-btn{background:transparent;border:none;border-radius:8px;padding:7px 18px;font-size:0.85rem;font-weight:700;color:#475569;cursor:pointer;transition:background .15s,color .15s;}
+.tab-btn.active{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(15,23,42,0.12);}
+.league-sel{background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:8px 12px;font-size:0.88rem;font-weight:600;color:#0f172a;min-width:140px;cursor:pointer;}
+.load-btn{background:#2563eb;border:none;border-radius:10px;color:#fff;padding:9px 22px;font-size:0.88rem;font-weight:800;cursor:pointer;margin-left:auto;white-space:nowrap;}
+.load-btn:hover{background:#1d4ed8;}
+.load-btn:disabled{background:#93c5fd;cursor:default;}
+.props-msg{text-align:center;padding:48px 20px;color:#64748b;font-size:0.95rem;background:#fff;border:1px solid #E2E8F0;border-radius:14px;}
+.props-error{padding:12px 16px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:0.88rem;margin-bottom:16px;}
+.results-hdr{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap;}
+.results-hdr-title{font-size:1.05rem;font-weight:800;color:#0f172a;}
+.record-badge{font-size:0.88rem;font-weight:700;padding:4px 12px;border-radius:8px;background:#f1f5f9;border:1px solid #E2E8F0;}
+.rec-w{color:#059669;}
+.rec-l{color:#dc2626;}
+/* player cards grid */
+.player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;}
+@media(max-width:680px){.player-grid{grid-template-columns:1fr;}}
+/* player card */
+.player-card{background:#fff;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(15,23,42,0.07);}
+.player-card-hdr{display:flex;align-items:center;gap:12px;padding:14px 16px 12px;border-bottom:1px solid #f1f5f9;background:#fafbfc;}
+.player-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;font-size:0.88rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.5px;}
+.player-name{font-size:0.95rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.player-team{font-size:0.75rem;color:#64748b;font-weight:600;margin-top:2px;}
+/* prop cells */
+.prop-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));border-bottom:1px solid #f1f5f9;}
+.prop-cell{display:flex;flex-direction:column;align-items:center;padding:12px 6px 10px;border-right:1px solid #f1f5f9;text-align:center;}
+.prop-cell:last-child{border-right:none;}
+.prop-cell.over{background:rgba(16,185,129,0.04);}
+.prop-cell.under{background:rgba(239,68,68,0.04);}
+.pc-type{font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:4px;}
+.pc-proj{font-size:1.28rem;font-weight:800;color:#0f172a;line-height:1;margin-bottom:3px;}
+.over .pc-proj{color:#059669;}
+.under .pc-proj{color:#dc2626;}
+.pc-line{font-size:0.63rem;color:#94a3b8;margin-bottom:5px;}
+.pc-pick{font-size:0.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:5px;background:#f1f5f9;color:#475569;}
+.over .pc-pick{background:rgba(16,185,129,0.15);color:#059669;}
+.under .pc-pick{background:rgba(239,68,68,0.12);color:#dc2626;}
+/* model row */
+.model-row{display:flex;padding:7px 10px;background:#fafbfc;}
+.model-cell{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;}
+.mc-lbl{font-size:0.57rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.3px;}
+.mc-val{font-size:0.75rem;font-weight:700;color:#334155;}
+/* results */
+.player-record{font-size:0.82rem;font-weight:700;margin-left:auto;white-space:nowrap;padding:4px 10px;border-radius:8px;background:#f1f5f9;border:1px solid #E2E8F0;}
+.result-rows{padding:4px 0;}
+.result-row{display:grid;grid-template-columns:1fr 58px 68px 68px 58px;align-items:center;padding:9px 16px;border-bottom:1px solid #f8fafc;gap:6px;font-size:0.82rem;}
+.result-row:last-child{border-bottom:none;}
+.rr-prop{font-weight:700;color:#0f172a;}
+.rr-pick{font-size:0.72rem;font-weight:800;text-align:center;padding:3px 6px;border-radius:5px;background:#f1f5f9;color:#475569;}
+.rr-pick.over{background:rgba(16,185,129,0.13);color:#059669;}
+.rr-pick.under{background:rgba(239,68,68,0.10);color:#dc2626;}
+.rr-line,.rr-actual{color:#475569;text-align:center;}
+.rr-lbl{display:block;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#94a3b8;margin-bottom:1px;}
+.rr-result{font-size:0.72rem;font-weight:800;text-align:center;padding:3px 6px;border-radius:5px;background:#f1f5f9;color:#64748b;}
+.rr-result.win{background:rgba(16,185,129,0.15);color:#059669;}
+.rr-result.loss{background:rgba(239,68,68,0.12);color:#dc2626;}
+.rr-result.push{background:rgba(251,191,36,0.12);color:#b45309;}
+@media(max-width:440px){.result-row{grid-template-columns:1fr 50px 58px 58px 50px;padding:8px 12px;gap:3px;font-size:0.77rem;}}
+{% endblock %}
+{% block content %}
+<div class="props-wrap">
+  <div class="props-controls">
+    <div class="tab-group">
+      <button class="tab-btn active" id="tabProps" onclick="switchTab('props')">Props</button>
+      <button class="tab-btn" id="tabResults" onclick="switchTab('results')">Results</button>
+    </div>
+    <select class="league-sel" id="leagueSel">
+      <option value="">Select sport</option>
+      <option>NBA</option><option>NHL</option><option>NFL</option>
+      <option>MLB</option><option>NCAAB</option><option>WNBA</option>
+      <option>NCAAF</option><option>NCAAW</option><option>SOCCER</option>
+    </select>
+    <button class="load-btn" id="loadBtn" onclick="loadProps()">Load Props</button>
+  </div>
+  <div id="propsError" class="props-error" style="display:none;"></div>
+  <div id="propsContent">
+    <div class="props-msg">Select a sport and click <strong>Load Props</strong> to see tonight's projections.</div>
+  </div>
+</div>
+<script>
+const MODEL_KEYS   = ['glicko2','trueskill','xgboost','xsharp','sharp_consensus'];
+const MODEL_LABELS = ['Grinder2','Takedown','Edge','XSharp','Consensus'];
+const PROP_LABELS  = {
+  points:'Points', rebounds:'Rebounds', assists:'Assists', threes:'3PT Made',
+  steals:'Steals', shots_on_goal:'SOG', goals:'Goals', hits:'Hits',
+  strikeouts:'K', runs:'Runs', rbis:'RBI', home_runs:'HR',
+  passing_yards:'Pass Yds', rushing_yards:'Rush Yds',
+  receiving_yards:'Rec Yds', receptions:'Rec',
+  shots:'Shots', shots_on_target:'On Tgt'
+};
+let _view = 'props';
+
+function switchTab(v) {
+  _view = v;
+  document.getElementById('tabProps').classList.toggle('active', v === 'props');
+  document.getElementById('tabResults').classList.toggle('active', v === 'results');
+  const league = document.getElementById('leagueSel').value;
+  if (league) loadProps();
+}
+
+function loadProps() {
+  const league = document.getElementById('leagueSel').value;
+  if (!league) return;
+  const btn = document.getElementById('loadBtn');
+  btn.disabled = true; btn.textContent = 'Loading…';
+  setError('');
+  setContent('<div class="props-msg">Loading…</div>');
+  const url = _view === 'props'
+    ? `/player-props-api/props?league=${encodeURIComponent(league)}`
+    : `/player-props-api/results?league=${encodeURIComponent(league)}`;
+  fetch(url)
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.detail || r.statusText); }))
+    .then(data => {
+      btn.disabled = false; btn.textContent = 'Load Props';
+      if (_view === 'props') renderProps(data, league);
+      else renderResults(data, league);
+    })
+    .catch(err => {
+      btn.disabled = false; btn.textContent = 'Load Props';
+      setError(err.message || 'Props service unavailable. Please try again.');
+      setContent('');
+    });
+}
+
+function setError(msg) {
+  const el = document.getElementById('propsError');
+  el.style.display = msg ? '' : 'none';
+  el.textContent = msg;
+}
+
+function setContent(html) {
+  document.getElementById('propsContent').innerHTML = html;
+}
+
+/* ── Group flat props rows by player ── */
+function groupByPlayer(items) {
+  const map = new Map();
+  for (const row of items) {
+    const k = row.player_id || row.player_name;
+    if (!map.has(k)) map.set(k, { player_id: k, player_name: row.player_name, team: row.team, props: [] });
+    map.get(k).props.push(row);
+  }
+  return [...map.values()];
+}
+
+function groupResultsByPlayer(items) {
+  const map = new Map();
+  for (const row of items) {
+    const k = row.player_id || row.player_name;
+    if (!map.has(k)) map.set(k, { player_id: k, player_name: row.player_name, team: row.team, results: [], wins: 0, losses: 0, pushes: 0 });
+    const g = map.get(k);
+    g.results.push(row);
+    if (row.result === 'WIN') g.wins++;
+    else if (row.result === 'LOSS') g.losses++;
+    else if (row.result === 'PUSH') g.pushes++;
+  }
+  return [...map.values()];
+}
+
+function initials(name) {
+  return (name || '').split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+}
+
+function fmt(pt) { return PROP_LABELS[pt] || pt.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
+
+/* ── Render props ── */
+function renderProps(data, league) {
+  const groups = groupByPlayer(data.items || []);
+  if (!groups.length) { setContent(`<div class="props-msg">No props available for ${league} right now.</div>`); return; }
+  let html = '<div class="player-grid">';
+  for (const p of groups) {
+    const avg = p.props[0]?.model_confidence || {};
+    html += `<div class="player-card">
+      <div class="player-card-hdr">
+        <div class="player-avatar">${initials(p.player_name)}</div>
+        <div><div class="player-name">${p.player_name}</div><div class="player-team">${p.team || ''}</div></div>
+      </div>
+      <div class="prop-row">`;
+    for (const prop of p.props) {
+      const side = (prop.picked_side || '').toLowerCase();
+      html += `<div class="prop-cell ${side}">
+        <div class="pc-type">${fmt(prop.prop_type)}</div>
+        <div class="pc-proj">${prop.projection ?? '—'}</div>
+        <div class="pc-line">Line: ${prop.line ?? '—'}</div>
+        <div class="pc-pick">${prop.picked_side || '—'}</div>
+      </div>`;
+    }
+    html += `</div><div class="model-row">`;
+    for (let i = 0; i < MODEL_KEYS.length; i++) {
+      const v = avg[MODEL_KEYS[i]];
+      html += `<div class="model-cell"><span class="mc-lbl">${MODEL_LABELS[i]}</span><span class="mc-val">${v != null ? v + '%' : '—'}</span></div>`;
+    }
+    html += `</div></div>`;
+  }
+  html += '</div>';
+  setContent(html);
+}
+
+/* ── Render results ── */
+function renderResults(data, league) {
+  const groups = groupResultsByPlayer(data.items || []);
+  if (!groups.length) { setContent(`<div class="props-msg">No graded results yet for ${league}.</div>`); return; }
+  const totalW = groups.reduce((s,g) => s + g.wins, 0);
+  const totalL = groups.reduce((s,g) => s + g.losses, 0);
+  let html = `<div class="results-hdr">
+    <span class="results-hdr-title">${league} Props Results</span>
+    <span class="record-badge"><span class="rec-w">${totalW}W</span> – <span class="rec-l">${totalL}L</span></span>
+  </div><div class="player-grid">`;
+  for (const p of groups) {
+    html += `<div class="player-card">
+      <div class="player-card-hdr">
+        <div class="player-avatar">${initials(p.player_name)}</div>
+        <div style="flex:1;min-width:0;"><div class="player-name">${p.player_name}</div><div class="player-team">${p.team || ''}</div></div>
+        <div class="player-record"><span class="rec-w">${p.wins}W</span> – <span class="rec-l">${p.losses}L</span>${p.pushes ? ` – ${p.pushes}P` : ''}</div>
+      </div>
+      <div class="result-rows">`;
+    for (const r of p.results) {
+      const pick = (r.pick || '').toLowerCase();
+      const res  = (r.result || '').toLowerCase();
+      html += `<div class="result-row">
+        <div class="rr-prop">${fmt(r.prop_type)}</div>
+        <div class="rr-pick ${pick}">${r.pick || '—'}</div>
+        <div class="rr-line"><span class="rr-lbl">Line</span>${r.line ?? '—'}</div>
+        <div class="rr-actual"><span class="rr-lbl">Actual</span>${r.actual ?? '—'}</div>
+        <div class="rr-result ${res}">${r.result || '—'}</div>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+  html += '</div>';
+  setContent(html);
+}
+</script>
+{% endblock %}
