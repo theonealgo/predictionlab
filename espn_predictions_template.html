@@ -971,7 +971,7 @@
         const c=document.getElementById('dateBubbles'); c.innerHTML='';
         const end=Math.min(currentWeekStart+datesPerWeek,allDates.length);
         const week=allDates.slice(currentWeekStart,end);
-        if(!week.includes(activeDate)){activeDate=week[0];showDate(activeDate);}
+        if(!week.includes(activeDate)){if(week.length>0){activeDate=week[0];showDate(activeDate);}}
         week.forEach(date=>{
             const b=document.createElement('div'); b.className='date-bubble';
             if(date===today)b.classList.add('today');

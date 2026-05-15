@@ -3768,7 +3768,9 @@ def get_upcoming_predictions(sport, days=365):
 
     for game_date, game in all_games_with_dates:
         # Show games from season start up to one month from today
-        if game_date >= season_start and game_date <= future_cutoff:
+        if not (game_date >= season_start and game_date <= future_cutoff):
+            continue
+        try:
             # ============================================================
             # SOCCER MODELS + V2 PREDICTION SYSTEM
             # ============================================================
@@ -4425,7 +4427,12 @@ def get_upcoming_predictions(sport, days=365):
                 game_dict['away_injuries'] = []
 
             predictions.append(game_dict)
-    
+        except Exception as _game_err:
+            import traceback as _tb_game
+            _gid = game.get('game_id', '?') if isinstance(game, dict) else '?'
+            logger.error(f"[{sport}] skipping game {_gid} in prediction loop: {_game_err}\n{_tb_game.format_exc()}")
+            continue
+
     if sport not in ('MLB', 'SOCCER'):
         try:
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
@@ -12024,7 +12031,8 @@ def sport_predictions(sport, filter_date=None):
     try:
         predictions = get_upcoming_predictions(sport)
     except Exception as e:
-        logger.error(f"Error loading {sport} predictions: {e}")
+        import traceback as _tb_pred
+        logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
         predictions = []
         prediction_error = (
             f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
