@@ -4103,6 +4103,13 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['xgb_total'] = _round_to_half(result[3]) if result[3] is not None else None
                 except Exception as _e:
                     logger.debug(f"XGBSpread error: {_e}")
+                # Fallback: if XGB model unavailable, promote naive/ScorePredictor values to xgb fields
+                # so the XSharp Spread / XSharp Total / XSharp Score rows always render
+                if game_dict.get('xgb_spread') is None and game_dict.get('naive_spread') is not None:
+                    game_dict['xgb_spread'] = game_dict['naive_spread']
+                    game_dict['xgb_total'] = game_dict.get('naive_total')
+                    game_dict['xgb_home_score'] = game_dict.get('naive_home_score')
+                    game_dict['xgb_away_score'] = game_dict.get('naive_away_score')
 
             if game_dict.get('home_score') is None:
                 # ── MLB: pitching-enhanced prediction (upcoming games only
