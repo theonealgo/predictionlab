@@ -12342,6 +12342,20 @@ def sport_results(sport):
                 daily_results[game_date]['games'].append(game_info)
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
+            for _dd in daily_results.values():
+                for _gg in _dd.get('games', []):
+                    for _k, _dv in {
+                        'market_spread': None, 'market_total': None,
+                        'market_spread_label': None, 'market_spread_reason': None,
+                        'market_total_reason': None,
+                        'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
+                        'our_total': None, 'our_total_games': 0,
+                        'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
+                        'spread_correct': None,
+                        'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
+                        'total_correct': None, 'strong_ou': False,
+                    }.items():
+                        _gg.setdefault(_k, _dv)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
@@ -12410,7 +12424,20 @@ def sport_results(sport):
             try:
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-
+                for _dd in daily_results.values():
+                    for _gg in _dd.get('games', []):
+                        for _k, _dv in {
+                            'market_spread': None, 'market_total': None,
+                            'market_spread_label': None, 'market_spread_reason': None,
+                            'market_total_reason': None,
+                            'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
+                            'our_total': None, 'our_total_games': 0,
+                            'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
+                            'spread_correct': None,
+                            'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
+                            'total_correct': None, 'strong_ou': False,
+                        }.items():
+                            _gg.setdefault(_k, _dv)
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
@@ -12719,6 +12746,26 @@ def sport_results(sport):
                     continue
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
+
+            # Defensive: ensure all template-required keys exist before rendering.
+            # If _compute_spread_total_for_daily exits early (no XGB model), Jinja2
+            # creates Undefined objects that raise AttributeError when formatted.
+            _GAME_KEY_DEFAULTS = {
+                'market_spread': None, 'market_total': None,
+                'market_spread_label': None, 'market_spread_reason': None,
+                'market_total_reason': None,
+                'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
+                'our_total': None, 'our_total_games': 0,
+                'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
+                'spread_correct': None,
+                'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
+                'total_correct': None, 'strong_ou': False,
+            }
+            for _dd in daily_results.values():
+                for _gg in _dd.get('games', []):
+                    for _k, _dv in _GAME_KEY_DEFAULTS.items():
+                        _gg.setdefault(_k, _dv)
+
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _cache_market_lines_for_results(sport, daily_results, limit=20)
