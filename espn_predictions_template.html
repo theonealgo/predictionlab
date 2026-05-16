@@ -541,7 +541,7 @@
                 {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
                 {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
                 <div class="game-card" data-league="{{ pred.league if pred.league else 'Other' }}">
-                    <div class="game-status {% if is_final %}final{% endif %}">{% if is_final %}FINAL{% else %}UPCOMING{% endif %}</div>
+                    <div class="game-status {% if is_final %}final{% endif %}">{% if is_final %}FINAL{% else %}UPCOMING{% endif %}{% if not is_final and pred.game_time is defined and pred.game_time is not none %} &nbsp;·&nbsp; {{ pred.game_time }}{% elif not is_final %} &nbsp;·&nbsp; TBD{% endif %}</div>
                     <div class="game-body">
                         <div class="teams-section">
                             <div class="team-row">

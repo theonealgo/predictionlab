@@ -2972,6 +2972,20 @@ def _espn_event_date_to_local(date_str, tz_name='America/New_York'):
     except Exception:
         return date_str[:10]
 
+def _espn_event_time_to_et(date_str):
+    """Convert ESPN event ISO date (UTC) to Eastern game time string like '7:30 PM ET'. Returns None if no time info."""
+    if not date_str:
+        return None
+    try:
+        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        et = dt.astimezone(ZoneInfo('America/New_York'))
+        # If time is midnight UTC it's likely a TBD placeholder
+        if dt.hour == 0 and dt.minute == 0:
+            return 'TBD'
+        return et.strftime('%-I:%M %p ET')
+    except Exception:
+        return None
+
 # ============================================================================
 # V2 PREDICTION SYSTEM HELPER
 # ============================================================================
@@ -3342,6 +3356,7 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date':    game_date,
+                        'game_time':    _espn_event_time_to_et(event_dt),
                         'home_score':   home_score,
                         'away_score':   away_score,
                         'league':       league_name,
@@ -3488,6 +3503,7 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date': game_date,
+                        'game_time': _espn_event_time_to_et(_raw_dt),
                         'home_score': home_score,
                         'away_score': away_score,
                         'league': league_name or sport,
@@ -12065,6 +12081,7 @@ def sport_predictions(sport, filter_date=None):
             'naive_away_score',
             'h2h_last10_total',
             'h2h_last10_games',
+            'game_time',
         ):
             if _k not in pred:
                 pred[_k] = None if _k != 'h2h_last10_games' else 0
