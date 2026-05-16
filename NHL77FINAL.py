@@ -869,14 +869,10 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
             at = pred.get('away_team_id')
             proj = _compute_h2h_projection(conn, sport, ht, at, n=n)
             if proj:
-                # H2H sets our_total only when efficiency model hasn't already set it.
-                # Never overwrite our_spread/our_home_pts/our_away_pts — those belong
-                # to the efficiency/team-avg model and must stay independent of H2H.
-                pred.setdefault('our_total', proj['our_total'])
+                pred['our_total'] = proj['our_total']
                 pred['our_total_games'] = proj['games_used']
                 pred['our_avg_home'] = proj['avg_home']
                 pred['our_avg_away'] = proj['avg_away']
-                # H2H reference shown separately in UI as "H2H Last 10"
                 pred['h2h_last10_total'] = proj['our_total']
                 pred['h2h_last10_games'] = proj['games_used']
             else:
