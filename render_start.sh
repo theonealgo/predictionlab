@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 set -e
 
-# ── Copy database to persistent disk on first deploy ──────────────────────────
-if [ ! -f /data/sports_predictions_original.db ]; then
-    echo "[render_start] Initializing database on persistent disk..."
-    cp sports_predictions_original.db /data/sports_predictions_original.db
-else
-    echo "[render_start] Database already on persistent disk."
+# ── Refresh database on persistent disk EVERY deploy ──────────────────────────
+# The repo DB is the source of truth (updated with completed games + team stats).
+# Always overwrite the persistent copy so the spread/total/efficiency models on
+# production have the same recent data as local. A timestamped backup of the
+# previous /data copy is kept so nothing is permanently lost.
+if [ -f /data/sports_predictions_original.db ]; then
+    cp /data/sports_predictions_original.db \
+       "/data/sports_predictions_original.db.bak.$(date +%Y%m%d%H%M%S)" || true
+    # keep only the 3 most recent backups
+    ls -1t /data/sports_predictions_original.db.bak.* 2>/dev/null \
+       | tail -n +4 | xargs -r rm -f || true
 fi
+echo "[render_start] Refreshing database on persistent disk from repo..."
+cp sports_predictions_original.db /data/sports_predictions_original.db
+echo "[render_start] Database refreshed ($(du -h sports_predictions_original.db | cut -f1))."
 
 # ── Launch Flask app via gunicorn ─────────────────────────────────────────────
 exec gunicorn NHL77FINAL:app \
