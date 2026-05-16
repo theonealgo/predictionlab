@@ -869,17 +869,14 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
             at = pred.get('away_team_id')
             proj = _compute_h2h_projection(conn, sport, ht, at, n=n)
             if proj:
-                pred['our_total'] = proj['our_total']
-                pred.setdefault('our_spread', proj.get('our_spread'))
+                # H2H sets our_total only when efficiency model hasn't already set it.
+                # Never overwrite our_spread/our_home_pts/our_away_pts — those belong
+                # to the efficiency/team-avg model and must stay independent of H2H.
+                pred.setdefault('our_total', proj['our_total'])
                 pred['our_total_games'] = proj['games_used']
                 pred['our_avg_home'] = proj['avg_home']
                 pred['our_avg_away'] = proj['avg_away']
-                # Use H2H avg scores as estimated home/away pts (overwritten later by
-                # efficiency model for NBA; used as fallback for all other sports).
-                pred.setdefault('our_home_pts', round(proj['avg_home']))
-                pred.setdefault('our_away_pts', round(proj['avg_away']))
-                # Keep H2H reference for UI (results page labels this "H2H Last 10";
-                # NBA may later replace our_total with an efficiency projection).
+                # H2H reference shown separately in UI as "H2H Last 10"
                 pred['h2h_last10_total'] = proj['our_total']
                 pred['h2h_last10_games'] = proj['games_used']
             else:
@@ -4109,13 +4106,6 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['xgb_total'] = _round_to_half(result[3]) if result[3] is not None else None
                 except Exception as _e:
                     logger.debug(f"XGBSpread error: {_e}")
-                # Fallback: if XGB model unavailable, promote naive/ScorePredictor values to xgb fields
-                # so the XSharp Spread / XSharp Total / XSharp Score rows always render
-                if game_dict.get('xgb_spread') is None and game_dict.get('naive_spread') is not None:
-                    game_dict['xgb_spread'] = game_dict['naive_spread']
-                    game_dict['xgb_total'] = game_dict.get('naive_total')
-                    game_dict['xgb_home_score'] = game_dict.get('naive_home_score')
-                    game_dict['xgb_away_score'] = game_dict.get('naive_away_score')
 
             if game_dict.get('home_score') is None:
                 # ── MLB: pitching-enhanced prediction (upcoming games only
@@ -4513,18 +4503,6 @@ def get_upcoming_predictions(sport, days=365):
         _attach_h2h_projection_to_predictions(sport, predictions, n=10)
     except Exception as _h2he:
         logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
-
-    # Second xgb fallback: after H2H sets our_spread/our_total/our_home_pts/our_away_pts,
-    # promote them to xgb fields so XSharp Spread/Total/Score always render.
-    for _pred in predictions:
-        if _pred.get('xgb_spread') is None and _pred.get('our_spread') is not None:
-            _pred['xgb_spread'] = _pred['our_spread']
-        if _pred.get('xgb_total') is None and _pred.get('our_total') is not None:
-            _pred['xgb_total'] = _pred['our_total']
-        if _pred.get('xgb_home_score') is None and _pred.get('our_home_pts') is not None:
-            _pred['xgb_home_score'] = _pred['our_home_pts']
-        if _pred.get('xgb_away_score') is None and _pred.get('our_away_pts') is not None:
-            _pred['xgb_away_score'] = _pred['our_away_pts']
 
     # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
     # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
