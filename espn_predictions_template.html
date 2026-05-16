@@ -651,6 +651,13 @@
                         <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
                         {% endif %}
                         {% endif %}
+                        {% if pred.our_home_pts is defined and pred.our_home_pts is not none and pred.our_away_pts is defined and pred.our_away_pts is not none %}
+                        {% if is_premium %}
+                        <div class="sf-item"><span class="sf-label">Our Score</span><span class="sf-val" style="color:#92400e;font-weight:700;">{{ pred.our_away_pts }} – {{ pred.our_home_pts }}</span></div>
+                        {% else %}
+                        <div class="sf-item"><span class="sf-label">Our Score</span><span class="sf-val" style="color:#475569;">🔒</span></div>
+                        {% endif %}
+                        {% endif %}
                         {% if not is_final and is_premium and (pred.ml_ev is defined or pred.spread_ev is defined or pred.total_ev is defined) %}
                         {% if pred.ml_ev is defined and pred.ml_ev is not none %}
                         <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if pred.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if pred.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(pred.ml_ev) }}%</span></div>
