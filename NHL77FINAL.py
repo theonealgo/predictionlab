@@ -1588,6 +1588,51 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
         logger.debug(f"[{sport}] cache market lines failed: {_e}")
 
 
+def _attach_market_lines_to_predictions(sport, predictions):
+    """Read spread/total from betting_lines DB and attach to each pred dict.
+
+    Called after _cache_market_lines_for_predictions so that the lines that
+    were just fetched/saved are reflected in the template context.  Without
+    this the pred dicts always show market_spread/market_total = None even
+    when valid lines exist in the DB.
+    """
+    if not predictions:
+        return
+    try:
+        conn = get_db_connection()
+        cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
+        has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+        for pred in predictions:
+            if pred.get('home_score') is not None:
+                continue
+            if pred.get('market_spread') is not None and pred.get('market_total') is not None:
+                continue
+            game_id = pred.get('game_id')
+            if not game_id:
+                continue
+            try:
+                if has_extra:
+                    row = conn.execute(
+                        "SELECT spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
+                        (sport, game_id)
+                    ).fetchone()
+                else:
+                    row = conn.execute(
+                        "SELECT spread, total FROM betting_lines WHERE game_id=? LIMIT 1",
+                        (game_id,)
+                    ).fetchone()
+                if row:
+                    if row['spread'] is not None and pred.get('market_spread') is None:
+                        pred['market_spread'] = float(row['spread'])
+                    if row['total'] is not None and pred.get('market_total') is None:
+                        pred['market_total'] = float(row['total'])
+            except Exception:
+                pass
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[{sport}] attach market lines failed: {_e}")
+
+
 def _cache_market_lines_for_results(sport, daily_results, limit=20):
     if sport not in ['NBA', 'MLB', 'SOCCER'] or not daily_results:
         return
@@ -4470,10 +4515,36 @@ def get_upcoming_predictions(sport, days=365):
                 if _fb_total is not None:
                     _sp_pred['market_total'] = round(float(_fb_total), 2)
 
+    # Read back betting lines from DB into pred dicts so the template sees them.
+    # Do this for all sports — betting_lines may have rows from prior fetches.
+    try:
+        _attach_market_lines_to_predictions(sport, predictions)
+    except Exception as _aml_e:
+        logger.debug(f"[{sport}] attach market lines error: {_aml_e}")
+
+    # Universal fallback: if market_spread/market_total still None after DB read,
+    # use xgb or naive model output so the card always shows something.
+    for _fp in predictions:
+        if _fp.get('home_score') is not None:
+            continue
+        if _fp.get('market_spread') is None:
+            _fb = _fp.get('xgb_spread') or _fp.get('naive_spread')
+            if _fb is not None:
+                _fp['market_spread'] = round(float(_fb), 2)
+        if _fp.get('market_total') is None:
+            _fb = _fp.get('xgb_total') or _fp.get('naive_total')
+            if _fb is not None:
+                _fp['market_total'] = round(float(_fb), 2)
+
     # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
         _ml_limit = 5 if sport == 'MLB' else 20
         _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
+        # Re-attach after cache so any newly fetched lines are visible
+        try:
+            _attach_market_lines_to_predictions(sport, predictions)
+        except Exception:
+            pass
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
