@@ -743,44 +743,117 @@ def _upsert_engine_odds(
 
 def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
     """Attach odds to completed game results for ROI calculation.
-    ESPN engine disabled — uses model-probability fallback only to avoid
-    hundreds of HTTP requests that kill the Render worker."""
+    Reads from engine_odds DB first, falls back to model-probability."""
     if not daily_results:
         return
-    for dd in daily_results.values():
-        for g in dd.get('games', []):
-            # Model-probability fallback only (no ESPN API calls)
-            ens = g.get('ens_prob')
-            ml = _compute_odds_from_prob(ens)
-            if ml:
-                g['home_moneyline'] = ml['moneyline_home']
-                g['away_moneyline'] = ml['moneyline_away']
-            g.setdefault('spread_price_home', -110)
-            g.setdefault('spread_price_away', -110)
-            g.setdefault('total_over_price', -110)
-            g.setdefault('total_under_price', -110)
-            g['odds_source'] = 'model_fallback'
+    try:
+        conn = get_db_connection()
+        for dd in daily_results.values():
+            for g in dd.get('games', []):
+                game_id = g.get('game_id')
+                row = None
+                if game_id:
+                    row = conn.execute(
+                        "SELECT home_moneyline, away_moneyline, spread, total, "
+                        "spread_price_home, spread_price_away, total_over_price, total_under_price "
+                        "FROM engine_odds WHERE sport=? AND game_id=? ORDER BY created_at DESC LIMIT 1",
+                        (sport, game_id)
+                    ).fetchone()
+                if row and (row['home_moneyline'] is not None or row['away_moneyline'] is not None):
+                    g['home_moneyline'] = row['home_moneyline']
+                    g['away_moneyline'] = row['away_moneyline']
+                    if row['spread'] is not None:
+                        g.setdefault('market_spread', row['spread'])
+                    if row['total'] is not None:
+                        g.setdefault('market_total', row['total'])
+                    g.setdefault('spread_price_home', row['spread_price_home'] or -110)
+                    g.setdefault('spread_price_away', row['spread_price_away'] or -110)
+                    g.setdefault('total_over_price', row['total_over_price'] or -110)
+                    g.setdefault('total_under_price', row['total_under_price'] or -110)
+                    g['odds_source'] = 'engine'
+                else:
+                    ens = g.get('ens_prob')
+                    ml = _compute_odds_from_prob(ens)
+                    if ml:
+                        g['home_moneyline'] = ml['moneyline_home']
+                        g['away_moneyline'] = ml['moneyline_away']
+                    g.setdefault('spread_price_home', -110)
+                    g.setdefault('spread_price_away', -110)
+                    g.setdefault('total_over_price', -110)
+                    g.setdefault('total_under_price', -110)
+                    g['odds_source'] = 'model_fallback'
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[engine_odds daily] attach failed: {_e}")
 
 def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
     """Attach odds to upcoming predictions.
-    ESPN engine disabled — uses model-probability fallback only to avoid
-    hundreds of HTTP requests that kill the Render worker."""
+    Reads from engine_odds DB first; fetches live from odds engine if missing;
+    falls back to model-probability as last resort."""
     if not predictions:
         return
-    for pred in predictions:
-        if pred.get('home_score') is not None:
-            continue
-        # Model-probability fallback only (no ESPN API calls)
-        ens = pred.get('ensemble_prob')
-        ml = _compute_odds_from_prob(ens)
-        if ml:
-            pred['home_moneyline'] = ml['moneyline_home']
-            pred['away_moneyline'] = ml['moneyline_away']
-        pred.setdefault('spread_price_home', -110)
-        pred.setdefault('spread_price_away', -110)
-        pred.setdefault('total_over_price', -110)
-        pred.setdefault('total_under_price', -110)
-        pred['odds_source'] = 'model_fallback'
+    try:
+        conn = get_db_connection()
+        fetched = 0
+        for pred in predictions:
+            if pred.get('home_score') is not None:
+                continue
+            game_id = pred.get('game_id')
+            row = None
+            if game_id:
+                row = conn.execute(
+                    "SELECT home_moneyline, away_moneyline, spread, total, "
+                    "spread_price_home, spread_price_away, total_over_price, total_under_price "
+                    "FROM engine_odds WHERE sport=? AND game_id=? ORDER BY created_at DESC LIMIT 1",
+                    (sport, game_id)
+                ).fetchone()
+            # If not in DB and odds engine is configured, fetch live (up to limit)
+            if (not row or row['home_moneyline'] is None) and ODDS_ENGINE_URL and fetched < limit:
+                odds, err = _fetch_engine_odds(
+                    sport, game_id,
+                    game_date=pred.get('game_date'),
+                    home_team=pred.get('home_team_id'),
+                    away_team=pred.get('away_team_id'),
+                )
+                if odds:
+                    _upsert_engine_odds(conn, sport, game_id,
+                                        pred.get('game_date'),
+                                        pred.get('home_team_id'),
+                                        pred.get('away_team_id'), odds)
+                    conn.commit()
+                    fetched += 1
+                    row = conn.execute(
+                        "SELECT home_moneyline, away_moneyline, spread, total, "
+                        "spread_price_home, spread_price_away, total_over_price, total_under_price "
+                        "FROM engine_odds WHERE sport=? AND game_id=? ORDER BY created_at DESC LIMIT 1",
+                        (sport, game_id)
+                    ).fetchone()
+            if row and (row['home_moneyline'] is not None or row['away_moneyline'] is not None):
+                pred['home_moneyline'] = row['home_moneyline']
+                pred['away_moneyline'] = row['away_moneyline']
+                if row['spread'] is not None:
+                    pred.setdefault('market_spread', row['spread'])
+                if row['total'] is not None:
+                    pred.setdefault('market_total', row['total'])
+                pred.setdefault('spread_price_home', row['spread_price_home'] or -110)
+                pred.setdefault('spread_price_away', row['spread_price_away'] or -110)
+                pred.setdefault('total_over_price', row['total_over_price'] or -110)
+                pred.setdefault('total_under_price', row['total_under_price'] or -110)
+                pred['odds_source'] = 'engine'
+            else:
+                ens = pred.get('ensemble_prob')
+                ml = _compute_odds_from_prob(ens)
+                if ml:
+                    pred['home_moneyline'] = ml['moneyline_home']
+                    pred['away_moneyline'] = ml['moneyline_away']
+                pred.setdefault('spread_price_home', -110)
+                pred.setdefault('spread_price_away', -110)
+                pred.setdefault('total_over_price', -110)
+                pred.setdefault('total_under_price', -110)
+                pred['odds_source'] = 'model_fallback'
+        conn.close()
+    except Exception as _e:
+        logger.debug(f"[engine_odds predictions] attach failed: {_e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4525,7 +4598,7 @@ def get_upcoming_predictions(sport, days=365):
             logger.error(f"[{sport}] skipping game {_gid} in prediction loop: {_game_err}\n{_tb_game.format_exc()}")
             continue
 
-    if sport not in ('MLB', 'SOCCER'):
+    if sport != 'SOCCER':
         try:
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
         except Exception as _eoe:
