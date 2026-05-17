@@ -5244,8 +5244,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
         if not _xgb:
             if sport in ['NBA', 'MLB']:
                 _sp = _score_predictor_instance(sport)
-            if not _sp:
-                return None
+            # Don't return early — the inner loop handles xs=xt=None and still
+            # populates market_spread / market_total from the betting_lines DB.
 
         conn = get_db_connection()
         _line_by_key = {}
