@@ -408,6 +408,27 @@ def _render_daily_report_share_image(payload: dict, fmt: str):
     return output.getvalue(), mimetype
 
 
+def _trim_cache(cache: dict, ttl: float, max_entries: int = 300) -> None:
+    """Evict stale and excess entries from a TTL-keyed cache dict.
+
+    All our caches store values as dicts with a 'ts' key.  We evict:
+      1. Any entry whose 'ts' age exceeds `ttl` seconds.
+      2. If the cache still has more than `max_entries` entries after TTL
+         eviction, we drop the oldest entries (by 'ts') until we're within
+         the limit.  This caps worst-case memory even if TTLs are long.
+    """
+    if not cache:
+        return
+    now = _time.time()
+    stale = [k for k, v in cache.items() if isinstance(v, dict) and now - v.get('ts', 0) > ttl]
+    for k in stale:
+        cache.pop(k, None)
+    if len(cache) > max_entries:
+        sorted_keys = sorted(cache, key=lambda k: cache[k].get('ts', 0) if isinstance(cache[k], dict) else 0)
+        for k in sorted_keys[:len(cache) - max_entries]:
+            cache.pop(k, None)
+
+
 def _cached_get(url: str, timeout: int = 10):
     """requests.get with 15-minute in-process cache."""
     now = _time.time()
@@ -419,6 +440,7 @@ def _cached_get(url: str, timeout: int = 10):
         r.raise_for_status()
         data = r.json()
         _API_CACHE[url] = {'data': data, 'ts': now}
+        _trim_cache(_API_CACHE, _API_TTL, max_entries=150)
         return data
     except Exception as exc:
         raise exc
@@ -851,6 +873,7 @@ def _compute_h2h_projection(
         'totals': totals,
     }
     _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': data}
+    _trim_cache(_H2H_PROJECTION_CACHE, _H2H_PROJECTION_TTL, max_entries=200)
     return data
 
 
@@ -914,6 +937,7 @@ _MLB_UNDERDOG_MIN_PROB = 0.42
 _MLB_NOISE_MODEL_GAP = 0.02
 _MLB_INJURY_CONF_DEFAULT = 0.75
 _MLB_BULLPEN_FATIGUE_CACHE: dict = {}
+_MLB_BULLPEN_FATIGUE_TTL = 86400  # 24 hours — one entry per team per game day
 
 
 def _round_to_half(value):
@@ -1104,8 +1128,8 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
     gday = str(game_date)[:10]
     cache_key = f"{team_name}|{gday}"
     cached = _MLB_BULLPEN_FATIGUE_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+    if cached is not None and (_time.time() - cached.get('ts', 0)) < _MLB_BULLPEN_FATIGUE_TTL:
+        return cached['val']
     try:
         conn = get_db_connection()
         row = conn.execute(
@@ -1125,7 +1149,7 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         ).fetchone()
         conn.close()
         if not row or not row['d']:
-            _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (0.0, 0.0, False)
+            _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = {'ts': _time.time(), 'val': (0.0, 0.0, False)}
             return 0.0, 0.0, False
         prev = datetime.strptime(row['d'], '%Y-%m-%d')
         cur = datetime.strptime(gday, '%Y-%m-%d')
@@ -1139,7 +1163,13 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         elif is_b2b:
             boost = 0.01
             total_adj = 0.5
-        _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (boost, total_adj, is_b2b)
+        _now_bf = _time.time()
+        _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = {'ts': _now_bf, 'val': (boost, total_adj, is_b2b)}
+        if len(_MLB_BULLPEN_FATIGUE_CACHE) > 500:
+            _stale_bf = [k for k, v in _MLB_BULLPEN_FATIGUE_CACHE.items()
+                         if _now_bf - v.get('ts', 0) > _MLB_BULLPEN_FATIGUE_TTL]
+            for _k in _stale_bf:
+                _MLB_BULLPEN_FATIGUE_CACHE.pop(_k, None)
         return boost, total_adj, is_b2b
     except Exception:
         return 0.0, 0.0, False
@@ -2193,6 +2223,7 @@ def _get_soccer_model_bundle(completed_games, league_name=None):
 
     bundle = build_soccer_model_bundle(filtered, league_name=league_name)
     _SOCCER_MODEL_CACHE[cache_key] = {'ts': now_ts, 'bundle': bundle}
+    _trim_cache(_SOCCER_MODEL_CACHE, _SOCCER_MODEL_TTL, max_entries=20)
     return bundle
 
 # ── Public-facing model brand names ───────────────────────────────────────────
@@ -3086,6 +3117,7 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
             'is_v2': True,
         }
         _V2_PREDICTION_CACHE[cache_key] = {'ts': now_ts, 'data': _copy.deepcopy(result)}
+        _trim_cache(_V2_PREDICTION_CACHE, _V2_PREDICTION_TTL_SECONDS, max_entries=500)
         return result
     except Exception as e:
         logger.warning(f"V2 prediction failed for {away_team} @ {home_team}: {e}")
@@ -4749,6 +4781,7 @@ def get_upcoming_predictions(sport, days=365):
             _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
 
     _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
+    _trim_cache(_PREDICTIONS_CACHE, max(_PREDICTIONS_TTL_BY_SPORT.values()), max_entries=50)
     return predictions
 
 def _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None):
@@ -12334,6 +12367,7 @@ def sport_predictions(sport, filter_date=None):
         return _predictions_fallback_page(sport, filter_date=filter_date)
     if cache_key:
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+        _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, max(_SPORT_PREDICTIONS_PAGE_TTL.values()), max_entries=20)
     return rendered
 
 def sport_results(sport):
@@ -12575,6 +12609,7 @@ def sport_results(sport):
                     roi_cards=roi_cards
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+                _trim_cache(_SPORT_RESULTS_CACHE, max(_SPORT_RESULTS_TTL_BY_SPORT.values()), max_entries=30)
                 return rendered
             except Exception as e:
                 logger.error(f"Error processing NHL results: {e}")
@@ -12667,6 +12702,7 @@ def sport_results(sport):
                     roi_cards=roi_cards
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+                _trim_cache(_SPORT_RESULTS_CACHE, max(_SPORT_RESULTS_TTL_BY_SPORT.values()), max_entries=30)
                 return rendered
             except Exception as e:
                 import traceback as _tb
@@ -12916,8 +12952,9 @@ def sport_results(sport):
                 soccer_leagues=soccer_leagues
             )
             _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+            _trim_cache(_SPORT_RESULTS_CACHE, max(_SPORT_RESULTS_TTL_BY_SPORT.values()), max_entries=30)
             return rendered
-        
+
         performance = calculate_model_performance(sport)
         return render_template_string(
             RESULTS_TEMPLATE,
