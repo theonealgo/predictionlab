@@ -662,20 +662,6 @@
                         {% else %}
                         <div class="sf-item"><span class="sf-label">Our Score</span><span class="sf-val" style="color:#475569;">🔒</span></div>
                         {% endif %}
-                        {# ── XSharp rows ── #}
-                        {% if is_premium %}
-                        {% if pred.xgb_spread is defined and pred.xgb_spread is not none %}{% set _xs = pred.xgb_spread|float %}
-                        <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#1d4ed8;">{% if _xs == 0 %}PK{% elif _xs > 0 %}{{ pred.home_team_id }} -{{ "%.1f"|format(_xs|abs) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(_xs|abs) }}{% endif %}</span></div>
-                        {% else %}
-                        <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#475569;">—</span></div>
-                        {% endif %}
-                        <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val" style="color:{% if pred.xgb_total is defined and pred.xgb_total is not none %}#1d4ed8{% else %}#475569{% endif %};">{% if pred.xgb_total is defined and pred.xgb_total is not none %}{{ pred.xgb_total }}{% else %}—{% endif %}</span></div>
-                        <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val" style="color:{% if pred.xgb_home_score is defined and pred.xgb_home_score is not none and pred.xgb_away_score is defined and pred.xgb_away_score is not none %}#1d4ed8{% else %}#475569{% endif %};font-weight:700;">{% if pred.xgb_home_score is defined and pred.xgb_home_score is not none and pred.xgb_away_score is defined and pred.xgb_away_score is not none %}{{ pred.xgb_away_score }} – {{ pred.xgb_home_score }}{% else %}—{% endif %}</span></div>
-                        {% else %}
-                        <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#475569;">🔒</span></div>
-                        <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
-                        <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val" style="color:#475569;">🔒</span></div>
-                        {% endif %}
                         {% endif %}
                         {% if not is_final and is_premium and (pred.ml_ev is defined or pred.spread_ev is defined or pred.total_ev is defined) %}
                         {% if pred.ml_ev is defined and pred.ml_ev is not none %}
