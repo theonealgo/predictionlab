@@ -4525,7 +4525,7 @@ def get_upcoming_predictions(sport, days=365):
             logger.error(f"[{sport}] skipping game {_gid} in prediction loop: {_game_err}\n{_tb_game.format_exc()}")
             continue
 
-    if sport != 'SOCCER':
+    if sport not in ('MLB', 'SOCCER'):
         try:
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
         except Exception as _eoe:
