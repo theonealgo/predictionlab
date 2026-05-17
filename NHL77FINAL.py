@@ -12233,6 +12233,11 @@ def sport_predictions(sport, filter_date=None):
         _pred_li = False
 
     try:
+        _pred_premium = is_premium_user()
+    except Exception:
+        _pred_premium = False
+
+    try:
         # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
         with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
             espn_template = f.read()
@@ -12254,6 +12259,7 @@ def sport_predictions(sport, filter_date=None):
             share_image_src=share_image_src,
             share_image_view_url=share_image_view_url,
             is_logged_in=_pred_li,
+            is_premium=_pred_premium,
             soccer_enabled=SOCCER_ENABLED,
             ga_tracking_id=GA_TRACKING_ID,
             todays_picks=[],
