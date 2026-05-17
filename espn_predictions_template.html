@@ -21,7 +21,6 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -541,7 +540,7 @@
                 {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
                 {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
                 <div class="game-card" data-league="{{ pred.league if pred.league else 'Other' }}">
-                    <div class="game-status {% if is_final %}final{% endif %}">{% if is_final %}FINAL{% else %}UPCOMING{% endif %}{% if not is_final and pred.game_time is defined and pred.game_time is not none %} &nbsp;·&nbsp; {{ pred.game_time }}{% elif not is_final %} &nbsp;·&nbsp; TBD{% endif %}</div>
+                    <div class="game-status {% if is_final %}final{% endif %}">{% if is_final %}FINAL{% else %}UPCOMING{% endif %}</div>
                     <div class="game-body">
                         <div class="teams-section">
                             <div class="team-row">
@@ -552,16 +551,6 @@
                                 <span class="team-name {% if home_wins %}winner{% endif %}">{{ pred.home_team_id }}{% if not is_final and pred.home_moneyline is not none %} <span class="team-odds {% if pred.home_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.home_moneyline > 0 %}+{% endif %}{{ pred.home_moneyline }}</span>{% endif %}</span>
                                 {% if is_final %}<span class="score-box">{{ pred.home_score }}</span>{% else %}{% if home_picked and _odds_pass %}<span class="pick-indicator">▶</span>{% endif %}{% endif %}
                             </div>
-                            {% if not is_final and (pred.market_spread is not none or pred.market_total is not none) %}
-                            <div style="display:flex;gap:12px;padding:4px 0 2px;border-top:1px solid rgba(15,23,42,0.07);margin-top:4px;">
-                                {% if pred.market_spread is not none %}
-                                <span style="font-size:0.75em;color:#475569;">Spread <strong style="color:#0f172a;">{% if pred.market_spread == 0 %}PK{% elif pred.market_spread < 0 %}{{ pred.home_team_id }} {{ "%.1f"|format(pred.market_spread) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(pred.market_spread|abs) }}{% endif %}</strong></span>
-                                {% endif %}
-                                {% if pred.market_total is not none %}
-                                <span style="font-size:0.75em;color:#475569;">O/U <strong style="color:#0f172a;">{{ pred.market_total }}</strong></span>
-                                {% endif %}
-                            </div>
-                            {% endif %}
                     </div>
                         <div class="premium-panel premium-protected">
                             <div class="panel-title">🏆 Premium Picks</div>
@@ -617,64 +606,54 @@
                         </div>
                     </div>
                     {# Our Spread / Our Total — prefer our own projection (last-3 per-team avg for NBA),
-                       fall back to xgb / market / naive only when missing.
-                       Always use `is defined and is not none` to avoid Jinja2 Undefined short-circuits. #}
-                    {% set _our_spread = pred.our_spread if (pred.our_spread is defined and pred.our_spread is not none) else (pred.xgb_spread if (pred.xgb_spread is defined and pred.xgb_spread is not none) else (pred.market_spread if (pred.market_spread is defined and pred.market_spread is not none) else (pred.naive_spread if (pred.naive_spread is defined and pred.naive_spread is not none) else none))) %}
+                       fall back to xgb / market / naive only when missing. #}
+                    {% set _our_spread = pred.our_spread if pred.our_spread is not none else (pred.xgb_spread if pred.xgb_spread is not none else (pred.market_spread if pred.market_spread is not none else pred.naive_spread)) %}
                     {% set _spread_val = _our_spread %}
-                    {% set _total_val = pred.our_total if (pred.our_total is defined and pred.our_total is not none) else (pred.xgb_total if (pred.xgb_total is defined and pred.xgb_total is not none) else (pred.market_total if (pred.market_total is defined and pred.market_total is not none) else (pred.naive_total if (pred.naive_total is defined and pred.naive_total is not none) else none))) %}
+                    {% set _total_val = pred.our_total if pred.our_total is not none else (pred.xgb_total if pred.xgb_total is not none else (pred.market_total if pred.market_total is not none else pred.naive_total)) %}
                     {# Sign convention: our_spread > 0 ⇒ home favored by that much. #}
                     {% set _spread_home_favored = (_our_spread is not none) and (_our_spread > 0) %}
-                    {% if not is_final or is_final or _spread_val is not none or _total_val is not none or (sport == 'NHL' and pred.puck_line_tag is not none) %}
+                    {% if _spread_val is not none or _total_val is not none or (sport == 'NHL' and pred.puck_line_tag is not none) or is_final %}
                     <div class="score-footer premium-protected">
                         {% if sport == 'NHL' and pred.puck_line_tag is not none %}
                         {% if is_premium %}
-                        <div class="sf-item sf-full"><span class="sf-label">Puck Line</span>
+                        <div class="sf-item"><span class="sf-label">Puck Line</span>
                             {% if pred.puck_line_tag == 'STRONG -1.5' %}<span class="sf-val" style="color:#00C076;font-weight:800;">{{ pred.puck_line_tag }}</span>
                             {% elif pred.puck_line_tag == 'LEAN -1.5' %}<span class="sf-val" style="color:#34d399;">{{ pred.puck_line_tag }}</span>
                             {% elif pred.puck_line_tag == 'STRONG +1.5' %}<span class="sf-val" style="color:#92400e;font-weight:800;">{{ pred.puck_line_tag }}</span>
                             {% elif pred.puck_line_tag == 'LEAN +1.5' %}<span class="sf-val" style="color:#fcd34d;">{{ pred.puck_line_tag }}</span>
                             {% else %}<span class="sf-val" style="color:#475569;">{{ pred.puck_line_tag }}</span>{% endif %}
-                            &nbsp;·&nbsp;
-                            <span style="font-size:0.8em;color:#475569;">{% if pred.puck_line_fav_side == 'home' %}{{ pred.home_team_id[:10] }}{% else %}{{ pred.away_team_id[:10] }}{% endif %} -1.5 {{ pred.puck_line_fav_prob }}% / +1.5 {{ pred.puck_line_dog_prob }}%</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">{% if pred.puck_line_fav_side == 'home' %}{{ pred.home_team_id[:10] }} -1.5{% else %}{{ pred.away_team_id[:10] }} -1.5{% endif %}</span>
+                            <span class="sf-val sf-fav">{{ pred.puck_line_fav_prob }}%</span>
+                        </div>
+                        <div class="sf-item">
+                            <span class="sf-label">{% if pred.puck_line_fav_side == 'home' %}{{ pred.away_team_id[:10] }} +1.5{% else %}{{ pred.home_team_id[:10] }} +1.5{% endif %}</span>
+                            <span class="sf-val" style="color:#475569;">{{ pred.puck_line_dog_prob }}%</span>
                         </div>
                         {% else %}
-                        <div class="sf-item sf-full"><span class="sf-label">Puck Line</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
+                        <div class="sf-item"><span class="sf-label">Puck Line</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% endif %}
-                        {% if not is_final %}
+                        {% if _spread_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:{% if _spread_val is not none %}#92400e{% else %}#475569{% endif %};">{% if _spread_val is not none %}{% if _spread_home_favored %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} -{{ "%.1f"|format(_spread_val|abs) }}{% else %}—{% endif %}</span></div>
+                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#92400e;">{% set _sv = _spread_val|float %}{% if _sv == 0 %}PK{% elif _spread_home_favored %}{{ pred.home_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% endif %}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
+                        {% endif %}
+                        {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">H2H Last 10</span><span class="sf-val" style="color:#475569;">{% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}{{ "%.1f"|format(pred.h2h_last10_total) }}{% if pred.h2h_last10_games is defined and pred.h2h_last10_games %} <span style="font-size:0.78em;color:#94a3b8;font-weight:600;">({{ pred.h2h_last10_games }} game{% if pred.h2h_last10_games != 1 %}s{% endif %})</span>{% endif %}{% else %}—{% endif %}</span></div>
+                        <div class="sf-item"><span class="sf-label">H2H Last 10</span><span class="sf-val" style="color:#475569;">{{ "%.1f"|format(pred.h2h_last10_total) }}{% if pred.h2h_last10_games is defined and pred.h2h_last10_games %} <span style="font-size:0.78em;color:#94a3b8;font-weight:600;">({{ pred.h2h_last10_games }} game{% if pred.h2h_last10_games != 1 %}s{% endif %})</span>{% endif %}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">H2H Last 10</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
+                        {% endif %}
+                        {% if _total_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:{% if _total_val is not none %}#92400e{% else %}#475569{% endif %};">{% if _total_val is not none %}{{ "%.1f"|format(_total_val) }}{% else %}—{% endif %}</span></div>
+                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#92400e;">{{ "%.1f"|format(_total_val) }}</span></div>
                         {% else %}
                         <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
-                        {% endif %}
-                        {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Score</span><span class="sf-val" style="color:{% if pred.our_home_pts is defined and pred.our_home_pts is not none and pred.our_away_pts is defined and pred.our_away_pts is not none %}#92400e{% else %}#475569{% endif %};font-weight:700;">{% if pred.our_home_pts is defined and pred.our_home_pts is not none and pred.our_away_pts is defined and pred.our_away_pts is not none %}{{ pred.our_away_pts }} – {{ pred.our_home_pts }}{% else %}—{% endif %}</span></div>
-                        {% else %}
-                        <div class="sf-item"><span class="sf-label">Our Score</span><span class="sf-val" style="color:#475569;">🔒</span></div>
-                        {% endif %}
-                        {# ── XSharp rows ── #}
-                        {% if is_premium %}
-                        {% if pred.xgb_spread is defined and pred.xgb_spread is not none %}{% set _xs = pred.xgb_spread|float %}
-                        <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#1d4ed8;">{% if _xs == 0 %}PK{% elif _xs > 0 %}{{ pred.home_team_id }} -{{ "%.1f"|format(_xs|abs) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(_xs|abs) }}{% endif %}</span></div>
-                        {% else %}
-                        <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#475569;">—</span></div>
-                        {% endif %}
-                        <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val" style="color:{% if pred.xgb_total is defined and pred.xgb_total is not none %}#1d4ed8{% else %}#475569{% endif %};">{% if pred.xgb_total is defined and pred.xgb_total is not none %}{{ pred.xgb_total }}{% else %}—{% endif %}</span></div>
-                        <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val" style="color:{% if pred.xgb_home_score is defined and pred.xgb_home_score is not none and pred.xgb_away_score is defined and pred.xgb_away_score is not none %}#1d4ed8{% else %}#475569{% endif %};font-weight:700;">{% if pred.xgb_home_score is defined and pred.xgb_home_score is not none and pred.xgb_away_score is defined and pred.xgb_away_score is not none %}{{ pred.xgb_away_score }} – {{ pred.xgb_home_score }}{% else %}—{% endif %}</span></div>
-                        {% else %}
-                        <div class="sf-item"><span class="sf-label">XSharp Spread</span><span class="sf-val" style="color:#475569;">🔒</span></div>
-                        <div class="sf-item"><span class="sf-label">XSharp Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
-                        <div class="sf-item"><span class="sf-label">XSharp Score</span><span class="sf-val" style="color:#475569;">🔒</span></div>
                         {% endif %}
                         {% endif %}
                         {% if not is_final and is_premium and (pred.ml_ev is defined or pred.spread_ev is defined or pred.total_ev is defined) %}
@@ -692,7 +671,9 @@
                         {% endif %}
                         {% endif %}
                         {% if is_final and is_premium %}
-                        <div class="sf-item sf-full"><span class="sf-label">Actual Score</span><span class="sf-val" style="color:#00C076;font-weight:700;">{{ pred.away_score }} – {{ pred.home_score }} &nbsp;·&nbsp; Total {{ pred.away_score + pred.home_score }} &nbsp;·&nbsp; Spread {{ "%+.0f"|format(pred.home_score - pred.away_score) }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Actual Score</span><span class="sf-val" style="color:#00C076;font-weight:700;">{{ pred.away_score }} – {{ pred.home_score }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Actual Total</span><span class="sf-val" style="color:#00C076;">{{ pred.away_score + pred.home_score }}</span></div>
+                        <div class="sf-item"><span class="sf-label">Actual Spread</span><span class="sf-val" style="color:#00C076;">{{ "%+.0f"|format(pred.home_score - pred.away_score) }}</span></div>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -990,7 +971,7 @@
         const c=document.getElementById('dateBubbles'); c.innerHTML='';
         const end=Math.min(currentWeekStart+datesPerWeek,allDates.length);
         const week=allDates.slice(currentWeekStart,end);
-        if(!week.includes(activeDate)){if(week.length>0){activeDate=week[0];showDate(activeDate);}}
+        if(!week.includes(activeDate)){activeDate=week[0];showDate(activeDate);}
         week.forEach(date=>{
             const b=document.createElement('div'); b.className='date-bubble';
             if(date===today)b.classList.add('today');

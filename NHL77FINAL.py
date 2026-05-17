@@ -408,27 +408,6 @@ def _render_daily_report_share_image(payload: dict, fmt: str):
     return output.getvalue(), mimetype
 
 
-def _trim_cache(cache: dict, ttl: float, max_entries: int = 300) -> None:
-    """Evict stale and excess entries from a TTL-keyed cache dict.
-
-    All our caches store values as dicts with a 'ts' key.  We evict:
-      1. Any entry whose 'ts' age exceeds `ttl` seconds.
-      2. If the cache still has more than `max_entries` entries after TTL
-         eviction, we drop the oldest entries (by 'ts') until we're within
-         the limit.  This caps worst-case memory even if TTLs are long.
-    """
-    if not cache:
-        return
-    now = _time.time()
-    stale = [k for k, v in cache.items() if isinstance(v, dict) and now - v.get('ts', 0) > ttl]
-    for k in stale:
-        cache.pop(k, None)
-    if len(cache) > max_entries:
-        sorted_keys = sorted(cache, key=lambda k: cache[k].get('ts', 0) if isinstance(cache[k], dict) else 0)
-        for k in sorted_keys[:len(cache) - max_entries]:
-            cache.pop(k, None)
-
-
 def _cached_get(url: str, timeout: int = 10):
     """requests.get with 15-minute in-process cache."""
     now = _time.time()
@@ -440,7 +419,6 @@ def _cached_get(url: str, timeout: int = 10):
         r.raise_for_status()
         data = r.json()
         _API_CACHE[url] = {'data': data, 'ts': now}
-        _trim_cache(_API_CACHE, _API_TTL, max_entries=150)
         return data
     except Exception as exc:
         raise exc
@@ -743,117 +721,44 @@ def _upsert_engine_odds(
 
 def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
     """Attach odds to completed game results for ROI calculation.
-    Reads from engine_odds DB first, falls back to model-probability."""
+    ESPN engine disabled — uses model-probability fallback only to avoid
+    hundreds of HTTP requests that kill the Render worker."""
     if not daily_results:
         return
-    try:
-        conn = get_db_connection()
-        for dd in daily_results.values():
-            for g in dd.get('games', []):
-                game_id = g.get('game_id')
-                row = None
-                if game_id:
-                    row = conn.execute(
-                        "SELECT home_moneyline, away_moneyline, spread, total, "
-                        "spread_price_home, spread_price_away, total_over_price, total_under_price "
-                        "FROM engine_odds WHERE sport=? AND game_id=? ORDER BY created_at DESC LIMIT 1",
-                        (sport, game_id)
-                    ).fetchone()
-                if row and (row['home_moneyline'] is not None or row['away_moneyline'] is not None):
-                    g['home_moneyline'] = row['home_moneyline']
-                    g['away_moneyline'] = row['away_moneyline']
-                    if row['spread'] is not None:
-                        g.setdefault('market_spread', row['spread'])
-                    if row['total'] is not None:
-                        g.setdefault('market_total', row['total'])
-                    g.setdefault('spread_price_home', row['spread_price_home'] or -110)
-                    g.setdefault('spread_price_away', row['spread_price_away'] or -110)
-                    g.setdefault('total_over_price', row['total_over_price'] or -110)
-                    g.setdefault('total_under_price', row['total_under_price'] or -110)
-                    g['odds_source'] = 'engine'
-                else:
-                    ens = g.get('ens_prob')
-                    ml = _compute_odds_from_prob(ens)
-                    if ml:
-                        g['home_moneyline'] = ml['moneyline_home']
-                        g['away_moneyline'] = ml['moneyline_away']
-                    g.setdefault('spread_price_home', -110)
-                    g.setdefault('spread_price_away', -110)
-                    g.setdefault('total_over_price', -110)
-                    g.setdefault('total_under_price', -110)
-                    g['odds_source'] = 'model_fallback'
-        conn.close()
-    except Exception as _e:
-        logger.debug(f"[engine_odds daily] attach failed: {_e}")
+    for dd in daily_results.values():
+        for g in dd.get('games', []):
+            # Model-probability fallback only (no ESPN API calls)
+            ens = g.get('ens_prob')
+            ml = _compute_odds_from_prob(ens)
+            if ml:
+                g['home_moneyline'] = ml['moneyline_home']
+                g['away_moneyline'] = ml['moneyline_away']
+            g.setdefault('spread_price_home', -110)
+            g.setdefault('spread_price_away', -110)
+            g.setdefault('total_over_price', -110)
+            g.setdefault('total_under_price', -110)
+            g['odds_source'] = 'model_fallback'
 
 def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
     """Attach odds to upcoming predictions.
-    Reads from engine_odds DB first; fetches live from odds engine if missing;
-    falls back to model-probability as last resort."""
+    ESPN engine disabled — uses model-probability fallback only to avoid
+    hundreds of HTTP requests that kill the Render worker."""
     if not predictions:
         return
-    try:
-        conn = get_db_connection()
-        fetched = 0
-        for pred in predictions:
-            if pred.get('home_score') is not None:
-                continue
-            game_id = pred.get('game_id')
-            row = None
-            if game_id:
-                row = conn.execute(
-                    "SELECT home_moneyline, away_moneyline, spread, total, "
-                    "spread_price_home, spread_price_away, total_over_price, total_under_price "
-                    "FROM engine_odds WHERE sport=? AND game_id=? ORDER BY created_at DESC LIMIT 1",
-                    (sport, game_id)
-                ).fetchone()
-            # If not in DB and odds engine is configured, fetch live (up to limit)
-            if (not row or row['home_moneyline'] is None) and ODDS_ENGINE_URL and fetched < limit:
-                odds, err = _fetch_engine_odds(
-                    sport, game_id,
-                    game_date=pred.get('game_date'),
-                    home_team=pred.get('home_team_id'),
-                    away_team=pred.get('away_team_id'),
-                )
-                if odds:
-                    _upsert_engine_odds(conn, sport, game_id,
-                                        pred.get('game_date'),
-                                        pred.get('home_team_id'),
-                                        pred.get('away_team_id'), odds)
-                    conn.commit()
-                    fetched += 1
-                    row = conn.execute(
-                        "SELECT home_moneyline, away_moneyline, spread, total, "
-                        "spread_price_home, spread_price_away, total_over_price, total_under_price "
-                        "FROM engine_odds WHERE sport=? AND game_id=? ORDER BY created_at DESC LIMIT 1",
-                        (sport, game_id)
-                    ).fetchone()
-            if row and (row['home_moneyline'] is not None or row['away_moneyline'] is not None):
-                pred['home_moneyline'] = row['home_moneyline']
-                pred['away_moneyline'] = row['away_moneyline']
-                if row['spread'] is not None:
-                    pred.setdefault('market_spread', row['spread'])
-                if row['total'] is not None:
-                    pred.setdefault('market_total', row['total'])
-                pred.setdefault('spread_price_home', row['spread_price_home'] or -110)
-                pred.setdefault('spread_price_away', row['spread_price_away'] or -110)
-                pred.setdefault('total_over_price', row['total_over_price'] or -110)
-                pred.setdefault('total_under_price', row['total_under_price'] or -110)
-                pred['odds_source'] = 'engine'
-            else:
-                ens = pred.get('ensemble_prob')
-                ml = _compute_odds_from_prob(ens)
-                if ml:
-                    pred['home_moneyline'] = ml['moneyline_home']
-                    pred['away_moneyline'] = ml['moneyline_away']
-                pred.setdefault('spread_price_home', -110)
-                pred.setdefault('spread_price_away', -110)
-                pred.setdefault('total_over_price', -110)
-                pred.setdefault('total_under_price', -110)
-                pred['odds_source'] = 'model_fallback'
-        conn.close()
-    except Exception as _e:
-        logger.debug(f"[engine_odds predictions] attach failed: {_e}")
+    for pred in predictions:
+        if pred.get('home_score') is not None:
+            continue
+        # Model-probability fallback only (no ESPN API calls)
+        ens = pred.get('ensemble_prob')
+        ml = _compute_odds_from_prob(ens)
+        if ml:
+            pred['home_moneyline'] = ml['moneyline_home']
+            pred['away_moneyline'] = ml['moneyline_away']
+        pred.setdefault('spread_price_home', -110)
+        pred.setdefault('spread_price_away', -110)
+        pred.setdefault('total_over_price', -110)
+        pred.setdefault('total_under_price', -110)
+        pred['odds_source'] = 'model_fallback'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -942,11 +847,9 @@ def _compute_h2h_projection(
         'avg_home': round(avg_home, 2),
         'avg_away': round(avg_away, 2),
         'our_total': round(avg_home + avg_away, 1),
-        'our_spread': round(avg_home - avg_away, 1),  # positive = home favored
         'totals': totals,
     }
     _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': data}
-    _trim_cache(_H2H_PROJECTION_CACHE, _H2H_PROJECTION_TTL, max_entries=200)
     return data
 
 
@@ -969,6 +872,8 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
                 pred['our_total_games'] = proj['games_used']
                 pred['our_avg_home'] = proj['avg_home']
                 pred['our_avg_away'] = proj['avg_away']
+                # Keep H2H reference for UI (results page labels this "H2H Last 10";
+                # NBA may later replace our_total with an efficiency projection).
                 pred['h2h_last10_total'] = proj['our_total']
                 pred['h2h_last10_games'] = proj['games_used']
             else:
@@ -1010,7 +915,6 @@ _MLB_UNDERDOG_MIN_PROB = 0.42
 _MLB_NOISE_MODEL_GAP = 0.02
 _MLB_INJURY_CONF_DEFAULT = 0.75
 _MLB_BULLPEN_FATIGUE_CACHE: dict = {}
-_MLB_BULLPEN_FATIGUE_TTL = 86400  # 24 hours — one entry per team per game day
 
 
 def _round_to_half(value):
@@ -1201,8 +1105,8 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
     gday = str(game_date)[:10]
     cache_key = f"{team_name}|{gday}"
     cached = _MLB_BULLPEN_FATIGUE_CACHE.get(cache_key)
-    if cached is not None and (_time.time() - cached.get('ts', 0)) < _MLB_BULLPEN_FATIGUE_TTL:
-        return cached['val']
+    if cached is not None:
+        return cached
     try:
         conn = get_db_connection()
         row = conn.execute(
@@ -1222,7 +1126,7 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         ).fetchone()
         conn.close()
         if not row or not row['d']:
-            _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = {'ts': _time.time(), 'val': (0.0, 0.0, False)}
+            _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (0.0, 0.0, False)
             return 0.0, 0.0, False
         prev = datetime.strptime(row['d'], '%Y-%m-%d')
         cur = datetime.strptime(gday, '%Y-%m-%d')
@@ -1236,13 +1140,7 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         elif is_b2b:
             boost = 0.01
             total_adj = 0.5
-        _now_bf = _time.time()
-        _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = {'ts': _now_bf, 'val': (boost, total_adj, is_b2b)}
-        if len(_MLB_BULLPEN_FATIGUE_CACHE) > 500:
-            _stale_bf = [k for k, v in _MLB_BULLPEN_FATIGUE_CACHE.items()
-                         if _now_bf - v.get('ts', 0) > _MLB_BULLPEN_FATIGUE_TTL]
-            for _k in _stale_bf:
-                _MLB_BULLPEN_FATIGUE_CACHE.pop(_k, None)
+        _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (boost, total_adj, is_b2b)
         return boost, total_adj, is_b2b
     except Exception:
         return 0.0, 0.0, False
@@ -1689,51 +1587,6 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
         conn.close()
     except Exception as _e:
         logger.debug(f"[{sport}] cache market lines failed: {_e}")
-
-
-def _attach_market_lines_to_predictions(sport, predictions):
-    """Read spread/total from betting_lines DB and attach to each pred dict.
-
-    Called after _cache_market_lines_for_predictions so that the lines that
-    were just fetched/saved are reflected in the template context.  Without
-    this the pred dicts always show market_spread/market_total = None even
-    when valid lines exist in the DB.
-    """
-    if not predictions:
-        return
-    try:
-        conn = get_db_connection()
-        cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
-        has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
-        for pred in predictions:
-            if pred.get('home_score') is not None:
-                continue
-            if pred.get('market_spread') is not None and pred.get('market_total') is not None:
-                continue
-            game_id = pred.get('game_id')
-            if not game_id:
-                continue
-            try:
-                if has_extra:
-                    row = conn.execute(
-                        "SELECT spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
-                        (sport, game_id)
-                    ).fetchone()
-                else:
-                    row = conn.execute(
-                        "SELECT spread, total FROM betting_lines WHERE game_id=? LIMIT 1",
-                        (game_id,)
-                    ).fetchone()
-                if row:
-                    if row['spread'] is not None and pred.get('market_spread') is None:
-                        pred['market_spread'] = float(row['spread'])
-                    if row['total'] is not None and pred.get('market_total') is None:
-                        pred['market_total'] = float(row['total'])
-            except Exception:
-                pass
-        conn.close()
-    except Exception as _e:
-        logger.debug(f"[{sport}] attach market lines failed: {_e}")
 
 
 def _cache_market_lines_for_results(sport, daily_results, limit=20):
@@ -2296,7 +2149,6 @@ def _get_soccer_model_bundle(completed_games, league_name=None):
 
     bundle = build_soccer_model_bundle(filtered, league_name=league_name)
     _SOCCER_MODEL_CACHE[cache_key] = {'ts': now_ts, 'bundle': bundle}
-    _trim_cache(_SOCCER_MODEL_CACHE, _SOCCER_MODEL_TTL, max_entries=20)
     return bundle
 
 # ── Public-facing model brand names ───────────────────────────────────────────
@@ -3121,20 +2973,6 @@ def _espn_event_date_to_local(date_str, tz_name='America/New_York'):
     except Exception:
         return date_str[:10]
 
-def _espn_event_time_to_et(date_str):
-    """Convert ESPN event ISO date (UTC) to Eastern game time string like '7:30 PM ET'. Returns None if no time info."""
-    if not date_str:
-        return None
-    try:
-        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        et = dt.astimezone(ZoneInfo('America/New_York'))
-        # If time is midnight UTC it's likely a TBD placeholder
-        if dt.hour == 0 and dt.minute == 0:
-            return 'TBD'
-        return et.strftime('%-I:%M %p ET')
-    except Exception:
-        return None
-
 # ============================================================================
 # V2 PREDICTION SYSTEM HELPER
 # ============================================================================
@@ -3190,7 +3028,6 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
             'is_v2': True,
         }
         _V2_PREDICTION_CACHE[cache_key] = {'ts': now_ts, 'data': _copy.deepcopy(result)}
-        _trim_cache(_V2_PREDICTION_CACHE, _V2_PREDICTION_TTL_SECONDS, max_entries=500)
         return result
     except Exception as e:
         logger.warning(f"V2 prediction failed for {away_team} @ {home_team}: {e}")
@@ -3506,7 +3343,6 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date':    game_date,
-                        'game_time':    _espn_event_time_to_et(event_dt),
                         'home_score':   home_score,
                         'away_score':   away_score,
                         'league':       league_name,
@@ -3653,7 +3489,6 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date': game_date,
-                        'game_time': _espn_event_time_to_et(_raw_dt),
                         'home_score': home_score,
                         'away_score': away_score,
                         'league': league_name or sport,
@@ -3933,9 +3768,7 @@ def get_upcoming_predictions(sport, days=365):
 
     for game_date, game in all_games_with_dates:
         # Show games from season start up to one month from today
-        if not (game_date >= season_start and game_date <= future_cutoff):
-            continue
-        try:
+        if game_date >= season_start and game_date <= future_cutoff:
             # ============================================================
             # SOCCER MODELS + V2 PREDICTION SYSTEM
             # ============================================================
@@ -3956,33 +3789,16 @@ def get_upcoming_predictions(sport, days=365):
 
             v2_pred = None
             is_completed = game.get('home_score') is not None
-            # V2 is expensive per row. Always use it for upcoming games; for finals,
-            # only re-run it for a short lookback so the page stays within worker
-            # timeouts while Grinder2/Takedown still show on recent results.
-            _completed_v2_lookback_days = 21
+            # Always run V2 for non-soccer sports (including finished games) so
+            # Grinder2 / Takedown probabilities stay on the card; see frozen DB
+            # snapshot block below so moneyline stack does not drift after scores.
             if sport != 'SOCCER':
-                _run_v2 = True
-                if is_completed:
-                    _run_v2 = False
-                    try:
-                        _gday = game_date.date() if hasattr(game_date, 'date') else game_date
-                        _run_v2 = (today.date() - _gday).days <= _completed_v2_lookback_days
-                    except Exception:
-                        _run_v2 = False
-                if _run_v2:
-                    try:
-                        v2_pred = get_v2_prediction(
-                            sport,
-                            game.get('home_team_id') or game.get('home_team_name'),
-                            game.get('away_team_id') or game.get('away_team_name'),
-                            game.get('game_date'),
-                        )
-                    except Exception as _v2_row_err:
-                        logger.warning(
-                            f"V2 row skip {sport} {game.get('game_date')} "
-                            f"{game.get('away_team_id')}@{game.get('home_team_id')}: {_v2_row_err}"
-                        )
-                        v2_pred = None
+                v2_pred = get_v2_prediction(
+                        sport, 
+                        game.get('home_team_id') or game.get('home_team_name'),
+                        game.get('away_team_id') or game.get('away_team_name'),
+                        game.get('game_date')
+                    )
 
             if soccer_pred:
                 elo_prob = soccer_pred.get('elo_prob')
@@ -4030,8 +3846,7 @@ def get_upcoming_predictions(sport, days=365):
                     away_rating = get_elo(game.get('away_team_id', ''))
                     elo_prob = expected_score(home_rating, away_rating)
                 _xgb_raw = v2_pred.get('xgboost_prob')
-                _hp = v2_pred.get('home_prob')
-                xgb_prob = _xgb_raw if _xgb_raw is not None else (_hp if _hp is not None else 0.5)
+                xgb_prob = _xgb_raw if _xgb_raw is not None else v2_pred['home_prob']
 
                 # Build ensemble from individual model probs.
                 # The meta-learner (v2_pred['home_prob']) frequently defaults to ~0.49
@@ -4039,15 +3854,12 @@ def get_upcoming_predictions(sport, days=365):
                 _g2 = v2_pred.get('glicko2_prob')
                 _ts = v2_pred.get('trueskill_prob')
                 _wp = []
-                if _g2      is not None: _wp.append((_g2,      0.30))
-                if _ts      is not None: _wp.append((_ts,      0.30))
-                if _xgb_raw is not None: _wp.append((_xgb_raw, 0.25))
-                if elo_prob is not None: _wp.append((elo_prob,  0.15))
+                if _g2       is not None: _wp.append((_g2,      0.30))
+                if _ts       is not None: _wp.append((_ts,      0.30))
+                if _xgb_raw  is not None: _wp.append((_xgb_raw, 0.25))
+                _wp.append((elo_prob, 0.15))
                 _tw = sum(w for _, w in _wp)
-                if _tw > 0:
-                    ensemble_prob = sum((p or 0.0) * w for p, w in _wp) / _tw
-                else:
-                    ensemble_prob = float(_hp) if _hp is not None else float(elo_prob or 0.5)
+                ensemble_prob = sum(p * w for p, w in _wp) / _tw
 
                 # Store model probabilities for display (Glicko-2 and TrueSkill only)
                 game['glicko2_prob'] = v2_pred.get('glicko2_prob')
@@ -4107,7 +3919,7 @@ def get_upcoming_predictions(sport, days=365):
                 if v2_pred:
                     game['glicko2_prob'] = v2_pred.get('glicko2_prob')
                     game['trueskill_prob'] = v2_pred.get('trueskill_prob')
-
+            
             # Add predictions to game dict
             game_dict = dict(game)
             for _k in (
@@ -4592,13 +4404,8 @@ def get_upcoming_predictions(sport, days=365):
                 game_dict['away_injuries'] = []
 
             predictions.append(game_dict)
-        except Exception as _game_err:
-            import traceback as _tb_game
-            _gid = game.get('game_id', '?') if isinstance(game, dict) else '?'
-            logger.error(f"[{sport}] skipping game {_gid} in prediction loop: {_game_err}\n{_tb_game.format_exc()}")
-            continue
-
-    if sport != 'SOCCER':
+    
+    if sport not in ('MLB', 'SOCCER'):
         try:
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
         except Exception as _eoe:
@@ -4620,36 +4427,10 @@ def get_upcoming_predictions(sport, days=365):
                 if _fb_total is not None:
                     _sp_pred['market_total'] = round(float(_fb_total), 2)
 
-    # Read back betting lines from DB into pred dicts so the template sees them.
-    # Do this for all sports — betting_lines may have rows from prior fetches.
-    try:
-        _attach_market_lines_to_predictions(sport, predictions)
-    except Exception as _aml_e:
-        logger.debug(f"[{sport}] attach market lines error: {_aml_e}")
-
-    # Universal fallback: if market_spread/market_total still None after DB read,
-    # use xgb or naive model output so the card always shows something.
-    for _fp in predictions:
-        if _fp.get('home_score') is not None:
-            continue
-        if _fp.get('market_spread') is None:
-            _fb = _fp.get('xgb_spread') or _fp.get('naive_spread')
-            if _fb is not None:
-                _fp['market_spread'] = round(float(_fb), 2)
-        if _fp.get('market_total') is None:
-            _fb = _fp.get('xgb_total') or _fp.get('naive_total')
-            if _fb is not None:
-                _fp['market_total'] = round(float(_fb), 2)
-
     # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
         _ml_limit = 5 if sport == 'MLB' else 20
         _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
-        # Re-attach after cache so any newly fetched lines are visible
-        try:
-            _attach_market_lines_to_predictions(sport, predictions)
-        except Exception:
-            pass
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
@@ -4854,7 +4635,6 @@ def get_upcoming_predictions(sport, days=365):
             _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
 
     _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
-    _trim_cache(_PREDICTIONS_CACHE, max(_PREDICTIONS_TTL_BY_SPORT.values()), max_entries=50)
     return predictions
 
 def _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None):
@@ -5421,8 +5201,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
         if not _xgb:
             if sport in ['NBA', 'MLB']:
                 _sp = _score_predictor_instance(sport)
-            # Don't return early — the inner loop handles xs=xt=None and still
-            # populates market_spread / market_total from the betting_lines DB.
+            if not _sp:
+                return None
 
         conn = get_db_connection()
         _line_by_key = {}
@@ -7761,7 +7541,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">Our Spread</span>
                             <span class="sf-val">
                                 {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
-                                {% elif game.market_spread is defined and game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
+                                {% elif game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
                                 {% elif game.market_spread_reason is defined and game.market_spread_reason %}{{ game.market_spread_reason }}
                                 {% else %}—{% endif %}
                             </span>
@@ -7789,7 +7569,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">H2H Last 10</span>
                             <span class="sf-val">{% if game.our_total is defined and game.our_total is not none %}{{ "%.1f"|format(game.our_total) }}{% else %}—{% endif %}</span>
                         </div>
-                        {% if game.market_total is defined and game.market_total is not none %}
+                        {% if game.market_total is not none %}
                         <div class="sf-item">
                             <span class="sf-label">Market Total</span>
                             <span class="sf-val">{{ "%.1f"|format(game.market_total) }}</span>
@@ -12223,8 +12003,7 @@ def sport_predictions(sport, filter_date=None):
     try:
         predictions = get_upcoming_predictions(sport)
     except Exception as e:
-        import traceback as _tb_pred
-        logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
+        logger.error(f"Error loading {sport} predictions: {e}")
         predictions = []
         prediction_error = (
             f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
@@ -12246,19 +12025,12 @@ def sport_predictions(sport, filter_date=None):
             # missing keys on plain dicts raise in Jinja (NBA paths always had these).
             'our_spread',
             'our_total',
-            'our_home_pts',
-            'our_away_pts',
             'xgb_spread',
             'xgb_total',
-            'xgb_home_score',
-            'xgb_away_score',
             'naive_spread',
             'naive_total',
-            'naive_home_score',
-            'naive_away_score',
             'h2h_last10_total',
             'h2h_last10_games',
-            'game_time',
         ):
             if _k not in pred:
                 pred[_k] = None if _k != 'h2h_last10_games' else 0
@@ -12440,7 +12212,6 @@ def sport_predictions(sport, filter_date=None):
         return _predictions_fallback_page(sport, filter_date=filter_date)
     if cache_key:
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
-        _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, max(_SPORT_PREDICTIONS_PAGE_TTL.values()), max_entries=20)
     return rendered
 
 def sport_results(sport):
@@ -12550,20 +12321,6 @@ def sport_results(sport):
                 daily_results[game_date]['games'].append(game_info)
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
-            for _dd in daily_results.values():
-                for _gg in _dd.get('games', []):
-                    for _k, _dv in {
-                        'market_spread': None, 'market_total': None,
-                        'market_spread_label': None, 'market_spread_reason': None,
-                        'market_total_reason': None,
-                        'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                        'our_total': None, 'our_total_games': 0,
-                        'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                        'spread_correct': None,
-                        'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                        'total_correct': None, 'strong_ou': False,
-                    }.items():
-                        _gg.setdefault(_k, _dv)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
@@ -12632,20 +12389,7 @@ def sport_results(sport):
             try:
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-                for _dd in daily_results.values():
-                    for _gg in _dd.get('games', []):
-                        for _k, _dv in {
-                            'market_spread': None, 'market_total': None,
-                            'market_spread_label': None, 'market_spread_reason': None,
-                            'market_total_reason': None,
-                            'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                            'our_total': None, 'our_total_games': 0,
-                            'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                            'spread_correct': None,
-                            'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                            'total_correct': None, 'strong_ou': False,
-                        }.items():
-                            _gg.setdefault(_k, _dv)
+
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
@@ -12682,7 +12426,6 @@ def sport_results(sport):
                     roi_cards=roi_cards
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
-                _trim_cache(_SPORT_RESULTS_CACHE, max(_SPORT_RESULTS_TTL_BY_SPORT.values()), max_entries=30)
                 return rendered
             except Exception as e:
                 logger.error(f"Error processing NHL results: {e}")
@@ -12720,26 +12463,7 @@ def sport_results(sport):
                 yesterday_dt = datetime.now() - timedelta(days=1)
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-
-                # Defensively ensure all template-required keys exist on every game dict.
-                # Without this, if _compute_spread_total_for_daily exits early (no XGB model),
-                # Jinja2 creates Undefined objects that raise AttributeError when formatted.
-                _GAME_KEY_DEFAULTS = {
-                    'market_spread': None, 'market_total': None,
-                    'market_spread_label': None, 'market_spread_reason': None,
-                    'market_total_reason': None,
-                    'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                    'our_total': None, 'our_total_games': 0,
-                    'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                    'spread_correct': None,
-                    'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                    'total_correct': None, 'strong_ou': False,
-                }
-                for _dd in daily_results.values():
-                    for _gg in _dd.get('games', []):
-                        for _k, _dv in _GAME_KEY_DEFAULTS.items():
-                            _gg.setdefault(_k, _dv)
-
+                
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _cache_market_lines_for_results(sport, daily_results, limit=20)
@@ -12775,11 +12499,9 @@ def sport_results(sport):
                     roi_cards=roi_cards
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
-                _trim_cache(_SPORT_RESULTS_CACHE, max(_SPORT_RESULTS_TTL_BY_SPORT.values()), max_entries=30)
                 return rendered
             except Exception as e:
-                import traceback as _tb
-                logger.error(f"Error processing NBA results: {e}\n{_tb.format_exc()}")
+                logger.error(f"Error processing NBA results: {e}")
                 return f"<h1>NBA results page failed to render because of a processing error: {str(e)}</h1>"
 
         # Handle NCAAB
@@ -12956,26 +12678,6 @@ def sport_results(sport):
                     continue
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
-
-            # Defensive: ensure all template-required keys exist before rendering.
-            # If _compute_spread_total_for_daily exits early (no XGB model), Jinja2
-            # creates Undefined objects that raise AttributeError when formatted.
-            _GAME_KEY_DEFAULTS = {
-                'market_spread': None, 'market_total': None,
-                'market_spread_label': None, 'market_spread_reason': None,
-                'market_total_reason': None,
-                'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                'our_total': None, 'our_total_games': 0,
-                'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                'spread_correct': None,
-                'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                'total_correct': None, 'strong_ou': False,
-            }
-            for _dd in daily_results.values():
-                for _gg in _dd.get('games', []):
-                    for _k, _dv in _GAME_KEY_DEFAULTS.items():
-                        _gg.setdefault(_k, _dv)
-
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _cache_market_lines_for_results(sport, daily_results, limit=20)
@@ -13025,9 +12727,8 @@ def sport_results(sport):
                 soccer_leagues=soccer_leagues
             )
             _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
-            _trim_cache(_SPORT_RESULTS_CACHE, max(_SPORT_RESULTS_TTL_BY_SPORT.values()), max_entries=30)
             return rendered
-
+        
         performance = calculate_model_performance(sport)
         return render_template_string(
             RESULTS_TEMPLATE,
