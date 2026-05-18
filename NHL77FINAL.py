@@ -869,6 +869,11 @@ def _ensure_xsharp_lines(pred: dict) -> None:
         pred['xgb_spread'] = pred['market_spread']
     if pred.get('xgb_total') is None and pred.get('market_total') is not None:
         pred['xgb_total'] = pred['market_total']
+    # Final fallback: use efficiency/team-avg model values so XSharp never shows "—"
+    if pred.get('xgb_spread') is None and pred.get('our_spread') is not None:
+        pred['xgb_spread'] = pred['our_spread']
+    if pred.get('xgb_total') is None and pred.get('our_total') is not None:
+        pred['xgb_total'] = pred['our_total']
     if pred.get('xgb_home_score') is None and pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
         h, a = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
         if h is not None:
@@ -1875,6 +1880,46 @@ def _upsert_betting_line(conn, sport, game_id, game_date, home_team, away_team, 
                 )
     except Exception as _e:
         logger.debug(f"[betting_lines] upsert failed: {_e}")
+
+
+def _attach_market_lines_to_predictions(sport, predictions):
+    """Read market spread/total from betting_lines DB and attach to pred dicts."""
+    if not predictions:
+        return
+    game_ids = [p.get('game_id') for p in predictions if p.get('game_id') and p.get('home_score') is None]
+    if not game_ids:
+        return
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
+        has_sport_col = 'sport' in cols
+        placeholders = ','.join('?' * len(game_ids))
+        if has_sport_col:
+            rows = cur.execute(
+                f"SELECT game_id, spread, total FROM betting_lines WHERE sport=? AND game_id IN ({placeholders}) ORDER BY fetched_at DESC",
+                [sport] + game_ids
+            ).fetchall()
+        else:
+            rows = cur.execute(
+                f"SELECT game_id, spread, total FROM betting_lines WHERE game_id IN ({placeholders})",
+                game_ids
+            ).fetchall()
+        conn.close()
+        line_map = {}
+        for row in rows:
+            gid = row['game_id']
+            if gid not in line_map:
+                line_map[gid] = {'spread': row['spread'], 'total': row['total']}
+        for pred in predictions:
+            gid = pred.get('game_id')
+            if gid and gid in line_map:
+                if pred.get('market_spread') is None and line_map[gid]['spread'] is not None:
+                    pred['market_spread'] = line_map[gid]['spread']
+                if pred.get('market_total') is None and line_map[gid]['total'] is not None:
+                    pred['market_total'] = line_map[gid]['total']
+    except Exception as _e:
+        logger.debug(f"[{sport}] attach market lines failed: {_e}")
 
 
 def _cache_market_lines_for_predictions(sport, predictions, limit=20):
@@ -4893,6 +4938,7 @@ def get_upcoming_predictions(sport, days=365):
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
         _ml_limit = 5 if sport == 'MLB' else 20
         _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
+        _attach_market_lines_to_predictions(sport, predictions)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
