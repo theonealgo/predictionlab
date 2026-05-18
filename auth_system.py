@@ -287,9 +287,18 @@ def init_auth(app, db_path=None):
     # Inject is_premium into all templates
     @app.context_processor
     def inject_auth():
+        is_prem = current_user.premium_active if current_user.is_authenticated else False
+        # Local dev: full premium preview on localhost so picks pages are testable without Stripe login
+        if not is_prem:
+            try:
+                host = (request.host or '').split(':')[0].lower()
+                if host in ('127.0.0.1', 'localhost'):
+                    is_prem = True
+            except Exception:
+                pass
         return {
             'user': current_user,
-            'is_premium': current_user.premium_active if current_user.is_authenticated else False,
+            'is_premium': is_prem,
             'is_logged_in': current_user.is_authenticated,
         }
 

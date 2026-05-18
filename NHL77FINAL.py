@@ -761,6 +761,113 @@ def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
         pred['odds_source'] = 'model_fallback'
 
 
+# ── Team logos (ESPN CDN) for prediction cards ───────────────────────────────
+_TEAM_LOGO_SLUG = {
+    'NBA': 'nba', 'MLB': 'mlb', 'NHL': 'nhl', 'NFL': 'nfl', 'WNBA': 'wnba',
+    'NCAAB': 'mens-college-basketball', 'NCAAF': 'college-football',
+}
+_TEAM_NAME_TO_ABBR = {
+    'NBA': {
+        'Atlanta Hawks': 'atl', 'Boston Celtics': 'bos', 'Brooklyn Nets': 'bkn',
+        'Charlotte Hornets': 'cha', 'Chicago Bulls': 'chi', 'Cleveland Cavaliers': 'cle',
+        'Dallas Mavericks': 'dal', 'Denver Nuggets': 'den', 'Detroit Pistons': 'det',
+        'Golden State Warriors': 'gs', 'Houston Rockets': 'hou', 'Indiana Pacers': 'ind',
+        'LA Clippers': 'lac', 'Los Angeles Clippers': 'lac', 'Los Angeles Lakers': 'lal',
+        'Memphis Grizzlies': 'mem', 'Miami Heat': 'mia', 'Milwaukee Bucks': 'mil',
+        'Minnesota Timberwolves': 'min', 'New Orleans Pelicans': 'no', 'New York Knicks': 'ny',
+        'Oklahoma City Thunder': 'okc', 'Orlando Magic': 'orl', 'Philadelphia 76ers': 'phi',
+        'Phoenix Suns': 'phx', 'Portland Trail Blazers': 'por', 'Sacramento Kings': 'sac',
+        'San Antonio Spurs': 'sa', 'Toronto Raptors': 'tor', 'Utah Jazz': 'utah',
+        'Washington Wizards': 'wsh',
+    },
+    'MLB': {
+        'Arizona Diamondbacks': 'ari', 'Atlanta Braves': 'atl', 'Baltimore Orioles': 'bal',
+        'Boston Red Sox': 'bos', 'Chicago Cubs': 'chc', 'Chicago White Sox': 'chw',
+        'Cincinnati Reds': 'cin', 'Cleveland Guardians': 'cle', 'Colorado Rockies': 'col',
+        'Detroit Tigers': 'det', 'Houston Astros': 'hou', 'Kansas City Royals': 'kc',
+        'Los Angeles Angels': 'laa', 'Los Angeles Dodgers': 'lad', 'Miami Marlins': 'mia',
+        'Milwaukee Brewers': 'mil', 'Minnesota Twins': 'min', 'New York Mets': 'nym',
+        'New York Yankees': 'nyy', 'Oakland Athletics': 'oak', 'Philadelphia Phillies': 'phi',
+        'Pittsburgh Pirates': 'pit', 'San Diego Padres': 'sd', 'San Francisco Giants': 'sf',
+        'Seattle Mariners': 'sea', 'St. Louis Cardinals': 'stl', 'Tampa Bay Rays': 'tb',
+        'Texas Rangers': 'tex', 'Toronto Blue Jays': 'tor', 'Washington Nationals': 'wsh',
+    },
+    'NHL': {
+        'Anaheim Ducks': 'ana', 'Arizona Coyotes': 'ari', 'Boston Bruins': 'bos',
+        'Buffalo Sabres': 'buf', 'Calgary Flames': 'cgy', 'Carolina Hurricanes': 'car',
+        'Chicago Blackhawks': 'chi', 'Colorado Avalanche': 'col', 'Columbus Blue Jackets': 'cbj',
+        'Dallas Stars': 'dal', 'Detroit Red Wings': 'det', 'Edmonton Oilers': 'edm',
+        'Florida Panthers': 'fla', 'Los Angeles Kings': 'la', 'Minnesota Wild': 'min',
+        'Montreal Canadiens': 'mtl', 'Nashville Predators': 'nsh', 'New Jersey Devils': 'nj',
+        'New York Islanders': 'nyi', 'New York Rangers': 'nyr', 'Ottawa Senators': 'ott',
+        'Philadelphia Flyers': 'phi', 'Pittsburgh Penguins': 'pit', 'San Jose Sharks': 'sj',
+        'Seattle Kraken': 'sea', 'St. Louis Blues': 'stl', 'Tampa Bay Lightning': 'tb',
+        'Toronto Maple Leafs': 'tor', 'Utah Hockey Club': 'uta', 'Vancouver Canucks': 'van',
+        'Vegas Golden Knights': 'vgk', 'Washington Capitals': 'wsh', 'Winnipeg Jets': 'wpg',
+    },
+    'NFL': {
+        'Arizona Cardinals': 'ari', 'Atlanta Falcons': 'atl', 'Baltimore Ravens': 'bal',
+        'Buffalo Bills': 'buf', 'Carolina Panthers': 'car', 'Chicago Bears': 'chi',
+        'Cincinnati Bengals': 'cin', 'Cleveland Browns': 'cle', 'Dallas Cowboys': 'dal',
+        'Denver Broncos': 'den', 'Detroit Lions': 'det', 'Green Bay Packers': 'gb',
+        'Houston Texans': 'hou', 'Indianapolis Colts': 'ind', 'Jacksonville Jaguars': 'jax',
+        'Kansas City Chiefs': 'kc', 'Las Vegas Raiders': 'lv', 'Los Angeles Chargers': 'lac',
+        'Los Angeles Rams': 'lar', 'Miami Dolphins': 'mia', 'Minnesota Vikings': 'min',
+        'New England Patriots': 'ne', 'New Orleans Saints': 'no', 'New York Giants': 'nyg',
+        'New York Jets': 'nyj', 'Philadelphia Eagles': 'phi', 'Pittsburgh Steelers': 'pit',
+        'San Francisco 49ers': 'sf', 'Seattle Seahawks': 'sea', 'Tampa Bay Buccaneers': 'tb',
+        'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh',
+    },
+}
+
+
+def team_logo_url(sport: str, team_name: str) -> str:
+    """ESPN team logo for prediction card header."""
+    if not (sport and team_name):
+        return '/static/pl-logo.svg'
+    slug = _TEAM_LOGO_SLUG.get(sport)
+    abbr = (_TEAM_NAME_TO_ABBR.get(sport) or {}).get(team_name)
+    if not slug or not abbr:
+        return '/static/pl-logo.svg'
+    return f'https://a.espncdn.com/i/teamlogos/{slug}/500/{abbr}.png'
+
+
+def _align_pl_model_odds(pred: dict) -> None:
+    """Keep PL Model spread, total, and projected score internally consistent.
+
+  Sign convention: our_spread > 0 means home team favored by that many points.
+  When projected scores exist, spread/total are derived from them (not the reverse).
+    """
+    if pred.get('our_home_pts') is None or pred.get('our_away_pts') is None:
+        ha = pred.get('our_home_avg')
+        if ha is None:
+            ha = pred.get('our_avg_home')
+        aa = pred.get('our_away_avg')
+        if aa is None:
+            aa = pred.get('our_avg_away')
+        if ha is not None and aa is not None:
+            pred['our_home_pts'] = round(float(ha))
+            pred['our_away_pts'] = round(float(aa))
+        else:
+            spread = pred.get('our_spread')
+            total = pred.get('our_total')
+            if spread is not None and total is not None:
+                try:
+                    s, t = float(spread), float(total)
+                    pred['our_home_pts'] = round((t + s) / 2.0)
+                    pred['our_away_pts'] = round((t - s) / 2.0)
+                except (TypeError, ValueError):
+                    pass
+    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
+        try:
+            h = float(pred['our_home_pts'])
+            a = float(pred['our_away_pts'])
+            pred['our_spread'] = _round_to_half(h - a)
+            pred['our_total'] = _round_to_half(h + a)
+        except (TypeError, ValueError):
+            pass
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # H2H (head-to-head) projected total
 #
@@ -824,12 +931,20 @@ def _compute_h2h_projection(
     home_pts = []
     away_pts = []
     totals = []
+    meetings = []
     for r in rows:
         try:
             hs = float(r['home_score'])
             as_ = float(r['away_score'])
         except Exception:
             continue
+        meetings.append({
+            'game_date': r['game_date'],
+            'home_team_id': r['home_team_id'],
+            'away_team_id': r['away_team_id'],
+            'home_score': int(hs) if hs == int(hs) else hs,
+            'away_score': int(as_) if as_ == int(as_) else as_,
+        })
         if r['home_team_id'] == home_team:
             home_pts.append(hs)
             away_pts.append(as_)
@@ -849,6 +964,7 @@ def _compute_h2h_projection(
         'our_total': round(avg_home + avg_away, 1),
         'our_spread': round(avg_home - avg_away, 1),  # positive = home favored
         'totals': totals,
+        'meetings': meetings,
     }
     _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': data}
     return data
@@ -875,11 +991,13 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
                 pred['our_avg_away'] = proj['avg_away']
                 pred['h2h_last10_total'] = proj['our_total']
                 pred['h2h_last10_games'] = proj['games_used']
+                pred['h2h_last10_meetings'] = proj.get('meetings') or []
             else:
                 pred.setdefault('our_total', None)
                 pred.setdefault('our_total_games', 0)
                 pred.setdefault('h2h_last10_total', None)
                 pred.setdefault('h2h_last10_games', 0)
+                pred.setdefault('h2h_last10_meetings', [])
     finally:
         try:
             conn.close()
@@ -2972,17 +3090,44 @@ def _espn_event_date_to_local(date_str, tz_name='America/New_York'):
     except Exception:
         return date_str[:10]
 
-def _espn_event_time_to_et(date_str):
-    """Convert ESPN event ISO date (UTC) to Eastern game time string like '7:30 PM ET'. Returns None if no time info."""
+def _espn_time_from_status_text(text):
+    """Parse ESPN status strings like '5/17 - 8:00 PM EDT' or 'Sun, May 17th at 8:00 PM EDT'."""
+    if not text:
+        return None
+    import re
+    m = re.search(
+        r'(\d{1,2}):(\d{2})\s*(AM|PM)\s*(EDT|EST|ET)\b',
+        str(text),
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    h, mi, ap, _tz = m.groups()
+    return f"{int(h)}:{mi} {ap.upper()} ET"
+
+
+def _espn_event_time_to_et(date_str, status_type=None):
+    """Convert ESPN event ISO date (UTC) to Eastern game time like '8:00 PM ET'."""
+    if status_type and isinstance(status_type, dict):
+        for key in ('shortDetail', 'detail', 'description'):
+            parsed = _espn_time_from_status_text(status_type.get(key))
+            if parsed:
+                return parsed
+        blob = ' '.join(
+            str(status_type.get(k) or '')
+            for k in ('shortDetail', 'detail', 'description', 'name')
+        ).upper()
+        if 'TBD' in blob or 'TBA' in blob:
+            return None
     if not date_str:
         return None
     try:
-        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(str(date_str).replace('Z', '+00:00'))
         et = dt.astimezone(ZoneInfo('America/New_York'))
-        # If time is midnight UTC it's likely a TBD placeholder
-        if dt.hour == 0 and dt.minute == 0:
-            return 'TBD'
-        return et.strftime('%-I:%M %p ET')
+        # Do NOT treat UTC midnight as TBD — ESPN uses 00:00Z for evening ET tip-offs.
+        h12 = et.hour % 12 or 12
+        ampm = 'AM' if et.hour < 12 else 'PM'
+        return f"{h12}:{et.minute:02d} {ampm} ET"
     except Exception:
         return None
 
@@ -3342,6 +3487,7 @@ def get_upcoming_predictions(sport, days=365):
                     event_id  = event.get('id', '')
                     status_info  = event.get('status', {}).get('type', {})
                     status_name  = status_info.get('name', '')
+                    _status_type = status_info
                     home_score = away_score = None
                     if status_name.startswith('STATUS_FINAL'):
                         try:
@@ -3356,10 +3502,11 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date':    game_date,
-                        'game_time':    _espn_event_time_to_et(event_dt),
+                        'game_time':    _espn_event_time_to_et(event_dt, _status_type),
                         'home_score':   home_score,
                         'away_score':   away_score,
                         'league':       league_name,
+                        'status_type':  _status_type,
                     })
 
         # Enrich with stored predictions from database
@@ -3489,6 +3636,7 @@ def get_upcoming_predictions(sport, days=365):
 
                     status_info = event.get('status', {}).get('type', {})
                     status_name = status_info.get('name', 'scheduled')
+                    _status_type = status_info
                     home_score = None
                     away_score = None
                     if status_name in ['STATUS_FINAL', 'STATUS_FINAL_OT']:
@@ -3503,10 +3651,11 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date': game_date,
-                        'game_time': _espn_event_time_to_et(_raw_dt),
+                        'game_time': _espn_event_time_to_et(_raw_dt, _status_type),
                         'home_score': home_score,
                         'away_score': away_score,
                         'league': league_name or sport,
+                        'status_type': _status_type,
                     })
             except Exception as e:
                 logger.debug(f"Error fetching {sport} range {start_str}-{end_str}: {e}")
@@ -3960,6 +4109,14 @@ def get_upcoming_predictions(sport, days=365):
 
             # Add predictions to game dict
             game_dict = dict(game)
+            _gt_raw = game_dict.get('game_time')
+            _st_for_time = game_dict.get('status_type') if isinstance(game_dict.get('status_type'), dict) else None
+            if _gt_raw:
+                _gt_fmt = _espn_event_time_to_et(_gt_raw, _st_for_time) if (
+                    isinstance(_gt_raw, str) and 'T' in _gt_raw
+                ) else _gt_raw
+                if _gt_fmt:
+                    game_dict['game_time'] = _gt_fmt
             for _k in (
                 'market_spread',
                 'market_total',
@@ -4570,10 +4727,14 @@ def get_upcoming_predictions(sport, days=365):
                         home_eff, away_eff, sport='NBA',
                         xsharp_total=xs_total, xsharp_spread=xs_spread,
                     )
-                    pred['our_total']    = _round_to_half(proj['projected_total'])
-                    pred['our_spread']   = _round_to_half(proj['projected_spread'])
                     pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
                     pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
+                    if pred['our_home_pts'] is not None and pred['our_away_pts'] is not None:
+                        pred['our_spread'] = _round_to_half(pred['our_home_pts'] - pred['our_away_pts'])
+                        pred['our_total'] = _round_to_half(pred['our_home_pts'] + pred['our_away_pts'])
+                    else:
+                        pred['our_total'] = _round_to_half(proj['projected_total'])
+                        pred['our_spread'] = _round_to_half(proj['projected_spread'])
                     pred['our_home_eff'] = home_eff
                     pred['our_away_eff'] = away_eff
                     pred['our_pace']     = proj['avg_pace']
@@ -4592,10 +4753,12 @@ def get_upcoming_predictions(sport, days=365):
                     fb = None
                     logger.debug(f"[team-avg fallback] {ht} vs {at}: {_fb_e}")
                 if fb:
-                    pred['our_total']       = fb['projected_total']
-                    pred['our_spread']      = fb['projected_spread']
                     pred['our_home_avg']    = fb['home_avg']
                     pred['our_away_avg']    = fb['away_avg']
+                    pred['our_home_pts']    = round(float(fb['home_avg']))
+                    pred['our_away_pts']    = round(float(fb['away_avg']))
+                    pred['our_spread']      = _round_to_half(pred['our_home_pts'] - pred['our_away_pts'])
+                    pred['our_total']       = _round_to_half(pred['our_home_pts'] + pred['our_away_pts'])
                     pred['our_total_games'] = fb['games_used']
                     pred['our_method']      = 'team-avg-fallback'
                     if xs_total is not None:
@@ -4612,6 +4775,9 @@ def get_upcoming_predictions(sport, days=365):
             )
         except Exception as _nbae:
             logger.debug(f"[NBA projection] attach failed: {_nbae}")
+
+    for _pred in predictions:
+        _align_pl_model_odds(_pred)
 
     # ── EV calculations for NBA / WNBA / NHL / MLB / NFL upcoming games ─────
     if sport in ('NBA', 'WNBA', 'NHL', 'MLB', 'NFL'):
@@ -7245,9 +7411,9 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .date-section { display:none; background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
     .date-header { color:#0F172A; font-size:1.3em; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #E2E8F0; }
-    .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(420px, 100%),1fr)); gap:16px; }
-    @media(max-width:480px){ .results-grid { grid-template-columns:1fr; } .result-card { max-width:100%; } }
-    .result-card {
+    .games-grid, .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; align-items:start; }
+    @media(max-width:480px){ .games-grid, .results-grid { grid-template-columns:1fr; } .game-card { max-width:100%; } }
+    .game-card {
         background:#ffffff;
         border:1px solid #E2E8F0;
         border-radius:12px;
@@ -7255,15 +7421,21 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06);
         transition:border-color 0.2s, box-shadow 0.2s;
     }
-    .result-card:hover { border-color:#cbd5e1; box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08); }
-    .result-status { padding:6px 14px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#00C076; background:rgba(16,185,129,0.12); }
-    .result-body { display:flex; padding:12px 14px; gap:12px; }
-    .teams-section { flex:1; min-width:0; }
-    .team-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(15,23,42,0.08); }
-    .team-row:last-child { border-bottom:none; }
-    .team-name { font-size:0.95em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
-    .team-name.winner { font-weight:700; }
-    .score-box { font-size:1.05em; font-weight:700; color:#fbbf24; margin-left:8px; }
+    .game-card:hover { border-color:#cbd5e1; box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08); }
+    .card-hero { display:flex; gap:12px; align-items:flex-start; padding:14px 14px 12px; border-bottom:1px solid #E2E8F0; }
+    .card-hero-logos { display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; width:52px; }
+    .card-hero-logos .team-logo { width:44px; height:44px; object-fit:contain; }
+    .card-hero-at { font-size:0.62em; font-weight:700; color:#94a3b8; letter-spacing:0.3px; }
+    .card-hero-text { flex:1; min-width:0; }
+    .card-hero-matchup { font-size:0.96em; font-weight:800; color:#0f172a; line-height:1.3; margin:0 0 4px; }
+    .card-hero-meta { font-size:0.7em; color:#64748b; text-transform:uppercase; font-weight:600; letter-spacing:0.4px; margin-bottom:8px; }
+    .card-hero-meta.final { color:#00C076; }
+    .card-hero-ml { display:flex; flex-direction:column; gap:5px; }
+    .card-hero-ml-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.86em; font-weight:600; color:#0f172a; }
+    .card-hero-final-scores { margin-top:0; }
+    .card-hero-ml-row .score-winner { color:#00C076; font-weight:800; }
+    .card-final-score { font-size:1.05em; font-weight:800; color:#0f172a; flex-shrink:0; }
+    .card-final-score.score-winner { color:#00C076; }
     .model-panel { background:#ffffff; border:1px solid rgba(139,92,246,0.35); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:170px; max-width:200px; display:flex; flex-direction:column; gap:4px; }
     .panel-title { font-size:0.66em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
     .model-row { display:flex; justify-content:space-between; font-size:0.82em; padding:2px 0; }
@@ -7278,7 +7450,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .pick-ok { color:#00C076; font-weight:700; }
     .pick-no { color:#D93025; font-weight:700; }
     /* Pick confidence grid (results cards) */
-    .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#ffffff; }
+    .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
     .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
     .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
     @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
@@ -7320,7 +7492,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
-        {% set label_ensemble = 'Consensus' %}
+        {% set label_ensemble = 'Sharp Consensus' %}
+        {% from 'includes/score_macros.html' import fmt_labeled_final, fmt_final_spread %}
         {% if daily_results and overall_stats %}
         {% if soccer_leagues %}
         <div class="league-slider">
@@ -7526,26 +7699,18 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div id="date-{{ date }}" class="date-section">
             <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
 
-            <div class="results-grid">
+            <div class="games-grid">
                 {% for game in date_data.games %}
                 {% set home_wins = game.home_score > game.away_score %}
                 {% set away_wins = game.away_score > game.home_score %}
                 {% set actual_spread = (game.home_score - game.away_score) %}
                 {% set actual_total = (game.home_score + game.away_score) %}
-                <div class="result-card" data-league="{{ game.league if game.league else 'Other' }}">
-                    <div class="result-status">FINAL</div>
-                    <div class="result-body">
-                        <div class="teams-section">
-                            <div class="team-row">
-                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ game.away }}{% if game.away_moneyline is defined and game.away_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.away_moneyline < 0 %}#00C076{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.away_moneyline > 0 %}+{% endif %}{{ game.away_moneyline }}</span>{% endif %}</span>
-                                <span class="score-box">{{ game.away_score }}</span>
-                            </div>
-                            <div class="team-row">
-                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ game.home }}{% if game.home_moneyline is defined and game.home_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.home_moneyline < 0 %}#00C076{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.home_moneyline > 0 %}+{% endif %}{{ game.home_moneyline }}</span>{% endif %}</span>
-                                <span class="score-box">{{ game.home_score }}</span>
-                            </div>
-                        </div>
-                    </div>
+                {% set away_team = game.away %}
+                {% set home_team = game.home %}
+                {% set away_score = game.away_score %}
+                {% set home_score = game.home_score %}
+                <div class="game-card" data-league="{{ game.league if game.league else 'Other' }}">
+                    {% include 'includes/card_hero_final.html' %}
                     <div class="pick-conf-bar section-ml">
                         <div class="pick-conf-title">Pick Confidence</div>
                         <div class="pick-conf-grid">
@@ -12081,10 +12246,16 @@ def sport_predictions(sport, filter_date=None):
             'naive_away_score',
             'h2h_last10_total',
             'h2h_last10_games',
+            'h2h_last10_meetings',
             'game_time',
         ):
             if _k not in pred:
-                pred[_k] = None if _k != 'h2h_last10_games' else 0
+                if _k == 'h2h_last10_games':
+                    pred[_k] = 0
+                elif _k == 'h2h_last10_meetings':
+                    pred[_k] = []
+                else:
+                    pred[_k] = None
 
     soccer_leagues = None
     selected_league = None
@@ -12257,6 +12428,7 @@ def sport_predictions(sport, filter_date=None):
             soccer_enabled=SOCCER_ENABLED,
             ga_tracking_id=GA_TRACKING_ID,
             todays_picks=[],
+            team_logo_url=team_logo_url,
         )
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
@@ -12419,7 +12591,8 @@ def sport_results(sport):
                 weekly_tally_date_range=weekly_tally_date_range,
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
-                soccer_leagues=None
+                soccer_leagues=None,
+                team_logo_url=team_logo_url,
             )
         
         if sport == 'NHL':
@@ -12501,7 +12674,8 @@ def sport_results(sport):
                     weekly_tally=weekly_tally,
                     weekly_tally_date_range=weekly_tally_date_range,
                     weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards
+                    roi_cards=roi_cards,
+                    team_logo_url=team_logo_url,
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
@@ -12593,7 +12767,8 @@ def sport_results(sport):
                     weekly_tally=weekly_tally,
                     weekly_tally_date_range=weekly_tally_date_range,
                     weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards
+                    roi_cards=roi_cards,
+                    team_logo_url=team_logo_url,
                 )
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
@@ -12842,7 +13017,8 @@ def sport_results(sport):
                 weekly_tally_date_range=weekly_tally_date_range,
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
-                soccer_leagues=soccer_leagues
+                soccer_leagues=soccer_leagues,
+                team_logo_url=team_logo_url,
             )
             _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
             return rendered

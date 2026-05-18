@@ -1,0 +1,31 @@
+{# Shared score / line display helpers — used by predictions + results cards #}
+{% macro team_short(name) -%}
+{{ (name|string).split()[-1] }}
+{%- endmacro %}
+{% macro fmt_half(v) -%}
+{%- if v is not none -%}
+{%- set x = (v|float * 2)|round(0, 'common') / 2 -%}
+{%- if x == (x|int) -%}{{ x|int }}{%- else -%}{{ "%.1f"|format(x) }}{%- endif -%}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro fmt_labeled_final(away_team, away_score, home_team, home_score) -%}
+{%- if away_score is not none and home_score is not none -%}
+<span class="score-full">{{ away_team }} {{ away_score }} – {{ home_team }} {{ home_score }}</span><span class="score-compact">{{ team_short(away_team) }} {{ away_score }} – {{ team_short(home_team) }} {{ home_score }}</span>
+{%- else -%}—{%- endif -%}
+{%- endmacro %}
+
+{% macro fmt_labeled_proj(away_team, away_pts, home_team, home_pts) -%}
+{%- if away_pts is not none and home_pts is not none -%}
+{{ away_team }} {{ fmt_half(away_pts) }} – {{ home_team }} {{ fmt_half(home_pts) }}
+{%- else -%}—{%- endif -%}
+{%- endmacro %}
+
+{% macro fmt_final_spread(home_team, away_team, home_score, away_score) -%}
+{%- if home_score is not none and away_score is not none -%}
+{%- set margin = home_score - away_score -%}
+{%- if margin > 0 -%}{{ home_team }} {{ "%+.0f"|format(margin) }}
+{%- elif margin < 0 -%}{{ away_team }} {{ "%+.0f"|format(margin|abs) }}
+{%- else -%}PK{%- endif -%}
+{%- else -%}—{%- endif -%}
+{%- endmacro %}

@@ -76,10 +76,12 @@ class NHLAPI:
                 except:
                     game_date_et = event_date_utc.split('T')[0]
                 
+                _status_type = (event.get('status') or {}).get('type') or {}
                 game_data = {
                     'game_id': f"NHL_{event['id']}",
                     'game_date': game_date_et,
                     'game_time': event['date'],
+                    'status_type': _status_type,
                     'away_team_id': away_team['team']['displayName'],  # Use full name for DB matching
                     'home_team_id': home_team['team']['displayName'],  # Use full name for DB matching
                     'away_team_abbr': away_team['team']['abbreviation'],
