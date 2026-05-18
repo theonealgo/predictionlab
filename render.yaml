@@ -2,10 +2,11 @@ services:
   - type: web
     name: predictionlab
     runtime: python
+    # Player-props frontend must not block picks-page deploys (npm failures kept site on old code).
     buildCommand: >
       pip install -r requirements.txt &&
-      pip install -r standalone-player-props/backend/requirements.txt &&
-      cd standalone-player-props/frontend && npm ci && npm run build && cd ../..
+      (pip install -r standalone-player-props/backend/requirements.txt || true) &&
+      (cd standalone-player-props/frontend && npm ci && npm run build && cd ../.. || echo "[build] player-props frontend skipped")
     startCommand: bash render_start.sh
     envVars:
       - key: PYTHON_VERSION
