@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+echo "[render_start] deploy $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
 # ── Refresh database on persistent disk EVERY deploy ──────────────────────────
 # The repo DB is the source of truth (updated with completed games + team stats).
 # Always overwrite the persistent copy so the spread/total/efficiency models on

@@ -2177,6 +2177,8 @@ DATABASE = _os.path.join(_DATA_DIR, 'sports_predictions_original.db')
 # Absolute path to this file's directory — used for template loading
 _BASE_DIR = _os.path.dirname(_os.path.abspath(__file__))
 ODDS_ENGINE_URL = _os.environ.get('ODDS_ENGINE_URL')
+app.template_folder = _os.path.join(_BASE_DIR, 'templates')
+_SPORT_PREDICTIONS_PAGE_CACHE.clear()
 
 # ── Auth + Premium System ─────────────────────────────────────────────────────
 from auth_system import init_auth, is_premium_user
@@ -2187,6 +2189,22 @@ try:
     logger.info('[startup] espn_predictions_template.html loaded OK')
 except Exception as _tpl_startup_err:
     logger.error('[startup] espn_predictions_template.html FAILED: %s', _tpl_startup_err)
+
+
+@app.route('/healthz/picks-template')
+def healthz_picks_template():
+    """Ops: verify picks template is present and compiles."""
+    try:
+        app.jinja_env.get_template('espn_predictions_template.html')
+        _root = _os.path.join(_BASE_DIR, 'espn_predictions_template.html')
+        return jsonify({
+            'ok': True,
+            'template_folder': app.template_folder,
+            'root_copy': _os.path.isfile(_root),
+        })
+    except Exception as _hz_err:
+        return jsonify({'ok': False, 'error': str(_hz_err)}), 500
+
 _TRAFFIC_TZ = 'America/New_York'
 
 def _traffic_now():
@@ -12434,6 +12452,30 @@ def soccer_predictions_league(league_slug):
 def soccer_results_league(league_slug):
     return redirect(f'/soccer-results?league={league_slug}', code=301)
 
+def _render_espn_picks_page(**ctx):
+    """Render picks page — template path, then root file, then templates/ file."""
+    last_err = None
+    try:
+        return render_template('espn_predictions_template.html', **ctx)
+    except Exception as _e:
+        last_err = _e
+        logger.exception('render_template espn_predictions_template failed: %s', _e)
+    for _path in (
+        _os.path.join(_BASE_DIR, 'espn_predictions_template.html'),
+        _os.path.join(_BASE_DIR, 'templates', 'espn_predictions_template.html'),
+    ):
+        if not _os.path.isfile(_path):
+            continue
+        try:
+            with open(_path, encoding='utf-8') as _f:
+                _src = _f.read()
+            return render_template_string(_src, **ctx)
+        except Exception as _e2:
+            last_err = _e2
+            logger.exception('render_template_string picks failed (%s): %s', _path, _e2)
+    raise RuntimeError(f'Picks template render failed: {last_err}')
+
+
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
     sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
@@ -12496,13 +12538,18 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v7::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v8::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
-            if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+            if (
+                cached_ts is not None
+                and cached_html
+                and (_time.time() - cached_ts) < cache_ttl
+                and 'refreshing this page right now' not in cached_html.lower()
+            ):
                 return cached_html
     prediction_error = None
     try:
@@ -12711,30 +12758,30 @@ def sport_predictions(sport, filter_date=None):
     except Exception:
         _pred_li = False
 
+    _render_ctx = dict(
+        page=sport,
+        sport=sport,
+        sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+        sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+        sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+        predictions=predictions,
+        prediction_error=prediction_error,
+        grouped_predictions=grouped_predictions,
+        sorted_dates=sorted_dates,
+        today_date=today_date,
+        group_by='week' if sport == 'NFL' else 'date',
+        soccer_leagues=soccer_leagues,
+        shareable_cards=shareable_cards,
+        share_image_src=share_image_src,
+        share_image_view_url=share_image_view_url,
+        is_logged_in=_pred_li,
+        soccer_enabled=SOCCER_ENABLED,
+        ga_tracking_id=GA_TRACKING_ID,
+        todays_picks=[],
+        team_logo_url=team_logo_url,
+    )
     try:
-        rendered = render_template(
-            'espn_predictions_template.html',
-            page=sport,
-            sport=sport,
-            sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
-            sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
-            sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-            predictions=predictions,
-            prediction_error=prediction_error,
-            grouped_predictions=grouped_predictions,
-            sorted_dates=sorted_dates,
-            today_date=today_date,
-            group_by='week' if sport == 'NFL' else 'date',
-            soccer_leagues=soccer_leagues,
-            shareable_cards=shareable_cards,
-            share_image_src=share_image_src,
-            share_image_view_url=share_image_view_url,
-            is_logged_in=_pred_li,
-            soccer_enabled=SOCCER_ENABLED,
-            ga_tracking_id=GA_TRACKING_ID,
-            todays_picks=[],
-            team_logo_url=team_logo_url,
-        )
+        rendered = _render_espn_picks_page(**_render_ctx)
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)

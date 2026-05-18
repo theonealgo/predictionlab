@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
+    {% set _meta_title = sport_info.name ~ ' Predictions for ' ~ sorted_dates[0] ~ ' | predictionlab.io' %}
+    {% set _meta_desc = 'AI-powered ' ~ sport_info.name ~ ' predictions and game forecasts for ' ~ sorted_dates[0] ~ ' — model projections and matchup analysis on predictionlab.io.' %}
+    {% else %}
+    {% set _meta_title = sport_info.name ~ ' Predictions Today | predictionlab.io' %}
+    {% set _meta_desc = 'Daily AI-powered ' ~ sport_info.name ~ ' predictions, game forecasts, model projections, and matchup analysis — updated on predictionlab.io.' %}
+    {% endif %}
+    <title>{{ _meta_title }}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ _meta_desc }}">
+    {% if grouped_predictions is defined and not grouped_predictions %}<meta name="robots" content="noindex, follow">{% endif %}
+    <meta property="og:title" content="{{ _meta_title }}">
+    <meta property="og:description" content="{{ _meta_desc }}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://predictionlab.io{{ request.path }}">
+        <meta property="og:site_name" content="predictionlab.io">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ _meta_title }}">
+    <meta name="twitter:description" content="{{ _meta_desc }}">
+    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
+    {% if ga_tracking_id %}
+    <script>
+      (function(){
+        function initGA(){
+          if (window.__gaLoaded) return;
+          window.__gaLoaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}';
+          document.head.appendChild(s);
+          window.dataLayer = window.dataLayer || [];
+          window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+          gtag('js', new Date());
+          gtag('config', '{{ ga_tracking_id }}');
+        }
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(initGA, { timeout: 2500 });
+        } else {
+          window.addEventListener('load', function(){ setTimeout(initGA, 800); }, { once: true });
+        }
+      })();
+    </script>
+    {% endif %}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "predictionlab.io",
+      "url": "https://predictionlab.io",
+      "sameAs": [
+        "https://x.com/predictionlab_io",
+        "https://instagram.com/predictionlab.io",
+        "https://facebook.com/predictionlab.io",
+        "https://predictionlab.io",
+        "https://predictionlab.io"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://predictionlab.io/"},
+        {"@type": "ListItem", "position": 2, "name": "{{ sport_info.name }} Picks", "item": "https://predictionlab.io/{{ sport_seo_slug }}"}
+      ]
+    }
+    </script>
+    {% if grouped_predictions %}
+    {% for date in sorted_dates %}
+    {% for pred in grouped_predictions[date] %}
+    {% if pred.home_score is none and pred.home_team_id != 'TBD' and pred.away_team_id != 'TBD' and pred.home_team_id and pred.away_team_id %}
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} at {{ pred.home_team_id }}","description":"{{ sport_info.name }} game: {{ pred.away_team_id }} at {{ pred.home_team_id }}. AI predictions and picks at predictionlab.io.","startDate":"{{ date }}T19:00:00-04:00","endDate":"{{ date }}T22:00:00-04:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","location":{"@type":"Place","name":"{{ pred.home_team_id }} Home Venue","address":{"@type":"PostalAddress","addressCountry":"US"}},"homeTeam":{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"},"awayTeam":{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},"organizer":{"@type":"Organization","name":"{{ sport_info.name }}","url":"https://predictionlab.io/{{ sport_seo_slug }}"},"offers":{"@type":"Offer","url":"https://predictionlab.io/{{ sport_seo_slug }}","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","validFrom":"{{ date }}"}}
+    </script>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+    {% endif %}
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:#ffffff;
+            color:#1A1D23;
+        }
+        /* Top nav chrome: templates/includes/picks_nav_chrome.html + /static/css/picks-nav-overrides.css
+           (aligned with templates/base.html). Do not restyle .navbar / .hamburger here — inline CSS
+           loads after picks-nav-overrides and was overriding hamburger to the right. */
+        .hamburger:hover { background: #f8fafc; }
+        /* Do not style header a.logo here — conflicts with picks-nav flex order */
+        .nav-search {
+            flex: 1;
+            max-width: 620px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            border: 1px solid #E0E4E8;
+            border-radius: 999px;
+            padding: 5px 8px 5px 14px;
+            box-shadow: 0 3px 10px rgba(26,29,35,0.08);
+        }
+        .nav-search input {
+            flex: 1;
+            min-width: 0;
+            border: none;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: 0.9em;
+        }
+        .nav-search input::placeholder { color: #475569; }
+        .nav-search button {
+            border: 1px solid #E0E4E8;
+            background: #ffffff;
+            color: #00529B;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .nav-search-wrap{position:relative;flex:1;max-width:620px;}
+        .search-autocomplete{
+            display:none;position:absolute;top:48px;right:0;width:min(250px,calc(100vw - 36px));z-index:1100;
+            background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:10px;
+            box-shadow:0 14px 28px rgba(15,23,42,0.18);padding:6px;
+        }
+        .search-autocomplete.show{display:block;}
+        .search-item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#0f172a;}
+        .search-item:hover{background:rgba(15,23,42,0.06);}
+        .search-item small{color:#475569;}
+        .nav-actions { display:flex; align-items:center; gap:10px; }
+        .auth-btn {
+            text-decoration:none;
+            border-radius:999px;
+            font-weight:800;
+            font-size:0.82em;
+            padding:9px 14px;
+            transition:opacity .2s ease;
+            white-space:nowrap;
+        }
+        .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
+        .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
+        .auth-btn:hover { opacity:.9; }
+        .nav-links {
+            display:none;
+            position:absolute;
+            top:calc(100% + 8px);
+            left:0;
+            right:0;
+            flex-direction:column;
+            gap:0;
+            padding:8px;
+            border:1px solid #cbd5e1;
+            border-radius:12px;
+            background:#ffffff;
+            box-shadow:0 14px 28px rgba(15,23,42,0.18);
+            z-index:1100;
+        }
+        .nav-links.active { display:flex; }
+        .nav-links a {
+            color: #1A1D23;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.82em;
+            transition: all 0.2s;
+            white-space: normal;
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+        .nav-links a:hover { color:#00529B; background:rgba(0,82,155,0.08); }
+        .nav-links a.active { color:#00529B; background:rgba(0,82,155,0.12); }
+        .search-results-wrap{max-width:1400px;margin:12px auto 0;padding:0 30px;}
+        .search-results{display:none;background:#fff;border:1px solid rgba(15,23,42,0.16);border-radius:12px;padding:12px 14px;box-shadow:0 8px 20px rgba(15,23,42,0.08);}
+        .search-results.show{display:block;}
+        .search-results h3{margin:0 0 8px;font-size:0.96em;color:#0f172a;}
+        .search-results p{margin:0 0 8px;color:#334155;font-size:0.88em;}
+        .search-results ul{margin:0;padding-left:18px;color:#0f172a;font-size:0.84em;display:grid;gap:5px;}
+        .search-results a{color:#0f172a;text-decoration:underline;}
+        .nav-section-title { display: none; }
+        .nav-divider { display: none; }
+        .nav-donate-btn {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #000 !important;
+            font-weight: 800 !important;
+            padding: 8px 14px;
+            border-radius: 10px;
+            transition: opacity 0.2s !important;
+            white-space: nowrap;
+        }
+        .nav-donate-btn:hover { opacity: 0.9; color: #000 !important; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px; }
+        .site-footer {
+            background: rgba(255,255,255,0.72);
+            border-top: 1px solid rgba(15,23,42,0.12);
+            padding: 22px 24px 28px;
+            color: #475569;
+            font-size: 0.88em;
+            backdrop-filter: saturate(140%) blur(2px);
+        }
+        .footer-outer { max-width: 1200px; margin: 0 auto; }
+        .footer-brand { margin-bottom: 18px; }
+        .footer-brand .logo {
+            font-weight: 900;
+            font-size: 1.05em;
+            color: #0f172a;
+            letter-spacing: 0.2px;
+            text-decoration: none;
+        }
+        .footer-columns-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 28px 36px;
+            align-items: start;
+        }
+        .footer-heading {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.55px;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 12px;
+        }
+        .footer-col-blk a {
+            display: block;
+            font-size: 0.88em;
+            line-height: 1.85;
+            color: #475569;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 2px 0;
+        }
+        .footer-col-blk a:hover { color: #00529B; text-decoration: underline; }
+        .footer-bottom {
+            margin-top: 22px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(15,23,42,0.1);
+            font-size: 0.82em;
+            color: #475569;
+            opacity: 0.78;
+        }
+        .share-strip { max-width: 1200px; margin: 0 auto 10px; padding: 10px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; background: rgba(244,247,249,0.7); border: 1px solid rgba(15,23,42,0.1); border-radius: 12px; }
+        .share-strip-label { font-size: 0.82em; font-weight: 800; color: #0f172a; letter-spacing: 0.2px; }
+        .share-icons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .share-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid rgba(15,23,42,0.14); background: #fff; }
+        .share-icon img { width: 16px; height: 16px; display: block; }
+        .share-icon:hover { border-color: #00529B; background: rgba(0,82,155,0.08); }
+        @media (max-width: 720px) {
+            .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
+        }
+        .header { text-align:left; margin-bottom:16px; padding:20px 18px; border:1px solid rgba(15,23,42,0.16); border-radius:12px; position:relative; overflow:hidden; background:#ffffff; }
+        .header::before, .header::after { display:none !important; content:none !important; }
+        h1 { font-size:1.85em; letter-spacing:0.2px; color:#0F172A; font-weight:700; }
+        .section-tabs { display:flex; gap:8px; margin-bottom:16px; justify-content:center; flex-wrap:wrap; }
+        .tab { padding:9px 20px; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.9em; background:#fff; border:1px solid rgba(15,23,42,0.18); color:#0f172a; transition:all 0.2s; }
+        .tab.active { background:#bfdbfe; color:#0f172a; border:1px solid #93c5fd; }
+        .tab:hover { background:rgba(15,23,42,0.06); }
+        .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 14px; }
+        .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
+        .league-pill { background:#f8fafc; border:2px solid rgba(15,23,42,0.14); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#334155; text-decoration:none; display:inline-flex; align-items:center; }
+        .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
+        .league-pill:hover { border-color:#fbbf24; }
+        .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }
+        .nav-arrow { background:rgba(146,64,14,0.12); border:2px solid #92400e; color:#92400e; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
+        .nav-arrow:hover { background:rgba(146,64,14,0.22); transform:scale(1.1); }
+        .date-bubbles { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
+        .date-bubble { background:#fff; border:2px solid rgba(15,23,42,0.18); border-radius:22px; padding:9px 16px; min-width:105px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.86em; color:#0f172a; }
+        .date-bubble:hover { border-color:#92400e; }
+        .date-bubble.active { background:#f59e0b; border-color:#d97706; color:#0f172a; font-weight:700; }
+        .date-bubble.today { border-color:#00C076; color:#00C076; }
+        .date-bubble.active.today { background:#00C076; color:#fff; }
+        .date-section { display:none; }
+        .date-section.visible { display:block; }
+        .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
+        .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+        .date-header { font-size:1.25em; margin-bottom:14px; color:#0F172A; font-weight:700; }
+        .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
+        @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
+        .game-card-stack { min-width:0; max-width:420px; width:100%; justify-self:stretch; display:flex; flex-direction:column; }
+        .game-card-stack .game-card { flex:0 0 auto; border-radius:12px 12px 0 0; }
+        .game-card-stack .analysis-toggle,
+        .game-card-stack .analysis-panel { border-left:1px solid #E2E8F0; border-right:1px solid #E2E8F0; background:#fff; }
+        .game-card-stack .analysis-panel { border-bottom:1px solid #E2E8F0; border-radius:0 0 12px 12px; margin-bottom:0; }
+        .game-card-stack .analysis-toggle { border-top:1px solid rgba(15,23,42,0.08); border-bottom:none; }
+        .odds-pricing-table .score-compact { display:none; }
+        .odds-pricing-table .score-full { display:inline; }
+        @media(max-width:480px){
+            .odds-pricing-table .score-compact { display:inline; }
+            .odds-pricing-table .score-full { display:none; }
+        }
+
+        /* Card — floating white tile */
+        .game-card {
+            background:#ffffff;
+            border:1px solid #E2E8F0;
+            border-radius:12px;
+            overflow:hidden;
+            box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06);
+            transition:border-color 0.2s, box-shadow 0.2s;
+        }
+        .game-card:hover {
+            border-color:#cbd5e1;
+            box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08);
+        }
+        /* Mockup-style card header: logos + matchup + ML under logos */
+        .card-hero { display:flex; gap:12px; align-items:flex-start; padding:14px 14px 12px; border-bottom:1px solid #E2E8F0; }
+        .card-hero-logos { display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; width:52px; }
+        .card-hero-logos .team-logo { width:44px; height:44px; object-fit:contain; }
+        .card-hero-at { font-size:0.62em; font-weight:700; color:#94a3b8; letter-spacing:0.3px; }
+        .card-hero-text { flex:1; min-width:0; }
+        .card-hero-matchup { font-size:0.92em; font-weight:800; color:#0f172a; line-height:1.25; margin:0 0 4px; }
+        .card-hero-ml-row .team-line { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .card-hero-ml-row .team-line-full { display:none; }
+        @media(min-width:380px){ .card-hero-ml-row .team-line-full { display:inline; } .card-hero-ml-row .team-line-short { display:none; } }
+        .card-hero-meta { font-size:0.7em; color:#64748b; text-transform:uppercase; font-weight:600; letter-spacing:0.4px; margin-bottom:8px; }
+        .card-hero-meta.final { color:#00C076; }
+        .card-hero-ml { display:flex; flex-direction:column; gap:5px; }
+        .card-hero-ml-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.86em; font-weight:600; color:#0f172a; }
+        .card-hero-ml-row .ml-val.fav { color:#00C076; }
+        .card-hero-ml-row .ml-val.dog { color:#92400e; }
+        .card-hero-ml-row .pick-arrow { color:#00C076; font-weight:800; flex-shrink:0; }
+        .card-hero-final-scores { margin-top:0; }
+        .card-hero-ml-row .score-winner { color:#00C076; font-weight:800; }
+        .card-final-score { font-size:1.05em; font-weight:800; color:#0f172a; flex-shrink:0; }
+        .card-final-score.score-winner { color:#00C076; }
+        .card-legend { font-size:0.68em; color:#94a3b8; padding:4px 12px 10px; line-height:1.4; border-top:1px solid rgba(15,23,42,0.06); }
+        .h2h-info-wrap { position:relative; display:flex; flex-direction:column; gap:1px; }
+        .h2h-info-label { display:inline-flex; align-items:center; gap:5px; }
+        .h2h-info-btn { width:16px; height:16px; border-radius:50%; border:1px solid #94a3b8; background:#fff; color:#475569; font-size:0.62em; font-weight:800; font-style:italic; line-height:1; padding:0; cursor:pointer; flex-shrink:0; }
+        .h2h-info-btn:hover, .h2h-info-btn[aria-expanded="true"] { border-color:#00529B; color:#00529B; background:#eff6ff; }
+        .h2h-popover { display:none; position:absolute; left:0; bottom:calc(100% + 8px); min-width:280px; max-width:min(320px, 90vw); background:#fff; border:1px solid #e2e8f0; border-radius:10px; box-shadow:0 10px 28px rgba(15,23,42,0.14); padding:8px 0; z-index:30; max-height:220px; overflow-y:auto; }
+        .h2h-popover.open { display:block; }
+        .h2h-pop-title { font-size:0.65em; text-transform:uppercase; font-weight:700; color:#64748b; padding:4px 12px 6px; letter-spacing:0.3px; }
+        .h2h-pop-row { font-size:0.76em; color:#334155; padding:5px 12px; border-top:1px solid #f1f5f9; line-height:1.35; }
+        .h2h-pop-row:first-of-type { border-top:none; }
+        .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#92400e; background:rgba(146,64,14,0.1); }
+        .game-status.final { color:#00C076; background:rgba(16,185,129,0.12); }
+        .game-body { display:flex; padding:10px 12px; gap:10px; }
+        .teams-section { flex:1; min-width:0; }
+        .team-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(15,23,42,0.06); }
+        .team-row:last-child { border-bottom:none; }
+        .team-name { font-size:0.94em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
+        .team-name.winner { font-weight:700; }
+        .team-odds { font-size:0.82em; font-weight:700; margin-left:6px; flex-shrink:0; }
+        .team-odds.fav { color:#00C076; }
+        .team-odds.dog { color:#92400e; }
+        .pick-indicator { color:#00C076; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
+        .score-box { font-size:1.05em; font-weight:700; color:#92400e; margin-left:8px; flex-shrink:0; }
+        .prediction-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:120px; max-width:168px; display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
+        @media(max-width:400px){ .game-body{flex-direction:column;} .prediction-panel{max-width:none;min-width:0;border-left:none;border-top:3px solid #8b5cf6;} }
+        .panel-title { font-size:0.66em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
+        .model-row { display:flex; justify-content:space-between; font-size:0.81em; padding:2px 0; }
+        .model-lbl { opacity:0.85; }
+        .model-val { font-weight:600; }
+        .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #00C076; color:#00C076; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
+
+        /* Pick confidence strip (all sports — same footprint) */
+        .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
+        .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
+        @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
+        .pc-box {
+            background:#ffffff;
+            border:1px solid #E2E8F0;
+            border-radius:8px;
+            padding:6px 4px;
+            text-align:center;
+            display:grid;
+            grid-template-rows:30px 26px 32px;
+            align-content:stretch;
+            justify-items:center;
+            gap:2px;
+            min-width:0;
+            min-height:86px;
+            height:auto;
+        }
+        .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
+        .pc-name {
+            font-size:0.68em;
+            font-weight:700;
+            color:#0F172A;
+            text-transform:uppercase;
+            letter-spacing:0.3px;
+            width:100%;
+            max-width:100%;
+            min-height:30px;
+            line-height:1.15;
+            display:flex;
+            align-items:flex-start;
+            justify-content:center;
+            text-align:center;
+            word-break:break-word;
+            overflow-wrap:anywhere;
+        }
+        .pc-val {
+            font-size:0.95em;
+            font-weight:800;
+            color:#0f172a;
+            min-height:24px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            line-height:1.1;
+        }
+        .pc-side {
+            font-size:0.6em;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:0.3px;
+            padding:2px 6px;
+            border-radius:4px;
+            width:100%;
+            max-width:100%;
+            min-height:30px;
+            box-sizing:border-box;
+            text-align:center;
+            line-height:1.15;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            word-break:break-word;
+            overflow-wrap:anywhere;
+        }
+        .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
+        .pc-side.away { color:#92400e; background:rgba(146,64,14,0.1); }
+
+        /* MLB premium picks side-panel (replaces Home Win % panel) */
+        .premium-panel { background:#f4f7f9; border-left:3px solid #d1d5db; padding:10px 12px; min-width:140px; max-width:190px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+        @media(max-width:400px){ .premium-panel{ max-width:none; min-width:0; border-left:none; border-top:3px solid #d1d5db; } }
+        .premium-panel .panel-title { color:#1A1D23; font-weight:700; }
+        .premium-row { display:flex; flex-direction:column; gap:1px; }
+        .premium-row .sf-label { color:#334155; }
+        .premium-lock { font-size:0.78em; color:#475569; }
+        .premium-lock a { color:#00529B; text-decoration:none; font-weight:700; }
+
+        /* Premium content — print-hidden only (text must be copiable for analysis) */
+        @media print { .premium-protected { display:none !important; } }
+        /* Odds & pricing table (PL Model + XSharp — predictions page only) */
+        .odds-pricing-section { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#f8fafc; overflow-x:auto; }
+        .odds-pricing-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
+        .odds-pricing-table { width:100%; border-collapse:collapse; font-size:0.8em; }
+        .odds-pricing-table th { text-align:left; font-weight:700; padding:7px 8px; border-bottom:1px solid #e2e8f0; color:#64748b; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
+        .odds-pricing-table td { padding:7px 8px; border-bottom:1px solid #f1f5f9; vertical-align:middle; color:#0f172a; font-weight:600; }
+        .odds-pricing-table tr:last-child td { border-bottom:none; }
+        .odds-pricing-table th.col-pl { color:#92400e; }
+        .odds-pricing-table th.col-xs { color:#1d4ed8; }
+        .odds-pricing-table .market-k { color:#64748b; font-weight:700; font-size:0.72em; text-transform:uppercase; }
+        .odds-pricing-table .val-pl { color:#92400e; }
+        .odds-pricing-table .val-xs { color:#1d4ed8; }
+        .odds-pricing-table .val-result { color:#00C076; font-weight:800; font-size:0.78em; line-height:1.35; word-break:break-word; }
+        .odds-pricing-table .val-result-compact { font-size:0.76em; }
+        .odds-pricing-locked { font-size:0.82em; color:#475569; padding:8px 0; }
+        .odds-pricing-locked a { color:#00529B; font-weight:700; }
+        .odds-extras-footer { border-top:1px solid rgba(15,23,42,0.07); padding:7px 12px; display:flex; gap:16px; flex-wrap:wrap; background:rgba(15,23,42,0.03); }
+        /* Legacy score footer (non-NBA pilot sports) */
+        .score-footer { border-top:1px solid rgba(15,23,42,0.07); padding:7px 12px; display:flex; gap:16px; flex-wrap:wrap; background:rgba(15,23,42,0.03); }
+        .sf-item { display:flex; flex-direction:column; gap:1px; }
+        .sf-label { color:#475569; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
+        .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
+        .sf-fav { color:#00C076; }
+        .sf-xgb { color:#f87171; }
+        .no-data { text-align:center; padding:60px; opacity:0.7; font-size:1.2em; }
+        /* Injury badges */
+        .injury-bar { padding:4px 12px 6px; display:flex; flex-wrap:wrap; gap:5px; background:rgba(239,68,68,0.06); border-top:1px solid rgba(239,68,68,0.15); }
+        .injury-tag { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.71em; font-weight:600; }
+        .injury-tag.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(146,64,14,0.45); color:#92400e; }
+        /* Analysis toggle */
+        .analysis-toggle { padding:6px 12px; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#a78bfa; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+        .analysis-toggle:hover { color:#c4b5fd; }
+        .analysis-panel { display:none; padding:8px 12px 12px; border-top:1px solid rgba(15,23,42,0.08); background:rgba(15,23,42,0.03); }
+        .analysis-panel.open { display:block; }
+        .analysis-title { font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; color:#475569; margin-bottom:6px; }
+        .analysis-empty { font-size:0.78em; color:#475569; }
+        .injury-list { display:flex; flex-wrap:wrap; gap:6px; }
+        .injury-pill { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.72em; font-weight:600; }
+        .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(146,64,14,0.45); color:#92400e; }
+        .social-export-wrap{max-width:960px;margin:24px auto 0;padding:0 8px;}
+        .social-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+        .social-export-title{font-size:0.9em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
+        .social-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .social-export-btn{border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 12px;font-size:0.76em;font-weight:800;cursor:pointer;}
+        .social-export-btn.primary{background:#00529B;color:#fff;}
+        .social-export-hint{margin:0 0 10px;font-size:0.82em;color:#475569;line-height:1.45;}
+        .social-image-link{display:block;width:min(100%,min(420px,90vw));margin:0 auto;aspect-ratio:9/16;border-radius:14px;overflow:hidden;border:1px solid rgba(15,23,42,0.14);box-shadow:0 6px 18px rgba(15,23,42,0.08);background:#ffffff;}
+        .social-image-link img{display:block;width:100%;height:100%;object-fit:cover;}
+        @media (max-width: 768px) {
+            .container { padding: 20px 10px; }
+            .games-grid { grid-template-columns:1fr !important; }
+        }
+        .nav-group { position: relative; }
+        .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(0,82,155,0.08); }
+        .nav-group-items { display: none; padding-left: 12px; }
+        .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
+        .nav-group-items a:hover { opacity: 1; color: #00529B; }
+    </style>
+    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
+</head>
+<body>
+{% include 'includes/picks_nav_chrome.html' %}
+<div class="search-results-wrap">
+    <div id="searchResultsPicks" class="search-results" aria-live="polite"></div>
+</div>
+<div class="container">
+
+    <div class="header">
+        <h1 id="pageHeading">{{ sport_info.icon }} {{ sport_info.name }} AI Picks, Predictions and Model Probabilities</h1>
+    </div>
+
+    <!-- SEO text block -->
+    <div style="margin-bottom:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:0.85em;color:#475569;line-height:1.7;">
+        {% if sport == 'NBA' %}Our NBA picks today are powered by a multi-model AI system combining advanced team ratings, performance data, and real-time matchup analysis. Our models analyze pace, efficiency, and player trends to generate accurate daily predictions across moneyline, spread, and totals.
+        {% elif sport == 'MLB' %}Our MLB picks today are generated using a specialized system that focuses on starting pitchers, bullpen usage, and advanced matchup data. By analyzing strikeout rates, run projections, and team performance, we identify high-value opportunities across moneyline, spread, and totals.
+        {% elif sport == 'NHL' %}Our NHL picks are driven by advanced models that evaluate team strength, goaltending performance, shot metrics, and recent form. We combine real-time data with predictive analysis to generate daily value across moneyline, puck line, and totals.
+        {% elif sport == 'NFL' %}Our NFL picks are built using predictive systems that combine team performance metrics, quarterback play, and matchup data. We analyze offensive and defensive strengths to generate high-confidence predictions for spreads, totals, and moneyline outcomes.
+        {% elif sport == 'NCAAB' %}Our college basketball picks use advanced analytics, team ratings, and matchup-based projections to identify value in daily games. The system evaluates efficiency and recent performance trends to produce accurate predictions.
+        {% elif sport == 'NCAAF' %}Our college football picks are powered by data-driven models that analyze team strength, scoring efficiency, and matchup dynamics to project outcomes and identify value across spreads and totals.
+        {% elif sport == 'SOCCER' %}Our soccer predictions combine team form, expected performance metrics, and matchup data to generate accurate forecasts. The system evaluates both attacking and defensive strength to identify value opportunities.
+        {% elif sport == 'WNBA' %}Our WNBA picks are generated using advanced models that evaluate team efficiency, pace, and player performance trends to identify high-value opportunities in daily matchups.
+        {% elif sport == 'NCAAW' %}Our women's college basketball picks combine team ratings and performance analytics to identify value in daily matchups across spreads and totals.
+        {% else %}Our AI-powered picks combine multiple predictive models to generate accurate daily predictions across moneyline, spread, and totals.
+        {% endif %}
+        {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
+        <br><strong style="color:#334155;">Showing picks for {{ sorted_dates[0] }}.</strong> <a href="/{{ sport_seo_slug }}" style="color:#00529B;text-decoration:none;font-weight:700;">View today's picks →</a>
+        {% endif %}
+    </div>
+
+    <div class="section-tabs">
+        <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
+    </div>
+    {% set label_glicko2 = 'Grinder2' %}
+    {% set label_trueskill = 'Takedown' %}
+    {% set label_elo = 'Edge' %}
+    {% set label_xgb = 'XSharp' %}
+    {% set label_ensemble = 'Sharp Consensus' %}
+    {% from 'includes/score_macros.html' import fmt_half, fmt_labeled_final, fmt_labeled_proj, fmt_final_spread, team_short %}
+    {# Display helpers: lines/totals/scores snap to whole or .5 #}
+    {% macro fmt_spread_line(spread, home, away, force_run_line=false) -%}
+    {%- if spread is none -%}—
+    {%- else -%}
+    {%- set raw = spread|float -%}
+    {%- if force_run_line -%}
+    {%- set mag = 1.5 -%}
+    {%- set s = mag if raw >= 0 else -mag -%}
+    {%- else -%}
+    {%- set s = (raw * 2)|round(0, 'common') / 2 -%}
+    {%- endif -%}
+    {%- if s == 0 -%}PK
+    {%- elif s > 0 -%}{{ home }} -{{ fmt_half(s) }}
+    {%- else -%}{{ away }} -{{ fmt_half(s|abs) }}
+    {%- endif -%}
+    {%- endif -%}
+    {%- endmacro %}
+    {% if soccer_leagues %}
+    <div class="league-slider">
+        <div class="league-badges" id="leagueBubbles">
+            {% for lg in soccer_leagues %}
+            <a class="league-pill {% if lg.active %}active{% endif %}" href="{{ lg.url }}">{{ lg.name }}</a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if prediction_error %}
+    <div style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.35);color:#fecaca;font-size:0.9em;">
+        {{ prediction_error }}
+    </div>
+    {% endif %}
+
+    <div class="date-nav">
+        <div class="nav-arrow" onclick="previousWeek()">‹</div>
+        <div class="date-bubbles" id="dateBubbles"></div>
+        <div class="nav-arrow" onclick="nextWeek()">›</div>
+    </div>
+
+    {% if sorted_dates %}
+    <ul class="sr-only">
+        {% for date in sorted_dates %}
+        <li><a href="#date-{{ date }}">{{ date }}</a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if grouped_predictions %}
+        {% for date in sorted_dates %}
+        <div class="date-section seo-hidden" id="date-{{ date }}">
+            <div class="date-header">
+                📅 {{ date }}
+                {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
+            </div>
+            <div class="games-grid">
+                {% set _prev_league = namespace(val='') %}
+                {% if sport == 'SOCCER' %}
+                {% set _date_preds = grouped_predictions[date]|sort(attribute='league') %}
+                {% else %}
+                {% set _date_preds = grouped_predictions[date] %}
+                {% endif %}
+                {% for pred in _date_preds %}
+                {% if sport == 'SOCCER' and pred.league and pred.league != _prev_league.val %}
+                {% set _prev_league.val = pred.league %}
+                <div style="grid-column:1/-1;font-size:0.88em;font-weight:700;color:#92400e;padding:10px 0 4px;border-top:1px solid rgba(15,23,42,0.1);margin-top:6px;">{{ pred.league }}</div>
+                {% endif %}
+                {% set is_final = pred.home_score is not none %}
+                {% set home_wins = is_final and pred.home_score > pred.away_score %}
+                {% set away_wins = is_final and pred.away_score > pred.home_score %}
+                {% set home_picked = pred.predicted_winner == pred.home_team_id %}
+                {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
+                {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
+                <div class="game-card-stack">
+                <div class="game-card" data-league="{{ pred.league if pred.league else 'Other' }}">
+                    {% set _force_rl = (sport == 'MLB') %}
+                    {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
+                    <div class="card-hero">
+                        <div class="card-hero-logos">
+                            <img class="team-logo" src="{{ team_logo_url(sport, pred.away_team_id) }}" alt="" width="44" height="44" loading="lazy">
+                            <span class="card-hero-at">@</span>
+                            <img class="team-logo" src="{{ team_logo_url(sport, pred.home_team_id) }}" alt="" width="44" height="44" loading="lazy">
+                        </div>
+                        <div class="card-hero-text">
+                            <h3 class="card-hero-matchup">{{ pred.away_team_id }} at {{ pred.home_team_id }}</h3>
+                            <div class="card-hero-meta {% if is_final %}final{% endif %}">{% if is_final %}FINAL{% else %}UPCOMING{% endif %}{% if not is_final and pred.game_time is defined and pred.game_time is not none %} · {{ pred.game_time }}{% elif not is_final %} · TBD{% endif %}</div>
+                            {% if is_final %}
+                            <div class="card-hero-ml card-hero-final-scores">
+                                <div class="card-hero-ml-row">
+                                    <span class="team-line {% if away_wins %}score-winner{% endif %}" title="{{ pred.away_team_id }}"><span class="team-line-short">{{ team_short(pred.away_team_id) }}</span><span class="team-line-full">{{ pred.away_team_id }}</span></span>
+                                    <span class="card-final-score {% if away_wins %}score-winner{% endif %}">{{ pred.away_score }}</span>
+                                </div>
+                                <div class="card-hero-ml-row">
+                                    <span class="team-line {% if home_wins %}score-winner{% endif %}" title="{{ pred.home_team_id }}"><span class="team-line-short">{{ team_short(pred.home_team_id) }}</span><span class="team-line-full">{{ pred.home_team_id }}</span></span>
+                                    <span class="card-final-score {% if home_wins %}score-winner{% endif %}">{{ pred.home_score }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="card-hero-ml">
+                                <div class="card-hero-ml-row">
+                                    <span class="team-line" title="{{ pred.away_team_id }}"><span class="team-line-short">{{ team_short(pred.away_team_id) }}</span><span class="team-line-full">{{ pred.away_team_id }}</span></span>
+                                    <span>{% if pred.away_moneyline is not none %}<span class="ml-val {% if pred.away_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.away_moneyline > 0 %}+{% endif %}{{ pred.away_moneyline }}</span>{% endif %}{% if not home_picked and _odds_pass %}<span class="pick-arrow">▶</span>{% endif %}</span>
+                                </div>
+                                <div class="card-hero-ml-row">
+                                    <span class="team-line" title="{{ pred.home_team_id }}"><span class="team-line-short">{{ team_short(pred.home_team_id) }}</span><span class="team-line-full">{{ pred.home_team_id }}</span></span>
+                                    <span>{% if pred.home_moneyline is not none %}<span class="ml-val {% if pred.home_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.home_moneyline > 0 %}+{% endif %}{{ pred.home_moneyline }}</span>{% endif %}{% if home_picked and _odds_pass %}<span class="pick-arrow">▶</span>{% endif %}</span>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="pick-conf-bar">
+                        <div class="pick-conf-title">Pick Confidence</div>
+                        <div class="pick-conf-grid">
+                            {% for m in [
+                                {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
+                                {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
+                                {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
+                                {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                                {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
+                            ] %}
+                            <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %}">
+                                <div class="pc-name">{{ m.name }}</div>
+                                {% if m.prob is not none %}
+                                <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
+                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}">{% if m.prob >= 50 %}{{ (pred.home_team_id|string).split()[-1] }}{% else %}{{ (pred.away_team_id|string).split()[-1] }}{% endif %}</div>
+                                {% else %}
+                                <div class="pc-val" style="color:#475569;">—</div>
+                                <div class="pc-side" style="color:#475569;background:transparent;">—</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% set _spread_val = pred.disp_pl_spread if (pred.disp_pl_spread is defined and pred.disp_pl_spread is not none) else none %}
+                    {% set _total_val = pred.disp_pl_total if (pred.disp_pl_total is defined and pred.disp_pl_total is not none) else none %}
+                    {% set _xs_spread = pred.disp_xs_spread if (pred.disp_xs_spread is defined and pred.disp_xs_spread is not none) else none %}
+                    {% set _xs_total = pred.disp_xs_total if (pred.disp_xs_total is defined and pred.disp_xs_total is not none) else none %}
+                    {% set _xs_away_pts = pred.disp_xs_away if (pred.disp_xs_away is defined and pred.disp_xs_away is not none) else none %}
+                    {% set _xs_home_pts = pred.disp_xs_home if (pred.disp_xs_home is defined and pred.disp_xs_home is not none) else none %}
+                    {% set _cons_pct = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
+                    {% set _xgb_pct = pred.xgb_prob if (pred.xgb_prob is defined and pred.xgb_prob is not none) else none %}
+                    {% set _show_odds = _spread_val is not none or _total_val is not none or _cons_pct is not none or _xgb_pct is not none or is_final or (pred.our_home_pts is defined and pred.our_home_pts is not none) or (pred.xgb_home_score is defined and pred.xgb_home_score is not none) %}
+                    {% if _show_odds %}
+                    <div class="odds-pricing-section premium-protected">
+                        <div class="odds-pricing-title">Odds &amp; Pricing</div>
+                        {% if is_premium %}
+                        <table class="odds-pricing-table">
+                            <thead>
+                                <tr>
+                                    <th>Market</th>
+                                    <th class="col-pl">PL Model Odds</th>
+                                    <th class="col-xs">XSharp Odds</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if is_final %}
+                                <tr>
+                                    <td class="market-k">Final</td>
+                                    <td colspan="2" class="val-result">{{ fmt_labeled_final(pred.away_team_id, pred.away_score, pred.home_team_id, pred.home_score) }} &nbsp;·&nbsp; Total {{ pred.away_score + pred.home_score }} &nbsp;·&nbsp; {{ fmt_final_spread(pred.home_team_id, pred.away_team_id, pred.home_score, pred.away_score) }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td class="market-k">Moneyline</td>
+                                    <td class="val-pl">{% if _cons_pct is not none %}{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} · {% if home_picked %}{{ _cons_pct }}{% else %}{{ "%.1f"|format(100 - _cons_pct) }}{% endif %}%{% else %}—{% endif %}</td>
+                                    <td class="val-xs">{% if _xgb_pct is not none %}{% if _xgb_pct >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} · {% if _xgb_pct >= 50 %}{{ _xgb_pct }}{% else %}{{ "%.1f"|format(100 - _xgb_pct) }}{% endif %}%{% else %}—{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td class="market-k">{{ _spread_label }}</td>
+                                    <td class="val-pl">{{ fmt_spread_line(_spread_val, pred.home_team_id, pred.away_team_id, _force_rl) }}</td>
+                                    <td class="val-xs">{% if _xs_spread is not none %}{{ fmt_spread_line(_xs_spread, pred.home_team_id, pred.away_team_id, _force_rl) }}{% else %}—{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td class="market-k">Total</td>
+                                    <td class="val-pl">{% if _total_val is not none %}{{ fmt_half(_total_val) }}{% else %}—{% endif %}</td>
+                                    <td class="val-xs">{% if _xs_total is not none %}{{ fmt_half(_xs_total) }}{% else %}—{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td class="market-k">Projected score</td>
+                                    <td class="val-pl">{{ fmt_labeled_proj(pred.away_team_id, pred.our_away_pts if (pred.our_away_pts is defined and pred.our_away_pts is not none) else none, pred.home_team_id, pred.our_home_pts if (pred.our_home_pts is defined and pred.our_home_pts is not none) else none) }}</td>
+                                    <td class="val-xs">{{ fmt_labeled_proj(pred.away_team_id, _xs_away_pts, pred.home_team_id, _xs_home_pts) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <table class="odds-pricing-table">
+                            <thead>
+                                <tr><th>Market</th><th class="col-pl">PL Model</th><th class="col-xs">XSharp</th></tr>
+                            </thead>
+                            <tbody>
+                                {% if is_final %}
+                                <tr><td class="market-k">Final</td><td colspan="2" class="val-result val-result-compact">{{ fmt_labeled_final(pred.away_team_id, pred.away_score, pred.home_team_id, pred.home_score) }}</td></tr>
+                                {% endif %}
+                                <tr>
+                                    <td class="market-k">Moneyline</td>
+                                    <td class="val-pl">{% if _cons_pct is not none %}{% if home_picked %}{{ team_short(pred.home_team_id) }}{% else %}{{ team_short(pred.away_team_id) }}{% endif %} · {% if home_picked %}{{ _cons_pct }}{% else %}{{ "%.1f"|format(100 - _cons_pct) }}{% endif %}%{% else %}—{% endif %}</td>
+                                    <td class="val-xs">{% if _xgb_pct is not none %}{% if _xgb_pct >= 50 %}{{ team_short(pred.home_team_id) }}{% else %}{{ team_short(pred.away_team_id) }}{% endif %} · {% if _xgb_pct >= 50 %}{{ _xgb_pct }}{% else %}{{ "%.1f"|format(100 - _xgb_pct) }}{% endif %}%{% else %}—{% endif %}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="odds-pricing-locked" style="margin-top:8px;">🔒 Spread, total &amp; projections locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.</div>
+                        {% endif %}
+                    </div>
+                    <div class="odds-extras-footer premium-protected">
+                        {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
+                        <div class="h2h-info-wrap sf-item">
+                            <span class="h2h-info-label sf-label">H2H Last 10
+                                {% if is_premium and pred.h2h_last10_meetings is defined and pred.h2h_last10_meetings|length > 0 %}
+                                <button type="button" class="h2h-info-btn" aria-label="Show last 10 head-to-head games" aria-expanded="false" onclick="toggleH2hPopover(this, event)">i</button>
+                                {% endif %}
+                            </span>
+                            {% if is_premium %}
+                            <span class="sf-val" style="color:#475569;">{{ fmt_half(pred.h2h_last10_total) }}{% if pred.h2h_last10_games is defined and pred.h2h_last10_games %} <span style="font-size:0.78em;color:#94a3b8;font-weight:600;">({{ pred.h2h_last10_games }} game{% if pred.h2h_last10_games != 1 %}s{% endif %})</span>{% endif %}</span>
+                            {% if pred.h2h_last10_meetings is defined and pred.h2h_last10_meetings|length > 0 %}
+                            <div class="h2h-popover" role="dialog" aria-label="Last head-to-head games">
+                                <div class="h2h-pop-title">Last {{ pred.h2h_last10_meetings|length }} meetings</div>
+                                {% for g in pred.h2h_last10_meetings %}
+                                <div class="h2h-pop-row">{{ g.game_date }} · {{ g.away_team_id }} {{ g.away_score }} – {{ g.home_score }} {{ g.home_team_id }}</div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% if not is_final and is_premium and pred.ml_ev is defined and pred.ml_ev is not none %}
+                        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if pred.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if pred.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(pred.ml_ev) }}%</span></div>
+                        {% elif not is_final and is_premium %}
+                        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:#475569;">—</span></div>
+                        {% endif %}
+                    </div>
+                    <div class="card-legend">PL Model = projections · XSharp = proprietary sharp line</div>
+                    {% endif %}
+                    {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
+                    <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
+                    <div id="{{ analysis_id }}" class="analysis-panel">
+                        {% if pred.our_method == 'efficiency' and pred.our_home_eff and pred.our_away_eff %}
+                        <div class="analysis-title">Efficiency-based projection (last 5 games)</div>
+                        <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
+                            <div>{{ pred.home_team_id }}: ORtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['ortg'] }}{% else %}{{ pred.our_home_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['drtg'] }}{% else %}{{ pred.our_home_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['pace'] }}{% else %}{{ pred.our_home_eff.pace }}{% endif %}</strong></div>
+                            <div>{{ pred.away_team_id }}: ORtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['ortg'] }}{% else %}{{ pred.our_away_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['drtg'] }}{% else %}{{ pred.our_away_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['pace'] }}{% else %}{{ pred.our_away_eff.pace }}{% endif %}</strong></div>
+                            <div style="margin-top:4px;">Projected score: <strong>{{ (pred.home_team_id|string).split()[-1] }} {{ pred.our_home_pts }} &mdash; {{ pred.our_away_pts }} {{ (pred.away_team_id|string).split()[-1] }}</strong> &nbsp;·&nbsp; Game pace ~{{ pred.our_pace }}</div>
+                        </div>
+                        {% elif pred.total_trend_record is defined or pred.spread_trend_record is defined %}
+                        <div class="analysis-title">Last 3-Game Trend (vs current XSharp lines)</div>
+                        <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
+                            {% if pred.our_home_avg is defined and pred.our_away_avg is defined %}
+                            <div>{{ pred.home_team_id }} avg (last 3): <strong>{{ pred.our_home_avg }}</strong> &nbsp;·&nbsp; {{ pred.away_team_id }} avg (last 3): <strong>{{ pred.our_away_avg }}</strong></div>
+                            {% endif %}
+                            {% if pred.total_trend_record is defined %}
+                            <div>Combined record vs XSharp total ({{ pred.xgb_total }}): <strong>{{ pred.total_trend_record }}</strong></div>
+                            {% endif %}
+                            {% if pred.spread_trend_record is defined %}
+                            <div>Combined record vs XSharp spread ({{ "%+.1f"|format(pred.xgb_spread) }}): <strong>{{ pred.spread_trend_record }}</strong></div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% set _away_injuries = pred.away_injuries if pred.away_injuries is not none else [] %}
+                        {% set _home_injuries = pred.home_injuries if pred.home_injuries is not none else [] %}
+                        {% set _away_suspended = _away_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _home_suspended = _home_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _away_injured = _away_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
+                        {% set _home_injured = _home_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
+                        {% if _away_suspended or _home_suspended %}
+                        <div class="analysis-title" style="color:#ef4444;">Suspensions</div>
+                        <div class="injury-list">
+                            {% for inj in _away_suspended %}
+                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ (pred.away_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
+                            {% endfor %}
+                            {% for inj in _home_suspended %}
+                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ (pred.home_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="analysis-title">Injuries</div>
+                        {% if _away_injured or _home_injured %}
+                        <div class="injury-list">
+                            {% for inj in _away_injured %}
+                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ (pred.away_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
+                            {% endfor %}
+                            {% for inj in _home_injured %}
+                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ (pred.home_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="analysis-empty">No injuries reported.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="no-data">No predictions available for {{ sport_info.name }}</div>
+    {% endif %}
+
+    <!-- Internal links to recent dated pages (past dates only) -->
+    {% set _past_dates = [] %}
+    {% for _d in sorted_dates if _d <= today_date %}
+    {% if _past_dates.append(_d) %}{% endif %}
+    {% endfor %}
+    {% if _past_dates|length > 1 %}
+    <div style="margin-top:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+        <div style="font-size:0.82em;font-weight:700;color:#334155;margin-bottom:8px;">Recent {{ sport_info.name }} Picks</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            {% for _d in _past_dates[-7:] %}
+            {% set _m = _d.split('-') %}
+            {% if _m|length == 3 %}
+            <a href="/{{ sport_seo_slug }}-{{ {'01':'january','02':'february','03':'march','04':'april','05':'may','06':'june','07':'july','08':'august','09':'september','10':'october','11':'november','12':'december'}.get(_m[1],'january') }}-{{ _m[2]|int }}-{{ _m[0] }}" style="color:#475569;text-decoration:none;font-size:0.8em;padding:4px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;">{{ _d }}</a>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="seo-picks-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
+        <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">How These AI Picks Are Generated</h2>
+        <p style="margin-bottom:14px;">The picks on this page are generated using a data-driven sports betting model that analyzes market odds, historical performance, and team-level trends. Instead of relying on opinions or public sentiment, the model looks for pricing inefficiencies across sportsbooks to identify potential value.</p>
+        <p style="margin-bottom:22px;">This approach is designed to stay consistent over time. While individual results can vary from day to day, the goal is long-term profitability based on disciplined, repeatable analysis.</p>
+        <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">What to Expect From These Picks</h2>
+        <p style="margin-bottom:14px;">These picks are not meant to guarantee wins on a daily basis. Sports betting naturally includes variance, and even strong edges can result in short-term losses. The focus is on maintaining a structured approach and tracking performance over a larger sample size.</p>
+        <p style="margin-bottom:22px;">Users should approach these picks with proper bankroll management and realistic expectations.</p>
+        <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">Full Transparency &amp; Results Tracking</h2>
+        <p style="margin-bottom:14px;">Every pick published is tracked and recorded. There is no cherry-picking or selective reporting. You can review historical performance and verify results directly on our results pages.</p>
+        <p style="margin-bottom:22px;">If you're looking to evaluate long-term performance, we recommend checking the latest results and trends across each sport.</p>
+        <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">Learn More About the Model</h2>
+        <p style="margin-bottom:10px;">If you're new to AI sports betting picks, you can learn more about how the system works and how it compares to traditional betting approaches:</p>
+        <ul style="margin:0 0 14px 22px;">
+            <li style="margin-bottom:6px;"><a href="/ai-sports-betting-picks-today" style="color:#1d4ed8;font-weight:600;text-decoration:none;">AI picks overview</a></li>
+            <li style="margin-bottom:6px;"><a href="/what-are-ai-sports-betting-picks" style="color:#1d4ed8;font-weight:600;text-decoration:none;">What AI picks are</a></li>
+            <li style="margin-bottom:6px;"><a href="/our-model-vs-sportsbooks" style="color:#1d4ed8;font-weight:600;text-decoration:none;">Model vs sportsbooks</a></li>
+        </ul>
+        <p style="margin:0;">This helps provide a clearer understanding of the strategy behind the picks and how they are generated.</p>
+    </div>
+</div>
+
+{% if share_image_src %}
+<div class="social-export-wrap">
+    <div class="social-export-head">
+        <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
+        <div class="social-export-actions">
+            <a class="social-export-btn" href="{{ share_image_src }}" download="predictionlab-picks.jpg">Download image</a>
+            <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="noopener">Open fullscreen</a>
+        </div>
+    </div>
+    <p class="social-export-hint">For TikTok: use <strong>Download</strong> and upload from Photos so no browser URL appears in your recording.</p>
+    <a class="social-image-link" href="{{ share_image_view_url }}" target="_blank" rel="noopener">
+        <img src="{{ share_image_src }}" alt="">
+    </a>
+</div>
+{% endif %}
+<div class="share-strip">
+    <span class="share-strip-label">Share on social media</span>
+    <div class="share-icons">
+        <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+        <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+        <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+        <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+        <a class="share-icon" href="https://api.whatsapp.com/send?text={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+        <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+    </div>
+</div>
+<footer class="site-footer">
+    <div class="footer-outer">
+        <div class="footer-brand"><a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a></div>
+        <div class="footer-columns-3">
+            <div class="footer-col-blk">
+                <div class="footer-heading">Company</div>
+                <a href="/plans">Plans &amp; pricing</a>
+                <a href="/tutorial">Tutorial</a>
+                <a href="/contact">Contact us</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/responsible-gaming">Responsible gaming</a>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Product</div>
+                <a href="/#faq">FAQ</a>
+                <a href="/daily-report">Daily results report</a>
+                <a href="/search">Search</a>
+                <a href="/performance">Model performance</a>
+                <a href="/ai-sports-betting-picks-today">AI picks today</a>
+                <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
+                <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Social</div>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener noreferrer">Instagram</a>
+                <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener noreferrer">Facebook</a>
+                <a href="https://predictionlab.io" target="_blank" rel="noopener noreferrer">TikTok</a>
+                <a href="https://predictionlab.io" target="_blank" rel="noopener noreferrer">YouTube</a>
+            </div>
+        </div>
+        <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
+    </div>
+</footer>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const navLinks = document.getElementById('navLinks');
+        const searchForm = document.getElementById('navSearchFormPicks');
+        const searchInput = document.getElementById('navSearchInputPicks');
+        const autocompleteEl = document.getElementById('searchAutocompletePicks');
+        const resultsEl = document.getElementById('searchResultsPicks');
+        const teams = [
+            { name: "Detroit Pistons", sport: "NBA", slug: "detroit-pistons" },
+            { name: "Detroit Red Wings", sport: "NHL", slug: "detroit-red-wings" },
+            { name: "Detroit Tigers", sport: "MLB", slug: "detroit-tigers" },
+            { name: "Boston Celtics", sport: "NBA", slug: "boston-celtics" },
+        ];
+        if (navLinks) {
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function() {
+                navLinks.classList.remove('active');
+            });
+        });
+        }
+        if (searchForm && resultsEl) {
+            let debounceTimer = null;
+            if (searchInput && autocompleteEl) {
+                searchInput.addEventListener('input', function() {
+                    const q = (searchInput.value || '').trim().toLowerCase();
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        if (!q) {
+                            autocompleteEl.classList.remove('show');
+                            autocompleteEl.innerHTML = '';
+                            return;
+                        }
+                        const matches = teams.filter(t => t.name.toLowerCase().includes(q)).slice(0, 5);
+                        autocompleteEl.innerHTML = matches.map(t => `<div class="search-item" data-slug="${t.slug}"><span>${t.name}</span><small>${t.sport}</small></div>`).join('') || '<div class="search-item"><span>No team matches</span></div>';
+                        autocompleteEl.classList.add('show');
+                    }, 300);
+                });
+                autocompleteEl.addEventListener('click', function(e) {
+                    const item = e.target.closest('[data-slug]');
+                    if (!item) return;
+                    window.location.href = `/teams/${item.getAttribute('data-slug')}`;
+                });
+            }
+            searchForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const input = searchForm.querySelector('input[name="query"]');
+                const query = (input?.value || '').trim();
+                if (!query) {
+                    resultsEl.classList.remove('show');
+                    resultsEl.innerHTML = '';
+                    return;
+                }
+                resultsEl.classList.add('show');
+                resultsEl.innerHTML = '<p>Searching...</p>';
+                try {
+                    const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`, { headers: { 'Accept': 'application/json' } });
+                    const data = await resp.json();
+                    const modelLine = data.matched_model ? `<p><strong>Model:</strong> ${data.matched_model.public_name} -> ${data.matched_model.internal_name}${data.confidence_threshold ? ` (confidence >= ${data.confidence_threshold}%)` : ''}</p>` : '';
+                    const modelItems = (data.model_results || []).map(r => `<li>${r.sport}: ${r.record} (${r.accuracy}%)${r.filtered_games !== null && r.filtered_games !== undefined ? ` - ${r.filtered_games} games at threshold` : ''}</li>`).join('');
+                    const localTeamItems = (data.team_results || []).map(r => `<li>${r.sport}: ${r.away_team} vs ${r.home_team} (${r.game_date}) - pick: ${r.predicted_winner} (${r.win_probability}%)</li>`).join('');
+                    const espnItems = (data.espn_results || []).map(r => `<li>${r.sport}: ${r.away_team} at ${r.home_team} (${r.status})</li>`).join('');
+                    const routeLine = data.suggested_route ? `<p><strong>Suggested page:</strong> <a href="${data.suggested_route}">${data.suggested_route}</a></p>` : '';
+                    const empty = (!modelItems && !localTeamItems && !espnItems) ? '<p>No matches found yet. Try a team name, league, or model alias.</p>' : '';
+                    resultsEl.innerHTML = `
+                        <h3>Search Results</h3>
+                        ${modelLine}
+                        ${routeLine}
+                        ${modelItems ? `<p><strong>Model Performance</strong></p><ul>${modelItems}</ul>` : ''}
+                        ${localTeamItems ? `<p style="margin-top:10px;"><strong>Our Prediction Matches</strong></p><ul>${localTeamItems}</ul>` : ''}
+                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest ESPN Matchups</strong></p><ul>${espnItems}</ul>` : ''}
+                        ${empty}
+                    `;
+                } catch (_err) {
+                    resultsEl.innerHTML = '<p>Search temporarily unavailable. Please try again.</p>';
+                }
+            });
+        }
+    });
+    document.addEventListener('click', function(event) {
+        const navLinks = document.getElementById('navLinks');
+        const navbar = document.querySelector('.navbar');
+        const burger = document.querySelector('.hamburger[aria-controls="navLinks"]');
+        if (!navLinks || !navbar) return;
+        if (!navbar.contains(event.target)) {
+            navLinks.classList.remove('active');
+            if (burger) burger.setAttribute('aria-expanded', 'false');
+        }
+    });
+    const allDates = {{ sorted_dates|tojson }};
+    const today = '{{ today_date }}';
+    let currentWeekStart = 0, activeDate = today;
+    const datesPerWeek = 7;
+    function formatDate(ds) {
+        const d = new Date(ds+'T12:00:00');
+        const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
+    }
+    const sportIcon = '{{ sport_info.icon }}';
+    const sportName = '{{ sport_info.name }}';
+    function showDate(date) {
+        document.querySelectorAll('.date-section').forEach(s=>{
+            s.classList.remove('visible');
+            s.classList.add('seo-hidden');
+        });
+        const sec=document.getElementById('date-'+date);
+        if(sec){sec.classList.remove('seo-hidden');sec.classList.add('visible');activeDate=date;}
+        // Update heading with selected date
+        const h=document.getElementById('pageHeading');
+        if(h){
+            if(date===today){h.textContent=sportIcon+' '+sportName+' AI Picks, Predictions and Model Probabilities';}
+            else{h.textContent=sportIcon+' '+sportName+' AI Picks and Predictions for '+formatDate(date);}
+        }
+    }
+    function toggleAnalysis(id, el) {
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        panel.classList.toggle('open');
+        const open = panel.classList.contains('open');
+        if (el) el.textContent = open ? 'Analysis ▴' : 'Analysis ▾';
+    }
+    function renderDateBubbles() {
+        const c=document.getElementById('dateBubbles'); c.innerHTML='';
+        const end=Math.min(currentWeekStart+datesPerWeek,allDates.length);
+        const week=allDates.slice(currentWeekStart,end);
+        if(!week.includes(activeDate)){if(week.length>0){activeDate=week[0];showDate(activeDate);}}
+        week.forEach(date=>{
+            const b=document.createElement('div'); b.className='date-bubble';
+            if(date===today)b.classList.add('today');
+            if(date===activeDate)b.classList.add('active');
+            b.innerHTML=formatDate(date);
+            b.onclick=()=>{document.querySelectorAll('.date-bubble').forEach(x=>x.classList.remove('active'));b.classList.add('active');showDate(date);};
+            c.appendChild(b);
+        });
+    }
+    function previousWeek(){if(currentWeekStart>0){currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderDateBubbles();}}
+    function nextWeek(){if(currentWeekStart+datesPerWeek<allDates.length){currentWeekStart+=datesPerWeek;renderDateBubbles();}}
+    document.addEventListener('DOMContentLoaded',()=>{
+        const idx=allDates.indexOf(today);
+        if(idx>=0){currentWeekStart=Math.max(0,idx-3);activeDate=today;}
+        else if(allDates.length>0){
+            const td=new Date(today+'T12:00:00');let ci=0,md=Infinity;
+            allDates.forEach((d,i)=>{const df=Math.abs(new Date(d+'T12:00:00')-td);if(df<md){md=df;ci=i;}});
+            currentWeekStart=Math.max(0,ci-3);activeDate=allDates[ci];
+        }
+        showDate(activeDate);renderDateBubbles();
+    });
+</script>
+</body>
+</html>
