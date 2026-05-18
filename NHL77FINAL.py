@@ -869,11 +869,6 @@ def _ensure_xsharp_lines(pred: dict) -> None:
         pred['xgb_spread'] = pred['market_spread']
     if pred.get('xgb_total') is None and pred.get('market_total') is not None:
         pred['xgb_total'] = pred['market_total']
-    # Final fallback: use efficiency/team-avg model values so XSharp never shows "—"
-    if pred.get('xgb_spread') is None and pred.get('our_spread') is not None:
-        pred['xgb_spread'] = pred['our_spread']
-    if pred.get('xgb_total') is None and pred.get('our_total') is not None:
-        pred['xgb_total'] = pred['our_total']
     if pred.get('xgb_home_score') is None and pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
         h, a = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
         if h is not None:
