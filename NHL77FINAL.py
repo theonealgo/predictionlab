@@ -858,12 +858,63 @@ def _ensure_xsharp_lines(pred: dict) -> None:
             pass
 
 
+def _best_pl_spread(pred: dict):
+    """Pick the first usable model spread (never derive PK from rounded 110–110)."""
+    for _k in ('our_spread', 'xgb_spread', 'naive_spread', 'market_spread'):
+        _v = pred.get(_k)
+        if _v is None:
+            continue
+        try:
+            _vf = float(_v)
+        except (TypeError, ValueError):
+            continue
+        if abs(_vf) >= 0.01:
+            return _round_to_half(_vf)
+    try:
+        _v = pred.get('our_spread')
+        if _v is not None:
+            return _round_to_half(float(_v))
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _best_pl_total(pred: dict):
+    for _k in ('our_total', 'xgb_total', 'naive_total', 'market_total', 'h2h_last10_total'):
+        _v = pred.get(_k)
+        if _v is None:
+            continue
+        try:
+            return _round_to_half(float(_v))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _sync_pl_scores_from_line(pred: dict, spread, total) -> None:
+    """Set our_spread, our_total, and projected scores from a line (not the reverse)."""
+    try:
+        s, t = float(spread), float(total)
+    except (TypeError, ValueError):
+        return
+    pred['our_spread'] = _round_to_half(s)
+    pred['our_total'] = _round_to_half(t)
+    pred['our_home_pts'] = round((t + s) / 2.0)
+    pred['our_away_pts'] = round((t - s) / 2.0)
+
+
 def _align_pl_model_odds(pred: dict) -> None:
     """Keep PL Model spread, total, and projected score internally consistent.
 
-  Sign convention: our_spread > 0 means home team favored by that many points.
-  When projected scores exist, spread/total are derived from them (not the reverse).
+    Sign convention: our_spread > 0 means home team favored by that many points.
+    Model spread/total win over rounded score ties (110–110 must not become PK).
     """
+    spread = _best_pl_spread(pred)
+    total = _best_pl_total(pred)
+    if spread is not None and total is not None:
+        _sync_pl_scores_from_line(pred, spread, total)
+        return
+
     if pred.get('our_home_pts') is None or pred.get('our_away_pts') is None:
         ha = pred.get('our_home_avg')
         if ha is None:
@@ -874,49 +925,20 @@ def _align_pl_model_odds(pred: dict) -> None:
         if ha is not None and aa is not None:
             pred['our_home_pts'] = round(float(ha))
             pred['our_away_pts'] = round(float(aa))
-        else:
-            spread = pred.get('our_spread')
-            total = pred.get('our_total')
-            if spread is not None and total is not None:
-                try:
-                    s, t = float(spread), float(total)
-                    pred['our_home_pts'] = round((t + s) / 2.0)
-                    pred['our_away_pts'] = round((t - s) / 2.0)
-                except (TypeError, ValueError):
-                    pass
+        elif spread is not None and total is not None:
+            _sync_pl_scores_from_line(pred, spread, total)
     if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
         try:
             h = float(pred['our_home_pts'])
             a = float(pred['our_away_pts'])
-            pred['our_spread'] = _round_to_half(h - a)
-            pred['our_total'] = _round_to_half(h + a)
+            if spread is None:
+                spread = _round_to_half(h - a)
+            if total is None:
+                total = _round_to_half(h + a)
+            if spread is not None and total is not None:
+                _sync_pl_scores_from_line(pred, spread, total)
         except (TypeError, ValueError):
             pass
-    # Tied rounded scores (e.g. 110–110) must not force PK when a line exists elsewhere.
-    try:
-        spread_f = float(pred['our_spread']) if pred.get('our_spread') is not None else None
-    except (TypeError, ValueError):
-        spread_f = None
-    if spread_f is None or abs(spread_f) < 0.01:
-        for _k in ('xgb_spread', 'naive_spread', 'market_spread'):
-            _v = pred.get(_k)
-            if _v is None:
-                continue
-            try:
-                _vf = float(_v)
-            except (TypeError, ValueError):
-                continue
-            if abs(_vf) >= 0.01:
-                pred['our_spread'] = _round_to_half(_vf)
-                _t = pred.get('our_total')
-                if _t is not None:
-                    try:
-                        t = float(_t)
-                        pred['our_home_pts'] = round((t + _vf) / 2.0)
-                        pred['our_away_pts'] = round((t - _vf) / 2.0)
-                    except (TypeError, ValueError):
-                        pass
-                break
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4812,10 +4834,19 @@ def get_upcoming_predictions(sport, days=365):
                 if fb:
                     pred['our_home_avg']    = fb['home_avg']
                     pred['our_away_avg']    = fb['away_avg']
-                    pred['our_home_pts']    = round(float(fb['home_avg']))
-                    pred['our_away_pts']    = round(float(fb['away_avg']))
-                    pred['our_spread']      = _round_to_half(pred['our_home_pts'] - pred['our_away_pts'])
-                    pred['our_total']       = _round_to_half(pred['our_home_pts'] + pred['our_away_pts'])
+                    pred['our_spread']      = _round_to_half(fb['projected_spread'])
+                    pred['our_total']       = _round_to_half(fb['projected_total'])
+                    if pred['our_spread'] is not None and pred['our_total'] is not None:
+                        try:
+                            s, t = float(pred['our_spread']), float(pred['our_total'])
+                            pred['our_home_pts'] = round((t + s) / 2.0)
+                            pred['our_away_pts'] = round((t - s) / 2.0)
+                        except (TypeError, ValueError):
+                            pred['our_home_pts'] = round(float(fb['home_avg']))
+                            pred['our_away_pts'] = round(float(fb['away_avg']))
+                    else:
+                        pred['our_home_pts'] = round(float(fb['home_avg']))
+                        pred['our_away_pts'] = round(float(fb['away_avg']))
                     pred['our_total_games'] = fb['games_used']
                     pred['our_method']      = 'team-avg-fallback'
                     if xs_total is not None:
@@ -12257,7 +12288,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v3::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v4::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
