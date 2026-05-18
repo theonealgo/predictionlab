@@ -12421,7 +12421,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v5::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v6::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
