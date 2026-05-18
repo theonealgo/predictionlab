@@ -130,6 +130,21 @@ _PROPS_CONFIG_MODULE = None
 _STANDALONE_PROPS_PKG = "_standalone_player_props"
 
 
+def _trim_cache(cache: dict, ttl: float, max_entries: int = 200) -> None:
+    """Evict expired entries then, if still over max_entries, drop the oldest ones."""
+    now = _time.time()
+    expired = [k for k, v in cache.items() if isinstance(v, dict) and (now - v.get('ts', now)) > ttl]
+    for k in expired:
+        cache.pop(k, None)
+    if len(cache) > max_entries:
+        sorted_keys = sorted(
+            (k for k, v in cache.items() if isinstance(v, dict)),
+            key=lambda k: cache[k].get('ts', 0)
+        )
+        for k in sorted_keys[:len(cache) - max_entries]:
+            cache.pop(k, None)
+
+
 def _cleanup_share_image_cache():
     """Remove stale or excess share-image JSON files (disk-backed for multi-worker processes)."""
     try:
@@ -418,6 +433,7 @@ def _cached_get(url: str, timeout: int = 10):
         r = requests.get(url, timeout=timeout)
         r.raise_for_status()
         data = r.json()
+        _trim_cache(_API_CACHE, _API_TTL, max_entries=300)
         _API_CACHE[url] = {'data': data, 'ts': now}
         return data
     except Exception as exc:
@@ -819,6 +835,7 @@ def _compute_h2h_projection(
         logger.debug(f"[h2h] query failed for {sport} {home_team} vs {away_team}: {_e}")
         return None
     if not rows or len(rows) < min_games:
+        _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
         _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': None}
         return None
     home_pts = []
@@ -838,6 +855,7 @@ def _compute_h2h_projection(
             away_pts.append(hs)
         totals.append(hs + as_)
     if len(home_pts) < min_games:
+        _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
         _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': None}
         return None
     avg_home = sum(home_pts) / len(home_pts)
@@ -849,6 +867,7 @@ def _compute_h2h_projection(
         'our_total': round(avg_home + avg_away, 1),
         'totals': totals,
     }
+    _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
     _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': data}
     return data
 
@@ -1126,6 +1145,9 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         ).fetchone()
         conn.close()
         if not row or not row['d']:
+            if len(_MLB_BULLPEN_FATIGUE_CACHE) > 500:
+                for _k in list(_MLB_BULLPEN_FATIGUE_CACHE)[:200]:
+                    _MLB_BULLPEN_FATIGUE_CACHE.pop(_k, None)
             _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (0.0, 0.0, False)
             return 0.0, 0.0, False
         prev = datetime.strptime(row['d'], '%Y-%m-%d')
@@ -1140,6 +1162,9 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         elif is_b2b:
             boost = 0.01
             total_adj = 0.5
+        if len(_MLB_BULLPEN_FATIGUE_CACHE) > 500:
+            for _k in list(_MLB_BULLPEN_FATIGUE_CACHE)[:200]:
+                _MLB_BULLPEN_FATIGUE_CACHE.pop(_k, None)
         _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (boost, total_adj, is_b2b)
         return boost, total_adj, is_b2b
     except Exception:
@@ -1587,6 +1612,46 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
         conn.close()
     except Exception as _e:
         logger.debug(f"[{sport}] cache market lines failed: {_e}")
+
+
+def _attach_market_lines_to_predictions(sport, predictions):
+    """Read market spread/total from betting_lines DB and attach to pred dicts."""
+    if not predictions:
+        return
+    game_ids = [p.get('game_id') for p in predictions if p.get('game_id') and p.get('home_score') is None]
+    if not game_ids:
+        return
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
+        has_sport_col = 'sport' in cols
+        placeholders = ','.join('?' * len(game_ids))
+        if has_sport_col:
+            rows = cur.execute(
+                f"SELECT game_id, spread, total FROM betting_lines WHERE sport=? AND game_id IN ({placeholders}) ORDER BY fetched_at DESC",
+                [sport] + game_ids
+            ).fetchall()
+        else:
+            rows = cur.execute(
+                f"SELECT game_id, spread, total FROM betting_lines WHERE game_id IN ({placeholders})",
+                game_ids
+            ).fetchall()
+        conn.close()
+        line_map = {}
+        for row in rows:
+            gid = row['game_id']
+            if gid not in line_map:
+                line_map[gid] = {'spread': row['spread'], 'total': row['total']}
+        for pred in predictions:
+            gid = pred.get('game_id')
+            if gid and gid in line_map:
+                if pred.get('market_spread') is None and line_map[gid]['spread'] is not None:
+                    pred['market_spread'] = line_map[gid]['spread']
+                if pred.get('market_total') is None and line_map[gid]['total'] is not None:
+                    pred['market_total'] = line_map[gid]['total']
+    except Exception as _e:
+        logger.debug(f"[{sport}] attach market lines failed: {_e}")
 
 
 def _cache_market_lines_for_results(sport, daily_results, limit=20):
@@ -2148,6 +2213,7 @@ def _get_soccer_model_bundle(completed_games, league_name=None):
             logger.debug(f"[soccer] DB supplement failed: {_e}")
 
     bundle = build_soccer_model_bundle(filtered, league_name=league_name)
+    _trim_cache(_SOCCER_MODEL_CACHE, _SOCCER_MODEL_TTL, max_entries=50)
     _SOCCER_MODEL_CACHE[cache_key] = {'ts': now_ts, 'bundle': bundle}
     return bundle
 
@@ -3027,6 +3093,7 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
             
             'is_v2': True,
         }
+        _trim_cache(_V2_PREDICTION_CACHE, _V2_PREDICTION_TTL_SECONDS, max_entries=200)
         _V2_PREDICTION_CACHE[cache_key] = {'ts': now_ts, 'data': _copy.deepcopy(result)}
         return result
     except Exception as e:
@@ -4431,6 +4498,7 @@ def get_upcoming_predictions(sport, days=365):
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
         _ml_limit = 5 if sport == 'MLB' else 20
         _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
+        _attach_market_lines_to_predictions(sport, predictions)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
@@ -4634,6 +4702,7 @@ def get_upcoming_predictions(sport, days=365):
             if _total_ev  is not None and _total_ev  > 0: _ev_map['Total']  = _total_ev
             _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
 
+    _trim_cache(_PREDICTIONS_CACHE, cache_ttl, max_entries=50)
     _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
     return predictions
 
@@ -12211,6 +12280,7 @@ def sport_predictions(sport, filter_date=None):
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)
     if cache_key:
+        _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180), max_entries=50)
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
 
@@ -12425,6 +12495,7 @@ def sport_results(sport):
                     weekly_tally_games=weekly_tally_games,
                     roi_cards=roi_cards
                 )
+                _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
             except Exception as e:
@@ -12498,6 +12569,7 @@ def sport_results(sport):
                     weekly_tally_games=weekly_tally_games,
                     roi_cards=roi_cards
                 )
+                _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
             except Exception as e:
@@ -12726,6 +12798,7 @@ def sport_results(sport):
                 roi_cards=roi_cards,
                 soccer_leagues=soccer_leagues
             )
+            _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
             _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
             return rendered
         

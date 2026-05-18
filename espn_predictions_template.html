@@ -637,9 +637,9 @@
                         {% endif %}
                         {% if _spread_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#92400e;">{% set _sv = _spread_val|float %}{% if _sv == 0 %}PK{% elif _spread_home_favored %}{{ pred.home_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% endif %}</span></div>
+                        <div class="sf-item"><span class="sf-label">PL Model Spread</span><span class="sf-val" style="color:#92400e;">{% set _sv = _spread_val|float %}{% if _sv == 0 %}PK{% elif _spread_home_favored %}{{ pred.home_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% else %}{{ pred.away_team_id }} -{{ "%.1f"|format(_sv|abs) }}{% endif %}</span></div>
                         {% else %}
-                        <div class="sf-item"><span class="sf-label">Our Spread</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
+                        <div class="sf-item"><span class="sf-label">PL Model Spread</span><span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span></div>
                         {% endif %}
                         {% endif %}
                         {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
@@ -651,9 +651,9 @@
                         {% endif %}
                         {% if _total_val is not none %}
                         {% if is_premium %}
-                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#92400e;">{{ "%.1f"|format(_total_val) }}</span></div>
+                        <div class="sf-item"><span class="sf-label">PL Model Total</span><span class="sf-val" style="color:#92400e;">{{ "%.1f"|format(_total_val) }}</span></div>
                         {% else %}
-                        <div class="sf-item"><span class="sf-label">Our Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
+                        <div class="sf-item"><span class="sf-label">PL Model Total</span><span class="sf-val" style="color:#475569;">🔒</span></div>
                         {% endif %}
                         {% endif %}
                         {% if not is_final and is_premium and (pred.ml_ev is defined or pred.spread_ev is defined or pred.total_ev is defined) %}
