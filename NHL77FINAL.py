@@ -970,6 +970,69 @@ def _break_tied_projection_scores(pred: dict, home_key: str, away_key: str, prob
         pred[home_key] = hf - 1
 
 
+def _safe_float(value, default=None):
+    """Coerce DB/model values to float; reject corrupt bytes and NaN."""
+    if value is None:
+        return default
+    if isinstance(value, (bytes, bytearray)):
+        return default
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return default
+    try:
+        import math as _math_sf
+        if _math_sf.isnan(out) or _math_sf.isinf(out):
+            return default
+    except Exception:
+        pass
+    return out
+
+
+def _first_pred_float(pred: dict, keys):
+    for key in keys:
+        val = _safe_float(pred.get(key))
+        if val is not None:
+            return val
+    return None
+
+
+def _prepare_pred_card_display(pred: dict) -> None:
+    """Precompute odds fields for the picks template (avoids fragile nested Jinja)."""
+    if pred.get('home_score') is not None:
+        return
+    pred['disp_pl_spread'] = _best_pl_spread(pred)
+    if pred['disp_pl_spread'] is None:
+        pred['disp_pl_spread'] = _first_pred_float(
+            pred, ('our_spread', 'market_spread', 'naive_spread'),
+        )
+        if pred['disp_pl_spread'] is not None:
+            pred['disp_pl_spread'] = _round_to_half(pred['disp_pl_spread'])
+    pred['disp_pl_total'] = _best_pl_total(pred)
+    if pred['disp_pl_total'] is None:
+        pred['disp_pl_total'] = _first_pred_float(
+            pred, ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'),
+        )
+        if pred['disp_pl_total'] is not None:
+            pred['disp_pl_total'] = _round_to_half(pred['disp_pl_total'])
+    pred['disp_xs_spread'] = _first_pred_float(
+        pred, ('xsharp_spread', 'xgb_spread', 'naive_spread', 'market_spread'),
+    )
+    if pred['disp_xs_spread'] is not None:
+        pred['disp_xs_spread'] = _round_to_half(pred['disp_xs_spread'])
+    pred['disp_xs_total'] = _first_pred_float(
+        pred, ('xsharp_total', 'xgb_total', 'naive_total', 'market_total'),
+    )
+    if pred['disp_xs_total'] is not None:
+        pred['disp_xs_total'] = _round_to_half(pred['disp_xs_total'])
+    pred['disp_xs_away'] = _first_pred_float(
+        pred, ('xsharp_away_score', 'xgb_away_score', 'naive_away_score'),
+    )
+    pred['disp_xs_home'] = _first_pred_float(
+        pred, ('xsharp_home_score', 'xgb_home_score', 'naive_home_score'),
+    )
+
+
 def _finalize_prediction_odds(pred: dict) -> None:
     """Single pass: backfill XSharp, align PL, mirror display keys, break score ties."""
     if pred.get('home_score') is not None:
@@ -2118,6 +2181,12 @@ ODDS_ENGINE_URL = _os.environ.get('ODDS_ENGINE_URL')
 # ── Auth + Premium System ─────────────────────────────────────────────────────
 from auth_system import init_auth, is_premium_user
 init_auth(app, db_path=DATABASE)
+
+try:
+    app.jinja_env.get_template('espn_predictions_template.html')
+    logger.info('[startup] espn_predictions_template.html loaded OK')
+except Exception as _tpl_startup_err:
+    logger.error('[startup] espn_predictions_template.html FAILED: %s', _tpl_startup_err)
 _TRAFFIC_TZ = 'America/New_York'
 
 def _traffic_now():
@@ -4264,11 +4333,17 @@ def get_upcoming_predictions(sport, days=365):
                 _fp_sx = game.get('stored_xgb_prob')
                 _fp_selo = game.get('stored_elo_prob')
                 if _fp_selo is not None:
-                    elo_prob = float(_fp_selo)
+                    _elo_fp = _safe_float(_fp_selo)
+                    if _elo_fp is not None:
+                        elo_prob = _elo_fp
                 if _fp_sx is not None:
-                    xgb_prob = float(_fp_sx)
+                    _xgb_fp = _safe_float(_fp_sx)
+                    if _xgb_fp is not None:
+                        xgb_prob = _xgb_fp
                 if _fp_se is not None:
-                    ensemble_prob = float(_fp_se)
+                    _ens_fp = _safe_float(_fp_se)
+                    if _ens_fp is not None:
+                        ensemble_prob = _ens_fp
                 if v2_pred:
                     game['glicko2_prob'] = v2_pred.get('glicko2_prob')
                     game['trueskill_prob'] = v2_pred.get('trueskill_prob')
@@ -12421,7 +12496,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v6::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v7::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -12473,6 +12548,12 @@ def sport_predictions(sport, filter_date=None):
             'xsharp_total',
             'xsharp_home_score',
             'xsharp_away_score',
+            'disp_pl_spread',
+            'disp_pl_total',
+            'disp_xs_spread',
+            'disp_xs_total',
+            'disp_xs_away',
+            'disp_xs_home',
             'game_time',
         ):
             if _k not in pred:
@@ -12620,6 +12701,7 @@ def sport_predictions(sport, filter_date=None):
             _v = pred.get(_eff_key)
             if isinstance(_v, dict):
                 pred[_eff_key] = types.SimpleNamespace(**_v)
+        _prepare_pred_card_display(pred)
 
     # soccer_leagues already computed above for soccer
 
@@ -12630,11 +12712,8 @@ def sport_predictions(sport, filter_date=None):
         _pred_li = False
 
     try:
-        # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
-        with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
-            espn_template = f.read()
-        rendered = render_template_string(
-            espn_template,
+        rendered = render_template(
+            'espn_predictions_template.html',
             page=sport,
             sport=sport,
             sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
@@ -12659,7 +12738,7 @@ def sport_predictions(sport, filter_date=None):
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)
-    if cache_key:
+    if cache_key and rendered and 'refreshing this page right now' not in rendered.lower():
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
 

@@ -679,13 +679,12 @@
                             {% endfor %}
                         </div>
                     </div>
-                    {% set _our_spread = pred.our_spread if (pred.our_spread is defined and pred.our_spread is not none) else (pred.xgb_spread if (pred.xgb_spread is defined and pred.xgb_spread is not none) else (pred.market_spread if (pred.market_spread is defined and pred.market_spread is not none) else (pred.naive_spread if (pred.naive_spread is defined and pred.naive_spread is not none) else none))) %}
-                    {% set _spread_val = _our_spread %}
-                    {% set _total_val = pred.our_total if (pred.our_total is defined and pred.our_total is not none) else (pred.xgb_total if (pred.xgb_total is defined and pred.xgb_total is not none) else (pred.market_total if (pred.market_total is defined and pred.market_total is not none) else (pred.naive_total if (pred.naive_total is defined and pred.naive_total is not none) else none))) %}
-                    {% set _xs_spread = pred.xsharp_spread if (pred.xsharp_spread is defined and pred.xsharp_spread is not none) else (pred.xgb_spread if (pred.xgb_spread is defined and pred.xgb_spread is not none) else (pred.naive_spread if (pred.naive_spread is defined and pred.naive_spread is not none) else (pred.market_spread if (pred.market_spread is defined and pred.market_spread is not none) else none))) %}
-                    {% set _xs_total = pred.xsharp_total if (pred.xsharp_total is defined and pred.xsharp_total is not none) else (pred.xgb_total if (pred.xgb_total is defined and pred.xgb_total is not none) else (pred.naive_total if (pred.naive_total is defined and pred.naive_total is not none) else (pred.market_total if (pred.market_total is defined and pred.market_total is not none) else none))) %}
-                    {% set _xs_away_pts = pred.xsharp_away_score if (pred.xsharp_away_score is defined and pred.xsharp_away_score is not none) else (pred.xgb_away_score if (pred.xgb_away_score is defined and pred.xgb_away_score is not none) else (pred.naive_away_score if (pred.naive_away_score is defined and pred.naive_away_score is not none) else none)) %}
-                    {% set _xs_home_pts = pred.xsharp_home_score if (pred.xsharp_home_score is defined and pred.xsharp_home_score is not none) else (pred.xgb_home_score if (pred.xgb_home_score is defined and pred.xgb_home_score is not none) else (pred.naive_home_score if (pred.naive_home_score is defined and pred.naive_home_score is not none) else none)) %}
+                    {% set _spread_val = pred.disp_pl_spread if (pred.disp_pl_spread is defined and pred.disp_pl_spread is not none) else none %}
+                    {% set _total_val = pred.disp_pl_total if (pred.disp_pl_total is defined and pred.disp_pl_total is not none) else none %}
+                    {% set _xs_spread = pred.disp_xs_spread if (pred.disp_xs_spread is defined and pred.disp_xs_spread is not none) else none %}
+                    {% set _xs_total = pred.disp_xs_total if (pred.disp_xs_total is defined and pred.disp_xs_total is not none) else none %}
+                    {% set _xs_away_pts = pred.disp_xs_away if (pred.disp_xs_away is defined and pred.disp_xs_away is not none) else none %}
+                    {% set _xs_home_pts = pred.disp_xs_home if (pred.disp_xs_home is defined and pred.disp_xs_home is not none) else none %}
                     {% set _cons_pct = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
                     {% set _xgb_pct = pred.xgb_prob if (pred.xgb_prob is defined and pred.xgb_prob is not none) else none %}
                     {% set _show_odds = _spread_val is not none or _total_val is not none or _cons_pct is not none or _xgb_pct is not none or is_final or (pred.our_home_pts is defined and pred.our_home_pts is not none) or (pred.xgb_home_score is defined and pred.xgb_home_score is not none) %}
