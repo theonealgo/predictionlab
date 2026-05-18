@@ -682,6 +682,10 @@
                     {% set _our_spread = pred.our_spread if (pred.our_spread is defined and pred.our_spread is not none) else (pred.xgb_spread if (pred.xgb_spread is defined and pred.xgb_spread is not none) else (pred.market_spread if (pred.market_spread is defined and pred.market_spread is not none) else (pred.naive_spread if (pred.naive_spread is defined and pred.naive_spread is not none) else none))) %}
                     {% set _spread_val = _our_spread %}
                     {% set _total_val = pred.our_total if (pred.our_total is defined and pred.our_total is not none) else (pred.xgb_total if (pred.xgb_total is defined and pred.xgb_total is not none) else (pred.market_total if (pred.market_total is defined and pred.market_total is not none) else (pred.naive_total if (pred.naive_total is defined and pred.naive_total is not none) else none))) %}
+                    {% set _xs_spread = pred.xgb_spread if (pred.xgb_spread is defined and pred.xgb_spread is not none) else (pred.naive_spread if (pred.naive_spread is defined and pred.naive_spread is not none) else (pred.market_spread if (pred.market_spread is defined and pred.market_spread is not none) else none)) %}
+                    {% set _xs_total = pred.xgb_total if (pred.xgb_total is defined and pred.xgb_total is not none) else (pred.naive_total if (pred.naive_total is defined and pred.naive_total is not none) else (pred.market_total if (pred.market_total is defined and pred.market_total is not none) else none)) %}
+                    {% set _xs_away_pts = pred.xgb_away_score if (pred.xgb_away_score is defined and pred.xgb_away_score is not none) else (pred.naive_away_score if (pred.naive_away_score is defined and pred.naive_away_score is not none) else none) %}
+                    {% set _xs_home_pts = pred.xgb_home_score if (pred.xgb_home_score is defined and pred.xgb_home_score is not none) else (pred.naive_home_score if (pred.naive_home_score is defined and pred.naive_home_score is not none) else none) %}
                     {% set _cons_pct = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
                     {% set _xgb_pct = pred.xgb_prob if (pred.xgb_prob is defined and pred.xgb_prob is not none) else none %}
                     {% set _show_odds = _spread_val is not none or _total_val is not none or _cons_pct is not none or _xgb_pct is not none or is_final or (pred.our_home_pts is defined and pred.our_home_pts is not none) or (pred.xgb_home_score is defined and pred.xgb_home_score is not none) %}
@@ -712,17 +716,17 @@
                                 <tr>
                                     <td class="market-k">{{ _spread_label }}</td>
                                     <td class="val-pl">{{ fmt_spread_line(_spread_val, pred.home_team_id, pred.away_team_id, _force_rl) }}</td>
-                                    <td class="val-xs">{% if pred.xgb_spread is defined and pred.xgb_spread is not none %}{{ fmt_spread_line(pred.xgb_spread, pred.home_team_id, pred.away_team_id, _force_rl) }}{% else %}—{% endif %}</td>
+                                    <td class="val-xs">{% if _xs_spread is not none %}{{ fmt_spread_line(_xs_spread, pred.home_team_id, pred.away_team_id, _force_rl) }}{% else %}—{% endif %}</td>
                                 </tr>
                                 <tr>
                                     <td class="market-k">Total</td>
                                     <td class="val-pl">{% if _total_val is not none %}{{ fmt_half(_total_val) }}{% else %}—{% endif %}</td>
-                                    <td class="val-xs">{% if pred.xgb_total is defined and pred.xgb_total is not none %}{{ fmt_half(pred.xgb_total) }}{% else %}—{% endif %}</td>
+                                    <td class="val-xs">{% if _xs_total is not none %}{{ fmt_half(_xs_total) }}{% else %}—{% endif %}</td>
                                 </tr>
                                 <tr>
                                     <td class="market-k">Projected score</td>
                                     <td class="val-pl">{{ fmt_labeled_proj(pred.away_team_id, pred.our_away_pts if (pred.our_away_pts is defined and pred.our_away_pts is not none) else none, pred.home_team_id, pred.our_home_pts if (pred.our_home_pts is defined and pred.our_home_pts is not none) else none) }}</td>
-                                    <td class="val-xs">{{ fmt_labeled_proj(pred.away_team_id, pred.xgb_away_score if (pred.xgb_away_score is defined and pred.xgb_away_score is not none) else none, pred.home_team_id, pred.xgb_home_score if (pred.xgb_home_score is defined and pred.xgb_home_score is not none) else none) }}</td>
+                                    <td class="val-xs">{{ fmt_labeled_proj(pred.away_team_id, _xs_away_pts, pred.home_team_id, _xs_home_pts) }}</td>
                                 </tr>
                             </tbody>
                         </table>
