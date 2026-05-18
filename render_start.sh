@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-echo "[render_start] deploy $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+export PL_DEPLOY_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+echo "[render_start] deploy ${PL_DEPLOY_SHA}"
 
 # ── Refresh database on persistent disk EVERY deploy ──────────────────────────
 # The repo DB is the source of truth (updated with completed games + team stats).

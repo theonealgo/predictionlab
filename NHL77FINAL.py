@@ -2169,6 +2169,9 @@ def add_header(response):
         "frame-ancestors 'self' https://underdogs.bet https://predictionlab.io "
         "http://localhost:3000"
     )
+    _sha = _os.environ.get('PL_DEPLOY_SHA')
+    if _sha:
+        response.headers['X-PL-Deploy'] = _sha
     return response
 
 import os as _os
