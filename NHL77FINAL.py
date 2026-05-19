@@ -944,6 +944,264 @@ def _round_to_half(value):
         return value
 
 
+def _scores_from_spread_total(spread, total):
+    """Project home/away points from spread+total; home+away always equals total exactly."""
+    try:
+        s, t = float(spread), float(total)
+    except (TypeError, ValueError):
+        return None, None
+
+    def _half(v):
+        return round(v * 2) / 2.0
+
+    home = _half((t + s) / 2.0)
+    away = t - home  # derived so home + away == total exactly
+    if home == away and abs(s) >= 0.25:
+        if s > 0:
+            home += 0.5
+            away -= 0.5
+        elif s < 0:
+            away += 0.5
+            home -= 0.5
+    return home, away
+
+
+def _safe_float(value, default=None):
+    """Coerce DB/model values to float; reject corrupt bytes and NaN."""
+    if value is None:
+        return default
+    if isinstance(value, (bytes, bytearray)):
+        return default
+    try:
+        import math as _mf
+        out = float(value)
+        if _mf.isnan(out) or _mf.isinf(out):
+            return default
+        return out
+    except (TypeError, ValueError):
+        return default
+
+
+def _first_pred_float(pred: dict, keys):
+    for key in keys:
+        val = _safe_float(pred.get(key))
+        if val is not None:
+            return val
+    return None
+
+
+def _best_pl_spread(pred: dict):
+    """PL Model spread: efficiency/team-avg only — never XSharp or H2H noise."""
+    if pred.get('our_method') in ('efficiency', 'team-avg-fallback') and pred.get('our_spread') is not None:
+        try:
+            return _round_to_half(float(pred['our_spread']))
+        except (TypeError, ValueError):
+            pass
+    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
+        try:
+            diff = float(pred['our_home_pts']) - float(pred['our_away_pts'])
+            if abs(diff) >= 0.25:
+                return _round_to_half(diff)
+        except (TypeError, ValueError):
+            pass
+    if pred.get('our_spread') is not None and pred.get('our_total') is not None:
+        try:
+            return _round_to_half(float(pred['our_spread']))
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _best_pl_total(pred: dict):
+    for _k in ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'):
+        _v = pred.get(_k)
+        if _v is None:
+            continue
+        try:
+            return _round_to_half(float(_v))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _ensure_xsharp_lines(pred: dict) -> None:
+    """Fill XSharp spread/total/score fields when the spread model did not run."""
+    if pred.get('home_score') is not None:
+        return
+    pairs = (
+        ('xgb_spread', 'naive_spread'),
+        ('xgb_total', 'naive_total'),
+        ('xgb_home_score', 'naive_home_score'),
+        ('xgb_away_score', 'naive_away_score'),
+    )
+    for xk, nk in pairs:
+        if pred.get(xk) is None and pred.get(nk) is not None:
+            pred[xk] = pred[nk]
+    if pred.get('xgb_spread') is None and pred.get('market_spread') is not None:
+        pred['xgb_spread'] = pred['market_spread']
+    if pred.get('xgb_total') is None and pred.get('market_total') is not None:
+        pred['xgb_total'] = pred['market_total']
+    if pred.get('xgb_home_score') is None and pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
+        h, a = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
+        if h is not None:
+            pred['xgb_home_score'] = h
+            pred['xgb_away_score'] = a
+
+
+def _sync_pl_scores_from_line(pred: dict, spread, total) -> None:
+    """Set our_spread, our_total, and projected scores from a line."""
+    try:
+        s, t = float(spread), float(total)
+    except (TypeError, ValueError):
+        return
+    pred['our_spread'] = _round_to_half(s)
+    pred['our_total'] = _round_to_half(t)
+    h, a = _scores_from_spread_total(s, t)
+    if h is not None:
+        pred['our_home_pts'] = h
+        pred['our_away_pts'] = a
+
+
+def _break_tied_projection_scores(pred: dict, home_key: str, away_key: str, prob_keys=()) -> None:
+    """Never show a tied projected score when spread or win prob implies a favorite."""
+    h, a = pred.get(home_key), pred.get(away_key)
+    if h is None or a is None:
+        return
+    try:
+        hf, af = float(h), float(a)
+    except (TypeError, ValueError):
+        return
+    if hf != af:
+        return
+    for sk in ('our_spread', 'xgb_spread', 'naive_spread', 'market_spread'):
+        sv = pred.get(sk)
+        if sv is None:
+            continue
+        try:
+            s = float(sv)
+        except (TypeError, ValueError):
+            continue
+        if abs(s) < 0.25:
+            continue
+        total = pred.get('our_total') or pred.get('xgb_total') or pred.get('naive_total') or (hf + af)
+        nh, na = _scores_from_spread_total(s, total)
+        if nh is not None and nh != na:
+            pred[home_key] = nh
+            pred[away_key] = na
+            return
+    prob = None
+    for pk in prob_keys:
+        pv = pred.get(pk)
+        if pv is not None:
+            try:
+                prob = float(pv)
+                break
+            except (TypeError, ValueError):
+                continue
+    if prob is None:
+        return
+    if prob >= 50.5:
+        pred[home_key] = hf + 1
+        pred[away_key] = af - 1
+    elif prob <= 49.5:
+        pred[away_key] = af + 1
+        pred[home_key] = hf - 1
+
+
+def _align_pl_model_odds(pred: dict) -> None:
+    """Keep PL Model spread, total, and projected score internally consistent."""
+    spread = _best_pl_spread(pred)
+    total = _best_pl_total(pred)
+    if spread is not None and total is not None:
+        _sync_pl_scores_from_line(pred, spread, total)
+        return
+    if pred.get('our_home_pts') is None or pred.get('our_away_pts') is None:
+        ha = pred.get('our_home_avg') or pred.get('our_avg_home')
+        aa = pred.get('our_away_avg') or pred.get('our_avg_away')
+        if ha is not None and aa is not None:
+            pred['our_home_pts'] = round(float(ha))
+            pred['our_away_pts'] = round(float(aa))
+        elif spread is not None and total is not None:
+            _sync_pl_scores_from_line(pred, spread, total)
+    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
+        try:
+            h = float(pred['our_home_pts'])
+            a = float(pred['our_away_pts'])
+            if spread is None:
+                spread = _round_to_half(h - a)
+            if total is None:
+                total = _round_to_half(h + a)
+            if spread is not None and total is not None:
+                _sync_pl_scores_from_line(pred, spread, total)
+        except (TypeError, ValueError):
+            pass
+
+
+def _finalize_prediction_odds(pred: dict) -> None:
+    """Single pass: backfill XSharp, align PL, mirror display keys, break score ties."""
+    if pred.get('home_score') is not None:
+        return
+    _ensure_xsharp_lines(pred)
+    if pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
+        xh, xa = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
+        if xh is not None:
+            pred['xgb_home_score'] = xh
+            pred['xgb_away_score'] = xa
+    _break_tied_projection_scores(
+        pred, 'xgb_home_score', 'xgb_away_score', ('xgb_prob', 'ensemble_prob'),
+    )
+    _align_pl_model_odds(pred)
+    _break_tied_projection_scores(
+        pred, 'our_home_pts', 'our_away_pts', ('ensemble_prob', 'xgb_prob'),
+    )
+    pred['xsharp_spread'] = pred.get('xgb_spread')
+    pred['xsharp_total'] = pred.get('xgb_total')
+    pred['xsharp_home_score'] = pred.get('xgb_home_score')
+    pred['xsharp_away_score'] = pred.get('xgb_away_score')
+
+
+def _prepare_pred_card_display(pred: dict) -> None:
+    """Precompute odds fields for the picks template (avoids fragile nested Jinja)."""
+    if pred.get('home_score') is not None:
+        return
+    pred['disp_pl_spread'] = _best_pl_spread(pred)
+    if pred['disp_pl_spread'] is None:
+        pred['disp_pl_spread'] = _first_pred_float(
+            pred, ('our_spread', 'market_spread', 'naive_spread'),
+        )
+        if pred['disp_pl_spread'] is not None:
+            pred['disp_pl_spread'] = _round_to_half(pred['disp_pl_spread'])
+    pred['disp_pl_total'] = _best_pl_total(pred)
+    if pred['disp_pl_total'] is None:
+        pred['disp_pl_total'] = _first_pred_float(
+            pred, ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'),
+        )
+        if pred['disp_pl_total'] is not None:
+            pred['disp_pl_total'] = _round_to_half(pred['disp_pl_total'])
+    pred['disp_xs_spread'] = _first_pred_float(
+        pred, ('xsharp_spread', 'xgb_spread', 'naive_spread', 'market_spread'),
+    )
+    if pred['disp_xs_spread'] is not None:
+        pred['disp_xs_spread'] = _round_to_half(pred['disp_xs_spread'])
+    pred['disp_xs_total'] = _first_pred_float(
+        pred, ('xsharp_total', 'xgb_total', 'naive_total', 'market_total'),
+    )
+    if pred['disp_xs_total'] is not None:
+        pred['disp_xs_total'] = _round_to_half(pred['disp_xs_total'])
+    pred['disp_xs_away'] = _first_pred_float(
+        pred, ('xsharp_away_score', 'xgb_away_score', 'naive_away_score'),
+    )
+    pred['disp_xs_home'] = _first_pred_float(
+        pred, ('xsharp_home_score', 'xgb_home_score', 'naive_home_score'),
+    )
+    # NBA-specific: consensus total, pace, variance/confidence tiers
+    _ct = pred.get('consensus_total')
+    pred['disp_consensus_total'] = _round_to_half(float(_ct)) if _ct is not None else None
+    pred['disp_pl_pace'] = pred.get('our_pace')
+    pred['disp_variance_tier'] = pred.get('pl_variance_tier')
+    pred['disp_confidence_tier'] = pred.get('pl_confidence_tier')
+
+
 def _odds_to_implied(odds):
     """American odds → raw implied probability (vig still included)."""
     try:
@@ -4595,14 +4853,37 @@ def get_upcoming_predictions(sport, days=365):
                         home_eff, away_eff, sport='NBA',
                         xsharp_total=xs_total, xsharp_spread=xs_spread,
                     )
-                    pred['our_total']    = _round_to_half(proj['projected_total'])
-                    pred['our_spread']   = _round_to_half(proj['projected_spread'])
-                    pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
-                    pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
+                    pred['our_spread'] = _round_to_half(proj['projected_spread'])
+                    pred['our_total'] = _round_to_half(proj['projected_total'])
+                    if pred['our_spread'] is not None and pred['our_total'] is not None:
+                        _h, _a = _scores_from_spread_total(pred['our_spread'], pred['our_total'])
+                        if _h is not None:
+                            pred['our_home_pts'] = _h
+                            pred['our_away_pts'] = _a
+                        else:
+                            pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
+                            pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
+                    else:
+                        pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
+                        pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
                     pred['our_home_eff'] = home_eff
                     pred['our_away_eff'] = away_eff
                     pred['our_pace']     = proj['avg_pace']
                     pred['our_method']   = 'efficiency'
+                    pred['pl_variance_tier']   = proj.get('variance_tier')
+                    pred['pl_confidence_tier'] = proj.get('confidence_tier')
+                    # Consensus total: blend PL efficiency + XSharp totals
+                    if xs_total is not None and pred['our_total'] is not None:
+                        _delta = abs(float(pred['our_total']) - float(xs_total))
+                        if _delta <= 0.5:
+                            pred['consensus_total'] = _round_to_half(
+                                (float(pred['our_total']) + float(xs_total)) / 2.0
+                            )
+                        else:
+                            pred['consensus_total'] = _round_to_half(
+                                0.6 * float(pred['our_total']) + 0.4 * float(xs_total)
+                            )
+                        pred['pl_model_delta'] = round(float(pred['our_total']) - float(xs_total), 1)
                     eff_hits += 1
                     continue
 
@@ -12103,6 +12384,11 @@ def sport_predictions(sport, filter_date=None):
         ):
             if _k not in pred:
                 pred[_k] = None if _k != 'h2h_last10_games' else 0
+
+    # Finalize XSharp + PL model consistency, then precompute disp_* display keys.
+    for _pred in predictions:
+        _finalize_prediction_odds(_pred)
+        _prepare_pred_card_display(_pred)
 
     soccer_leagues = None
     selected_league = None

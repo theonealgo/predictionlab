@@ -245,21 +245,33 @@ def _aggregate_efficiency(games_box: List[Dict]) -> Optional[Dict[str, float]]:
     opp = sum(g['opp_pts'] for g in games_box)
     poss = 0.0
     pace_mins = 0.0
+    per_game_paces: List[float] = []
     for g in games_box:
         # Dean Oliver possessions estimator.
         p = g['fga'] + 0.475 * g['fta'] - g['oreb'] + g['tov']
+        mins = max(1.0, g['minutes_played'] or 48)
         poss += p
-        pace_mins += g['minutes_played'] or 48
+        pace_mins += mins
+        per_game_paces.append(p * (48.0 / mins))
     if poss <= 0:
         return None
     ortg = pts / poss * 100.0
     drtg = opp / poss * 100.0
     # Pace = avg possessions per 48 minutes across the sample.
     pace = (poss / max(1.0, pace_mins)) * 48.0
+    # Pace variance: std dev of per-game paces (measures consistency).
+    if len(per_game_paces) >= 2:
+        _mean_p = sum(per_game_paces) / len(per_game_paces)
+        pace_std = round(
+            (sum((p - _mean_p) ** 2 for p in per_game_paces) / (len(per_game_paces) - 1)) ** 0.5, 2
+        )
+    else:
+        pace_std = 0.0
     return {
         'ortg': round(ortg, 2),
         'drtg': round(drtg, 2),
         'pace': round(pace, 2),
+        'pace_std': pace_std,
         'games': n,
         'ppg': round(pts / n, 2),
         'opp_ppg': round(opp / n, 2),
@@ -320,6 +332,15 @@ def compute_efficiency_projection_from(home_eff: Dict, away_eff: Dict,
         home_court_adv = _HOME_COURT_ADV.get(sport, 2.5)
 
     avg_pace = (home_eff['pace'] + away_eff['pace']) / 2.0
+
+    # Playoff intensity modifier: NBA playoff games run ~2% slower pace.
+    playoff_modifier = False
+    if sport == 'NBA':
+        month = datetime.now().month
+        if month in (4, 5, 6):
+            avg_pace *= 0.98
+            playoff_modifier = True
+
     poss_mult = avg_pace / 100.0
 
     home_pts = ((home_eff['ortg'] + away_eff['drtg']) / 2.0) * poss_mult + home_court_adv
@@ -331,6 +352,22 @@ def compute_efficiency_projection_from(home_eff: Dict, away_eff: Dict,
     def _half_round(v):
         return round(v * 2) / 2.0
 
+    # Variance and confidence tier based on pace consistency and sample size.
+    h_pace_std = home_eff.get('pace_std', 0.0) or 0.0
+    a_pace_std = away_eff.get('pace_std', 0.0) or 0.0
+    avg_pace_std = (h_pace_std + a_pace_std) / 2.0
+    min_games = min(home_eff.get('games', 5), away_eff.get('games', 5))
+
+    if avg_pace_std < 3.0 and min_games >= 4:
+        variance_tier = 'Low'
+        confidence_tier = 'High'
+    elif avg_pace_std < 6.0 and min_games >= 3:
+        variance_tier = 'Med'
+        confidence_tier = 'Med'
+    else:
+        variance_tier = 'High'
+        confidence_tier = 'Low'
+
     out = {
         'home_eff': home_eff,
         'away_eff': away_eff,
@@ -340,6 +377,10 @@ def compute_efficiency_projection_from(home_eff: Dict, away_eff: Dict,
         'projected_spread': _half_round(projected_spread),
         'avg_pace': round(avg_pace, 2),
         'home_court_adv': home_court_adv,
+        'variance_tier': variance_tier,
+        'confidence_tier': confidence_tier,
+        'avg_pace_std': round(avg_pace_std, 2),
+        'playoff_modifier': playoff_modifier,
     }
     if xsharp_total is not None:
         out['delta_vs_xsharp_total'] = round(projected_total - float(xsharp_total), 1)
@@ -429,6 +470,15 @@ def compute_efficiency_projection(home_team: str, away_team: str,
         return None
 
     avg_pace = (home_eff['pace'] + away_eff['pace']) / 2.0
+
+    # Playoff intensity modifier for NBA.
+    playoff_modifier = False
+    if sport == 'NBA':
+        month = datetime.now().month
+        if month in (4, 5, 6):
+            avg_pace *= 0.98
+            playoff_modifier = True
+
     poss_mult = avg_pace / 100.0
 
     home_pts = ((home_eff['ortg'] + away_eff['drtg']) / 2.0) * poss_mult + home_court_adv
@@ -441,6 +491,22 @@ def compute_efficiency_projection(home_team: str, away_team: str,
     def _half_round(v):
         return round(v * 2) / 2.0
 
+    # Variance and confidence tier.
+    h_pace_std = home_eff.get('pace_std', 0.0) or 0.0
+    a_pace_std = away_eff.get('pace_std', 0.0) or 0.0
+    avg_pace_std = (h_pace_std + a_pace_std) / 2.0
+    min_games = min(home_eff.get('games', 5), away_eff.get('games', 5))
+
+    if avg_pace_std < 3.0 and min_games >= 4:
+        variance_tier = 'Low'
+        confidence_tier = 'High'
+    elif avg_pace_std < 6.0 and min_games >= 3:
+        variance_tier = 'Med'
+        confidence_tier = 'Med'
+    else:
+        variance_tier = 'High'
+        confidence_tier = 'Low'
+
     out = {
         'home_eff': home_eff,
         'away_eff': away_eff,
@@ -450,6 +516,10 @@ def compute_efficiency_projection(home_team: str, away_team: str,
         'projected_spread': _half_round(projected_spread),
         'avg_pace': round(avg_pace, 2),
         'home_court_adv': home_court_adv,
+        'variance_tier': variance_tier,
+        'confidence_tier': confidence_tier,
+        'avg_pace_std': round(avg_pace_std, 2),
+        'playoff_modifier': playoff_modifier,
     }
 
     # Compare against XSharp lines if provided
