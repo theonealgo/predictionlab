@@ -3606,7 +3606,7 @@ def _get_xgb_spread_model(sport):
             return None
         return get_or_train_model(sport, games, team_stats)
     except Exception as e:
-        logger.debug(f"_get_xgb_spread_model error for {sport}: {e}")
+        logger.warning(f"_get_xgb_spread_model error for {sport}: {e}")
         return None
 
 
@@ -4576,7 +4576,7 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['xgb_spread'] = _round_to_half(result[2]) if result[2] is not None else None
                             game_dict['xgb_total'] = _round_to_half(result[3]) if result[3] is not None else None
                 except Exception as _e:
-                    logger.debug(f"XGBSpread error: {_e}")
+                    logger.warning(f"XGBSpread predict error: {_e}")
 
             if game_dict.get('home_score') is None:
                 # ── MLB: pitching-enhanced prediction (upcoming games only
