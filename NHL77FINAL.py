@@ -1884,6 +1884,7 @@ def _attach_market_lines_to_predictions(sport, predictions):
     game_ids = [p.get('game_id') for p in predictions if p.get('game_id') and p.get('home_score') is None]
     if not game_ids:
         return
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1900,7 +1901,6 @@ def _attach_market_lines_to_predictions(sport, predictions):
                 f"SELECT game_id, spread, total FROM betting_lines WHERE game_id IN ({placeholders})",
                 game_ids
             ).fetchall()
-        conn.close()
         line_map = {}
         for row in rows:
             gid = row['game_id']
@@ -1914,7 +1914,10 @@ def _attach_market_lines_to_predictions(sport, predictions):
                 if pred.get('market_total') is None and line_map[gid]['total'] is not None:
                     pred['market_total'] = line_map[gid]['total']
     except Exception as _e:
-        logger.debug(f"[{sport}] attach market lines failed: {_e}")
+        logger.warning(f"[{sport}] attach market lines failed: {_e}")
+    finally:
+        if conn:
+            conn.close()
 
 
 def _cache_market_lines_for_predictions(sport, predictions, limit=20):
@@ -3528,7 +3531,7 @@ def _build_team_stats_from_db(sport: str) -> dict:
             if d['games'] >= 3  # minimum sample
         }
     except Exception as _e:
-        logger.debug(f"_build_team_stats_from_db({sport}) failed: {_e}")
+        logger.warning(f"_build_team_stats_from_db({sport}) failed: {_e}")
         return {}
 
 
@@ -3954,7 +3957,7 @@ def get_upcoming_predictions(sport, days=365):
                         'status_type': _status_type,
                     })
             except Exception as e:
-                logger.debug(f"Error fetching {sport} range {start_str}-{end_str}: {e}")
+                logger.warning(f"Error fetching {sport} range {start_str}-{end_str}: {e}")
         # (day-by-day fallback removed — all sports now use date-range above)
         
         # NFL/NCAAF fallback: if ESPN returned nothing (offseason), load from database
@@ -4522,7 +4525,7 @@ def get_upcoming_predictions(sport, days=365):
                                 game_dict['naive_spread'] = ns
                                 game_dict['naive_total'] = nt
                     except Exception as _e:
-                        logger.debug(f"ScorePredictor error: {_e}")
+                        logger.warning(f"ScorePredictor error: {_e}")
                 if game_dict.get('naive_spread') is None:
                     game_dict['spread_total_note'] = soccer_note or (
                         "Soccer spread/total requires team scoring rates; data not ready yet."
@@ -4543,7 +4546,7 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['naive_spread'] = ns
                             game_dict['naive_total'] = nt
                 except Exception as _e:
-                    logger.debug(f"ScorePredictor error: {_e}")
+                    logger.warning(f"ScorePredictor error: {_e}")
 
                 # Fallback to Vegas-style predictor if naive stats are still missing
                 if game_dict.get('naive_spread') is None:
@@ -4561,7 +4564,7 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['naive_spread'] = vs
                             game_dict['naive_total'] = vt
                     except Exception as _ve:
-                        logger.debug(f"VegasScorePredictor error: {_ve}")
+                        logger.warning(f"VegasScorePredictor error: {_ve}")
 
             if game_dict.get('home_score') is None:
                 try:
@@ -4974,7 +4977,7 @@ def get_upcoming_predictions(sport, days=365):
     try:
         _attach_h2h_projection_to_predictions(sport, predictions, n=10)
     except Exception as _h2he:
-        logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
+        logger.warning(f"[h2h] attach failed for {sport}: {_h2he}")
 
     # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
     # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
@@ -5133,7 +5136,7 @@ def get_upcoming_predictions(sport, days=365):
                 f"total_time={_time.time() - _nba_t0:.2f}s"
             )
         except Exception as _nbae:
-            logger.debug(f"[NBA projection] attach failed: {_nbae}")
+            logger.warning(f"[NBA projection] attach failed: {_nbae}")
 
     for _pred in predictions:
         _finalize_prediction_odds(_pred)
