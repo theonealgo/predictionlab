@@ -1202,6 +1202,52 @@ def _prepare_pred_card_display(pred: dict) -> None:
     pred['disp_confidence_tier'] = pred.get('pl_confidence_tier')
 
 
+def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
+    """Ensure the moneyline pick direction matches the spread.
+
+    An 8-point spread implies ~75% win probability for the favored team.
+    If our_spread says 'NYK -8' but ensemble_prob says 'CLE wins', that is
+    an internal contradiction — correct ensemble_prob to match the spread.
+    Also corrects xgb_prob to match xgb_spread in the XSharp column.
+    """
+    import math as _mc
+    if pred.get('home_score') is not None:
+        return
+
+    # Sport-specific σ for the spread normal distribution.
+    _sigma = {'NBA': 12.0, 'NCAAB': 10.0, 'NFL': 14.0, 'NCAAF': 16.0,
+              'NHL': 1.2, 'MLB': 1.5, 'WNBA': 11.0}.get(sport, 12.0)
+    _min_spread = {'NHL': 0.3, 'MLB': 0.5}.get(sport, 3.0)  # threshold per sport
+
+    def _spread_to_pct(sp):
+        """Home win probability (0-100) implied by a spread."""
+        return 50.0 + 50.0 * _mc.erf(float(sp) / (_sigma * _mc.sqrt(2)))
+
+    # ── PL Model: our_spread → ensemble_prob ──────────────────────────────
+    our_sp = _safe_float(pred.get('our_spread'))
+    ens = _safe_float(pred.get('ensemble_prob'))
+    if our_sp is not None and abs(our_sp) >= _min_spread and ens is not None:
+        implied = _spread_to_pct(our_sp)
+        if our_sp > 0 and ens < 50.0:
+            # Spread says home wins; pick incorrectly says away — override.
+            pred['ensemble_prob'] = round(implied, 1)
+            pred['predicted_winner'] = pred.get('home_team_id')
+        elif our_sp < 0 and ens >= 50.0:
+            # Spread says away wins; pick incorrectly says home — override.
+            pred['ensemble_prob'] = round(implied, 1)
+            pred['predicted_winner'] = pred.get('away_team_id')
+
+    # ── XSharp: xgb_spread → xgb_prob ────────────────────────────────────
+    xgb_sp = _safe_float(pred.get('xgb_spread'))
+    xgb_p = _safe_float(pred.get('xgb_prob'))
+    if xgb_sp is not None and abs(xgb_sp) >= _min_spread and xgb_p is not None:
+        implied_xs = _spread_to_pct(xgb_sp)
+        if xgb_sp > 0 and xgb_p < 50.0:
+            pred['xgb_prob'] = round(implied_xs, 1)
+        elif xgb_sp < 0 and xgb_p >= 50.0:
+            pred['xgb_prob'] = round(implied_xs, 1)
+
+
 def _odds_to_implied(odds):
     """American odds → raw implied probability (vig still included)."""
     try:
@@ -12388,6 +12434,7 @@ def sport_predictions(sport, filter_date=None):
     # Finalize XSharp + PL model consistency, then precompute disp_* display keys.
     for _pred in predictions:
         _finalize_prediction_odds(_pred)
+        _enforce_pick_spread_consistency(_pred, sport=sport)
         _prepare_pred_card_display(_pred)
 
     soccer_leagues = None
