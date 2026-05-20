@@ -19,13 +19,14 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# ── Module-level ESPN request cache (15-min TTL) ───────────────────────────
+# ── Module-level ESPN request cache (15-min TTL, max 500 entries) ─────────────
 _WT_CACHE: dict = {}
 _WT_TTL = 900  # seconds
+_WT_CACHE_MAX = 300  # hard cap: evict oldest entries beyond this
 
 
 def _wt_cached_get(url: str, timeout: int = 3):
-    """Cached requests.get with 15-minute TTL."""
+    """Cached requests.get with 15-minute TTL and bounded size."""
     now = time.time()
     entry = _WT_CACHE.get(url)
     if entry and (now - entry['ts']) < _WT_TTL:
@@ -39,9 +40,15 @@ def _wt_cached_get(url: str, timeout: int = 3):
     if r.status_code == 200:
         data = r.json()
         _WT_CACHE[url] = {'data': data, 'ts': now}
-        return data
-    _WT_CACHE[url] = {'data': None, 'ts': now}
-    return None
+    else:
+        _WT_CACHE[url] = {'data': None, 'ts': now}
+        data = None
+    # Evict oldest 20% of entries when over the size cap.
+    if len(_WT_CACHE) > _WT_CACHE_MAX:
+        evict_count = max(1, len(_WT_CACHE) // 5)
+        for _old_url in sorted(_WT_CACHE, key=lambda u: _WT_CACHE[u]['ts'])[:evict_count]:
+            _WT_CACHE.pop(_old_url, None)
+    return data
 
 
 def prefetch_recent_scoreboards(sport: str = 'NBA', days: int = 14, max_workers: int = 8):

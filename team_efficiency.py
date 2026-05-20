@@ -42,14 +42,16 @@ logger = logging.getLogger(__name__)
 # Share the scoreboard URL cache with weighted_total_predictor so we don't
 # double-fetch the same date pages.
 try:
-    from weighted_total_predictor import _WT_CACHE as _URL_CACHE, _WT_TTL as _URL_TTL
+    from weighted_total_predictor import _WT_CACHE as _URL_CACHE, _WT_TTL as _URL_TTL, _WT_CACHE_MAX as _URL_CACHE_MAX
 except Exception:
     _URL_CACHE: dict = {}
     _URL_TTL = 900
+    _URL_CACHE_MAX = 300
 
-# Per-team aggregate cache (ORtg/DRtg/Pace)
+# Per-team aggregate cache (ORtg/DRtg/Pace) — bounded to 200 entries
 _TEAM_EFF_CACHE: dict = {}
-_TEAM_EFF_TTL = 600  # 10 minutes
+_TEAM_EFF_TTL = 600   # 10 minutes
+_TEAM_EFF_MAX = 200   # ~30 NBA teams × a few lookback configs = well under this
 
 # Home court advantage by sport (points). NBA ~2.5, NFL ~2.0, NHL ~0.2 etc.
 _HOME_COURT_ADV = {
@@ -69,7 +71,7 @@ _ESPN_PATHS = {
 
 
 def _cached_get(url: str, timeout: int = 3):
-    """Cached GET with 15-min TTL; returns parsed JSON or None on failure."""
+    """Cached GET with 15-min TTL and bounded size; returns parsed JSON or None."""
     now = time.time()
     entry = _URL_CACHE.get(url)
     if entry and (now - entry['ts']) < _URL_TTL:
@@ -89,6 +91,11 @@ def _cached_get(url: str, timeout: int = 3):
         _URL_CACHE[url] = {'data': None, 'ts': now}
         return None
     _URL_CACHE[url] = {'data': data, 'ts': now}
+    # Evict oldest 20% of entries when over the size cap.
+    if len(_URL_CACHE) > _URL_CACHE_MAX:
+        evict_count = max(1, len(_URL_CACHE) // 5)
+        for _old_url in sorted(_URL_CACHE, key=lambda u: _URL_CACHE[u]['ts'])[:evict_count]:
+            _URL_CACHE.pop(_old_url, None)
     return data
 
 
@@ -319,6 +326,11 @@ def compute_team_efficiency(team_name: str, sport: str = 'NBA',
 
     agg = _aggregate_efficiency(games_box)
     _TEAM_EFF_CACHE[cache_key] = {'data': agg, 'ts': now}
+    # Evict oldest entries when over size cap.
+    if len(_TEAM_EFF_CACHE) > _TEAM_EFF_MAX:
+        evict_count = max(1, len(_TEAM_EFF_CACHE) // 5)
+        for _old_key in sorted(_TEAM_EFF_CACHE, key=lambda k: _TEAM_EFF_CACHE[k]['ts'])[:evict_count]:
+            _TEAM_EFF_CACHE.pop(_old_key, None)
     return agg
 
 
