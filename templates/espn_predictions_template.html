@@ -685,7 +685,7 @@
                     {% set _xs_total = pred.disp_xs_total if (pred.disp_xs_total is defined and pred.disp_xs_total is not none) else none %}
                     {% set _xs_away_pts = pred.disp_xs_away if (pred.disp_xs_away is defined and pred.disp_xs_away is not none) else none %}
                     {% set _xs_home_pts = pred.disp_xs_home if (pred.disp_xs_home is defined and pred.disp_xs_home is not none) else none %}
-                    {% set _cons_pct = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
+                    {% set _cons_pct = pred.disp_ml_prob if (pred.disp_ml_prob is defined and pred.disp_ml_prob is not none) else (pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none) %}
                     {% set _xgb_pct = pred.xgb_prob if (pred.xgb_prob is defined and pred.xgb_prob is not none) else none %}
                     {% set _show_odds = _spread_val is not none or _total_val is not none or _cons_pct is not none or _xgb_pct is not none or is_final or (pred.our_home_pts is defined and pred.our_home_pts is not none) or (pred.xgb_home_score is defined and pred.xgb_home_score is not none) %}
                     {% if _show_odds %}

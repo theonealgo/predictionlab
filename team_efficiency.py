@@ -244,29 +244,39 @@ def _list_team_recent_game_ids(team_name: str, sport: str,
 
 
 def _aggregate_efficiency(games_box: List[Dict]) -> Optional[Dict[str, float]]:
-    """From a list of per-game box-score dicts, compute aggregate ORtg/DRtg/Pace."""
+    """Compute aggregate ORtg/DRtg/Pace plus style metrics from per-game box scores.
+
+    Style metrics (ft_rate, oreb_rate, tov_rate) let the PL projection diverge
+    from XSharp, which only sees rolling scoring averages and Elo — not shooting
+    profile or turnover tendencies.
+    """
     if not games_box:
         return None
     n = len(games_box)
     pts = sum(g['pts'] for g in games_box)
     opp = sum(g['opp_pts'] for g in games_box)
+    fga_total = sum(g['fga'] for g in games_box)
+    fta_total = sum(g['fta'] for g in games_box)
+    oreb_total = sum(g['oreb'] for g in games_box)
+    tov_total = sum(g['tov'] for g in games_box)
     poss = 0.0
     pace_mins = 0.0
     per_game_paces: List[float] = []
+    per_game_pts: List[float] = []
     for g in games_box:
-        # Dean Oliver possessions estimator.
-        p = g['fga'] + 0.475 * g['fta'] - g['oreb'] + g['tov']
+        p = g['fga'] + 0.475 * g['fta'] - g['oreb'] + g['tov']  # Dean Oliver possessions
         mins = max(1.0, g['minutes_played'] or 48)
         poss += p
         pace_mins += mins
         per_game_paces.append(p * (48.0 / mins))
+        per_game_pts.append(float(g['pts']))
     if poss <= 0:
         return None
     ortg = pts / poss * 100.0
     drtg = opp / poss * 100.0
-    # Pace = avg possessions per 48 minutes across the sample.
     pace = (poss / max(1.0, pace_mins)) * 48.0
-    # Pace variance: std dev of per-game paces (measures consistency).
+
+    # Pace variance: std dev of per-game paces (measures tempo consistency).
     if len(per_game_paces) >= 2:
         _mean_p = sum(per_game_paces) / len(per_game_paces)
         pace_std = round(
@@ -274,14 +284,33 @@ def _aggregate_efficiency(games_box: List[Dict]) -> Optional[Dict[str, float]]:
         )
     else:
         pace_std = 0.0
+
+    # Scoring volatility: std dev of per-game points scored.
+    if len(per_game_pts) >= 2:
+        _mean_s = sum(per_game_pts) / len(per_game_pts)
+        ppg_std = round(
+            (sum((s - _mean_s) ** 2 for s in per_game_pts) / (len(per_game_pts) - 1)) ** 0.5, 2
+        )
+    else:
+        ppg_std = 0.0
+
+    # Style metrics — give PL model signals XSharp cannot see.
+    ft_rate = round(fta_total / max(fga_total, 1), 3)    # free-throw generation
+    oreb_rate = round(oreb_total / max(fga_total, 1), 3)  # offensive rebounding pressure
+    tov_rate = round(tov_total / max(poss, 1), 3)         # turnover rate per possession
+
     return {
         'ortg': round(ortg, 2),
         'drtg': round(drtg, 2),
         'pace': round(pace, 2),
         'pace_std': pace_std,
+        'ppg_std': ppg_std,
         'games': n,
         'ppg': round(pts / n, 2),
         'opp_ppg': round(opp / n, 2),
+        'ft_rate': ft_rate,
+        'oreb_rate': oreb_rate,
+        'tov_rate': tov_rate,
     }
 
 
@@ -358,22 +387,50 @@ def compute_efficiency_projection_from(home_eff: Dict, away_eff: Dict,
     home_pts = ((home_eff['ortg'] + away_eff['drtg']) / 2.0) * poss_mult + home_court_adv
     away_pts = ((away_eff['ortg'] + home_eff['drtg']) / 2.0) * poss_mult
 
+    # ── Style-based adjustments (NBA only) ──────────────────────────────────
+    # These give PL a signal XSharp's rolling-score averages cannot see:
+    #   FT rate  → foul-drawing teams generate more points per possession
+    #   OREB rate → second-chance volume elevates effective scoring above ORtg
+    #   TOV rate  → turnover-heavy teams lose possessions → fewer points
+    # Baselines are 2024-25 NBA medians.
+    if sport == 'NBA':
+        _FT_BASE   = 0.280   # median fta / fga
+        _OREB_BASE = 0.230   # median oreb / fga
+        _TOV_BASE  = 0.140   # median tov / poss
+
+        def _style_adj(eff, base_ft, base_oreb, base_tov):
+            ft_delta   = min(0.12, max(-0.12, eff.get('ft_rate', base_ft) - base_ft))
+            oreb_delta = min(0.10, max(-0.10, eff.get('oreb_rate', base_oreb) - base_oreb))
+            tov_delta  = min(0.06, max(-0.06, eff.get('tov_rate', base_tov) - base_tov))
+            adj = ft_delta * 15.0 + oreb_delta * 20.0 - tov_delta * 20.0
+            return max(-5.0, min(5.0, adj))  # hard cap ±5 pts
+
+        home_pts += _style_adj(home_eff, _FT_BASE, _OREB_BASE, _TOV_BASE)
+        away_pts += _style_adj(away_eff, _FT_BASE, _OREB_BASE, _TOV_BASE)
+
     projected_total  = home_pts + away_pts
     projected_spread = home_pts - away_pts  # >0 home favored
 
     def _half_round(v):
         return round(v * 2) / 2.0
 
-    # Variance and confidence tier based on pace consistency and sample size.
+    # ── Variance + volatility → confidence tier ─────────────────────────────
     h_pace_std = home_eff.get('pace_std', 0.0) or 0.0
     a_pace_std = away_eff.get('pace_std', 0.0) or 0.0
     avg_pace_std = (h_pace_std + a_pace_std) / 2.0
-    min_games = min(home_eff.get('games', 5), away_eff.get('games', 5))
 
-    if avg_pace_std < 3.0 and min_games >= 4:
+    h_ppg_std = home_eff.get('ppg_std', 0.0) or 0.0
+    a_ppg_std = away_eff.get('ppg_std', 0.0) or 0.0
+    avg_ppg_std = (h_ppg_std + a_ppg_std) / 2.0
+
+    min_games = min(home_eff.get('games', 5), away_eff.get('games', 5))
+    # Volatility score 0–10 (higher = more uncertain)
+    volatility_score = round(min(10.0, (avg_pace_std / 1.5 + avg_ppg_std / 2.5) / 2.0), 1)
+
+    if avg_pace_std < 3.0 and avg_ppg_std < 8.0 and min_games >= 4:
         variance_tier = 'Low'
         confidence_tier = 'High'
-    elif avg_pace_std < 6.0 and min_games >= 3:
+    elif avg_pace_std < 6.0 and avg_ppg_std < 14.0 and min_games >= 3:
         variance_tier = 'Med'
         confidence_tier = 'Med'
     else:
@@ -391,7 +448,9 @@ def compute_efficiency_projection_from(home_eff: Dict, away_eff: Dict,
         'home_court_adv': home_court_adv,
         'variance_tier': variance_tier,
         'confidence_tier': confidence_tier,
+        'volatility_score': volatility_score,
         'avg_pace_std': round(avg_pace_std, 2),
+        'avg_ppg_std': round(avg_ppg_std, 2),
         'playoff_modifier': playoff_modifier,
     }
     if xsharp_total is not None:
@@ -496,23 +555,44 @@ def compute_efficiency_projection(home_team: str, away_team: str,
     home_pts = ((home_eff['ortg'] + away_eff['drtg']) / 2.0) * poss_mult + home_court_adv
     away_pts = ((away_eff['ortg'] + home_eff['drtg']) / 2.0) * poss_mult
 
+    # Style-based adjustments (NBA only) — FT rate, OREB rate, TOV rate.
+    if sport == 'NBA':
+        _FT_BASE   = 0.280
+        _OREB_BASE = 0.230
+        _TOV_BASE  = 0.140
+
+        def _style_adj(eff, base_ft, base_oreb, base_tov):
+            ft_delta   = min(0.12, max(-0.12, eff.get('ft_rate', base_ft) - base_ft))
+            oreb_delta = min(0.10, max(-0.10, eff.get('oreb_rate', base_oreb) - base_oreb))
+            tov_delta  = min(0.06, max(-0.06, eff.get('tov_rate', base_tov) - base_tov))
+            adj = ft_delta * 15.0 + oreb_delta * 20.0 - tov_delta * 20.0
+            return max(-5.0, min(5.0, adj))
+
+        home_pts += _style_adj(home_eff, _FT_BASE, _OREB_BASE, _TOV_BASE)
+        away_pts += _style_adj(away_eff, _FT_BASE, _OREB_BASE, _TOV_BASE)
+
     projected_total  = home_pts + away_pts
     projected_spread = home_pts - away_pts  # >0 home favored
 
-    # Round to nearest 0.5 like a real sportsbook would
     def _half_round(v):
         return round(v * 2) / 2.0
 
-    # Variance and confidence tier.
+    # Variance and confidence tier (pace_std + ppg_std).
     h_pace_std = home_eff.get('pace_std', 0.0) or 0.0
     a_pace_std = away_eff.get('pace_std', 0.0) or 0.0
     avg_pace_std = (h_pace_std + a_pace_std) / 2.0
-    min_games = min(home_eff.get('games', 5), away_eff.get('games', 5))
 
-    if avg_pace_std < 3.0 and min_games >= 4:
+    h_ppg_std = home_eff.get('ppg_std', 0.0) or 0.0
+    a_ppg_std = away_eff.get('ppg_std', 0.0) or 0.0
+    avg_ppg_std = (h_ppg_std + a_ppg_std) / 2.0
+
+    min_games = min(home_eff.get('games', 5), away_eff.get('games', 5))
+    volatility_score = round(min(10.0, (avg_pace_std / 1.5 + avg_ppg_std / 2.5) / 2.0), 1)
+
+    if avg_pace_std < 3.0 and avg_ppg_std < 8.0 and min_games >= 4:
         variance_tier = 'Low'
         confidence_tier = 'High'
-    elif avg_pace_std < 6.0 and min_games >= 3:
+    elif avg_pace_std < 6.0 and avg_ppg_std < 14.0 and min_games >= 3:
         variance_tier = 'Med'
         confidence_tier = 'Med'
     else:
@@ -530,7 +610,9 @@ def compute_efficiency_projection(home_team: str, away_team: str,
         'home_court_adv': home_court_adv,
         'variance_tier': variance_tier,
         'confidence_tier': confidence_tier,
+        'volatility_score': volatility_score,
         'avg_pace_std': round(avg_pace_std, 2),
+        'avg_ppg_std': round(avg_ppg_std, 2),
         'playoff_modifier': playoff_modifier,
     }
 
