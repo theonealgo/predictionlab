@@ -1200,19 +1200,34 @@ def _prepare_pred_card_display(pred: dict) -> None:
     pred['disp_pl_pace'] = pred.get('our_pace')
     pred['disp_variance_tier'] = pred.get('pl_variance_tier')
     pred['disp_confidence_tier'] = pred.get('pl_confidence_tier')
-    # Confidence penalty: regress ensemble_prob toward 50% when uncertainty is high.
-    # Med confidence → 15% regression; Low confidence → 35% regression.
-    _raw_ens = _safe_float(pred.get('ensemble_prob'))
-    if _raw_ens is not None:
-        _conf = pred.get('pl_confidence_tier') or pred.get('confidence_tier')
-        _regression = {'High': 0.0, 'Med': 0.15, 'Low': 0.35}.get(_conf, 0.0)
+    # PL Model moneyline: derive from PL spread when efficiency projection is available.
+    # This ensures the PL column is internally consistent (pick always matches spread).
+    _conf = pred.get('pl_confidence_tier') or pred.get('confidence_tier')
+    _regression = {'High': 0.0, 'Med': 0.15, 'Low': 0.35}.get(_conf, 0.0)
+    _pl_sp = _safe_float(pred.get('disp_pl_spread'))
+    _our_method = pred.get('our_method')
+    if _pl_sp is not None and abs(_pl_sp) >= 1.0 and _our_method in ('efficiency', 'team-avg-fallback'):
+        import math as _mt
+        _sigma_pl = 12.0  # NBA spread distribution std dev
+        _pl_home_prob = 50.0 + 50.0 * _mt.erf(_pl_sp / (_sigma_pl * _mt.sqrt(2)))
         if _regression > 0.0:
-            _penalized = _raw_ens - _regression * (_raw_ens - 50.0)
-            pred['disp_ml_prob'] = round(_penalized, 1)
+            _pl_home_prob -= _regression * (_pl_home_prob - 50.0)
+        pred['disp_ml_prob'] = round(_pl_home_prob, 1)
+        # Ensure predicted_winner matches PL spread direction
+        if _pl_sp > 0:
+            pred['predicted_winner'] = pred.get('home_team_id')
         else:
-            pred['disp_ml_prob'] = _raw_ens
+            pred['predicted_winner'] = pred.get('away_team_id')
     else:
-        pred['disp_ml_prob'] = None
+        # Fallback: confidence-penalized ensemble_prob
+        _raw_ens = _safe_float(pred.get('ensemble_prob'))
+        if _raw_ens is not None:
+            if _regression > 0.0:
+                pred['disp_ml_prob'] = round(_raw_ens - _regression * (_raw_ens - 50.0), 1)
+            else:
+                pred['disp_ml_prob'] = _raw_ens
+        else:
+            pred['disp_ml_prob'] = None
 
 
 def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
