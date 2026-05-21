@@ -5598,20 +5598,26 @@ _OU_BENCH = {'NBA': 226.0, 'NHL': 6.1, 'NCAAB': 145.0, 'NCAAW': 140.0, 'NCAAF': 
 
 def _compute_spread_total_for_daily(sport, daily_results):
     """Compute XSharp spread/total grading for games already in daily_results (in-place).
-    Returns aggregate stats dict or None if the XGB model is unavailable."""
+    Returns aggregate stats dict (may be None for spread/total if model unavailable,
+    but market lines and H2H are always attached)."""
     try:
         # H2H last-10 "Our Total" (used as the O/U line the model is compared to)
         try:
             _attach_h2h_projection_to_daily_results(sport, daily_results, n=10)
         except Exception as _h2he:
             logger.debug(f"[h2h] daily attach failed for {sport}: {_h2he}")
-        _xgb = _get_xgb_spread_model(sport)
+        _xgb = None
         _sp = None
-        if not _xgb:
-            if sport in ['NBA', 'MLB']:
+        try:
+            _xgb = _get_xgb_spread_model(sport)
+        except Exception:
+            pass
+        if not _xgb and sport in ['NBA', 'MLB']:
+            try:
                 _sp = _score_predictor_instance(sport)
-            if not _sp:
-                return None
+            except Exception:
+                pass
+        _has_model = bool(_xgb or _sp)
 
         conn = get_db_connection()
         _line_by_key = {}
