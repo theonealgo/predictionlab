@@ -130,6 +130,21 @@ _PROPS_CONFIG_MODULE = None
 _STANDALONE_PROPS_PKG = "_standalone_player_props"
 
 
+def _trim_cache(cache: dict, ttl: float, max_entries: int = 200) -> None:
+    """Evict expired entries then, if still over max_entries, drop the oldest ones."""
+    now = _time.time()
+    expired = [k for k, v in cache.items() if isinstance(v, dict) and (now - v.get('ts', now)) > ttl]
+    for k in expired:
+        cache.pop(k, None)
+    if len(cache) > max_entries:
+        sorted_keys = sorted(
+            (k for k, v in cache.items() if isinstance(v, dict)),
+            key=lambda k: cache[k].get('ts', 0)
+        )
+        for k in sorted_keys[:len(cache) - max_entries]:
+            cache.pop(k, None)
+
+
 def _cleanup_share_image_cache():
     """Remove stale or excess share-image JSON files (disk-backed for multi-worker processes)."""
     try:
@@ -418,6 +433,7 @@ def _cached_get(url: str, timeout: int = 10):
         r = requests.get(url, timeout=timeout)
         r.raise_for_status()
         data = r.json()
+        _trim_cache(_API_CACHE, _API_TTL, max_entries=300)
         _API_CACHE[url] = {'data': data, 'ts': now}
         return data
     except Exception as exc:
@@ -761,339 +777,6 @@ def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
         pred['odds_source'] = 'model_fallback'
 
 
-# ── Team logos (ESPN CDN) for prediction cards ───────────────────────────────
-_TEAM_LOGO_SLUG = {
-    'NBA': 'nba', 'MLB': 'mlb', 'NHL': 'nhl', 'NFL': 'nfl', 'WNBA': 'wnba',
-    'NCAAB': 'mens-college-basketball', 'NCAAF': 'college-football',
-}
-_TEAM_NAME_TO_ABBR = {
-    'NBA': {
-        'Atlanta Hawks': 'atl', 'Boston Celtics': 'bos', 'Brooklyn Nets': 'bkn',
-        'Charlotte Hornets': 'cha', 'Chicago Bulls': 'chi', 'Cleveland Cavaliers': 'cle',
-        'Dallas Mavericks': 'dal', 'Denver Nuggets': 'den', 'Detroit Pistons': 'det',
-        'Golden State Warriors': 'gs', 'Houston Rockets': 'hou', 'Indiana Pacers': 'ind',
-        'LA Clippers': 'lac', 'Los Angeles Clippers': 'lac', 'Los Angeles Lakers': 'lal',
-        'Memphis Grizzlies': 'mem', 'Miami Heat': 'mia', 'Milwaukee Bucks': 'mil',
-        'Minnesota Timberwolves': 'min', 'New Orleans Pelicans': 'no', 'New York Knicks': 'ny',
-        'Oklahoma City Thunder': 'okc', 'Orlando Magic': 'orl', 'Philadelphia 76ers': 'phi',
-        'Phoenix Suns': 'phx', 'Portland Trail Blazers': 'por', 'Sacramento Kings': 'sac',
-        'San Antonio Spurs': 'sa', 'Toronto Raptors': 'tor', 'Utah Jazz': 'utah',
-        'Washington Wizards': 'wsh',
-    },
-    'MLB': {
-        'Arizona Diamondbacks': 'ari', 'Atlanta Braves': 'atl', 'Baltimore Orioles': 'bal',
-        'Boston Red Sox': 'bos', 'Chicago Cubs': 'chc', 'Chicago White Sox': 'chw',
-        'Cincinnati Reds': 'cin', 'Cleveland Guardians': 'cle', 'Colorado Rockies': 'col',
-        'Detroit Tigers': 'det', 'Houston Astros': 'hou', 'Kansas City Royals': 'kc',
-        'Los Angeles Angels': 'laa', 'Los Angeles Dodgers': 'lad', 'Miami Marlins': 'mia',
-        'Milwaukee Brewers': 'mil', 'Minnesota Twins': 'min', 'New York Mets': 'nym',
-        'New York Yankees': 'nyy', 'Oakland Athletics': 'oak', 'Philadelphia Phillies': 'phi',
-        'Pittsburgh Pirates': 'pit', 'San Diego Padres': 'sd', 'San Francisco Giants': 'sf',
-        'Seattle Mariners': 'sea', 'St. Louis Cardinals': 'stl', 'Tampa Bay Rays': 'tb',
-        'Texas Rangers': 'tex', 'Toronto Blue Jays': 'tor', 'Washington Nationals': 'wsh',
-    },
-    'NHL': {
-        'Anaheim Ducks': 'ana', 'Arizona Coyotes': 'ari', 'Boston Bruins': 'bos',
-        'Buffalo Sabres': 'buf', 'Calgary Flames': 'cgy', 'Carolina Hurricanes': 'car',
-        'Chicago Blackhawks': 'chi', 'Colorado Avalanche': 'col', 'Columbus Blue Jackets': 'cbj',
-        'Dallas Stars': 'dal', 'Detroit Red Wings': 'det', 'Edmonton Oilers': 'edm',
-        'Florida Panthers': 'fla', 'Los Angeles Kings': 'la', 'Minnesota Wild': 'min',
-        'Montreal Canadiens': 'mtl', 'Nashville Predators': 'nsh', 'New Jersey Devils': 'nj',
-        'New York Islanders': 'nyi', 'New York Rangers': 'nyr', 'Ottawa Senators': 'ott',
-        'Philadelphia Flyers': 'phi', 'Pittsburgh Penguins': 'pit', 'San Jose Sharks': 'sj',
-        'Seattle Kraken': 'sea', 'St. Louis Blues': 'stl', 'Tampa Bay Lightning': 'tb',
-        'Toronto Maple Leafs': 'tor', 'Utah Hockey Club': 'uta', 'Vancouver Canucks': 'van',
-        'Vegas Golden Knights': 'vgk', 'Washington Capitals': 'wsh', 'Winnipeg Jets': 'wpg',
-    },
-    'NFL': {
-        'Arizona Cardinals': 'ari', 'Atlanta Falcons': 'atl', 'Baltimore Ravens': 'bal',
-        'Buffalo Bills': 'buf', 'Carolina Panthers': 'car', 'Chicago Bears': 'chi',
-        'Cincinnati Bengals': 'cin', 'Cleveland Browns': 'cle', 'Dallas Cowboys': 'dal',
-        'Denver Broncos': 'den', 'Detroit Lions': 'det', 'Green Bay Packers': 'gb',
-        'Houston Texans': 'hou', 'Indianapolis Colts': 'ind', 'Jacksonville Jaguars': 'jax',
-        'Kansas City Chiefs': 'kc', 'Las Vegas Raiders': 'lv', 'Los Angeles Chargers': 'lac',
-        'Los Angeles Rams': 'lar', 'Miami Dolphins': 'mia', 'Minnesota Vikings': 'min',
-        'New England Patriots': 'ne', 'New Orleans Saints': 'no', 'New York Giants': 'nyg',
-        'New York Jets': 'nyj', 'Philadelphia Eagles': 'phi', 'Pittsburgh Steelers': 'pit',
-        'San Francisco 49ers': 'sf', 'Seattle Seahawks': 'sea', 'Tampa Bay Buccaneers': 'tb',
-        'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh',
-    },
-}
-
-
-def team_logo_url(sport: str, team_name: str) -> str:
-    """ESPN team logo for prediction card header."""
-    if not (sport and team_name):
-        return '/static/pl-logo.svg'
-    slug = _TEAM_LOGO_SLUG.get(sport)
-    abbr = (_TEAM_NAME_TO_ABBR.get(sport) or {}).get(team_name)
-    if not slug or not abbr:
-        return '/static/pl-logo.svg'
-    return f'https://a.espncdn.com/i/teamlogos/{slug}/500/{abbr}.png'
-
-
-def _scores_from_spread_total(spread, total):
-    """Project home/away points from spread+total; avoid integer ties on small lines (e.g. 219.5 / -0.5)."""
-    try:
-        s, t = float(spread), float(total)
-    except (TypeError, ValueError):
-        return None, None
-
-    def _half(v):
-        return round(v * 2) / 2.0
-
-    home = _half((t + s) / 2.0)
-    away = _half((t - s) / 2.0)
-    if home == away and abs(s) >= 0.25:
-        if s > 0:
-            home += 0.5
-        elif s < 0:
-            away += 0.5
-    return home, away
-
-
-def _ensure_xsharp_lines(pred: dict) -> None:
-    """Fill XSharp spread/total/score fields when the spread model did not run."""
-    if pred.get('home_score') is not None:
-        return
-    pairs = (
-        ('xgb_spread', 'naive_spread'),
-        ('xgb_total', 'naive_total'),
-        ('xgb_home_score', 'naive_home_score'),
-        ('xgb_away_score', 'naive_away_score'),
-    )
-    for xk, nk in pairs:
-        if pred.get(xk) is None and pred.get(nk) is not None:
-            pred[xk] = pred[nk]
-    if pred.get('xgb_spread') is None and pred.get('market_spread') is not None:
-        pred['xgb_spread'] = pred['market_spread']
-    if pred.get('xgb_total') is None and pred.get('market_total') is not None:
-        pred['xgb_total'] = pred['market_total']
-    if pred.get('xgb_home_score') is None and pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
-        h, a = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
-        if h is not None:
-            pred['xgb_home_score'] = h
-            pred['xgb_away_score'] = a
-
-
-def _best_pl_spread(pred: dict):
-    """PL Model spread: efficiency/team-avg only — never XSharp or H2H noise."""
-    if pred.get('our_method') in ('efficiency', 'team-avg-fallback') and pred.get('our_spread') is not None:
-        try:
-            return _round_to_half(float(pred['our_spread']))
-        except (TypeError, ValueError):
-            pass
-    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
-        try:
-            diff = float(pred['our_home_pts']) - float(pred['our_away_pts'])
-            if abs(diff) >= 0.25:
-                return _round_to_half(diff)
-        except (TypeError, ValueError):
-            pass
-    if pred.get('our_spread') is not None and pred.get('our_total') is not None:
-        try:
-            return _round_to_half(float(pred['our_spread']))
-        except (TypeError, ValueError):
-            pass
-    return None
-
-
-def _best_pl_total(pred: dict):
-    for _k in ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'):
-        _v = pred.get(_k)
-        if _v is None:
-            continue
-        try:
-            return _round_to_half(float(_v))
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
-def _sync_pl_scores_from_line(pred: dict, spread, total) -> None:
-    """Set our_spread, our_total, and projected scores from a line (not the reverse)."""
-    try:
-        s, t = float(spread), float(total)
-    except (TypeError, ValueError):
-        return
-    pred['our_spread'] = _round_to_half(s)
-    pred['our_total'] = _round_to_half(t)
-    h, a = _scores_from_spread_total(s, t)
-    if h is not None:
-        pred['our_home_pts'] = h
-        pred['our_away_pts'] = a
-
-
-def _break_tied_projection_scores(pred: dict, home_key: str, away_key: str, prob_keys=()) -> None:
-    """Never show a tied projected score when spread or win prob implies a favorite."""
-    h, a = pred.get(home_key), pred.get(away_key)
-    if h is None or a is None:
-        return
-    try:
-        hf, af = float(h), float(a)
-    except (TypeError, ValueError):
-        return
-    if hf != af:
-        return
-    for sk in ('our_spread', 'xgb_spread', 'naive_spread', 'market_spread'):
-        sv = pred.get(sk)
-        if sv is None:
-            continue
-        try:
-            s = float(sv)
-        except (TypeError, ValueError):
-            continue
-        if abs(s) < 0.25:
-            continue
-        total = pred.get('our_total') or pred.get('xgb_total') or pred.get('naive_total') or (hf + af)
-        nh, na = _scores_from_spread_total(s, total)
-        if nh is not None and nh != na:
-            pred[home_key] = nh
-            pred[away_key] = na
-            return
-    prob = None
-    for pk in prob_keys:
-        pv = pred.get(pk)
-        if pv is not None:
-            try:
-                prob = float(pv)
-                break
-            except (TypeError, ValueError):
-                continue
-    if prob is None:
-        return
-    if prob >= 50.5:
-        pred[home_key] = hf + 1
-        pred[away_key] = af - 1
-    elif prob <= 49.5:
-        pred[away_key] = af + 1
-        pred[home_key] = hf - 1
-
-
-def _safe_float(value, default=None):
-    """Coerce DB/model values to float; reject corrupt bytes and NaN."""
-    if value is None:
-        return default
-    if isinstance(value, (bytes, bytearray)):
-        return default
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return default
-    try:
-        import math as _math_sf
-        if _math_sf.isnan(out) or _math_sf.isinf(out):
-            return default
-    except Exception:
-        pass
-    return out
-
-
-def _first_pred_float(pred: dict, keys):
-    for key in keys:
-        val = _safe_float(pred.get(key))
-        if val is not None:
-            return val
-    return None
-
-
-def _prepare_pred_card_display(pred: dict) -> None:
-    """Precompute odds fields for the picks template (avoids fragile nested Jinja)."""
-    if pred.get('home_score') is not None:
-        return
-    pred['disp_pl_spread'] = _best_pl_spread(pred)
-    if pred['disp_pl_spread'] is None:
-        pred['disp_pl_spread'] = _first_pred_float(
-            pred, ('our_spread', 'market_spread', 'naive_spread'),
-        )
-        if pred['disp_pl_spread'] is not None:
-            pred['disp_pl_spread'] = _round_to_half(pred['disp_pl_spread'])
-    pred['disp_pl_total'] = _best_pl_total(pred)
-    if pred['disp_pl_total'] is None:
-        pred['disp_pl_total'] = _first_pred_float(
-            pred, ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'),
-        )
-        if pred['disp_pl_total'] is not None:
-            pred['disp_pl_total'] = _round_to_half(pred['disp_pl_total'])
-    pred['disp_xs_spread'] = _first_pred_float(
-        pred, ('xsharp_spread', 'xgb_spread', 'naive_spread', 'market_spread'),
-    )
-    if pred['disp_xs_spread'] is not None:
-        pred['disp_xs_spread'] = _round_to_half(pred['disp_xs_spread'])
-    pred['disp_xs_total'] = _first_pred_float(
-        pred, ('xsharp_total', 'xgb_total', 'naive_total', 'market_total'),
-    )
-    if pred['disp_xs_total'] is not None:
-        pred['disp_xs_total'] = _round_to_half(pred['disp_xs_total'])
-    pred['disp_xs_away'] = _first_pred_float(
-        pred, ('xsharp_away_score', 'xgb_away_score', 'naive_away_score'),
-    )
-    pred['disp_xs_home'] = _first_pred_float(
-        pred, ('xsharp_home_score', 'xgb_home_score', 'naive_home_score'),
-    )
-
-
-def _finalize_prediction_odds(pred: dict) -> None:
-    """Single pass: backfill XSharp, align PL, mirror display keys, break score ties."""
-    if pred.get('home_score') is not None:
-        return
-    _ensure_xsharp_lines(pred)
-    if pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
-        xh, xa = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
-        if xh is not None:
-            pred['xgb_home_score'] = xh
-            pred['xgb_away_score'] = xa
-    _break_tied_projection_scores(
-        pred, 'xgb_home_score', 'xgb_away_score', ('xgb_prob', 'ensemble_prob'),
-    )
-    _align_pl_model_odds(pred)
-    _break_tied_projection_scores(
-        pred, 'our_home_pts', 'our_away_pts', ('ensemble_prob', 'xgb_prob'),
-    )
-    pred['xsharp_spread'] = pred.get('xgb_spread')
-    pred['xsharp_total'] = pred.get('xgb_total')
-    pred['xsharp_home_score'] = pred.get('xgb_home_score')
-    pred['xsharp_away_score'] = pred.get('xgb_away_score')
-
-
-def _align_pl_model_odds(pred: dict) -> None:
-    """Keep PL Model spread, total, and projected score internally consistent.
-
-    Sign convention: our_spread > 0 means home team favored by that many points.
-    Model spread/total win over rounded score ties (110–110 must not become PK).
-    """
-    spread = _best_pl_spread(pred)
-    total = _best_pl_total(pred)
-    if spread is not None and total is not None:
-        _sync_pl_scores_from_line(pred, spread, total)
-        return
-
-    if pred.get('our_home_pts') is None or pred.get('our_away_pts') is None:
-        ha = pred.get('our_home_avg')
-        if ha is None:
-            ha = pred.get('our_avg_home')
-        aa = pred.get('our_away_avg')
-        if aa is None:
-            aa = pred.get('our_avg_away')
-        if ha is not None and aa is not None:
-            pred['our_home_pts'] = round(float(ha))
-            pred['our_away_pts'] = round(float(aa))
-        elif spread is not None and total is not None:
-            _sync_pl_scores_from_line(pred, spread, total)
-    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
-        try:
-            h = float(pred['our_home_pts'])
-            a = float(pred['our_away_pts'])
-            if spread is None:
-                spread = _round_to_half(h - a)
-            if total is None:
-                total = _round_to_half(h + a)
-            if spread is not None and total is not None:
-                _sync_pl_scores_from_line(pred, spread, total)
-        except (TypeError, ValueError):
-            pass
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # H2H (head-to-head) projected total
 #
@@ -1152,25 +835,18 @@ def _compute_h2h_projection(
         logger.debug(f"[h2h] query failed for {sport} {home_team} vs {away_team}: {_e}")
         return None
     if not rows or len(rows) < min_games:
+        _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
         _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': None}
         return None
     home_pts = []
     away_pts = []
     totals = []
-    meetings = []
     for r in rows:
         try:
             hs = float(r['home_score'])
             as_ = float(r['away_score'])
         except Exception:
             continue
-        meetings.append({
-            'game_date': r['game_date'],
-            'home_team_id': r['home_team_id'],
-            'away_team_id': r['away_team_id'],
-            'home_score': int(hs) if hs == int(hs) else hs,
-            'away_score': int(as_) if as_ == int(as_) else as_,
-        })
         if r['home_team_id'] == home_team:
             home_pts.append(hs)
             away_pts.append(as_)
@@ -1179,6 +855,7 @@ def _compute_h2h_projection(
             away_pts.append(hs)
         totals.append(hs + as_)
     if len(home_pts) < min_games:
+        _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
         _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': None}
         return None
     avg_home = sum(home_pts) / len(home_pts)
@@ -1188,10 +865,9 @@ def _compute_h2h_projection(
         'avg_home': round(avg_home, 2),
         'avg_away': round(avg_away, 2),
         'our_total': round(avg_home + avg_away, 1),
-        'our_spread': round(avg_home - avg_away, 1),  # positive = home favored
         'totals': totals,
-        'meetings': meetings,
     }
+    _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
     _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': data}
     return data
 
@@ -1211,22 +887,19 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
             at = pred.get('away_team_id')
             proj = _compute_h2h_projection(conn, sport, ht, at, n=n)
             if proj:
+                pred['our_total'] = proj['our_total']
                 pred['our_total_games'] = proj['games_used']
                 pred['our_avg_home'] = proj['avg_home']
                 pred['our_avg_away'] = proj['avg_away']
+                # Keep H2H reference for UI (results page labels this "H2H Last 10";
+                # NBA may later replace our_total with an efficiency projection).
                 pred['h2h_last10_total'] = proj['our_total']
                 pred['h2h_last10_games'] = proj['games_used']
-                pred['h2h_last10_meetings'] = proj.get('meetings') or []
-                # NBA/WNBA PL lines come from efficiency / team-avg — not H2H averages.
-                if sport not in ('NBA', 'WNBA'):
-                    pred['our_total'] = proj['our_total']
-                    pred['our_spread'] = proj.get('our_spread')
             else:
                 pred.setdefault('our_total', None)
                 pred.setdefault('our_total_games', 0)
                 pred.setdefault('h2h_last10_total', None)
                 pred.setdefault('h2h_last10_games', 0)
-                pred.setdefault('h2h_last10_meetings', [])
     finally:
         try:
             conn.close()
@@ -1269,6 +942,338 @@ def _round_to_half(value):
         return round(float(value) * 2) / 2
     except (TypeError, ValueError):
         return value
+
+
+def _scores_from_spread_total(spread, total):
+    """Project home/away points from spread+total; home+away always equals total exactly."""
+    try:
+        s, t = float(spread), float(total)
+    except (TypeError, ValueError):
+        return None, None
+
+    def _half(v):
+        return round(v * 2) / 2.0
+
+    home = _half((t + s) / 2.0)
+    away = t - home  # derived so home + away == total exactly
+    if home == away and abs(s) >= 0.25:
+        if s > 0:
+            home += 0.5
+            away -= 0.5
+        elif s < 0:
+            away += 0.5
+            home -= 0.5
+    return home, away
+
+
+def _safe_float(value, default=None):
+    """Coerce DB/model values to float; reject corrupt bytes and NaN."""
+    if value is None:
+        return default
+    if isinstance(value, (bytes, bytearray)):
+        return default
+    try:
+        import math as _mf
+        out = float(value)
+        if _mf.isnan(out) or _mf.isinf(out):
+            return default
+        return out
+    except (TypeError, ValueError):
+        return default
+
+
+def _first_pred_float(pred: dict, keys):
+    for key in keys:
+        val = _safe_float(pred.get(key))
+        if val is not None:
+            return val
+    return None
+
+
+def _best_pl_spread(pred: dict):
+    """PL Model spread: efficiency/team-avg only — never XSharp or H2H noise."""
+    if pred.get('our_method') in ('efficiency', 'team-avg-fallback') and pred.get('our_spread') is not None:
+        try:
+            return _round_to_half(float(pred['our_spread']))
+        except (TypeError, ValueError):
+            pass
+    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
+        try:
+            diff = float(pred['our_home_pts']) - float(pred['our_away_pts'])
+            if abs(diff) >= 0.25:
+                return _round_to_half(diff)
+        except (TypeError, ValueError):
+            pass
+    if pred.get('our_spread') is not None and pred.get('our_total') is not None:
+        try:
+            return _round_to_half(float(pred['our_spread']))
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _best_pl_total(pred: dict):
+    for _k in ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'):
+        _v = pred.get(_k)
+        if _v is None:
+            continue
+        try:
+            return _round_to_half(float(_v))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _ensure_xsharp_lines(pred: dict) -> None:
+    """Fill XSharp spread/total/score fields when the spread model did not run."""
+    if pred.get('home_score') is not None:
+        return
+    pairs = (
+        ('xgb_spread', 'naive_spread'),
+        ('xgb_total', 'naive_total'),
+        ('xgb_home_score', 'naive_home_score'),
+        ('xgb_away_score', 'naive_away_score'),
+    )
+    for xk, nk in pairs:
+        if pred.get(xk) is None and pred.get(nk) is not None:
+            pred[xk] = pred[nk]
+    if pred.get('xgb_spread') is None and pred.get('market_spread') is not None:
+        pred['xgb_spread'] = pred['market_spread']
+    if pred.get('xgb_total') is None and pred.get('market_total') is not None:
+        pred['xgb_total'] = pred['market_total']
+    if pred.get('xgb_home_score') is None and pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
+        h, a = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
+        if h is not None:
+            pred['xgb_home_score'] = h
+            pred['xgb_away_score'] = a
+
+
+def _sync_pl_scores_from_line(pred: dict, spread, total) -> None:
+    """Set our_spread, our_total, and projected scores from a line."""
+    try:
+        s, t = float(spread), float(total)
+    except (TypeError, ValueError):
+        return
+    pred['our_spread'] = _round_to_half(s)
+    pred['our_total'] = _round_to_half(t)
+    h, a = _scores_from_spread_total(s, t)
+    if h is not None:
+        pred['our_home_pts'] = h
+        pred['our_away_pts'] = a
+
+
+def _break_tied_projection_scores(pred: dict, home_key: str, away_key: str, prob_keys=()) -> None:
+    """Never show a tied projected score when spread or win prob implies a favorite."""
+    h, a = pred.get(home_key), pred.get(away_key)
+    if h is None or a is None:
+        return
+    try:
+        hf, af = float(h), float(a)
+    except (TypeError, ValueError):
+        return
+    if hf != af:
+        return
+    for sk in ('our_spread', 'xgb_spread', 'naive_spread', 'market_spread'):
+        sv = pred.get(sk)
+        if sv is None:
+            continue
+        try:
+            s = float(sv)
+        except (TypeError, ValueError):
+            continue
+        if abs(s) < 0.25:
+            continue
+        total = pred.get('our_total') or pred.get('xgb_total') or pred.get('naive_total') or (hf + af)
+        nh, na = _scores_from_spread_total(s, total)
+        if nh is not None and nh != na:
+            pred[home_key] = nh
+            pred[away_key] = na
+            return
+    prob = None
+    for pk in prob_keys:
+        pv = pred.get(pk)
+        if pv is not None:
+            try:
+                prob = float(pv)
+                break
+            except (TypeError, ValueError):
+                continue
+    if prob is None:
+        return
+    if prob >= 50.5:
+        pred[home_key] = hf + 1
+        pred[away_key] = af - 1
+    elif prob <= 49.5:
+        pred[away_key] = af + 1
+        pred[home_key] = hf - 1
+
+
+def _align_pl_model_odds(pred: dict) -> None:
+    """Keep PL Model spread, total, and projected score internally consistent."""
+    spread = _best_pl_spread(pred)
+    total = _best_pl_total(pred)
+    if spread is not None and total is not None:
+        _sync_pl_scores_from_line(pred, spread, total)
+        return
+    if pred.get('our_home_pts') is None or pred.get('our_away_pts') is None:
+        ha = pred.get('our_home_avg') or pred.get('our_avg_home')
+        aa = pred.get('our_away_avg') or pred.get('our_avg_away')
+        if ha is not None and aa is not None:
+            pred['our_home_pts'] = round(float(ha))
+            pred['our_away_pts'] = round(float(aa))
+        elif spread is not None and total is not None:
+            _sync_pl_scores_from_line(pred, spread, total)
+    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
+        try:
+            h = float(pred['our_home_pts'])
+            a = float(pred['our_away_pts'])
+            if spread is None:
+                spread = _round_to_half(h - a)
+            if total is None:
+                total = _round_to_half(h + a)
+            if spread is not None and total is not None:
+                _sync_pl_scores_from_line(pred, spread, total)
+        except (TypeError, ValueError):
+            pass
+
+
+def _finalize_prediction_odds(pred: dict) -> None:
+    """Single pass: backfill XSharp, align PL, mirror display keys, break score ties."""
+    if pred.get('home_score') is not None:
+        return
+    _ensure_xsharp_lines(pred)
+    if pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
+        xh, xa = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
+        if xh is not None:
+            pred['xgb_home_score'] = xh
+            pred['xgb_away_score'] = xa
+    _break_tied_projection_scores(
+        pred, 'xgb_home_score', 'xgb_away_score', ('xgb_prob', 'ensemble_prob'),
+    )
+    _align_pl_model_odds(pred)
+    _break_tied_projection_scores(
+        pred, 'our_home_pts', 'our_away_pts', ('ensemble_prob', 'xgb_prob'),
+    )
+    pred['xsharp_spread'] = pred.get('xgb_spread')
+    pred['xsharp_total'] = pred.get('xgb_total')
+    pred['xsharp_home_score'] = pred.get('xgb_home_score')
+    pred['xsharp_away_score'] = pred.get('xgb_away_score')
+
+
+def _prepare_pred_card_display(pred: dict) -> None:
+    """Precompute odds fields for the picks template (avoids fragile nested Jinja)."""
+    if pred.get('home_score') is not None:
+        return
+    pred['disp_pl_spread'] = _best_pl_spread(pred)
+    if pred['disp_pl_spread'] is None:
+        pred['disp_pl_spread'] = _first_pred_float(
+            pred, ('our_spread', 'market_spread', 'naive_spread'),
+        )
+        if pred['disp_pl_spread'] is not None:
+            pred['disp_pl_spread'] = _round_to_half(pred['disp_pl_spread'])
+    pred['disp_pl_total'] = _best_pl_total(pred)
+    if pred['disp_pl_total'] is None:
+        pred['disp_pl_total'] = _first_pred_float(
+            pred, ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'),
+        )
+        if pred['disp_pl_total'] is not None:
+            pred['disp_pl_total'] = _round_to_half(pred['disp_pl_total'])
+    pred['disp_xs_spread'] = _first_pred_float(
+        pred, ('xsharp_spread', 'xgb_spread', 'naive_spread', 'market_spread'),
+    )
+    if pred['disp_xs_spread'] is not None:
+        pred['disp_xs_spread'] = _round_to_half(pred['disp_xs_spread'])
+    pred['disp_xs_total'] = _first_pred_float(
+        pred, ('xsharp_total', 'xgb_total', 'naive_total', 'market_total'),
+    )
+    if pred['disp_xs_total'] is not None:
+        pred['disp_xs_total'] = _round_to_half(pred['disp_xs_total'])
+    pred['disp_xs_away'] = _first_pred_float(
+        pred, ('xsharp_away_score', 'xgb_away_score', 'naive_away_score'),
+    )
+    pred['disp_xs_home'] = _first_pred_float(
+        pred, ('xsharp_home_score', 'xgb_home_score', 'naive_home_score'),
+    )
+    # NBA-specific: consensus total, pace, variance/confidence tiers
+    _ct = pred.get('consensus_total')
+    pred['disp_consensus_total'] = _round_to_half(float(_ct)) if _ct is not None else None
+    pred['disp_pl_pace'] = pred.get('our_pace')
+    pred['disp_variance_tier'] = pred.get('pl_variance_tier')
+    pred['disp_confidence_tier'] = pred.get('pl_confidence_tier')
+    # PL Model moneyline: derive from PL spread when efficiency projection is available.
+    # This ensures the PL column is internally consistent (pick always matches spread).
+    _conf = pred.get('pl_confidence_tier') or pred.get('confidence_tier')
+    _regression = {'High': 0.0, 'Med': 0.15, 'Low': 0.35}.get(_conf, 0.0)
+    _pl_sp = _safe_float(pred.get('disp_pl_spread'))
+    _our_method = pred.get('our_method')
+    if _pl_sp is not None and abs(_pl_sp) >= 1.0 and _our_method in ('efficiency', 'team-avg-fallback'):
+        import math as _mt
+        _sigma_pl = 12.0  # NBA spread distribution std dev
+        _pl_home_prob = 50.0 + 50.0 * _mt.erf(_pl_sp / (_sigma_pl * _mt.sqrt(2)))
+        if _regression > 0.0:
+            _pl_home_prob -= _regression * (_pl_home_prob - 50.0)
+        pred['disp_ml_prob'] = round(_pl_home_prob, 1)
+        # Ensure predicted_winner matches PL spread direction
+        if _pl_sp > 0:
+            pred['predicted_winner'] = pred.get('home_team_id')
+        else:
+            pred['predicted_winner'] = pred.get('away_team_id')
+    else:
+        # Fallback: confidence-penalized ensemble_prob
+        _raw_ens = _safe_float(pred.get('ensemble_prob'))
+        if _raw_ens is not None:
+            if _regression > 0.0:
+                pred['disp_ml_prob'] = round(_raw_ens - _regression * (_raw_ens - 50.0), 1)
+            else:
+                pred['disp_ml_prob'] = _raw_ens
+        else:
+            pred['disp_ml_prob'] = None
+
+
+def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
+    """Ensure the moneyline pick direction matches the spread.
+
+    An 8-point spread implies ~75% win probability for the favored team.
+    If our_spread says 'NYK -8' but ensemble_prob says 'CLE wins', that is
+    an internal contradiction — correct ensemble_prob to match the spread.
+    Also corrects xgb_prob to match xgb_spread in the XSharp column.
+    """
+    import math as _mc
+    if pred.get('home_score') is not None:
+        return
+
+    # Sport-specific σ for the spread normal distribution.
+    _sigma = {'NBA': 12.0, 'NCAAB': 10.0, 'NFL': 14.0, 'NCAAF': 16.0,
+              'NHL': 1.2, 'MLB': 1.5, 'WNBA': 11.0}.get(sport, 12.0)
+    _min_spread = {'NHL': 0.3, 'MLB': 0.5}.get(sport, 3.0)  # threshold per sport
+
+    def _spread_to_pct(sp):
+        """Home win probability (0-100) implied by a spread."""
+        return 50.0 + 50.0 * _mc.erf(float(sp) / (_sigma * _mc.sqrt(2)))
+
+    # ── PL Model: our_spread → ensemble_prob ──────────────────────────────
+    our_sp = _safe_float(pred.get('our_spread'))
+    ens = _safe_float(pred.get('ensemble_prob'))
+    if our_sp is not None and abs(our_sp) >= _min_spread and ens is not None:
+        implied = _spread_to_pct(our_sp)
+        if our_sp > 0 and ens < 50.0:
+            # Spread says home wins; pick incorrectly says away — override.
+            pred['ensemble_prob'] = round(implied, 1)
+            pred['predicted_winner'] = pred.get('home_team_id')
+        elif our_sp < 0 and ens >= 50.0:
+            # Spread says away wins; pick incorrectly says home — override.
+            pred['ensemble_prob'] = round(implied, 1)
+            pred['predicted_winner'] = pred.get('away_team_id')
+
+    # ── XSharp: xgb_spread → xgb_prob ────────────────────────────────────
+    xgb_sp = _safe_float(pred.get('xgb_spread'))
+    xgb_p = _safe_float(pred.get('xgb_prob'))
+    if xgb_sp is not None and abs(xgb_sp) >= _min_spread and xgb_p is not None:
+        implied_xs = _spread_to_pct(xgb_sp)
+        if xgb_sp > 0 and xgb_p < 50.0:
+            pred['xgb_prob'] = round(implied_xs, 1)
+        elif xgb_sp < 0 and xgb_p >= 50.0:
+            pred['xgb_prob'] = round(implied_xs, 1)
 
 
 def _odds_to_implied(odds):
@@ -1472,6 +1477,9 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         ).fetchone()
         conn.close()
         if not row or not row['d']:
+            if len(_MLB_BULLPEN_FATIGUE_CACHE) > 500:
+                for _k in list(_MLB_BULLPEN_FATIGUE_CACHE)[:200]:
+                    _MLB_BULLPEN_FATIGUE_CACHE.pop(_k, None)
             _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (0.0, 0.0, False)
             return 0.0, 0.0, False
         prev = datetime.strptime(row['d'], '%Y-%m-%d')
@@ -1486,6 +1494,9 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         elif is_b2b:
             boost = 0.01
             total_adj = 0.5
+        if len(_MLB_BULLPEN_FATIGUE_CACHE) > 500:
+            for _k in list(_MLB_BULLPEN_FATIGUE_CACHE)[:200]:
+                _MLB_BULLPEN_FATIGUE_CACHE.pop(_k, None)
         _MLB_BULLPEN_FATIGUE_CACHE[cache_key] = (boost, total_adj, is_b2b)
         return boost, total_adj, is_b2b
     except Exception:
@@ -1877,49 +1888,6 @@ def _upsert_betting_line(conn, sport, game_id, game_date, home_team, away_team, 
         logger.debug(f"[betting_lines] upsert failed: {_e}")
 
 
-def _attach_market_lines_to_predictions(sport, predictions):
-    """Read market spread/total from betting_lines DB and attach to pred dicts."""
-    if not predictions:
-        return
-    game_ids = [p.get('game_id') for p in predictions if p.get('game_id') and p.get('home_score') is None]
-    if not game_ids:
-        return
-    conn = None
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
-        has_sport_col = 'sport' in cols
-        placeholders = ','.join('?' * len(game_ids))
-        if has_sport_col:
-            rows = cur.execute(
-                f"SELECT game_id, spread, total FROM betting_lines WHERE sport=? AND game_id IN ({placeholders}) ORDER BY fetched_at DESC",
-                [sport] + game_ids
-            ).fetchall()
-        else:
-            rows = cur.execute(
-                f"SELECT game_id, spread, total FROM betting_lines WHERE game_id IN ({placeholders})",
-                game_ids
-            ).fetchall()
-        line_map = {}
-        for row in rows:
-            gid = row['game_id']
-            if gid not in line_map:
-                line_map[gid] = {'spread': row['spread'], 'total': row['total']}
-        for pred in predictions:
-            gid = pred.get('game_id')
-            if gid and gid in line_map:
-                if pred.get('market_spread') is None and line_map[gid]['spread'] is not None:
-                    pred['market_spread'] = line_map[gid]['spread']
-                if pred.get('market_total') is None and line_map[gid]['total'] is not None:
-                    pred['market_total'] = line_map[gid]['total']
-    except Exception as _e:
-        logger.warning(f"[{sport}] attach market lines failed: {_e}")
-    finally:
-        if conn:
-            conn.close()
-
-
 def _cache_market_lines_for_predictions(sport, predictions, limit=20):
     if sport not in ['NBA', 'MLB', 'SOCCER'] or not predictions:
         return
@@ -1976,6 +1944,46 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
         conn.close()
     except Exception as _e:
         logger.debug(f"[{sport}] cache market lines failed: {_e}")
+
+
+def _attach_market_lines_to_predictions(sport, predictions):
+    """Read market spread/total from betting_lines DB and attach to pred dicts."""
+    if not predictions:
+        return
+    game_ids = [p.get('game_id') for p in predictions if p.get('game_id') and p.get('home_score') is None]
+    if not game_ids:
+        return
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
+        has_sport_col = 'sport' in cols
+        placeholders = ','.join('?' * len(game_ids))
+        if has_sport_col:
+            rows = cur.execute(
+                f"SELECT game_id, spread, total FROM betting_lines WHERE sport=? AND game_id IN ({placeholders}) ORDER BY fetched_at DESC",
+                [sport] + game_ids
+            ).fetchall()
+        else:
+            rows = cur.execute(
+                f"SELECT game_id, spread, total FROM betting_lines WHERE game_id IN ({placeholders})",
+                game_ids
+            ).fetchall()
+        conn.close()
+        line_map = {}
+        for row in rows:
+            gid = row['game_id']
+            if gid not in line_map:
+                line_map[gid] = {'spread': row['spread'], 'total': row['total']}
+        for pred in predictions:
+            gid = pred.get('game_id')
+            if gid and gid in line_map:
+                if pred.get('market_spread') is None and line_map[gid]['spread'] is not None:
+                    pred['market_spread'] = line_map[gid]['spread']
+                if pred.get('market_total') is None and line_map[gid]['total'] is not None:
+                    pred['market_total'] = line_map[gid]['total']
+    except Exception as _e:
+        logger.debug(f"[{sport}] attach market lines failed: {_e}")
 
 
 def _cache_market_lines_for_results(sport, daily_results, limit=20):
@@ -2212,9 +2220,6 @@ def add_header(response):
         "frame-ancestors 'self' https://underdogs.bet https://predictionlab.io "
         "http://localhost:3000"
     )
-    _sha = _os.environ.get('PL_DEPLOY_SHA')
-    if _sha:
-        response.headers['X-PL-Deploy'] = _sha
     return response
 
 import os as _os
@@ -2223,34 +2228,10 @@ DATABASE = _os.path.join(_DATA_DIR, 'sports_predictions_original.db')
 # Absolute path to this file's directory — used for template loading
 _BASE_DIR = _os.path.dirname(_os.path.abspath(__file__))
 ODDS_ENGINE_URL = _os.environ.get('ODDS_ENGINE_URL')
-app.template_folder = _os.path.join(_BASE_DIR, 'templates')
-_SPORT_PREDICTIONS_PAGE_CACHE.clear()
 
 # ── Auth + Premium System ─────────────────────────────────────────────────────
 from auth_system import init_auth, is_premium_user
 init_auth(app, db_path=DATABASE)
-
-try:
-    app.jinja_env.get_template('espn_predictions_template.html')
-    logger.info('[startup] espn_predictions_template.html loaded OK')
-except Exception as _tpl_startup_err:
-    logger.error('[startup] espn_predictions_template.html FAILED: %s', _tpl_startup_err)
-
-
-@app.route('/healthz/picks-template')
-def healthz_picks_template():
-    """Ops: verify picks template is present and compiles."""
-    try:
-        app.jinja_env.get_template('espn_predictions_template.html')
-        _root = _os.path.join(_BASE_DIR, 'espn_predictions_template.html')
-        return jsonify({
-            'ok': True,
-            'template_folder': app.template_folder,
-            'root_copy': _os.path.isfile(_root),
-        })
-    except Exception as _hz_err:
-        return jsonify({'ok': False, 'error': str(_hz_err)}), 500
-
 _TRAFFIC_TZ = 'America/New_York'
 
 def _traffic_now():
@@ -2564,6 +2545,7 @@ def _get_soccer_model_bundle(completed_games, league_name=None):
             logger.debug(f"[soccer] DB supplement failed: {_e}")
 
     bundle = build_soccer_model_bundle(filtered, league_name=league_name)
+    _trim_cache(_SOCCER_MODEL_CACHE, _SOCCER_MODEL_TTL, max_entries=50)
     _SOCCER_MODEL_CACHE[cache_key] = {'ts': now_ts, 'bundle': bundle}
     return bundle
 
@@ -3389,47 +3371,6 @@ def _espn_event_date_to_local(date_str, tz_name='America/New_York'):
     except Exception:
         return date_str[:10]
 
-def _espn_time_from_status_text(text):
-    """Parse ESPN status strings like '5/17 - 8:00 PM EDT' or 'Sun, May 17th at 8:00 PM EDT'."""
-    if not text:
-        return None
-    import re
-    m = re.search(
-        r'(\d{1,2}):(\d{2})\s*(AM|PM)\s*(EDT|EST|ET)\b',
-        str(text),
-        re.IGNORECASE,
-    )
-    if not m:
-        return None
-    h, mi, ap, _tz = m.groups()
-    return f"{int(h)}:{mi} {ap.upper()} ET"
-
-
-def _espn_event_time_to_et(date_str, status_type=None):
-    """Convert ESPN event ISO date (UTC) to Eastern game time like '8:00 PM ET'."""
-    if status_type and isinstance(status_type, dict):
-        for key in ('shortDetail', 'detail', 'description'):
-            parsed = _espn_time_from_status_text(status_type.get(key))
-            if parsed:
-                return parsed
-        blob = ' '.join(
-            str(status_type.get(k) or '')
-            for k in ('shortDetail', 'detail', 'description', 'name')
-        ).upper()
-        if 'TBD' in blob or 'TBA' in blob:
-            return None
-    if not date_str:
-        return None
-    try:
-        dt = datetime.fromisoformat(str(date_str).replace('Z', '+00:00'))
-        et = dt.astimezone(ZoneInfo('America/New_York'))
-        # Do NOT treat UTC midnight as TBD — ESPN uses 00:00Z for evening ET tip-offs.
-        h12 = et.hour % 12 or 12
-        ampm = 'AM' if et.hour < 12 else 'PM'
-        return f"{h12}:{et.minute:02d} {ampm} ET"
-    except Exception:
-        return None
-
 # ============================================================================
 # V2 PREDICTION SYSTEM HELPER
 # ============================================================================
@@ -3484,6 +3425,7 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
             
             'is_v2': True,
         }
+        _trim_cache(_V2_PREDICTION_CACHE, _V2_PREDICTION_TTL_SECONDS, max_entries=200)
         _V2_PREDICTION_CACHE[cache_key] = {'ts': now_ts, 'data': _copy.deepcopy(result)}
         return result
     except Exception as e:
@@ -3531,7 +3473,7 @@ def _build_team_stats_from_db(sport: str) -> dict:
             if d['games'] >= 3  # minimum sample
         }
     except Exception as _e:
-        logger.warning(f"_build_team_stats_from_db({sport}) failed: {_e}")
+        logger.debug(f"_build_team_stats_from_db({sport}) failed: {_e}")
         return {}
 
 
@@ -3609,7 +3551,7 @@ def _get_xgb_spread_model(sport):
             return None
         return get_or_train_model(sport, games, team_stats)
     except Exception as e:
-        logger.warning(f"_get_xgb_spread_model error for {sport}: {e}")
+        logger.debug(f"_get_xgb_spread_model error for {sport}: {e}")
         return None
 
 
@@ -3786,7 +3728,6 @@ def get_upcoming_predictions(sport, days=365):
                     event_id  = event.get('id', '')
                     status_info  = event.get('status', {}).get('type', {})
                     status_name  = status_info.get('name', '')
-                    _status_type = status_info
                     home_score = away_score = None
                     if status_name.startswith('STATUS_FINAL'):
                         try:
@@ -3801,11 +3742,9 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date':    game_date,
-                        'game_time':    _espn_event_time_to_et(event_dt, _status_type),
                         'home_score':   home_score,
                         'away_score':   away_score,
                         'league':       league_name,
-                        'status_type':  _status_type,
                     })
 
         # Enrich with stored predictions from database
@@ -3935,7 +3874,6 @@ def get_upcoming_predictions(sport, days=365):
 
                     status_info = event.get('status', {}).get('type', {})
                     status_name = status_info.get('name', 'scheduled')
-                    _status_type = status_info
                     home_score = None
                     away_score = None
                     if status_name in ['STATUS_FINAL', 'STATUS_FINAL_OT']:
@@ -3950,14 +3888,12 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date': game_date,
-                        'game_time': _espn_event_time_to_et(_raw_dt, _status_type),
                         'home_score': home_score,
                         'away_score': away_score,
                         'league': league_name or sport,
-                        'status_type': _status_type,
                     })
             except Exception as e:
-                logger.warning(f"Error fetching {sport} range {start_str}-{end_str}: {e}")
+                logger.debug(f"Error fetching {sport} range {start_str}-{end_str}: {e}")
         # (day-by-day fallback removed — all sports now use date-range above)
         
         # NFL/NCAAF fallback: if ESPN returned nothing (offseason), load from database
@@ -4231,9 +4167,7 @@ def get_upcoming_predictions(sport, days=365):
 
     for game_date, game in all_games_with_dates:
         # Show games from season start up to one month from today
-        if not (game_date >= season_start and game_date <= future_cutoff):
-            continue
-        try:
+        if game_date >= season_start and game_date <= future_cutoff:
             # ============================================================
             # SOCCER MODELS + V2 PREDICTION SYSTEM
             # ============================================================
@@ -4254,33 +4188,16 @@ def get_upcoming_predictions(sport, days=365):
 
             v2_pred = None
             is_completed = game.get('home_score') is not None
-            # V2 is expensive per row. Always use it for upcoming games; for finals,
-            # only re-run it for a short lookback so the page stays within worker
-            # timeouts while Grinder2/Takedown still show on recent results.
-            _completed_v2_lookback_days = 21
+            # Always run V2 for non-soccer sports (including finished games) so
+            # Grinder2 / Takedown probabilities stay on the card; see frozen DB
+            # snapshot block below so moneyline stack does not drift after scores.
             if sport != 'SOCCER':
-                _run_v2 = True
-                if is_completed:
-                    _run_v2 = False
-                    try:
-                        _gday = game_date.date() if hasattr(game_date, 'date') else game_date
-                        _run_v2 = (today.date() - _gday).days <= _completed_v2_lookback_days
-                    except Exception:
-                        _run_v2 = False
-                if _run_v2:
-                    try:
-                        v2_pred = get_v2_prediction(
-                            sport,
-                            game.get('home_team_id') or game.get('home_team_name'),
-                            game.get('away_team_id') or game.get('away_team_name'),
-                            game.get('game_date'),
-                        )
-                    except Exception as _v2_row_err:
-                        logger.warning(
-                            f"V2 row skip {sport} {game.get('game_date')} "
-                            f"{game.get('away_team_id')}@{game.get('home_team_id')}: {_v2_row_err}"
-                        )
-                        v2_pred = None
+                v2_pred = get_v2_prediction(
+                        sport, 
+                        game.get('home_team_id') or game.get('home_team_name'),
+                        game.get('away_team_id') or game.get('away_team_name'),
+                        game.get('game_date')
+                    )
 
             if soccer_pred:
                 elo_prob = soccer_pred.get('elo_prob')
@@ -4328,8 +4245,7 @@ def get_upcoming_predictions(sport, days=365):
                     away_rating = get_elo(game.get('away_team_id', ''))
                     elo_prob = expected_score(home_rating, away_rating)
                 _xgb_raw = v2_pred.get('xgboost_prob')
-                _hp = v2_pred.get('home_prob')
-                xgb_prob = _xgb_raw if _xgb_raw is not None else (_hp if _hp is not None else 0.5)
+                xgb_prob = _xgb_raw if _xgb_raw is not None else v2_pred['home_prob']
 
                 # Build ensemble from individual model probs.
                 # The meta-learner (v2_pred['home_prob']) frequently defaults to ~0.49
@@ -4337,15 +4253,12 @@ def get_upcoming_predictions(sport, days=365):
                 _g2 = v2_pred.get('glicko2_prob')
                 _ts = v2_pred.get('trueskill_prob')
                 _wp = []
-                if _g2      is not None: _wp.append((_g2,      0.30))
-                if _ts      is not None: _wp.append((_ts,      0.30))
-                if _xgb_raw is not None: _wp.append((_xgb_raw, 0.25))
-                if elo_prob is not None: _wp.append((elo_prob,  0.15))
+                if _g2       is not None: _wp.append((_g2,      0.30))
+                if _ts       is not None: _wp.append((_ts,      0.30))
+                if _xgb_raw  is not None: _wp.append((_xgb_raw, 0.25))
+                _wp.append((elo_prob, 0.15))
                 _tw = sum(w for _, w in _wp)
-                if _tw > 0:
-                    ensemble_prob = sum((p or 0.0) * w for p, w in _wp) / _tw
-                else:
-                    ensemble_prob = float(_hp) if _hp is not None else float(elo_prob or 0.5)
+                ensemble_prob = sum(p * w for p, w in _wp) / _tw
 
                 # Store model probabilities for display (Glicko-2 and TrueSkill only)
                 game['glicko2_prob'] = v2_pred.get('glicko2_prob')
@@ -4397,31 +4310,17 @@ def get_upcoming_predictions(sport, days=365):
                 _fp_sx = game.get('stored_xgb_prob')
                 _fp_selo = game.get('stored_elo_prob')
                 if _fp_selo is not None:
-                    _elo_fp = _safe_float(_fp_selo)
-                    if _elo_fp is not None:
-                        elo_prob = _elo_fp
+                    elo_prob = float(_fp_selo)
                 if _fp_sx is not None:
-                    _xgb_fp = _safe_float(_fp_sx)
-                    if _xgb_fp is not None:
-                        xgb_prob = _xgb_fp
+                    xgb_prob = float(_fp_sx)
                 if _fp_se is not None:
-                    _ens_fp = _safe_float(_fp_se)
-                    if _ens_fp is not None:
-                        ensemble_prob = _ens_fp
+                    ensemble_prob = float(_fp_se)
                 if v2_pred:
                     game['glicko2_prob'] = v2_pred.get('glicko2_prob')
                     game['trueskill_prob'] = v2_pred.get('trueskill_prob')
-
+            
             # Add predictions to game dict
             game_dict = dict(game)
-            _gt_raw = game_dict.get('game_time')
-            _st_for_time = game_dict.get('status_type') if isinstance(game_dict.get('status_type'), dict) else None
-            if _gt_raw:
-                _gt_fmt = _espn_event_time_to_et(_gt_raw, _st_for_time) if (
-                    isinstance(_gt_raw, str) and 'T' in _gt_raw
-                ) else _gt_raw
-                if _gt_fmt:
-                    game_dict['game_time'] = _gt_fmt
             for _k in (
                 'market_spread',
                 'market_total',
@@ -4525,7 +4424,7 @@ def get_upcoming_predictions(sport, days=365):
                                 game_dict['naive_spread'] = ns
                                 game_dict['naive_total'] = nt
                     except Exception as _e:
-                        logger.warning(f"ScorePredictor error: {_e}")
+                        logger.debug(f"ScorePredictor error: {_e}")
                 if game_dict.get('naive_spread') is None:
                     game_dict['spread_total_note'] = soccer_note or (
                         "Soccer spread/total requires team scoring rates; data not ready yet."
@@ -4546,7 +4445,7 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['naive_spread'] = ns
                             game_dict['naive_total'] = nt
                 except Exception as _e:
-                    logger.warning(f"ScorePredictor error: {_e}")
+                    logger.debug(f"ScorePredictor error: {_e}")
 
                 # Fallback to Vegas-style predictor if naive stats are still missing
                 if game_dict.get('naive_spread') is None:
@@ -4564,7 +4463,7 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['naive_spread'] = vs
                             game_dict['naive_total'] = vt
                     except Exception as _ve:
-                        logger.warning(f"VegasScorePredictor error: {_ve}")
+                        logger.debug(f"VegasScorePredictor error: {_ve}")
 
             if game_dict.get('home_score') is None:
                 try:
@@ -4579,7 +4478,7 @@ def get_upcoming_predictions(sport, days=365):
                             game_dict['xgb_spread'] = _round_to_half(result[2]) if result[2] is not None else None
                             game_dict['xgb_total'] = _round_to_half(result[3]) if result[3] is not None else None
                 except Exception as _e:
-                    logger.warning(f"XGBSpread predict error: {_e}")
+                    logger.debug(f"XGBSpread error: {_e}")
 
             if game_dict.get('home_score') is None:
                 # ── MLB: pitching-enhanced prediction (upcoming games only
@@ -4904,12 +4803,7 @@ def get_upcoming_predictions(sport, days=365):
                 game_dict['away_injuries'] = []
 
             predictions.append(game_dict)
-        except Exception as _game_err:
-            import traceback as _tb_game
-            _gid = game.get('game_id', '?') if isinstance(game, dict) else '?'
-            logger.error(f"[{sport}] skipping game {_gid} in prediction loop: {_game_err}\n{_tb_game.format_exc()}")
-            continue
-
+    
     if sport not in ('MLB', 'SOCCER'):
         try:
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
@@ -4977,7 +4871,7 @@ def get_upcoming_predictions(sport, days=365):
     try:
         _attach_h2h_projection_to_predictions(sport, predictions, n=10)
     except Exception as _h2he:
-        logger.warning(f"[h2h] attach failed for {sport}: {_h2he}")
+        logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
 
     # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
     # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
@@ -5036,10 +4930,10 @@ def get_upcoming_predictions(sport, days=365):
                     pred['our_spread'] = _round_to_half(proj['projected_spread'])
                     pred['our_total'] = _round_to_half(proj['projected_total'])
                     if pred['our_spread'] is not None and pred['our_total'] is not None:
-                        h, a = _scores_from_spread_total(pred['our_spread'], pred['our_total'])
-                        if h is not None:
-                            pred['our_home_pts'] = h
-                            pred['our_away_pts'] = a
+                        _h, _a = _scores_from_spread_total(pred['our_spread'], pred['our_total'])
+                        if _h is not None:
+                            pred['our_home_pts'] = _h
+                            pred['our_away_pts'] = _a
                         else:
                             pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
                             pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
@@ -5050,6 +4944,20 @@ def get_upcoming_predictions(sport, days=365):
                     pred['our_away_eff'] = away_eff
                     pred['our_pace']     = proj['avg_pace']
                     pred['our_method']   = 'efficiency'
+                    pred['pl_variance_tier']   = proj.get('variance_tier')
+                    pred['pl_confidence_tier'] = proj.get('confidence_tier')
+                    # Consensus total: blend PL efficiency + XSharp totals
+                    if xs_total is not None and pred['our_total'] is not None:
+                        _delta = abs(float(pred['our_total']) - float(xs_total))
+                        if _delta <= 0.5:
+                            pred['consensus_total'] = _round_to_half(
+                                (float(pred['our_total']) + float(xs_total)) / 2.0
+                            )
+                        else:
+                            pred['consensus_total'] = _round_to_half(
+                                0.6 * float(pred['our_total']) + 0.4 * float(xs_total)
+                            )
+                        pred['pl_model_delta'] = round(float(pred['our_total']) - float(xs_total), 1)
                     eff_hits += 1
                     continue
 
@@ -5064,21 +4972,10 @@ def get_upcoming_predictions(sport, days=365):
                     fb = None
                     logger.debug(f"[team-avg fallback] {ht} vs {at}: {_fb_e}")
                 if fb:
+                    pred['our_total']       = fb['projected_total']
+                    pred['our_spread']      = fb['projected_spread']
                     pred['our_home_avg']    = fb['home_avg']
                     pred['our_away_avg']    = fb['away_avg']
-                    pred['our_spread']      = _round_to_half(fb['projected_spread'])
-                    pred['our_total']       = _round_to_half(fb['projected_total'])
-                    if pred['our_spread'] is not None and pred['our_total'] is not None:
-                        h, a = _scores_from_spread_total(pred['our_spread'], pred['our_total'])
-                        if h is not None:
-                            pred['our_home_pts'] = h
-                            pred['our_away_pts'] = a
-                        else:
-                            pred['our_home_pts'] = round(float(fb['home_avg']))
-                            pred['our_away_pts'] = round(float(fb['away_avg']))
-                    else:
-                        pred['our_home_pts'] = round(float(fb['home_avg']))
-                        pred['our_away_pts'] = round(float(fb['away_avg']))
                     pred['our_total_games'] = fb['games_used']
                     pred['our_method']      = 'team-avg-fallback'
                     if xs_total is not None:
@@ -5089,57 +4986,12 @@ def get_upcoming_predictions(sport, days=365):
                         pred['spread_trend_record'] = f"{c}-{n} ATS"
                 eff_misses += 1
 
-            # Games that missed both efficiency and in-loop team-avg still need PL lines.
-            for pred in predictions:
-                if pred.get('our_method'):
-                    continue
-                ht = pred.get('home_team_id')
-                at = pred.get('away_team_id')
-                if not (ht and at):
-                    continue
-                try:
-                    fb = compute_team_avg_projection(
-                        home_team=ht, away_team=at, sport='NBA',
-                        xsharp_total=pred.get('xgb_total'),
-                        xsharp_spread=pred.get('xgb_spread'),
-                        n_games=3, max_lookback_days=14,
-                    )
-                except Exception as _fb2_e:
-                    logger.debug(f"[team-avg retry] {ht} vs {at}: {_fb2_e}")
-                    fb = None
-                if not fb:
-                    ha = pred.get('our_avg_home')
-                    aa = pred.get('our_avg_away')
-                    if ha is not None and aa is not None:
-                        pred['our_home_pts'] = round(float(ha))
-                        pred['our_away_pts'] = round(float(aa))
-                        pred['our_spread'] = _round_to_half(float(ha) - float(aa))
-                        pred['our_total'] = _round_to_half(float(ha) + float(aa))
-                        pred['our_method'] = 'h2h-avg-fallback'
-                    continue
-                pred['our_home_avg'] = fb['home_avg']
-                pred['our_away_avg'] = fb['away_avg']
-                pred['our_spread'] = _round_to_half(fb['projected_spread'])
-                pred['our_total'] = _round_to_half(fb['projected_total'])
-                h, a = _scores_from_spread_total(pred['our_spread'], pred['our_total'])
-                if h is not None:
-                    pred['our_home_pts'] = h
-                    pred['our_away_pts'] = a
-                else:
-                    pred['our_home_pts'] = round(float(fb['home_avg']))
-                    pred['our_away_pts'] = round(float(fb['away_avg']))
-                pred['our_total_games'] = fb['games_used']
-                pred['our_method'] = 'team-avg-fallback'
-
             logger.info(
                 f"[NBA proj] efficiency={eff_hits} fallback={eff_misses} "
                 f"total_time={_time.time() - _nba_t0:.2f}s"
             )
         except Exception as _nbae:
-            logger.warning(f"[NBA projection] attach failed: {_nbae}")
-
-    for _pred in predictions:
-        _finalize_prediction_odds(_pred)
+            logger.debug(f"[NBA projection] attach failed: {_nbae}")
 
     # ── EV calculations for NBA / WNBA / NHL / MLB / NFL upcoming games ─────
     if sport in ('NBA', 'WNBA', 'NHL', 'MLB', 'NFL'):
@@ -5205,6 +5057,7 @@ def get_upcoming_predictions(sport, days=365):
             if _total_ev  is not None and _total_ev  > 0: _ev_map['Total']  = _total_ev
             _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
 
+    _trim_cache(_PREDICTIONS_CACHE, cache_ttl, max_entries=50)
     _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
     return predictions
 
@@ -5760,20 +5613,26 @@ _OU_BENCH = {'NBA': 226.0, 'NHL': 6.1, 'NCAAB': 145.0, 'NCAAW': 140.0, 'NCAAF': 
 
 def _compute_spread_total_for_daily(sport, daily_results):
     """Compute XSharp spread/total grading for games already in daily_results (in-place).
-    Returns aggregate stats dict or None if the XGB model is unavailable."""
+    Returns aggregate stats dict (may be None for spread/total if model unavailable,
+    but market lines and H2H are always attached)."""
     try:
         # H2H last-10 "Our Total" (used as the O/U line the model is compared to)
         try:
             _attach_h2h_projection_to_daily_results(sport, daily_results, n=10)
         except Exception as _h2he:
             logger.debug(f"[h2h] daily attach failed for {sport}: {_h2he}")
-        _xgb = _get_xgb_spread_model(sport)
+        _xgb = None
         _sp = None
-        if not _xgb:
-            if sport in ['NBA', 'MLB']:
+        try:
+            _xgb = _get_xgb_spread_model(sport)
+        except Exception:
+            pass
+        if not _xgb and sport in ['NBA', 'MLB']:
+            try:
                 _sp = _score_predictor_instance(sport)
-            if not _sp:
-                return None
+            except Exception:
+                pass
+        _has_model = bool(_xgb or _sp)
 
         conn = get_db_connection()
         _line_by_key = {}
@@ -7773,9 +7632,9 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .date-section { display:none; background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
     .date-header { color:#0F172A; font-size:1.3em; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #E2E8F0; }
-    .games-grid, .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; align-items:start; }
-    @media(max-width:480px){ .games-grid, .results-grid { grid-template-columns:1fr; } .game-card { max-width:100%; } }
-    .game-card {
+    .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(420px, 100%),1fr)); gap:16px; }
+    @media(max-width:480px){ .results-grid { grid-template-columns:1fr; } .result-card { max-width:100%; } }
+    .result-card {
         background:#ffffff;
         border:1px solid #E2E8F0;
         border-radius:12px;
@@ -7783,21 +7642,15 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06);
         transition:border-color 0.2s, box-shadow 0.2s;
     }
-    .game-card:hover { border-color:#cbd5e1; box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08); }
-    .card-hero { display:flex; gap:12px; align-items:flex-start; padding:14px 14px 12px; border-bottom:1px solid #E2E8F0; }
-    .card-hero-logos { display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; width:52px; }
-    .card-hero-logos .team-logo { width:44px; height:44px; object-fit:contain; }
-    .card-hero-at { font-size:0.62em; font-weight:700; color:#94a3b8; letter-spacing:0.3px; }
-    .card-hero-text { flex:1; min-width:0; }
-    .card-hero-matchup { font-size:0.96em; font-weight:800; color:#0f172a; line-height:1.3; margin:0 0 4px; }
-    .card-hero-meta { font-size:0.7em; color:#64748b; text-transform:uppercase; font-weight:600; letter-spacing:0.4px; margin-bottom:8px; }
-    .card-hero-meta.final { color:#00C076; }
-    .card-hero-ml { display:flex; flex-direction:column; gap:5px; }
-    .card-hero-ml-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.86em; font-weight:600; color:#0f172a; }
-    .card-hero-final-scores { margin-top:0; }
-    .card-hero-ml-row .score-winner { color:#00C076; font-weight:800; }
-    .card-final-score { font-size:1.05em; font-weight:800; color:#0f172a; flex-shrink:0; }
-    .card-final-score.score-winner { color:#00C076; }
+    .result-card:hover { border-color:#cbd5e1; box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08); }
+    .result-status { padding:6px 14px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#00C076; background:rgba(16,185,129,0.12); }
+    .result-body { display:flex; padding:12px 14px; gap:12px; }
+    .teams-section { flex:1; min-width:0; }
+    .team-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(15,23,42,0.08); }
+    .team-row:last-child { border-bottom:none; }
+    .team-name { font-size:0.95em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
+    .team-name.winner { font-weight:700; }
+    .score-box { font-size:1.05em; font-weight:700; color:#fbbf24; margin-left:8px; }
     .model-panel { background:#ffffff; border:1px solid rgba(139,92,246,0.35); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:170px; max-width:200px; display:flex; flex-direction:column; gap:4px; }
     .panel-title { font-size:0.66em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
     .model-row { display:flex; justify-content:space-between; font-size:0.82em; padding:2px 0; }
@@ -7812,7 +7665,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .pick-ok { color:#00C076; font-weight:700; }
     .pick-no { color:#D93025; font-weight:700; }
     /* Pick confidence grid (results cards) */
-    .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
+    .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#ffffff; }
     .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
     .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
     @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
@@ -7854,8 +7707,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
-        {% set label_ensemble = 'Sharp Consensus' %}
-        {% from 'includes/score_macros.html' import fmt_labeled_final, fmt_final_spread %}
+        {% set label_ensemble = 'Consensus' %}
         {% if daily_results and overall_stats %}
         {% if soccer_leagues %}
         <div class="league-slider">
@@ -8061,18 +7913,26 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div id="date-{{ date }}" class="date-section">
             <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
 
-            <div class="games-grid">
+            <div class="results-grid">
                 {% for game in date_data.games %}
                 {% set home_wins = game.home_score > game.away_score %}
                 {% set away_wins = game.away_score > game.home_score %}
                 {% set actual_spread = (game.home_score - game.away_score) %}
                 {% set actual_total = (game.home_score + game.away_score) %}
-                {% set away_team = game.away %}
-                {% set home_team = game.home %}
-                {% set away_score = game.away_score %}
-                {% set home_score = game.home_score %}
-                <div class="game-card" data-league="{{ game.league if game.league else 'Other' }}">
-                    {% include 'includes/card_hero_final.html' %}
+                <div class="result-card" data-league="{{ game.league if game.league else 'Other' }}">
+                    <div class="result-status">FINAL</div>
+                    <div class="result-body">
+                        <div class="teams-section">
+                            <div class="team-row">
+                                <span class="team-name {% if away_wins %}winner{% endif %}">{{ game.away }}{% if game.away_moneyline is defined and game.away_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.away_moneyline < 0 %}#00C076{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.away_moneyline > 0 %}+{% endif %}{{ game.away_moneyline }}</span>{% endif %}</span>
+                                <span class="score-box">{{ game.away_score }}</span>
+                            </div>
+                            <div class="team-row">
+                                <span class="team-name {% if home_wins %}winner{% endif %}">{{ game.home }}{% if game.home_moneyline is defined and game.home_moneyline is not none %} <span style="font-size:0.8em;color:{% if game.home_moneyline < 0 %}#00C076{% else %}#fbbf24{% endif %};font-weight:700;">{% if game.home_moneyline > 0 %}+{% endif %}{{ game.home_moneyline }}</span>{% endif %}</span>
+                                <span class="score-box">{{ game.home_score }}</span>
+                            </div>
+                        </div>
+                    </div>
                     <div class="pick-conf-bar section-ml">
                         <div class="pick-conf-title">Pick Confidence</div>
                         <div class="pick-conf-grid">
@@ -8111,7 +7971,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">Our Spread</span>
                             <span class="sf-val">
                                 {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
-                                {% elif game.market_spread is defined and game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
+                                {% elif game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
                                 {% elif game.market_spread_reason is defined and game.market_spread_reason %}{{ game.market_spread_reason }}
                                 {% else %}—{% endif %}
                             </span>
@@ -8139,7 +7999,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <span class="sf-label">H2H Last 10</span>
                             <span class="sf-val">{% if game.our_total is defined and game.our_total is not none %}{{ "%.1f"|format(game.our_total) }}{% else %}—{% endif %}</span>
                         </div>
-                        {% if game.market_total is defined and game.market_total is not none %}
+                        {% if game.market_total is not none %}
                         <div class="sf-item">
                             <span class="sf-label">Market Total</span>
                             <span class="sf-val">{{ "%.1f"|format(game.market_total) }}</span>
@@ -12499,30 +12359,6 @@ def soccer_predictions_league(league_slug):
 def soccer_results_league(league_slug):
     return redirect(f'/soccer-results?league={league_slug}', code=301)
 
-def _render_espn_picks_page(**ctx):
-    """Render picks page — template path, then root file, then templates/ file."""
-    last_err = None
-    try:
-        return render_template('espn_predictions_template.html', **ctx)
-    except Exception as _e:
-        last_err = _e
-        logger.exception('render_template espn_predictions_template failed: %s', _e)
-    for _path in (
-        _os.path.join(_BASE_DIR, 'espn_predictions_template.html'),
-        _os.path.join(_BASE_DIR, 'templates', 'espn_predictions_template.html'),
-    ):
-        if not _os.path.isfile(_path):
-            continue
-        try:
-            with open(_path, encoding='utf-8') as _f:
-                _src = _f.read()
-            return render_template_string(_src, **ctx)
-        except Exception as _e2:
-            last_err = _e2
-            logger.exception('render_template_string picks failed (%s): %s', _path, _e2)
-    raise RuntimeError(f'Picks template render failed: {last_err}')
-
-
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
     sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
@@ -12585,25 +12421,19 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v8::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
-            if (
-                cached_ts is not None
-                and cached_html
-                and (_time.time() - cached_ts) < cache_ttl
-                and 'refreshing this page right now' not in cached_html.lower()
-            ):
+            if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
                 return cached_html
     prediction_error = None
     try:
         predictions = get_upcoming_predictions(sport)
     except Exception as e:
-        import traceback as _tb_pred
-        logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
+        logger.error(f"Error loading {sport} predictions: {e}")
         predictions = []
         prediction_error = (
             f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
@@ -12625,38 +12455,21 @@ def sport_predictions(sport, filter_date=None):
             # missing keys on plain dicts raise in Jinja (NBA paths always had these).
             'our_spread',
             'our_total',
-            'our_home_pts',
-            'our_away_pts',
             'xgb_spread',
             'xgb_total',
-            'xgb_home_score',
-            'xgb_away_score',
             'naive_spread',
             'naive_total',
-            'naive_home_score',
-            'naive_away_score',
             'h2h_last10_total',
             'h2h_last10_games',
-            'h2h_last10_meetings',
-            'xsharp_spread',
-            'xsharp_total',
-            'xsharp_home_score',
-            'xsharp_away_score',
-            'disp_pl_spread',
-            'disp_pl_total',
-            'disp_xs_spread',
-            'disp_xs_total',
-            'disp_xs_away',
-            'disp_xs_home',
-            'game_time',
         ):
             if _k not in pred:
-                if _k == 'h2h_last10_games':
-                    pred[_k] = 0
-                elif _k == 'h2h_last10_meetings':
-                    pred[_k] = []
-                else:
-                    pred[_k] = None
+                pred[_k] = None if _k != 'h2h_last10_games' else 0
+
+    # Finalize XSharp + PL model consistency, then precompute disp_* display keys.
+    for _pred in predictions:
+        _finalize_prediction_odds(_pred)
+        _enforce_pick_spread_consistency(_pred, sport=sport)
+        _prepare_pred_card_display(_pred)
 
     soccer_leagues = None
     selected_league = None
@@ -12795,7 +12608,6 @@ def sport_predictions(sport, filter_date=None):
             _v = pred.get(_eff_key)
             if isinstance(_v, dict):
                 pred[_eff_key] = types.SimpleNamespace(**_v)
-        _prepare_pred_card_display(pred)
 
     # soccer_leagues already computed above for soccer
 
@@ -12805,34 +12617,37 @@ def sport_predictions(sport, filter_date=None):
     except Exception:
         _pred_li = False
 
-    _render_ctx = dict(
-        page=sport,
-        sport=sport,
-        sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
-        sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
-        sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-        predictions=predictions,
-        prediction_error=prediction_error,
-        grouped_predictions=grouped_predictions,
-        sorted_dates=sorted_dates,
-        today_date=today_date,
-        group_by='week' if sport == 'NFL' else 'date',
-        soccer_leagues=soccer_leagues,
-        shareable_cards=shareable_cards,
-        share_image_src=share_image_src,
-        share_image_view_url=share_image_view_url,
-        is_logged_in=_pred_li,
-        soccer_enabled=SOCCER_ENABLED,
-        ga_tracking_id=GA_TRACKING_ID,
-        todays_picks=[],
-        team_logo_url=team_logo_url,
-    )
     try:
-        rendered = _render_espn_picks_page(**_render_ctx)
+        # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
+        with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
+            espn_template = f.read()
+        rendered = render_template_string(
+            espn_template,
+            page=sport,
+            sport=sport,
+            sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+            sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+            sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+            predictions=predictions,
+            prediction_error=prediction_error,
+            grouped_predictions=grouped_predictions,
+            sorted_dates=sorted_dates,
+            today_date=today_date,
+            group_by='week' if sport == 'NFL' else 'date',
+            soccer_leagues=soccer_leagues,
+            shareable_cards=shareable_cards,
+            share_image_src=share_image_src,
+            share_image_view_url=share_image_view_url,
+            is_logged_in=_pred_li,
+            soccer_enabled=SOCCER_ENABLED,
+            ga_tracking_id=GA_TRACKING_ID,
+            todays_picks=[],
+        )
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)
-    if cache_key and rendered and 'refreshing this page right now' not in rendered.lower():
+    if cache_key:
+        _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180), max_entries=50)
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
 
@@ -12943,20 +12758,6 @@ def sport_results(sport):
                 daily_results[game_date]['games'].append(game_info)
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
-            for _dd in daily_results.values():
-                for _gg in _dd.get('games', []):
-                    for _k, _dv in {
-                        'market_spread': None, 'market_total': None,
-                        'market_spread_label': None, 'market_spread_reason': None,
-                        'market_total_reason': None,
-                        'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                        'our_total': None, 'our_total_games': 0,
-                        'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                        'spread_correct': None,
-                        'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                        'total_correct': None, 'strong_ou': False,
-                    }.items():
-                        _gg.setdefault(_k, _dv)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
@@ -12990,8 +12791,7 @@ def sport_results(sport):
                 weekly_tally_date_range=weekly_tally_date_range,
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
-                soccer_leagues=None,
-                team_logo_url=team_logo_url,
+                soccer_leagues=None
             )
         
         if sport == 'NHL':
@@ -13026,20 +12826,7 @@ def sport_results(sport):
             try:
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-                for _dd in daily_results.values():
-                    for _gg in _dd.get('games', []):
-                        for _k, _dv in {
-                            'market_spread': None, 'market_total': None,
-                            'market_spread_label': None, 'market_spread_reason': None,
-                            'market_total_reason': None,
-                            'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                            'our_total': None, 'our_total_games': 0,
-                            'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                            'spread_correct': None,
-                            'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                            'total_correct': None, 'strong_ou': False,
-                        }.items():
-                            _gg.setdefault(_k, _dv)
+
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
@@ -13073,9 +12860,9 @@ def sport_results(sport):
                     weekly_tally=weekly_tally,
                     weekly_tally_date_range=weekly_tally_date_range,
                     weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards,
-                    team_logo_url=team_logo_url,
+                    roi_cards=roi_cards
                 )
+                _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
             except Exception as e:
@@ -13114,26 +12901,7 @@ def sport_results(sport):
                 yesterday_dt = datetime.now() - timedelta(days=1)
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
-
-                # Defensively ensure all template-required keys exist on every game dict.
-                # Without this, if _compute_spread_total_for_daily exits early (no XGB model),
-                # Jinja2 creates Undefined objects that raise AttributeError when formatted.
-                _GAME_KEY_DEFAULTS = {
-                    'market_spread': None, 'market_total': None,
-                    'market_spread_label': None, 'market_spread_reason': None,
-                    'market_total_reason': None,
-                    'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                    'our_total': None, 'our_total_games': 0,
-                    'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                    'spread_correct': None,
-                    'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                    'total_correct': None, 'strong_ou': False,
-                }
-                for _dd in daily_results.values():
-                    for _gg in _dd.get('games', []):
-                        for _k, _dv in _GAME_KEY_DEFAULTS.items():
-                            _gg.setdefault(_k, _dv)
-
+                
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _cache_market_lines_for_results(sport, daily_results, limit=20)
@@ -13166,14 +12934,13 @@ def sport_results(sport):
                     weekly_tally=weekly_tally,
                     weekly_tally_date_range=weekly_tally_date_range,
                     weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards,
-                    team_logo_url=team_logo_url,
+                    roi_cards=roi_cards
                 )
+                _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
             except Exception as e:
-                import traceback as _tb
-                logger.error(f"Error processing NBA results: {e}\n{_tb.format_exc()}")
+                logger.error(f"Error processing NBA results: {e}")
                 return f"<h1>NBA results page failed to render because of a processing error: {str(e)}</h1>"
 
         # Handle NCAAB
@@ -13350,26 +13117,6 @@ def sport_results(sport):
                     continue
 
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
-
-            # Defensive: ensure all template-required keys exist before rendering.
-            # If _compute_spread_total_for_daily exits early (no XGB model), Jinja2
-            # creates Undefined objects that raise AttributeError when formatted.
-            _GAME_KEY_DEFAULTS = {
-                'market_spread': None, 'market_total': None,
-                'market_spread_label': None, 'market_spread_reason': None,
-                'market_total_reason': None,
-                'xgb_spread': None, 'xgb_total': None, 'xgb_total_adj': None,
-                'our_total': None, 'our_total_games': 0,
-                'spread_pick': None, 'spread_pick_label': None, 'spread_pick_reason': None,
-                'spread_correct': None,
-                'total_pick': None, 'total_pick_label': None, 'total_pick_reason': None,
-                'total_correct': None, 'strong_ou': False,
-            }
-            for _dd in daily_results.values():
-                for _gg in _dd.get('games', []):
-                    for _k, _dv in _GAME_KEY_DEFAULTS.items():
-                        _gg.setdefault(_k, _dv)
-
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _cache_market_lines_for_results(sport, daily_results, limit=20)
@@ -13416,9 +13163,9 @@ def sport_results(sport):
                 weekly_tally_date_range=weekly_tally_date_range,
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
-                soccer_leagues=soccer_leagues,
-                team_logo_url=team_logo_url,
+                soccer_leagues=soccer_leagues
             )
+            _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
             _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
             return rendered
         

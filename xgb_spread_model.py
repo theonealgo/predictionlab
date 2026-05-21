@@ -12,7 +12,7 @@ Enhancements over v1:
   - Separate XGBoost hyper-params tuned for spread vs total models
   - Model version key forces cache invalidation on feature changes
 
-Feature vector (17 features):
+Feature vector (20 features):
   [0]  elo_diff              rolling Elo difference at game time
   [1]  off_diff              season PPG differential
   [2]  def_diff              season PAPG diff (positive = home def better)
@@ -30,6 +30,9 @@ Feature vector (17 features):
   [14] a_off_rtg_idx         away off-rating index
   [15] h_def_rtg_idx         home def-rating index
   [16] a_def_rtg_idx         away def-rating index
+  [17] h_pace_var            std dev of home team's last-5 game totals (pace variance)
+  [18] a_pace_var            std dev of away team's last-5 game totals (pace variance)
+  [19] is_rest_asymmetry     1.0 if |rest_diff| >= 2 (one team clearly short-rested)
 """
 
 import numpy as np
@@ -91,13 +94,13 @@ SPREAD_REGRESSION_ALPHA = 0.90  # less regression for spreads
 MARKET_WEIGHT = 0.33  # 33 % market, 67 % model
 
 # ── Cache version — bump to invalidate stale cached models ─────────────────
-_MODEL_VERSION = 'v2_roll5_ratings'
+_MODEL_VERSION = 'v3_variance_b2b'
 
 # ── Module-level model cache  {sport: {'ts': float, 'model': ..., 'ver': str}} ──
 _MODEL_CACHE: dict = {}
 _CACHE_TTL = 3600  # retrain at most once per hour
 
-N_FEATURES = 17  # must match feature vector built in train() and predict()
+N_FEATURES = 20  # must match feature vector built in train() and predict()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -254,11 +257,19 @@ class XGBSpreadTotalPredictor:
             h_def_rtg = h_stats['defense'] / la_def * 100
             a_def_rtg = a_stats['defense'] / la_def * 100
 
+            # ── Pace variance features: std dev of game totals in rolling window ──
+            h_totals = [r[2] for r in h_roll]
+            a_totals = [r[2] for r in a_roll]
+            h_pace_var = float(np.std(h_totals)) if len(h_totals) >= 2 else 10.0
+            a_pace_var = float(np.std(a_totals)) if len(a_totals) >= 2 else 10.0
+            is_rest_asymmetry = 1.0 if abs(rest_diff) >= 2.0 else 0.0
+
             feats = [
                 elo_diff, off_diff, def_diff, pace_diff_season, rest_diff, home_adv,
                 h_r5_off, a_r5_off, h_r5_def, a_r5_def,
                 h_r5_pace, a_r5_pace, total_roll5_baseline,
                 h_off_rtg, a_off_rtg, h_def_rtg, a_def_rtg,
+                h_pace_var, a_pace_var, is_rest_asymmetry,
             ]
             assert len(feats) == N_FEATURES
             X.append(feats)
@@ -383,11 +394,19 @@ class XGBSpreadTotalPredictor:
         h_def_rtg = h['defense'] / la_def * 100
         a_def_rtg = a['defense'] / la_def * 100
 
+        # ── Pace variance features ─────────────────────────────────────
+        h_totals = [r[2] for r in h_roll]
+        a_totals = [r[2] for r in a_roll]
+        h_pace_var = float(np.std(h_totals)) if len(h_totals) >= 2 else 10.0
+        a_pace_var = float(np.std(a_totals)) if len(a_totals) >= 2 else 10.0
+        is_rest_asymmetry = 1.0 if abs(rest_days_diff) >= 2.0 else 0.0
+
         X = np.array([[
             elo_diff, off_diff, def_diff, pace_diff_season, rest_days_diff, home_adv,
             h_r5_off, a_r5_off, h_r5_def, a_r5_def,
             h_r5_pace, a_r5_pace, total_roll5_baseline,
             h_off_rtg, a_off_rtg, h_def_rtg, a_def_rtg,
+            h_pace_var, a_pace_var, is_rest_asymmetry,
         ]], dtype=np.float32)
 
         raw_spread = float(self.spread_model.predict(X)[0])

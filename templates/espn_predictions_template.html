@@ -685,7 +685,7 @@
                     {% set _xs_total = pred.disp_xs_total if (pred.disp_xs_total is defined and pred.disp_xs_total is not none) else none %}
                     {% set _xs_away_pts = pred.disp_xs_away if (pred.disp_xs_away is defined and pred.disp_xs_away is not none) else none %}
                     {% set _xs_home_pts = pred.disp_xs_home if (pred.disp_xs_home is defined and pred.disp_xs_home is not none) else none %}
-                    {% set _cons_pct = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
+                    {% set _cons_pct = pred.disp_ml_prob if (pred.disp_ml_prob is defined and pred.disp_ml_prob is not none) else (pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none) %}
                     {% set _xgb_pct = pred.xgb_prob if (pred.xgb_prob is defined and pred.xgb_prob is not none) else none %}
                     {% set _show_odds = _spread_val is not none or _total_val is not none or _cons_pct is not none or _xgb_pct is not none or is_final or (pred.our_home_pts is defined and pred.our_home_pts is not none) or (pred.xgb_home_score is defined and pred.xgb_home_score is not none) %}
                     {% if _show_odds %}
@@ -722,6 +722,20 @@
                                     <td class="val-pl">{% if _total_val is not none %}{{ fmt_half(_total_val) }}{% else %}—{% endif %}</td>
                                     <td class="val-xs">{% if _xs_total is not none %}{{ fmt_half(_xs_total) }}{% else %}—{% endif %}</td>
                                 </tr>
+                                {% if sport == 'NBA' and pred.disp_consensus_total is defined and pred.disp_consensus_total is not none %}
+                                <tr>
+                                    <td class="market-k">Consensus</td>
+                                    <td class="val-pl">{{ fmt_half(pred.disp_consensus_total) }}</td>
+                                    <td class="val-xs">—</td>
+                                </tr>
+                                {% endif %}
+                                {% if sport == 'NBA' and pred.disp_pl_pace is defined and pred.disp_pl_pace is not none %}
+                                <tr>
+                                    <td class="market-k">Est. Pace</td>
+                                    <td class="val-pl">{{ "%.1f"|format(pred.disp_pl_pace) }}{% if pred.disp_variance_tier is defined and pred.disp_variance_tier is not none %} · {{ pred.disp_variance_tier }} var{% endif %}{% if pred.disp_confidence_tier is defined and pred.disp_confidence_tier is not none %} · {{ pred.disp_confidence_tier }} conf{% endif %}</td>
+                                    <td class="val-xs">—</td>
+                                </tr>
+                                {% endif %}
                                 <tr>
                                     <td class="market-k">Projected score</td>
                                     <td class="val-pl">{{ fmt_labeled_proj(pred.away_team_id, pred.our_away_pts if (pred.our_away_pts is defined and pred.our_away_pts is not none) else none, pred.home_team_id, pred.our_home_pts if (pred.our_home_pts is defined and pred.our_home_pts is not none) else none) }}</td>
