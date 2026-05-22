@@ -990,10 +990,14 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
         from pl_book_odds_api import build_pl_book_odds
     except ImportError:
         return
+    upcoming = [
+        p for p in predictions
+        if isinstance(p, dict) and p.get('home_score') is None and p.get('game_id')
+    ]
+    # Newest slates first so API budget hits today/upcoming cards, not old dates.
+    upcoming.sort(key=lambda p: (p.get('game_date') or '0000', str(p.get('game_id') or '')), reverse=True)
     attempts = 0
-    for pred in predictions:
-        if pred.get('home_score') is not None:
-            continue
+    for pred in upcoming:
         if attempts >= limit:
             break
         game_id = pred.get('game_id')
@@ -1003,9 +1007,10 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
         if not raw_eid.isdigit():
             continue
         if (
-            pred.get('book_home_moneyline') is not None
-            and pred.get('book_spread') is not None
+            pred.get('book_spread') is not None
             and pred.get('book_total') is not None
+            and pred.get('book_home_moneyline') is not None
+            and pred.get('book_away_moneyline') is not None
         ):
             continue
         row = build_pl_book_odds(
@@ -1029,6 +1034,51 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
         if pred.get('market_total') is None and row.get('total') is not None:
             pred['market_total'] = row['total']
         pred['book_odds_source'] = row.get('source') or 'pl_book_odds_api'
+
+
+def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date):
+    """ESPN Core / DK closing line for one game (completed or upcoming)."""
+    try:
+        from pl_book_odds_api import build_pl_book_odds
+    except ImportError:
+        return None
+    gid = str(game_id or '')
+    if not gid.split('_')[-1].isdigit():
+        return None
+    return build_pl_book_odds(sport, gid, home or '', away or '', game_date)
+
+
+def _apply_pl_book_row_to_game(g: dict, row: dict) -> None:
+    """Merge sportsbook row onto a game/pred dict for grading + card display."""
+    if not row:
+        return
+    if row.get('spread') is not None:
+        g['book_spread'] = row['spread']
+        if g.get('market_spread') is None:
+            g['market_spread'] = row['spread']
+    if row.get('total') is not None:
+        g['book_total'] = row['total']
+        if g.get('market_total') is None:
+            g['market_total'] = row['total']
+    if row.get('home_moneyline') is not None:
+        g['book_home_moneyline'] = row['home_moneyline']
+    if row.get('away_moneyline') is not None:
+        g['book_away_moneyline'] = row['away_moneyline']
+
+
+def _persist_pl_book_row(sport, g: dict, row: dict) -> None:
+    if not row or not g.get('game_id'):
+        return
+    try:
+        conn = get_db_connection()
+        _upsert_betting_line(
+            conn, sport, str(g['game_id']), g.get('date'), g.get('home'), g.get('away'),
+            row.get('spread'), row.get('total'), row.get('source') or 'pl_book_odds_api',
+        )
+        conn.commit()
+        conn.close()
+    except Exception as _pe:
+        logger.debug(f"[book persist] {sport} {g.get('game_id')}: {_pe}")
 
 
 def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
@@ -1063,6 +1113,7 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
             conn.close()
         except Exception as _dbe:
             logger.debug(f"[book odds db] {sport}: {_dbe}")
+    games.sort(key=lambda g: (g.get('date') or ''), reverse=True)
     api_attempts = 0
     try:
         from pl_book_odds_api import build_pl_book_odds
@@ -1080,7 +1131,12 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
                 g['book_spread'] = row['spread']
             if row.get('total') is not None and g.get('book_total') is None:
                 g['book_total'] = row['total']
-        if g.get('book_home_moneyline') is not None:
+        if (
+            g.get('book_spread') is not None
+            and g.get('book_total') is not None
+            and g.get('book_home_moneyline') is not None
+            and g.get('book_away_moneyline') is not None
+        ):
             continue
         if not build_pl_book_odds or api_attempts >= api_limit:
             continue
@@ -1093,14 +1149,22 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
         api_attempts += 1
         if not api_row:
             continue
-        g['book_spread'] = api_row.get('spread')
-        g['book_total'] = api_row.get('total')
-        g['book_home_moneyline'] = api_row.get('home_moneyline')
-        g['book_away_moneyline'] = api_row.get('away_moneyline')
+        _apply_pl_book_row_to_game(g, api_row)
+        _persist_pl_book_row(sport, g, api_row)
 
 
 def _set_card_book_lines(card: dict) -> None:
     """Books column in Odds & Lines — prefer sportsbook lines, else market."""
+    if card.get('book_home_moneyline') is None and card.get('home_moneyline') is not None:
+        try:
+            card['book_home_moneyline'] = int(round(float(card['home_moneyline'])))
+        except (TypeError, ValueError):
+            pass
+    if card.get('book_away_moneyline') is None and card.get('away_moneyline') is not None:
+        try:
+            card['book_away_moneyline'] = int(round(float(card['away_moneyline'])))
+        except (TypeError, ValueError):
+            pass
     bs = _safe_float(card.get('book_spread'))
     if bs is not None:
         card['disp_book_spread'] = _round_to_half(-bs)
@@ -5200,7 +5264,7 @@ def get_upcoming_predictions(sport, days=365):
             logger.debug(f"Engine odds failed in get_upcoming_predictions for {sport}: {_eoe}")
     if sport in ('NBA', 'MLB', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA'):
         try:
-            _attach_pl_book_odds_to_predictions(sport, predictions, limit=30)
+            _attach_pl_book_odds_to_predictions(sport, predictions, limit=120)
         except Exception as _boe:
             logger.debug(f"PL book odds failed in get_upcoming_predictions for {sport}: {_boe}")
 
@@ -6120,6 +6184,20 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         mt = float(ml['total']) if ml.get('total') is not None else None
                     except Exception:
                         mt = None
+                if ms is None:
+                    try:
+                        bs = _safe_float(g.get('book_spread'))
+                        if bs is not None:
+                            ms = float(bs)
+                    except Exception:
+                        pass
+                if mt is None:
+                    try:
+                        bt = _safe_float(g.get('book_total'))
+                        if bt is not None:
+                            mt = float(bt)
+                    except Exception:
+                        pass
 
                 try:
                     if _xgb:
@@ -6181,6 +6259,21 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     except Exception:
                         pass
 
+                if mt is None and sport in ('NBA', 'WNBA', 'NHL', 'MLB', 'NFL'):
+                    try:
+                        gd_dt = parse_date(gd) if gd else None
+                        if gd_dt is None or (datetime.now() - gd_dt).days <= 21:
+                            _bk = _fetch_pl_book_line_for_game(sport, gid, h, a, gd)
+                            if _bk:
+                                _apply_pl_book_row_to_game(g, _bk)
+                                _persist_pl_book_row(sport, g, _bk)
+                                if ms is None and _bk.get('spread') is not None:
+                                    ms = float(_bk['spread'])
+                                if mt is None and _bk.get('total') is not None:
+                                    mt = float(_bk['total'])
+                    except Exception:
+                        pass
+
                 am = hs - as_
                 at = hs + as_
 
@@ -6237,10 +6330,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'rest': round(rest_adj, 2),
                         'park': round(park_adj, 2),
                     }
-                    # Grading line: Vegas → H2H → sport benchmark.
-                    # Fallback totals are shown but not graded for ROI/record cards.
+                    sportsbook_mt = mt
                     total_fallback_used = False
-                    if mt is None:
+                    if sportsbook_mt is None:
                         if our_total_h2h is not None:
                             mt = round(float(our_total_h2h), 1)
                             g['market_total_reason'] = "H2H last-10 (fallback)"
@@ -6259,11 +6351,11 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         g['total_pick_reason'] = g.get('total_pick_reason') or "no sportsbook total line"
                     elif adj_xt is None:
                         g['total_pick_reason'] = "model score unavailable"
-                    else:
-                        edge = adj_xt - mt
+                    elif sportsbook_mt is not None:
+                        edge = adj_xt - sportsbook_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
-                        if (not total_fallback_used) and abs(at - mt) >= 1e-9:
-                            aou = 'OVER' if at > mt else 'UNDER'
+                        if abs(at - sportsbook_mt) >= 1e-9:
+                            aou = 'OVER' if at > sportsbook_mt else 'UNDER'
                             tp_ok = (tp_disp == aou)
                             tt_gr += 1
                             if tp_ok:
@@ -6275,7 +6367,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             h2h_edge = our_total_h2h - mt
                             strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
                         g['strong_ou'] = strong
-                        label = f"{tp_disp.title()} {mt:.1f}"
+                        _lbl_mt = sportsbook_mt if sportsbook_mt is not None else mt
+                        label = f"{tp_disp.title()} {_lbl_mt:.1f}"
                         if strong and abs(edge) >= _ou_edge_threshold(sport):
                             label += " ★"
                         g['total_pick_label'] = label
@@ -6296,10 +6389,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'rest': round(rest_adj, 2),
                         'park': round(park_adj, 2),
                     }
-                    # Grading line fallback for O/U: Vegas → H2H → sport benchmark.
-                    # Fallback totals are shown but not graded for ROI/record cards.
+                    sportsbook_mt = mt
                     total_fallback_used = False
-                    if mt is None:
+                    if sportsbook_mt is None:
                         if our_total_h2h is not None:
                             mt = round(float(our_total_h2h), 1)
                             g['market_total_reason'] = "H2H last-10 (fallback)"
@@ -6343,26 +6435,35 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     elif xs is None:
                         g['spread_pick_reason'] = "model score unavailable"
 
-                    if adj_xt is not None and mt is not None:
-                        edge = adj_xt - mt
+                    if adj_xt is not None and sportsbook_mt is not None:
+                        edge = adj_xt - sportsbook_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
-                        if (not total_fallback_used) and abs(at - mt) >= 1e-9:
-                            aou = 'OVER' if at > mt else 'UNDER'
+                        if abs(at - sportsbook_mt) >= 1e-9:
+                            aou = 'OVER' if at > sportsbook_mt else 'UNDER'
                             tp_ok = (tp_disp == aou)
                             tt_gr += 1
                             if tp_ok:
                                 tt_cor += 1
-                        elif total_fallback_used:
-                            g['total_pick_reason'] = "fallback total line (not graded)"
+                        line_for_label = sportsbook_mt
                         strong = False
                         if our_total_h2h is not None:
-                            h2h_edge = our_total_h2h - mt
+                            h2h_edge = our_total_h2h - sportsbook_mt
                             strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
                         g['strong_ou'] = strong and abs(edge) >= _ou_edge_threshold(sport)
+                    elif adj_xt is not None and mt is not None and total_fallback_used:
+                        edge = adj_xt - mt
+                        tp_disp = 'OVER' if edge >= 0 else 'UNDER'
+                        g['total_pick_reason'] = "fallback total line (not graded)"
+                        line_for_label = mt
+                        g['strong_ou'] = False
                     elif xt is None:
                         g['total_pick_reason'] = "model score unavailable"
+                        line_for_label = None
                     elif mt is None:
                         g['total_pick_reason'] = "no sportsbook total line"
+                        line_for_label = None
+                    else:
+                        line_for_label = None
 
                     # Display-ready strings for the unified table
                     g['spread_pick_label'] = None
@@ -6373,8 +6474,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     else:
                         g['spread_line_display'] = None
                     g['total_pick_label'] = None
-                    if tp_disp in ('OVER', 'UNDER') and mt is not None:
-                        g['total_line_display'] = f"{tp_disp.title()} {mt:.1f}"
+                    if tp_disp in ('OVER', 'UNDER') and line_for_label is not None:
+                        g['total_line_display'] = f"{tp_disp.title()} {line_for_label:.1f}"
                         label = g['total_line_display']
                         if g.get('strong_ou'):
                             label += " ★"
@@ -13052,7 +13153,7 @@ def sport_predictions(sport, filter_date=None):
             sorted_dates = []
 
     try:
-        _attach_pl_book_odds_to_predictions(sport, predictions, limit=50)
+        _attach_pl_book_odds_to_predictions(sport, predictions, limit=120)
     except Exception as _card_bk:
         logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
 
@@ -13286,6 +13387,7 @@ def sport_results(sport):
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
+                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=60)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 _finalize_daily_result_cards(sport, daily_results)
@@ -13327,7 +13429,7 @@ def sport_results(sport):
                 return f"<h1>NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
-            cache_key = f'{sport}_daily_results_html_v3'
+            cache_key = f'{sport}_daily_results_html_v5'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
@@ -13361,7 +13463,8 @@ def sport_results(sport):
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
-                _cache_market_lines_for_results(sport, daily_results, limit=20)
+                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=120)
+                _cache_market_lines_for_results(sport, daily_results, limit=80)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 _finalize_daily_result_cards(sport, daily_results)
@@ -13577,7 +13680,8 @@ def sport_results(sport):
             sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
-            _cache_market_lines_for_results(sport, daily_results, limit=20)
+            _attach_book_odds_to_daily_results(sport, daily_results, api_limit=60)
+            _cache_market_lines_for_results(sport, daily_results, limit=40)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)

@@ -158,5 +158,11 @@
     {% if not is_final and is_premium and card.ml_ev is defined and card.ml_ev is not none %}
     <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
     {% endif %}
+    {% if not is_final and is_premium and card.total_ev is defined and card.total_ev is not none %}
+    <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if card.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.total_ev) }}%</span></div>
+    {% endif %}
+    {% if not is_final and is_premium and card.best_ev_pick is defined and card.best_ev_pick %}
+    <div class="sf-item"><span class="sf-label">Best EV</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ card.best_ev_pick }}</span></div>
+    {% endif %}
 </div>
 {% endif %}
