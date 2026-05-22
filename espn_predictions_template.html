@@ -636,6 +636,7 @@
                     {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
                     {% set card = pred %}
                     {% set is_results = false %}
+                    {% set is_premium = is_premium|default(false) %}
                     {% set spread_label = _spread_label %}
                     {% set force_rl = _force_rl %}
                     {% set away_score = pred.away_score %}

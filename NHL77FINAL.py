@@ -12682,6 +12682,31 @@ def soccer_predictions_league(league_slug):
 def soccer_results_league(league_slug):
     return redirect(f'/soccer-results?league={league_slug}', code=301)
 
+
+def _render_espn_picks_page(**ctx):
+    """Render picks page — templates/ file first, then root copy (with {% include %} support)."""
+    last_err = None
+    try:
+        return render_template('espn_predictions_template.html', **ctx)
+    except Exception as _e:
+        last_err = _e
+        logger.exception('render_template espn_predictions_template failed: %s', _e)
+    for _path in (
+        _os.path.join(_BASE_DIR, 'templates', 'espn_predictions_template.html'),
+        _os.path.join(_BASE_DIR, 'espn_predictions_template.html'),
+    ):
+        if not _os.path.isfile(_path):
+            continue
+        try:
+            with open(_path, encoding='utf-8') as _f:
+                _src = _f.read()
+            return render_template_string(_src, **ctx)
+        except Exception as _e2:
+            last_err = _e2
+            logger.exception('render_template_string picks failed (%s): %s', _path, _e2)
+    raise RuntimeError(f'Picks template render failed: {last_err}')
+
+
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
     sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
@@ -12744,19 +12769,26 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v9::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
-            if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+            if (
+                cached_ts is not None
+                and cached_html
+                and (_time.time() - cached_ts) < cache_ttl
+                and 'teams-split' in cached_html
+                and 'refreshing this page right now' not in cached_html.lower()
+            ):
                 return cached_html
     prediction_error = None
     try:
         predictions = get_upcoming_predictions(sport)
     except Exception as e:
-        logger.error(f"Error loading {sport} predictions: {e}")
+        import traceback as _tb_pred
+        logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
         predictions = []
         prediction_error = (
             f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
@@ -12774,25 +12806,50 @@ def sport_predictions(sport, filter_date=None):
             'total_over_price',
             'total_under_price',
             'odds_reason',
-            # espn_predictions_template uses pred.our_spread / pred.xgb_spread / …;
-            # missing keys on plain dicts raise in Jinja (NBA paths always had these).
             'our_spread',
             'our_total',
+            'our_home_pts',
+            'our_away_pts',
             'xgb_spread',
             'xgb_total',
+            'xgb_home_score',
+            'xgb_away_score',
             'naive_spread',
             'naive_total',
+            'naive_home_score',
+            'naive_away_score',
             'h2h_last10_total',
             'h2h_last10_games',
+            'h2h_last10_meetings',
+            'xsharp_spread',
+            'xsharp_total',
+            'xsharp_home_score',
+            'xsharp_away_score',
+            'book_spread',
+            'book_total',
+            'book_home_moneyline',
+            'book_away_moneyline',
+            'disp_pl_spread',
+            'disp_pl_total',
+            'disp_xs_spread',
+            'disp_xs_total',
+            'disp_book_spread',
+            'disp_book_total',
+            'pl_model_home_ml',
+            'pl_model_away_ml',
+            'pl_proj_home_pts',
+            'pl_proj_away_pts',
+            'xs_proj_home_pts',
+            'xs_proj_away_pts',
+            'game_time',
         ):
             if _k not in pred:
-                pred[_k] = None if _k != 'h2h_last10_games' else 0
-
-    # Finalize XSharp + PL model consistency, then precompute disp_* display keys.
-    for _pred in predictions:
-        _finalize_prediction_odds(_pred)
-        _enforce_pick_spread_consistency(_pred, sport=sport)
-        _prepare_pred_card_display(_pred)
+                if _k == 'h2h_last10_games':
+                    pred[_k] = 0
+                elif _k == 'h2h_last10_meetings':
+                    pred[_k] = []
+                else:
+                    pred[_k] = None
 
     soccer_leagues = None
     selected_league = None
@@ -12922,8 +12979,11 @@ def sport_predictions(sport, filter_date=None):
             grouped_predictions = {}
             sorted_dates = []
 
-    # Nested efficiency payloads are plain dicts for some sports; Jinja attribute access
-    # (pred.our_home_eff.ortg) fails on dicts — wrap as SimpleNamespace for template compatibility.
+    try:
+        _attach_pl_book_odds_to_predictions(sport, predictions, limit=50)
+    except Exception as _card_bk:
+        logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
+
     for pred in predictions:
         if not isinstance(pred, dict):
             continue
@@ -12931,8 +12991,9 @@ def sport_predictions(sport, filter_date=None):
             _v = pred.get(_eff_key)
             if isinstance(_v, dict):
                 pred[_eff_key] = types.SimpleNamespace(**_v)
-
-    # soccer_leagues already computed above for soccer
+        _finalize_prediction_odds(pred)
+        _enforce_pick_spread_consistency(pred, sport=sport)
+        _prepare_pred_card_display(pred)
 
     try:
         from flask_login import current_user as _cu
@@ -12940,36 +13001,35 @@ def sport_predictions(sport, filter_date=None):
     except Exception:
         _pred_li = False
 
+    _render_ctx = dict(
+        page=sport,
+        sport=sport,
+        sport_info=SPORTS[sport],
+        sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+        sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+        sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+        predictions=predictions,
+        prediction_error=prediction_error,
+        grouped_predictions=grouped_predictions,
+        sorted_dates=sorted_dates,
+        today_date=today_date,
+        group_by='week' if sport == 'NFL' else 'date',
+        soccer_leagues=soccer_leagues,
+        shareable_cards=shareable_cards,
+        share_image_src=share_image_src,
+        share_image_view_url=share_image_view_url,
+        is_logged_in=_pred_li,
+        soccer_enabled=SOCCER_ENABLED,
+        ga_tracking_id=GA_TRACKING_ID,
+        todays_picks=[],
+        team_logo_url=team_logo_url,
+    )
     try:
-        # Load ESPN-style template (absolute path so Render/gunicorn always finds it)
-        with open(_os.path.join(_BASE_DIR, 'espn_predictions_template.html'), 'r') as f:
-            espn_template = f.read()
-        rendered = render_template_string(
-            espn_template,
-            page=sport,
-            sport=sport,
-            sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
-            sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
-            sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-            predictions=predictions,
-            prediction_error=prediction_error,
-            grouped_predictions=grouped_predictions,
-            sorted_dates=sorted_dates,
-            today_date=today_date,
-            group_by='week' if sport == 'NFL' else 'date',
-            soccer_leagues=soccer_leagues,
-            shareable_cards=shareable_cards,
-            share_image_src=share_image_src,
-            share_image_view_url=share_image_view_url,
-            is_logged_in=_pred_li,
-            soccer_enabled=SOCCER_ENABLED,
-            ga_tracking_id=GA_TRACKING_ID,
-            todays_picks=[],
-        )
+        rendered = _render_espn_picks_page(**_render_ctx)
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)
-    if cache_key:
+    if cache_key and rendered and 'teams-split' in rendered:
         _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180), max_entries=50)
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
