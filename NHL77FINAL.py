@@ -8276,64 +8276,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;padding:4px 12px 8px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
                 </div>
                 {% endfor %}
-                        </div>
-                        {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:6px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
-                    </div>
-                    <div class="result-footer section-spread">
-                        <div class="sf-item">
-                            <span class="sf-label">Model Spread Pick</span>
-                            <span class="sf-val">
-                                {% if game.spread_pick_label %}{{ game.spread_pick_label }}
-                                {% elif game.spread_pick_reason is defined and game.spread_pick_reason %}{{ game.spread_pick_reason }}
-                                {% else %}—{% endif %}
-                                {% if game.spread_correct is not none %}<span class="{{ 'pick-ok' if game.spread_correct else 'pick-no' }}">{{ '✅' if game.spread_correct else '❌' }}</span>{% endif %}
-                            </span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">Our Spread</span>
-                            <span class="sf-val">
-                                {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
-                                {% elif game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
-                                {% elif game.market_spread_reason is defined and game.market_spread_reason %}{{ game.market_spread_reason }}
-                                {% else %}—{% endif %}
-                            </span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">Actual Spread</span>
-                            <span class="sf-val">{{ "%+.1f"|format(actual_spread) }}</span>
-                        </div>
-                    </div>
-                    <div class="result-footer section-total">
-                        <div class="sf-item">
-                            <span class="sf-label">Model O/U Pick</span>
-                            <span class="sf-val">
-                                {% if game.total_pick_label %}{{ game.total_pick_label }}
-                                {% elif game.total_pick_reason is defined and game.total_pick_reason %}{{ game.total_pick_reason }}
-                                {% else %}—{% endif %}
-                                {% if game.total_correct is not none %}<span class="{{ 'pick-ok' if game.total_correct else 'pick-no' }}">{{ '✅' if game.total_correct else '❌' }}</span>{% endif %}
-                            </span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">XSharp Total</span>
-                            <span class="sf-val sf-xgb">{% if game.xgb_total is not none %}{{ "%.1f"|format(game.xgb_total) }}{% if game.xgb_total_adj is defined and game.xgb_total_adj is not none and (game.xgb_total_adj - game.xgb_total)|abs > 0.05 %} <span style="color:#a78bfa;font-size:0.78em;">→ {{ "%.1f"|format(game.xgb_total_adj) }}</span>{% endif %}{% else %}—{% endif %}</span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">H2H Last 10</span>
-                            <span class="sf-val">{% if game.our_total is defined and game.our_total is not none %}{{ "%.1f"|format(game.our_total) }}{% else %}—{% endif %}</span>
-                        </div>
-                        {% if game.market_total is not none %}
-                        <div class="sf-item">
-                            <span class="sf-label">Market Total</span>
-                            <span class="sf-val">{{ "%.1f"|format(game.market_total) }}</span>
-                        </div>
-                        {% endif %}
-                        <div class="sf-item">
-                            <span class="sf-label">Actual Total</span>
-                            <span class="sf-val">{{ "%.1f"|format(actual_total) }}</span>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
             </div>
         </div>
         {% endfor %}
