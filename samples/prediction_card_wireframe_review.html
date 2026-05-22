@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cavs @ Knicks — site preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f4f8;
+      margin: 0;
+      padding: 20px 16px 32px;
+      color: #0f172a;
+    }
+    .preview-page { max-width: 420px; margin: 0 auto; }
+    .game-card {
+      background: #fff;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+    }
+    .game-status {
+      padding: 4px 12px;
+      font-size: 0.72em;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #92400e;
+      background: rgba(146, 64, 14, 0.1);
+      text-align: center;
+    }
+    .card-hero {
+      padding: 12px 12px 10px;
+      border-bottom: 1px solid #E2E8F0;
+    }
+    .card-hero-meta {
+      text-align: center;
+      font-size: 0.68em;
+      color: #64748b;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .teams-split {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: start;
+      gap: 8px;
+    }
+    .team-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      min-width: 0;
+    }
+    .team-col.home { align-items: center; }
+    .team-logo { width: 48px; height: 48px; object-fit: contain; margin-bottom: 4px; }
+    .team-name {
+      font-size: 0.78em;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 8px;
+      color: #0f172a;
+    }
+    .teams-at {
+      font-size: 0.72em;
+      font-weight: 800;
+      color: #94a3b8;
+      padding-top: 18px;
+    }
+    .ml-stack { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+    .ml-line {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+    }
+    .ml-src {
+      font-size: 0.58em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #94a3b8;
+    }
+    .ml-src.books { color: #0f766e; }
+    .ml-src.pl { color: #92400e; }
+    .ml-num {
+      font-size: 0.92em;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .ml-num.fav { color: #00C076; }
+    .ml-num.dog { color: #92400e; }
+    .pick-arrow { color: #00C076; font-weight: 800; font-size: 0.85em; margin-top: 2px; }
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: 0.68em;
+      color: #0F172A;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+    .info-wrap { position: relative; display: inline-flex; }
+    .info-btn {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid #94a3b8;
+      background: #fff;
+      color: #475569;
+      font-size: 0.62em;
+      font-weight: 800;
+      font-style: italic;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+    }
+    .info-btn:hover, .info-btn[aria-expanded="true"] {
+      border-color: #00529B;
+      color: #00529B;
+      background: #eff6ff;
+    }
+    .info-pop {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: calc(100% + 6px);
+      min-width: 200px;
+      max-width: 260px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+      padding: 8px 10px;
+      font-size: 0.72em;
+      font-weight: 500;
+      color: #475569;
+      line-height: 1.4;
+      z-index: 20;
+      text-transform: none;
+    }
+    .info-pop.open { display: block; }
+    .odds-pricing-section {
+      border-top: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 10px 12px 10px;
+      background: #f8fafc;
+    }
+    .odds-pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8em;
+    }
+    .odds-pricing-table th {
+      text-align: left;
+      font-weight: 700;
+      padding: 7px 8px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #64748b;
+      font-size: 0.68em;
+      text-transform: uppercase;
+      line-height: 1.2;
+    }
+    .odds-pricing-table td {
+      padding: 7px 8px;
+      border-bottom: 1px solid #f1f5f9;
+      font-weight: 600;
+    }
+    .odds-pricing-table tr:last-child td { border-bottom: none; }
+    .market-k { color: #64748b; font-size: 0.72em; text-transform: uppercase; }
+    .val-books, th.col-books { color: #0f766e; }
+    .val-pl, th.col-pl { color: #92400e; }
+    .val-xs, th.col-xs { color: #1d4ed8; }
+    .proj-score-box {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+    .proj-score-box .section-title { margin-bottom: 6px; }
+    .proj-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      padding: 5px 0;
+      border-top: 1px solid #f1f5f9;
+      font-size: 0.78em;
+      font-weight: 600;
+    }
+    .proj-row:first-of-type { border-top: none; padding-top: 0; }
+    .proj-model { font-size: 0.68em; text-transform: uppercase; font-weight: 700; flex-shrink: 0; }
+    .proj-model.pl { color: #92400e; }
+    .proj-model.xs { color: #1d4ed8; }
+    .proj-val { color: #0f172a; text-align: right; }
+    .pick-conf-bar {
+      border-top: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 10px 12px 12px;
+      background: rgba(15, 23, 42, 0.03);
+    }
+    .pick-conf-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    @media (max-width: 520px) {
+      .pick-conf-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .pc-box {
+      background: #fff;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 6px 4px;
+      text-align: center;
+      min-height: 86px;
+      display: grid;
+      grid-template-rows: 30px 26px 32px;
+      gap: 2px;
+    }
+    .pc-box.consensus {
+      border-color: rgba(251, 191, 36, 0.5);
+      background: rgba(251, 191, 36, 0.1);
+    }
+    .pc-name {
+      font-size: 0.68em;
+      font-weight: 700;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1.1;
+    }
+    .pc-val {
+      font-size: 0.95em;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pc-side {
+      font-size: 0.6em;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pc-side.home { color: #00C076; background: rgba(16, 185, 129, 0.15); }
+    .pc-side.away { color: #92400e; background: rgba(146, 64, 14, 0.1); }
+    .odds-extras-footer {
+      border-top: 1px solid rgba(15, 23, 42, 0.07);
+      padding: 8px 12px 10px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      background: rgba(15, 23, 42, 0.03);
+    }
+    .sf-item { display: flex; flex-direction: column; gap: 1px; }
+    .sf-label {
+      font-size: 0.72em;
+      text-transform: uppercase;
+      color: #475569;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .sf-val { font-size: 0.85em; font-weight: 700; }
+    .analysis-toggle {
+      padding: 8px 12px;
+      font-size: 0.72em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #7c3aed;
+      border-top: 1px solid rgba(15, 23, 42, 0.06);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-page">
+    <div class="game-card">
+      <div class="game-status">May 21, 2026 · Upcoming · 7:30 PM ET</div>
+
+      <div class="card-hero">
+        <div class="card-hero-meta">Cleveland at New York</div>
+        <div class="teams-split">
+          <div class="team-col away">
+            <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/nba/500/cle.png" alt="">
+            <div class="team-name">Cavaliers</div>
+            <div class="ml-stack">
+              <div class="ml-line">
+                <span class="ml-src books">Books</span>
+                <span class="ml-num dog">+170</span>
+              </div>
+              <div class="ml-line">
+                <span class="ml-src pl">Prediction Lab</span>
+                <span class="ml-num dog">+243</span>
+              </div>
+            </div>
+          </div>
+          <div class="teams-at">@</div>
+          <div class="team-col home">
+            <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/nba/500/ny.png" alt="">
+            <div class="team-name">Knicks</div>
+            <div class="ml-stack">
+              <div class="ml-line">
+                <span class="ml-src books">Books</span>
+                <span class="ml-num fav">-205</span>
+              </div>
+              <div class="ml-line">
+                <span class="ml-src pl">Prediction Lab</span>
+                <span class="ml-num fav">-298</span>
+              </div>
+            </div>
+            <span class="pick-arrow">▶</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="odds-pricing-section">
+        <div class="section-head">
+          <h4 class="section-title">Odds &amp; Lines</h4>
+          <span class="info-wrap">
+            <button type="button" class="info-btn" aria-label="About odds table" onclick="toggleInfo(this)">i</button>
+            <span class="info-pop">Spread and total from Books, Prediction Lab, and XSharp.</span>
+          </span>
+        </div>
+        <table class="odds-pricing-table">
+          <thead>
+            <tr>
+              <th>Market</th>
+              <th class="col-books">Books</th>
+              <th class="col-pl">Prediction Lab Odds</th>
+              <th class="col-xs">XSharp</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="market-k">Spread</td>
+              <td class="val-books">NYK -5.5</td>
+              <td class="val-pl">NYK -7.0</td>
+              <td class="val-xs">NYK -5.5</td>
+            </tr>
+            <tr>
+              <td class="market-k">Total</td>
+              <td class="val-books">215.5</td>
+              <td class="val-pl">233.0</td>
+              <td class="val-xs">215.5</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="proj-score-box">
+          <div class="section-title">Projected Score</div>
+          <div class="proj-row">
+            <span class="proj-model pl">Prediction Lab Odds</span>
+            <span class="proj-val">CLE 113 – NYK 120</span>
+          </div>
+          <div class="proj-row">
+            <span class="proj-model xs">XSharp</span>
+            <span class="proj-val">CLE 111 – NYK 105</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pick-conf-bar">
+        <div class="section-head">
+          <h4 class="section-title">Pick Confidence</h4>
+          <span class="info-wrap">
+            <button type="button" class="info-btn" aria-label="About pick confidence" onclick="toggleInfo(this)">i</button>
+            <span class="info-pop">Model win % and side. Used for results.</span>
+          </span>
+        </div>
+        <div class="pick-conf-grid">
+          <div class="pc-box">
+            <div class="pc-name">Grinder2</div>
+            <div class="pc-val">52.7%</div>
+            <div class="pc-side home">Knicks</div>
+          </div>
+          <div class="pc-box">
+            <div class="pc-name">Takedown</div>
+            <div class="pc-val">53.0%</div>
+            <div class="pc-side away">Cavaliers</div>
+          </div>
+          <div class="pc-box">
+            <div class="pc-name">Edge</div>
+            <div class="pc-val">52.6%</div>
+            <div class="pc-side home">Knicks</div>
+          </div>
+          <div class="pc-box">
+            <div class="pc-name">XSharp</div>
+            <div class="pc-val">70.3%</div>
+            <div class="pc-side away">Cavaliers</div>
+          </div>
+          <div class="pc-box consensus">
+            <div class="pc-name">Sharp Consensus</div>
+            <div class="pc-val">72.0%</div>
+            <div class="pc-side home">Knicks</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="odds-extras-footer">
+        <div class="sf-item">
+          <span class="sf-label">H2H Last 10
+            <span class="info-wrap">
+              <button type="button" class="info-btn" aria-label="H2H info" onclick="toggleInfo(this)">i</button>
+              <span class="info-pop">Combined scoring in last meetings.</span>
+            </span>
+          </span>
+          <span class="sf-val" style="color:#475569">233.0 (3 games)</span>
+        </div>
+        <div class="sf-item">
+          <span class="sf-label">EV</span>
+          <span class="sf-val" style="color:#b91c1c">-4.0%</span>
+        </div>
+        <div class="sf-item">
+          <span class="sf-label">Total EV</span>
+          <span class="sf-val" style="color:#15803d">+54.5%</span>
+        </div>
+        <div class="sf-item">
+          <span class="sf-label">Best EV</span>
+          <span class="sf-val" style="color:#1d4ed8">Total</span>
+        </div>
+      </div>
+
+      <div class="analysis-toggle">Analysis ▾</div>
+    </div>
+  </div>
+  <script>
+    function toggleInfo(btn) {
+      var pop = btn.nextElementSibling;
+      var open = pop.classList.contains('open');
+      document.querySelectorAll('.info-pop.open').forEach(function (p) {
+        p.classList.remove('open');
+        var b = p.previousElementSibling;
+        if (b) b.setAttribute('aria-expanded', 'false');
+      });
+      if (!open) {
+        pop.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+      event.stopPropagation();
+    }
+    document.addEventListener('click', function () {
+      document.querySelectorAll('.info-pop.open').forEach(function (p) {
+        p.classList.remove('open');
+        var b = p.previousElementSibling;
+        if (b) b.setAttribute('aria-expanded', 'false');
+      });
+    });
+  </script>
+</body>
+</html>

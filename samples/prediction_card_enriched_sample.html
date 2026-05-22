@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cavs @ Knicks — card sample</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f4f8;
+      margin: 0;
+      padding: 24px 16px;
+      color: #0f172a;
+    }
+    .game-card-stack { max-width: 420px; margin: 0 auto; }
+    .game-card {
+      background: #fff;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+    }
+    .game-status {
+      padding: 4px 12px;
+      font-size: 0.72em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #92400e;
+      background: rgba(146, 64, 14, 0.1);
+    }
+    .card-hero { display: flex; gap: 12px; padding: 14px 12px; border-bottom: 1px solid #E2E8F0; }
+    .card-hero-logos { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 52px; flex-shrink: 0; }
+    .team-logo { width: 44px; height: 44px; object-fit: contain; }
+    .card-hero-at { font-size: 0.62em; font-weight: 700; color: #94a3b8; }
+    .card-hero-meta { font-size: 0.7em; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+    .card-hero-ml { display: flex; flex-direction: column; gap: 5px; }
+    .card-hero-ml-row { display: flex; justify-content: space-between; font-size: 0.86em; font-weight: 600; }
+    .ml-val.fav { color: #00C076; }
+    .ml-val.dog { color: #92400e; }
+    .pick-arrow { color: #00C076; font-weight: 800; }
+    .pick-conf-bar { padding: 10px 12px; background: rgba(15, 23, 42, 0.03); border-bottom: 1px solid #e2e8f0; }
+    .pick-conf-title { font-size: 0.68em; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+    .pick-conf-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .pc-box { background: #fff; border: 1px solid #E2E8F0; border-radius: 8px; padding: 6px 4px; text-align: center; min-height: 86px; display: grid; grid-template-rows: 30px 26px 32px; gap: 2px; }
+    .pc-box.consensus { border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.1); }
+    .pc-name { font-size: 0.68em; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; justify-content: center; }
+    .pc-val { font-size: 0.95em; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .pc-side { font-size: 0.6em; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; width: 100%; display: flex; align-items: center; justify-content: center; }
+    .pc-side.home { color: #00C076; background: rgba(16, 185, 129, 0.15); }
+    .pc-side.away { color: #92400e; background: rgba(146, 64, 14, 0.1); }
+    .odds-pricing-section { padding: 10px 12px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    .odds-pricing-title { font-size: 0.68em; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+    .odds-pricing-table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
+    .odds-pricing-table th { text-align: left; padding: 7px 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 0.72em; text-transform: uppercase; }
+    .odds-pricing-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; font-weight: 600; }
+    .val-pl, th.col-pl { color: #92400e; }
+    .val-xs, th.col-xs { color: #1d4ed8; }
+    .odds-extras-footer { padding: 7px 12px; display: flex; gap: 16px; flex-wrap: wrap; background: rgba(15, 23, 42, 0.03); }
+    .sf-label { font-size: 0.72em; text-transform: uppercase; color: #475569; }
+    .sf-val { font-size: 0.85em; font-weight: 600; }
+    .analysis-toggle { padding: 6px 12px; font-size: 0.72em; text-transform: uppercase; color: #a78bfa; }
+  </style>
+</head>
+<body>
+  <div class="game-card-stack">
+    <div class="game-card">
+      <div class="game-status">📅 2026-05-21 · upcoming</div>
+      <div class="card-hero">
+        <div class="card-hero-logos">
+          <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/nba/500/cle.png" alt="">
+          <span class="card-hero-at">@</span>
+          <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/nba/500/ny.png" alt="">
+        </div>
+        <div>
+          <div class="card-hero-meta">upcoming</div>
+          <div class="card-hero-ml">
+            <div class="card-hero-ml-row"><span>Cleveland Cavaliers</span><span class="ml-val dog">+170</span></div>
+            <div class="card-hero-ml-row"><span>New York Knicks</span><span><span class="ml-val fav">-205</span><span class="pick-arrow"> ▶</span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="pick-conf-bar">
+        <div class="pick-conf-title">Pick Confidence</div>
+        <div class="pick-conf-grid">
+          <div class="pc-box"><div class="pc-name">Grinder2</div><div class="pc-val">52.7%</div><div class="pc-side home">Knicks</div></div>
+          <div class="pc-box"><div class="pc-name">Takedown</div><div class="pc-val">53.0%</div><div class="pc-side away">Cavaliers</div></div>
+          <div class="pc-box"><div class="pc-name">Edge</div><div class="pc-val">52.6%</div><div class="pc-side home">Knicks</div></div>
+          <div class="pc-box"><div class="pc-name">XSharp</div><div class="pc-val">70.3%</div><div class="pc-side away">Cavaliers</div></div>
+          <div class="pc-box consensus"><div class="pc-name">Sharp Consensus</div><div class="pc-val">72.0%</div><div class="pc-side home">Knicks</div></div>
+        </div>
+      </div>
+      <div class="odds-pricing-section">
+        <div class="odds-pricing-title">Odds &amp; Pricing</div>
+        <table class="odds-pricing-table">
+          <thead>
+            <tr>
+              <th>Market</th>
+              <th>Book</th>
+              <th class="col-pl">PL Model</th>
+              <th class="col-xs">XSharp</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Moneyline</td>
+              <td>CLE +170 · NYK -205</td>
+              <td class="val-pl">NYK · 62.9%</td>
+              <td class="val-xs">NYK · 73.4%</td>
+            </tr>
+            <tr>
+              <td>Spread</td>
+              <td>NYK -5.5</td>
+              <td class="val-pl">NYK -7.0</td>
+              <td class="val-xs">NYK -5.5</td>
+            </tr>
+            <tr>
+              <td>Total</td>
+              <td>215.5</td>
+              <td class="val-pl">233.0</td>
+              <td class="val-xs">215.5</td>
+            </tr>
+            <tr>
+              <td>Projected score</td>
+              <td>—</td>
+              <td class="val-pl">CLE 113 – NYK 120</td>
+              <td class="val-xs">110.5 – 105.0</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="odds-extras-footer">
+        <div><span class="sf-label">H2H Last 10</span><br><span class="sf-val">233.0 (3 games)</span></div>
+        <div><span class="sf-label">EV</span><br><span class="sf-val" style="color:#b91c1c">-4.0%</span></div>
+        <div><span class="sf-label">Total EV</span><br><span class="sf-val" style="color:#15803d">+54.5%</span></div>
+        <div><span class="sf-label">Best EV Pick</span><br><span class="sf-val" style="color:#1d4ed8">Total</span></div>
+      </div>
+      <div class="analysis-toggle">Analysis ▾</div>
+    </div>
+  </div>
+</body>
+</html>

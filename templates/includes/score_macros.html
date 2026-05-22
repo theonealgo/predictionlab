@@ -21,6 +21,33 @@
 {%- else -%}—{%- endif -%}
 {%- endmacro %}
 
+{% macro fmt_single_ml(v) -%}
+{%- if v is not none -%}{% if v > 0 %}+{% endif %}{{ v }}{%- else -%}—{%- endif -%}
+{%- endmacro %}
+
+{% macro fmt_dual_american_ml(away_team, away_ml, home_team, home_ml) -%}
+{%- if away_ml is not none and home_ml is not none -%}
+{{ team_short(away_team) }} {% if away_ml > 0 %}+{% endif %}{{ away_ml }} · {{ team_short(home_team) }} {% if home_ml > 0 %}+{% endif %}{{ home_ml }}
+{%- else -%}—{%- endif -%}
+{%- endmacro %}
+
+{% macro fmt_spread_line(spread, home, away, force_run_line=false) -%}
+{%- if spread is none -%}—
+{%- else -%}
+{%- set raw = spread|float -%}
+{%- if force_run_line -%}
+{%- set mag = 1.5 -%}
+{%- set s = mag if raw >= 0 else -mag -%}
+{%- else -%}
+{%- set s = (raw * 2)|round(0, 'common') / 2 -%}
+{%- endif -%}
+{%- if s == 0 -%}PK
+{%- elif s > 0 -%}{{ home }} -{{ fmt_half(s) }}
+{%- else -%}{{ away }} -{{ fmt_half(s|abs) }}
+{%- endif -%}
+{%- endif -%}
+{%- endmacro %}
+
 {% macro fmt_final_spread(home_team, away_team, home_score, away_score) -%}
 {%- if home_score is not none and away_score is not none -%}
 {%- set margin = home_score - away_score -%}

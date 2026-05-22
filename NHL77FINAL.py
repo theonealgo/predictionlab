@@ -761,6 +761,182 @@ def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
         pred['odds_source'] = 'model_fallback'
 
 
+def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
+    """Attach sportsbook lines (ESPN Core / DraftKings when listed) for card display."""
+    if not predictions:
+        return
+    try:
+        from pl_book_odds_api import build_pl_book_odds
+    except ImportError:
+        return
+    attempts = 0
+    for pred in predictions:
+        if pred.get('home_score') is not None:
+            continue
+        if attempts >= limit:
+            break
+        game_id = pred.get('game_id')
+        if not game_id:
+            continue
+        raw_eid = str(game_id).split('_')[-1]
+        if not raw_eid.isdigit():
+            continue
+        if pred.get('book_home_moneyline') is not None and pred.get('book_spread') is not None:
+            continue
+        row = build_pl_book_odds(
+            sport,
+            game_id,
+            pred.get('home_team_id', ''),
+            pred.get('away_team_id', ''),
+            pred.get('game_date'),
+        )
+        attempts += 1
+        if not row:
+            continue
+        pred['book_spread'] = row.get('spread')
+        pred['book_total'] = row.get('total')
+        pred['book_home_moneyline'] = row.get('home_moneyline')
+        pred['book_away_moneyline'] = row.get('away_moneyline')
+        pred['book_provider'] = row.get('provider')
+        pred['book_favorite_team'] = row.get('favorite_team')
+        if pred.get('market_spread') is None and row.get('spread') is not None:
+            pred['market_spread'] = row['spread']
+        if pred.get('market_total') is None and row.get('total') is not None:
+            pred['market_total'] = row['total']
+        pred['book_odds_source'] = row.get('source') or 'pl_book_odds_api'
+
+
+def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
+    """Attach Books ML/spread/total on completed games (DB lines first, then ESPN API)."""
+    if not daily_results:
+        return
+    games = []
+    for dd in daily_results.values():
+        for g in dd.get('games', []):
+            games.append(g)
+    if not games:
+        return
+    game_ids = [str(g['game_id']) for g in games if g.get('game_id')]
+    by_gid = {}
+    if game_ids:
+        try:
+            conn = get_db_connection()
+            chunk = 400
+            for i in range(0, len(game_ids), chunk):
+                part = game_ids[i:i + chunk]
+                ph = ','.join('?' * len(part))
+                rows = conn.execute(
+                    f"""SELECT game_id, spread, total, home_moneyline, away_moneyline
+                        FROM betting_lines WHERE sport=? AND game_id IN ({ph})
+                        ORDER BY fetched_at DESC""",
+                    [sport] + part,
+                ).fetchall()
+                for r in rows:
+                    gid = str(r['game_id'])
+                    if gid not in by_gid:
+                        by_gid[gid] = dict(r)
+            conn.close()
+        except Exception as _dbe:
+            logger.debug(f"[book odds db] {sport}: {_dbe}")
+    api_attempts = 0
+    try:
+        from pl_book_odds_api import build_pl_book_odds
+    except ImportError:
+        build_pl_book_odds = None
+    for g in games:
+        gid = str(g.get('game_id') or '')
+        row = by_gid.get(gid) if gid else None
+        if row:
+            if row.get('home_moneyline') is not None:
+                g['book_home_moneyline'] = int(row['home_moneyline'])
+            if row.get('away_moneyline') is not None:
+                g['book_away_moneyline'] = int(row['away_moneyline'])
+            if row.get('spread') is not None and g.get('book_spread') is None:
+                g['book_spread'] = row['spread']
+            if row.get('total') is not None and g.get('book_total') is None:
+                g['book_total'] = row['total']
+        if g.get('book_home_moneyline') is not None:
+            continue
+        if not build_pl_book_odds or api_attempts >= api_limit:
+            continue
+        raw_eid = gid.split('_')[-1]
+        if not raw_eid.isdigit():
+            continue
+        api_row = build_pl_book_odds(
+            sport, gid, g.get('home', ''), g.get('away', ''), g.get('date'),
+        )
+        api_attempts += 1
+        if not api_row:
+            continue
+        g['book_spread'] = api_row.get('spread')
+        g['book_total'] = api_row.get('total')
+        g['book_home_moneyline'] = api_row.get('home_moneyline')
+        g['book_away_moneyline'] = api_row.get('away_moneyline')
+
+
+def _prepare_result_card_display(g: dict, sport: str) -> None:
+    """Display fields for results cards (same layout as predictions)."""
+    away = g.get('away') or g.get('away_team_id')
+    home = g.get('home') or g.get('home_team_id')
+    g['away_team_id'] = away
+    g['home_team_id'] = home
+    ens = g.get('ens_prob')
+    if ens is not None:
+        ml = _compute_odds_from_prob(ens)
+        if ml:
+            g['pl_model_home_ml'] = ml.get('moneyline_home')
+            g['pl_model_away_ml'] = ml.get('moneyline_away')
+    ms = g.get('market_spread')
+    if ms is not None:
+        try:
+            g['disp_book_spread'] = _round_to_half(-float(ms))
+        except (TypeError, ValueError):
+            pass
+    bs = _safe_float(g.get('book_spread'))
+    if bs is not None and g.get('disp_book_spread') is None:
+        g['disp_book_spread'] = _round_to_half(-bs)
+    if g.get('our_spread') is not None:
+        g['disp_pl_spread'] = _round_to_half(g['our_spread'])
+    if g.get('xgb_spread') is not None:
+        g['disp_xs_spread'] = _round_to_half(g['xgb_spread'])
+    mt = g.get('market_total')
+    if mt is not None:
+        g['disp_book_total'] = _round_to_half(mt)
+    bt = _safe_float(g.get('book_total'))
+    if bt is not None:
+        g['disp_book_total'] = _round_to_half(bt)
+    if g.get('our_total') is not None:
+        g['disp_pl_total'] = _round_to_half(g['our_total'])
+    if g.get('xgb_total') is not None:
+        g['disp_xs_total'] = _round_to_half(g['xgb_total'])
+    if g.get('our_avg_home') is not None and g.get('our_avg_away') is not None:
+        g['pl_proj_home_pts'] = g['our_avg_home']
+        g['pl_proj_away_pts'] = g['our_avg_away']
+    elif g.get('our_spread') is not None and g.get('our_total') is not None:
+        xh, xa = _scores_from_spread_total(g['our_spread'], g['our_total'])
+        if xh is not None:
+            g['pl_proj_home_pts'] = xh
+            g['pl_proj_away_pts'] = xa
+    if g.get('xgb_spread') is not None and g.get('xgb_total') is not None:
+        xh, xa = _scores_from_spread_total(g['xgb_spread'], g['xgb_total'])
+        if xh is not None:
+            g['xs_proj_home_pts'] = xh
+            g['xs_proj_away_pts'] = xa
+
+
+def _finalize_daily_result_cards(sport, daily_results):
+    """Book lines + card display keys for every completed game (all sports)."""
+    if not daily_results:
+        return
+    try:
+        _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25)
+    except Exception as _bk:
+        logger.debug(f"Book odds on results for {sport}: {_bk}")
+    for dd in daily_results.values():
+        for g in dd.get('games', []):
+            _prepare_result_card_display(g, sport)
+
+
 # ── Team logos (ESPN CDN) for prediction cards ───────────────────────────────
 _TEAM_LOGO_SLUG = {
     'NBA': 'nba', 'MLB': 'mlb', 'NHL': 'nhl', 'NFL': 'nfl', 'WNBA': 'wnba',
@@ -1031,7 +1207,30 @@ def _prepare_pred_card_display(pred: dict) -> None:
     pred['disp_xs_home'] = _first_pred_float(
         pred, ('xsharp_home_score', 'xgb_home_score', 'naive_home_score'),
     )
-
+    bt = _safe_float(pred.get('book_total'))
+    if bt is not None:
+        pred['disp_book_total'] = _round_to_half(bt)
+    bs = _safe_float(pred.get('book_spread'))
+    if bs is not None:
+        # ESPN/DK spread is home-centric (negative = home fav); template fmt uses PL sign.
+        pred['disp_book_spread'] = _round_to_half(-bs)
+    for pct_key, home_key, away_key in (
+        ('ensemble_prob', 'pl_model_home_ml', 'pl_model_away_ml'),
+        ('xgb_prob', 'xs_home_ml', 'xs_away_ml'),
+    ):
+        pct = pred.get(pct_key)
+        if pct is None:
+            continue
+        ml = _compute_odds_from_prob(pct)
+        if ml:
+            pred[home_key] = ml.get('moneyline_home')
+            pred[away_key] = ml.get('moneyline_away')
+    if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
+        pred['pl_proj_home_pts'] = pred['our_home_pts']
+        pred['pl_proj_away_pts'] = pred['our_away_pts']
+    if pred.get('xgb_home_score') is not None and pred.get('xgb_away_score') is not None:
+        pred['xs_proj_home_pts'] = pred['xgb_home_score']
+        pred['xs_proj_away_pts'] = pred['xgb_away_score']
 
 def _finalize_prediction_odds(pred: dict) -> None:
     """Single pass: backfill XSharp, align PL, mirror display keys, break score ties."""
@@ -1677,6 +1876,7 @@ def _attach_h2h_projection_to_daily_results(sport, daily_results, n: int = 10):
                 proj = _compute_h2h_projection(conn, sport, ht, at, n=n)
                 if proj:
                     g['our_total'] = proj['our_total']
+                    g['our_spread'] = proj.get('our_spread')
                     g['our_total_games'] = proj['games_used']
                     g['our_avg_home'] = proj['avg_home']
                     g['our_avg_away'] = proj['avg_away']
@@ -4872,6 +5072,11 @@ def get_upcoming_predictions(sport, days=365):
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
         except Exception as _eoe:
             logger.debug(f"Engine odds failed in get_upcoming_predictions for {sport}: {_eoe}")
+    if sport in ('NBA', 'MLB', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA'):
+        try:
+            _attach_pl_book_odds_to_predictions(sport, predictions, limit=30)
+        except Exception as _boe:
+            logger.debug(f"PL book odds failed in get_upcoming_predictions for {sport}: {_boe}")
 
     # Soccer: when the odds engine has no spread line
     # naive spread/total so the predictions page shows our own line instead of
@@ -7740,20 +7945,42 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         transition:border-color 0.2s, box-shadow 0.2s;
     }
     .game-card:hover { border-color:#cbd5e1; box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08); }
-    .card-hero { display:flex; gap:12px; align-items:flex-start; padding:14px 14px 12px; border-bottom:1px solid #E2E8F0; }
-    .card-hero-logos { display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; width:52px; }
-    .card-hero-logos .team-logo { width:44px; height:44px; object-fit:contain; }
-    .card-hero-at { font-size:0.62em; font-weight:700; color:#94a3b8; letter-spacing:0.3px; }
-    .card-hero-text { flex:1; min-width:0; }
-    .card-hero-matchup { font-size:0.96em; font-weight:800; color:#0f172a; line-height:1.3; margin:0 0 4px; }
-    .card-hero-meta { font-size:0.7em; color:#64748b; text-transform:uppercase; font-weight:600; letter-spacing:0.4px; margin-bottom:8px; }
-    .card-hero-meta.final { color:#00C076; }
-    .card-hero-ml { display:flex; flex-direction:column; gap:5px; }
-    .card-hero-ml-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.86em; font-weight:600; color:#0f172a; }
-    .card-hero-final-scores { margin-top:0; }
-    .card-hero-ml-row .score-winner { color:#00C076; font-weight:800; }
-    .card-final-score { font-size:1.05em; font-weight:800; color:#0f172a; flex-shrink:0; }
-    .card-final-score.score-winner { color:#00C076; }
+    .card-hero { padding:12px 12px 10px; border-bottom:1px solid #E2E8F0; }
+    .card-hero-meta-line { text-align:center; font-size:0.68em; color:#64748b; text-transform:uppercase; font-weight:600; margin-bottom:10px; }
+    .teams-split { display:grid; grid-template-columns:1fr auto 1fr; align-items:start; gap:8px; }
+    .team-col { display:flex; flex-direction:column; align-items:center; text-align:center; min-width:0; }
+    .teams-split .team-logo { width:48px; height:48px; object-fit:contain; margin-bottom:4px; }
+    .teams-split .team-name { font-size:0.78em; font-weight:800; margin-bottom:8px; color:#0f172a; }
+    .teams-at { font-size:0.72em; font-weight:800; color:#94a3b8; padding-top:18px; }
+    .ml-stack { display:flex; flex-direction:column; gap:4px; width:100%; }
+    .ml-line { display:flex; flex-direction:column; align-items:center; gap:1px; }
+    .ml-src { font-size:0.58em; font-weight:700; text-transform:uppercase; color:#94a3b8; }
+    .ml-src.books { color:#0f766e; }
+    .ml-src.pl { color:#92400e; }
+    .ml-num { font-size:0.92em; font-weight:800; }
+    .ml-num.fav { color:#00C076; }
+    .ml-num.dog { color:#92400e; }
+    .final-score { font-size:1.2em; font-weight:800; color:#0f172a; }
+    .final-score.score-winner { color:#00C076; }
+    .odds-pricing-section { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#f8fafc; }
+    .odds-pricing-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
+    .odds-pricing-table { width:100%; border-collapse:collapse; font-size:0.8em; }
+    .odds-pricing-table th { text-align:left; font-weight:700; padding:7px 8px; border-bottom:1px solid #e2e8f0; color:#64748b; font-size:0.72em; text-transform:uppercase; }
+    .odds-pricing-table td { padding:7px 8px; border-bottom:1px solid #f1f5f9; font-weight:600; color:#0f172a; }
+    .odds-pricing-table th.col-books, .val-books { color:#0f766e; }
+    .odds-pricing-table th.col-pl, .val-pl { color:#92400e; }
+    .odds-pricing-table th.col-xs, .val-xs { color:#1d4ed8; }
+    .market-k { color:#64748b; font-size:0.72em; text-transform:uppercase; }
+    .proj-score-box { margin-top:8px; padding:8px 10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; }
+    .proj-score-title { font-size:0.68em; text-transform:uppercase; font-weight:700; color:#0F172A; margin-bottom:6px; }
+    .proj-row { display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-top:1px solid #f1f5f9; font-size:0.78em; font-weight:600; }
+    .proj-row:first-of-type { border-top:none; padding-top:0; }
+    .proj-model { font-size:0.68em; text-transform:uppercase; font-weight:700; }
+    .proj-model.pl { color:#92400e; }
+    .proj-model.xs { color:#1d4ed8; }
+    .proj-val { color:#0f172a; text-align:right; }
+    .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
+    .odds-extras-footer { border-top:1px solid rgba(15,23,42,0.07); padding:8px 12px 10px; display:flex; gap:14px; flex-wrap:wrap; background:rgba(15,23,42,0.03); }
     .model-panel { background:#ffffff; border:1px solid rgba(139,92,246,0.35); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:170px; max-width:200px; display:flex; flex-direction:column; gap:4px; }
     .panel-title { font-size:0.66em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:2px; }
     .model-row { display:flex; justify-content:space-between; font-size:0.82em; padding:2px 0; }
@@ -7811,7 +8038,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
         {% set label_ensemble = 'Sharp Consensus' %}
-        {% from 'includes/score_macros.html' import fmt_labeled_final, fmt_final_spread %}
+        {% from 'includes/score_macros.html' import fmt_labeled_final, fmt_final_spread, fmt_half, team_short %}
         {% if daily_results and overall_stats %}
         {% if soccer_leagues %}
         <div class="league-slider">
@@ -8027,85 +8254,27 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 {% set home_team = game.home %}
                 {% set away_score = game.away_score %}
                 {% set home_score = game.home_score %}
+                {% set _force_rl = (sport == 'MLB') %}
+                {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
                 <div class="game-card" data-league="{{ game.league if game.league else 'Other' }}">
-                    {% include 'includes/card_hero_final.html' %}
-                    <div class="pick-conf-bar section-ml">
-                        <div class="pick-conf-title">Pick Confidence</div>
-                        <div class="pick-conf-grid">
-                            {% for m in [
-                                {'name': label_glicko2, 'prob': game.glicko2_prob, 'correct': game.glicko2_correct, 'key': 'glicko2'},
-                                {'name': label_trueskill, 'prob': game.trueskill_prob, 'correct': game.trueskill_correct, 'key': 'trueskill'},
-                                {'name': label_elo, 'prob': game.elo_prob, 'correct': game.elo_correct, 'key': 'elo'},
-                                {'name': label_xgb, 'prob': game.xgb_prob, 'correct': game.xgb_correct, 'key': 'xgb'},
-                                {'name': label_ensemble, 'prob': game.ens_prob, 'correct': game.ens_correct, 'key': 'consensus'}
-                            ] %}
-                            <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %} {% if m.correct == true %}correct{% elif m.correct == false %}wrong{% endif %}">
-                                <div class="pc-name">{{ m.name }}</div>
-                                {% if m.prob is not none %}
-                                <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
-                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ game.home }}{% else %}{{ game.away }}{% endif %}">{% if m.prob >= 50 %}{{ (game.home|string).split()[-1] }}{% else %}{{ (game.away|string).split()[-1] }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
-                                {% else %}
-                                <div class="pc-val" style="color:#64748b;">—</div>
-                                <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;margin-top:6px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
-                    </div>
-                    <div class="result-footer section-spread">
-                        <div class="sf-item">
-                            <span class="sf-label">Model Spread Pick</span>
-                            <span class="sf-val">
-                                {% if game.spread_pick_label %}{{ game.spread_pick_label }}
-                                {% elif game.spread_pick_reason is defined and game.spread_pick_reason %}{{ game.spread_pick_reason }}
-                                {% else %}—{% endif %}
-                                {% if game.spread_correct is not none %}<span class="{{ 'pick-ok' if game.spread_correct else 'pick-no' }}">{{ '✅' if game.spread_correct else '❌' }}</span>{% endif %}
-                            </span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">Our Spread</span>
-                            <span class="sf-val">
-                                {% if game.market_spread_label is defined and game.market_spread_label %}{{ game.market_spread_label }}
-                                {% elif game.market_spread is defined and game.market_spread is not none %}{{ "%+.1f"|format(game.market_spread) }}
-                                {% elif game.market_spread_reason is defined and game.market_spread_reason %}{{ game.market_spread_reason }}
-                                {% else %}—{% endif %}
-                            </span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">Actual Spread</span>
-                            <span class="sf-val">{{ "%+.1f"|format(actual_spread) }}</span>
-                        </div>
-                    </div>
-                    <div class="result-footer section-total">
-                        <div class="sf-item">
-                            <span class="sf-label">Model O/U Pick</span>
-                            <span class="sf-val">
-                                {% if game.total_pick_label %}{{ game.total_pick_label }}
-                                {% elif game.total_pick_reason is defined and game.total_pick_reason %}{{ game.total_pick_reason }}
-                                {% else %}—{% endif %}
-                                {% if game.total_correct is not none %}<span class="{{ 'pick-ok' if game.total_correct else 'pick-no' }}">{{ '✅' if game.total_correct else '❌' }}</span>{% endif %}
-                            </span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">XSharp Total</span>
-                            <span class="sf-val sf-xgb">{% if game.xgb_total is not none %}{{ "%.1f"|format(game.xgb_total) }}{% if game.xgb_total_adj is defined and game.xgb_total_adj is not none and (game.xgb_total_adj - game.xgb_total)|abs > 0.05 %} <span style="color:#a78bfa;font-size:0.78em;">→ {{ "%.1f"|format(game.xgb_total_adj) }}</span>{% endif %}{% else %}—{% endif %}</span>
-                        </div>
-                        <div class="sf-item">
-                            <span class="sf-label">H2H Last 10</span>
-                            <span class="sf-val">{% if game.our_total is defined and game.our_total is not none %}{{ "%.1f"|format(game.our_total) }}{% else %}—{% endif %}</span>
-                        </div>
-                        {% if game.market_total is defined and game.market_total is not none %}
-                        <div class="sf-item">
-                            <span class="sf-label">Market Total</span>
-                            <span class="sf-val">{{ "%.1f"|format(game.market_total) }}</span>
-                        </div>
-                        {% endif %}
-                        <div class="sf-item">
-                            <span class="sf-label">Actual Total</span>
-                            <span class="sf-val">{{ "%.1f"|format(actual_total) }}</span>
-                        </div>
-                    </div>
+                    {% set card = game %}
+                    {% set is_results = true %}
+                    {% set is_final = true %}
+                    {% set is_premium = true %}
+                    {% set spread_label = _spread_label %}
+                    {% set force_rl = _force_rl %}
+                    {% set away_score = game.away_score %}
+                    {% set home_score = game.home_score %}
+                    {% set show_pick_arrow = false %}
+                    {% set conf_models = [
+                        {'name': label_glicko2, 'prob': game.glicko2_prob, 'correct': game.glicko2_correct, 'key': 'glicko2'},
+                        {'name': label_trueskill, 'prob': game.trueskill_prob, 'correct': game.trueskill_correct, 'key': 'trueskill'},
+                        {'name': label_elo, 'prob': game.elo_prob, 'correct': game.elo_correct, 'key': 'elo'},
+                        {'name': label_xgb, 'prob': game.xgb_prob, 'correct': game.xgb_correct, 'key': 'xgb'},
+                        {'name': label_ensemble, 'prob': game.ens_prob, 'correct': game.ens_correct, 'key': 'consensus'}
+                    ] %}
+                    {% include 'includes/game_card_body.html' %}
+                    {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;padding:4px 12px 8px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -12171,6 +12340,7 @@ def daily_report_page():
             # Compute spread/total grading (DB-only, no external API calls)
             try:
                 _compute_spread_total_for_daily(sport_key, daily_results)
+                _finalize_daily_result_cards(sport_key, daily_results)
             except Exception:
                 pass  # spread/total may be unavailable but moneyline still works
             tally = compute_daily_model_tally(daily_results, report_date)
@@ -12744,6 +12914,10 @@ def sport_predictions(sport, filter_date=None):
 
     # Nested efficiency payloads are plain dicts for some sports; Jinja attribute access
     # (pred.our_home_eff.ortg) fails on dicts — wrap as SimpleNamespace for template compatibility.
+    try:
+        _attach_pl_book_odds_to_predictions(sport, predictions, limit=50)
+    except Exception as _card_bk:
+        logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
     for pred in predictions:
         if not isinstance(pred, dict):
             continue
@@ -12751,6 +12925,7 @@ def sport_predictions(sport, filter_date=None):
             _v = pred.get(_eff_key)
             if isinstance(_v, dict):
                 pred[_eff_key] = types.SimpleNamespace(**_v)
+        _finalize_prediction_odds(pred)
         _prepare_pred_card_display(pred)
 
     # soccer_leagues already computed above for soccer
@@ -12917,6 +13092,7 @@ def sport_results(sport):
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
+            _finalize_daily_result_cards(sport, daily_results)
             yesterday_dt = datetime.now() - timedelta(days=1)
             daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
@@ -13001,6 +13177,7 @@ def sport_results(sport):
 
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
+                _finalize_daily_result_cards(sport, daily_results)
                 daily_tally_date = yesterday
                 daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
                 daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
@@ -13095,6 +13272,7 @@ def sport_results(sport):
                 _cache_market_lines_for_results(sport, daily_results, limit=20)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
+                _finalize_daily_result_cards(sport, daily_results)
                 daily_tally_date = yesterday
                 daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
                 daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
@@ -13331,6 +13509,7 @@ def sport_results(sport):
             _cache_market_lines_for_results(sport, daily_results, limit=20)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
+            _finalize_daily_result_cards(sport, daily_results)
             yesterday_dt = datetime.now() - timedelta(days=1)
             daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
@@ -13701,6 +13880,56 @@ def api_get_sports():
             'icon': info['icon']
         } for code, info in SPORTS.items()]
     })
+
+
+@app.route('/api/pl-book-odds/<sport>', methods=['GET'])
+def api_pl_book_odds_slate(sport):
+    """Book lines (DraftKings via ESPN Core) — spread, total, American moneylines only."""
+    from pl_book_odds_api import build_pl_book_odds, fetch_pl_book_odds_for_date
+
+    sport_u = sport.upper()
+    if sport_u not in SPORTS:
+        return jsonify({'error': 'Sport not found'}), 404
+
+    game_date = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+    game_id = request.args.get('game_id')
+
+    try:
+        if game_id:
+            home = request.args.get('home_team', '')
+            away = request.args.get('away_team', '')
+            if not home or not away:
+                conn = get_db_connection()
+                row = conn.execute(
+                    'SELECT home_team_id, away_team_id FROM predictions '
+                    'WHERE game_id = ? LIMIT 1',
+                    (game_id if '_' in str(game_id) else f'{sport_u}_{game_id}',),
+                ).fetchone()
+                conn.close()
+                if row:
+                    home, away = row[0], row[1]
+            row = build_pl_book_odds(sport_u, game_id, home, away, game_date)
+            if not row:
+                return jsonify({'error': 'No book odds found for game'}), 404
+            return jsonify({'sport': sport_u, 'games': [row], 'count': 1})
+
+        predictions = get_upcoming_predictions(sport_u)
+        games = [
+            {
+                'game_id': p['game_id'],
+                'home_team_id': p['home_team_id'],
+                'away_team_id': p['away_team_id'],
+                'game_date': p.get('game_date') or game_date,
+            }
+            for p in predictions
+            if (p.get('game_date') or game_date)[:10] == game_date[:10]
+        ]
+        rows = fetch_pl_book_odds_for_date(sport_u, game_date, games)
+        return jsonify({'sport': sport_u, 'date': game_date, 'games': rows, 'count': len(rows)})
+    except Exception as e:
+        logger.error('pl-book-odds %s: %s', sport_u, e)
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     import os, socket

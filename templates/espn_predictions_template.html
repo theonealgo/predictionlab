@@ -312,8 +312,35 @@
             border-color:#cbd5e1;
             box-shadow:0 10px 28px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.08);
         }
-        /* Mockup-style card header: logos + matchup + ML under logos */
-        .card-hero { display:flex; gap:12px; align-items:flex-start; padding:14px 14px 12px; border-bottom:1px solid #E2E8F0; }
+        .card-hero { padding:12px 12px 10px; border-bottom:1px solid #E2E8F0; }
+        .card-hero-meta-line { text-align:center; font-size:0.68em; color:#64748b; text-transform:uppercase; font-weight:600; margin-bottom:10px; }
+        .teams-split { display:grid; grid-template-columns:1fr auto 1fr; align-items:start; gap:8px; }
+        .team-col { display:flex; flex-direction:column; align-items:center; text-align:center; min-width:0; }
+        .teams-split .team-logo { width:48px; height:48px; object-fit:contain; margin-bottom:4px; }
+        .teams-split .team-name { font-size:0.78em; font-weight:800; margin-bottom:8px; }
+        .teams-at { font-size:0.72em; font-weight:800; color:#94a3b8; padding-top:18px; }
+        .ml-stack { display:flex; flex-direction:column; gap:4px; width:100%; }
+        .ml-line { display:flex; flex-direction:column; align-items:center; gap:1px; }
+        .ml-src { font-size:0.58em; font-weight:700; text-transform:uppercase; color:#94a3b8; }
+        .ml-src.books { color:#0f766e; }
+        .ml-src.pl { color:#92400e; }
+        .ml-num { font-size:0.92em; font-weight:800; }
+        .ml-num.fav { color:#00C076; }
+        .ml-num.dog { color:#92400e; }
+        .pick-arrow { color:#00C076; font-weight:800; font-size:0.85em; margin-top:2px; }
+        .final-score { font-size:1.2em; font-weight:800; color:#0f172a; }
+        .final-score.score-winner { color:#00C076; }
+        .odds-pricing-table th.col-books, .val-books { color:#0f766e; }
+        .proj-score-box { margin-top:8px; padding:8px 10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; }
+        .proj-score-title { font-size:0.68em; text-transform:uppercase; font-weight:700; color:#0F172A; margin-bottom:6px; }
+        .proj-row { display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-top:1px solid #f1f5f9; font-size:0.78em; font-weight:600; }
+        .proj-row:first-of-type { border-top:none; padding-top:0; }
+        .proj-model { font-size:0.68em; text-transform:uppercase; font-weight:700; }
+        .proj-model.pl { color:#92400e; }
+        .proj-model.xs { color:#1d4ed8; }
+        .proj-val { color:#0f172a; text-align:right; }
+        /* Legacy card-hero (unused) */
+        .card-hero-legacy { display:flex; gap:12px; align-items:flex-start; padding:14px 14px 12px; border-bottom:1px solid #E2E8F0; }
         .card-hero-logos { display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; width:52px; }
         .card-hero-logos .team-logo { width:44px; height:44px; object-fit:contain; }
         .card-hero-at { font-size:0.62em; font-weight:700; color:#94a3b8; letter-spacing:0.3px; }
@@ -454,6 +481,8 @@
         .odds-pricing-table tr:last-child td { border-bottom:none; }
         .odds-pricing-table th.col-pl { color:#92400e; }
         .odds-pricing-table th.col-xs { color:#1d4ed8; }
+        .odds-pricing-table th.col-book { color:#0f766e; }
+        .odds-pricing-table .val-book { color:#0f766e; }
         .odds-pricing-table .market-k { color:#64748b; font-weight:700; font-size:0.72em; text-transform:uppercase; }
         .odds-pricing-table .val-pl { color:#92400e; }
         .odds-pricing-table .val-xs { color:#1d4ed8; }
@@ -546,23 +575,6 @@
     {% set label_xgb = 'XSharp' %}
     {% set label_ensemble = 'Sharp Consensus' %}
     {% from 'includes/score_macros.html' import fmt_half, fmt_labeled_final, fmt_labeled_proj, fmt_final_spread, team_short %}
-    {# Display helpers: lines/totals/scores snap to whole or .5 #}
-    {% macro fmt_spread_line(spread, home, away, force_run_line=false) -%}
-    {%- if spread is none -%}—
-    {%- else -%}
-    {%- set raw = spread|float -%}
-    {%- if force_run_line -%}
-    {%- set mag = 1.5 -%}
-    {%- set s = mag if raw >= 0 else -mag -%}
-    {%- else -%}
-    {%- set s = (raw * 2)|round(0, 'common') / 2 -%}
-    {%- endif -%}
-    {%- if s == 0 -%}PK
-    {%- elif s > 0 -%}{{ home }} -{{ fmt_half(s) }}
-    {%- else -%}{{ away }} -{{ fmt_half(s|abs) }}
-    {%- endif -%}
-    {%- endif -%}
-    {%- endmacro %}
     {% if soccer_leagues %}
     <div class="league-slider">
         <div class="league-badges" id="leagueBubbles">
@@ -622,163 +634,26 @@
                 <div class="game-card" data-league="{{ pred.league if pred.league else 'Other' }}">
                     {% set _force_rl = (sport == 'MLB') %}
                     {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
-                    <div class="card-hero">
-                        <div class="card-hero-logos">
-                            <img class="team-logo" src="{{ team_logo_url(sport, pred.away_team_id) }}" alt="" width="44" height="44" loading="lazy">
-                            <span class="card-hero-at">@</span>
-                            <img class="team-logo" src="{{ team_logo_url(sport, pred.home_team_id) }}" alt="" width="44" height="44" loading="lazy">
-                        </div>
-                        <div class="card-hero-text">
-                            <h3 class="card-hero-matchup">{{ pred.away_team_id }} at {{ pred.home_team_id }}</h3>
-                            <div class="card-hero-meta {% if is_final %}final{% endif %}">{% if is_final %}FINAL{% else %}UPCOMING{% endif %}{% if not is_final and pred.game_time is defined and pred.game_time is not none %} · {{ pred.game_time }}{% elif not is_final %} · TBD{% endif %}</div>
-                            {% if is_final %}
-                            <div class="card-hero-ml card-hero-final-scores">
-                                <div class="card-hero-ml-row">
-                                    <span class="team-line {% if away_wins %}score-winner{% endif %}" title="{{ pred.away_team_id }}"><span class="team-line-short">{{ team_short(pred.away_team_id) }}</span><span class="team-line-full">{{ pred.away_team_id }}</span></span>
-                                    <span class="card-final-score {% if away_wins %}score-winner{% endif %}">{{ pred.away_score }}</span>
-                                </div>
-                                <div class="card-hero-ml-row">
-                                    <span class="team-line {% if home_wins %}score-winner{% endif %}" title="{{ pred.home_team_id }}"><span class="team-line-short">{{ team_short(pred.home_team_id) }}</span><span class="team-line-full">{{ pred.home_team_id }}</span></span>
-                                    <span class="card-final-score {% if home_wins %}score-winner{% endif %}">{{ pred.home_score }}</span>
-                                </div>
-                            </div>
-                            {% else %}
-                            <div class="card-hero-ml">
-                                <div class="card-hero-ml-row">
-                                    <span class="team-line" title="{{ pred.away_team_id }}"><span class="team-line-short">{{ team_short(pred.away_team_id) }}</span><span class="team-line-full">{{ pred.away_team_id }}</span></span>
-                                    <span>{% if pred.away_moneyline is not none %}<span class="ml-val {% if pred.away_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.away_moneyline > 0 %}+{% endif %}{{ pred.away_moneyline }}</span>{% endif %}{% if not home_picked and _odds_pass %}<span class="pick-arrow">▶</span>{% endif %}</span>
-                                </div>
-                                <div class="card-hero-ml-row">
-                                    <span class="team-line" title="{{ pred.home_team_id }}"><span class="team-line-short">{{ team_short(pred.home_team_id) }}</span><span class="team-line-full">{{ pred.home_team_id }}</span></span>
-                                    <span>{% if pred.home_moneyline is not none %}<span class="ml-val {% if pred.home_moneyline < 0 %}fav{% else %}dog{% endif %}">{% if pred.home_moneyline > 0 %}+{% endif %}{{ pred.home_moneyline }}</span>{% endif %}{% if home_picked and _odds_pass %}<span class="pick-arrow">▶</span>{% endif %}</span>
-                                </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="pick-conf-bar">
-                        <div class="pick-conf-title">Pick Confidence</div>
-                        <div class="pick-conf-grid">
-                            {% for m in [
-                                {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
-                                {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
-                                {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
-                                {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
-                                {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
-                            ] %}
-                            <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %}">
-                                <div class="pc-name">{{ m.name }}</div>
-                                {% if m.prob is not none %}
-                                <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
-                                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %}">{% if m.prob >= 50 %}{{ (pred.home_team_id|string).split()[-1] }}{% else %}{{ (pred.away_team_id|string).split()[-1] }}{% endif %}</div>
-                                {% else %}
-                                <div class="pc-val" style="color:#475569;">—</div>
-                                <div class="pc-side" style="color:#475569;background:transparent;">—</div>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% set _spread_val = pred.disp_pl_spread if (pred.disp_pl_spread is defined and pred.disp_pl_spread is not none) else none %}
-                    {% set _total_val = pred.disp_pl_total if (pred.disp_pl_total is defined and pred.disp_pl_total is not none) else none %}
-                    {% set _xs_spread = pred.disp_xs_spread if (pred.disp_xs_spread is defined and pred.disp_xs_spread is not none) else none %}
-                    {% set _xs_total = pred.disp_xs_total if (pred.disp_xs_total is defined and pred.disp_xs_total is not none) else none %}
-                    {% set _xs_away_pts = pred.disp_xs_away if (pred.disp_xs_away is defined and pred.disp_xs_away is not none) else none %}
-                    {% set _xs_home_pts = pred.disp_xs_home if (pred.disp_xs_home is defined and pred.disp_xs_home is not none) else none %}
-                    {% set _cons_pct = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
-                    {% set _xgb_pct = pred.xgb_prob if (pred.xgb_prob is defined and pred.xgb_prob is not none) else none %}
-                    {% set _show_odds = _spread_val is not none or _total_val is not none or _cons_pct is not none or _xgb_pct is not none or is_final or (pred.our_home_pts is defined and pred.our_home_pts is not none) or (pred.xgb_home_score is defined and pred.xgb_home_score is not none) %}
-                    {% if _show_odds %}
-                    <div class="odds-pricing-section premium-protected">
-                        <div class="odds-pricing-title">Odds &amp; Pricing</div>
-                        {% if is_premium %}
-                        <table class="odds-pricing-table">
-                            <thead>
-                                <tr>
-                                    <th>Market</th>
-                                    <th class="col-pl">PL Model Odds</th>
-                                    <th class="col-xs">XSharp Odds</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% if is_final %}
-                                <tr>
-                                    <td class="market-k">Final</td>
-                                    <td colspan="2" class="val-result">{{ fmt_labeled_final(pred.away_team_id, pred.away_score, pred.home_team_id, pred.home_score) }} &nbsp;·&nbsp; Total {{ pred.away_score + pred.home_score }} &nbsp;·&nbsp; {{ fmt_final_spread(pred.home_team_id, pred.away_team_id, pred.home_score, pred.away_score) }}</td>
-                                </tr>
-                                {% endif %}
-                                <tr>
-                                    <td class="market-k">Moneyline</td>
-                                    <td class="val-pl">{% if _cons_pct is not none %}{% if home_picked %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} · {% if home_picked %}{{ _cons_pct }}{% else %}{{ "%.1f"|format(100 - _cons_pct) }}{% endif %}%{% else %}—{% endif %}</td>
-                                    <td class="val-xs">{% if _xgb_pct is not none %}{% if _xgb_pct >= 50 %}{{ pred.home_team_id }}{% else %}{{ pred.away_team_id }}{% endif %} · {% if _xgb_pct >= 50 %}{{ _xgb_pct }}{% else %}{{ "%.1f"|format(100 - _xgb_pct) }}{% endif %}%{% else %}—{% endif %}</td>
-                                </tr>
-                                <tr>
-                                    <td class="market-k">{{ _spread_label }}</td>
-                                    <td class="val-pl">{{ fmt_spread_line(_spread_val, pred.home_team_id, pred.away_team_id, _force_rl) }}</td>
-                                    <td class="val-xs">{% if _xs_spread is not none %}{{ fmt_spread_line(_xs_spread, pred.home_team_id, pred.away_team_id, _force_rl) }}{% else %}—{% endif %}</td>
-                                </tr>
-                                <tr>
-                                    <td class="market-k">Total</td>
-                                    <td class="val-pl">{% if _total_val is not none %}{{ fmt_half(_total_val) }}{% else %}—{% endif %}</td>
-                                    <td class="val-xs">{% if _xs_total is not none %}{{ fmt_half(_xs_total) }}{% else %}—{% endif %}</td>
-                                </tr>
-                                <tr>
-                                    <td class="market-k">Projected score</td>
-                                    <td class="val-pl">{{ fmt_labeled_proj(pred.away_team_id, pred.our_away_pts if (pred.our_away_pts is defined and pred.our_away_pts is not none) else none, pred.home_team_id, pred.our_home_pts if (pred.our_home_pts is defined and pred.our_home_pts is not none) else none) }}</td>
-                                    <td class="val-xs">{{ fmt_labeled_proj(pred.away_team_id, _xs_away_pts, pred.home_team_id, _xs_home_pts) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        {% else %}
-                        <table class="odds-pricing-table">
-                            <thead>
-                                <tr><th>Market</th><th class="col-pl">PL Model</th><th class="col-xs">XSharp</th></tr>
-                            </thead>
-                            <tbody>
-                                {% if is_final %}
-                                <tr><td class="market-k">Final</td><td colspan="2" class="val-result val-result-compact">{{ fmt_labeled_final(pred.away_team_id, pred.away_score, pred.home_team_id, pred.home_score) }}</td></tr>
-                                {% endif %}
-                                <tr>
-                                    <td class="market-k">Moneyline</td>
-                                    <td class="val-pl">{% if _cons_pct is not none %}{% if home_picked %}{{ team_short(pred.home_team_id) }}{% else %}{{ team_short(pred.away_team_id) }}{% endif %} · {% if home_picked %}{{ _cons_pct }}{% else %}{{ "%.1f"|format(100 - _cons_pct) }}{% endif %}%{% else %}—{% endif %}</td>
-                                    <td class="val-xs">{% if _xgb_pct is not none %}{% if _xgb_pct >= 50 %}{{ team_short(pred.home_team_id) }}{% else %}{{ team_short(pred.away_team_id) }}{% endif %} · {% if _xgb_pct >= 50 %}{{ _xgb_pct }}{% else %}{{ "%.1f"|format(100 - _xgb_pct) }}{% endif %}%{% else %}—{% endif %}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div class="odds-pricing-locked" style="margin-top:8px;">🔒 Spread, total &amp; projections locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.</div>
-                        {% endif %}
-                    </div>
-                    <div class="odds-extras-footer premium-protected">
-                        {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
-                        <div class="h2h-info-wrap sf-item">
-                            <span class="h2h-info-label sf-label">H2H Last 10
-                                {% if is_premium and pred.h2h_last10_meetings is defined and pred.h2h_last10_meetings|length > 0 %}
-                                <button type="button" class="h2h-info-btn" aria-label="Show last 10 head-to-head games" aria-expanded="false" onclick="toggleH2hPopover(this, event)">i</button>
-                                {% endif %}
-                            </span>
-                            {% if is_premium %}
-                            <span class="sf-val" style="color:#475569;">{{ fmt_half(pred.h2h_last10_total) }}{% if pred.h2h_last10_games is defined and pred.h2h_last10_games %} <span style="font-size:0.78em;color:#94a3b8;font-weight:600;">({{ pred.h2h_last10_games }} game{% if pred.h2h_last10_games != 1 %}s{% endif %})</span>{% endif %}</span>
-                            {% if pred.h2h_last10_meetings is defined and pred.h2h_last10_meetings|length > 0 %}
-                            <div class="h2h-popover" role="dialog" aria-label="Last head-to-head games">
-                                <div class="h2h-pop-title">Last {{ pred.h2h_last10_meetings|length }} meetings</div>
-                                {% for g in pred.h2h_last10_meetings %}
-                                <div class="h2h-pop-row">{{ g.game_date }} · {{ g.away_team_id }} {{ g.away_score }} – {{ g.home_score }} {{ g.home_team_id }}</div>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                            {% else %}
-                            <span class="sf-val" style="color:#475569;">🔒 <a href="/plans" style="color:#00529B;font-size:0.85em;">Unlock</a></span>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                        {% if not is_final and is_premium and pred.ml_ev is defined and pred.ml_ev is not none %}
-                        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if pred.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if pred.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(pred.ml_ev) }}%</span></div>
-                        {% elif not is_final and is_premium %}
-                        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:#475569;">—</span></div>
-                        {% endif %}
-                    </div>
-                    <div class="card-legend">PL Model = projections · XSharp = proprietary sharp line</div>
+                    {% set card = pred %}
+                    {% set is_results = false %}
+                    {% set spread_label = _spread_label %}
+                    {% set force_rl = _force_rl %}
+                    {% set away_score = pred.away_score %}
+                    {% set home_score = pred.home_score %}
+                    {% set show_pick_arrow = (not is_final) and _odds_pass %}
+                    {% set conf_models = [
+                        {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
+                        {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
+                        {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
+                        {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
+                    ] %}
+                    <div class="premium-protected">
+                    {% include 'includes/game_card_body.html' %}
+                    {% if not is_premium %}
+                    <div class="odds-pricing-locked" style="padding:8px 12px;font-size:0.82em;">🔒 Lines &amp; projections locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.</div>
                     {% endif %}
+                    </div>
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
                     <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
                     <div id="{{ analysis_id }}" class="analysis-panel">
