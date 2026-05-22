@@ -1228,15 +1228,15 @@ def _fill_xsharp_from_efficiency_if_missing(g: dict, sport: str) -> None:
     except ImportError:
         return
     try:
-        proj = compute_efficiency_projection(h, a, sport=sport, n_games=5, max_lookback_days=14)
+        proj = compute_efficiency_projection(h, a, sport=sport, n_games=5)
         if not proj:
             return
         if g.get('xgb_spread') is None and proj.get('projected_spread') is not None:
             g['xgb_spread'] = _round_to_half(proj['projected_spread'])
         if g.get('xgb_total') is None and proj.get('projected_total') is not None:
             g['xgb_total'] = _round_to_half(proj['projected_total'])
-    except Exception:
-        pass
+    except Exception as _xfe:
+        logger.debug(f"[eff] xsharp fallback failed {h} vs {a}: {_xfe}")
 
 
 def _prepare_result_card_display(g: dict, sport: str) -> None:
@@ -6029,7 +6029,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
             _xgb = _get_xgb_spread_model(sport)
         except Exception:
             pass
-        if not _xgb and sport in ['NBA', 'MLB']:
+        if sport in ['NBA', 'MLB', 'WNBA']:
             try:
                 _sp = _score_predictor_instance(sport)
             except Exception:
@@ -6126,12 +6126,12 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         xp = _xgb.predict(h, a, vegas_total=mt)
                         xs = round(float(xp[2]), 1) if xp and xp[2] is not None else None
                         xt = round(float(xp[3]), 1) if xp and xp[3] is not None else None
-                    elif _sp:
+                    if (xs is None or xt is None) and _sp:
                         nh, na, ns, nt = _sp.predict_score(h, a, sport)
-                        xs = round(float(ns), 1) if ns is not None else None
-                        xt = round(float(nt), 1) if nt is not None else None
-                    else:
-                        xs = xt = None
+                        if xs is None and ns is not None:
+                            xs = round(float(ns), 1)
+                        if xt is None and nt is not None:
+                            xt = round(float(nt), 1)
                 except Exception:
                     xs = xt = None
                 if xs is None or xt is None:
@@ -6141,6 +6141,16 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 if xt is None and g.get('predicted_total') is not None:
                     try:
                         xt = round(float(g['predicted_total']), 1)
+                    except (TypeError, ValueError):
+                        pass
+                if xs is None and g.get('our_spread') is not None:
+                    try:
+                        xs = round(float(g['our_spread']), 1)
+                    except (TypeError, ValueError):
+                        pass
+                if xt is None and g.get('our_home_pts') is not None and g.get('our_away_pts') is not None:
+                    try:
+                        xt = round(float(g['our_home_pts']) + float(g['our_away_pts']), 1)
                     except (TypeError, ValueError):
                         pass
                 g['xgb_total'] = xt
@@ -6379,7 +6389,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 g['total_pick'] = tp_disp
                 g['total_correct'] = tp_ok
 
-        return {
+        stats = {
             'spread_covered': st_cov,
             'spread_graded': st_gr,
             'spread_pct': round(st_cov / st_gr * 100, 1) if st_gr > 0 else 0,
@@ -6387,6 +6397,12 @@ def _compute_spread_total_for_daily(sport, daily_results):
             'total_graded': tt_gr,
             'total_pct': round(tt_cor / tt_gr * 100, 1) if tt_gr > 0 else 0,
         }
+        if st_gr == 0 and tt_gr == 0:
+            logger.warning(
+                f"[{sport}] spread/total: 0 graded games "
+                f"(xgb={bool(_xgb)} score_pred={bool(_sp)}); check model imports on server"
+            )
+        return stats
     except Exception as e:
         logger.error(f"[{sport}] spread/total integration error: {e}", exc_info=True)
         if st_gr > 0 or tt_gr > 0:
@@ -13311,7 +13327,7 @@ def sport_results(sport):
                 return f"<h1>NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
-            cache_key = f'{sport}_daily_results_html_v2'
+            cache_key = f'{sport}_daily_results_html_v3'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
