@@ -1002,7 +1002,11 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
         raw_eid = str(game_id).split('_')[-1]
         if not raw_eid.isdigit():
             continue
-        if pred.get('book_home_moneyline') is not None and pred.get('book_spread') is not None:
+        if (
+            pred.get('book_home_moneyline') is not None
+            and pred.get('book_spread') is not None
+            and pred.get('book_total') is not None
+        ):
             continue
         row = build_pl_book_odds(
             sport,
@@ -1095,54 +1099,91 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
         g['book_away_moneyline'] = api_row.get('away_moneyline')
 
 
+def _set_card_book_lines(card: dict) -> None:
+    """Books column in Odds & Lines — prefer sportsbook lines, else market."""
+    bs = _safe_float(card.get('book_spread'))
+    if bs is not None:
+        card['disp_book_spread'] = _round_to_half(-bs)
+    elif card.get('disp_book_spread') is None:
+        ms = _safe_float(card.get('market_spread'))
+        if ms is not None:
+            card['disp_book_spread'] = _round_to_half(-ms)
+    bt = _safe_float(card.get('book_total'))
+    if bt is not None:
+        card['disp_book_total'] = _round_to_half(bt)
+    elif card.get('disp_book_total') is None:
+        mt = _safe_float(card.get('market_total'))
+        if mt is not None:
+            card['disp_book_total'] = _round_to_half(mt)
+
+
+def _set_card_pl_moneylines(card: dict) -> None:
+    """Prediction Lab ML under each team (from PL win %, not Books)."""
+    prob = _safe_float(card.get('disp_ml_prob'))
+    if prob is None:
+        prob = _safe_float(card.get('ensemble_prob'))
+    if prob is None:
+        ens = card.get('ens_prob')
+        if ens is not None:
+            try:
+                prob = float(ens)
+            except (TypeError, ValueError):
+                prob = None
+    ml = _compute_odds_from_prob(prob)
+    if ml:
+        card['pl_model_home_ml'] = ml.get('moneyline_home')
+        card['pl_model_away_ml'] = ml.get('moneyline_away')
+
+
+def _set_card_projected_scores(card: dict) -> None:
+    """Projected Score box — PL and XSharp point projections."""
+    ah = _safe_float(card.get('our_home_pts')) or _safe_float(card.get('our_avg_home'))
+    aa = _safe_float(card.get('our_away_pts')) or _safe_float(card.get('our_avg_away'))
+    if ah is not None and aa is not None:
+        card['pl_proj_home_pts'] = ah
+        card['pl_proj_away_pts'] = aa
+    else:
+        ps = _safe_float(card.get('disp_pl_spread')) or _safe_float(card.get('our_spread'))
+        pt = _safe_float(card.get('disp_pl_total')) or _safe_float(card.get('our_total'))
+        if ps is not None and pt is not None:
+            xh, xa = _scores_from_spread_total(ps, pt)
+            if xh is not None:
+                card['pl_proj_home_pts'] = xh
+                card['pl_proj_away_pts'] = xa
+    xh = _first_pred_float(
+        card, ('xgb_home_score', 'xsharp_home_score', 'disp_xs_home'),
+    )
+    xa = _first_pred_float(
+        card, ('xgb_away_score', 'xsharp_away_score', 'disp_xs_away'),
+    )
+    if xh is not None and xa is not None:
+        card['xs_proj_home_pts'] = xh
+        card['xs_proj_away_pts'] = xa
+    else:
+        xs = _safe_float(card.get('disp_xs_spread')) or _safe_float(card.get('xgb_spread'))
+        xt = _safe_float(card.get('disp_xs_total')) or _safe_float(card.get('xgb_total'))
+        if xs is not None and xt is not None:
+            xh, xa = _scores_from_spread_total(xs, xt)
+            if xh is not None:
+                card['xs_proj_home_pts'] = xh
+                card['xs_proj_away_pts'] = xa
+
+
 def _prepare_result_card_display(g: dict, sport: str) -> None:
     """Display fields for results cards (same layout as predictions)."""
-    away = g.get('away') or g.get('away_team_id')
-    home = g.get('home') or g.get('home_team_id')
-    g['away_team_id'] = away
-    g['home_team_id'] = home
-    ens = g.get('ens_prob')
-    if ens is not None:
-        ml = _compute_odds_from_prob(ens)
-        if ml:
-            g['pl_model_home_ml'] = ml.get('moneyline_home')
-            g['pl_model_away_ml'] = ml.get('moneyline_away')
-    ms = g.get('market_spread')
-    if ms is not None:
-        try:
-            g['disp_book_spread'] = _round_to_half(-float(ms))
-        except (TypeError, ValueError):
-            pass
-    bs = _safe_float(g.get('book_spread'))
-    if bs is not None and g.get('disp_book_spread') is None:
-        g['disp_book_spread'] = _round_to_half(-bs)
+    g['away_team_id'] = g.get('away') or g.get('away_team_id')
+    g['home_team_id'] = g.get('home') or g.get('home_team_id')
     if g.get('our_spread') is not None:
         g['disp_pl_spread'] = _round_to_half(g['our_spread'])
     if g.get('xgb_spread') is not None:
         g['disp_xs_spread'] = _round_to_half(g['xgb_spread'])
-    mt = g.get('market_total')
-    if mt is not None:
-        g['disp_book_total'] = _round_to_half(mt)
-    bt = _safe_float(g.get('book_total'))
-    if bt is not None:
-        g['disp_book_total'] = _round_to_half(bt)
     if g.get('our_total') is not None:
         g['disp_pl_total'] = _round_to_half(g['our_total'])
     if g.get('xgb_total') is not None:
         g['disp_xs_total'] = _round_to_half(g['xgb_total'])
-    if g.get('our_avg_home') is not None and g.get('our_avg_away') is not None:
-        g['pl_proj_home_pts'] = g['our_avg_home']
-        g['pl_proj_away_pts'] = g['our_avg_away']
-    elif g.get('our_spread') is not None and g.get('our_total') is not None:
-        xh, xa = _scores_from_spread_total(g['our_spread'], g['our_total'])
-        if xh is not None:
-            g['pl_proj_home_pts'] = xh
-            g['pl_proj_away_pts'] = xa
-    if g.get('xgb_spread') is not None and g.get('xgb_total') is not None:
-        xh, xa = _scores_from_spread_total(g['xgb_spread'], g['xgb_total'])
-        if xh is not None:
-            g['xs_proj_home_pts'] = xh
-            g['xs_proj_away_pts'] = xa
+    _set_card_book_lines(g)
+    _set_card_pl_moneylines(g)
+    _set_card_projected_scores(g)
 
 
 def _finalize_daily_result_cards(sport, daily_results):
@@ -1479,6 +1520,10 @@ def _prepare_pred_card_display(pred: dict) -> None:
                 pred['disp_ml_prob'] = _raw_ens
         else:
             pred['disp_ml_prob'] = None
+
+    _set_card_book_lines(pred)
+    _set_card_pl_moneylines(pred)
+    _set_card_projected_scores(pred)
 
 
 def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
