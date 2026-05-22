@@ -1169,18 +1169,99 @@ def _set_card_projected_scores(card: dict) -> None:
                 card['xs_proj_away_pts'] = xa
 
 
+def _attach_nba_efficiency_to_daily_results(sport, daily_results) -> None:
+    """Attach PL spread/total (and scores) on completed NBA games from efficiency data."""
+    if sport not in ('NBA', 'WNBA') or not daily_results:
+        return
+    try:
+        from team_efficiency import precompute_team_efficiencies, compute_efficiency_projection_from
+        from weighted_total_predictor import prefetch_recent_scoreboards
+    except ImportError:
+        return
+    try:
+        prefetch_recent_scoreboards(sport=sport, days=14)
+        teams, games = set(), []
+        for dd in daily_results.values():
+            for g in dd.get('games', []):
+                h, a = g.get('home'), g.get('away')
+                if h and a:
+                    teams.add(h)
+                    teams.add(a)
+                    games.append(g)
+        if not teams:
+            return
+        eff_map = precompute_team_efficiencies(
+            list(teams), sport=sport, n_games=5,
+            max_lookback_days=14, total_budget_seconds=12.0, max_workers=12,
+        )
+        for g in games:
+            h, a = g.get('home'), g.get('away')
+            he, ae = eff_map.get(h), eff_map.get(a)
+            if not (he and ae):
+                continue
+            proj = compute_efficiency_projection_from(
+                he, ae, sport=sport,
+                xsharp_total=g.get('xgb_total'),
+                xsharp_spread=g.get('xgb_spread'),
+            )
+            if g.get('our_spread') is None and proj.get('projected_spread') is not None:
+                g['our_spread'] = _round_to_half(proj['projected_spread'])
+            if g.get('our_total') is None and proj.get('projected_total') is not None:
+                g['our_total'] = _round_to_half(proj['projected_total'])
+            if g.get('our_home_pts') is None and proj.get('home_pts') is not None:
+                g['our_home_pts'] = round(float(proj['home_pts']))
+            if g.get('our_away_pts') is None and proj.get('away_pts') is not None:
+                g['our_away_pts'] = round(float(proj['away_pts']))
+    except Exception as _nba_eff:
+        logger.debug(f"[nba-eff] daily results attach failed: {_nba_eff}")
+
+
+def _fill_xsharp_from_efficiency_if_missing(g: dict, sport: str) -> None:
+    """When XGB predict misses a team, use efficiency projection for XSharp display/grading."""
+    if sport not in ('NBA', 'WNBA') or (g.get('xgb_spread') is not None and g.get('xgb_total') is not None):
+        return
+    h, a = g.get('home'), g.get('away')
+    if not (h and a):
+        return
+    try:
+        from team_efficiency import compute_efficiency_projection
+    except ImportError:
+        return
+    try:
+        proj = compute_efficiency_projection(h, a, sport=sport, n_games=5, max_lookback_days=14)
+        if not proj:
+            return
+        if g.get('xgb_spread') is None and proj.get('projected_spread') is not None:
+            g['xgb_spread'] = _round_to_half(proj['projected_spread'])
+        if g.get('xgb_total') is None and proj.get('projected_total') is not None:
+            g['xgb_total'] = _round_to_half(proj['projected_total'])
+    except Exception:
+        pass
+
+
 def _prepare_result_card_display(g: dict, sport: str) -> None:
     """Display fields for results cards (same layout as predictions)."""
     g['away_team_id'] = g.get('away') or g.get('away_team_id')
     g['home_team_id'] = g.get('home') or g.get('home_team_id')
-    if g.get('our_spread') is not None:
-        g['disp_pl_spread'] = _round_to_half(g['our_spread'])
-    if g.get('xgb_spread') is not None:
-        g['disp_xs_spread'] = _round_to_half(g['xgb_spread'])
-    if g.get('our_total') is not None:
+    pl_sp = _best_pl_spread(g)
+    if pl_sp is not None:
+        g['disp_pl_spread'] = pl_sp
+    elif g.get('our_avg_home') is not None and g.get('our_avg_away') is not None:
+        try:
+            g['disp_pl_spread'] = _round_to_half(float(g['our_avg_home']) - float(g['our_avg_away']))
+        except (TypeError, ValueError):
+            pass
+    xs = _first_pred_float(g, ('xgb_spread', 'xsharp_spread'))
+    if xs is not None:
+        g['disp_xs_spread'] = _round_to_half(xs)
+    pt = _best_pl_total(g)
+    if pt is not None:
+        g['disp_pl_total'] = pt
+    elif g.get('our_total') is not None:
         g['disp_pl_total'] = _round_to_half(g['our_total'])
-    if g.get('xgb_total') is not None:
-        g['disp_xs_total'] = _round_to_half(g['xgb_total'])
+    xt = _first_pred_float(g, ('xgb_total', 'xsharp_total', 'xgb_total_adj'))
+    if xt is not None:
+        g['disp_xs_total'] = _round_to_half(xt)
     _set_card_book_lines(g)
     _set_card_pl_moneylines(g)
     _set_card_projected_scores(g)
@@ -1284,6 +1365,13 @@ def _first_pred_float(pred: dict, keys):
 
 def _best_pl_spread(pred: dict):
     """PL Model spread: efficiency/team-avg only — never XSharp or H2H noise."""
+    if pred.get('our_avg_home') is not None and pred.get('our_avg_away') is not None:
+        try:
+            diff = float(pred['our_avg_home']) - float(pred['our_avg_away'])
+            if abs(diff) >= 0.25:
+                return _round_to_half(diff)
+        except (TypeError, ValueError):
+            pass
     if pred.get('our_method') in ('efficiency', 'team-avg-fallback') and pred.get('our_spread') is not None:
         try:
             return _round_to_half(float(pred['our_spread']))
@@ -1987,6 +2075,10 @@ def _attach_h2h_projection_to_daily_results(sport, daily_results, n: int = 10):
                     g['our_total_games'] = proj['games_used']
                     g['our_avg_home'] = proj['avg_home']
                     g['our_avg_away'] = proj['avg_away']
+                    try:
+                        g['our_spread'] = _round_to_half(float(proj['avg_home']) - float(proj['avg_away']))
+                    except (TypeError, ValueError):
+                        pass
                 else:
                     g.setdefault('our_total', None)
                     g.setdefault('our_total_games', 0)
@@ -5692,7 +5784,8 @@ def calculate_nba_weekly_performance():
         games = conn.execute('''
             SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
-                   p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                   p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability,
+                   p.predicted_total
             FROM games g
             LEFT JOIN predictions p
               ON p.sport = 'NBA' AND (
@@ -5779,6 +5872,7 @@ def calculate_nba_weekly_performance():
                     if correct:
                         weekly_results[week][model]['correct'] += 1
 
+            _pt = to_float(game['predicted_total'])
             weekly_results[week]['games'].append({
                 'game_id':         game['game_id'],
                 'date':             game['game_date'].split()[0],
@@ -5786,6 +5880,7 @@ def calculate_nba_weekly_performance():
                 'home':             home_team,
                 'away_score':       int(away_score),
                 'home_score':       int(home_score),
+                'predicted_total':  _round_to_half(_pt) if _pt is not None else None,
                 'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
                 'trueskill_prob':   round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
                 'elo_prob':         round(elo_prob  * 100, 1) if elo_prob  is not None else None,
@@ -5917,12 +6012,17 @@ def _compute_spread_total_for_daily(sport, daily_results):
     """Compute XSharp spread/total grading for games already in daily_results (in-place).
     Returns aggregate stats dict (may be None for spread/total if model unavailable,
     but market lines and H2H are always attached)."""
+    st_cov = st_gr = tt_cor = tt_gr = 0
     try:
         # H2H last-10 "Our Total" (used as the O/U line the model is compared to)
         try:
             _attach_h2h_projection_to_daily_results(sport, daily_results, n=10)
         except Exception as _h2he:
             logger.debug(f"[h2h] daily attach failed for {sport}: {_h2he}")
+        try:
+            _attach_nba_efficiency_to_daily_results(sport, daily_results)
+        except Exception as _ne:
+            logger.debug(f"[nba-eff] pre-compute failed for {sport}: {_ne}")
         _xgb = None
         _sp = None
         try:
@@ -5986,7 +6086,6 @@ def _compute_spread_total_for_daily(sport, daily_results):
             pass
         conn.close()
 
-        st_cov = st_gr = tt_cor = tt_gr = 0
         live_attempts = 0
         live_cap = 10 if sport in ('NBA', 'SOCCER') else 5
         for dd in daily_results.values():
@@ -5995,25 +6094,6 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 gd = g['date']
                 gid = str(g.get('game_id') or '')
                 hs, as_ = g['home_score'], g['away_score']
-
-                try:
-                    if _xgb:
-                        xp = _xgb.predict(h, a)
-                        xs = round(float(xp[2]), 1) if xp and xp[2] is not None else None
-                        xt = round(float(xp[3]), 1) if xp and xp[3] is not None else None
-                    elif _sp:
-                        nh, na, ns, nt = _sp.predict_score(h, a, sport)
-                        xs = round(float(ns), 1) if ns is not None else None
-                        xt = round(float(nt), 1) if nt is not None else None
-                    else:
-                        xs = xt = None
-                except Exception:
-                    xs = xt = None
-                # Preserve XSharp model projections on the row so the UI can show
-                # both "XSharp Total" (model projection) and "Our Total" (H2H line).
-                g['xgb_total'] = xt
-                g['xgb_spread'] = xs
-
                 hk = _normalize_team_key_for_sport(sport, h)
                 ak = _normalize_team_key_for_sport(sport, a)
                 ms = g.get('market_spread')
@@ -6040,6 +6120,31 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         mt = float(ml['total']) if ml.get('total') is not None else None
                     except Exception:
                         mt = None
+
+                try:
+                    if _xgb:
+                        xp = _xgb.predict(h, a, vegas_total=mt)
+                        xs = round(float(xp[2]), 1) if xp and xp[2] is not None else None
+                        xt = round(float(xp[3]), 1) if xp and xp[3] is not None else None
+                    elif _sp:
+                        nh, na, ns, nt = _sp.predict_score(h, a, sport)
+                        xs = round(float(ns), 1) if ns is not None else None
+                        xt = round(float(nt), 1) if nt is not None else None
+                    else:
+                        xs = xt = None
+                except Exception:
+                    xs = xt = None
+                if xs is None or xt is None:
+                    _fill_xsharp_from_efficiency_if_missing(g, sport)
+                    xs = g.get('xgb_spread') if xs is None else xs
+                    xt = g.get('xgb_total') if xt is None else xt
+                if xt is None and g.get('predicted_total') is not None:
+                    try:
+                        xt = round(float(g['predicted_total']), 1)
+                    except (TypeError, ValueError):
+                        pass
+                g['xgb_total'] = xt
+                g['xgb_spread'] = xs
 
                 # Live fallback for missing market lines (recent games only)
                 if (ms is None or mt is None) and live_attempts < live_cap and gd:
@@ -6283,7 +6388,16 @@ def _compute_spread_total_for_daily(sport, daily_results):
             'total_pct': round(tt_cor / tt_gr * 100, 1) if tt_gr > 0 else 0,
         }
     except Exception as e:
-        logger.debug(f"[{sport}] spread/total integration skipped: {e}")
+        logger.error(f"[{sport}] spread/total integration error: {e}", exc_info=True)
+        if st_gr > 0 or tt_gr > 0:
+            return {
+                'spread_covered': st_cov,
+                'spread_graded': st_gr,
+                'spread_pct': round(st_cov / st_gr * 100, 1) if st_gr > 0 else 0,
+                'total_correct': tt_cor,
+                'total_graded': tt_gr,
+                'total_pct': round(tt_cor / tt_gr * 100, 1) if tt_gr > 0 else 0,
+            }
         return None
 
 
@@ -13197,7 +13311,7 @@ def sport_results(sport):
                 return f"<h1>NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
-            cache_key = f'{sport}_daily_results_html'
+            cache_key = f'{sport}_daily_results_html_v2'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
