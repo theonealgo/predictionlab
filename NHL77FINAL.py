@@ -1049,21 +1049,18 @@ def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date):
 
 
 def _apply_pl_book_row_to_game(g: dict, row: dict) -> None:
-    """Merge sportsbook row onto a game/pred dict for grading + card display."""
+    """Merge sportsbook row onto a game/pred dict — book_* only, never model market_*."""
     if not row:
         return
     if row.get('spread') is not None:
         g['book_spread'] = row['spread']
-        if g.get('market_spread') is None:
-            g['market_spread'] = row['spread']
     if row.get('total') is not None:
         g['book_total'] = row['total']
-        if g.get('market_total') is None:
-            g['market_total'] = row['total']
     if row.get('home_moneyline') is not None:
         g['book_home_moneyline'] = row['home_moneyline']
     if row.get('away_moneyline') is not None:
         g['book_away_moneyline'] = row['away_moneyline']
+    g['book_odds_source'] = row.get('source') or 'pl_book_odds_api'
 
 
 def _persist_pl_book_row(sport, g: dict, row: dict) -> None:
@@ -1154,31 +1151,13 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
 
 
 def _set_card_book_lines(card: dict) -> None:
-    """Books column in Odds & Lines — prefer sportsbook lines, else market."""
-    if card.get('book_home_moneyline') is None and card.get('home_moneyline') is not None:
-        try:
-            card['book_home_moneyline'] = int(round(float(card['home_moneyline'])))
-        except (TypeError, ValueError):
-            pass
-    if card.get('book_away_moneyline') is None and card.get('away_moneyline') is not None:
-        try:
-            card['book_away_moneyline'] = int(round(float(card['away_moneyline'])))
-        except (TypeError, ValueError):
-            pass
+    """Books column — only real sportsbook fields (never model/engine ML or market lines)."""
     bs = _safe_float(card.get('book_spread'))
     if bs is not None:
         card['disp_book_spread'] = _round_to_half(-bs)
-    elif card.get('disp_book_spread') is None:
-        ms = _safe_float(card.get('market_spread'))
-        if ms is not None:
-            card['disp_book_spread'] = _round_to_half(-ms)
     bt = _safe_float(card.get('book_total'))
     if bt is not None:
         card['disp_book_total'] = _round_to_half(bt)
-    elif card.get('disp_book_total') is None:
-        mt = _safe_float(card.get('market_total'))
-        if mt is not None:
-            card['disp_book_total'] = _round_to_half(mt)
 
 
 def _set_card_pl_moneylines(card: dict) -> None:
@@ -1481,10 +1460,6 @@ def _ensure_xsharp_lines(pred: dict) -> None:
     for xk, nk in pairs:
         if pred.get(xk) is None and pred.get(nk) is not None:
             pred[xk] = pred[nk]
-    if pred.get('xgb_spread') is None and pred.get('market_spread') is not None:
-        pred['xgb_spread'] = pred['market_spread']
-    if pred.get('xgb_total') is None and pred.get('market_total') is not None:
-        pred['xgb_total'] = pred['market_total']
     if pred.get('xgb_home_score') is None and pred.get('xgb_spread') is not None and pred.get('xgb_total') is not None:
         h, a = _scores_from_spread_total(pred['xgb_spread'], pred['xgb_total'])
         if h is not None:
@@ -5257,16 +5232,16 @@ def get_upcoming_predictions(sport, days=365):
 
             predictions.append(game_dict)
     
+    if sport in ('NBA', 'MLB', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA', 'NCAAW'):
+        try:
+            _attach_pl_book_odds_to_predictions(sport, predictions, limit=150)
+        except Exception as _boe:
+            logger.debug(f"PL book odds failed in get_upcoming_predictions for {sport}: {_boe}")
     if sport not in ('MLB', 'SOCCER'):
         try:
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
         except Exception as _eoe:
             logger.debug(f"Engine odds failed in get_upcoming_predictions for {sport}: {_eoe}")
-    if sport in ('NBA', 'MLB', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA'):
-        try:
-            _attach_pl_book_odds_to_predictions(sport, predictions, limit=120)
-        except Exception as _boe:
-            logger.debug(f"PL book odds failed in get_upcoming_predictions for {sport}: {_boe}")
 
     # Soccer: when the odds engine has no spread line
     # naive spread/total so the predictions page shows our own line instead of
@@ -6331,6 +6306,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'park': round(park_adj, 2),
                     }
                     sportsbook_mt = mt
+                    if sportsbook_mt is None:
+                        sportsbook_mt = _safe_float(g.get('book_total'))
                     total_fallback_used = False
                     if sportsbook_mt is None:
                         if our_total_h2h is not None:
@@ -6345,8 +6322,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             mt = round(adj_xt, 1)
                             g['market_total_reason'] = "XSharp total (fallback)"
                             total_fallback_used = True
-                    g['market_total'] = mt
-                    if mt is None:
+                    g['market_total'] = mt if mt is not None else sportsbook_mt
+                    if mt is None and sportsbook_mt is None:
                         g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
                         g['total_pick_reason'] = g.get('total_pick_reason') or "no sportsbook total line"
                     elif adj_xt is None:
@@ -6390,6 +6367,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         'park': round(park_adj, 2),
                     }
                     sportsbook_mt = mt
+                    if sportsbook_mt is None:
+                        sportsbook_mt = _safe_float(g.get('book_total'))
                     total_fallback_used = False
                     if sportsbook_mt is None:
                         if our_total_h2h is not None:
@@ -6405,10 +6384,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             g['market_total_reason'] = "XSharp total (fallback)"
                             total_fallback_used = True
                     g['market_spread'] = ms
-                    g['market_total'] = mt
+                    g['market_total'] = mt if mt is not None else sportsbook_mt
                     if ms is None:
                         g['market_spread_reason'] = "no sportsbook spread line found"
-                    if mt is None:
+                    if mt is None and sportsbook_mt is None:
                         g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
 
                     # Fallback spread: if Vegas spread missing, use pick-em (0)
@@ -13153,7 +13132,7 @@ def sport_predictions(sport, filter_date=None):
             sorted_dates = []
 
     try:
-        _attach_pl_book_odds_to_predictions(sport, predictions, limit=120)
+        _attach_pl_book_odds_to_predictions(sport, predictions, limit=150)
     except Exception as _card_bk:
         logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
 
@@ -13429,7 +13408,7 @@ def sport_results(sport):
                 return f"<h1>NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
-            cache_key = f'{sport}_daily_results_html_v5'
+            cache_key = f'{sport}_daily_results_html_v6'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
