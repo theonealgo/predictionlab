@@ -6461,43 +6461,43 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     if sportsbook_mt is None:
                         if our_total_h2h is not None:
                             mt = round(float(our_total_h2h), 1)
-                            g['market_total_reason'] = "H2H last-10 (fallback)"
-                            total_fallback_used = True
+                            g['market_total_reason'] = "H2H last-10"
                         elif _OU_BENCH.get(sport):
                             mt = float(_OU_BENCH[sport])
-                            g['market_total_reason'] = "sport benchmark (fallback)"
+                            g['market_total_reason'] = "sport benchmark (not graded)"
                             total_fallback_used = True
                         elif adj_xt is not None:
                             mt = round(adj_xt, 1)
-                            g['market_total_reason'] = "XSharp total (fallback)"
+                            g['market_total_reason'] = "XSharp total (not graded)"
                             total_fallback_used = True
+                    _grade_mt = sportsbook_mt if sportsbook_mt is not None else (mt if not total_fallback_used else None)
                     g['market_total'] = mt if mt is not None else sportsbook_mt
-                    if mt is None and sportsbook_mt is None:
-                        g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
-                        g['total_pick_reason'] = g.get('total_pick_reason') or "no sportsbook total line"
+                    if _grade_mt is None and mt is None:
+                        g['market_total_reason'] = g.get('market_total_reason') or "no total line found"
+                        g['total_pick_reason'] = g.get('total_pick_reason') or "no total line"
                     elif adj_xt is None:
                         g['total_pick_reason'] = "model score unavailable"
-                    elif sportsbook_mt is not None:
-                        edge = adj_xt - sportsbook_mt
+                    elif _grade_mt is not None:
+                        edge = adj_xt - _grade_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
-                        if abs(at - sportsbook_mt) >= 1e-9:
-                            aou = 'OVER' if at > sportsbook_mt else 'UNDER'
+                        if abs(at - _grade_mt) >= 1e-9:
+                            aou = 'OVER' if at > _grade_mt else 'UNDER'
                             tp_ok = (tp_disp == aou)
                             tt_gr += 1
                             if tp_ok:
                                 tt_cor += 1
-                        elif total_fallback_used:
-                            g['total_pick_reason'] = "fallback total line (not graded)"
                         strong = False
                         if our_total_h2h is not None:
-                            h2h_edge = our_total_h2h - mt
+                            h2h_edge = our_total_h2h - _grade_mt
                             strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
                         g['strong_ou'] = strong
-                        _lbl_mt = sportsbook_mt if sportsbook_mt is not None else mt
+                        _lbl_mt = sportsbook_mt if sportsbook_mt is not None else _grade_mt
                         label = f"{tp_disp.title()} {_lbl_mt:.1f}"
                         if strong and abs(edge) >= _ou_edge_threshold(sport):
                             label += " ★"
                         g['total_pick_label'] = label
+                    elif total_fallback_used:
+                        g['total_pick_reason'] = "benchmark only (not graded)"
 
                 else:
                     # ── Non-MLB grading: Spread uses Vegas (unchanged).
@@ -6522,15 +6522,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     if sportsbook_mt is None:
                         if our_total_h2h is not None:
                             mt = round(float(our_total_h2h), 1)
-                            g['market_total_reason'] = "H2H last-10 (fallback)"
-                            total_fallback_used = True
+                            g['market_total_reason'] = "H2H last-10"
                         elif _OU_BENCH.get(sport):
                             mt = float(_OU_BENCH[sport])
-                            g['market_total_reason'] = "sport benchmark (fallback)"
+                            g['market_total_reason'] = "sport benchmark (not graded)"
                             total_fallback_used = True
                         elif adj_xt is not None:
                             mt = round(adj_xt, 1)
-                            g['market_total_reason'] = "XSharp total (fallback)"
+                            g['market_total_reason'] = "XSharp total (not graded)"
                             total_fallback_used = True
                     g['market_spread'] = ms
                     g['market_total'] = mt if mt is not None else sportsbook_mt
@@ -6563,25 +6562,26 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     elif xs is None:
                         g['spread_pick_reason'] = "model score unavailable"
 
-                    if adj_xt is not None and sportsbook_mt is not None:
-                        edge = adj_xt - sportsbook_mt
+                    _grade_mt = sportsbook_mt if sportsbook_mt is not None else (mt if not total_fallback_used else None)
+                    if adj_xt is not None and _grade_mt is not None:
+                        edge = adj_xt - _grade_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
-                        if abs(at - sportsbook_mt) >= 1e-9:
-                            aou = 'OVER' if at > sportsbook_mt else 'UNDER'
+                        if abs(at - _grade_mt) >= 1e-9:
+                            aou = 'OVER' if at > _grade_mt else 'UNDER'
                             tp_ok = (tp_disp == aou)
                             tt_gr += 1
                             if tp_ok:
                                 tt_cor += 1
-                        line_for_label = sportsbook_mt
+                        line_for_label = _grade_mt
                         strong = False
                         if our_total_h2h is not None:
-                            h2h_edge = our_total_h2h - sportsbook_mt
+                            h2h_edge = our_total_h2h - _grade_mt
                             strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
                         g['strong_ou'] = strong and abs(edge) >= _ou_edge_threshold(sport)
                     elif adj_xt is not None and mt is not None and total_fallback_used:
                         edge = adj_xt - mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
-                        g['total_pick_reason'] = "fallback total line (not graded)"
+                        g['total_pick_reason'] = "benchmark only (not graded)"
                         line_for_label = mt
                         g['strong_ou'] = False
                     elif xt is None:
@@ -13720,7 +13720,7 @@ def sport_results(sport):
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ? AND g.home_score IS NOT NULL
                 ORDER BY g.game_date DESC
-                LIMIT 100
+                LIMIT 500
             ''', (sport, sport)).fetchall()
             conn.close()
             if sport == 'SOCCER' and not selected_slug:
