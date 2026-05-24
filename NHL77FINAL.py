@@ -5385,7 +5385,7 @@ def get_upcoming_predictions(sport, days=365):
 
     # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
-        _ml_limit = 5 if sport == 'MLB' else 20
+        _ml_limit = 20
         _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
         _attach_market_lines_to_predictions(sport, predictions)
         conn_save = get_db_connection()
@@ -6355,7 +6355,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                                 ms = live_line.get('spread')
                             if mt is None:
                                 mt = live_line.get('total')
-                            if sport in ('NBA', 'SOCCER') and (ms is not None or mt is not None):
+                            if sport in ('NBA', 'MLB', 'SOCCER') and (ms is not None or mt is not None):
                                 try:
                                     _conn_line = get_db_connection()
                                     _upsert_betting_line(_conn_line, sport, gid, gd, h, a, ms, mt, live_line.get('source'))
