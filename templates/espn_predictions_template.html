@@ -607,7 +607,7 @@
 
     {% if grouped_predictions %}
         {% for date in sorted_dates %}
-        <div class="date-section seo-hidden" id="date-{{ date }}">
+        <div class="date-section {% if date == (default_pick_date|default(today_date)) %}visible{% else %}seo-hidden{% endif %}" id="date-{{ date }}">
             <div class="date-header">
                 📅 {{ date }}
                 {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
@@ -915,7 +915,8 @@
     });
     const allDates = {{ sorted_dates|tojson }};
     const today = '{{ today_date }}';
-    let currentWeekStart = 0, activeDate = today;
+    const defaultPickDate = '{{ default_pick_date|default(today_date) }}';
+    let currentWeekStart = 0, activeDate = defaultPickDate || today;
     const datesPerWeek = 7;
     function formatDate(ds) {
         const d = new Date(ds+'T12:00:00');
@@ -962,15 +963,31 @@
     }
     function previousWeek(){if(currentWeekStart>0){currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderDateBubbles();}}
     function nextWeek(){if(currentWeekStart+datesPerWeek<allDates.length){currentWeekStart+=datesPerWeek;renderDateBubbles();}}
-    document.addEventListener('DOMContentLoaded',()=>{
-        const idx=allDates.indexOf(today);
-        if(idx>=0){currentWeekStart=Math.max(0,idx-3);activeDate=today;}
-        else if(allDates.length>0){
-            const td=new Date(today+'T12:00:00');let ci=0,md=Infinity;
-            allDates.forEach((d,i)=>{const df=Math.abs(new Date(d+'T12:00:00')-td);if(df<md){md=df;ci=i;}});
-            currentWeekStart=Math.max(0,ci-3);activeDate=allDates[ci];
+    function firstDateWithCards() {
+        for (const d of allDates) {
+            const sec = document.getElementById('date-' + d);
+            if (sec && sec.querySelectorAll('.game-card').length > 0) return d;
         }
-        showDate(activeDate);renderDateBubbles();
+        return allDates.length ? allDates[0] : today;
+    }
+    document.addEventListener('DOMContentLoaded',()=>{
+        if (defaultPickDate && allDates.includes(defaultPickDate)) {
+            activeDate = defaultPickDate;
+        } else if (allDates.includes(today)) {
+            activeDate = today;
+        } else {
+            activeDate = firstDateWithCards();
+        }
+        const sec = document.getElementById('date-' + activeDate);
+        if (!sec || sec.querySelectorAll('.game-card').length === 0) {
+            activeDate = firstDateWithCards();
+        }
+        const idx = allDates.indexOf(activeDate);
+        if (idx >= 0) {
+            currentWeekStart = Math.max(0, idx - 3);
+        }
+        showDate(activeDate);
+        renderDateBubbles();
     });
 </script>
 </body>

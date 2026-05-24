@@ -30,7 +30,65 @@ CORE_API_SPORT_PATHS = {
     'MLB': ('baseball', 'mlb'),
     'NCAAB': ('basketball', 'mens-college-basketball'),
     'NCAAF': ('football', 'college-football'),
+    'NCAAW': ('basketball', 'womens-college-basketball'),
+    'SOCCER': ('soccer', None),
 }
+
+# Display / DB league name → ESPN core league slug (soccer only).
+SOCCER_LEAGUE_ESPN_SLUGS = {
+    'English Premier League': 'eng.1',
+    'FA Cup': 'eng.fa',
+    'EFL Cup': 'eng.league_cup',
+    'EFL Championship': 'eng.2',
+    'UEFA Champions League': 'uefa.champions',
+    'UEFA Europa League': 'uefa.europa',
+    'UEFA Europa Conference League': 'uefa.europa.conf',
+    'Spanish LaLiga': 'esp.1',
+    'Spanish Segunda División': 'esp.2',
+    'German Bundesliga': 'ger.1',
+    'Italian Serie A': 'ita.1',
+    'French Ligue 1': 'fra.1',
+    'FIFA World Cup': 'fifa.world',
+    'FIFA World Cup Qualifiers (UEFA)': 'fifa.worldq.uefa',
+    'FIFA World Cup Qualifiers (CONMEBOL)': 'fifa.worldq.conmebol',
+    'FIFA World Cup Qualifiers (CAF)': 'fifa.worldq.caf',
+    'FIFA World Cup Qualifiers (CONCACAF)': 'fifa.worldq.concacaf',
+    'Major League Soccer': 'usa.1',
+    'Liga MX': 'mex.1',
+    'Dutch Eredivisie': 'ned.1',
+    'Portuguese Primeira Liga': 'por.1',
+    'Copa Libertadores': 'conmebol.libertadores',
+    'CONCACAF Champions Cup': 'concacaf.champions',
+    'Leagues Cup': 'concacaf.leagues.cup',
+    'AFC Champions League Elite': 'afc.champions',
+    'AFC Champions League Two': 'afc.cup',
+    'AFC Asian Cup': 'afc.asian.cup',
+}
+
+_SOCCER_LEAGUE_ALIASES = {
+    'premier league': 'English Premier League',
+    'epl': 'English Premier League',
+    'eng.1': 'eng.1',
+    'champions league': 'UEFA Champions League',
+    'uefa champions league': 'UEFA Champions League',
+    'mls': 'Major League Soccer',
+    'la liga': 'Spanish LaLiga',
+    'laliga': 'Spanish LaLiga',
+    'bundesliga': 'German Bundesliga',
+    'serie a': 'Italian Serie A',
+    'ligue 1': 'French Ligue 1',
+    'afc champions league elite': 'AFC Champions League Elite',
+    'afc champions league': 'AFC Champions League Elite',
+    'acl elite': 'AFC Champions League Elite',
+    'afc.champions': 'afc.champions',
+}
+
+SOCCER_PROBE_SLUGS = [
+    'eng.1', 'esp.1', 'ger.1', 'ita.1', 'fra.1',
+    'uefa.champions', 'uefa.europa', 'uefa.europa.conf',
+    'usa.1', 'mex.1', 'ned.1', 'por.1', 'afc.champions',
+    'conmebol.libertadores', 'concacaf.champions',
+]
 
 
 def _normalize_team_key(team_name: str) -> str:
@@ -68,22 +126,71 @@ def _espn_event_id(game_id: str) -> Optional[str]:
     return raw if raw.isdigit() else None
 
 
-def _fetch_core_odds_payload(sport: str, event_id: str) -> Optional[list]:
+def _soccer_slug_from_league_name(league_name: Optional[str]) -> Optional[str]:
+    if not league_name:
+        return None
+    key = str(league_name).strip()
+    if not key:
+        return None
+    low = key.lower()
+    if re.match(r'^[a-z][a-z0-9._-]*$', low) and '.' in low:
+        return low
+    canon = _SOCCER_LEAGUE_ALIASES.get(low, key)
+    if re.match(r'^[a-z][a-z0-9._-]*$', str(canon).lower()) and '.' in str(canon):
+        return str(canon).lower()
+    return SOCCER_LEAGUE_ESPN_SLUGS.get(canon) or SOCCER_LEAGUE_ESPN_SLUGS.get(key)
+
+
+def _soccer_league_slugs_to_try(game_id: str, league_name: Optional[str] = None) -> list[str]:
+    """Ordered ESPN league slugs for a soccer event (most likely first)."""
+    slugs: list[str] = []
+    parts = str(game_id or '').split('_')
+    if len(parts) >= 3 and parts[0].upper() == 'SOCCER':
+        mid = parts[1]
+        if mid and '.' in mid:
+            slugs.append(mid)
+    mapped = _soccer_slug_from_league_name(league_name)
+    if mapped and mapped not in slugs:
+        slugs.append(mapped)
+    for slug in SOCCER_PROBE_SLUGS:
+        if slug not in slugs:
+            slugs.append(slug)
+    # Cap probes so picks/results pages cannot stall on 15+ sequential ESPN calls per game.
+    return slugs[:5]
+
+
+def _fetch_core_odds_payload(
+    sport: str,
+    event_id: str,
+    *,
+    game_id: Optional[str] = None,
+    league_name: Optional[str] = None,
+) -> Optional[list]:
     path = CORE_API_SPORT_PATHS.get(sport)
     if not path:
         return None
     sport_slug, league_slug = path
-    url = (
-        f"https://sports.core.api.espn.com/v2/sports/{sport_slug}/leagues/{league_slug}/"
-        f"events/{event_id}/competitions/{event_id}/odds"
-    )
-    try:
-        data = requests.get(url, timeout=10).json()
-    except Exception as exc:
-        logger.debug('PL book odds fetch failed %s: %s', event_id, exc)
-        return None
-    items = data.get('items') if isinstance(data, dict) else []
-    return items or None
+
+    league_slugs = [league_slug] if league_slug else []
+    if sport == 'SOCCER':
+        league_slugs = _soccer_league_slugs_to_try(game_id or '', league_name)
+
+    for _league_slug in league_slugs:
+        if not _league_slug:
+            continue
+        url = (
+            f"https://sports.core.api.espn.com/v2/sports/{sport_slug}/leagues/{_league_slug}/"
+            f"events/{event_id}/competitions/{event_id}/odds"
+        )
+        try:
+            data = requests.get(url, timeout=5).json()
+        except Exception as exc:
+            logger.debug('PL book odds fetch failed %s/%s: %s', _league_slug, event_id, exc)
+            continue
+        items = data.get('items') if isinstance(data, dict) else []
+        if items:
+            return items
+    return None
 
 
 def _parse_core_item(item: dict) -> Optional[dict[str, Any]]:
@@ -108,9 +215,13 @@ def fetch_all_core_providers(
     event_id: str,
     *,
     include_live: bool = False,
+    game_id: Optional[str] = None,
+    league_name: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """All pregame books ESPN exposes for one event (for accuracy testing)."""
-    items = _fetch_core_odds_payload(sport, event_id)
+    items = _fetch_core_odds_payload(
+        sport, event_id, game_id=game_id, league_name=league_name,
+    )
     if not items:
         return []
     out = []
@@ -124,8 +235,16 @@ def fetch_all_core_providers(
     return out
 
 
-def _fetch_core_odds_item(sport: str, event_id: str) -> Optional[dict]:
-    items = _fetch_core_odds_payload(sport, event_id)
+def _fetch_core_odds_item(
+    sport: str,
+    event_id: str,
+    *,
+    game_id: Optional[str] = None,
+    league_name: Optional[str] = None,
+) -> Optional[dict]:
+    items = _fetch_core_odds_payload(
+        sport, event_id, game_id=game_id, league_name=league_name,
+    )
     if not items:
         return None
 
@@ -226,6 +345,7 @@ def build_pl_book_odds(
     home_team: str,
     away_team: str,
     game_date: Optional[str] = None,
+    league_name: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """
     Return book-style odds for one game.
@@ -237,7 +357,9 @@ def build_pl_book_odds(
     if not event_id:
         return None
 
-    item = _fetch_core_odds_item(sport, event_id)
+    item = _fetch_core_odds_item(
+        sport, event_id, game_id=game_id, league_name=league_name,
+    )
     if not item:
         return None
 
@@ -300,6 +422,7 @@ def fetch_pl_book_odds_for_date(sport: str, game_date: str, games: list[dict]) -
             g.get('home_team_id', ''),
             g.get('away_team_id', ''),
             g.get('game_date') or game_date,
+            league_name=g.get('league') or g.get('league_name'),
         )
         if row:
             out.append(row)

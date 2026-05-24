@@ -130,6 +130,87 @@ _PROPS_CONFIG_MODULE = None
 _STANDALONE_PROPS_PKG = "_standalone_player_props"
 
 
+_PL_BOOK_ODDS_LIMIT_BY_SPORT = {
+    'SOCCER': 25,
+    'NBA': 50,
+    'MLB': 50,
+    'NHL': 40,
+    'NFL': 30,
+    'WNBA': 35,
+    'NCAAB': 35,
+    'NCAAW': 35,
+    'NCAAF': 30,
+}
+
+_OFFSEASON_SPORTS_HINT = {
+    'NCAAB': 'College basketball picks return when the season schedule is live on ESPN (typically November–April).',
+    'NCAAW': "Women's college basketball picks return when the season schedule is live on ESPN (typically November–April).",
+    'NFL': 'NFL picks return when the regular season schedule is published (typically September–February).',
+    'NCAAF': 'College football picks return when the fall schedule is live on ESPN (typically August–January).',
+}
+
+
+def _daily_results_game_count(daily_results) -> int:
+    if not daily_results:
+        return 0
+    return sum(len(dd.get('games') or []) for dd in daily_results.values())
+
+
+def _recent_result_dates(daily_results, *, yesterday=None, limit=7):
+    """Prefer graded days (through yesterday); fall back to latest dates if none."""
+    if not daily_results:
+        return []
+    if yesterday is None:
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    dates = sorted((d for d in daily_results.keys() if d and d <= yesterday), reverse=True)
+    if not dates:
+        dates = sorted((d for d in daily_results.keys() if d), reverse=True)
+    return dates[:limit]
+
+
+def _picks_display_dates(grouped_predictions, today_date):
+    """Dates for picks nav + default visible day (must have upcoming games when possible)."""
+    if not grouped_predictions:
+        return [], today_date
+    upcoming = []
+    for dk in sorted(grouped_predictions.keys()):
+        if not dk or dk == 'TBD':
+            continue
+        games = grouped_predictions[dk]
+        if any(isinstance(g, dict) and g.get('home_score') is None for g in games):
+            upcoming.append(dk)
+    if upcoming:
+        if today_date in upcoming:
+            default = today_date
+        else:
+            future = [d for d in upcoming if d >= today_date]
+            default = future[0] if future else upcoming[-1]
+        return upcoming, default
+    all_dates = sorted(d for d in grouped_predictions.keys() if d and d != 'TBD')
+    if not all_dates:
+        return [], today_date
+    window = all_dates[-14:]
+    default = today_date if today_date in window else window[-1]
+    return window, default
+
+
+def _results_page_html_usable(html: str) -> bool:
+    if not html:
+        return False
+    low = html.lower()
+    if any(
+        phrase in low
+        for phrase in (
+            'class="no-data"',
+            'moneyline results are temporarily unavailable',
+            'results could not be loaded because no completed',
+            'no results data available yet',
+        )
+    ):
+        return False
+    return 'game-card' in low or 'week-section' in low
+
+
 def _trim_cache(cache: dict, ttl: float, max_entries: int = 200) -> None:
     """Evict expired entries then, if still over max_entries, drop the oldest ones."""
     now = _time.time()
@@ -1019,6 +1100,7 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
             pred.get('home_team_id', ''),
             pred.get('away_team_id', ''),
             pred.get('game_date'),
+            league_name=pred.get('league') or pred.get('league_name'),
         )
         attempts += 1
         if not row:
@@ -1029,14 +1111,10 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
         pred['book_away_moneyline'] = row.get('away_moneyline')
         pred['book_provider'] = row.get('provider')
         pred['book_favorite_team'] = row.get('favorite_team')
-        if pred.get('market_spread') is None and row.get('spread') is not None:
-            pred['market_spread'] = row['spread']
-        if pred.get('market_total') is None and row.get('total') is not None:
-            pred['market_total'] = row['total']
         pred['book_odds_source'] = row.get('source') or 'pl_book_odds_api'
 
 
-def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date):
+def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date, league_name=None):
     """ESPN Core / DK closing line for one game (completed or upcoming)."""
     try:
         from pl_book_odds_api import build_pl_book_odds
@@ -1045,7 +1123,9 @@ def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date):
     gid = str(game_id or '')
     if not gid.split('_')[-1].isdigit():
         return None
-    return build_pl_book_odds(sport, gid, home or '', away or '', game_date)
+    return build_pl_book_odds(
+        sport, gid, home or '', away or '', game_date, league_name=league_name,
+    )
 
 
 def _apply_pl_book_row_to_game(g: dict, row: dict) -> None:
@@ -1142,6 +1222,7 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
             continue
         api_row = build_pl_book_odds(
             sport, gid, g.get('home', ''), g.get('away', ''), g.get('date'),
+            league_name=g.get('league') or g.get('league_name'),
         )
         api_attempts += 1
         if not api_row:
@@ -2352,7 +2433,8 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
                 game_id,
                 pred.get('game_date'),
                 pred.get('home_team_id'),
-                pred.get('away_team_id')
+                pred.get('away_team_id'),
+                league_name=pred.get('league') or pred.get('league_name'),
             )
             attempts += 1
             if line and (line.get('spread') is not None or line.get('total') is not None):
@@ -2456,7 +2538,8 @@ def _cache_market_lines_for_results(sport, daily_results, limit=20):
                     gid,
                     gd,
                     g.get('home'),
-                    g.get('away')
+                    g.get('away'),
+                    league_name=g.get('league') or g.get('league_name'),
                 )
                 attempts += 1
                 if line and (line.get('spread') is not None or line.get('total') is not None):
@@ -2484,7 +2567,8 @@ def _fetch_live_market_line(
     game_id: str,
     game_date: str = None,
     home_team: str = None,
-    away_team: str = None
+    away_team: str = None,
+    league_name: str = None,
 ):
     """
     Fetch market spread/total for a game from ESPN Core API.
@@ -2528,12 +2612,19 @@ def _fetch_live_market_line(
                 soccer_league_slugs.append(parts[1])
         except Exception:
             pass
-        # Fallback: probe the most common leagues if we cannot parse the slug.
+        if not soccer_league_slugs:
+            try:
+                from pl_book_odds_api import _soccer_slug_from_league_name
+                _mapped = _soccer_slug_from_league_name(league_name)
+            except Exception:
+                _mapped = None
+            if _mapped:
+                soccer_league_slugs.append(_mapped)
         if not soccer_league_slugs:
             soccer_league_slugs = [
                 'eng.1', 'esp.1', 'ger.1', 'ita.1', 'fra.1',
                 'uefa.champions', 'uefa.europa', 'uefa.europa.conf',
-                'usa.1', 'mex.1', 'ned.1', 'por.1',
+                'usa.1', 'mex.1', 'ned.1', 'por.1', 'afc.champions',
             ]
     for event_id in event_candidates:
         league_candidates = soccer_league_slugs if sport == 'SOCCER' else [league_slug]
@@ -2869,6 +2960,8 @@ SOCCER_LEAGUE_ENDPOINTS = {
     'Copa Libertadores': 'conmebol.libertadores',
     'CONCACAF Champions Cup': 'concacaf.champions',
     'Leagues Cup': 'concacaf.leagues.cup',
+    'AFC Champions League Elite': 'afc.champions',
+    'AFC Champions League Two': 'afc.cup',
     'USL Championship': None,
 }
 
@@ -4074,12 +4167,14 @@ def get_upcoming_predictions(sport, days=365):
     """
     
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
-    cache_key = f"{sport}_upcoming_predictions"
+    cache_key = f"{sport}_upcoming_predictions_v3"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
     if cached and (now_ts - cached['ts']) < cache_ttl:
-        return _copy.deepcopy(cached['data'])
+        _cached_preds = cached.get('data')
+        if _cached_preds:
+            return _copy.deepcopy(_cached_preds)
 
     # Load game data based on sport
     if sport == 'NHL':
@@ -4106,9 +4201,9 @@ def get_upcoming_predictions(sport, days=365):
                 
                 if existing:
                     game['game_id'] = existing['game_id']
-                    game['stored_elo_prob'] = existing['elo_home_prob']
-                    game['stored_xgb_prob'] = existing['xgboost_home_prob']
-                    game['stored_ensemble_prob'] = existing['meta_home_prob']
+                    game['stored_elo_prob'] = _to_float_safe(existing['elo_home_prob'])
+                    game['stored_xgb_prob'] = _to_float_safe(existing['xgboost_home_prob'])
+                    game['stored_ensemble_prob'] = _to_float_safe(existing['meta_home_prob'])
             
             conn.close()
             
@@ -4183,9 +4278,9 @@ def get_upcoming_predictions(sport, days=365):
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             if pred:
-                game['stored_elo_prob']      = pred['elo_home_prob']
-                game['stored_xgb_prob']      = pred['xgboost_home_prob']
-                game['stored_ensemble_prob'] = pred['win_probability']
+                game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
+                game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
+                game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
         conn.close()
 
         # Build dates list
@@ -4354,9 +4449,9 @@ def get_upcoming_predictions(sport, days=365):
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
-                game['stored_elo_prob'] = pred['elo_home_prob']
-                game['stored_xgb_prob'] = pred['xgboost_home_prob']
-                game['stored_ensemble_prob'] = pred['win_probability']
+                game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
+                game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
+                game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
         conn.close()
         
         # Build dates list
@@ -4563,15 +4658,15 @@ def get_upcoming_predictions(sport, days=365):
     
     # Display logic: Show ALL past games + future games for ONE MONTH from today
     season_starts = {
-        'NHL': datetime(2024, 10, 7),
-        'NFL': datetime(2024, 9, 4),
-        'NBA': datetime(2024, 10, 21),
-        'MLB': datetime(2025, 3, 27),
-        'NCAAF': datetime(2024, 8, 30),
-        'NCAAB': datetime(2024, 11, 4),
-        'NCAAW': datetime(2024, 11, 4),
+        'NHL': datetime(2025, 10, 7),
+        'NFL': datetime(2025, 9, 4),
+        'NBA': datetime(2025, 10, 21),
+        'MLB': datetime(2026, 3, 27),
+        'NCAAF': datetime(2025, 8, 30),
+        'NCAAB': datetime(2025, 11, 4),
+        'NCAAW': datetime(2025, 11, 4),
         'WNBA': datetime(2026, 5, 8),
-        'SOCCER': datetime(2024, 8, 1),
+        'SOCCER': datetime(2025, 8, 1),
     }
     season_start = season_starts.get(sport, datetime(2025, 1, 1))
     
@@ -4737,12 +4832,15 @@ def get_upcoming_predictions(sport, days=365):
                 _fp_se = game.get('stored_ensemble_prob')
                 _fp_sx = game.get('stored_xgb_prob')
                 _fp_selo = game.get('stored_elo_prob')
-                if _fp_selo is not None:
-                    elo_prob = float(_fp_selo)
-                if _fp_sx is not None:
-                    xgb_prob = float(_fp_sx)
-                if _fp_se is not None:
-                    ensemble_prob = float(_fp_se)
+                _fp_elo = _to_float_safe(_fp_selo)
+                _fp_xgb = _to_float_safe(_fp_sx)
+                _fp_ens = _to_float_safe(_fp_se)
+                if _fp_elo is not None:
+                    elo_prob = _fp_elo
+                if _fp_xgb is not None:
+                    xgb_prob = _fp_xgb
+                if _fp_ens is not None:
+                    ensemble_prob = _fp_ens
                 if v2_pred:
                     game['glicko2_prob'] = v2_pred.get('glicko2_prob')
                     game['trueskill_prob'] = v2_pred.get('trueskill_prob')
@@ -5232,11 +5330,6 @@ def get_upcoming_predictions(sport, days=365):
 
             predictions.append(game_dict)
     
-    if sport in ('NBA', 'MLB', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA', 'NCAAW'):
-        try:
-            _attach_pl_book_odds_to_predictions(sport, predictions, limit=150)
-        except Exception as _boe:
-            logger.debug(f"PL book odds failed in get_upcoming_predictions for {sport}: {_boe}")
     if sport not in ('MLB', 'SOCCER'):
         try:
             _attach_engine_odds_to_predictions(sport, predictions, limit=40)
@@ -5277,7 +5370,11 @@ def get_upcoming_predictions(sport, days=365):
                 ''', (pred['game_id'], sport)).fetchone()
                 
                 if not existing:
-                    # Save new prediction (locked by default when first saved)
+                    _elo_save = pred.get('elo_prob')
+                    _xgb_save = pred.get('xgb_prob')
+                    _ens_save = pred.get('ensemble_prob')
+                    if _elo_save is None or _xgb_save is None or _ens_save is None:
+                        continue
                     try:
                         cursor_save.execute('''
                             INSERT INTO predictions (
@@ -5287,9 +5384,9 @@ def get_upcoming_predictions(sport, days=365):
                         ''', (
                             pred['game_id'], sport, pred.get('league') or sport, pred['game_date'],
                             pred['home_team_id'], pred['away_team_id'],
-                            pred['elo_prob'] / 100.0,
-                            pred['xgb_prob'] / 100.0,
-                            pred['ensemble_prob'] / 100.0
+                            float(_elo_save) / 100.0,
+                            float(_xgb_save) / 100.0,
+                            float(_ens_save) / 100.0,
                         ))
                         saved_count += 1
                     except Exception as e:
@@ -5491,7 +5588,8 @@ def get_upcoming_predictions(sport, days=365):
             _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
 
     _trim_cache(_PREDICTIONS_CACHE, cache_ttl, max_entries=50)
-    _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
+    if predictions:
+        _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
     return predictions
 
 def _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None):
@@ -6217,7 +6315,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             if gd_dt and abs((datetime.now() - gd_dt).days) > 3:
                                 raise Exception(f"skip live fetch for older {sport} dates")
                         live_attempts += 1
-                        live_line = _fetch_live_market_line(sport, gid, gd, h, a)
+                        live_line = _fetch_live_market_line(
+                            sport, gid, gd, h, a,
+                            league_name=g.get('league') or g.get('league_name'),
+                        )
                         if live_line:
                             if ms is None:
                                 ms = live_line.get('spread')
@@ -6238,7 +6339,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     try:
                         gd_dt = parse_date(gd) if gd else None
                         if gd_dt is None or (datetime.now() - gd_dt).days <= 21:
-                            _bk = _fetch_pl_book_line_for_game(sport, gid, h, a, gd)
+                            _bk = _fetch_pl_book_line_for_game(
+                                sport, gid, h, a, gd,
+                                league_name=g.get('league') or g.get('league_name'),
+                            )
                             if _bk:
                                 _apply_pl_book_row_to_game(g, _bk)
                                 _persist_pl_book_row(sport, g, _bk)
@@ -12921,7 +13025,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v9::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v11::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -12931,7 +13035,8 @@ def sport_predictions(sport, filter_date=None):
                 cached_ts is not None
                 and cached_html
                 and (_time.time() - cached_ts) < cache_ttl
-                and 'teams-split' in cached_html
+                and 'game-card' in cached_html
+                and 'no predictions available' not in cached_html.lower()
                 and 'refreshing this page right now' not in cached_html.lower()
             ):
                 return cached_html
@@ -12946,6 +13051,8 @@ def sport_predictions(sport, filter_date=None):
             f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
             "Please refresh in a minute."
         )
+    if not predictions and not prediction_error and sport in _OFFSEASON_SPORTS_HINT:
+        prediction_error = _OFFSEASON_SPORTS_HINT[sport]
 
     for pred in predictions:
         for _k in (
@@ -13119,20 +13226,24 @@ def sport_predictions(sport, filter_date=None):
             date_key = pred.get('game_date') or 'TBD'
             grouped_predictions[date_key].append(pred)
     
-    # Sort dates
-    sorted_dates = sorted(grouped_predictions.keys())
+    # Sort dates — picks UI only shows days with upcoming games (avoids blank "today" tab)
+    sorted_dates, default_pick_date = _picks_display_dates(grouped_predictions, today_date)
 
     # Filter to specific date if requested (daily SEO pages)
     if filter_date:
         if filter_date in grouped_predictions:
             grouped_predictions = {filter_date: grouped_predictions[filter_date]}
             sorted_dates = [filter_date]
+            default_pick_date = filter_date
         else:
             grouped_predictions = {}
             sorted_dates = []
+            default_pick_date = filter_date
 
     try:
-        _attach_pl_book_odds_to_predictions(sport, predictions, limit=150)
+        _attach_pl_book_odds_to_predictions(
+            sport, predictions, limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 40),
+        )
     except Exception as _card_bk:
         logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
 
@@ -13164,6 +13275,7 @@ def sport_predictions(sport, filter_date=None):
         prediction_error=prediction_error,
         grouped_predictions=grouped_predictions,
         sorted_dates=sorted_dates,
+        default_pick_date=default_pick_date,
         today_date=today_date,
         group_by='week' if sport == 'NFL' else 'date',
         soccer_leagues=soccer_leagues,
@@ -13181,7 +13293,15 @@ def sport_predictions(sport, filter_date=None):
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)
-    if cache_key and rendered and 'teams-split' in rendered:
+    if (
+        cache_key
+        and rendered
+        and grouped_predictions
+        and sorted_dates
+        and rendered.count('class="game-card"') >= 1
+        and 'no predictions available' not in rendered.lower()
+        and 'upstream data/model dependency failed' not in rendered.lower()
+    ):
         _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180), max_entries=50)
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
@@ -13208,38 +13328,44 @@ def sport_results(sport):
                 logger.exception(f"NFL sync/performance pipeline failed; falling back to DB-only render: {nfl_sync_err}")
 
             if weekly_results:
-                overall_stats = compute_overall_stats_from_weekly(weekly_results)
-                yesterday_dt = datetime.now() - timedelta(days=1)
-                daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
-                daily_tally = compute_daily_model_tally_from_weekly(weekly_results, daily_tally_date)
-                daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
-                daily_results = _daily_results_from_weekly(weekly_results)
-                _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
-                weekly_start_dt = yesterday_dt - timedelta(days=6)
-                weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
-                weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
-                weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
-                roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
-                roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
-                roi_total = compute_roi_for_range(daily_results, None, None)
-                roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
-                return render_template_string(
-                    NFL_WEEKLY_RESULTS_TEMPLATE,
-                    page=sport,
-                    sport=sport,
-                    sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
-                    sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
-                    sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-                    weekly_results=weekly_results,
-                    overall_stats=overall_stats,
-                    daily_tally=daily_tally,
-                    daily_tally_date=daily_tally_date,
-                    daily_tally_games=daily_tally_games,
-                    weekly_tally=weekly_tally,
-                    weekly_tally_date_range=weekly_tally_date_range,
-                    weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards
-                )
+                try:
+                    overall_stats = compute_overall_stats_from_weekly(weekly_results)
+                    yesterday_dt = datetime.now() - timedelta(days=1)
+                    daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
+                    daily_tally = compute_daily_model_tally_from_weekly(weekly_results, daily_tally_date)
+                    daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
+                    daily_results = _daily_results_from_weekly(weekly_results)
+                    _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
+                    weekly_start_dt = yesterday_dt - timedelta(days=6)
+                    weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                    weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+                    weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+                    roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
+                    roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                    roi_total = compute_roi_for_range(daily_results, None, None)
+                    roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+                    return render_template_string(
+                        NFL_WEEKLY_RESULTS_TEMPLATE,
+                        page=sport,
+                        sport=sport,
+                        sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
+                        sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
+                        sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+                        weekly_results=weekly_results,
+                        overall_stats=overall_stats,
+                        daily_tally=daily_tally,
+                        daily_tally_date=daily_tally_date,
+                        daily_tally_games=daily_tally_games,
+                        weekly_tally=weekly_tally,
+                        weekly_tally_date_range=weekly_tally_date_range,
+                        weekly_tally_games=weekly_tally_games,
+                        roi_cards=roi_cards
+                    )
+                except Exception as nfl_tpl_err:
+                    logger.exception(
+                        "NFL weekly template render failed; falling back to DB daily cards: %s",
+                        nfl_tpl_err,
+                    )
 
             # Fallback path: render from existing DB data if the live NFL pipeline fails.
             conn = get_db_connection()
@@ -13292,14 +13418,15 @@ def sport_results(sport):
                 }
                 daily_results[game_date]['games'].append(game_info)
 
-            sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
+            yesterday_dt = datetime.now() - timedelta(days=1)
+            yesterday = yesterday_dt.strftime('%Y-%m-%d')
+            sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=30)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
-            yesterday_dt = datetime.now() - timedelta(days=1)
-            daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
+            daily_tally_date = yesterday
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
             weekly_start_dt = yesterday_dt - timedelta(days=6)
@@ -13337,7 +13464,12 @@ def sport_results(sport):
             if isinstance(cached_page, dict):
                 cached_ts = cached_page.get('ts')
                 cached_html = cached_page.get('html')
-                if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+                if (
+                    cached_ts is not None
+                    and cached_html
+                    and (_time.time() - cached_ts) < cache_ttl
+                    and _results_page_html_usable(cached_html)
+                ):
                     return cached_html
 
             try:
@@ -13361,7 +13493,7 @@ def sport_results(sport):
 
             try:
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
-                sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
+                sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=7)
 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
@@ -13400,8 +13532,9 @@ def sport_results(sport):
                     weekly_tally_games=weekly_tally_games,
                     roi_cards=roi_cards
                 )
-                _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
-                _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+                if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
+                    _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
+                    _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
             except Exception as e:
                 logger.error(f"Error processing NHL results: {e}")
@@ -13414,7 +13547,12 @@ def sport_results(sport):
             if isinstance(cached_page, dict):
                 cached_ts = cached_page.get('ts')
                 cached_html = cached_page.get('html')
-                if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+                if (
+                    cached_ts is not None
+                    and cached_html
+                    and (_time.time() - cached_ts) < cache_ttl
+                    and _results_page_html_usable(cached_html)
+                ):
                     return cached_html
             try:
                 update_nba_scores()
@@ -13438,7 +13576,12 @@ def sport_results(sport):
                 # Render recent dates only to keep response size manageable.
                 yesterday_dt = datetime.now() - timedelta(days=1)
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
-                sorted_dates = sorted([d for d in daily_results.keys() if d <= yesterday], reverse=True)[:7]
+                sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=7)
+                if not sorted_dates:
+                    return _results_fallback_page(
+                        sport,
+                        "NBA results could not be loaded because no completed games were available for grading yet.",
+                    )
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
@@ -13476,8 +13619,9 @@ def sport_results(sport):
                     weekly_tally_games=weekly_tally_games,
                     roi_cards=roi_cards
                 )
-                _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
-                _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+                if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
+                    _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
+                    _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered
             except Exception as e:
                 logger.error(f"Error processing NBA results: {e}")
@@ -13512,7 +13656,12 @@ def sport_results(sport):
                 if isinstance(cached_page, dict):
                     cached_ts = cached_page.get('ts')
                     cached_html = cached_page.get('html')
-                    if cached_ts is not None and cached_html and (_time.time() - cached_ts) < cache_ttl:
+                    if (
+                        cached_ts is not None
+                        and cached_html
+                        and (_time.time() - cached_ts) < cache_ttl
+                        and _results_page_html_usable(cached_html)
+                    ):
                         return cached_html
             # Update scores at most once every 10 minutes per sport.
             sync_key = f'{sport}_results_score_sync_ts'
@@ -13707,8 +13856,9 @@ def sport_results(sport):
                 roi_cards=roi_cards,
                 soccer_leagues=soccer_leagues
             )
-            _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
-            _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+            if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
+                _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
+                _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
             return rendered
         
         performance = calculate_model_performance(sport)
