@@ -5685,17 +5685,26 @@ def calculate_nfl_weekly_performance():
                 WHERE p.game_id = ? AND p.sport = 'NFL'
             ''', (game_id,)).fetchone()
 
-            if not pred or pred[0] is None:
-                continue
-
             # Get team full names
             home_team_full = abbr_to_full.get(api_game['home_team'], api_game['home_team'])
             away_team_full = abbr_to_full.get(api_game['away_team'], api_game['away_team'])
 
-            # Stored DB predictions
-            elo_prob = float(pred[0]) if pred[0] else None
-            xgb_prob = float(pred[1]) if pred[1] else elo_prob
-            ens_prob = elo_prob  # start with elo as fallback
+            if not pred or pred[0] is None:
+                # No stored prediction (e.g. Super Bowl / playoff game never visited).
+                # Fall back to live Elo so the game still shows in results.
+                try:
+                    _hr = get_elo(home_team_full)
+                    _ar = get_elo(away_team_full)
+                    elo_prob = expected_score(_hr, _ar) if _hr and _ar else 0.5
+                except Exception:
+                    elo_prob = 0.5
+                xgb_prob = elo_prob
+                ens_prob = elo_prob
+            else:
+                # Stored DB predictions
+                elo_prob = float(pred[0]) if pred[0] else None
+                xgb_prob = float(pred[1]) if pred[1] else elo_prob
+                ens_prob = elo_prob  # start with elo as fallback
 
             # V2 model predictions
             v2 = get_v2_prediction('NFL', home_team_full, away_team_full, str(api_game['gameday']))
