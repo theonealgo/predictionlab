@@ -2307,6 +2307,7 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
               AND g.away_score IS NOT NULL
               AND date(g.game_date) BETWEEN ? AND ?
             ORDER BY g.game_date DESC
+            LIMIT 600
         ''', (
             sport,
             sport,
@@ -3977,7 +3978,7 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
             
             'is_v2': True,
         }
-        _trim_cache(_V2_PREDICTION_CACHE, _V2_PREDICTION_TTL_SECONDS, max_entries=200)
+        _trim_cache(_V2_PREDICTION_CACHE, _V2_PREDICTION_TTL_SECONDS, max_entries=1000)
         _V2_PREDICTION_CACHE[cache_key] = {'ts': now_ts, 'data': _copy.deepcopy(result)}
         return result
     except Exception as e:
@@ -4067,6 +4068,9 @@ def _score_predictor_instance(sport):
 
     if _stats:
         sp.team_stats_cache[_cache_key] = _stats
+    if len(_sp_instances) >= 6:
+        oldest = min(_sp_instances, key=lambda k: _sp_instances[k][1])
+        del _sp_instances[oldest]
     _sp_instances[sport] = (sp, now)
     logger.debug(f"[{sport}] team_stats loaded: {len(_stats)} teams "
                  f"(db={len(_db_stats)}, api={len(_api_stats or {})})")
@@ -6229,11 +6233,13 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     FROM betting_lines
                     WHERE sport=?
                     ORDER BY fetched_at DESC
+                    LIMIT 2000
                 ''', (sport,)).fetchall()
             else:
                 rows = conn.execute('''
                     SELECT game_id, spread, total
                     FROM betting_lines
+                    LIMIT 2000
                 ''').fetchall()
             for r in rows:
                 if r['game_id']:
@@ -6250,7 +6256,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
         # Betting odds fallback (game_id may be stored as numeric or text)
         try:
-            odds_rows = conn.execute('SELECT game_id, spread, total FROM betting_odds').fetchall()
+            odds_rows = conn.execute('SELECT game_id, spread, total FROM betting_odds LIMIT 2000').fetchall()
             for r in odds_rows:
                 if r['game_id'] is None:
                     continue
