@@ -2428,7 +2428,7 @@ def _upsert_betting_line(conn, sport, game_id, game_date, home_team, away_team, 
 
 
 def _cache_market_lines_for_predictions(sport, predictions, limit=20):
-    if sport not in ['NBA', 'MLB', 'SOCCER'] or not predictions:
+    if not predictions:
         return
     try:
         conn = get_db_connection()
@@ -2527,7 +2527,7 @@ def _attach_market_lines_to_predictions(sport, predictions):
 
 
 def _cache_market_lines_for_results(sport, daily_results, limit=20):
-    if sport not in ['NBA', 'MLB', 'SOCCER'] or not daily_results:
+    if not daily_results:
         return
     try:
         conn = get_db_connection()
@@ -3270,8 +3270,8 @@ def update_nhl_scores():
     Gets scores from the last 30 days (to catch any missing games).
     """
     try:
-        default_lookback_days = 10
-        
+        default_lookback_days = 120
+
         # Fetch recent window to keep request latency low while still catching missed finals.
         from datetime import datetime, timedelta
         today = datetime.now()
@@ -5383,10 +5383,9 @@ def get_upcoming_predictions(sport, days=365):
                 if _fb_total is not None:
                     _sp_pred['market_total'] = round(float(_fb_total), 2)
 
-    # For NBA/MLB/NCAAW/SOCCER: Save newly generated predictions to database so Results page can use them
-    if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER']:
-        _ml_limit = 20
-        _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
+    # Cache market lines for all sports so Results page has book lines available.
+    _cache_market_lines_for_predictions(sport, predictions, limit=20)
+    if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']:
         _attach_market_lines_to_predictions(sport, predictions)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
@@ -6355,7 +6354,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                                 ms = live_line.get('spread')
                             if mt is None:
                                 mt = live_line.get('total')
-                            if sport in ('NBA', 'MLB', 'SOCCER') and (ms is not None or mt is not None):
+                            if (ms is not None or mt is not None):
                                 try:
                                     _conn_line = get_db_connection()
                                     _upsert_betting_line(_conn_line, sport, gid, gd, h, a, ms, mt, live_line.get('source'))
