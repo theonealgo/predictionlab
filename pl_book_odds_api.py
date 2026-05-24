@@ -346,6 +346,7 @@ def build_pl_book_odds(
     away_team: str,
     game_date: Optional[str] = None,
     league_name: Optional[str] = None,
+    espn_event_id: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """
     Return book-style odds for one game.
@@ -353,8 +354,8 @@ def build_pl_book_odds(
     Response uses American moneyline integers only (no win %).
     favorite_team always matches spread sign.
     """
-    event_id = _espn_event_id(game_id)
-    if not event_id:
+    event_id = str(espn_event_id) if espn_event_id else _espn_event_id(game_id)
+    if not event_id or not str(event_id).isdigit():
         return None
 
     item = _fetch_core_odds_item(

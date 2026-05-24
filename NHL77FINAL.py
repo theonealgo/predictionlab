@@ -131,15 +131,15 @@ _STANDALONE_PROPS_PKG = "_standalone_player_props"
 
 
 _PL_BOOK_ODDS_LIMIT_BY_SPORT = {
-    'SOCCER': 25,
-    'NBA': 50,
-    'MLB': 50,
-    'NHL': 40,
-    'NFL': 30,
-    'WNBA': 35,
-    'NCAAB': 35,
-    'NCAAW': 35,
-    'NCAAF': 30,
+    'SOCCER': 40,
+    'NBA': 80,
+    'MLB': 80,
+    'NHL': 60,
+    'NFL': 60,
+    'WNBA': 50,
+    'NCAAB': 40,
+    'NCAAW': 40,
+    'NCAAF': 40,
 }
 
 _OFFSEASON_SPORTS_HINT = {
@@ -1063,6 +1063,20 @@ def _safe_float(value, default=None):
         return default
 
 
+def _espn_event_id_for_book(sport, game_id, game_date, home_team, away_team):
+    """ESPN event id for Core odds — numeric game_id or scoreboard matchup lookup."""
+    raw = str(game_id or '').split('_')[-1]
+    if raw.isdigit() and raw.startswith('401'):
+        return raw
+    if sport in CORE_API_SPORT_PATHS and game_date and home_team and away_team:
+        resolved = _resolve_espn_event_id_by_matchup(
+            sport, game_date, home_team, away_team,
+        )
+        if resolved:
+            return str(resolved)
+    return raw if raw.isdigit() else None
+
+
 def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
     """Attach sportsbook lines (ESPN Core / DraftKings when listed) for card display."""
     if not predictions:
@@ -1084,9 +1098,6 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
         game_id = pred.get('game_id')
         if not game_id:
             continue
-        raw_eid = str(game_id).split('_')[-1]
-        if not raw_eid.isdigit():
-            continue
         if (
             pred.get('book_spread') is not None
             and pred.get('book_total') is not None
@@ -1094,16 +1105,36 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
             and pred.get('book_away_moneyline') is not None
         ):
             continue
+        home = pred.get('home_team_id', '')
+        away = pred.get('away_team_id', '')
+        gd = pred.get('game_date')
+        espn_eid = _espn_event_id_for_book(sport, game_id, gd, home, away)
+        if not espn_eid:
+            continue
         row = build_pl_book_odds(
             sport,
             game_id,
-            pred.get('home_team_id', ''),
-            pred.get('away_team_id', ''),
-            pred.get('game_date'),
+            home,
+            away,
+            gd,
             league_name=pred.get('league') or pred.get('league_name'),
+            espn_event_id=espn_eid,
         )
         attempts += 1
         if not row:
+            try:
+                live = _fetch_live_market_line(
+                    sport, game_id, gd, home, away,
+                    league_name=pred.get('league') or pred.get('league_name'),
+                )
+            except Exception:
+                live = None
+            if live and (live.get('spread') is not None or live.get('total') is not None):
+                if live.get('spread') is not None:
+                    pred['book_spread'] = live['spread']
+                if live.get('total') is not None:
+                    pred['book_total'] = live['total']
+                pred['book_odds_source'] = live.get('source') or 'ESPN Core API'
             continue
         pred['book_spread'] = row.get('spread')
         pred['book_total'] = row.get('total')
@@ -13025,7 +13056,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v11::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v12::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -13207,24 +13238,18 @@ def sport_predictions(sport, filter_date=None):
         share_image_src = url_for('share_predictions_image', token=_pred_token, fmt='jpg')
         share_image_view_url = url_for('share_predictions_view', token=_pred_token)
 
-    # Group predictions by date for NHL/NBA, by week for NFL
+    # Group upcoming games only (picks page — not season of finals)
     from collections import defaultdict
     grouped_predictions = defaultdict(list)
-    if sport in ['NHL', 'NBA']:
-        # Group by date
-        for pred in predictions:
-            date_key = pred.get('game_date') or 'TBD'
-            grouped_predictions[date_key].append(pred)
-    elif sport == 'NFL':
-        # Group by date (ESPN data doesn't have week numbers)
-        for pred in predictions:
-            date_key = pred.get('game_date') or 'TBD'
-            grouped_predictions[date_key].append(pred)
-    else:
-        # Default: group by date
-        for pred in predictions:
-            date_key = pred.get('game_date') or 'TBD'
-            grouped_predictions[date_key].append(pred)
+    for pred in predictions:
+        if pred.get('home_score') is not None:
+            continue
+        if not pred.get('home_team_id') or not pred.get('away_team_id'):
+            continue
+        if pred.get('home_team_id') == 'TBD' or pred.get('away_team_id') == 'TBD':
+            continue
+        date_key = pred.get('game_date') or 'TBD'
+        grouped_predictions[date_key].append(pred)
     
     # Sort dates — picks UI only shows days with upcoming games (avoids blank "today" tab)
     sorted_dates, default_pick_date = _picks_display_dates(grouped_predictions, today_date)
@@ -13287,6 +13312,7 @@ def sport_predictions(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
+        is_premium=True,
     )
     try:
         rendered = _render_espn_picks_page(**_render_ctx)
