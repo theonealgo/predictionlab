@@ -1203,8 +1203,8 @@ def _pred_needs_book_fetch(pred: dict) -> bool:
     return not (
         pred.get('book_spread') is not None
         and pred.get('book_total') is not None
-        and pred.get('book_home_moneyline') is not None
-        and pred.get('book_away_moneyline') is not None
+        and _valid_book_ml(pred.get('book_home_moneyline'))
+        and _valid_book_ml(pred.get('book_away_moneyline'))
     )
 
 
@@ -1324,11 +1324,23 @@ def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date, league_n
     )
 
 
+def _valid_book_ml(val) -> bool:
+    try:
+        return val is not None and int(val) != 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _ensure_book_moneylines(pred: dict) -> None:
     """Fill book_home/away_moneyline when spread exists but ESPN live path omitted ML."""
-    if pred.get('book_home_moneyline') is not None and pred.get('book_away_moneyline') is not None:
+    if _valid_book_ml(pred.get('book_home_moneyline')) and _valid_book_ml(pred.get('book_away_moneyline')):
         return
     bs = _safe_float(pred.get('book_spread'))
+    if bs is None:
+        ds = _safe_float(pred.get('disp_book_spread'))
+        if ds is not None:
+            bs = -ds
+            pred['book_spread'] = bs
     if bs is None:
         return
     try:
@@ -1336,10 +1348,12 @@ def _ensure_book_moneylines(pred: dict) -> None:
         h_ml, a_ml = _ml_from_spread_fallback(bs)
     except Exception:
         return
-    if pred.get('book_home_moneyline') is None and h_ml is not None:
+    if not _valid_book_ml(pred.get('book_home_moneyline')) and h_ml is not None:
         pred['book_home_moneyline'] = int(h_ml)
-    if pred.get('book_away_moneyline') is None and a_ml is not None:
+        pred['book_ml_estimated'] = True
+    if not _valid_book_ml(pred.get('book_away_moneyline')) and a_ml is not None:
         pred['book_away_moneyline'] = int(a_ml)
+        pred['book_ml_estimated'] = True
 
 
 def _apply_pl_book_row_to_game(g: dict, row: dict) -> None:
@@ -4680,6 +4694,9 @@ def get_upcoming_predictions(sport, days=365):
             out = _copy.deepcopy(_cached_preds)
             try:
                 _refresh_books_on_predictions(sport, out)
+                for _bp in out:
+                    if isinstance(_bp, dict):
+                        _ensure_book_moneylines(_bp)
             except Exception as _bk_cache:
                 logger.debug(f"[{sport}] book refresh on predictions cache hit: {_bk_cache}")
             return out
@@ -5849,6 +5866,7 @@ def get_upcoming_predictions(sport, days=365):
                 game_dict['book_away_moneyline'] = int(game['away_moneyline'])
             if game_dict.get('book_spread') is not None or game_dict.get('book_home_moneyline') is not None:
                 game_dict.setdefault('book_odds_source', 'betting_odds')
+            _ensure_book_moneylines(game_dict)
 
             # Picks page: skip finals (results page owns completed games).
             if is_completed:
@@ -13087,6 +13105,10 @@ def promo_top_picks_today():
 @app.route('/<slug>')
 def seo_picks_page(slug):
     """Handle SEO-friendly URLs like /nhl-picks, /nba-picks, /nhl-results, etc."""
+    if slug.endswith('-predictions'):
+        return redirect(f"/{slug.replace('-predictions', '-picks')}", code=301)
+    if slug.endswith('-prediction'):
+        return redirect(f"/{slug.replace('-prediction', '-picks')}", code=301)
     # Check picks slugs
     sport = _SEO_SLUG_TO_SPORT.get(slug)
     if sport:

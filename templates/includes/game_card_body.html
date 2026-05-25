@@ -2,8 +2,8 @@
 {% from 'includes/score_macros.html' import fmt_half, fmt_labeled_proj, team_short, fmt_spread_line %}
 {% set away_id = card.away_team_id if card.away_team_id is defined else card.away %}
 {% set home_id = card.home_team_id if card.home_team_id is defined else card.home %}
-{% set bk_away = card.book_away_moneyline if card.book_away_moneyline is defined else none %}
-{% set bk_home = card.book_home_moneyline if card.book_home_moneyline is defined else none %}
+{% set bk_away = card.book_away_moneyline if card.book_away_moneyline is defined and card.book_away_moneyline else none %}
+{% set bk_home = card.book_home_moneyline if card.book_home_moneyline is defined and card.book_home_moneyline else none %}
 {% set pl_away = card.pl_model_away_ml if card.pl_model_away_ml is defined else none %}
 {% set pl_home = card.pl_model_home_ml if card.pl_model_home_ml is defined else none %}
 {% set _disp_bs = card.disp_book_spread if card.disp_book_spread is defined else none %}
@@ -29,7 +29,7 @@
             {% else %}
             <div class="ml-stack">
                 <div class="ml-line">
-                    <span class="ml-src books">Books</span>
+                    <span class="ml-src books">Books{% if card.book_ml_estimated is defined and card.book_ml_estimated %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
                     <span class="ml-num {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</span>
                 </div>
                 <div class="ml-line">
@@ -49,7 +49,7 @@
             {% else %}
             <div class="ml-stack">
                 <div class="ml-line">
-                    <span class="ml-src books">Books</span>
+                    <span class="ml-src books">Books{% if card.book_ml_estimated is defined and card.book_ml_estimated %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
                     <span class="ml-num {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</span>
                 </div>
                 <div class="ml-line">

@@ -12,8 +12,9 @@ fi
 # ── Launch Flask app via gunicorn ─────────────────────────────────────────────
 exec gunicorn NHL77FINAL:app \
     --bind "0.0.0.0:${PORT:-10000}" \
+    --worker-class gthread \
     --workers 1 \
-    --threads 4 \
+    --threads 8 \
     --timeout 120 \
     --preload \
     --access-logfile - \
