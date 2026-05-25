@@ -51,6 +51,10 @@ def main():
             print('  No upcoming games in 7-day window')
             continue
         print(f'  Upcoming games: {len(upcoming)}')
+        try:
+            N._refresh_books_on_predictions(sport, upcoming)
+        except Exception:
+            pass
         for p in upcoming:
             N._finalize_prediction_odds(p)
             N._prepare_pred_card_display(p)

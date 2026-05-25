@@ -1145,6 +1145,27 @@ def _hydrate_book_lines_db_only(sport, predictions):
             _apply_db_book_row_to_pred(pred, row)
 
 
+def _refresh_books_on_predictions(sport, predictions, today_date=None, prioritize=None):
+    """DB hydrate + ESPN Core book lines for every sport on the picks path."""
+    if not predictions:
+        return
+    if today_date is None:
+        try:
+            today_date = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+        except Exception:
+            today_date = datetime.now().strftime('%Y-%m-%d')
+    _hydrate_book_lines_db_only(sport, predictions)
+    _prio = prioritize if prioritize is not None else _upcoming_preds_for_book_fetch(
+        predictions, today_date,
+    )
+    _attach_pl_book_odds_to_predictions(
+        sport,
+        predictions,
+        limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
+        prioritize=_prio,
+    )
+
+
 def _upcoming_preds_for_book_fetch(predictions, today_date, horizon_days=8):
     """Upcoming games from today through horizon — picks page book API budget."""
     try:
@@ -4420,7 +4441,7 @@ def get_upcoming_predictions(sport, days=365):
     """
     
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
-    cache_key = f"{sport}_upcoming_predictions_v4"
+    cache_key = f"{sport}_upcoming_predictions_v5"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
@@ -4428,7 +4449,10 @@ def get_upcoming_predictions(sport, days=365):
         _cached_preds = cached.get('data')
         if _cached_preds:
             out = _copy.deepcopy(_cached_preds)
-            _hydrate_book_lines_db_only(sport, out)
+            try:
+                _refresh_books_on_predictions(sport, out)
+            except Exception as _bk_cache:
+                logger.debug(f"[{sport}] book refresh on predictions cache hit: {_bk_cache}")
             return out
 
     # Load game data based on sport
@@ -5859,6 +5883,11 @@ def get_upcoming_predictions(sport, days=365):
             if _spread_ev is not None and _spread_ev > 0: _ev_map['Spread'] = _spread_ev
             if _total_ev  is not None and _total_ev  > 0: _ev_map['Total']  = _total_ev
             _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
+
+    try:
+        _refresh_books_on_predictions(sport, predictions)
+    except Exception as _bk_build:
+        logger.debug(f"[{sport}] book refresh before predictions cache store: {_bk_build}")
 
     _trim_cache(_PREDICTIONS_CACHE, cache_ttl, max_entries=50)
     if predictions:
@@ -13309,7 +13338,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v15::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v16::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -13440,14 +13469,7 @@ def sport_predictions(sport, filter_date=None):
 
     # Books first (before shareable/EV work) so Render timeouts do not skip ESPN Core fetch.
     try:
-        _hydrate_book_lines_db_only(sport, predictions)
-        _book_slate = _upcoming_preds_for_book_fetch(predictions, today_date)
-        _attach_pl_book_odds_to_predictions(
-            sport,
-            predictions,
-            limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
-            prioritize=_book_slate,
-        )
+        _refresh_books_on_predictions(sport, predictions, today_date=today_date)
     except Exception as _early_bk:
         logger.debug(f"[{sport}] early book odds on picks page: {_early_bk}")
 
@@ -13535,11 +13557,8 @@ def sport_predictions(sport, filter_date=None):
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
     try:
-        _attach_pl_book_odds_to_predictions(
-            sport,
-            predictions,
-            limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
-            prioritize=_book_priority,
+        _refresh_books_on_predictions(
+            sport, predictions, today_date=today_date, prioritize=_book_priority,
         )
     except Exception as _card_bk:
         logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
