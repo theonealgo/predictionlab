@@ -87,7 +87,7 @@ _PREDICTIONS_TTL_BY_SPORT = {
 _SPORT_RESULTS_CACHE: dict = {}
 _SPORT_RESULTS_TTL_BY_SPORT = {
     'NHL': 300,
-    'NBA': 240,
+    'NBA': 600,
     'NCAAB': 240,
     'NCAAW': 240,
     'MLB': 300,
@@ -1408,9 +1408,10 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
         return
     game_ids = [str(g['game_id']) for g in games if g.get('game_id')]
     by_gid = {}
-    if game_ids:
-        try:
-            conn = get_db_connection()
+    by_key = {}
+    try:
+        conn = get_db_connection()
+        if game_ids:
             chunk = 400
             for i in range(0, len(game_ids), chunk):
                 part = game_ids[i:i + chunk]
@@ -1425,9 +1426,30 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
                     gid = str(r['game_id'])
                     if gid not in by_gid:
                         by_gid[gid] = dict(r)
-            conn.close()
-        except Exception as _dbe:
-            logger.debug(f"[book odds db] {sport}: {_dbe}")
+        try:
+            cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
+            has_extra = any(c in cols for c in ('game_date', 'home_team', 'away_team'))
+        except Exception:
+            has_extra = False
+        if has_extra:
+            rows = conn.execute(
+                """SELECT game_id, game_date, home_team, away_team, spread, total,
+                          home_moneyline, away_moneyline
+                   FROM betting_lines WHERE sport=?
+                   ORDER BY fetched_at DESC LIMIT 5000""",
+                (sport,),
+            ).fetchall()
+            for r in rows:
+                gd = (r['game_date'] or '')[:10]
+                hk = _normalize_team_key_for_sport(sport, r['home_team'])
+                ak = _normalize_team_key_for_sport(sport, r['away_team'])
+                if gd and hk and ak:
+                    key = (gd, hk, ak)
+                    if key not in by_key:
+                        by_key[key] = dict(r)
+        conn.close()
+    except Exception as _dbe:
+        logger.debug(f"[book odds db] {sport}: {_dbe}")
     games.sort(key=lambda g: (g.get('date') or ''), reverse=True)
     api_attempts = 0
     try:
@@ -1436,7 +1458,12 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
         build_pl_book_odds = None
     for g in games:
         gid = str(g.get('game_id') or '')
+        gd = (g.get('date') or '')[:10]
+        hk = _normalize_team_key_for_sport(sport, g.get('home'))
+        ak = _normalize_team_key_for_sport(sport, g.get('away'))
         row = by_gid.get(gid) if gid else None
+        if not row and gd and hk and ak:
+            row = by_key.get((gd, hk, ak))
         if row:
             if row.get('home_moneyline') is not None:
                 g['book_home_moneyline'] = int(row['home_moneyline'])
@@ -6787,6 +6814,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
         live_attempts = 0
         live_cap = 25 if sport == 'SOCCER' else (15 if sport == 'NBA' else 8)
+        _xgb_pair_cache = {}
         for dd in daily_results.values():
             for g in dd.get('games', []):
                 h, a = g['home'], g['away']
@@ -6836,9 +6864,15 @@ def _compute_spread_total_for_daily(sport, daily_results):
 
                 try:
                     if _xgb:
-                        xp = _xgb.predict(h, a, vegas_total=mt)
-                        xs = round(float(xp[2]), 1) if xp and xp[2] is not None else None
-                        xt = round(float(xp[3]), 1) if xp and xp[3] is not None else None
+                        _pair_key = (hk, ak, round(mt, 1) if mt is not None else None)
+                        _cached = _xgb_pair_cache.get(_pair_key)
+                        if _cached is not None:
+                            xs, xt = _cached
+                        else:
+                            xp = _xgb.predict(h, a, vegas_total=mt)
+                            xs = round(float(xp[2]), 1) if xp and xp[2] is not None else None
+                            xt = round(float(xp[3]), 1) if xp and xp[3] is not None else None
+                            _xgb_pair_cache[_pair_key] = (xs, xt)
                     if (xs is None or xt is None) and _sp:
                         nh, na, ns, nt = _sp.predict_score(h, a, sport)
                         if xs is None and ns is not None:
@@ -6868,6 +6902,11 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         pass
                 g['xgb_total'] = xt
                 g['xgb_spread'] = xs
+                _grade_xt = xt
+                if _grade_xt is None:
+                    _grade_xt = _safe_float(g.get('our_total'))
+                if _grade_xt is None:
+                    _grade_xt = _safe_float(g.get('predicted_total'))
 
                 # Live fallback for missing market lines (recent games only)
                 if (ms is None or mt is None) and live_attempts < live_cap and gd:
@@ -6967,7 +7006,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     inj_adj = _injury_total_adjustment(sport, h, a)
                     rest_adj = _rest_total_adjustment(sport, h, a, gd)
                     park_adj = _park_weather_total_adjustment(sport, h)
-                    adj_xt = xt + inj_adj + rest_adj + park_adj if xt is not None else None
+                    adj_xt = _grade_xt + inj_adj + rest_adj + park_adj if _grade_xt is not None else None
                     our_total_h2h = g.get('our_total')
                     g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
                     g['total_adj_breakdown'] = {
@@ -6978,6 +7017,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     sportsbook_mt = mt
                     if sportsbook_mt is None:
                         sportsbook_mt = _safe_float(g.get('book_total'))
+                    _book_mt_only = _safe_float(g.get('book_total'))
+                    if _book_mt_only is not None:
+                        sportsbook_mt = _book_mt_only
                     total_fallback_used = False
                     if sportsbook_mt is None:
                         if our_total_h2h is not None:
@@ -7028,7 +7070,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     inj_adj = _injury_total_adjustment(sport, h, a)
                     rest_adj = _rest_total_adjustment(sport, h, a, gd)
                     park_adj = _park_weather_total_adjustment(sport, h)
-                    adj_xt = xt + inj_adj + rest_adj + park_adj if xt is not None else None
+                    adj_xt = _grade_xt + inj_adj + rest_adj + park_adj if _grade_xt is not None else None
                     our_total_h2h = g.get('our_total')
                     g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
                     g['total_adj_breakdown'] = {
@@ -7039,6 +7081,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     sportsbook_mt = mt
                     if sportsbook_mt is None:
                         sportsbook_mt = _safe_float(g.get('book_total'))
+                    _book_mt_only = _safe_float(g.get('book_total'))
+                    if _book_mt_only is not None:
+                        sportsbook_mt = _book_mt_only
                     total_fallback_used = False
                     if sportsbook_mt is None:
                         if our_total_h2h is not None:
@@ -7105,7 +7150,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         g['total_pick_reason'] = "benchmark only (not graded)"
                         line_for_label = mt
                         g['strong_ou'] = False
-                    elif xt is None:
+                    elif _grade_xt is None:
                         g['total_pick_reason'] = "model score unavailable"
                         line_for_label = None
                     elif mt is None:
@@ -10024,6 +10069,12 @@ def build_todays_top_picks():
     except Exception as _tp_err:
         logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
     return todays_picks
+
+
+@app.route('/healthz')
+def healthz():
+    """Lightweight probe for Render/load balancers (no DB or model work)."""
+    return 'ok', 200
 
 
 @app.route('/')
