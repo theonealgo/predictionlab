@@ -80,6 +80,7 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '').strip()
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
 STRIPE_PRICE_MONTHLY = os.environ.get('STRIPE_PRICE_MONTHLY', '').strip()
 STRIPE_PRICE_YEARLY = os.environ.get('STRIPE_PRICE_YEARLY', '').strip()
+STRIPE_WEEKLY_URL = 'https://buy.stripe.com/14A6oI4Ra66ReWLczTao802'
 
 # Admin emails get automatic premium — no payment needed
 ADMIN_EMAILS = {
@@ -861,7 +862,7 @@ def plans_page():
             .stat-pill{background:#F4F7F9;border:1px solid #E0E4E8;border-radius:24px;padding:8px 16px;font-size:0.82em;font-weight:600;color:#334155;}
             .competitor-bar{background:#f8fafc;border:1px solid #E0E4E8;border-radius:10px;max-width:560px;margin:18px auto 0;padding:12px 18px;font-size:0.88em;color:#475569;}
             .competitor-bar strong{color:#0f172a;}
-            .plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+            .plans-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;}
             .plan-card{background:#ffffff;color:#1e293b;border-radius:18px;padding:34px 26px;text-align:center;transition:all 0.25s;box-shadow:0 4px 18px rgba(15,23,42,0.08);border:1px solid #E0E4E8;position:relative;}
             .plan-card:hover{transform:translateY(-4px);box-shadow:0 10px 28px rgba(15,23,42,0.12);}
             .plan-card.popular{border:2px solid #00529B;}
@@ -893,6 +894,7 @@ def plans_page():
             .plans-why-foot{margin:0 auto;text-align:center;color:#475569;font-size:0.92em;line-height:1.65;max-width:680px;}
             .plans-why-foot a{color:#00529B;font-weight:700;text-decoration:none;}
             .plans-why-foot a:hover{text-decoration:underline;}
+            @media(max-width:900px){.plans-grid{grid-template-columns:1fr 1fr;}}
             @media(max-width:640px){.plans-grid{grid-template-columns:1fr;}.plans-hero-stats{flex-direction:column;align-items:center;gap:10px;}}
             """
         ).replace('{% block content %}{% endblock %}', """
@@ -916,6 +918,22 @@ def plans_page():
             </div>
             <p style="text-align:center;font-size:1.12em;color:#334155;margin-bottom:26px;font-weight:700;">Free gets you the winners. Premium gets you the edge.</p>
             <div class="plans-grid">
+                <div class="plan-card">
+                    <div class="plan-name">Weekly</div>
+                    <div class="plan-price">$4.99<span>/week</span></div>
+                    <div class="plan-save">Try the edge. No commitment.</div>
+                    <ul class="plan-features">
+                        <li>Every Spread Pick (No Guessing)</li>
+                        <li>Every Total Pick (Our Strongest Edge)</li>
+                        <li>Projected Scores for Every Game</li>
+                        <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>Player Props Picks &amp; Projections</li>
+                        <li>Model Performance Calculator Access</li>
+                        <li>All Sports Covered</li>
+                        <li>Cancel Anytime</li>
+                    </ul>
+                    <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="plan-btn plan-btn-secondary">Try This Week</a>
+                </div>
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>
                     <div class="plan-price">$19.99<span>/month</span></div>
@@ -952,7 +970,7 @@ def plans_page():
                     <a href="/checkout/yearly" class="plan-btn plan-btn-primary">Get Yearly Access</a>
                 </div>
             </div>
-            <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily.</p>
+            <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily. Cancel any plan anytime.</p>
             <div class="free-section">
                 <p class="free-head">Start Free</p>
                 <p class="free-copy">Start free. Upgrade when you're ready for the full edge.</p>

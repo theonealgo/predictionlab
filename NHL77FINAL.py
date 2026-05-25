@@ -7508,7 +7508,7 @@ BASE_TEMPLATE = """
                     <a href="/faq">Help</a>
                 </div>
                 {% if not is_logged_in %}
-                <a href="/signup" class="nav-cta">Get Started</a>
+                <a href="/plans" class="nav-cta">Get Started</a>
                 {% endif %}
             </div>
         </div>
@@ -10504,7 +10504,7 @@ def landing_page():
         <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">See The Edge First.</h1>
         <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks updated daily across every major sport.</p>
         <div class="hero-slide" style="display:flex;gap:12px;margin-top:28px;animation:slideIn 0.8s ease-out 0.4s both;">
-            <a href="/signup" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;box-shadow:0 6px 20px rgba(0,0,0,0.25);">Get Started Free</a>
+            <a href="/plans" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;box-shadow:0 6px 20px rgba(0,0,0,0.25);">Get Started Free</a>
         </div>
         <p class="hero-slide" style="font-size:0.76em;color:rgba(255,255,255,0.38);margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
         <div class="hero-slide" style="display:flex;gap:40px;margin-top:64px;padding-top:40px;border-top:1px solid rgba(255,255,255,0.08);flex-wrap:wrap;animation:slideIn 0.8s ease-out 0.6s both;">
@@ -10691,47 +10691,53 @@ def landing_page():
 </div>
 {% endif %}
 
-<!-- See What You're Missing -->
+<!-- See What You’re Missing -->
 <div class="section" style="padding-top:10px;padding-bottom:30px;">
-    <h2 class="section-title">See What You’re Missing</h2>
-    <p class="section-sub" style="color:#334155;">The public sees picks. Members see the edge.</p>
+    <h2 class="section-title">Free Picks vs. Full Access</h2>
+    <p class="section-sub" style="color:#334155;">The public sees picks. Members see the edge &mdash; spreads, totals, and scores.</p>
     <div class="landing-pricing-row">
         <div class="landing-price-card" style="background:#ffffff;border:1px solid rgba(15,23,42,0.22);border-radius:14px;padding:24px;">
-            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 8px;color:#0f172a;">Free Picks</h3>
-            <div style="font-size:0.78em;color:#94a3b8;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.4px;line-height:1.35;min-height:2.7em;">Updated daily &middot; no subscription</div>
+            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 4px;color:#0f172a;">Free Picks</h3>
+            <div style="font-size:0.82em;color:#059669;font-weight:800;margin:0 0 10px;">$0 &mdash; no credit card</div>
             <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#0f172a;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Moneyline picks across 9 sports</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model-generated win probability for every game</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Proprietary AI odds engine pricing (not public consensus)</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Proprietary AI odds engine pricing</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Multi-model consensus signal strength</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Expanded dataset weighting (injuries, pace, efficiency, market movement)</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Fully tracked historical performance (transparent results)</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Fully tracked historical performance</span></li>
             </ul>
             <a href="/nba-picks" class="landing-price-cta landing-price-cta--light" style="text-align:center;background:#fff;color:#0f172a;border:1px solid rgba(15,23,42,0.32);border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 2px 8px rgba(15,23,42,0.08);">View Free Picks</a>
         </div>
-        <div class="landing-price-card" style="background:#fffdf5;border:1px solid rgba(251,191,36,0.5);border-radius:14px;padding:24px;">
-            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 8px;color:#fbbf24;">Full AI Model Access</h3>
-            <div style="font-size:0.78em;color:#fde68a;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.4px;line-height:1.35;min-height:2.7em;">Everything in Free, plus</div>
+        <div class="landing-price-card" style="background:#fffdf5;border:2px solid #fbbf24;border-radius:14px;padding:24px;position:relative;">
+            <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:#fbbf24;color:#000;font-size:0.72em;font-weight:900;padding:4px 16px;border-radius:20px;white-space:nowrap;letter-spacing:0.3px;">FULL AI MODEL ACCESS</div>
+            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 4px;color:#fbbf24;">Premium Edge</h3>
+            <div style="font-size:0.82em;font-weight:800;color:#0f172a;margin:0 0 6px;">
+                <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" style="color:#0f172a;text-decoration:none;">$4.99/week</a>
+                &nbsp;&bull;&nbsp;
+                <a href="/checkout/monthly" style="color:#64748b;text-decoration:none;font-weight:700;">$19.99/mo</a>
+                &nbsp;&bull;&nbsp;
+                <a href="/checkout/yearly" style="color:#64748b;text-decoration:none;font-weight:700;">$149.99/yr</a>
+            </div>
             <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#0f172a;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Everything in Free, plus&hellip;</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Spread betting models (edge-based pricing)</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Over/Under totals with projected game flow</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Predicted final scores (simulation-based outputs)</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Enhanced multi-model consensus signals</span></li>
+                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Predicted final scores (simulation-based)</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Player props picks and projections</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model performance page access</span></li>
             </ul>
-            <a href="/plans" class="landing-price-cta landing-price-cta--gold" style="text-align:center;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Unlock Model Edge</a>
+            <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="landing-price-cta landing-price-cta--gold" style="text-align:center;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Try a Week &mdash; $4.99</a>
+            <p style="text-align:center;font-size:0.75em;color:#94a3b8;margin:8px 0 0;">or <a href="/plans" style="color:#f59e0b;font-weight:700;text-decoration:none;">see monthly &amp; yearly plans</a></p>
         </div>
     </div>
-    <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">Free moneyline picks and premium spreads, totals, and scores are all updated daily as schedules, injuries, and markets change.</p>
+    <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">All picks updated daily. Cancel any plan anytime.</p>
     <style>
         .landing-pricing-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:860px; margin:0 auto; }
         .landing-price-card { display:flex; flex-direction:column; min-height:100%; }
-        .landing-price-card .landing-price-list { flex:1 1 auto; min-height:16.5rem; }
+        .landing-price-card .landing-price-list { flex:1 1 auto; }
         .landing-price-cta { display:flex; align-items:center; justify-content:center; margin-top:auto; min-height:48px; padding:0 22px; box-sizing:border-box; flex-shrink:0; }
         @media (max-width: 768px) {
             .landing-pricing-row { grid-template-columns:1fr !important; }
-            .landing-price-card .landing-price-list { min-height:0; }
         }
     </style>
 </div>
