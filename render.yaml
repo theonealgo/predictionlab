@@ -7,6 +7,7 @@ services:
       pip install -r requirements.txt &&
       (pip install -r standalone-player-props/backend/requirements.txt || true) &&
       (cd standalone-player-props/frontend && npm ci && npm run build && cd ../.. || true)
+    # Do not override in Render dashboard with a raw gunicorn line (drops gthread + /data DB).
     startCommand: bash render_start.sh
     envVars:
       - key: PYTHON_VERSION
