@@ -1123,6 +1123,7 @@ def _apply_db_book_row_to_pred(pred: dict, row: dict) -> None:
         pred['book_total'] = row['total']
     if pred.get('book_spread') is not None or pred.get('book_home_moneyline') is not None:
         pred.setdefault('book_odds_source', row.get('source') or 'betting_lines')
+    _ensure_book_moneylines(pred)
 
 
 def _hydrate_book_lines_db_only(sport, predictions):
@@ -1263,7 +1264,15 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30, prioritize
                 pred['book_spread'] = live['spread']
             if live.get('total') is not None:
                 pred['book_total'] = live['total']
+            if live.get('home_moneyline') is not None:
+                pred['book_home_moneyline'] = int(live['home_moneyline'])
+            if live.get('away_moneyline') is not None:
+                pred['book_away_moneyline'] = int(live['away_moneyline'])
             pred['book_odds_source'] = live.get('source') or 'ESPN Core API'
+            _ensure_book_moneylines(pred)
+
+    for pred in upcoming:
+        _ensure_book_moneylines(pred)
 
 
 def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date, league_name=None):
@@ -1280,6 +1289,24 @@ def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date, league_n
     )
 
 
+def _ensure_book_moneylines(pred: dict) -> None:
+    """Fill book_home/away_moneyline when spread exists but ESPN live path omitted ML."""
+    if pred.get('book_home_moneyline') is not None and pred.get('book_away_moneyline') is not None:
+        return
+    bs = _safe_float(pred.get('book_spread'))
+    if bs is None:
+        return
+    try:
+        from pl_book_odds_api import _ml_from_spread_fallback
+        h_ml, a_ml = _ml_from_spread_fallback(bs)
+    except Exception:
+        return
+    if pred.get('book_home_moneyline') is None and h_ml is not None:
+        pred['book_home_moneyline'] = int(h_ml)
+    if pred.get('book_away_moneyline') is None and a_ml is not None:
+        pred['book_away_moneyline'] = int(a_ml)
+
+
 def _apply_pl_book_row_to_game(g: dict, row: dict) -> None:
     """Merge sportsbook row onto a game/pred dict — book_* only, never model market_*."""
     if not row:
@@ -1293,6 +1320,7 @@ def _apply_pl_book_row_to_game(g: dict, row: dict) -> None:
     if row.get('away_moneyline') is not None:
         g['book_away_moneyline'] = row['away_moneyline']
     g['book_odds_source'] = row.get('source') or 'pl_book_odds_api'
+    _ensure_book_moneylines(g)
 
 
 def _persist_pl_book_row(sport, g: dict, row: dict) -> None:
@@ -1888,6 +1916,7 @@ def _prepare_pred_card_display(pred: dict) -> None:
         else:
             pred['disp_ml_prob'] = None
 
+    _ensure_book_moneylines(pred)
     _set_card_book_lines(pred)
     _set_card_pl_moneylines(pred)
     _set_card_projected_scores(pred)
@@ -2861,9 +2890,28 @@ def _fetch_live_market_line(
                 if spread_val is None and total_val is None:
                     continue
 
+                def _to_int_ml(v):
+                    try:
+                        return int(round(float(v))) if v is not None else None
+                    except (TypeError, ValueError):
+                        return None
+
+                home_ml = _to_int_ml((chosen.get('homeTeamOdds') or {}).get('moneyLine'))
+                away_ml = _to_int_ml((chosen.get('awayTeamOdds') or {}).get('moneyLine'))
+                if spread_val is not None and (home_ml is None or away_ml is None):
+                    try:
+                        from pl_book_odds_api import _ml_from_spread_fallback
+                        h_fb, a_fb = _ml_from_spread_fallback(spread_val)
+                        home_ml = home_ml if home_ml is not None else h_fb
+                        away_ml = away_ml if away_ml is not None else a_fb
+                    except Exception:
+                        pass
+
                 return {
                     'spread': spread_val,
                     'total': total_val,
+                    'home_moneyline': home_ml,
+                    'away_moneyline': away_ml,
                     'source': (
                         'ESPN Core API (matchup fallback)'
                         if mapped_event_id and str(event_id) == str(mapped_event_id)
@@ -13261,7 +13309,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v14::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v15::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
