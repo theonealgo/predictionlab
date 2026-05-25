@@ -30,6 +30,13 @@ services:
         sync: false
       - key: GA_PROPERTY_ID
         sync: false
+      # Contact form (Gmail app password for support.predictionlab@gmail.com)
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: CONTACT_TO_EMAIL
+        sync: false
     disk:
       name: app-data
       mountPath: /data

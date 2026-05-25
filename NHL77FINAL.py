@@ -8064,16 +8064,57 @@ CONTACT_PAGE_TEMPLATE = BASE_TEMPLATE.replace(
         .contact-card{background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:28px 26px;}
         .contact-card h1{font-size:1.75em;color:#0f172a;margin:0 0 16px;line-height:1.25;}
         .contact-card p{color:#334155;line-height:1.75;margin:0 0 14px;font-size:1.02em;}
-        .contact-email{font-size:1.05em;font-weight:800;margin-top:18px;}
-        .contact-email a{color:#00529B;text-decoration:none;}
-        .contact-email a:hover{text-decoration:underline;}
+        .contact-alert{border-radius:10px;padding:12px 14px;margin:0 0 18px;font-size:0.98em;line-height:1.5;}
+        .contact-alert.ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;}
+        .contact-alert.err{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;}
+        .contact-form label{display:block;font-weight:700;color:#0f172a;margin:14px 0 6px;font-size:0.95em;}
+        .contact-form input,.contact-form select,.contact-form textarea{
+            width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;
+            font-size:1em;font-family:inherit;color:#0f172a;background:#fff;
+        }
+        .contact-form textarea{min-height:140px;resize:vertical;}
+        .contact-form input:focus,.contact-form select:focus,.contact-form textarea:focus{
+            outline:2px solid #00529B;outline-offset:1px;border-color:#00529B;
+        }
+        .contact-hp{position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden;}
+        .contact-submit{
+            margin-top:18px;background:#00529B;color:#fff;border:none;border-radius:10px;
+            padding:12px 22px;font-size:1em;font-weight:800;cursor:pointer;
+        }
+        .contact-submit:hover{background:#003d73;}
+        .contact-note{font-size:0.92em;color:#64748b;margin-top:12px;}
     """
 ).replace('{% block content %}{% endblock %}', """
     <div class="contact-wrap">
         <div class="contact-card">
             <h1>Questions, Suggestions, or Technical Issues?</h1>
             <p>We want to make your experience using predictionlab.io the best it can be. If you need help, find a bug, or have a suggestion, we want to hear about it! We are always looking for ways to ensure our customers have the best edge possible.</p>
-            <p class="contact-email">Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+            {% if contact_sent %}
+            <div class="contact-alert ok">Thanks — your message was sent. Our team will reply from <strong>{{ support_email }}</strong> as soon as we can.</div>
+            {% elif contact_error %}
+            <div class="contact-alert err">{{ contact_error }}</div>
+            {% endif %}
+            <form class="contact-form" method="post" action="/contact">
+                <label for="contact-name">Your name</label>
+                <input id="contact-name" name="name" type="text" required maxlength="120" autocomplete="name" value="{{ form_name or '' }}">
+                <label for="contact-email">Your email</label>
+                <input id="contact-email" name="email" type="email" required maxlength="254" autocomplete="email" value="{{ form_email or '' }}">
+                <label for="contact-topic">Topic</label>
+                <select id="contact-topic" name="topic">
+                    <option value="support"{% if form_topic == 'support' %} selected{% endif %}>Help / technical issue</option>
+                    <option value="suggestion"{% if form_topic == 'suggestion' %} selected{% endif %}>Suggestion</option>
+                    <option value="billing"{% if form_topic == 'billing' %} selected{% endif %}>Billing / Premium</option>
+                    <option value="other"{% if form_topic == 'other' %} selected{% endif %}>Other</option>
+                </select>
+                <label for="contact-message">Message</label>
+                <textarea id="contact-message" name="message" required minlength="10" maxlength="5000">{{ form_message or '' }}</textarea>
+                <div class="contact-hp" aria-hidden="true">
+                    <label for="contact-website">Website</label>
+                    <input id="contact-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
+                <button class="contact-submit" type="submit">Send message</button>
+                <p class="contact-note">Messages go to our support inbox at {{ support_email }}.</p>
+            </form>
         </div>
     </div>
 """)
@@ -9768,7 +9809,8 @@ def _get_cached_weekly_banner_messages(sport_keys, days=7, max_items=4):
 
 # ── Stripe payment link — replace with your link from dashboard.stripe.com/payment-links
 STRIPE_DONATION_URL = 'https://buy.stripe.com/8x228sabu7aV7uj43nao800'
-CONTACT_EMAIL = 'nmesghali@gmail.com'
+SUPPORT_EMAIL = 'support.predictionlab@gmail.com'
+CONTACT_EMAIL = SUPPORT_EMAIL  # public / schema.org only — not a mailto on /contact
 _SOCIAL_ICONS = {
     'X': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M18.244 2H21l-6.588 7.53L22 22h-6.828l-5.35-6.16L4.59 22H2l7.03-8.04L2 2h6.93l4.84 5.6L18.244 2zm-1.2 18h1.9L7.04 4H5.02l12.02 16z"/></svg>',
     'Instagram': '<svg role="img" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7.5 2C4.46 2 2 4.46 2 7.5v9C2 19.54 4.46 22 7.5 22h9c3.04 0 5.5-2.46 5.5-5.5v-9C22 4.46 19.54 2 16.5 2h-9zm9 2c1.93 0 3.5 1.57 3.5 3.5v9c0 1.93-1.57 3.5-3.5 3.5h-9C5.57 20 4 18.43 4 16.5v-9C4 5.57 5.57 4 7.5 4h9zm-4.5 3a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6zm5.25-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z"/></svg>',
@@ -10204,7 +10246,7 @@ def landing_page():
       "name": "predictionlab.io",
       "url": "https://predictionlab.io",
       "description": "Daily AI-powered sports predictions, game forecasts, and model projections across major sports.",
-      "email": "nmesghali@gmail.com",
+      "email": "support.predictionlab@gmail.com",
       "telephone": "+1-519-992-8484",
       "address": {
         "@type": "PostalAddress",
@@ -10231,7 +10273,7 @@ def landing_page():
     {"@context":"https://schema.org","@type":"WebSite","name":"predictionlab.io","url":"https://predictionlab.io","potentialAction":{"@type":"SearchAction","target":"https://predictionlab.io/search?query={search_term_string}","query-input":"required name=search_term_string"}}
     </script>
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"LocalBusiness","name":"predictionlab.io","url":"https://predictionlab.io","email":"nmesghali@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
+    {"@context":"https://schema.org","@type":"LocalBusiness","name":"predictionlab.io","url":"https://predictionlab.io","email":"support.predictionlab@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
     </script>
     <!-- FAQPage schema lives on /faq now (dedicated page). -->
 
@@ -12999,7 +13041,7 @@ def llms_txt():
 - Brand: predictionlab.io
 - Parent organization: GoodsandMore Inc. (Canada)
 - URL: https://predictionlab.io
-- Contact: nmesghali@gmail.com
+- Contact: support.predictionlab@gmail.com (web form: https://predictionlab.io/contact)
 
 ## What We Offer
 - Free daily moneyline picks
@@ -13033,9 +13075,80 @@ LLMs: https://predictionlab.io/llms.txt
 Sitemap: https://predictionlab.io/sitemap.xml
 
 # Canonical contact for AI indexing
-Contact: nmesghali@gmail.com
+Contact: support.predictionlab@gmail.com
 """
     return Response(body, mimetype='text/plain')
+
+
+_CONTACT_TOPIC_LABELS = {
+    'support': 'Help / technical issue',
+    'suggestion': 'Suggestion',
+    'billing': 'Billing / Premium',
+    'other': 'Other',
+}
+
+
+def _send_contact_form_email(name, reply_to, topic, message):
+    """Deliver contact form to SUPPORT_EMAIL via SMTP (configure SMTP_PASSWORD on Render)."""
+    import smtplib
+    from email.message import EmailMessage
+
+    smtp_password = (_os.environ.get('SMTP_PASSWORD') or _os.environ.get('CONTACT_SMTP_PASSWORD') or '').strip()
+    if not smtp_password:
+        logger.warning('[contact] SMTP_PASSWORD not set — contact form cannot send mail')
+        return False, 'Email is not configured yet. Please try again later or DM us on X @predictionlab_io.'
+
+    smtp_host = (_os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
+    smtp_port = int(_os.environ.get('SMTP_PORT') or '587')
+    smtp_user = (_os.environ.get('SMTP_USER') or SUPPORT_EMAIL).strip()
+    to_addr = (_os.environ.get('CONTACT_TO_EMAIL') or SUPPORT_EMAIL).strip()
+    topic_label = _CONTACT_TOPIC_LABELS.get(topic, topic or 'General')
+    subject = f'[predictionlab.io] {topic_label} — {name}'
+    body = (
+        f'Contact form on predictionlab.io\n\n'
+        f'Name: {name}\n'
+        f'Reply-To: {reply_to}\n'
+        f'Topic: {topic_label}\n\n'
+        f'{message}\n'
+    )
+    msg = EmailMessage()
+    msg['Subject'] = subject
+    msg['From'] = smtp_user
+    msg['To'] = to_addr
+    msg['Reply-To'] = reply_to
+    msg.set_content(body)
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.send_message(msg)
+        return True, None
+    except Exception as exc:
+        logger.error(f'[contact] send failed: {exc}', exc_info=True)
+        return False, 'We could not send your message right now. Please try again in a few minutes.'
+
+
+def _validate_contact_submission():
+    """Parse POST /contact; returns (ok, error_message, payload_dict)."""
+    if request.method != 'POST':
+        return False, None, {}
+    if (request.form.get('website') or '').strip():
+        return True, None, {}  # honeypot — pretend success
+    name = (request.form.get('name') or '').strip()
+    reply_to = (request.form.get('email') or '').strip().lower()
+    topic = (request.form.get('topic') or 'support').strip().lower()
+    message = (request.form.get('message') or '').strip()
+    if len(name) < 2:
+        return False, 'Please enter your name.', {'name': name, 'email': reply_to, 'topic': topic, 'message': message}
+    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', reply_to):
+        return False, 'Please enter a valid email address.', {'name': name, 'email': reply_to, 'topic': topic, 'message': message}
+    if topic not in _CONTACT_TOPIC_LABELS:
+        topic = 'other'
+    if len(message) < 10:
+        return False, 'Please enter a longer message (at least 10 characters).', {'name': name, 'email': reply_to, 'topic': topic, 'message': message}
+    if len(message) > 5000:
+        return False, 'Message is too long (max 5000 characters).', {'name': name, 'email': reply_to, 'topic': topic, 'message': message}
+    return True, None, {'name': name, 'email': reply_to, 'topic': topic, 'message': message}
 
 
 @app.route('/sitemap.xml')
@@ -13634,13 +13747,44 @@ def responsible_gaming_page():
         page_description='Find responsible gaming resources and support in Canada and the United States. predictionlab.io promotes safe and responsible play.'
     )
 
-@app.route('/contact')
+@app.route('/contact', methods=['GET', 'POST'])
 def contact_page():
+    form_name = form_email = form_message = form_topic = ''
+    contact_sent = False
+    contact_error = None
+
+    if request.method == 'POST':
+        ok, err, payload = _validate_contact_submission()
+        form_name = payload.get('name', '')
+        form_email = payload.get('email', '')
+        form_message = payload.get('message', '')
+        form_topic = payload.get('topic', 'support')
+        if ok and not err and payload:
+            sent, send_err = _send_contact_form_email(
+                payload['name'], payload['email'], payload['topic'], payload['message'],
+            )
+            if sent:
+                return redirect('/contact?sent=1')
+            contact_error = send_err
+        elif ok and not payload:
+            return redirect('/contact?sent=1')
+        else:
+            contact_error = err
+    else:
+        contact_sent = request.args.get('sent') == '1'
+
     return render_template_string(
         CONTACT_PAGE_TEMPLATE,
         page='contact',
         page_title='Contact us | predictionlab.io',
-        page_description='Questions, suggestions, or technical issues for predictionlab.io — reach our team by email.',
+        page_description='Questions, suggestions, or technical issues for predictionlab.io — send our support team a message.',
+        support_email=SUPPORT_EMAIL,
+        contact_sent=contact_sent,
+        contact_error=contact_error,
+        form_name=form_name,
+        form_email=form_email,
+        form_message=form_message,
+        form_topic=form_topic,
     )
 
 @app.route('/privacy')
