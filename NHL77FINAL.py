@@ -11134,6 +11134,23 @@ def _query_prop_results(league: str, for_date: str | None = None):
         ).fetchall()
         items = [dict(r) for r in rows]
 
+        # If no data for the requested date, fall back to the most recently graded date
+        fallback_occurred = False
+        if not items:
+            latest = conn.execute(
+                'SELECT result_date FROM player_prop_results WHERE league=? ORDER BY result_date DESC LIMIT 1',
+                (league,)
+            ).fetchone()
+            if latest and latest['result_date'] != target_str:
+                fallback_occurred = True
+                rows = conn.execute(
+                    'SELECT * FROM player_prop_results WHERE league=? AND result_date=? ORDER BY player_name, prop_type',
+                    (league, latest['result_date'])
+                ).fetchall()
+                items = [dict(r) for r in rows]
+                target_str = latest['result_date']
+                target = _date.fromisoformat(target_str)
+
         # Summary for the target date
         def _tally(rr):
             hits = sum(1 for r in rr if r['result'] == 'HIT')
@@ -11179,6 +11196,7 @@ def _query_prop_results(league: str, for_date: str | None = None):
         return {
             'league': league,
             'result_date': target_str,
+            'fallback_occurred': fallback_occurred,
             'count': len(items),
             'items': items,
             'summary': {
@@ -11641,6 +11659,81 @@ def results_export_csv():
     out.close()
     sport_tag = sport or 'ALL'
     fname = f"results_export_{sport_tag}.csv"
+    return Response(body, mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+
+@app.route('/player-props-api/results/export.csv')
+def player_props_results_export_csv():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    if not is_premium_user():
+        return redirect('/plans')
+    league = (request.args.get('league') or '').strip().upper() or None
+    date_from = (request.args.get('from') or '').strip() or None
+    date_to = (request.args.get('to') or '').strip() or None
+    conn = get_db_connection()
+    try:
+        where = ['1=1']
+        params = []
+        if league:
+            where.append('league = ?')
+            params.append(league)
+        if date_from:
+            where.append('result_date >= ?')
+            params.append(date_from)
+        if date_to:
+            where.append('result_date <= ?')
+            params.append(date_to)
+        rows = conn.execute(
+            f'SELECT * FROM player_prop_results WHERE {" AND ".join(where)} ORDER BY result_date DESC, player_name, prop_type',
+            params
+        ).fetchall()
+        rows = [dict(r) for r in rows]
+    finally:
+        conn.close()
+    import io as _io_pp, csv as _csv_pp
+    out = _io_pp.StringIO()
+    w = _csv_pp.writer(out)
+    # Columns A-N; K-N are pre-computed verification helpers
+    w.writerow([
+        'result_date',    # A
+        'league',         # B
+        'player_name',    # C
+        'team',           # D
+        'prop_type',      # E
+        'pick',           # F  OVER or UNDER
+        'line',           # G  published line
+        'projection',     # H  model projection
+        'actual',         # I  player actual stat
+        'result',         # J  HIT or MISS
+        'hit_binary',     # K  1 if HIT else 0   (verify: =IF(J2="HIT",1,0))
+        'verify_result',  # L  re-computed result (verify: =IF(F2="OVER",IF(I2>G2,"HIT","MISS"),IF(I2<G2,"HIT","MISS")))
+        'over_hit',       # M  1 if OVER and actual>line (verify: =IF(AND(F2="OVER",I2>G2),1,0))
+        'under_hit',      # N  1 if UNDER and actual<line (verify: =IF(AND(F2="UNDER",I2<G2),1,0))
+    ])
+    for d in rows:
+        pick = d.get('pick', '')
+        line = d.get('line')
+        actual = d.get('actual')
+        result = d.get('result', '')
+        hit_binary = 1 if result == 'HIT' else 0
+        if pick and line is not None and actual is not None:
+            verify = ('HIT' if actual > line else 'MISS') if pick == 'OVER' else ('HIT' if actual < line else 'MISS')
+            over_hit  = 1 if (pick == 'OVER'  and actual > line) else 0
+            under_hit = 1 if (pick == 'UNDER' and actual < line) else 0
+        else:
+            verify = ''
+            over_hit = under_hit = ''
+        w.writerow([
+            d.get('result_date'), d.get('league'), d.get('player_name'), d.get('team'),
+            d.get('prop_type'), pick, line, d.get('projection'), actual, result,
+            hit_binary, verify, over_hit, under_hit,
+        ])
+    body = out.getvalue()
+    out.close()
+    league_tag = league or 'ALL'
+    fname = f"props_results_{league_tag}.csv"
     return Response(body, mimetype='text/csv',
                     headers={'Content-Disposition': f'attachment; filename="{fname}"'})
 

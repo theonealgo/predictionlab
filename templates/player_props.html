@@ -33,9 +33,12 @@
 .props-error{padding:12px 16px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:0.88rem;margin-bottom:16px;}
 /* results summary card */
 .results-summary{background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:20px 24px;margin-bottom:20px;box-shadow:0 2px 8px rgba(15,23,42,0.06);}
-.rs-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #f1f5f9;}
+.rs-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #f1f5f9;}
 .rs-title{font-size:1.1rem;font-weight:800;color:#0f172a;}
 .rs-date{font-size:0.82rem;color:#64748b;font-weight:600;}
+.btn-export-csv{display:inline-block;padding:4px 12px;border-radius:20px;background:#f1f5f9;border:1px solid #E2E8F0;font-size:0.78rem;font-weight:700;color:#2563eb;text-decoration:none;white-space:nowrap;transition:all .15s;}
+.btn-export-csv:hover{background:#2563eb;border-color:#2563eb;color:#fff;}
+.rs-fallback-notice{padding:8px 12px;border-radius:8px;background:#fef9ec;border:1px solid #fed7aa;color:#92400e;font-size:0.82rem;font-weight:600;margin-bottom:14px;}
 /* prop type filter buttons */
 .prop-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
 .prop-filter-btn{background:#f1f5f9;border:1px solid #E2E8F0;border-radius:20px;padding:5px 14px;font-size:0.8rem;font-weight:700;color:#475569;cursor:pointer;transition:all .15s;white-space:nowrap;}
@@ -485,11 +488,17 @@ function renderResults(data, league) {
     ? 'Last Night'
     : (_fmtBubble(data.result_date || _isoToday()));
 
+  const exportUrl = `/player-props-api/results/export.csv?league=${encodeURIComponent(league)}`;
+
   let html = `<div class="results-summary">
     <div class="rs-head">
       <div class="rs-title">${league} Props — Performance &amp; Results</div>
-      ${dateLabel ? `<div class="rs-date">${dateLabel}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        ${dateLabel ? `<div class="rs-date">${dateLabel}</div>` : ''}
+        <a href="${exportUrl}" class="btn-export-csv" download>↓ Download CSV</a>
+      </div>
     </div>
+    ${data.fallback_occurred ? `<div class="rs-fallback-notice">No graded props found for the selected date — showing most recent available results (${dateLabel}).</div>` : ''}
 
     <div class="rs-tally-row">
       <div class="rs-tally-block">
