@@ -156,12 +156,26 @@ def _daily_results_game_count(daily_results) -> int:
     return sum(len(dd.get('games') or []) for dd in daily_results.values())
 
 
-def _recent_result_dates(daily_results, *, yesterday=None, limit=7):
-    """Prefer graded days (through yesterday); fall back to latest dates if none."""
+def _recent_result_dates(daily_results, *, yesterday=None, limit=7, recent_window_days=21):
+    """Prefer recent graded days (through yesterday); fall back to older dates if none."""
     if not daily_results:
         return []
     if yesterday is None:
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    try:
+        ydt = datetime.strptime(yesterday, '%Y-%m-%d')
+    except ValueError:
+        ydt = datetime.now() - timedelta(days=1)
+    cutoff = (ydt - timedelta(days=recent_window_days)).strftime('%Y-%m-%d')
+    recent = sorted(
+        (
+            d for d in daily_results.keys()
+            if d and cutoff <= d <= yesterday and daily_results[d].get('games')
+        ),
+        reverse=True,
+    )
+    if recent:
+        return recent[:limit]
     dates = sorted((d for d in daily_results.keys() if d and d <= yesterday), reverse=True)
     if not dates:
         dates = sorted((d for d in daily_results.keys() if d), reverse=True)
@@ -1614,6 +1628,87 @@ def _finalize_daily_result_cards(sport, daily_results):
 
 
 
+# ── Soccer team logos (ESPN CDN, persistent ID cache) ─────────────────────────
+_SOCCER_TEAM_ESPN_ID_PATH = _os_v2.path.join(_V2_BASE, 'data', 'soccer_team_espn_ids.json')
+_SOCCER_TEAM_ESPN_ID: dict = {}
+
+
+def _load_soccer_team_espn_ids():
+    global _SOCCER_TEAM_ESPN_ID
+    try:
+        if _os_v2.path.isfile(_SOCCER_TEAM_ESPN_ID_PATH):
+            with open(_SOCCER_TEAM_ESPN_ID_PATH, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                _SOCCER_TEAM_ESPN_ID = {str(k): str(v) for k, v in raw.items()}
+    except Exception as e:
+        logger.debug(f"Could not load soccer team ESPN IDs: {e}")
+
+
+def _save_soccer_team_espn_ids():
+    try:
+        _os_v2.makedirs(_os_v2.path.dirname(_SOCCER_TEAM_ESPN_ID_PATH), exist_ok=True)
+        with open(_SOCCER_TEAM_ESPN_ID_PATH, 'w', encoding='utf-8') as f:
+            json.dump(_SOCCER_TEAM_ESPN_ID, f, indent=2, sort_keys=True)
+    except Exception as e:
+        logger.debug(f"Could not save soccer team ESPN IDs: {e}")
+
+
+def _normalize_soccer_team_name(name):
+    if not name:
+        return ''
+    s = str(name).strip().lower()
+    s = re.sub(r'[^\w\s]', '', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
+
+def _register_soccer_team(name, espn_id, *, persist=True):
+    if not name or espn_id is None:
+        return
+    key = _normalize_soccer_team_name(name)
+    if not key:
+        return
+    sid = str(espn_id).strip()
+    if not sid:
+        return
+    if _SOCCER_TEAM_ESPN_ID.get(key) == sid:
+        return
+    _SOCCER_TEAM_ESPN_ID[key] = sid
+    if persist:
+        _save_soccer_team_espn_ids()
+
+
+def _register_soccer_from_competitor(comp, *, persist=True):
+    if not comp:
+        return
+    team = comp.get('team') or {}
+    espn_id = team.get('id')
+    if not espn_id:
+        return
+    for alias in (
+        team.get('displayName'),
+        team.get('shortDisplayName'),
+        team.get('abbreviation'),
+        team.get('name'),
+    ):
+        if alias:
+            _register_soccer_team(alias, espn_id, persist=False)
+    if persist:
+        _save_soccer_team_espn_ids()
+
+
+def _soccer_espn_logo_url(team_name):
+    key = _normalize_soccer_team_name(team_name)
+    espn_id = _SOCCER_TEAM_ESPN_ID.get(key) if key else None
+    if espn_id:
+        return f'https://a.espncdn.com/i/teamlogos/soccer/500/{espn_id}.png'
+    return '/static/pl-logo.svg'
+
+
+_load_soccer_team_espn_ids()
+
+
 # ── Team logos (ESPN CDN) for prediction cards ───────────────────────────────
 _TEAM_LOGO_SLUG = {
     'NBA': 'nba', 'MLB': 'mlb', 'NHL': 'nhl', 'NFL': 'nfl', 'WNBA': 'wnba',
@@ -1678,6 +1773,8 @@ def team_logo_url(sport: str, team_name: str) -> str:
     """ESPN team logo for prediction card header."""
     if not (sport and team_name):
         return '/static/pl-logo.svg'
+    if sport == 'SOCCER':
+        return _soccer_espn_logo_url(team_name)
     slug = _TEAM_LOGO_SLUG.get(sport)
     abbr = (_TEAM_NAME_TO_ABBR.get(sport) or {}).get(team_name)
     if not slug or not abbr:
@@ -2989,6 +3086,10 @@ def inject_globals():
         _wnba_status, _wnba_live = get_season_status('WNBA')
     except Exception:
         _wnba_live = True
+    try:
+        _is_premium = is_premium_user()
+    except Exception:
+        _is_premium = False
     return {
         'stripe_donation_url': STRIPE_DONATION_URL,
         'contact_email': CONTACT_EMAIL,
@@ -2998,6 +3099,7 @@ def inject_globals():
         'sport_seo_slug': SPORT_SEO_SLUGS.get(_sport, ''),
         'sport_results_slug': _SPORT_RESULTS_SLUGS.get(_sport, ''),
         'is_logged_in': _logged_in,
+        'is_premium': _is_premium,
         'wnba_enabled': _wnba_live,
         'team_logo_url': team_logo_url,
     }
@@ -3206,6 +3308,86 @@ _SOCCER_LEAGUE_CANONICAL = {
     'conmebol libertadores': 'Copa Libertadores',
 }
 
+# Distinct games.league values per curated league (filled from DB on first soccer results load).
+_SOCCER_LEAGUE_DB_VARIANTS = None
+
+SOCCER_RESULTS_GAMES_PER_LEAGUE = 250
+
+
+def _ensure_soccer_league_db_variants(conn):
+    """Map curated league name → set of raw DB `games.league` strings."""
+    global _SOCCER_LEAGUE_DB_VARIANTS
+    if _SOCCER_LEAGUE_DB_VARIANTS is not None:
+        return _SOCCER_LEAGUE_DB_VARIANTS
+    variants = {lg: {lg} for lg in SOCCER_LEAGUE_ORDER}
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT league FROM games WHERE sport = 'SOCCER' AND league IS NOT NULL"
+        ).fetchall()
+        for row in rows:
+            raw = row['league'] if hasattr(row, 'keys') else row[0]
+            if not raw:
+                continue
+            canon = _canonical_soccer_league_name(raw) or raw
+            if canon in variants:
+                variants[canon].add(raw)
+    except Exception as exc:
+        logger.debug(f"[soccer] league variant scan failed: {exc}")
+    _SOCCER_LEAGUE_DB_VARIANTS = variants
+    return variants
+
+
+def _soccer_curated_league_game_counts(conn):
+    """Completed-game counts per curated league (full DB, not the global LIMIT slice)."""
+    counts = {lg: 0 for lg in SOCCER_LEAGUE_ORDER}
+    try:
+        rows = conn.execute('''
+            SELECT league, COUNT(*) AS n
+            FROM games
+            WHERE sport = 'SOCCER' AND home_score IS NOT NULL
+            GROUP BY league
+        ''').fetchall()
+        for row in rows:
+            raw = row['league']
+            n = row['n']
+            canon = _canonical_soccer_league_name(raw) or raw
+            if canon in counts:
+                counts[canon] += int(n)
+    except Exception as exc:
+        logger.debug(f"[soccer] league counts failed: {exc}")
+    return counts
+
+
+def _fetch_soccer_completed_games(conn, selected_league=None, limit=None):
+    """Load completed soccer games for one curated league (or all if league is None)."""
+    limit = limit or SOCCER_RESULTS_GAMES_PER_LEAGUE
+    base_sql = '''
+        SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+        FROM games g
+        LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = 'SOCCER'
+        WHERE g.sport = 'SOCCER' AND g.home_score IS NOT NULL
+    '''
+    if not selected_league:
+        return conn.execute(
+            base_sql + ' ORDER BY g.game_date DESC LIMIT ?',
+            (limit,),
+        ).fetchall()
+    variants = _ensure_soccer_league_db_variants(conn)
+    names = sorted(variants.get(selected_league) or {selected_league})
+    if not names:
+        names = [selected_league]
+    placeholders = ','.join('?' * len(names))
+    return conn.execute(
+        base_sql + f' AND g.league IN ({placeholders}) ORDER BY g.game_date DESC LIMIT ?',
+        (*names, limit),
+    ).fetchall()
+
+
+def _invalidate_soccer_league_db_variants():
+    global _SOCCER_LEAGUE_DB_VARIANTS
+    _SOCCER_LEAGUE_DB_VARIANTS = None
+
+
 SOCCER_LEAGUE_ENDPOINTS = {
     'English Premier League': 'eng.1',
     'FA Cup': 'eng.fa',
@@ -3235,6 +3417,50 @@ SOCCER_LEAGUE_ENDPOINTS = {
     'AFC Champions League Two': 'afc.cup',
     'USL Championship': None,
 }
+
+
+def _hydrate_soccer_team_logos(team_names, league_code=None):
+    """Warm ESPN team ID cache for names missing from cache (lightweight scoreboard scan)."""
+    if not team_names:
+        return
+    missing = {
+        n for n in team_names
+        if n and _normalize_soccer_team_name(n) not in _SOCCER_TEAM_ESPN_ID
+    }
+    if not missing:
+        return
+    endpoints = [league_code] if league_code else [c for c in SOCCER_LEAGUE_ENDPOINTS.values() if c]
+    if not endpoints:
+        return
+    req_budget = min(12, max(4, len(endpoints) * 2))
+    requests_made = 0
+    today = datetime.now()
+    for days_offset in range(0, 14):
+        if not missing or requests_made >= req_budget:
+            break
+        date_str = (today - timedelta(days=days_offset)).strftime('%Y%m%d')
+        for code in endpoints:
+            if not missing or requests_made >= req_budget:
+                break
+            url = (
+                f"https://site.api.espn.com/apis/site/v2/sports/soccer/"
+                f"{code}/scoreboard?dates={date_str}"
+            )
+            try:
+                data = _cached_get(url)
+                requests_made += 1
+            except Exception:
+                continue
+            for event in data.get('events', []) if isinstance(data, dict) else []:
+                comp = (event.get('competitions') or [{}])[0]
+                for competitor in comp.get('competitors', []) or []:
+                    _register_soccer_from_competitor(competitor, persist=False)
+            _save_soccer_team_espn_ids()
+            missing = {
+                n for n in missing
+                if _normalize_soccer_team_name(n) not in _SOCCER_TEAM_ESPN_ID
+            }
+
 
 def _canonical_soccer_league_name(league_name: str):
     if not league_name:
@@ -3706,6 +3932,8 @@ def update_espn_scores(sport):
                         away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
                         if not home or not away:
                             continue
+                        _register_soccer_from_competitor(home)
+                        _register_soccer_from_competitor(away)
 
                         home_team = home.get('team', {}).get('displayName', '')
                         away_team = away.get('team', {}).get('displayName', '')
@@ -3753,6 +3981,7 @@ def update_espn_scores(sport):
                             updates_count += 1
 
             conn.commit()
+            _invalidate_soccer_league_db_variants()
             conn.close()
             if updates_count > 0:
                 logger.info(f"Successfully updated {updates_count} {sport} game scores.")
@@ -4525,6 +4754,8 @@ def get_upcoming_predictions(sport, days=365):
                     away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
                     if not home or not away:
                         continue
+                    _register_soccer_from_competitor(home)
+                    _register_soccer_from_competitor(away)
                     home_team = home.get('team', {}).get('displayName', '')
                     away_team = away.get('team', {}).get('displayName', '')
                     event_id  = event.get('id', '')
@@ -6537,7 +6768,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
         conn.close()
 
         live_attempts = 0
-        live_cap = 10 if sport in ('NBA', 'SOCCER') else 5
+        live_cap = 25 if sport == 'SOCCER' else (15 if sport == 'NBA' else 8)
         for dd in daily_results.values():
             for g in dd.get('games', []):
                 h, a = g['home'], g['away']
@@ -6623,10 +6854,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 # Live fallback for missing market lines (recent games only)
                 if (ms is None or mt is None) and live_attempts < live_cap and gd:
                     try:
-                        if sport in ('NBA', 'SOCCER'):
+                        if sport == 'NBA':
                             gd_dt = parse_date(gd)
                             if gd_dt and abs((datetime.now() - gd_dt).days) > 3:
-                                raise Exception(f"skip live fetch for older {sport} dates")
+                                raise Exception("skip live fetch for older NBA dates")
+                        elif sport == 'SOCCER':
+                            gd_dt = parse_date(gd)
+                            if gd_dt and abs((datetime.now() - gd_dt).days) > 21:
+                                raise Exception("skip live fetch for older SOCCER dates")
                         live_attempts += 1
                         live_line = _fetch_live_market_line(
                             sport, gid, gd, h, a,
@@ -6648,7 +6883,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     except Exception:
                         pass
 
-                if mt is None and sport in ('NBA', 'WNBA', 'NHL', 'MLB', 'NFL'):
+                if mt is None and sport in ('NBA', 'WNBA', 'NHL', 'MLB', 'NFL', 'SOCCER'):
                     try:
                         gd_dt = parse_date(gd) if gd else None
                         if gd_dt is None or (datetime.now() - gd_dt).days <= 21:
@@ -6889,10 +7124,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
         stats = {
             'spread_covered': st_cov,
             'spread_graded': st_gr,
-            'spread_pct': round(st_cov / st_gr * 100, 1) if st_gr > 0 else 0,
+            'spread_pct': round(st_cov / st_gr * 100, 1) if st_gr > 0 else None,
             'total_correct': tt_cor,
             'total_graded': tt_gr,
-            'total_pct': round(tt_cor / tt_gr * 100, 1) if tt_gr > 0 else 0,
+            'total_pct': round(tt_cor / tt_gr * 100, 1) if tt_gr > 0 else None,
         }
         if st_gr == 0 and tt_gr == 0:
             logger.warning(
@@ -6965,6 +7200,47 @@ def compute_overall_stats_from_daily(daily_results):
             round(c / t * 100, 1) if t > 0 else 0.0
         )
     return overall
+
+
+def _build_season_performance_summary(overall_stats, spread_total_stats):
+    """Season banner metrics with honest per-market game counts (ML vs spread vs O/U)."""
+    ens = (overall_stats or {}).get('ensemble') or {}
+    ml_total = int(ens.get('total') or 0)
+    ml_correct = int(ens.get('correct') or 0)
+    ml_accuracy = ens.get('accuracy') if ml_total > 0 else None
+    st = spread_total_stats or {}
+    sp_gr = int(st.get('spread_graded') or 0)
+    ou_gr = int(st.get('total_graded') or 0)
+    sp_pct = st.get('spread_pct') if sp_gr > 0 else None
+    ou_pct = st.get('total_pct') if ou_gr > 0 else None
+    spread_note = ou_note = None
+    if ml_total and sp_gr < ml_total:
+        spread_note = (
+            f"Graded {sp_gr} of {ml_total} moneyline games "
+            "(needs book spread line + XSharp spread)"
+        )
+    elif ml_total and sp_gr == 0:
+        spread_note = "No spread grades yet — missing book lines or XSharp spread"
+    if ml_total and ou_gr < ml_total:
+        ou_note = (
+            f"Graded {ou_gr} of {ml_total} moneyline games "
+            "(needs posted O/U total + XSharp total)"
+        )
+    elif ml_total and ou_gr == 0:
+        ou_note = "No O/U grades yet — missing posted totals on books"
+    return {
+        'ml_total': ml_total,
+        'ml_correct': ml_correct,
+        'ml_accuracy': ml_accuracy,
+        'spread_graded': sp_gr,
+        'spread_covered': int(st.get('spread_covered') or 0),
+        'spread_pct': sp_pct,
+        'spread_note': spread_note,
+        'ou_graded': ou_gr,
+        'ou_correct': int(st.get('total_correct') or 0),
+        'ou_pct': ou_pct,
+        'ou_note': ou_note,
+    }
 
 
 def _tally_spread_total(games):
@@ -7345,7 +7621,17 @@ BASE_TEMPLATE = """
         a.pl-brand-logo.pl-brand-logo--holding{outline:2px solid rgba(0,82,155,0.35);outline-offset:2px;}
         .nav-cta{display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);color:#fff;font-size:0.84em;font-weight:700;text-decoration:none;letter-spacing:0.3px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 16px rgba(99,102,241,0.45),inset 0 1px 0 rgba(255,255,255,0.15);}
         .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.6),inset 0 1px 0 rgba(255,255,255,0.15);}
-        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}}
+        .nav-cta-premium{display:inline-flex;align-items:center;padding:9px 16px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-size:0.84em;font-weight:800;text-decoration:none;letter-spacing:0.2px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(251,191,36,0.35);}
+        .nav-cta-premium:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(251,191,36,0.45);}
+        .tv-premium-cta{display:flex;align-items:center;justify-content:center;margin:10px 12px 6px;padding:12px 14px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;font-size:0.92em;text-decoration:none;letter-spacing:0.2px;}
+        .tv-premium-cta:hover{box-shadow:0 4px 14px rgba(251,191,36,0.4);}
+        .join-premium-bar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
+        .join-premium-inner{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+        .join-premium-copy{color:#e2e8f0;font-size:0.86em;font-weight:600;line-height:1.35;}
+        .join-premium-actions{display:flex;align-items:center;gap:8px;}
+        .join-premium-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.82em;}
+        .join-premium-close{border:1px solid rgba(255,255,255,0.3);background:transparent;color:#fff;border-radius:999px;width:28px;height:28px;line-height:1;cursor:pointer;font-size:18px;}
+        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}.nav-cta-premium{padding:8px 12px;font-size:0.78em;}}
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:1;}
         .hamburger:hover{background:#f8fafc;}
         .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
@@ -7498,6 +7784,9 @@ BASE_TEMPLATE = """
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </button>
                 <div class="acct-menu" id="acctMenu">
+                    {% if not is_premium %}
+                    <a href="/plans">Join Premium</a>
+                    {% endif %}
                     {% if is_logged_in %}
                     <a href="/logout">Sign Out</a>
                     {% else %}
@@ -7507,6 +7796,9 @@ BASE_TEMPLATE = """
                     <div class="acct-menu-divider"></div>
                     <a href="/faq">Help</a>
                 </div>
+                {% if not is_premium %}
+                <a href="/plans" class="nav-cta-premium">Join Premium</a>
+                {% endif %}
                 {% if not is_logged_in %}
                 <a href="/plans" class="nav-cta">Get Started</a>
                 {% endif %}
@@ -7532,6 +7824,9 @@ BASE_TEMPLATE = """
               {% endfor %}
             </div>
           </div>
+          {% endif %}
+          {% if not is_premium %}
+          <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
           {% endif %}
           <div class="tv-menu-list">
             <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
@@ -7622,7 +7917,7 @@ BASE_TEMPLATE = """
     </footer>
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -7631,7 +7926,7 @@ function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var ope
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
 document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
 var _srchFilter='all';
-var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
 function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
 function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
 function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
@@ -7639,6 +7934,17 @@ function renderSrchItems(q){var items=_srchDefaults.filter(function(i){return(_s
 document.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('srchInput');if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}document.querySelectorAll('.srch-filter').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});this.classList.add('active');_srchFilter=this.dataset.s;renderSrchItems(document.getElementById('srchInput').value);});});});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
     </script>
+    {% if not is_premium %}
+    <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium" style="display:block;">
+        <div class="join-premium-inner">
+            <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
+            <div class="join-premium-actions">
+                <a href="/plans" class="join-premium-btn">Join Now</a>
+                <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     <script src="/static/js/pl-header-logo.js" defer></script>
 </body>
 </html>
@@ -8547,6 +8853,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .league-pill { background:#ffffff; border:2px solid rgba(15,23,42,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#0f172a; text-decoration:none; display:inline-flex; align-items:center; }
     .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
     .league-pill:hover { border-color:#fbbf24; }
+    .league-pill-count { margin-left:6px; font-size:0.85em; opacity:0.75; font-weight:700; }
     /* Date navigation */
     .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:12px 16px; background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }
     .nav-arrow { background:rgba(251,191,36,0.2); border:2px solid #fbbf24; color:#fbbf24; font-size:1.3em; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; flex-shrink:0; }
@@ -8670,9 +8977,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="league-slider">
             <div class="league-badges" id="leagueBubbles">
                 {% for lg in soccer_leagues %}
-                <a class="league-pill {% if lg.active %}active{% endif %}" href="{{ lg.url }}">{{ lg.name }}</a>
+                <a class="league-pill {% if lg.active %}active{% endif %}" href="{{ lg.url }}">{{ lg.name }}{% if lg.count is defined and lg.count %}<span class="league-pill-count">{{ lg.count }}</span>{% endif %}</a>
                 {% endfor %}
             </div>
+        </div>
+        {% endif %}
+        {% if results_stale_notice %}
+        <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#334155;text-align:center;">
+            No games in the last 7 days for this league; showing most recent available results.
         </div>
         {% endif %}
         {% set ens = overall_stats.ensemble %}
@@ -8782,7 +9094,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── ROI Cards ── -->
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 16px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
+            <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
+            <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate.</p>
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
                 {% for mkt, mkt_label in [('moneyline','Moneyline'),('spread','Spread'),('total','Total (O/U)')] %}
                 {% set c = roi_cards[mkt] %}
@@ -8800,34 +9113,52 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            {% if sport == 'SOCCER' and selected_league and league_db_total is defined and league_db_total %}
+            <p style="text-align:center;margin:0 0 10px;font-size:0.82em;color:#64748b;">Showing recent results for this league ({{ league_db_total }} completed games in database).</p>
+            {% endif %}
             <div id="seasonInfoBox" style="display:none;background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.78em;color:#334155;line-height:1.6;text-align:center;">
-                Results are tracked from the start of the {{ sport_info.name }} season. All completed games with available model predictions are graded automatically. Game counts reflect actual games graded — some games may lack model data due to missing stats or early-season data gaps. Numbers grow daily as more games are played.
+                Moneyline, spread, and O/U are graded separately. A game can count toward moneyline (model pick vs final) but not toward spread or O/U if the sportsbook line or XSharp projection was missing. Subtitles under spread/O/U show how many of the moneyline-graded games were also graded for that market.
             </div>
             <div style="text-align:center;margin-bottom:14px;"><span onclick="var b=document.getElementById('seasonInfoBox');b.style.display=b.style.display==='none'?'block':'none';" style="cursor:pointer;font-size:0.75em;color:#475569;border:1px solid rgba(15,23,42,0.18);border-radius:12px;padding:3px 10px;background:#f8fafc;">ⓘ What do these numbers mean?</span></div>
+            {% set sp = season_perf if season_perf is defined and season_perf else none %}
+            {% if not sp and overall_stats and overall_stats.ensemble %}
+            {% set _ens = overall_stats.ensemble %}
+            {% set sp = {'ml_total': _ens.total, 'ml_correct': _ens.correct, 'ml_accuracy': _ens.accuracy, 'spread_graded': 0, 'spread_covered': 0, 'spread_pct': none, 'spread_note': none, 'ou_graded': 0, 'ou_correct': 0, 'ou_pct': none, 'ou_note': none} %}
+            {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline (Consensus)</div>
-                    <div style="font-size:2em;font-weight:bold;color:{% if ens.accuracy>=55 %}#00C076{% elif ens.accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ ens.accuracy }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ ens.correct }}-{{ ens.total - ens.correct }} ({{ ens.total }} games)</div>
+                    {% if sp and sp.ml_total > 0 %}
+                    <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#00C076{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} ({{ sp.ml_total }} games)</div>
+                    {% else %}
+                    <div style="font-size:1.5em;color:#94a3b8;">—</div>
+                    <div style="font-size:0.85em;color:#64748b;">no graded games</div>
+                    {% endif %}
                 </div>
-                {% if spread_total_stats is defined and spread_total_stats %}
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread (XSharp)</div>
-                    <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.spread_pct>=52 %}#00C076{% elif spread_total_stats.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ spread_total_stats.spread_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ spread_total_stats.spread_covered }}-{{ spread_total_stats.spread_graded - spread_total_stats.spread_covered }} ({{ spread_total_stats.spread_graded }} graded)</div>
+                    {% if sp and sp.spread_graded > 0 and sp.spread_pct is not none %}
+                    <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#00C076{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} ({{ sp.spread_graded }} graded)</div>
+                    {% if sp.spread_note %}<div style="font-size:0.72em;color:#64748b;margin-top:6px;line-height:1.35;">{{ sp.spread_note }}</div>{% endif %}
+                    {% else %}
+                    <div style="font-size:1.5em;color:#94a3b8;">—</div>
+                    <div style="font-size:0.85em;color:#64748b;">{% if sp and sp.spread_note %}{{ sp.spread_note }}{% else %}not graded yet{% endif %}</div>
+                    {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U (XSharp)</div>
-                    <div style="font-size:2em;font-weight:bold;color:{% if spread_total_stats.total_pct>=52 %}#00C076{% elif spread_total_stats.total_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ spread_total_stats.total_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ spread_total_stats.total_correct }}-{{ spread_total_stats.total_graded - spread_total_stats.total_correct }} ({{ spread_total_stats.total_graded }} graded)</div>
+                    {% if sp and sp.ou_graded > 0 and sp.ou_pct is not none %}
+                    <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#00C076{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} ({{ sp.ou_graded }} graded)</div>
+                    {% if sp.ou_note %}<div style="font-size:0.72em;color:#64748b;margin-top:6px;line-height:1.35;">{{ sp.ou_note }}</div>{% endif %}
+                    {% else %}
+                    <div style="font-size:1.5em;color:#94a3b8;">—</div>
+                    <div style="font-size:0.85em;color:#64748b;">{% if sp and sp.ou_note %}{{ sp.ou_note }}{% else %}not graded yet{% endif %}</div>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;">📈 Spread</div><div style="font-size:1.5em;color:#94a3b8;">—</div></div>
-                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.8;">🎲 O/U</div><div style="font-size:1.5em;color:#94a3b8;">—</div></div>
-                {% endif %}
             </div>
             <div style="border-top:1px solid rgba(15,23,42,0.12);padding-top:12px;"></div>
         </div>
@@ -9984,7 +10315,11 @@ def landing_page():
 }
         .nav-cta{display:inline-flex;align-items:center;padding:9px 22px;border-radius:999px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);color:#fff;font-size:0.84em;font-weight:700;text-decoration:none;letter-spacing:0.3px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 16px rgba(99,102,241,0.5),inset 0 1px 0 rgba(255,255,255,0.15);}
         .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.65),inset 0 1px 0 rgba(255,255,255,0.15);}
-        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}}
+        .nav-cta-premium{display:inline-flex;align-items:center;padding:9px 16px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-size:0.84em;font-weight:800;text-decoration:none;letter-spacing:0.2px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(251,191,36,0.35);}
+        .nav-cta-premium:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(251,191,36,0.45);}
+        .tv-premium-cta{display:flex;align-items:center;justify-content:center;margin:10px 12px 6px;padding:12px 14px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;font-size:0.92em;text-decoration:none;letter-spacing:0.2px;}
+        .tv-premium-cta:hover{box-shadow:0 4px 14px rgba(251,191,36,0.4);}
+        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}.nav-cta-premium{padding:8px 12px;font-size:0.78em;}}
         .srch-overlay{display:none;position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);}
         .srch-overlay.open{display:block;}
         .srch-box{position:absolute;top:70px;left:50%;transform:translateX(-50%);width:min(680px,96vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,0.18);overflow:hidden;}
@@ -10438,6 +10773,9 @@ def landing_page():
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </button>
                 <div class="acct-menu" id="acctMenu">
+                    {% if not is_premium %}
+                    <a href="/plans">Join Premium</a>
+                    {% endif %}
                     {% if is_logged_in %}
                     <a href="/logout">Sign Out</a>
                     {% else %}
@@ -10448,7 +10786,12 @@ def landing_page():
                     <a href="/faq">Help</a>
                 </div>
             </div>
+            {% if not is_premium %}
+            <a href="/plans" class="nav-cta-premium">Join Premium</a>
+            {% endif %}
+            {% if not is_logged_in %}
             <a href="/signup" class="nav-cta">Get Started</a>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -10461,6 +10804,9 @@ def landing_page():
   </div>
   <div class="tv-panels">
     <div class="tv-panel visible" id="tvMain">
+      {% if not is_premium %}
+      <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
+      {% endif %}
       <div class="tv-menu-list">
         <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
         <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
@@ -10841,7 +11187,7 @@ def landing_page():
     </div>
 </footer>
 
-{% if not is_logged_in %}
+{% if not is_premium %}
 <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
     <div class="join-premium-inner">
         <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
@@ -10854,7 +11200,7 @@ def landing_page():
 {% endif %}
 
 <script>
-    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
     function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
     function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
     function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -10863,7 +11209,7 @@ def landing_page():
     function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
     document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
     var _srchFilter='all';
-    var _srchDefaults=[{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+    var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
     function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
     function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
     function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
@@ -13609,7 +13955,7 @@ def sport_predictions(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=True,
+        is_premium=is_premium_user(),
     )
     try:
         rendered = _render_espn_picks_page(**_render_ctx)
@@ -13756,9 +14102,11 @@ def sport_results(sport):
             sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=30)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
+            _attach_book_odds_to_daily_results(sport, daily_results, api_limit=80)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
+            season_perf = _build_season_performance_summary(overall_stats, _st_stats)
             daily_tally_date = yesterday
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
@@ -13780,6 +14128,7 @@ def sport_results(sport):
                 total_over=_ov, total_under=_un, total_games_ou=_gou,
                 avg_total=_avg, ou_bench=_bench,
                 spread_total_stats=_st_stats,
+                season_perf=season_perf,
                 daily_tally=daily_tally,
                 daily_tally_date=daily_tally_date,
                 daily_tally_games=daily_tally_games,
@@ -13836,6 +14185,7 @@ def sport_results(sport):
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 _finalize_daily_result_cards(sport, daily_results)
+                season_perf = _build_season_performance_summary(overall_stats, _st_stats)
                 daily_tally_date = yesterday
                 daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
                 daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
@@ -13858,6 +14208,7 @@ def sport_results(sport):
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
                     avg_total=_avg, ou_bench=_bench,
                     spread_total_stats=_st_stats,
+                    season_perf=season_perf,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
                     daily_tally_games=daily_tally_games,
@@ -13924,6 +14275,7 @@ def sport_results(sport):
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 _finalize_daily_result_cards(sport, daily_results)
+                season_perf = _build_season_performance_summary(overall_stats, _st_stats)
                 daily_tally_date = yesterday
                 daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
                 daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
@@ -13945,6 +14297,7 @@ def sport_results(sport):
                     total_over=_ov, total_under=_un, total_games_ou=_gou,
                     avg_total=_avg, ou_bench=_bench,
                     spread_total_stats=_st_stats,
+                    season_perf=season_perf,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
                     daily_tally_games=daily_tally_games,
@@ -14006,32 +14359,48 @@ def sport_results(sport):
                 update_espn_scores(sport)
                 _SPORT_RESULTS_CACHE[sync_key] = {'ts': now_ts}
             
-            # Get completed games from database
             conn = get_db_connection()
-            completed_games = conn.execute('''
-                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
-                FROM games g
-                LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
-                WHERE g.sport = ? AND g.home_score IS NOT NULL
-                ORDER BY g.game_date DESC
-                LIMIT 500
-            ''', (sport, sport)).fetchall()
+            soccer_league_counts = {}
+            if sport == 'SOCCER':
+                soccer_league_counts = _soccer_curated_league_game_counts(conn)
+                if not selected_slug:
+                    active_leagues = [
+                        lg for lg in SOCCER_LEAGUE_ORDER if soccer_league_counts.get(lg, 0) > 0
+                    ]
+                    if active_leagues:
+                        selected_league = max(
+                            active_leagues,
+                            key=lambda lg: soccer_league_counts.get(lg, 0),
+                        )
+                    if not selected_league:
+                        selected_league = SOCCER_LEAGUE_ORDER[0] if SOCCER_LEAGUE_ORDER else None
+                    if selected_league:
+                        cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
+                completed_games = _fetch_soccer_completed_games(
+                    conn, selected_league, SOCCER_RESULTS_GAMES_PER_LEAGUE,
+                )
+            else:
+                completed_games = conn.execute('''
+                    SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                    FROM games g
+                    LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                    WHERE g.sport = ? AND g.home_score IS NOT NULL
+                    ORDER BY g.game_date DESC
+                    LIMIT 500
+                ''', (sport, sport)).fetchall()
             conn.close()
-            if sport == 'SOCCER' and not selected_slug:
-                league_counts = {}
-                for game in completed_games:
-                    league_name = _canonical_soccer_league_name(game['league']) or game['league']
-                    if league_name and league_name in SOCCER_LEAGUE_ORDER:
-                        league_counts[league_name] = league_counts.get(league_name, 0) + 1
-                if league_counts:
-                    selected_league = next((lg for lg in SOCCER_LEAGUE_ORDER if league_counts.get(lg)), None)
-                if not selected_league:
-                    selected_league = SOCCER_LEAGUE_ORDER[0] if SOCCER_LEAGUE_ORDER else None
-                if selected_league:
-                    cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
             soccer_bundle = None
             if sport == 'SOCCER':
                 soccer_bundle = _get_soccer_model_bundle(completed_games, selected_league)
+                _soccer_team_names = set()
+                for _sg in completed_games:
+                    try:
+                        _soccer_team_names.add(_sg['home_team_id'])
+                        _soccer_team_names.add(_sg['away_team_id'])
+                    except Exception:
+                        pass
+                _soccer_league_code = SOCCER_LEAGUE_ENDPOINTS.get(selected_league) if selected_league else None
+                _hydrate_soccer_team_logos(_soccer_team_names, league_code=_soccer_league_code)
             
             if not completed_games:
                 # Show message for offseason sports
@@ -14139,7 +14508,14 @@ def sport_results(sport):
                     logger.warning(f"Skipping {sport} results row (game_id={_gid}): {_row_err}")
                     continue
 
-            sorted_dates = sorted(daily_results.keys(), reverse=True)[:30]
+            yesterday_dt = datetime.now() - timedelta(days=1)
+            yesterday = yesterday_dt.strftime('%Y-%m-%d')
+            if sport == 'SOCCER':
+                sorted_dates = _recent_result_dates(
+                    daily_results, yesterday=yesterday, limit=60, recent_window_days=90,
+                )
+            else:
+                sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=30)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
             _attach_book_odds_to_daily_results(sport, daily_results, api_limit=60)
@@ -14147,8 +14523,8 @@ def sport_results(sport):
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
-            yesterday_dt = datetime.now() - timedelta(days=1)
-            daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
+            season_perf = _build_season_performance_summary(overall_stats, _st_stats)
+            daily_tally_date = yesterday
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
             weekly_start_dt = yesterday_dt - timedelta(days=6)
@@ -14159,16 +14535,21 @@ def sport_results(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+            results_stale_notice = False
             soccer_leagues = None
             if sport == 'SOCCER':
+                ens_total = (overall_stats.get('ensemble') or {}).get('total', 0) if overall_stats else 0
+                results_stale_notice = weekly_tally_games == 0 and ens_total > 0
                 soccer_leagues = [
                     {
                         'name': lg,
                         'slug': _soccer_league_slug(lg),
                         'active': lg == selected_league,
-                    'url': f"/soccer-results?league={_soccer_league_slug(lg)}",
+                        'url': f"/soccer-results?league={_soccer_league_slug(lg)}",
+                        'count': soccer_league_counts.get(lg, 0),
                     }
                     for lg in SOCCER_LEAGUE_ORDER
+                    if soccer_league_counts.get(lg, 0) > 0
                 ]
 
             rendered = render_template_string(
@@ -14181,6 +14562,7 @@ def sport_results(sport):
                 total_over=_ov, total_under=_un, total_games_ou=_gou,
                 avg_total=_avg, ou_bench=_bench,
                 spread_total_stats=_st_stats,
+                season_perf=season_perf,
                 daily_tally=daily_tally,
                 daily_tally_date=daily_tally_date,
                 daily_tally_games=daily_tally_games,
@@ -14188,7 +14570,10 @@ def sport_results(sport):
                 weekly_tally_date_range=weekly_tally_date_range,
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
-                soccer_leagues=soccer_leagues
+                soccer_leagues=soccer_leagues,
+                results_stale_notice=results_stale_notice,
+                selected_league=selected_league,
+                league_db_total=soccer_league_counts.get(selected_league, 0) if sport == 'SOCCER' else None,
             )
             if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
                 _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)

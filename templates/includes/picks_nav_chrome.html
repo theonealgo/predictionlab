@@ -15,6 +15,9 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </button>
                 <div class="acct-menu" id="acctMenu">
+                    {% if not is_premium|default(false) %}
+                    <a href="/plans">Join Premium</a>
+                    {% endif %}
                     {% if is_logged_in %}
                     <a href="/logout">Sign Out</a>
                     {% else %}
@@ -24,6 +27,9 @@
                     <div class="acct-menu-divider"></div>
                     <a href="/faq">Help</a>
                 </div>
+                {% if not is_premium|default(false) %}
+                <a href="/plans" class="nav-cta-premium">Join Premium</a>
+                {% endif %}
                 {% if not is_logged_in %}
                 <a href="/signup" class="nav-cta">Get Started</a>
                 {% endif %}
@@ -52,6 +58,9 @@
           {% endfor %}
         </div>
       </div>
+      {% endif %}
+      {% if not is_premium|default(false) %}
+      <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
       {% endif %}
       <div class="tv-menu-list">
         <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
@@ -94,7 +103,7 @@ var TV_MENUS={
   props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
   results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},
   community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
-  company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
+  company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
 };
 function tvOpen(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
@@ -117,6 +126,7 @@ function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu
 document.addEventListener('click',function(){var a=document.getElementById('acctMenu');if(a)a.classList.remove('open');});
 var _srchFilter='all';
 var _srchDefaults=[
+  {l:'Join Premium',h:'/plans',s:'all'},
   {l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},
   {l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},
   {l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},

@@ -84,6 +84,43 @@
             box-shadow: 0 4px 16px rgba(99,102,241,0.45);
         }
         .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(99,102,241,0.6); }
+        .nav-cta-premium {
+            display: inline-flex;
+            align-items: center;
+            padding: 9px 16px;
+            border-radius: 999px;
+            background: linear-gradient(135deg,#fbbf24,#f59e0b);
+            color: #000;
+            font-size: 0.84em;
+            font-weight: 800;
+            text-decoration: none;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            transition: all .15s;
+            box-shadow: 0 4px 14px rgba(251,191,36,0.35);
+        }
+        .nav-cta-premium:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(251,191,36,0.45); }
+        .tv-premium-cta {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 12px 6px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: linear-gradient(135deg,#fbbf24,#f59e0b);
+            color: #000;
+            font-weight: 800;
+            font-size: 0.92em;
+            text-decoration: none;
+            letter-spacing: 0.2px;
+        }
+        .tv-premium-cta:hover { box-shadow: 0 4px 14px rgba(251,191,36,0.4); }
+        .join-premium-bar { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 999; background: #0f172a; border-top: 1px solid rgba(255,255,255,0.12); }
+        .join-premium-inner { max-width: 1200px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+        .join-premium-copy { color: #e2e8f0; font-size: 0.86em; font-weight: 600; line-height: 1.35; }
+        .join-premium-actions { display: flex; align-items: center; gap: 8px; }
+        .join-premium-btn { display: inline-flex; align-items: center; justify-content: center; padding: 9px 14px; border-radius: 999px; background: linear-gradient(135deg,#fbbf24,#f59e0b); color: #000; text-decoration: none; font-weight: 800; font-size: 0.82em; }
+        .join-premium-close { border: 1px solid rgba(255,255,255,0.3); background: transparent; color: #fff; border-radius: 999px; width: 28px; height: 28px; line-height: 1; cursor: pointer; font-size: 18px; }
 
         .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:160px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
         .acct-menu.open{display:block;}
@@ -210,6 +247,9 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </button>
                 <div class="acct-menu" id="acctMenu">
+                    {% if not is_premium|default(false) %}
+                    <a href="/plans">Join Premium</a>
+                    {% endif %}
                     {% if is_logged_in %}
                     <a href="/logout">Sign Out</a>
                     {% else %}
@@ -219,6 +259,9 @@
                     <div class="acct-menu-divider"></div>
                     <a href="/faq">Help</a>
                 </div>
+                {% if not is_premium|default(false) %}
+                <a href="/plans" class="nav-cta-premium">Join Premium</a>
+                {% endif %}
                 {% if not is_logged_in %}
                 <a href="/signup" class="nav-cta">Get Started</a>
                 {% endif %}
@@ -247,6 +290,9 @@
           {% endfor %}
         </div>
       </div>
+      {% endif %}
+      {% if not is_premium|default(false) %}
+      <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
       {% endif %}
       <div class="tv-menu-list">
         <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
@@ -342,13 +388,24 @@
         <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
+{% if not is_premium|default(false) %}
+<div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
+    <div class="join-premium-inner">
+        <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
+        <div class="join-premium-actions">
+            <a href="/plans" class="join-premium-btn">Join Now</a>
+            <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
+        </div>
+    </div>
+</div>
+{% endif %}
 <script>
 var TV_MENUS={
   picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-picks'}{%- endif -%},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},
   props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
   results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},
   community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
-  company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
+  company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
 };
 function tvOpen(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
@@ -373,6 +430,7 @@ document.addEventListener('click',function(){var a=document.getElementById('acct
 
 var _srchFilter='all';
 var _srchDefaults=[
+  {l:'Join Premium',h:'/plans',s:'all'},
   {l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},
   {l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},
   {l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},

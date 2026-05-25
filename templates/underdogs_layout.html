@@ -99,6 +99,8 @@
             box-shadow: 0 4px 16px rgba(99,102,241,0.45);
         }
         .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(99,102,241,0.6); }
+        .nav-cta-premium { display: inline-flex; align-items: center; padding: 9px 16px; border-radius: 999px; background: linear-gradient(135deg,#fbbf24,#f59e0b); color: #000; font-size: 0.84em; font-weight: 800; text-decoration: none; white-space: nowrap; box-shadow: 0 4px 14px rgba(251,191,36,0.35); }
+        .tv-premium-cta { display: flex; align-items: center; justify-content: center; margin: 10px 12px 6px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg,#fbbf24,#f59e0b); color: #000; font-weight: 800; font-size: 0.92em; text-decoration: none; }
 
         /*  Menu Core Styles */
         .tv-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 1998; backdrop-filter: blur(2px); }
@@ -231,6 +233,9 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </button>
                 <div class="acct-menu" id="acctMenu">
+                    {% if not is_premium|default(false) %}
+                    <a href="/plans">Join Premium</a>
+                    {% endif %}
                     {% if is_logged_in %}
                     <a href="/logout">Sign Out</a>
                     {% else %}
@@ -240,7 +245,12 @@
                     <div class="acct-menu-divider"></div>
                     <a href="/faq">Help</a>
                 </div>
+                {% if not is_premium|default(false) %}
+                <a href="/plans" class="nav-cta-premium">Join Premium</a>
+                {% endif %}
+                {% if not is_logged_in %}
                 <a href="/signup" class="nav-cta">Get Started</a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -268,6 +278,9 @@
           {% endfor %}
         </div>
       </div>
+      {% endif %}
+      {% if not is_premium|default(false) %}
+      <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
       {% endif %}
       <div class="tv-menu-list">
         <button class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
@@ -363,7 +376,7 @@ var TV_MENUS={
   props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
   results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},
   community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
-  company:{title:'Company',items:[{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
+  company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
 };
 function tvOpen(){document.getElementById('tvOverlay').classList.add('open');document.getElementById('tvDrawer').classList.add('open');document.body.style.overflow='hidden';}
 function tvClose(){document.getElementById('tvOverlay').classList.remove('open');document.getElementById('tvDrawer').classList.remove('open');document.body.style.overflow='';setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}

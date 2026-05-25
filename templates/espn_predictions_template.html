@@ -568,7 +568,13 @@
     <div class="section-tabs">
         <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
+        {% if not is_premium|default(false) %}
+        <a href="/plans" class="tab" style="margin-left:auto;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;">⭐ Join Premium</a>
+        {% endif %}
     </div>
+    {% if not is_premium|default(false) %}
+    <div class="premium-upsell-strip">Unlock spreads, totals, and projected scores — <a href="/plans">Join Premium →</a></div>
+    {% endif %}
     {% set label_glicko2 = 'Grinder2' %}
     {% set label_trueskill = 'Takedown' %}
     {% set label_elo = 'Edge' %}
@@ -824,6 +830,17 @@
         <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
+{% if not is_premium|default(false) %}
+<div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
+    <div class="join-premium-inner">
+        <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
+        <div class="join-premium-actions">
+            <a href="/plans" class="join-premium-btn">Join Now</a>
+            <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
