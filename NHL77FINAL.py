@@ -1406,6 +1406,11 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
             games.append(g)
     if not games:
         return
+    missing_totals = sum(1 for g in games if _safe_float(g.get('book_total')) is None)
+    if api_limit is None or api_limit < 0:
+        api_limit = min(300, max(missing_totals, 40))
+    elif missing_totals > api_limit:
+        api_limit = min(300, missing_totals)
     game_ids = [str(g['game_id']) for g in games if g.get('game_id')]
     by_gid = {}
     by_key = {}
@@ -1473,10 +1478,8 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
                 g['book_spread'] = row['spread']
             if row.get('total') is not None and g.get('book_total') is None:
                 g['book_total'] = row['total']
-        # For completed-game results we only display spread and total, not moneylines.
-        # Skipping the API call when spread+total are already present preserves the
-        # api_limit budget for games that have NO cached lines at all.
-        if g.get('book_spread') is not None and g.get('book_total') is not None:
+        # Skip API only when we already have the O/U line (spread alone is not enough).
+        if g.get('book_total') is not None:
             continue
         if not build_pl_book_odds or api_attempts >= api_limit:
             continue
@@ -14319,7 +14322,7 @@ def sport_results(sport):
             sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=30)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
-            _attach_book_odds_to_daily_results(sport, daily_results, api_limit=80)
+            _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
@@ -14397,7 +14400,7 @@ def sport_results(sport):
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
 
-                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=60)
+                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
                 _cache_market_lines_for_results(sport, daily_results, limit=80)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
@@ -14443,7 +14446,7 @@ def sport_results(sport):
                 return f"<h1>NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
-            cache_key = f'{sport}_daily_results_html_v6'
+            cache_key = f'{sport}_daily_results_html_v7'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
@@ -14487,7 +14490,7 @@ def sport_results(sport):
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
-                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=120)
+                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
                 _cache_market_lines_for_results(sport, daily_results, limit=150)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
@@ -14735,12 +14738,17 @@ def sport_results(sport):
                 sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=30)
             overall_stats = compute_overall_stats_from_daily(daily_results)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
-            _attach_book_odds_to_daily_results(sport, daily_results, api_limit=60)
+            _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
             _cache_market_lines_for_results(sport, daily_results, limit=150)
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
             season_perf = _build_season_performance_summary(overall_stats, _st_stats)
+            if _st_stats and int(_st_stats.get('total_graded') or 0) == 0 and int((overall_stats or {}).get('ensemble', {}).get('total') or 0) > 0:
+                logger.warning(
+                    f"[{sport}] results O/U still 0 graded after book attach "
+                    f"(check /data betting_lines totals + pl_book_odds_api on Render)"
+                )
             daily_tally_date = yesterday
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
             daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
