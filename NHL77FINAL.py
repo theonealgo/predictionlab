@@ -1077,72 +1077,193 @@ def _espn_event_id_for_book(sport, game_id, game_date, home_team, away_team):
     return raw if raw.isdigit() else None
 
 
-def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30):
-    """Attach sportsbook lines (ESPN Core / DraftKings when listed) for card display."""
-    if not predictions:
-        return
+def _book_row_is_synthetic(source) -> bool:
+    src = (source or '').lower()
+    return 'model' in src or 'engine' in src or 'fallback' in src
+
+
+def _bulk_load_book_lines_from_db(sport, game_ids):
+    """Latest betting_lines row per game_id (spread, total, ML)."""
+    by_gid = {}
+    if not game_ids:
+        return by_gid
     try:
-        from pl_book_odds_api import build_pl_book_odds
-    except ImportError:
+        conn = get_db_connection()
+        chunk = 400
+        for i in range(0, len(game_ids), chunk):
+            part = [str(g) for g in game_ids[i:i + chunk]]
+            ph = ','.join('?' * len(part))
+            rows = conn.execute(
+                f"""SELECT game_id, spread, total, home_moneyline, away_moneyline, source
+                    FROM betting_lines WHERE sport=? AND game_id IN ({ph})
+                    ORDER BY fetched_at DESC""",
+                [sport] + part,
+            ).fetchall()
+            for r in rows:
+                gid = str(r['game_id'])
+                if gid not in by_gid:
+                    by_gid[gid] = dict(r)
+        conn.close()
+    except Exception as _dbe:
+        logger.debug(f"[book bulk db] {sport}: {_dbe}")
+    return by_gid
+
+
+def _apply_db_book_row_to_pred(pred: dict, row: dict) -> None:
+    """Hydrate book_* from a betting_lines row (never model-sourced rows)."""
+    if _book_row_is_synthetic(row.get('source')):
+        return
+    if row.get('home_moneyline') is not None and pred.get('book_home_moneyline') is None:
+        pred['book_home_moneyline'] = int(row['home_moneyline'])
+    if row.get('away_moneyline') is not None and pred.get('book_away_moneyline') is None:
+        pred['book_away_moneyline'] = int(row['away_moneyline'])
+    if row.get('spread') is not None and pred.get('book_spread') is None:
+        pred['book_spread'] = row['spread']
+    if row.get('total') is not None and pred.get('book_total') is None:
+        pred['book_total'] = row['total']
+    if pred.get('book_spread') is not None or pred.get('book_home_moneyline') is not None:
+        pred.setdefault('book_odds_source', row.get('source') or 'betting_lines')
+
+
+def _hydrate_book_lines_db_only(sport, predictions):
+    """Fill book_* from betting_lines only (no ESPN HTTP — safe inside get_upcoming)."""
+    if not predictions:
         return
     upcoming = [
         p for p in predictions
         if isinstance(p, dict) and p.get('home_score') is None and p.get('game_id')
     ]
-    # Newest slates first so API budget hits today/upcoming cards, not old dates.
-    upcoming.sort(key=lambda p: (p.get('game_date') or '0000', str(p.get('game_id') or '')), reverse=True)
-    attempts = 0
+    if not upcoming:
+        return
+    by_gid = _bulk_load_book_lines_from_db(
+        sport, [str(p['game_id']) for p in upcoming],
+    )
     for pred in upcoming:
+        row = by_gid.get(str(pred.get('game_id') or ''))
+        if row:
+            _apply_db_book_row_to_pred(pred, row)
+
+
+def _upcoming_preds_for_book_fetch(predictions, today_date, horizon_days=8):
+    """Upcoming games from today through horizon — picks page book API budget."""
+    try:
+        end = (
+            datetime.strptime(today_date, '%Y-%m-%d') + timedelta(days=horizon_days)
+        ).strftime('%Y-%m-%d')
+    except Exception:
+        end = today_date
+    out = []
+    for pred in predictions:
+        if not isinstance(pred, dict) or pred.get('home_score') is not None:
+            continue
+        gd = pred.get('game_date') or ''
+        if today_date <= gd <= end:
+            out.append(pred)
+    out.sort(key=lambda p: (p.get('game_date') or '', str(p.get('game_id') or '')))
+    return out
+
+
+def _pred_needs_book_fetch(pred: dict) -> bool:
+    return not (
+        pred.get('book_spread') is not None
+        and pred.get('book_total') is not None
+        and pred.get('book_home_moneyline') is not None
+        and pred.get('book_away_moneyline') is not None
+    )
+
+
+def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30, prioritize=None):
+    """Attach sportsbook lines (DB cache first, then ESPN Core / DraftKings) for card display."""
+    if not predictions:
+        return
+    try:
+        from pl_book_odds_api import build_pl_book_odds
+    except ImportError:
+        build_pl_book_odds = None
+    upcoming = [
+        p for p in predictions
+        if isinstance(p, dict) and p.get('home_score') is None and p.get('game_id')
+    ]
+    if not upcoming:
+        return
+
+    by_gid = _bulk_load_book_lines_from_db(
+        sport, [str(p['game_id']) for p in upcoming],
+    )
+    for pred in upcoming:
+        row = by_gid.get(str(pred.get('game_id') or ''))
+        if row:
+            _apply_db_book_row_to_pred(pred, row)
+
+    priority_ids = set()
+    ordered = []
+    if prioritize:
+        for pred in prioritize:
+            if (
+                isinstance(pred, dict)
+                and pred.get('home_score') is None
+                and pred.get('game_id')
+            ):
+                ordered.append(pred)
+                priority_ids.add(str(pred['game_id']))
+    for pred in upcoming:
+        gid = str(pred.get('game_id') or '')
+        if gid not in priority_ids:
+            ordered.append(pred)
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    ordered.sort(
+        key=lambda p: (
+            0 if str(p.get('game_id')) in priority_ids else 1,
+            0 if (p.get('game_date') or '') >= today else 1,
+            p.get('game_date') or '0000',
+            str(p.get('game_id') or ''),
+        ),
+        reverse=True,
+    )
+
+    attempts = 0
+    for pred in ordered:
         if attempts >= limit:
             break
+        if not _pred_needs_book_fetch(pred):
+            continue
         game_id = pred.get('game_id')
-        if not game_id:
-            continue
-        if (
-            pred.get('book_spread') is not None
-            and pred.get('book_total') is not None
-            and pred.get('book_home_moneyline') is not None
-            and pred.get('book_away_moneyline') is not None
-        ):
-            continue
         home = pred.get('home_team_id', '')
         away = pred.get('away_team_id', '')
         gd = pred.get('game_date')
         espn_eid = _espn_event_id_for_book(sport, game_id, gd, home, away)
         if not espn_eid:
             continue
-        row = build_pl_book_odds(
-            sport,
-            game_id,
-            home,
-            away,
-            gd,
-            league_name=pred.get('league') or pred.get('league_name'),
-            espn_event_id=espn_eid,
-        )
         attempts += 1
-        if not row:
-            try:
-                live = _fetch_live_market_line(
-                    sport, game_id, gd, home, away,
-                    league_name=pred.get('league') or pred.get('league_name'),
-                )
-            except Exception:
-                live = None
-            if live and (live.get('spread') is not None or live.get('total') is not None):
-                if live.get('spread') is not None:
-                    pred['book_spread'] = live['spread']
-                if live.get('total') is not None:
-                    pred['book_total'] = live['total']
-                pred['book_odds_source'] = live.get('source') or 'ESPN Core API'
+        row = None
+        if build_pl_book_odds:
+            row = build_pl_book_odds(
+                sport,
+                game_id,
+                home,
+                away,
+                gd,
+                league_name=pred.get('league') or pred.get('league_name'),
+                espn_event_id=espn_eid,
+            )
+        if row:
+            _apply_pl_book_row_to_game(pred, row)
+            _persist_pl_book_row(sport, pred, row)
             continue
-        pred['book_spread'] = row.get('spread')
-        pred['book_total'] = row.get('total')
-        pred['book_home_moneyline'] = row.get('home_moneyline')
-        pred['book_away_moneyline'] = row.get('away_moneyline')
-        pred['book_provider'] = row.get('provider')
-        pred['book_favorite_team'] = row.get('favorite_team')
-        pred['book_odds_source'] = row.get('source') or 'pl_book_odds_api'
+        try:
+            live = _fetch_live_market_line(
+                sport, game_id, gd, home, away,
+                league_name=pred.get('league') or pred.get('league_name'),
+            )
+        except Exception:
+            live = None
+        if live and (live.get('spread') is not None or live.get('total') is not None):
+            if live.get('spread') is not None:
+                pred['book_spread'] = live['spread']
+            if live.get('total') is not None:
+                pred['book_total'] = live['total']
+            pred['book_odds_source'] = live.get('source') or 'ESPN Core API'
 
 
 def _fetch_pl_book_line_for_game(sport, game_id, home, away, game_date, league_name=None):
@@ -1180,8 +1301,17 @@ def _persist_pl_book_row(sport, g: dict, row: dict) -> None:
     try:
         conn = get_db_connection()
         _upsert_betting_line(
-            conn, sport, str(g['game_id']), g.get('date'), g.get('home'), g.get('away'),
-            row.get('spread'), row.get('total'), row.get('source') or 'pl_book_odds_api',
+            conn,
+            sport,
+            str(g['game_id']),
+            g.get('date') or g.get('game_date'),
+            g.get('home') or g.get('home_team_id'),
+            g.get('away') or g.get('away_team_id'),
+            row.get('spread'),
+            row.get('total'),
+            row.get('source') or 'pl_book_odds_api',
+            home_moneyline=row.get('home_moneyline'),
+            away_moneyline=row.get('away_moneyline'),
         )
         conn.commit()
         conn.close()
@@ -2382,31 +2512,69 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
     return daily_results
 
 
-def _upsert_betting_line(conn, sport, game_id, game_date, home_team, away_team, spread, total, source=None):
+def _upsert_betting_line(
+    conn,
+    sport,
+    game_id,
+    game_date,
+    home_team,
+    away_team,
+    spread,
+    total,
+    source=None,
+    home_moneyline=None,
+    away_moneyline=None,
+):
     try:
         cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
     except Exception:
         cols = []
     has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+    has_ml = 'home_moneyline' in cols and 'away_moneyline' in cols
     now_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cur = conn.cursor()
     try:
         if has_extra:
             existing = cur.execute(
-                "SELECT id, spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
+                "SELECT id, spread, total, home_moneyline, away_moneyline FROM betting_lines "
+                "WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
                 (sport, game_id)
             ).fetchone()
             if existing:
-                cur.execute(
-                    "UPDATE betting_lines SET spread=COALESCE(spread, ?), total=COALESCE(total, ?), fetched_at=? WHERE id=?",
-                    (spread, total, now_ts, existing['id'])
-                )
+                if has_ml:
+                    cur.execute(
+                        "UPDATE betting_lines SET spread=COALESCE(?, spread), total=COALESCE(?, total), "
+                        "home_moneyline=COALESCE(?, home_moneyline), away_moneyline=COALESCE(?, away_moneyline), "
+                        "source=COALESCE(?, source), fetched_at=? WHERE id=?",
+                        (
+                            spread, total, home_moneyline, away_moneyline,
+                            source or 'live', now_ts, existing['id'],
+                        ),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE betting_lines SET spread=COALESCE(?, spread), total=COALESCE(?, total), fetched_at=? WHERE id=?",
+                        (spread, total, now_ts, existing['id']),
+                    )
             else:
-                cur.execute(
-                    "INSERT INTO betting_lines (sport, game_id, game_date, home_team, away_team, spread, total, source, fetched_at) "
-                    "VALUES (?,?,?,?,?,?,?,?,?)",
-                    (sport, game_id, game_date, home_team, away_team, spread, total, source or 'live', now_ts)
-                )
+                if has_ml:
+                    cur.execute(
+                        "INSERT INTO betting_lines "
+                        "(sport, game_id, game_date, home_team, away_team, spread, total, "
+                        "home_moneyline, away_moneyline, source, fetched_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            sport, game_id, game_date, home_team, away_team,
+                            spread, total, home_moneyline, away_moneyline,
+                            source or 'live', now_ts,
+                        ),
+                    )
+                else:
+                    cur.execute(
+                        "INSERT INTO betting_lines (sport, game_id, game_date, home_team, away_team, spread, total, source, fetched_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?)",
+                        (sport, game_id, game_date, home_team, away_team, spread, total, source or 'live', now_ts)
+                    )
         else:
             existing = cur.execute(
                 "SELECT id, spread, total FROM betting_lines WHERE game_id=? LIMIT 1",
@@ -2500,7 +2668,9 @@ def _attach_market_lines_to_predictions(sport, predictions):
         placeholders = ','.join('?' * len(game_ids))
         if has_sport_col:
             rows = cur.execute(
-                f"SELECT game_id, spread, total FROM betting_lines WHERE sport=? AND game_id IN ({placeholders}) ORDER BY fetched_at DESC",
+                f"""SELECT game_id, spread, total, home_moneyline, away_moneyline, source
+                    FROM betting_lines WHERE sport=? AND game_id IN ({placeholders})
+                    ORDER BY fetched_at DESC""",
                 [sport] + game_ids
             ).fetchall()
         else:
@@ -2513,14 +2683,16 @@ def _attach_market_lines_to_predictions(sport, predictions):
         for row in rows:
             gid = row['game_id']
             if gid not in line_map:
-                line_map[gid] = {'spread': row['spread'], 'total': row['total']}
+                line_map[gid] = dict(row)
         for pred in predictions:
             gid = pred.get('game_id')
             if gid and gid in line_map:
-                if pred.get('market_spread') is None and line_map[gid]['spread'] is not None:
-                    pred['market_spread'] = line_map[gid]['spread']
-                if pred.get('market_total') is None and line_map[gid]['total'] is not None:
-                    pred['market_total'] = line_map[gid]['total']
+                lm = line_map[gid]
+                if pred.get('market_spread') is None and lm.get('spread') is not None:
+                    pred['market_spread'] = lm['spread']
+                if pred.get('market_total') is None and lm.get('total') is not None:
+                    pred['market_total'] = lm['total']
+                _apply_db_book_row_to_pred(pred, lm)
     except Exception as _e:
         logger.debug(f"[{sport}] attach market lines failed: {_e}")
 
@@ -4200,14 +4372,16 @@ def get_upcoming_predictions(sport, days=365):
     """
     
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
-    cache_key = f"{sport}_upcoming_predictions_v3"
+    cache_key = f"{sport}_upcoming_predictions_v4"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
     if cached and (now_ts - cached['ts']) < cache_ttl:
         _cached_preds = cached.get('data')
         if _cached_preds:
-            return _copy.deepcopy(_cached_preds)
+            out = _copy.deepcopy(_cached_preds)
+            _hydrate_book_lines_db_only(sport, out)
+            return out
 
     # Load game data based on sport
     if sport == 'NHL':
@@ -5361,6 +5535,22 @@ def get_upcoming_predictions(sport, days=365):
                 game_dict['home_injuries'] = []
                 game_dict['away_injuries'] = []
 
+            # Real book lines from betting_odds join (NHL/DB path) — Books column only.
+            if game.get('spread') is not None and game_dict.get('book_spread') is None:
+                game_dict['book_spread'] = game['spread']
+            if game.get('total') is not None and game_dict.get('book_total') is None:
+                game_dict['book_total'] = game['total']
+            if game.get('home_moneyline') is not None and game_dict.get('book_home_moneyline') is None:
+                game_dict['book_home_moneyline'] = int(game['home_moneyline'])
+            if game.get('away_moneyline') is not None and game_dict.get('book_away_moneyline') is None:
+                game_dict['book_away_moneyline'] = int(game['away_moneyline'])
+            if game_dict.get('book_spread') is not None or game_dict.get('book_home_moneyline') is not None:
+                game_dict.setdefault('book_odds_source', 'betting_odds')
+
+            # Picks page: skip finals (results page owns completed games).
+            if is_completed:
+                continue
+
             predictions.append(game_dict)
     
     if sport not in ('MLB', 'SOCCER'):
@@ -5385,10 +5575,13 @@ def get_upcoming_predictions(sport, days=365):
                 if _fb_total is not None:
                     _sp_pred['market_total'] = round(float(_fb_total), 2)
 
-    # Cache market lines for all sports so Results page has book lines available.
-    _cache_market_lines_for_predictions(sport, predictions, limit=20)
+    # Cache market lines and hydrate book_* from DB (ESPN fetch runs on picks page).
+    _upcoming_n = sum(1 for p in predictions if p.get('home_score') is None)
+    _ml_limit = min(80, max(20, _upcoming_n)) if sport == 'MLB' else min(40, max(20, _upcoming_n))
+    _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
+    _attach_market_lines_to_predictions(sport, predictions)
+    _hydrate_book_lines_db_only(sport, predictions)
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']:
-        _attach_market_lines_to_predictions(sport, predictions)
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
@@ -13068,7 +13261,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v12::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v14::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -13197,6 +13390,19 @@ def sport_predictions(sport, filter_date=None):
     except Exception:
         today_date = datetime.now().strftime('%Y-%m-%d')
 
+    # Books first (before shareable/EV work) so Render timeouts do not skip ESPN Core fetch.
+    try:
+        _hydrate_book_lines_db_only(sport, predictions)
+        _book_slate = _upcoming_preds_for_book_fetch(predictions, today_date)
+        _attach_pl_book_odds_to_predictions(
+            sport,
+            predictions,
+            limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
+            prioritize=_book_slate,
+        )
+    except Exception as _early_bk:
+        logger.debug(f"[{sport}] early book odds on picks page: {_early_bk}")
+
     # Social-share image payload: top 3 unique upcoming predictions from today's slate
     # (fallback to next available date if no games today).
     shareable_by_matchup = {}
@@ -13277,9 +13483,15 @@ def sport_predictions(sport, filter_date=None):
             sorted_dates = []
             default_pick_date = filter_date
 
+    _book_priority = []
+    for _dk in sorted_dates:
+        _book_priority.extend(grouped_predictions.get(_dk, []))
     try:
         _attach_pl_book_odds_to_predictions(
-            sport, predictions, limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 40),
+            sport,
+            predictions,
+            limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
+            prioritize=_book_priority,
         )
     except Exception as _card_bk:
         logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
@@ -13331,11 +13543,21 @@ def sport_predictions(sport, filter_date=None):
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)
+    _default_games = grouped_predictions.get(default_pick_date, []) if grouped_predictions else []
+    _default_with_books = sum(
+        1 for g in _default_games
+        if isinstance(g, dict) and g.get('book_home_moneyline') is not None
+    )
+    _books_ok_for_cache = (
+        not _default_games
+        or _default_with_books >= max(1, len(_default_games) // 2)
+    )
     if (
         cache_key
         and rendered
         and grouped_predictions
         and sorted_dates
+        and _books_ok_for_cache
         and rendered.count('class="game-card"') >= 1
         and 'no predictions available' not in rendered.lower()
         and 'upstream data/model dependency failed' not in rendered.lower()
