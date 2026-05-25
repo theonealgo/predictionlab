@@ -1123,6 +1123,35 @@ def _bulk_load_book_lines_from_db(sport, game_ids):
     return by_gid
 
 
+def _bulk_load_book_lines_by_matchup(sport, limit=5000):
+    """Latest betting_lines row per (game_date, home, away) when game_id keys differ."""
+    by_key = {}
+    try:
+        conn = get_db_connection()
+        cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
+        has_extra = any(c in cols for c in ('game_date', 'home_team', 'away_team'))
+        if has_extra:
+            rows = conn.execute(
+                """SELECT game_id, game_date, home_team, away_team, spread, total,
+                          home_moneyline, away_moneyline, source
+                   FROM betting_lines WHERE sport=?
+                   ORDER BY fetched_at DESC LIMIT ?""",
+                (sport, int(limit)),
+            ).fetchall()
+            for r in rows:
+                gd = (r['game_date'] or '')[:10]
+                hk = _normalize_team_key_for_sport(sport, r['home_team'])
+                ak = _normalize_team_key_for_sport(sport, r['away_team'])
+                if gd and hk and ak:
+                    key = (gd, hk, ak)
+                    if key not in by_key:
+                        by_key[key] = dict(r)
+        conn.close()
+    except Exception as _dbe:
+        logger.debug(f"[book matchup db] {sport}: {_dbe}")
+    return by_key
+
+
 def _apply_db_book_row_to_pred(pred: dict, row: dict) -> None:
     """Hydrate book_* from a betting_lines row (never model-sourced rows)."""
     if _book_row_is_synthetic(row.get('source')):
@@ -1153,8 +1182,16 @@ def _hydrate_book_lines_db_only(sport, predictions):
     by_gid = _bulk_load_book_lines_from_db(
         sport, [str(p['game_id']) for p in upcoming],
     )
+    by_key = _bulk_load_book_lines_by_matchup(sport)
     for pred in upcoming:
-        row = by_gid.get(str(pred.get('game_id') or ''))
+        gid = str(pred.get('game_id') or '')
+        row = by_gid.get(gid)
+        if not row:
+            gd = (pred.get('game_date') or '')[:10]
+            hk = _normalize_team_key_for_sport(sport, pred.get('home_team_id'))
+            ak = _normalize_team_key_for_sport(sport, pred.get('away_team_id'))
+            if gd and hk and ak:
+                row = by_key.get((gd, hk, ak))
         if row:
             _apply_db_book_row_to_pred(pred, row)
 
@@ -1226,8 +1263,16 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30, prioritize
     by_gid = _bulk_load_book_lines_from_db(
         sport, [str(p['game_id']) for p in upcoming],
     )
+    by_key = _bulk_load_book_lines_by_matchup(sport)
     for pred in upcoming:
-        row = by_gid.get(str(pred.get('game_id') or ''))
+        gid = str(pred.get('game_id') or '')
+        row = by_gid.get(gid)
+        if not row:
+            gd = (pred.get('game_date') or '')[:10]
+            hk = _normalize_team_key_for_sport(sport, pred.get('home_team_id'))
+            ak = _normalize_team_key_for_sport(sport, pred.get('away_team_id'))
+            if gd and hk and ak:
+                row = by_key.get((gd, hk, ak))
         if row:
             _apply_db_book_row_to_pred(pred, row)
 
@@ -1409,52 +1454,11 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
     missing_totals = sum(1 for g in games if _safe_float(g.get('book_total')) is None)
     if api_limit is None or api_limit < 0:
         api_limit = min(300, max(missing_totals, 40))
-    elif missing_totals > api_limit:
+    elif api_limit > 0 and missing_totals > api_limit:
         api_limit = min(300, missing_totals)
     game_ids = [str(g['game_id']) for g in games if g.get('game_id')]
-    by_gid = {}
-    by_key = {}
-    try:
-        conn = get_db_connection()
-        if game_ids:
-            chunk = 400
-            for i in range(0, len(game_ids), chunk):
-                part = game_ids[i:i + chunk]
-                ph = ','.join('?' * len(part))
-                rows = conn.execute(
-                    f"""SELECT game_id, spread, total, home_moneyline, away_moneyline
-                        FROM betting_lines WHERE sport=? AND game_id IN ({ph})
-                        ORDER BY fetched_at DESC""",
-                    [sport] + part,
-                ).fetchall()
-                for r in rows:
-                    gid = str(r['game_id'])
-                    if gid not in by_gid:
-                        by_gid[gid] = dict(r)
-        try:
-            cols = [r['name'] for r in conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
-            has_extra = any(c in cols for c in ('game_date', 'home_team', 'away_team'))
-        except Exception:
-            has_extra = False
-        if has_extra:
-            rows = conn.execute(
-                """SELECT game_id, game_date, home_team, away_team, spread, total,
-                          home_moneyline, away_moneyline
-                   FROM betting_lines WHERE sport=?
-                   ORDER BY fetched_at DESC LIMIT 5000""",
-                (sport,),
-            ).fetchall()
-            for r in rows:
-                gd = (r['game_date'] or '')[:10]
-                hk = _normalize_team_key_for_sport(sport, r['home_team'])
-                ak = _normalize_team_key_for_sport(sport, r['away_team'])
-                if gd and hk and ak:
-                    key = (gd, hk, ak)
-                    if key not in by_key:
-                        by_key[key] = dict(r)
-        conn.close()
-    except Exception as _dbe:
-        logger.debug(f"[book odds db] {sport}: {_dbe}")
+    by_gid = _bulk_load_book_lines_from_db(sport, game_ids)
+    by_key = _bulk_load_book_lines_by_matchup(sport)
     games.sort(key=lambda g: (g.get('date') or ''), reverse=True)
     api_attempts = 0
     try:
