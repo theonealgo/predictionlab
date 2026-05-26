@@ -6563,15 +6563,21 @@ def calculate_nba_weekly_performance():
             xgb_prob  = to_float(game['xgboost_home_prob']) or elo_prob
             ens_prob  = to_float(game['win_probability']) or elo_prob
 
-            # V2 model predictions (Glicko-2, TrueSkill)
-            v2 = get_v2_prediction('NBA', home_team, away_team, game['game_date'])
-            glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
-            trueskill_prob = v2.get('trueskill_prob') if v2 else None
+            # V2 live inference only for recent games (full-season v2 on ~1.3k games timeouts Render)
+            glicko2_prob = trueskill_prob = None
+            v2 = None
+            days_ago = (datetime.now() - game_date).days if game_date else 999
+            if days_ago <= 21:
+                v2 = get_v2_prediction('NBA', home_team, away_team, game['game_date'])
             if v2:
+                glicko2_prob = v2.get('glicko2_prob')
+                trueskill_prob = v2.get('trueskill_prob')
                 xgb_prob = v2.get('xgboost_prob', xgb_prob)
                 if elo_prob is None:
                     elo_prob = v2.get('home_prob')
-                ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
+                ens_prob = _compute_ensemble_prob(
+                    glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob,
+                )
 
             actual_home_win = home_score > away_score
 
@@ -6754,17 +6760,25 @@ def _compute_spread_total_for_daily(sport, daily_results):
             _attach_nba_efficiency_to_daily_results(sport, daily_results)
         except Exception as _ne:
             logger.debug(f"[nba-eff] pre-compute failed for {sport}: {_ne}")
+        _game_count = sum(len(dd.get('games', [])) for dd in daily_results.values())
+        _skip_heavy_predict = _game_count > 500
         _xgb = None
         _sp = None
-        try:
-            _xgb = _get_xgb_spread_model(sport)
-        except Exception:
-            pass
-        if sport in ['NBA', 'MLB', 'WNBA']:
+        if not _skip_heavy_predict:
             try:
-                _sp = _score_predictor_instance(sport)
+                _xgb = _get_xgb_spread_model(sport)
             except Exception:
                 pass
+            if sport in ['NBA', 'MLB', 'WNBA']:
+                try:
+                    _sp = _score_predictor_instance(sport)
+                except Exception:
+                    pass
+        elif _game_count > 0:
+            logger.info(
+                f"[{sport}] spread/total: skipping per-game XGB/SP predict for {_game_count} games "
+                "(using H2H + efficiency totals; prevents worker timeout)"
+            )
         _has_model = bool(_xgb or _sp)
 
         conn = get_db_connection()
