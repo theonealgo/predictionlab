@@ -34,6 +34,18 @@ from nhl_api import NHLAPI
 from value_predictor import ValuePredictor
 from ats_system import ATSSystem
 from soccer_models import build_soccer_model_bundle
+try:
+    from nhl_context_layer import (
+        get_nhl_context_adjustments as _nhl_ctx_adjustments,
+        fetch_and_store_goalie_boxscores as _nhl_fetch_goalies,
+    )
+    _HAS_NHL_CTX = True
+except Exception:
+    _HAS_NHL_CTX = False
+    def _nhl_ctx_adjustments(*_a, **_kw):
+        return {"moneyline_boost": 0.0, "total_adj": 0.0, "diagnostics": {}}
+    def _nhl_fetch_goalies(*_a, **_kw):
+        return 0
 
 # V2 PREDICTION SYSTEM - Upgraded architecture
 import os as _os_v2
@@ -2830,7 +2842,13 @@ def update_nhl_scores():
         conn.commit()
         conn.close()
         logger.info(f"Successfully updated {updates_count} NHL game scores.")
-        
+        # Backfill goalie boxscore data for recently completed games
+        if _HAS_NHL_CTX:
+            try:
+                _nhl_fetch_goalies(DATABASE, lookback_days=7)
+            except Exception:
+                pass
+
     except Exception as e:
         logger.error(f"An error occurred while updating NHL scores: {e}")
 
@@ -4259,6 +4277,20 @@ def get_upcoming_predictions(sport, days=365):
                 _wp.append((elo_prob, 0.15))
                 _tw = sum(w for _, w in _wp)
                 ensemble_prob = sum(p * w for p, w in _wp) / _tw
+
+                # NHL context layer: apply goalie, rest, special teams, playoff boost
+                # to upcoming (ungraded) predictions only.
+                if sport == 'NHL' and not is_completed and _HAS_NHL_CTX:
+                    _h_id = game.get('home_team_id', '')
+                    _a_id = game.get('away_team_id', '')
+                    _gd_s = str(game.get('game_date', '') or '')[:10]
+                    if _h_id and _a_id and _gd_s:
+                        _nhl_adj = _nhl_ctx_adjustments(_h_id, _a_id, _gd_s, DATABASE)
+                        _ctx_ml  = _nhl_adj.get('moneyline_boost', 0.0)
+                        if _ctx_ml != 0.0:
+                            ensemble_prob = max(0.05, min(0.95, ensemble_prob + _ctx_ml))
+                        game['nhl_ctx_diagnostics'] = _nhl_adj.get('diagnostics', {})
+                        game['nhl_ctx_total_adj']   = _nhl_adj.get('total_adj', 0.0)
 
                 # Store model probabilities for display (Glicko-2 and TrueSkill only)
                 game['glicko2_prob'] = v2_pred.get('glicko2_prob')
@@ -5871,13 +5903,23 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     inj_adj = _injury_total_adjustment(sport, h, a)
                     rest_adj = _rest_total_adjustment(sport, h, a, gd)
                     park_adj = _park_weather_total_adjustment(sport, h)
-                    adj_xt = xt + inj_adj + rest_adj + park_adj if xt is not None else None
+                    # NHL context layer: goalie quality + special teams + incremental rest
+                    _nhl_ctx_total = 0.0
+                    if sport == 'NHL' and _HAS_NHL_CTX and gd:
+                        try:
+                            _ctx = _nhl_ctx_adjustments(h, a, gd, DATABASE)
+                            _nhl_ctx_total = _ctx.get('total_adj', 0.0)
+                            g['nhl_ctx_diagnostics'] = _ctx.get('diagnostics', {})
+                        except Exception:
+                            pass
+                    adj_xt = xt + inj_adj + rest_adj + park_adj + _nhl_ctx_total if xt is not None else None
                     our_total_h2h = g.get('our_total')
                     g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
                     g['total_adj_breakdown'] = {
                         'injury': round(inj_adj, 2),
                         'rest': round(rest_adj, 2),
                         'park': round(park_adj, 2),
+                        'nhl_ctx': round(_nhl_ctx_total, 3),
                     }
                     # Grading line fallback for O/U: Vegas → H2H → sport benchmark.
                     # Fallback totals are shown but not graded for ROI/record cards.
@@ -13459,6 +13501,43 @@ def sport_ats_picks(sport):
         ats_records=ats_records.head(10).to_dict('records') if not ats_records.empty else [],
         ou_records=ou_records.head(10).to_dict('records') if not ou_records.empty else []
     )
+
+@app.route('/admin/nhl-diagnostics')
+def nhl_model_diagnostics():
+    """NHL context layer diagnostics — shows adjustment breakdown for recent/upcoming games."""
+    from flask import jsonify
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'unauthorized'}), 401
+    games_arg = request.args.get('games', '')
+    results = []
+    if _HAS_NHL_CTX and games_arg:
+        # Expect comma-separated "HomeTeam|AwayTeam|YYYY-MM-DD" triples
+        for entry in games_arg.split(','):
+            parts = entry.strip().split('|')
+            if len(parts) == 3:
+                h, a, d = parts
+                adj = _nhl_ctx_adjustments(h.strip(), a.strip(), d.strip(), DATABASE)
+                results.append({'home': h, 'away': a, 'date': d, **adj})
+    else:
+        # Default: run on the 5 most recent NHL games in DB
+        try:
+            conn = get_db_connection()
+            rows = conn.execute(
+                """SELECT home_team_id, away_team_id, date(game_date) as gd
+                   FROM games WHERE sport='NHL' AND home_score IS NOT NULL
+                   ORDER BY game_date DESC LIMIT 5"""
+            ).fetchall()
+            conn.close()
+            for r in rows:
+                adj = _nhl_ctx_adjustments(r['home_team_id'], r['away_team_id'], r['gd'], DATABASE)
+                results.append({
+                    'home': r['home_team_id'], 'away': r['away_team_id'], 'date': r['gd'],
+                    **adj,
+                })
+        except Exception as exc:
+            return jsonify({'error': str(exc)}), 500
+    return jsonify({'has_nhl_ctx': _HAS_NHL_CTX, 'results': results})
+
 
 @app.route('/admin/traffic')
 def admin_traffic():
