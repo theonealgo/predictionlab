@@ -37,6 +37,19 @@ services:
         sync: false
       - key: CONTACT_TO_EMAIL
         sync: false
+      # Datadog APM (see docs/datadog-setup.md)
+      - key: DD_API_KEY
+        sync: false
+      - key: DD_SITE
+        sync: false
+      - key: DD_SERVICE
+        value: predictionlab
+      - key: DD_ENV
+        value: production
+      - key: DD_TRACE_ENABLED
+        value: "true"
+      - key: DD_LOGS_INJECTION
+        value: "true"
     disk:
       name: app-data
       mountPath: /data

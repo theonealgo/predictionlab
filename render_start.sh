@@ -9,5 +9,9 @@ else
     echo "[render_start] Database already on persistent disk."
 fi
 
-# ── Launch Flask app via gunicorn ─────────────────────────────────────────────
+# ── Launch Flask app via gunicorn (optional Datadog APM via ddtrace-run) ───────
+if [ -n "${DD_API_KEY:-}" ] || [ "${DD_TRACE_ENABLED:-}" = "true" ]; then
+    echo "[render_start] Datadog tracing enabled (DD_SERVICE=${DD_SERVICE:-predictionlab})"
+    exec ddtrace-run gunicorn -c gunicorn.conf.py NHL77FINAL:app
+fi
 exec gunicorn -c gunicorn.conf.py NHL77FINAL:app

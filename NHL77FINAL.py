@@ -58,6 +58,26 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _init_datadog_tracing():
+    """Enable ddtrace before Flask app import side-effects (no-op unless DD_TRACE_ENABLED)."""
+    flag = (_os_v2.environ.get('DD_TRACE_ENABLED') or '').lower()
+    if flag not in ('1', 'true', 'yes') and not _os_v2.environ.get('DD_API_KEY'):
+        return
+    try:
+        from ddtrace import config, patch_all
+        patch_all()
+        config.service = _os_v2.environ.get('DD_SERVICE', 'predictionlab')
+        config.env = _os_v2.environ.get('DD_ENV', 'production')
+        if _os_v2.environ.get('DD_VERSION'):
+            config.version = _os_v2.environ['DD_VERSION']
+        logger.info('[datadog] ddtrace enabled service=%s env=%s', config.service, config.env)
+    except Exception as _dde:
+        logger.warning('[datadog] ddtrace init failed: %s', _dde)
+
+
+_init_datadog_tracing()
+
 import time as _time
 import copy as _copy
 try:

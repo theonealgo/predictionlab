@@ -3,6 +3,7 @@ flask>=3.1.2
 flask-cors
 flask-login
 gunicorn
+ddtrace>=2.14.0
 
 # Auth & payments
 authlib
