@@ -71,15 +71,21 @@ def _fetch_todays_probables():
                         stats[name] = val
 
                 era = stats.get('ERA')
+                whip = stats.get('WHIP')
                 try:
                     era = float(era) if era is not None else None
                 except (ValueError, TypeError):
                     era = None
+                try:
+                    whip = float(whip) if whip is not None else None
+                except (ValueError, TypeError):
+                    whip = None
 
                 pitcher_info = {
                     'name': athlete.get('fullName') or athlete.get('displayName') or 'Unknown',
                     'id': athlete.get('id'),
                     'era': era,
+                    'whip': whip,
                     'wins': stats.get('wins', 0),
                     'losses': stats.get('losses', 0),
                     'record': record,
@@ -141,6 +147,21 @@ def get_mlb_pitching_adjustment(home_team, away_team):
 
     home_era = home_sp.get('era')
     away_era = away_sp.get('era')
+    home_whip = home_sp.get('whip')
+    away_whip = away_sp.get('whip')
+
+    try:
+        from mlb_context import _recent_pitcher_era, damped_blend
+        home_recent = _recent_pitcher_era(home_sp.get('name'))
+        away_recent = _recent_pitcher_era(away_sp.get('name'))
+        home_era_blend, _ = damped_blend(home_era, home_recent)
+        away_era_blend, _ = damped_blend(away_era, away_recent)
+        if home_era_blend is not None:
+            home_era = home_era_blend
+        if away_era_blend is not None:
+            away_era = away_era_blend
+    except Exception:
+        pass
 
     home_quality = _era_to_quality(home_era)
     away_quality = _era_to_quality(away_era)
@@ -154,6 +175,12 @@ def get_mlb_pitching_adjustment(home_team, away_team):
         'away_sp_name': away_sp.get('name', 'TBD'),
         'home_sp_era': home_era,
         'away_sp_era': away_era,
+        'home_sp_whip': home_whip,
+        'away_sp_whip': away_whip,
+        'home_sp_xera': None,
+        'away_sp_xera': None,
+        'home_sp_kbb': None,
+        'away_sp_kbb': None,
         'home_quality': round(home_quality, 3),
         'away_quality': round(away_quality, 3),
         'pitching_prob': pitching_prob,
