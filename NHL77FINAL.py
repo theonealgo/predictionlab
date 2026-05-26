@@ -6262,15 +6262,17 @@ def compute_roi_for_range(daily_results, start_date=None, end_date=None):
 def build_roi_cards(roi_daily, roi_weekly, roi_total):
     def _format_entry(entry):
         if not entry:
-            return {"roi": "—", "detail": "—"}
+            return {"roi": "—", "roi_num": None, "detail": "—"}
         if entry.get("roi_pct") is None:
-            return {"roi": "—", "detail": entry.get("reason") or "—"}
+            return {"roi": "—", "roi_num": None, "detail": entry.get("reason") or "—"}
         units = entry.get("units_won", 0.0)
         wins = entry.get("wins", 0)
         losses = entry.get("losses", 0)
         pushes = entry.get("pushes", 0)
+        win_pct = round(wins / (wins + losses) * 100, 1) if (wins + losses) > 0 else 0.0
         return {
-            "roi": f"{entry['roi_pct']}%",
+            "roi": f"{win_pct}%",
+            "roi_num": win_pct,
             "detail": f"{wins}-{losses}-{pushes}, {units:+.2f}u",
         }
     return {
@@ -7832,8 +7834,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:8px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
-                        <div><div style="opacity:0.8;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi != '—' and '-' not in c.weekly.roi %}#00C076{% elif c.weekly.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
-                        <div><div style="opacity:0.8;">Season</div><div style="font-weight:700;color:{% if c.total.roi != '—' and '-' not in c.total.roi %}#00C076{% elif c.total.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.total.detail }}</div></div>
+                        <div><div style="opacity:0.8;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi_num != none and c.weekly.roi_num >= 55 %}#00C076{% elif c.weekly.roi_num != none and c.weekly.roi_num >= 50 %}#fbbf24{% elif c.weekly.roi_num != none %}#D93025{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
+                        <div><div style="opacity:0.8;">Season</div><div style="font-weight:700;color:{% if c.total.roi_num != none and c.total.roi_num >= 55 %}#00C076{% elif c.total.roi_num != none and c.total.roi_num >= 50 %}#fbbf24{% elif c.total.roi_num != none %}#D93025{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.total.detail }}</div></div>
                     </div>
                 </div>
                 {% endfor %}
@@ -7875,6 +7877,9 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <div style="border-top:1px solid rgba(15,23,42,0.12);padding-top:12px;"></div>
         </div>
 
+        <div style="text-align:center;margin-bottom:16px;">
+            <a href="/results/export.csv{% if sport is defined and sport %}?sport={{ sport }}{% endif %}" style="display:inline-block;background:#0f172a;color:#fff;border-radius:8px;padding:9px 20px;font-size:0.88em;font-weight:600;text-decoration:none;">↓ Download CSV</a>
+        </div>
 
         <!-- ── Model Records ── -->
         <h3 style="text-align:center;font-size:1.15em;margin:0 0 12px;color:#0f172a;">Moneyline Accuracy by Model</h3>
