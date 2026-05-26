@@ -8291,6 +8291,11 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             </div>
             <div style="border-top:1px solid rgba(15,23,42,0.12);padding-top:15px;"></div>
         </div>
+
+        <div style="text-align:center;margin-bottom:16px;">
+            <a href="/results/export.csv?sport=NFL" style="display:inline-block;background:#0f172a;color:#fff;border-radius:8px;padding:9px 20px;font-size:0.88em;font-weight:600;text-decoration:none;">↓ Download CSV</a>
+        </div>
+
         {% for week_num in weekly_results|dictsort(reverse=true) %}
         {% set week_data = weekly_results[week_num[0]] %}
         {% set best_acc = [week_data.glicko2.accuracy, week_data.trueskill.accuracy, week_data.elo.accuracy, week_data.xgboost.accuracy, week_data.ensemble.accuracy]|max %}
