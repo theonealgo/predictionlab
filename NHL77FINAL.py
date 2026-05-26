@@ -2532,10 +2532,16 @@ def _rest_total_adjustment(sport, home_team, away_team, game_date):
     return total_adj
 
 
-def _park_weather_total_adjustment(sport, home_team):
+def _park_weather_total_adjustment(sport, home_team, game_date=None, game_id=None, away_team=None):
     """Return a park/weather adjustment for the total projection."""
     if sport == 'MLB':
-        return _MLB_PARK_FACTORS.get(home_team, 0.0)
+        try:
+            from mlb_context import weather_park_total_adjustment
+            return weather_park_total_adjustment(
+                home_team, away_team=away_team, game_date=game_date, game_id=game_id,
+            ).total_adj
+        except Exception:
+            return _MLB_PARK_FACTORS.get(home_team, 0.0)
     if sport == 'NFL':
         # Cold / outdoor stadiums lean slightly UNDER in winter months.
         from datetime import datetime as _dt
@@ -5673,109 +5679,41 @@ def get_upcoming_predictions(sport, days=365):
                             + _weights['glicko2'] * _g2_prob
                         )
 
-                        # Rule #10: role-based injury adjustment layer.
-                        _inj_conf = _MLB_INJURY_CONF_DEFAULT
-                        if not (_pitch.get('home_sp_name') and _pitch.get('away_sp_name')):
-                            _inj_conf = 0.55
-                        elif not (game_dict.get('home_injuries') or game_dict.get('away_injuries')):
-                            _inj_conf = 0.65
-
+                        # Rule #10: MLB contextual layers (bullpen, lineup, park, SP form, umpire, timing).
+                        from mlb_context import apply_mlb_context_layers as _apply_mlb_ctx
                         _home_inj = game_dict.get('home_injuries') or []
                         _away_inj = game_dict.get('away_injuries') or []
-                        _home_adj = 0.0
-                        _away_adj = 0.0
-                        _total_adj = 0.0
-
-                        def _apply_pitcher_scratch(injury_list, sp_name, side_quality):
-                            if not sp_name:
-                                return 0.0, 0.0, False
-                            scratched = False
-                            for inj in injury_list:
-                                name = (inj.get('name') or '').lower()
-                                pos = (inj.get('position') or '').upper()
-                                status = inj.get('status') or ''
-                                if status not in _INJURY_OUT_STATUSES and status not in _INJURY_DOUBTFUL_STATUSES:
-                                    continue
-                                if 'P' not in pos and 'PITCH' not in (inj.get('reason') or '').upper():
-                                    continue
-                                if sp_name.lower() in name or name in sp_name.lower():
-                                    scratched = True
-                                    break
-                            if not scratched:
-                                return 0.0, 0.0, False
-                            # Elite -> replacement is largest delta.
-                            if side_quality in ('elite',):
-                                return 0.15, 1.5, True
-                            if side_quality in ('above_avg',):
-                                return 0.09, 1.0, True
-                            if side_quality in ('average',):
-                                return 0.05, 0.7, True
-                            return 0.02, 0.5, True
-
-                        _home_tier, _home_q = _mlb_pitcher_quality_tier(
-                            _pitch.get('home_sp_era'),
-                            _pitch.get('home_sp_xera'),
-                            _pitch.get('home_sp_whip'),
-                            _pitch.get('home_sp_kbb'),
-                            _mlb_recent_pitcher_form(_pitch.get('home_sp_name')),
+                        _book_total = _to_float_safe(game_dict.get('book_total') or game_dict.get('total'))
+                        _model_total = _to_float_safe(game_dict.get('xgb_total'))
+                        _ctx = _apply_mlb_ctx(
+                            home_team=_ht,
+                            away_team=_at,
+                            game_date=_gdate,
+                            game_id=game_dict.get('game_id'),
+                            pitch=_pitch,
+                            home_injuries=_home_inj,
+                            away_injuries=_away_inj,
+                            pre_blended=_pre_blended,
+                            home_mkt=_home_mkt,
+                            home_ml=_home_ml,
+                            away_ml=_away_ml,
+                            book_total=_book_total,
+                            model_total=_model_total,
+                            umpire_name=game_dict.get('umpire_name'),
+                            injury_conf_default=_MLB_INJURY_CONF_DEFAULT,
                         )
-                        _away_tier, _away_q = _mlb_pitcher_quality_tier(
-                            _pitch.get('away_sp_era'),
-                            _pitch.get('away_sp_xera'),
-                            _pitch.get('away_sp_whip'),
-                            _pitch.get('away_sp_kbb'),
-                            _mlb_recent_pitcher_form(_pitch.get('away_sp_name')),
-                        )
-
-                        # If home SP scratched, boost away win prob (and vice versa).
-                        _away_boost, _away_total_bump, _home_sp_scratched = _apply_pitcher_scratch(_home_inj, _pitch.get('home_sp_name'), _home_tier)
-                        _home_boost, _home_total_bump, _away_sp_scratched = _apply_pitcher_scratch(_away_inj, _pitch.get('away_sp_name'), _away_tier)
-                        _away_adj += _away_boost
-                        _home_adj += _home_boost
-                        _total_adj += (_away_total_bump + _home_total_bump)
-
-                        def _lineup_adjustments(injury_list):
-                            t1 = t2 = 0
-                            for inj in injury_list:
-                                pos = (inj.get('position') or '').upper()
-                                status = inj.get('status') or ''
-                                if status not in _INJURY_OUT_STATUSES and status not in _INJURY_DOUBTFUL_STATUSES:
-                                    continue
-                                if pos in {'P', 'SP', 'RP', 'CP', 'CL'}:
-                                    continue
-                                tier = _mlb_lineup_tier(pos)
-                                if tier == 1:
-                                    t1 += 1
-                                elif tier == 2:
-                                    t2 += 1
-                            boost = t1 * 0.025 + t2 * 0.012
-                            if t1 >= 2:
-                                boost += 0.02
-                            return boost, t1, t2
-
-                        _away_lineup_boost, _home_t1, _home_t2 = _lineup_adjustments(_home_inj)
-                        _home_lineup_boost, _away_t1, _away_t2 = _lineup_adjustments(_away_inj)
-                        _away_adj += _away_lineup_boost
-                        _home_adj += _home_lineup_boost
-
-                        def _bullpen_adjustments(injury_list, team_name):
-                            key_relief = 0
-                            for inj in injury_list:
-                                status = inj.get('status') or ''
-                                if status not in _INJURY_OUT_STATUSES and status not in _INJURY_DOUBTFUL_STATUSES:
-                                    continue
-                                pos = (inj.get('position') or '').upper()
-                                if pos in {'RP', 'CP', 'CL'}:
-                                    key_relief += 1
-                            boost = min(0.03, key_relief * 0.012)
-                            fat_boost, fat_total, _ = _mlb_bullpen_fatigue_boost(team_name, _gdate)
-                            return boost + fat_boost, fat_total, key_relief
-
-                        _away_bp_boost, _home_bp_total, _home_relief_out = _bullpen_adjustments(_home_inj, _ht)
-                        _home_bp_boost, _away_bp_total, _away_relief_out = _bullpen_adjustments(_away_inj, _at)
-                        _away_adj += _away_bp_boost
-                        _home_adj += _home_bp_boost
-                        _total_adj += (_home_bp_total + _away_bp_total)
+                        _inj_conf = _ctx.injury_confidence
+                        _home_adj = _ctx.home_ml_adj
+                        _away_adj = _ctx.away_ml_adj
+                        _total_adj = _ctx.total_adj
+                        _home_tier = _ctx.home_tier
+                        _away_tier = _ctx.away_tier
+                        _home_t1 = _ctx.home_tier1
+                        _home_t2 = _ctx.home_tier2
+                        _away_t1 = _ctx.away_tier1
+                        _away_t2 = _ctx.away_tier2
+                        _home_relief_out = _ctx.home_relief_out
+                        _away_relief_out = _ctx.away_relief_out
 
                         _raw_delta = (_home_adj - _away_adj) * _inj_conf
 
@@ -5867,6 +5805,9 @@ def get_upcoming_predictions(sport, days=365):
                             'home_key_relief_out': _home_relief_out,
                             'away_key_relief_out': _away_relief_out,
                         }
+                        game_dict['mlb_context_diagnostics'] = _ctx.diagnostics.to_dict()
+                        game_dict['early_market_projection'] = _ctx.early_market
+                        game_dict['mlb_lineup_confirmed'] = _ctx.lineup_confirmed
 
                         # Rule #7 tracking placeholders (for later close update job).
                         game_dict['opening_home_moneyline'] = _home_ml
@@ -7046,7 +6987,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     # ── MLB total grading: XSharp (+ park/rest/injury adj) vs Vegas total ──
                     inj_adj = _injury_total_adjustment(sport, h, a)
                     rest_adj = _rest_total_adjustment(sport, h, a, gd)
-                    park_adj = _park_weather_total_adjustment(sport, h)
+                    park_adj = _park_weather_total_adjustment(
+                        sport, h, game_date=gd, game_id=g.get('game_id'), away_team=a,
+                    )
                     adj_xt = _grade_xt + inj_adj + rest_adj + park_adj if _grade_xt is not None else None
                     our_total_h2h = g.get('our_total')
                     g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
