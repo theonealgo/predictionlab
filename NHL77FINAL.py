@@ -717,6 +717,11 @@ def _american_units(odds: float):
 
 
 _ODDS_VIG = 0.04
+# PL pick-card display: cap implied probs and American ML (avoid -9000 from 99%+ model %).
+_PL_PROB_CLAMP_MIN_PCT = 1.0
+_PL_PROB_CLAMP_MAX_PCT = 99.0
+_PL_ML_CLAMP_MIN = -1000
+_PL_ML_CLAMP_MAX = 1000
 
 
 def _prob_to_american(p):
@@ -728,29 +733,59 @@ def _prob_to_american(p):
     return round(((1 - p) / p) * 100)
 
 
-def _compute_odds_from_prob(home_prob_pct, vig=_ODDS_VIG):
-    """Compute American moneyline odds from a home win probability percentage.
+def _normalize_home_win_prob_pct(prob):
+    """Return home win probability on 0–100 scale (accepts 0–1 or 0–100 input)."""
+    p = _safe_float(prob)
+    if p is None or p <= 0:
+        return None
+    if p <= 1.0:
+        p *= 100.0
+    return max(_PL_PROB_CLAMP_MIN_PCT, min(_PL_PROB_CLAMP_MAX_PCT, p))
 
-    home_prob_pct: e.g. 65.0 meaning 65% home win chance.
+
+def _clamp_pl_american_ml(val):
+    """Clamp American ML to a sane display range (e.g. no -9000)."""
+    if val is None:
+        return None
+    try:
+        o = int(round(float(val)))
+    except (TypeError, ValueError):
+        return None
+    if o < 0:
+        return max(o, _PL_ML_CLAMP_MIN)
+    return min(o, _PL_ML_CLAMP_MAX)
+
+
+def _compute_odds_from_prob(home_prob_pct, vig=_ODDS_VIG, *, apply_vig=True, clamp_ml=True):
+    """Compute American moneyline odds from home win probability.
+
+    home_prob_pct: 65.0 or 0.65 for 65% home win chance.
+    apply_vig: when False, fair ML from model % (PL pick cards).
+    clamp_ml: cap extremes to ±_PL_ML_CLAMP_MAX.
     Returns dict with moneyline_home, moneyline_away.
     """
-    if home_prob_pct is None:
+    pct = _normalize_home_win_prob_pct(home_prob_pct)
+    if pct is None:
         return None
-    hp = home_prob_pct / 100.0
+    hp = pct / 100.0
     ap = 1.0 - hp
-    if hp <= 0 or hp >= 1:
-        return None
-    # Apply vig (same logic as engine buildOdds)
-    total = hp + ap
-    ph = hp / total
-    pa = ap / total
-    vig_factor = 1 + vig
-    ph_vig = min(ph * vig_factor, 0.99)
-    pa_vig = min(pa * vig_factor, 0.99)
-    return {
-        'moneyline_home': _prob_to_american(ph_vig),
-        'moneyline_away': _prob_to_american(pa_vig),
+    if apply_vig and vig:
+        total = hp + ap
+        ph = hp / total
+        pa = ap / total
+        vig_factor = 1 + vig
+        ph = min(ph * vig_factor, 0.99)
+        pa = min(pa * vig_factor, 0.99)
+    else:
+        ph, pa = hp, ap
+    out = {
+        'moneyline_home': _prob_to_american(ph),
+        'moneyline_away': _prob_to_american(pa),
     }
+    if clamp_ml:
+        out['moneyline_home'] = _clamp_pl_american_ml(out['moneyline_home'])
+        out['moneyline_away'] = _clamp_pl_american_ml(out['moneyline_away'])
+    return out
 
 
 def _fetch_engine_odds(sport, game_id, game_date=None, home_team=None, away_team=None):
@@ -1537,13 +1572,9 @@ def _set_card_pl_moneylines(card: dict) -> None:
     if prob is None:
         prob = _safe_float(card.get('ensemble_prob'))
     if prob is None:
-        ens = card.get('ens_prob')
-        if ens is not None:
-            try:
-                prob = float(ens)
-            except (TypeError, ValueError):
-                prob = None
-    ml = _compute_odds_from_prob(prob)
+        prob = _safe_float(card.get('ens_prob'))
+    # Fair ML from model % — no book vig; scale normalized in _compute_odds_from_prob.
+    ml = _compute_odds_from_prob(prob, apply_vig=False, clamp_ml=True)
     if ml:
         card['pl_model_home_ml'] = ml.get('moneyline_home')
         card['pl_model_away_ml'] = ml.get('moneyline_away')
@@ -7815,7 +7846,7 @@ BASE_TEMPLATE = """
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
         <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality">
-            <img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false">
+            <img class="pl-brand-logo__img" src="/static/pl-logo.svg" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false">
         </a>
 
         <div class="nav-search-wrap">
@@ -7918,7 +7949,7 @@ BASE_TEMPLATE = """
         <div class="share-icons">
             <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
             <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-            <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+            <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
             <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
             <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
             <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
@@ -10738,7 +10769,7 @@ def landing_page():
             background:rgba(239,68,68,0.12);
         }
         .up-label{color:#0f172a;}
-        .up-units{font-size:1.05em;font-weight:900;color:#00C076;}
+        .up-units{font-size:1.05em;font-weight:900;color:#047857;}
         .units-pill.negative .up-units{color:#D93025;}
         .up-rec{color:#475569;font-size:0.82em;}
 
@@ -10855,7 +10886,7 @@ def landing_page():
 <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
-        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/PLLOGO.PNG" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
+        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/pl-logo.svg" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
         <div class="nav-search-wrap">
             <div class="nav-search" onclick="openSrch()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -10977,7 +11008,7 @@ def landing_page():
 {% if todays_picks %}
 <div class="section" style="margin-top:1.5in;padding-top:24px;padding-bottom:8px;">
     <div style="text-align:center;margin-bottom:8px;">
-        <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#00C076;font-size:0.78em;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;padding:5px 14px;border-radius:999px;">
+        <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#047857;font-size:0.78em;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;padding:5px 14px;border-radius:999px;">
             <span style="display:inline-block;width:8px;height:8px;background:#00C076;border-radius:50%;animation:pulseDot 1.6s infinite;"></span>
             Winning Results Tracked Daily
         </span>
@@ -10988,10 +11019,10 @@ def landing_page():
         {% for tp in todays_picks %}
         {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
         <a href="/{{ tp.slug }}" style="display:block;background:#ffffff;border:1px solid rgba(15,23,42,0.18);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 22px rgba(15,23,42,0.12)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(15,23,42,0.18)';this.style.boxShadow='none';">
-            <div style="font-size:0.68em;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;">{{ tp.sport }}</div>
+            <div style="display:inline-block;font-size:0.68em;background:#fbbf24;color:#000;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;padding:1px 6px;border-radius:4px;">{{ tp.sport }}</div>
             <div style="font-weight:800;font-size:1.02em;color:#0f172a;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
             <div style="display:flex;align-items:baseline;gap:10px;">
-                <span style="color:#00C076;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
+                <span style="color:#047857;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
                 <span style="color:#0f172a;font-weight:800;">{{ _disp_pct }}%</span>
                 <span style="color:#64748b;font-size:0.78em;font-weight:600;">Moneyline</span>
             </div>
@@ -11018,7 +11049,7 @@ def landing_page():
             <div class="sport-name">{{ s.name }}</div>
             <div class="sport-status {% if s.is_live %}live-text{% endif %}">{{ s.status }}</div>
             <div style="margin-top:8px;font-size:0.72em;color:#334155;">Today’s projections available</div>
-            <div style="margin-top:4px;font-size:0.78em;color:#fbbf24;font-weight:700;">View Picks →</div>
+            <div style="margin-top:4px;font-size:0.78em;color:#b45309;font-weight:700;">View Picks →</div>
         </a>
         {% endfor %}
     </div>
@@ -11071,7 +11102,7 @@ def landing_page():
 <div style="max-width:720px;margin:44px auto 32px;padding:0 24px;">
     <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(15,23,42,0.16);background:#ffffff;">
         <div style="position:relative;padding:32px 28px;text-align:center;">
-            <h2 style="font-size:1.5em;font-weight:900;color:#fbbf24;">Daily Betting Results Report</h2>
+            <h2 style="font-size:1.5em;font-weight:900;color:#92400e;">Daily Betting Results Report</h2>
             <p style="color:#334155;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
             <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
         </div>
@@ -11139,7 +11170,7 @@ def landing_page():
     <div class="landing-pricing-row">
         <div class="landing-price-card" style="background:#ffffff;border:1px solid rgba(15,23,42,0.22);border-radius:14px;padding:24px;">
             <h3 style="font-size:1.05em;font-weight:800;margin:0 0 4px;color:#0f172a;">Free Picks</h3>
-            <div style="font-size:0.82em;color:#059669;font-weight:800;margin:0 0 10px;">$0 &mdash; no credit card</div>
+            <div style="font-size:0.82em;color:#047857;font-weight:800;margin:0 0 10px;">$0 &mdash; no credit card</div>
             <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#0f172a;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Moneyline picks across 9 sports</span></li>
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model-generated win probability for every game</span></li>
@@ -11151,7 +11182,7 @@ def landing_page():
         </div>
         <div class="landing-price-card" style="background:#fffdf5;border:2px solid #fbbf24;border-radius:14px;padding:24px;position:relative;">
             <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:#fbbf24;color:#000;font-size:0.72em;font-weight:900;padding:4px 16px;border-radius:20px;white-space:nowrap;letter-spacing:0.3px;">FULL AI MODEL ACCESS</div>
-            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 4px;color:#fbbf24;">Premium Edge</h3>
+            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 4px;color:#92400e;">Premium Edge</h3>
             <div style="font-size:0.82em;font-weight:800;color:#0f172a;margin:0 0 6px;">
                 <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" style="color:#0f172a;text-decoration:none;">$4.99/week</a>
                 &nbsp;&bull;&nbsp;
@@ -11168,10 +11199,10 @@ def landing_page():
                 <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model performance page access</span></li>
             </ul>
             <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="landing-price-cta landing-price-cta--gold" style="text-align:center;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Try a Week &mdash; $4.99</a>
-            <p style="text-align:center;font-size:0.75em;color:#94a3b8;margin:8px 0 0;">or <a href="/plans" style="color:#f59e0b;font-weight:700;text-decoration:none;">see monthly &amp; yearly plans</a></p>
+            <p style="text-align:center;font-size:0.75em;color:#64748b;margin:8px 0 0;">or <a href="/plans" style="color:#92400e;font-weight:700;text-decoration:none;">see monthly &amp; yearly plans</a></p>
         </div>
     </div>
-    <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#94a3b8;line-height:1.5;">All picks updated daily. Cancel any plan anytime.</p>
+    <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#64748b;line-height:1.5;">All picks updated daily. Cancel any plan anytime.</p>
     <style>
         .landing-pricing-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:860px; margin:0 auto; }
         .landing-price-card { display:flex; flex-direction:column; min-height:100%; }
@@ -11237,7 +11268,7 @@ def landing_page():
     <div class="share-icons">
         <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
         <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
         <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
         <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
         <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
