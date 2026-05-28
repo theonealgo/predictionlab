@@ -48,14 +48,82 @@ _MODEL_WEIGHTS = {
 _MODEL_ORDER = ["glicko2", "trueskill", "xgboost", "xsharp", "sharp_consensus"]
 
 
-def _xgboost_style_projection(player: Dict, prop: Dict) -> float:
-    # Simplified mean projection proxy
-    base = player["projected_minutes"] * 0.5 + player["usage_score"] * 12
+# ── Per-sport realistic per-game projection ceilings ──────────────────────
+# These are hard caps applied after any projection formula so no sport ever
+# outputs physically impossible numbers (e.g. 9 assists in an NHL game).
+_SPORT_PROJ_CAPS: Dict[str, Dict[str, float]] = {
+    "NHL": {
+        "goals":         1.5,   # hat trick is the realistic ceiling
+        "assists":       2.0,   # two helpers in a game is already elite
+        "points":        3.0,   # goals + assists combined
+        "shots_on_goal": 6.0,   # heavy shooter max
+    },
+    "MLB": {
+        "hits":          5.0,
+        "runs":          4.0,
+        "rbis":          6.0,
+        "home_runs":     2.0,
+        "strikeouts":   15.0,
+        "walks":         5.0,
+        "stolen_bases":  2.0,
+    },
+    "NFL": {
+        "passing_yards":   500.0,
+        "rushing_yards":   200.0,
+        "receiving_yards": 250.0,
+        "touchdowns":        5.0,
+        "receptions":       15.0,
+        "interceptions":     3.0,
+    },
+    "SOCCER": {
+        "goals":            3.0,
+        "assists":          3.0,
+        "shots":            8.0,
+        "shots_on_target":  5.0,
+    },
+    "NCAAB": {"points": 50.0, "rebounds": 20.0, "assists": 15.0, "threes": 8.0},
+    "NCAAW": {"points": 45.0, "rebounds": 18.0, "assists": 12.0, "threes": 7.0},
+    "WNBA":  {"points": 40.0, "rebounds": 15.0, "assists": 12.0, "threes": 6.0},
+    "NCAAF": {
+        "passing_yards":   500.0,
+        "rushing_yards":   250.0,
+        "receiving_yards": 200.0,
+        "touchdowns":        5.0,
+        "receptions":       12.0,
+    },
+}
+
+# Per-sport scale factor for the projection formula (NBA baseline = 1.0).
+# NHL skaters play ~18 min of ice time vs NBA's ~35 min, so stats are
+# an order of magnitude smaller — scale the formula down accordingly.
+_SPORT_PROJ_SCALE: Dict[str, float] = {
+    "NBA":   1.00,
+    "WNBA":  0.85,
+    "NCAAB": 0.90,
+    "NCAAW": 0.80,
+    "NHL":   0.08,   # ice-time stats are tiny fractions per game
+    "MLB":   0.12,
+    "NFL":   0.45,
+    "NCAAF": 0.40,
+    "SOCCER": 0.06,
+}
+
+
+def _xgboost_style_projection(player: Dict, prop: Dict, league: str = "NBA") -> float:
+    # Simplified mean projection proxy — scaled per sport so NHL/MLB don't
+    # inherit NBA-sized numbers.
+    scale = _SPORT_PROJ_SCALE.get(league, 1.0)
+    base = (player["projected_minutes"] * 0.5 + player["usage_score"] * 12) * scale
     if prop["prop_type"] in ("points", "assists"):
         base *= 1.05
     elif prop["prop_type"] in ("rebounds", "shots_on_goal"):
         base *= 0.9
-    return base
+    # Apply hard sport-prop cap immediately so downstream math never sees
+    # impossible values.
+    cap = _SPORT_PROJ_CAPS.get(league, {}).get(prop["prop_type"])
+    if cap is not None:
+        base = min(base, cap)
+    return max(0.0, base)
 
 
 def _xsharp_adjustment(league: str, projection: float) -> float:
@@ -290,10 +358,15 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             if source_proj is not None:
                 proj = float(source_proj)
             else:
-                xgb_mean = _xgboost_style_projection(p, prop)
+                xgb_mean = _xgboost_style_projection(p, prop, league)
                 xsharp_mean = _xsharp_adjustment(league, xgb_mean)
                 rating = _form_rating(p)
                 proj = (xgb_mean * 0.55) + (xsharp_mean * 0.35) + ((rating / 100.0) * 0.10 * xgb_mean)
+            # Hard sanity cap — catches any path (including external source_proj)
+            _proj_cap = _SPORT_PROJ_CAPS.get(league, {}).get(prop["prop_type"])
+            if _proj_cap is not None:
+                proj = min(proj, _proj_cap)
+            proj = max(0.0, proj)
             agreement = 0.5
             variance = abs(proj) * 0.18
             model_confidence = _non_nba_model_confidence(p, proj, calc_line, prop["prop_type"])

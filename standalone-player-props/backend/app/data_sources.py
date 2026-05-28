@@ -11,6 +11,21 @@ import requests
 
 from .config import LEAGUE_CONFIG, ODDS_API_BASE, ODDS_API_KEY, ODDS_ENGINE_URL
 
+# Realistic "minutes" (or ice-time for hockey) ranges per sport.
+# NHL skaters average 12-22 min of ice time; using NBA values (24-40) was the
+# root cause of absurd projections like "9 assists in a game".
+_LEAGUE_MINUTES_RANGE = {
+    "NBA":   (24.0, 40.0),
+    "WNBA":  (18.0, 36.0),
+    "NCAAB": (20.0, 40.0),
+    "NCAAW": (18.0, 38.0),
+    "NHL":   (12.0, 22.0),   # ice time for skaters
+    "MLB":   (1.0,  1.0),    # plate appearances, not meaningful as "minutes"
+    "NFL":   (20.0, 65.0),   # snaps converted to minute-equivalent
+    "NCAAF": (18.0, 60.0),
+    "SOCCER":(60.0, 90.0),   # match minutes
+}
+
 _LEAGUE_PROP_TYPES = {
     "NBA": ["points", "rebounds", "assists", "threes"],
     "WNBA": ["points", "rebounds", "assists", "threes"],
@@ -219,7 +234,8 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
             return
         if key_name in seen_name_team:
             return
-        projected_minutes = random.uniform(24, 40)
+        _min_lo, _min_hi = _LEAGUE_MINUTES_RANGE.get(league, (24.0, 40.0))
+        projected_minutes = random.uniform(_min_lo, _min_hi)
         usage = random.uniform(0.35, 1.0)
         prop_frequency = random.uniform(0.4, 1.0)
         score = projected_minutes * 0.45 + usage * 30 + prop_frequency * 25
@@ -297,7 +313,8 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
     idx = 1
     for t in teams:
         for n in range(1, 5):
-            projected_minutes = random.uniform(20, 38)
+            _smin_lo, _smin_hi = _LEAGUE_MINUTES_RANGE.get(league, (20.0, 38.0))
+            projected_minutes = random.uniform(_smin_lo, _smin_hi)
             usage = random.uniform(0.25, 0.95)
             prop_frequency = random.uniform(0.45, 1.0)
             score = projected_minutes * 0.45 + usage * 30 + prop_frequency * 25
