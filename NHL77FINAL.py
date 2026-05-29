@@ -886,45 +886,106 @@ def _upsert_engine_odds(
 
 
 def _attach_engine_odds_to_daily_results(sport, daily_results, limit=40):
-    """Attach odds to completed game results for ROI calculation.
-    ESPN engine disabled — uses model-probability fallback only to avoid
-    hundreds of HTTP requests that kill the Render worker."""
+    """Attach ESPN-engine odds to completed game results for ROI calculation.
+
+    Primary: odds_engine_espn.get_odds() — uses ESPN team stats to compute
+    real moneyline, spread, total and vig-adjusted prices.  The engine has a
+    15-minute in-memory cache so repeated calls within a worker are instant.
+    The cache is pre-warmed at startup (_prewarm_espn_odds_cache) so the first
+    page load after a Render restart is never the one that pays the cold cost.
+
+    Fallback: model-probability math via _compute_odds_from_prob (vig applied).
+    """
     if not daily_results:
         return
+    try:
+        from odds_engine_espn import get_odds as _espn_get_odds
+        _espn_ok = True
+    except Exception:
+        _espn_ok = False
+
     for dd in daily_results.values():
         for g in dd.get('games', []):
-            # Model-probability fallback only (no ESPN API calls)
-            ens = g.get('ens_prob')
-            ml = _compute_odds_from_prob(ens)
-            if ml:
-                g['home_moneyline'] = ml['moneyline_home']
-                g['away_moneyline'] = ml['moneyline_away']
-            g.setdefault('spread_price_home', -110)
-            g.setdefault('spread_price_away', -110)
-            g.setdefault('total_over_price', -110)
-            g.setdefault('total_under_price', -110)
-            g['odds_source'] = 'model_fallback'
+            home = g.get('home', '')
+            away = g.get('away', '')
+            odds = None
+            if _espn_ok and home and away:
+                try:
+                    odds = _espn_get_odds(sport, home, away)
+                except Exception:
+                    odds = None
+            if odds:
+                g['home_moneyline'] = odds['moneyline_home']
+                g['away_moneyline'] = odds['moneyline_away']
+                g['spread_price_home'] = odds.get('spread_price_home', -110)
+                g['spread_price_away'] = odds.get('spread_price_away', -110)
+                g['total_over_price'] = odds.get('total_over_price', -110)
+                g['total_under_price'] = odds.get('total_under_price', -110)
+                if g.get('market_spread') is None:
+                    g['market_spread'] = odds.get('spread_home')
+                if g.get('market_total') is None:
+                    g['market_total'] = odds.get('total')
+                g['odds_source'] = 'espn_engine'
+            else:
+                ens = g.get('ens_prob')
+                ml = _compute_odds_from_prob(ens)
+                if ml:
+                    g['home_moneyline'] = ml['moneyline_home']
+                    g['away_moneyline'] = ml['moneyline_away']
+                g.setdefault('spread_price_home', -110)
+                g.setdefault('spread_price_away', -110)
+                g.setdefault('total_over_price', -110)
+                g.setdefault('total_under_price', -110)
+                g['odds_source'] = 'model_fallback'
+
 
 def _attach_engine_odds_to_predictions(sport, predictions, limit=40):
-    """Attach odds to upcoming predictions.
-    ESPN engine disabled — uses model-probability fallback only to avoid
-    hundreds of HTTP requests that kill the Render worker."""
+    """Attach ESPN-engine odds to upcoming predictions.
+
+    Primary: odds_engine_espn.get_odds() — ESPN team stats → real ML/spread/total.
+    Fallback: model-probability math (vig applied) when engine cache is cold or
+    the sport is not supported.
+    """
     if not predictions:
         return
+    try:
+        from odds_engine_espn import get_odds as _espn_get_odds
+        _espn_ok = True
+    except Exception:
+        _espn_ok = False
+
     for pred in predictions:
         if pred.get('home_score') is not None:
             continue
-        # Model-probability fallback only (no ESPN API calls)
-        ens = pred.get('ensemble_prob')
-        ml = _compute_odds_from_prob(ens)
-        if ml:
-            pred['home_moneyline'] = ml['moneyline_home']
-            pred['away_moneyline'] = ml['moneyline_away']
-        pred.setdefault('spread_price_home', -110)
-        pred.setdefault('spread_price_away', -110)
-        pred.setdefault('total_over_price', -110)
-        pred.setdefault('total_under_price', -110)
-        pred['odds_source'] = 'model_fallback'
+        home = pred.get('home_team_id', '') or pred.get('home', '')
+        away = pred.get('away_team_id', '') or pred.get('away', '')
+        odds = None
+        if _espn_ok and home and away:
+            try:
+                odds = _espn_get_odds(sport, home, away)
+            except Exception:
+                odds = None
+        if odds:
+            pred['home_moneyline'] = odds['moneyline_home']
+            pred['away_moneyline'] = odds['moneyline_away']
+            pred['market_spread'] = odds.get('spread_home')
+            pred['market_total'] = odds.get('total')
+            pred['spread_price_home'] = odds.get('spread_price_home', -110)
+            pred['spread_price_away'] = odds.get('spread_price_away', -110)
+            pred['total_over_price'] = odds.get('total_over_price', -110)
+            pred['total_under_price'] = odds.get('total_under_price', -110)
+            pred['odds_source'] = 'espn_engine'
+        else:
+            ens = pred.get('ens_prob') or pred.get('ensemble_prob')
+            ml = _compute_odds_from_prob(ens)
+            if ml:
+                pred['home_moneyline'] = ml['moneyline_home']
+                pred['away_moneyline'] = ml['moneyline_away']
+            pred.setdefault('spread_price_home', -110)
+            pred.setdefault('spread_price_away', -110)
+            pred.setdefault('total_over_price', -110)
+            pred.setdefault('total_under_price', -110)
+            pred['odds_source'] = 'model_fallback'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1567,14 +1628,24 @@ def _set_card_book_lines(card: dict) -> None:
 
 
 def _set_card_pl_moneylines(card: dict) -> None:
-    """Prediction Lab ML under each team (from PL win %, not Books)."""
-    prob = _safe_float(card.get('disp_ml_prob'))
-    if prob is None:
-        prob = _safe_float(card.get('ensemble_prob'))
-    if prob is None:
-        prob = _safe_float(card.get('ens_prob'))
-    # Fair ML from model % — no book vig; scale normalized in _compute_odds_from_prob.
-    ml = _compute_odds_from_prob(prob, apply_vig=False, clamp_ml=True)
+    """Prediction Lab ML displayed under each team on the pick card.
+
+    Priority:
+    1. home_moneyline / away_moneyline set by the ESPN odds engine
+       (_attach_engine_odds_to_predictions) — real stats-based odds with vig.
+    2. Fallback: compute from ens_prob with vig applied so the numbers at least
+       look like real sportsbook lines rather than raw fair-value math.
+    """
+    # Use engine odds if already attached to this card
+    eng_home = _safe_float(card.get('home_moneyline'))
+    eng_away = _safe_float(card.get('away_moneyline'))
+    if eng_home is not None and eng_away is not None:
+        card['pl_model_home_ml'] = _clamp_pl_american_ml(int(round(eng_home)))
+        card['pl_model_away_ml'] = _clamp_pl_american_ml(int(round(eng_away)))
+        return
+    # Fallback: derive from model win probability (vig applied)
+    prob = _safe_float(card.get('disp_ml_prob')) or _safe_float(card.get('ens_prob')) or _safe_float(card.get('ensemble_prob'))
+    ml = _compute_odds_from_prob(prob, apply_vig=True, clamp_ml=True)
     if ml:
         card['pl_model_home_ml'] = ml.get('moneyline_home')
         card['pl_model_away_ml'] = ml.get('moneyline_away')
@@ -4438,6 +4509,35 @@ try:
     _maybe_backfill_props_on_startup()
 except Exception as _pbe:
     logger.debug(f"[props-backfill] hook error: {_pbe}")
+
+
+# ── ESPN odds-engine cache pre-warmer ────────────────────────────────────────
+# odds_engine_espn has a 15-minute in-memory cache.  On Render, workers restart
+# frequently which always starts the cache cold — meaning the first page load
+# after restart triggers ~31 synchronous ESPN HTTP requests and times out.
+# This background thread warms the cache for every active sport immediately at
+# startup, and refreshes it every 12 minutes so it never expires mid-session.
+_PREWARM_SPORTS = ['NBA', 'NHL', 'MLB', 'NFL', 'NCAAB', 'NCAAF', 'WNBA', 'SOCCER']
+
+def _prewarm_espn_odds_cache():
+    import time as _time
+    try:
+        from odds_engine_espn import get_all_team_stats as _warm
+    except Exception:
+        return
+    while True:
+        for _sport in _PREWARM_SPORTS:
+            try:
+                _warm(_sport)
+                logger.debug(f"[odds-prewarm] {_sport} warmed")
+            except Exception as _we:
+                logger.debug(f"[odds-prewarm] {_sport} failed: {_we}")
+        _time.sleep(720)   # re-warm every 12 min — before the 15-min TTL expires
+
+try:
+    threading.Thread(target=_prewarm_espn_odds_cache, daemon=True, name='odds-prewarm').start()
+except Exception as _owe:
+    logger.debug(f"[odds-prewarm] failed to start: {_owe}")
 
 
 def parse_date(date_str):
