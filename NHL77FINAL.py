@@ -1209,6 +1209,11 @@ def _espn_event_id_for_book(sport, game_id, game_date, home_team, away_team):
 
 def _book_row_is_synthetic(source) -> bool:
     src = (source or '').lower()
+    # ESPN Core API and pl_book_odds_api rows are always real sportsbook data.
+    # The word "fallback" in ESPN source names refers to the *event-ID resolution
+    # method* (matchup lookup vs direct ID), not to synthetic/model-generated odds.
+    if 'espn' in src or 'pl_book_odds' in src or 'draftkings' in src:
+        return False
     return 'model' in src or 'engine' in src or 'fallback' in src
 
 
@@ -1493,7 +1498,13 @@ def _valid_book_ml(val) -> bool:
 
 
 def _ensure_book_moneylines(pred: dict) -> None:
-    """Fill book_home/away_moneyline when spread exists but ESPN live path omitted ML."""
+    """Fill book_home/away_moneyline when spread exists but ESPN live path omitted ML.
+
+    Priority for the spread source used to estimate ML:
+    1. book_spread  — real sportsbook spread (best)
+    2. disp_book_spread — display-flip of book_spread (same data)
+    3. market_spread — PL engine-computed spread (last resort, labeled Est.)
+    """
     if _valid_book_ml(pred.get('book_home_moneyline')) and _valid_book_ml(pred.get('book_away_moneyline')):
         return
     bs = _safe_float(pred.get('book_spread'))
@@ -1502,6 +1513,12 @@ def _ensure_book_moneylines(pred: dict) -> None:
         if ds is not None:
             bs = -ds
             pred['book_spread'] = bs
+    # Last resort: use the PL engine's spread projection (labeled Est.) so the
+    # pick card always shows a number rather than — when ESPN has no odds data.
+    if bs is None:
+        ms = _safe_float(pred.get('market_spread'))
+        if ms is not None:
+            bs = ms
     if bs is None:
         return
     try:
@@ -2935,9 +2952,11 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
             try:
                 cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
                 has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+                has_ml_cols = 'home_moneyline' in cols and 'away_moneyline' in cols
                 if has_extra:
                     existing = cur.execute(
-                        "SELECT spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
+                        "SELECT spread, total, home_moneyline, away_moneyline FROM betting_lines "
+                        "WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
                         (sport, game_id)
                     ).fetchone()
                 else:
@@ -2945,8 +2964,13 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
                         "SELECT spread, total FROM betting_lines WHERE game_id=? LIMIT 1",
                         (game_id,)
                     ).fetchone()
+                # Skip only when we already have spread/total AND moneylines — if
+                # moneylines are NULL we still need to fetch so we can fill them in.
                 if existing and (existing['spread'] is not None or existing['total'] is not None):
-                    continue
+                    if not has_ml_cols:
+                        continue
+                    if existing['home_moneyline'] is not None and existing['away_moneyline'] is not None:
+                        continue
             except Exception:
                 pass
             line = _fetch_live_market_line(
@@ -2968,7 +2992,9 @@ def _cache_market_lines_for_predictions(sport, predictions, limit=20):
                     pred.get('away_team_id'),
                     line.get('spread'),
                     line.get('total'),
-                    line.get('source')
+                    line.get('source'),
+                    home_moneyline=line.get('home_moneyline'),
+                    away_moneyline=line.get('away_moneyline'),
                 )
         conn.commit()
         conn.close()
@@ -3038,9 +3064,11 @@ def _cache_market_lines_for_results(sport, daily_results, limit=20):
                 try:
                     cols = [r['name'] for r in cur.execute("PRAGMA table_info('betting_lines')").fetchall()]
                     has_extra = any(c in cols for c in ['sport', 'game_date', 'home_team', 'away_team'])
+                    has_ml_cols = 'home_moneyline' in cols and 'away_moneyline' in cols
                     if has_extra:
                         existing = cur.execute(
-                            "SELECT spread, total FROM betting_lines WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
+                            "SELECT spread, total, home_moneyline, away_moneyline FROM betting_lines "
+                            "WHERE sport=? AND game_id=? ORDER BY fetched_at DESC LIMIT 1",
                             (sport, gid)
                         ).fetchone()
                     else:
@@ -3049,7 +3077,10 @@ def _cache_market_lines_for_results(sport, daily_results, limit=20):
                             (gid,)
                         ).fetchone()
                     if existing and (existing['spread'] is not None or existing['total'] is not None):
-                        continue
+                        if not has_ml_cols:
+                            continue
+                        if existing['home_moneyline'] is not None and existing['away_moneyline'] is not None:
+                            continue
                 except Exception:
                     pass
                 try:
@@ -3077,7 +3108,9 @@ def _cache_market_lines_for_results(sport, daily_results, limit=20):
                         g.get('away'),
                         line.get('spread'),
                         line.get('total'),
-                        line.get('source')
+                        line.get('source'),
+                        home_moneyline=line.get('home_moneyline'),
+                        away_moneyline=line.get('away_moneyline'),
                     )
             if attempts >= limit:
                 break
@@ -7045,7 +7078,12 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             if (ms is not None or mt is not None):
                                 try:
                                     _conn_line = get_db_connection()
-                                    _upsert_betting_line(_conn_line, sport, gid, gd, h, a, ms, mt, live_line.get('source'))
+                                    _upsert_betting_line(
+                                        _conn_line, sport, gid, gd, h, a, ms, mt,
+                                        live_line.get('source'),
+                                        home_moneyline=live_line.get('home_moneyline'),
+                                        away_moneyline=live_line.get('away_moneyline'),
+                                    )
                                     _conn_line.commit()
                                     _conn_line.close()
                                 except Exception:
