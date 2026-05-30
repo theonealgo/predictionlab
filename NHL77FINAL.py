@@ -2221,6 +2221,9 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _ensure_book_moneylines(pred)
     _set_card_book_lines(pred)
     _set_card_pl_spread(pred, sport=sport)
+    if sport == 'MLB':
+        _flip_mlb_pick_spread_display(pred)
+    _set_card_game_time(pred)
     _set_card_pl_moneylines(pred)
     _set_card_projected_scores(pred)
     _prepare_pred_card_face(pred, sport=sport)
@@ -4629,6 +4632,56 @@ def _espn_event_date_to_local(date_str, tz_name='America/New_York'):
     except Exception:
         return date_str[:10]
 
+
+def _format_card_game_time(pred: dict, tz_name: str = 'America/New_York') -> str | None:
+    """Format ESPN/ISO start time for pick card header (e.g. '7:10 PM ET')."""
+    raw = pred.get('game_time') or pred.get('event_date') or pred.get('commence_time')
+    if not raw:
+        return None
+    try:
+        if isinstance(raw, datetime):
+            dt = raw
+        else:
+            s = str(raw).strip()
+            if not s:
+                return None
+            if s.endswith('Z'):
+                s = s[:-1] + '+00:00'
+            dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZoneInfo('UTC'))
+        local = dt.astimezone(ZoneInfo(tz_name))
+        label = local.strftime('%I:%M %p').lstrip('0')
+        return f"{label} ET" if tz_name == 'America/New_York' else label
+    except Exception:
+        return None
+
+
+def _set_card_game_time(card: dict) -> None:
+    """Populate card.game_time for pick templates when a start timestamp exists."""
+    if card.get('home_score') is not None:
+        return
+    formatted = _format_card_game_time(card)
+    if formatted:
+        card['game_time'] = formatted
+
+
+def _flip_mlb_pick_spread_display(card: dict) -> None:
+    """Negate PL model spread on pick cards only (MLB run-line display is inverted)."""
+    raw = _best_pl_spread(card)
+    if raw is None:
+        raw = _first_pred_float(card, ('our_spread', 'market_spread', 'naive_spread'))
+    if raw is None:
+        return
+    card['disp_pl_spread'] = _round_to_half(-float(raw))
+    sp = card['disp_pl_spread']
+    h = card.get('home_team_id') or card.get('home')
+    a = card.get('away_team_id') or card.get('away')
+    if h and a and sp:
+        run_line = 1.5
+        pick_team = h if sp > 0 else a
+        card['spread_pick_label'] = f"{pick_team} {-run_line:+.1f}"
+
 # ============================================================================
 # V2 PREDICTION SYSTEM HELPER
 # ============================================================================
@@ -5015,6 +5068,7 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date':    game_date,
+                        'event_date':   event_dt or None,
                         'home_score':   home_score,
                         'away_score':   away_score,
                         'league':       league_name,
@@ -5161,6 +5215,7 @@ def get_upcoming_predictions(sport, days=365):
                         'home_team_id': home_team,
                         'away_team_id': away_team,
                         'game_date': game_date,
+                        'event_date': _raw_dt or None,
                         'home_score': home_score,
                         'away_score': away_score,
                         'league': league_name or sport,
