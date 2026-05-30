@@ -1601,6 +1601,45 @@ def _set_card_book_lines(card: dict) -> None:
         card['disp_book_total'] = _round_to_half(bt)
 
 
+def _pl_home_prob_for_spread_display(card: dict):
+    """Home win % (0–100) used to sign-normalize disp_pl_spread for card UI only."""
+    pre = _safe_float(card.get('_ensemble_prob_pre_enforce'))
+    if pre is not None:
+        return _normalize_home_win_prob_pct(pre)
+    disp = _safe_float(card.get('disp_ml_prob'))
+    if disp is not None:
+        return _normalize_home_win_prob_pct(disp)
+    for key in ('ensemble_prob', 'ens_prob'):
+        v = _safe_float(card.get(key))
+        if v is not None:
+            return _normalize_home_win_prob_pct(v)
+    return None
+
+
+def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
+    """Populate disp_pl_spread; flip sign only when it opposes PL ML direction.
+
+    our_spread / disp_pl_spread use home-centric convention (positive = home favored),
+    matching fmt_spread_line and pl_book_odds_api book_spread after disp_book flip.
+    Does not mutate our_spread or model probabilities.
+    """
+    sp = _best_pl_spread(card)
+    if sp is None:
+        sp = _first_pred_float(card, ('our_spread', 'market_spread', 'naive_spread'))
+    if sp is None:
+        card.pop('disp_pl_spread', None)
+        return
+    sp = _round_to_half(float(sp))
+    hp = _pl_home_prob_for_spread_display(card)
+    if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
+        home_ml_fav = hp > 50.0
+        if home_ml_fav and sp < 0:
+            sp = -sp
+        elif not home_ml_fav and sp > 0:
+            sp = -sp
+    card['disp_pl_spread'] = sp
+
+
 def _set_card_pl_moneylines(card: dict) -> None:
     """PL moneyline hero on each pick card — derived from ensemble model probability.
 
@@ -1708,14 +1747,6 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
     """Display fields for results cards (same layout as predictions)."""
     g['away_team_id'] = g.get('away') or g.get('away_team_id')
     g['home_team_id'] = g.get('home') or g.get('home_team_id')
-    pl_sp = _best_pl_spread(g)
-    if pl_sp is not None:
-        g['disp_pl_spread'] = pl_sp
-    elif g.get('our_avg_home') is not None and g.get('our_avg_away') is not None:
-        try:
-            g['disp_pl_spread'] = _round_to_half(float(g['our_avg_home']) - float(g['our_avg_away']))
-        except (TypeError, ValueError):
-            pass
     xs = _first_pred_float(g, ('xgb_spread', 'xsharp_spread'))
     if xs is not None:
         g['disp_xs_spread'] = _round_to_half(xs)
@@ -1729,6 +1760,7 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
         g['disp_xs_total'] = _round_to_half(xt)
     _set_card_book_lines(g)
     _set_card_pl_moneylines(g)
+    _set_card_pl_spread(g, sport=sport)
     _set_card_projected_scores(g)
 
 
@@ -2121,13 +2153,13 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     """Precompute odds fields for the picks template (avoids fragile nested Jinja)."""
     if pred.get('home_score') is not None:
         return
-    pred['disp_pl_spread'] = _best_pl_spread(pred)
-    if pred['disp_pl_spread'] is None:
-        pred['disp_pl_spread'] = _first_pred_float(
+    _raw_pl_sp = _best_pl_spread(pred)
+    if _raw_pl_sp is None:
+        _raw_pl_sp = _first_pred_float(
             pred, ('our_spread', 'market_spread', 'naive_spread'),
         )
-        if pred['disp_pl_spread'] is not None:
-            pred['disp_pl_spread'] = _round_to_half(pred['disp_pl_spread'])
+        if _raw_pl_sp is not None:
+            _raw_pl_sp = _round_to_half(_raw_pl_sp)
     pred['disp_pl_total'] = _best_pl_total(pred)
     if pred['disp_pl_total'] is None:
         pred['disp_pl_total'] = _first_pred_float(
@@ -2161,7 +2193,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     # This ensures the PL column is internally consistent (pick always matches spread).
     _conf = pred.get('pl_confidence_tier') or pred.get('confidence_tier')
     _regression = {'High': 0.0, 'Med': 0.15, 'Low': 0.35}.get(_conf, 0.0)
-    _pl_sp = _safe_float(pred.get('disp_pl_spread'))
+    _pl_sp = _safe_float(_raw_pl_sp)
     _our_method = pred.get('our_method')
     if _pl_sp is not None and abs(_pl_sp) >= 1.0 and _our_method in ('efficiency', 'team-avg-fallback'):
         import math as _mt
@@ -2188,6 +2220,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
 
     _ensure_book_moneylines(pred)
     _set_card_book_lines(pred)
+    _set_card_pl_spread(pred, sport=sport)
     _set_card_pl_moneylines(pred)
     _set_card_projected_scores(pred)
     _prepare_pred_card_face(pred, sport=sport)
@@ -14297,6 +14330,9 @@ def sport_predictions(sport, filter_date=None):
             if isinstance(_v, dict):
                 pred[_eff_key] = types.SimpleNamespace(**_v)
         _finalize_prediction_odds(pred)
+        _ens_pre = _safe_float(pred.get('ensemble_prob'))
+        if _ens_pre is not None:
+            pred['_ensemble_prob_pre_enforce'] = _ens_pre
         _enforce_pick_spread_consistency(pred, sport=sport)
         _prepare_pred_card_display(pred, sport=sport)
 
