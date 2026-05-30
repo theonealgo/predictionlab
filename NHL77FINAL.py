@@ -5373,6 +5373,30 @@ def get_upcoming_predictions(sport, days=365):
     except Exception:
         _xgb_model_page = None
 
+    # Pre-fetch book moneylines from betting_lines for edge calculation.
+    # The betting_odds join in the SQL above reads from an older table that is
+    # never written to; betting_lines is the live cache from pl_book_odds_api.
+    _book_ml_lookup: dict = {}
+    try:
+        _bl_conn = get_db_connection()
+        _bl_cols = [r['name'] for r in _bl_conn.execute("PRAGMA table_info('betting_lines')").fetchall()]
+        if 'home_moneyline' in _bl_cols and 'sport' in _bl_cols:
+            _bl_rows = _bl_conn.execute(
+                "SELECT game_id, home_moneyline, away_moneyline FROM betting_lines "
+                "WHERE sport=? AND home_moneyline IS NOT NULL",
+                (sport,)
+            ).fetchall()
+            for _bl in _bl_rows:
+                _gid = _bl['game_id']
+                if _gid and _gid not in _book_ml_lookup:
+                    _book_ml_lookup[_gid] = {
+                        'home': _bl['home_moneyline'],
+                        'away': _bl['away_moneyline'],
+                    }
+        _bl_conn.close()
+    except Exception:
+        pass
+
     for game_date, game in all_games_with_dates:
         # Show games from season start up to one month from today
         if game_date >= season_start and game_date <= future_cutoff:
@@ -5703,8 +5727,17 @@ def get_upcoming_predictions(sport, days=365):
                         _gdate = game_dict.get('game_date')
                         _home_mkt = _to_float_safe(game_dict.get('home_implied_prob'))
                         _away_mkt = _to_float_safe(game_dict.get('away_implied_prob'))
-                        _home_ml = _to_float_safe(game_dict.get('home_moneyline'))
-                        _away_ml = _to_float_safe(game_dict.get('away_moneyline'))
+                        # Edge = model probability vs BOOK (sportsbook) implied probability.
+                        # Primary: home_implied_prob from betting_odds join (may be empty).
+                        # Fallback 1: _book_ml_lookup pre-fetched from betting_lines (live cache).
+                        # Fallback 2: game_dict['home_moneyline'] from betting_odds join (real book data).
+                        # Do NOT derive from PL model moneyline — that produces edge ≈ 0.
+                        _gid_edge = game_dict.get('game_id', '')
+                        _bl_entry = _book_ml_lookup.get(_gid_edge, {})
+                        _home_ml = (_to_float_safe(_bl_entry.get('home'))
+                                    or _to_float_safe(game_dict.get('home_moneyline')))
+                        _away_ml = (_to_float_safe(_bl_entry.get('away'))
+                                    or _to_float_safe(game_dict.get('away_moneyline')))
                         if _home_mkt is None and _home_ml is not None:
                             _home_mkt = _american_to_implied_prob(_home_ml)
                         if _away_mkt is None and _away_ml is not None:
@@ -6180,8 +6213,13 @@ def get_upcoming_predictions(sport, days=365):
             _model_p   = (_ens_pct / 100.0) if _ens_pct is not None else None
             _home_picked = (_model_p is not None and _model_p >= 0.5)
             _pick_p    = _model_p if _home_picked else ((1.0 - _model_p) if _model_p is not None else None)
-            _home_ml   = _to_float_safe(_pred.get('home_moneyline'))
-            _away_ml   = _to_float_safe(_pred.get('away_moneyline'))
+            # EV must be computed against BOOK (sportsbook) lines, not PL model odds.
+            # book_home_moneyline is set by _hydrate_book_lines_db_only (runs before this).
+            # home_moneyline is now the PL model's odds — comparing to itself gives EV ≈ 0.
+            _home_ml   = (_to_float_safe(_pred.get('book_home_moneyline'))
+                          or _to_float_safe(_pred.get('home_moneyline')))
+            _away_ml   = (_to_float_safe(_pred.get('book_away_moneyline'))
+                          or _to_float_safe(_pred.get('away_moneyline')))
             _pick_ml   = _home_ml if _home_picked else _away_ml
             _opp_ml    = _away_ml if _home_picked else _home_ml
             _ht        = _pred.get('home_team_id', '?')
