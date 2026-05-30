@@ -18,6 +18,8 @@
 {% set _xs_hh = card.xs_proj_home_pts if card.xs_proj_home_pts is defined else none %}
 {% set _show_odds_tbl = _disp_bs is not none or _disp_ps is not none or _disp_xs is not none or _disp_bt is not none or _disp_pt is not none or _disp_xt is not none or _pl_ah is not none or _xs_ah is not none %}
 
+{% if is_results %}
+{# ── Results cards: layout unchanged ── #}
 <div class="card-hero">
     <div class="card-hero-meta-line">{% if is_final %}FINAL{% else %}UPCOMING{% if card.game_time is defined and card.game_time is not none %} · {{ card.game_time }}{% endif %}{% endif %}</div>
     <div class="teams-split">
@@ -63,7 +65,7 @@
     </div>
 </div>
 
-{% if _show_odds_tbl and (is_results or is_premium) %}
+{% if _show_odds_tbl %}
 <div class="odds-pricing-section">
     <div class="odds-pricing-title">Odds &amp; Lines</div>
     <table class="odds-pricing-table">
@@ -128,7 +130,6 @@
     </div>
 </div>
 
-{% if is_results %}
 <div class="odds-extras-footer">
     <div class="sf-item">
         <span class="sf-label">Spread pick</span>
@@ -147,22 +148,155 @@
         <span class="sf-val">{{ actual_total }}</span>
     </div>
 </div>
+
 {% else %}
-<div class="odds-extras-footer premium-protected">
-    {% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}
-    <div class="sf-item">
-        <span class="sf-label">H2H Last 10</span>
-        <span class="sf-val" style="color:#475569;">{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}</span>
+{# ── Picks cards: new face + expandable details ── #}
+{% set _face_label = card.face_model_label if card.face_model_label is defined else 'Sharp Consensus' %}
+{% set _fh = card.face_home_prob if card.face_home_prob is defined else none %}
+{% set _fa = card.face_away_prob if card.face_away_prob is defined else none %}
+{% set _away_favored = _fa is not none and _fh is not none and _fa > _fh %}
+{% set _home_favored = _fh is not none and _fa is not none and _fh > _fa %}
+{% set _book_spread_lbl = 'Book run line' if sport == 'MLB' else ('Book puck line' if sport == 'NHL' else 'Book spread') %}
+{% set _details_id = card_details_id if card_details_id is defined else ('card-details-' ~ loop.index0 if loop is defined else 'card-details') %}
+
+<header class="pick-card-header">
+    <span class="league-badge">{{ sport_info.icon if sport_info is defined else '' }} {{ sport_info.name if sport_info is defined else sport }}</span>
+    <span class="game-time">{% if is_final %}FINAL{% elif card.game_time is defined and card.game_time is not none %}{{ card.game_time }}{% else %}Upcoming{% endif %}</span>
+</header>
+
+<div class="matchup-row">
+    <div class="team-slot {% if _away_favored %}favored{% endif %}">
+        <img class="team-logo" src="{{ team_logo_url(sport, away_id) }}" alt="" width="52" height="52" loading="lazy">
+        <div class="team-name">{{ team_short(away_id) }}</div>
+        <div class="model-tag">{{ _face_label }}</div>
+        <div class="win-pct">{% if _fa is not none %}{{ _fa }}<span class="unit">%</span>{% else %}—{% endif %}</div>
+        <div class="book-ml {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</div>
+    </div>
+    <div class="matchup-at">@</div>
+    <div class="team-slot {% if _home_favored %}favored{% endif %}">
+        <img class="team-logo" src="{{ team_logo_url(sport, home_id) }}" alt="" width="52" height="52" loading="lazy">
+        <div class="team-name">{{ team_short(home_id) }}</div>
+        <div class="model-tag">{{ _face_label }}</div>
+        <div class="win-pct">{% if _fh is not none %}{{ _fh }}<span class="unit">%</span>{% else %}—{% endif %}</div>
+        <div class="book-ml {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</div>
+    </div>
+</div>
+
+<div class="lines-strip">
+    <div class="line-chip">
+        <div class="line-chip-label">{{ _book_spread_lbl }}</div>
+        <div class="line-chip-val">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</div>
+    </div>
+    <div class="line-chip">
+        <div class="line-chip-label">Book total</div>
+        <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
+    </div>
+</div>
+
+{% if card.face_pick_team is defined and card.face_pick_team %}
+<div class="ai-pick-row">
+    <div class="ai-pick-text">
+        AI pick · <strong>{{ card.face_pick_team }}</strong>
+        <span class="via">via {{ _face_label }}</span>
+    </div>
+    {% if card.face_pick_confidence is defined and card.face_pick_confidence is not none %}
+    <div class="confidence">Confidence <strong>{{ card.face_pick_confidence }}%</strong></div>
+    {% endif %}
+</div>
+{% endif %}
+
+<footer class="card-footer">
+    <button type="button" class="view-details-btn" aria-expanded="false" aria-controls="{{ _details_id }}" onclick="togglePickDetails(this)">
+        View Details <span class="chevron">▾</span>
+    </button>
+</footer>
+
+<div class="card-details" id="{{ _details_id }}" hidden>
+    {% if is_premium %}
+    {% if _show_odds_tbl %}
+    <div class="odds-pricing-section">
+        <div class="odds-pricing-title">Odds &amp; Lines</div>
+        <table class="odds-pricing-table">
+            <thead>
+                <tr>
+                    <th>Market</th>
+                    <th class="col-books">Books</th>
+                    <th class="col-pl">Prediction Lab</th>
+                    <th class="col-xs">XSharp</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="market-k">{{ spread_label }}</td>
+                    <td class="val-books">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</td>
+                    <td class="val-pl">{{ fmt_spread_line(_disp_ps, home_id, away_id, force_rl) }}</td>
+                    <td class="val-xs">{{ fmt_spread_line(_disp_xs, home_id, away_id, force_rl) }}</td>
+                </tr>
+                <tr>
+                    <td class="market-k">Total</td>
+                    <td class="val-books">{% if _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
+                    <td class="val-pl">{% if _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
+                    <td class="val-xs">{% if _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
+                </tr>
+            </tbody>
+        </table>
+        {% if _pl_ah is not none or _xs_ah is not none %}
+        <div class="proj-score-box">
+            <div class="proj-score-title">Projected Score</div>
+            {% if _pl_ah is not none %}
+            <div class="proj-row">
+                <span class="proj-model pl">Prediction Lab</span>
+                <span class="proj-val">{{ fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) }}</span>
+            </div>
+            {% endif %}
+            {% if _xs_ah is not none %}
+            <div class="proj-row">
+                <span class="proj-model xs">XSharp</span>
+                <span class="proj-val">{{ fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) }}</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
     {% endif %}
-    {% if not is_final and is_premium and card.ml_ev is defined and card.ml_ev is not none %}
-    <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
-    {% endif %}
-    {% if not is_final and is_premium and card.total_ev is defined and card.total_ev is not none %}
-    <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if card.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.total_ev) }}%</span></div>
-    {% endif %}
-    {% if not is_final and is_premium and card.best_ev_pick is defined and card.best_ev_pick %}
-    <div class="sf-item"><span class="sf-label">Best EV</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ card.best_ev_pick }}</span></div>
+
+    <div class="pick-conf-bar">
+        <div class="pick-conf-title">Pick Confidence</div>
+        <div class="pick-conf-grid">
+            {% for m in conf_models %}
+            <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %}">
+                <div class="pc-name">{{ m.name }}</div>
+                {% if m.prob is not none %}
+                <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
+                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}</div>
+                {% else %}
+                <div class="pc-val" style="color:#64748b;">—</div>
+                <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="odds-extras-footer">
+        {% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}
+        <div class="sf-item">
+            <span class="sf-label">H2H Last 10</span>
+            <span class="sf-val">{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}</span>
+        </div>
+        {% endif %}
+        {% if card.ml_ev is defined and card.ml_ev is not none %}
+        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
+        {% endif %}
+        {% if card.total_ev is defined and card.total_ev is not none %}
+        <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if card.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.total_ev) }}%</span></div>
+        {% endif %}
+        {% if card.best_ev_pick is defined and card.best_ev_pick %}
+        <div class="sf-item"><span class="sf-label">Best EV</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ card.best_ev_pick }}</span></div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="odds-pricing-locked" style="padding:14px;font-size:0.84em;text-align:center;">🔒 Lines &amp; projections locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.</div>
     {% endif %}
 </div>
 {% endif %}

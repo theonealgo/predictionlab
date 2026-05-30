@@ -1098,6 +1098,20 @@ def _round_to_half(value):
         return value
 
 
+# Card face win %: best model per sport (PL column = ensemble; XSharp = xgb_* only).
+BEST_MODEL_BY_SPORT = {
+    'NHL': ('xgb_prob', 'XSharp'),
+    'MLB': ('xgb_prob', 'XSharp'),
+    'SOCCER': ('xgb_prob', 'XSharp'),
+    'NBA': ('ensemble_prob', 'Sharp Consensus'),
+    'WNBA': ('ensemble_prob', 'Sharp Consensus'),
+    'NCAAB': ('ensemble_prob', 'Sharp Consensus'),
+    'NCAAW': ('ensemble_prob', 'Sharp Consensus'),
+    'NFL': ('ensemble_prob', 'Sharp Consensus'),
+    'NCAAF': ('ensemble_prob', 'Sharp Consensus'),
+}
+
+
 def _scores_from_spread_total(spread, total):
     """Project home/away points from spread+total; home+away always equals total exactly."""
     try:
@@ -1603,37 +1617,21 @@ def _set_card_pl_moneylines(card: dict) -> None:
 
 
 def _set_card_projected_scores(card: dict) -> None:
-    """Projected Score box — PL and XSharp point projections."""
-    ah = _safe_float(card.get('our_home_pts')) or _safe_float(card.get('our_avg_home'))
-    aa = _safe_float(card.get('our_away_pts')) or _safe_float(card.get('our_avg_away'))
-    if ah is not None and aa is not None:
-        card['pl_proj_home_pts'] = ah
-        card['pl_proj_away_pts'] = aa
-    else:
-        ps = _safe_float(card.get('disp_pl_spread')) or _safe_float(card.get('our_spread'))
-        pt = _safe_float(card.get('disp_pl_total')) or _safe_float(card.get('our_total'))
-        if ps is not None and pt is not None:
-            xh, xa = _scores_from_spread_total(ps, pt)
-            if xh is not None:
-                card['pl_proj_home_pts'] = xh
-                card['pl_proj_away_pts'] = xa
-    xh = _first_pred_float(
-        card, ('xgb_home_score', 'xsharp_home_score', 'disp_xs_home'),
-    )
-    xa = _first_pred_float(
-        card, ('xgb_away_score', 'xsharp_away_score', 'disp_xs_away'),
-    )
-    if xh is not None and xa is not None:
-        card['xs_proj_home_pts'] = xh
-        card['xs_proj_away_pts'] = xa
-    else:
-        xs = _safe_float(card.get('disp_xs_spread')) or _safe_float(card.get('xgb_spread'))
-        xt = _safe_float(card.get('disp_xs_total')) or _safe_float(card.get('xgb_total'))
-        if xs is not None and xt is not None:
-            xh, xa = _scores_from_spread_total(xs, xt)
-            if xh is not None:
-                card['xs_proj_home_pts'] = xh
-                card['xs_proj_away_pts'] = xa
+    """Projected Score box — derive PL/XSharp from spread+total (half-point increments)."""
+    ps = _safe_float(card.get('disp_pl_spread')) or _safe_float(card.get('our_spread'))
+    pt = _safe_float(card.get('disp_pl_total')) or _safe_float(card.get('our_total'))
+    if ps is not None and pt is not None:
+        xh, xa = _scores_from_spread_total(ps, pt)
+        if xh is not None:
+            card['pl_proj_home_pts'] = _round_to_half(xh)
+            card['pl_proj_away_pts'] = _round_to_half(xa)
+    xs = _safe_float(card.get('disp_xs_spread')) or _safe_float(card.get('xgb_spread'))
+    xt = _safe_float(card.get('disp_xs_total')) or _safe_float(card.get('xgb_total'))
+    if xs is not None and xt is not None:
+        xh, xa = _scores_from_spread_total(xs, xt)
+        if xh is not None:
+            card['xs_proj_home_pts'] = _round_to_half(xh)
+            card['xs_proj_away_pts'] = _round_to_half(xa)
 
 
 def _attach_nba_efficiency_to_daily_results(sport, daily_results) -> None:
@@ -1914,17 +1912,22 @@ def _first_pred_float(pred: dict, keys):
 
 
 def _best_pl_spread(pred: dict):
-    """PL Model spread: efficiency/team-avg only — never XSharp or H2H noise."""
-    if pred.get('our_avg_home') is not None and pred.get('our_avg_away') is not None:
+    """PL Model spread: our_spread from odds engine — never XSharp or raw H2H avgs."""
+    if pred.get('our_spread') is not None:
         try:
-            diff = float(pred['our_avg_home']) - float(pred['our_avg_away'])
-            if abs(diff) >= 0.25:
-                return _round_to_half(diff)
+            return _round_to_half(float(pred['our_spread']))
         except (TypeError, ValueError):
             pass
     if pred.get('our_method') in ('efficiency', 'team-avg-fallback') and pred.get('our_spread') is not None:
         try:
             return _round_to_half(float(pred['our_spread']))
+        except (TypeError, ValueError):
+            pass
+    if pred.get('our_avg_home') is not None and pred.get('our_avg_away') is not None:
+        try:
+            diff = float(pred['our_avg_home']) - float(pred['our_avg_away'])
+            if abs(diff) >= 0.25:
+                return _round_to_half(diff)
         except (TypeError, ValueError):
             pass
     if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
@@ -2041,14 +2044,6 @@ def _align_pl_model_odds(pred: dict) -> None:
     if spread is not None and total is not None:
         _sync_pl_scores_from_line(pred, spread, total)
         return
-    if pred.get('our_home_pts') is None or pred.get('our_away_pts') is None:
-        ha = pred.get('our_home_avg') or pred.get('our_avg_home')
-        aa = pred.get('our_away_avg') or pred.get('our_avg_away')
-        if ha is not None and aa is not None:
-            pred['our_home_pts'] = round(float(ha))
-            pred['our_away_pts'] = round(float(aa))
-        elif spread is not None and total is not None:
-            _sync_pl_scores_from_line(pred, spread, total)
     if pred.get('our_home_pts') is not None and pred.get('our_away_pts') is not None:
         try:
             h = float(pred['our_home_pts'])
@@ -2086,7 +2081,43 @@ def _finalize_prediction_odds(pred: dict) -> None:
     pred['xsharp_away_score'] = pred.get('xgb_away_score')
 
 
-def _prepare_pred_card_display(pred: dict) -> None:
+def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
+    """Precompute card-face win % from the best model for this sport."""
+    prob_key, label = BEST_MODEL_BY_SPORT.get(sport, ('ensemble_prob', 'Sharp Consensus'))
+    home_prob = _safe_float(pred.get(prob_key))
+    if home_prob is None and prob_key != 'ensemble_prob':
+        home_prob = _safe_float(pred.get('ensemble_prob'))
+    if home_prob is None:
+        home_prob = _safe_float(pred.get('elo_prob'))
+    if home_prob is not None:
+        if home_prob <= 1.0:
+            home_prob *= 100.0
+        home_prob = round(home_prob, 1)
+        away_prob = round(100.0 - home_prob, 1)
+    else:
+        home_prob = away_prob = None
+    pred['face_model_label'] = label
+    pred['face_home_prob'] = home_prob
+    pred['face_away_prob'] = away_prob
+    if home_prob is not None:
+        if home_prob >= away_prob:
+            pred['face_pick_team'] = pred.get('home_team_id')
+            pred['face_pick_confidence'] = home_prob
+        else:
+            pred['face_pick_team'] = pred.get('away_team_id')
+            pred['face_pick_confidence'] = away_prob
+    else:
+        pred['face_pick_team'] = pred.get('predicted_winner')
+        _fp = _safe_float(pred.get('ensemble_prob'))
+        if _fp is not None:
+            if _fp <= 1.0:
+                _fp *= 100.0
+            pred['face_pick_confidence'] = round(_fp if _fp >= 50 else 100.0 - _fp, 1)
+        else:
+            pred['face_pick_confidence'] = None
+
+
+def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     """Precompute odds fields for the picks template (avoids fragile nested Jinja)."""
     if pred.get('home_score') is not None:
         return
@@ -2159,6 +2190,7 @@ def _prepare_pred_card_display(pred: dict) -> None:
     _set_card_book_lines(pred)
     _set_card_pl_moneylines(pred)
     _set_card_projected_scores(pred)
+    _prepare_pred_card_face(pred, sport=sport)
 
 
 def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
@@ -6137,11 +6169,11 @@ def get_upcoming_predictions(sport, days=365):
                             pred['our_home_pts'] = _h
                             pred['our_away_pts'] = _a
                         else:
-                            pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
-                            pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
+                            pred['our_home_pts'] = _round_to_half(proj['home_pts']) if proj['home_pts'] is not None else None
+                            pred['our_away_pts'] = _round_to_half(proj['away_pts']) if proj['away_pts'] is not None else None
                     else:
-                        pred['our_home_pts'] = round(proj['home_pts']) if proj['home_pts'] is not None else None
-                        pred['our_away_pts'] = round(proj['away_pts']) if proj['away_pts'] is not None else None
+                        pred['our_home_pts'] = _round_to_half(proj['home_pts']) if proj['home_pts'] is not None else None
+                        pred['our_away_pts'] = _round_to_half(proj['away_pts']) if proj['away_pts'] is not None else None
                     pred['our_home_eff'] = home_eff
                     pred['our_away_eff'] = away_eff
                     pred['our_pace']     = proj['avg_pace']
@@ -14266,7 +14298,7 @@ def sport_predictions(sport, filter_date=None):
                 pred[_eff_key] = types.SimpleNamespace(**_v)
         _finalize_prediction_odds(pred)
         _enforce_pick_spread_consistency(pred, sport=sport)
-        _prepare_pred_card_display(pred)
+        _prepare_pred_card_display(pred, sport=sport)
 
     try:
         from flask_login import current_user as _cu
