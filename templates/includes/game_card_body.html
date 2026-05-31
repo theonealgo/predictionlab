@@ -156,7 +156,9 @@
 {% set _fa = card.face_away_prob if card.face_away_prob is defined else none %}
 {% set _away_favored = _fa is not none and _fh is not none and _fa > _fh %}
 {% set _home_favored = _fh is not none and _fa is not none and _fh > _fa %}
-{% set _book_spread_lbl = 'Book run line' if sport == 'MLB' else ('Book puck line' if sport == 'NHL' else 'Book spread') %}
+{% set _book_spread_lbl = 'Books run line' if sport == 'MLB' else ('Books puck line' if sport == 'NHL' else 'Books spread') %}
+{% set _books_src = 'Books · DK' if card.book_provider is defined and card.book_provider and 'draftkings' in card.book_provider|lower else 'Books' %}
+{% set _book_ml_est = card.book_ml_estimated is defined and card.book_ml_estimated %}
 {% set _details_id = card_details_id if card_details_id is defined else ('card-details-' ~ loop.index0 if loop is defined else 'card-details') %}
 
 <header class="pick-card-header">
@@ -170,7 +172,10 @@
         <div class="team-name">{{ team_short(away_id) }}</div>
         <div class="model-tag">{{ _face_label }}</div>
         <div class="win-pct">{% if _fa is not none %}{{ _fa }}<span class="unit">%</span>{% else %}—{% endif %}</div>
-        <div class="book-ml {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</div>
+        <div class="ml-line face-books-ml">
+            <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+            <span class="ml-num {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</span>
+        </div>
     </div>
     <div class="matchup-at">@</div>
     <div class="team-slot {% if _home_favored %}favored{% endif %}">
@@ -178,7 +183,10 @@
         <div class="team-name">{{ team_short(home_id) }}</div>
         <div class="model-tag">{{ _face_label }}</div>
         <div class="win-pct">{% if _fh is not none %}{{ _fh }}<span class="unit">%</span>{% else %}—{% endif %}</div>
-        <div class="book-ml {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</div>
+        <div class="ml-line face-books-ml">
+            <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+            <span class="ml-num {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</span>
+        </div>
     </div>
 </div>
 
@@ -188,7 +196,7 @@
         <div class="line-chip-val">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</div>
     </div>
     <div class="line-chip">
-        <div class="line-chip-label">Book total</div>
+        <div class="line-chip-label">Books total</div>
         <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
 </div>

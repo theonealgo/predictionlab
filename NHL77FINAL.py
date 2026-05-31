@@ -182,23 +182,34 @@ def _recent_result_dates(daily_results, *, yesterday=None, limit=7, recent_windo
         return []
     if yesterday is None:
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    try:
-        ydt = datetime.strptime(yesterday, '%Y-%m-%d')
-    except ValueError:
-        ydt = datetime.now() - timedelta(days=1)
-    cutoff = (ydt - timedelta(days=recent_window_days)).strftime('%Y-%m-%d')
+    ydt = parse_date(yesterday) or (datetime.now() - timedelta(days=1))
+    cutoff_dt = ydt - timedelta(days=recent_window_days)
+
+    def _date_key_dt(dk):
+        return parse_date(dk) or datetime.min
+
     recent = sorted(
         (
             d for d in daily_results.keys()
-            if d and cutoff <= d <= yesterday and daily_results[d].get('games')
+            if d and daily_results[d].get('games')
+            and (_dk := _date_key_dt(d)) >= cutoff_dt and _dk <= ydt
         ),
+        key=_date_key_dt,
         reverse=True,
     )
     if recent:
         return recent[:limit]
-    dates = sorted((d for d in daily_results.keys() if d and d <= yesterday), reverse=True)
+    dates = sorted(
+        (d for d in daily_results.keys() if d and _date_key_dt(d) <= ydt),
+        key=_date_key_dt,
+        reverse=True,
+    )
     if not dates:
-        dates = sorted((d for d in daily_results.keys() if d), reverse=True)
+        dates = sorted(
+            (d for d in daily_results.keys() if d),
+            key=_date_key_dt,
+            reverse=True,
+        )
     return dates[:limit]
 
 
@@ -1098,8 +1109,15 @@ def _round_to_half(value):
         return value
 
 
-def _mlb_fade_spread(val):
-    """Negate spread for MLB (parameter-level fade — model picks opposite ATS side)."""
+# Model-level fade: invert pick parameters when historical win rate < ~55%.
+# Book odds layer is never modified.
+SPREAD_FADE_SPORTS = frozenset({'MLB', 'NCAAB', 'SOCCER'})
+ML_FADE_SPORTS = frozenset({'WNBA'})
+OU_FADE_SPORTS = frozenset({'MLB'})
+
+
+def _fade_spread(val):
+    """Negate spread (parameter-level fade — model picks opposite ATS side)."""
     if val is None:
         return None
     try:
@@ -1111,14 +1129,42 @@ def _mlb_fade_spread(val):
     return _round_to_half(-v)
 
 
-def _apply_mlb_spread_fade(d: dict) -> None:
-    """Invert XSharp + PL spreads on one game/prediction dict (MLB only, once)."""
-    if not isinstance(d, dict) or d.get('_mlb_spread_faded'):
+_mlb_fade_spread = _fade_spread  # backward-compatible alias
+
+
+def _fade_ml_prob(val):
+    """Invert home win probability (100-pct or 1-p)."""
+    if val is None:
+        return None
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return None
+    if v > 1:
+        return round(100.0 - v, 1)
+    return round(1.0 - v, 4)
+
+
+def _fade_total_around_line(val, line):
+    """Reflect model total around market line (flips O/U side vs same book total)."""
+    if val is None or line is None:
+        return None
+    try:
+        v = float(val)
+        ln = float(line)
+    except (TypeError, ValueError):
+        return None
+    return _round_to_half(2.0 * ln - v)
+
+
+def _apply_spread_fade(d: dict) -> None:
+    """Invert XSharp + PL spreads on one game/prediction dict (once)."""
+    if not isinstance(d, dict) or d.get('_spread_faded') or d.get('_mlb_spread_faded'):
         return
     faded = False
     for key in ('xgb_spread', 'our_spread', 'xsharp_spread'):
         if d.get(key) is not None:
-            d[key] = _mlb_fade_spread(d[key])
+            d[key] = _fade_spread(d[key])
             faded = True
     if not faded:
         return
@@ -1135,15 +1181,109 @@ def _apply_mlb_spread_fade(d: dict) -> None:
             d['our_away_pts'] = a
     if d.get('xgb_spread') is not None:
         d['xsharp_spread'] = d['xgb_spread']
+    d['_spread_faded'] = True
     d['_mlb_spread_faded'] = True
 
 
-def _apply_mlb_spread_fade_batch(sport, items) -> None:
-    if sport != 'MLB' or not items:
+_apply_mlb_spread_fade = _apply_spread_fade  # backward-compatible alias
+
+
+def _apply_ncaab_spread_fade(d: dict) -> None:
+    _apply_spread_fade(d)
+
+
+def _apply_soccer_spread_fade(d: dict) -> None:
+    _apply_spread_fade(d)
+
+
+def _apply_nhl_spread_fade(d: dict) -> None:
+    _apply_spread_fade(d)
+
+
+def _apply_ml_fade(d: dict) -> None:
+    """Invert PL ensemble moneyline probability (once)."""
+    if not isinstance(d, dict) or d.get('_ml_faded'):
+        return
+    faded = False
+    for key in ('ensemble_prob', 'ens_prob', 'win_probability'):
+        if d.get(key) is not None:
+            d[key] = _fade_ml_prob(d[key])
+            faded = True
+    if not faded:
+        return
+    if d.get('our_home_pts') is not None and d.get('our_away_pts') is not None:
+        d['our_home_pts'], d['our_away_pts'] = d['our_away_pts'], d['our_home_pts']
+    if d.get('xgb_home_score') is not None and d.get('xgb_away_score') is not None:
+        d['xgb_home_score'], d['xgb_away_score'] = d['xgb_away_score'], d['xgb_home_score']
+    d['_ml_faded'] = True
+
+
+def _apply_ou_fade(d: dict, market_total=None) -> None:
+    """Reflect model totals around book/market line (once)."""
+    if not isinstance(d, dict) or d.get('_ou_faded'):
+        return
+    mt = market_total
+    if mt is None:
+        mt = _safe_float(d.get('book_total')) or _safe_float(d.get('market_total'))
+    if mt is None:
+        return
+    faded = False
+    for key in ('xgb_total', 'our_total', 'xsharp_total', 'naive_total', 'predicted_total'):
+        if d.get(key) is not None:
+            flipped = _fade_total_around_line(d[key], mt)
+            if flipped is not None:
+                d[key] = flipped
+                faded = True
+    if not faded:
+        return
+    if d.get('xgb_spread') is not None and d.get('xgb_total') is not None:
+        h, a = _scores_from_spread_total(d['xgb_spread'], d['xgb_total'])
+        if h is not None:
+            d['xgb_home_score'] = h
+            d['xgb_away_score'] = a
+    if d.get('our_spread') is not None and d.get('our_total') is not None:
+        h, a = _scores_from_spread_total(d['our_spread'], d['our_total'])
+        if h is not None:
+            d['our_home_pts'] = h
+            d['our_away_pts'] = a
+    d['_ou_faded'] = True
+
+
+def _recompute_ml_correct_after_fade(g: dict) -> None:
+    """Refresh ens_correct after ML fade for daily results grading."""
+    home_won = g.get('home_win')
+    if home_won is None:
+        return
+    ep = _safe_float(g.get('ens_prob'))
+    if ep is None:
+        ep = _safe_float(g.get('ensemble_prob'))
+    if ep is None:
+        return
+    if ep > 1:
+        ep = ep / 100.0
+    g['ens_correct'] = (ep >= 0.5) == home_won
+
+
+def _apply_model_fades_for_sport(sport, d: dict, *, market_total=None) -> None:
+    if sport in SPREAD_FADE_SPORTS:
+        _apply_spread_fade(d)
+    if sport in ML_FADE_SPORTS:
+        _apply_ml_fade(d)
+        _recompute_ml_correct_after_fade(d)
+    if sport in OU_FADE_SPORTS:
+        _apply_ou_fade(d, market_total=market_total)
+
+
+def _apply_model_fades_batch(sport, items) -> None:
+    if not items:
         return
     for d in items:
         if isinstance(d, dict):
-            _apply_mlb_spread_fade(d)
+            _apply_model_fades_for_sport(sport, d)
+
+
+def _apply_mlb_spread_fade_batch(sport, items) -> None:
+    _apply_model_fades_batch(sport, items)
 
 
 # Card face win %: best model per sport (PL column = ensemble; XSharp = xgb_* only).
@@ -1551,6 +1691,8 @@ def _apply_pl_book_row_to_game(g: dict, row: dict) -> None:
         g['book_home_moneyline'] = row['home_moneyline']
     if row.get('away_moneyline') is not None:
         g['book_away_moneyline'] = row['away_moneyline']
+    if row.get('provider'):
+        g['book_provider'] = row['provider']
     g['book_odds_source'] = row.get('source') or 'pl_book_odds_api'
     _ensure_book_moneylines(g)
 
@@ -2825,18 +2967,18 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             WHERE g.sport = ?
               AND g.home_score IS NOT NULL
               AND g.away_score IS NOT NULL
-              AND date(g.game_date) BETWEEN ? AND ?
             ORDER BY g.game_date DESC
-            LIMIT 600
-        ''', (
-            sport,
-            sport,
-            start_dt.strftime('%Y-%m-%d'),
-            end_dt.strftime('%Y-%m-%d'),
-        )).fetchall()
+            LIMIT 1200
+        ''', (sport, sport)).fetchall()
         conn.close()
     except Exception:
         return None
+
+    rows = [
+        r for r in rows
+        if _date_in_range(_normalize_game_date_key(r['game_date']), start_dt, end_dt)
+    ]
+    rows = _sort_game_rows_by_date_desc(rows)[:600]
 
     if not rows:
         return None
@@ -2856,7 +2998,7 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
         home_team = game['home_team_id']
         away_team = game['away_team_id']
         _raw_date = _to_date_str(game['game_date'])
-        game_date = _raw_date[:10] if _raw_date else None
+        game_date = _normalize_game_date_key(game['game_date'])
         league_name = game.get('league') if isinstance(game, dict) else game['league']
         if sport == 'SOCCER':
             league_name = _canonical_soccer_league_name(league_name) or league_name
@@ -4151,8 +4293,8 @@ def update_espn_scores(sport):
             except Exception:
                 completed_count = 0
 
-            days_back = 14 if completed_count < 50 else 3
-            max_requests = 140 if completed_count < 50 else 50
+            days_back = 14 if completed_count < 50 else 7
+            max_requests = 140 if completed_count < 50 else 70
             today = datetime.now()
 
             for days_offset in range(days_back):
@@ -4639,6 +4781,82 @@ def parse_date(date_str):
             return datetime.strptime(date_only, '%d/%m/%Y')
     except:
         return None
+
+
+def _normalize_game_date_key(val):
+    """Canonical YYYY-MM-DD bucket for daily_results keys (handles mixed DB formats)."""
+    raw = _to_date_str(val)
+    if not raw:
+        return None
+    dt = parse_date(raw)
+    return dt.strftime('%Y-%m-%d') if dt else None
+
+
+def _sort_game_rows_by_date_desc(rows):
+    """Sort sqlite game rows by parsed game_date descending."""
+    return sorted(
+        rows,
+        key=lambda r: parse_date(_normalize_game_date_key(r['game_date'])) or datetime.min,
+        reverse=True,
+    )
+
+
+def _compute_results_tally_bundle(daily_results, yesterday_dt):
+    """Daily + weekly tallies; when the calendar week is empty, use the latest 7-day window with games."""
+    yesterday = yesterday_dt.strftime('%Y-%m-%d')
+    weekly_start_dt = yesterday_dt - timedelta(days=6)
+    weekly_end_dt = yesterday_dt
+    weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday}"
+    results_stale_notice = False
+
+    daily_tally_date = yesterday
+    daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
+    weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, weekly_end_dt)
+    weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+
+    if not daily_tally and daily_results:
+        fallback_day = max(
+            (d for d in daily_results if daily_results[d].get('games')),
+            key=lambda d: parse_date(d) or datetime.min,
+            default=None,
+        )
+        if fallback_day:
+            daily_tally_date = fallback_day
+            daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
+
+    if weekly_tally_games == 0 and daily_results:
+        dated = [
+            (parse_date(dk), dk)
+            for dk, bucket in daily_results.items()
+            if dk and bucket.get('games') and parse_date(dk)
+        ]
+        if dated:
+            dated.sort(key=lambda x: x[0], reverse=True)
+            latest_dt, _ = dated[0]
+            fallback_start = latest_dt - timedelta(days=6)
+            weekly_start_dt = fallback_start
+            weekly_end_dt = latest_dt
+            weekly_tally = compute_model_tally_for_range(
+                daily_results, weekly_start_dt, weekly_end_dt,
+            )
+            weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+            weekly_tally_date_range = (
+                f"{fallback_start.strftime('%Y-%m-%d')} to {latest_dt.strftime('%Y-%m-%d')}"
+            )
+            results_stale_notice = weekly_tally_games > 0
+
+    daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
+    return {
+        'daily_tally': daily_tally,
+        'daily_tally_date': daily_tally_date,
+        'daily_tally_games': daily_tally_games,
+        'weekly_tally': weekly_tally,
+        'weekly_tally_date_range': weekly_tally_date_range,
+        'weekly_tally_games': weekly_tally_games,
+        'results_stale_notice': results_stale_notice,
+        'weekly_start_dt': weekly_start_dt,
+        'weekly_end_dt': weekly_end_dt,
+    }
 
 def _to_float_safe(val, default=None):
     if val is None:
@@ -6247,8 +6465,8 @@ def get_upcoming_predictions(sport, days=365):
     except Exception as _h2he:
         logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
 
-    # MLB: invert XSharp + PL spreads once (picks + cached predictions)
-    _apply_mlb_spread_fade_batch(sport, predictions)
+    # Model-level fades (spread / ML / O-U) once per prediction dict
+    _apply_model_fades_batch(sport, predictions)
 
     # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
     # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
@@ -7195,9 +7413,12 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         pass
                 g['xgb_total'] = xt
                 g['xgb_spread'] = xs
-                if sport == 'MLB':
-                    _apply_mlb_spread_fade(g)
+                if sport in SPREAD_FADE_SPORTS:
+                    _apply_spread_fade(g)
                     xs = g.get('xgb_spread')
+                if sport in ML_FADE_SPORTS:
+                    _apply_ml_fade(g)
+                    _recompute_ml_correct_after_fade(g)
                 _grade_xt = xt
                 if _grade_xt is None:
                     _grade_xt = _safe_float(g.get('our_total'))
@@ -7344,6 +7565,15 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     elif adj_xt is None:
                         g['total_pick_reason'] = "model score unavailable"
                     elif _grade_mt is not None:
+                        if sport in OU_FADE_SPORTS:
+                            _apply_ou_fade(g, market_total=_grade_mt)
+                            _grade_xt = _safe_float(g.get('xgb_total')) or _grade_xt
+                            adj_xt = (
+                                _grade_xt + inj_adj + rest_adj + park_adj
+                                if _grade_xt is not None else None
+                            )
+                            g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
+                            our_total_h2h = g.get('our_total')
                         edge = adj_xt - _grade_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
                         if abs(at - _grade_mt) >= 1e-9:
@@ -7432,6 +7662,15 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         g['spread_pick_reason'] = "model score unavailable"
 
                     _grade_mt = sportsbook_mt if sportsbook_mt is not None else (mt if not total_fallback_used else None)
+                    if sport in OU_FADE_SPORTS and _grade_mt is not None:
+                        _apply_ou_fade(g, market_total=_grade_mt)
+                        _grade_xt = _safe_float(g.get('xgb_total')) or _grade_xt
+                        adj_xt = (
+                            _grade_xt + inj_adj + rest_adj + park_adj
+                            if _grade_xt is not None else None
+                        )
+                        g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
+                        our_total_h2h = g.get('our_total')
                     if adj_xt is not None and _grade_mt is not None:
                         edge = adj_xt - _grade_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
@@ -9399,7 +9638,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Daily Tally ── -->
         {% if daily_tally %}
         <div class="daily-tally">
-            <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+            <h2>{% if results_stale_notice %}Latest Results Tally{% else %}Last Night's Tally{% endif %} — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in model_cards %}
@@ -9450,7 +9689,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Last 7 Days Tally ── -->
         {% if weekly_tally %}
         <div class="daily-tally">
-            <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+            <h2>{% if results_stale_notice %}Most Recent Week's Tally{% else %}Last 7 Days Tally{% endif %} — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in model_cards %}
@@ -13768,7 +14007,7 @@ def daily_report_page():
                 home_team = game['home_team_id']
                 away_team = game['away_team_id']
                 _raw_date = _to_date_str(game['game_date'])
-                game_date = _raw_date[:10] if _raw_date else None
+                game_date = _normalize_game_date_key(game['game_date'])
                 if not game_date:
                     continue
                 elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
@@ -14592,7 +14831,7 @@ def sport_results(sport):
                     continue
                 home_won = home_score > away_score
                 _raw_date = _to_date_str(game['game_date'])
-                game_date = _raw_date[:10] if _raw_date else 'Unknown'
+                game_date = _normalize_game_date_key(game['game_date']) or 'Unknown'
                 elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
                 xgb_prob = _to_float_safe(game['xgboost_home_prob'], elo_prob)
                 ens_prob = _to_float_safe(game['win_probability'], elo_prob)
@@ -14709,15 +14948,18 @@ def sport_results(sport):
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 _finalize_daily_result_cards(sport, daily_results)
                 season_perf = _build_season_performance_summary(overall_stats, _st_stats)
-                daily_tally_date = yesterday
-                daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
-                daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
-                weekly_start_dt = yesterday_dt - timedelta(days=6)
-                weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
-                weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
-                weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+                tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+                daily_tally = tally_bundle['daily_tally']
+                daily_tally_date = tally_bundle['daily_tally_date']
+                daily_tally_games = tally_bundle['daily_tally_games']
+                weekly_tally = tally_bundle['weekly_tally']
+                weekly_tally_date_range = tally_bundle['weekly_tally_date_range']
+                weekly_tally_games = tally_bundle['weekly_tally_games']
+                weekly_start_dt = tally_bundle['weekly_start_dt']
+                weekly_end_dt = tally_bundle['weekly_end_dt']
+                results_stale_notice = tally_bundle['results_stale_notice']
                 roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
-                roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
                 roi_total = compute_roi_for_range(daily_results, None, None)
                 roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
 
@@ -14738,7 +14980,8 @@ def sport_results(sport):
                     weekly_tally=weekly_tally,
                     weekly_tally_date_range=weekly_tally_date_range,
                     weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards
+                    roi_cards=roi_cards,
+                    results_stale_notice=results_stale_notice,
                 )
                 if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
                     _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
@@ -14902,15 +15145,16 @@ def sport_results(sport):
                 completed_games = _fetch_soccer_completed_games(
                     conn, selected_league, SOCCER_RESULTS_GAMES_PER_LEAGUE,
                 )
+                completed_games = _sort_game_rows_by_date_desc(completed_games)
             else:
                 completed_games = conn.execute('''
                     SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
                     FROM games g
                     LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                     WHERE g.sport = ? AND g.home_score IS NOT NULL
-                    ORDER BY g.game_date DESC
-                    LIMIT 500
+                    LIMIT 800
                 ''', (sport, sport)).fetchall()
+                completed_games = _sort_game_rows_by_date_desc(completed_games)[:500]
             conn.close()
             soccer_bundle = None
             if sport == 'SOCCER':
@@ -14950,7 +15194,7 @@ def sport_results(sport):
                     home_team = game['home_team_id']
                     away_team = game['away_team_id']
                     _raw_date = _to_date_str(game['game_date'])
-                    game_date = _raw_date[:10] if _raw_date else None
+                    game_date = _normalize_game_date_key(game['game_date'])
                     try:
                         if isinstance(game, dict):
                             league_name = game.get('league')
@@ -15052,22 +15296,22 @@ def sport_results(sport):
                     f"[{sport}] results O/U still 0 graded after book attach "
                     f"(check /data betting_lines totals + pl_book_odds_api on Render)"
                 )
-            daily_tally_date = yesterday
-            daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
-            daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
-            weekly_start_dt = yesterday_dt - timedelta(days=6)
-            weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
-            weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
-            weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+            tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+            daily_tally = tally_bundle['daily_tally']
+            daily_tally_date = tally_bundle['daily_tally_date']
+            daily_tally_games = tally_bundle['daily_tally_games']
+            weekly_tally = tally_bundle['weekly_tally']
+            weekly_tally_date_range = tally_bundle['weekly_tally_date_range']
+            weekly_tally_games = tally_bundle['weekly_tally_games']
+            weekly_start_dt = tally_bundle['weekly_start_dt']
+            weekly_end_dt = tally_bundle['weekly_end_dt']
+            results_stale_notice = tally_bundle['results_stale_notice']
             roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
-            roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+            roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
-            results_stale_notice = False
             soccer_leagues = None
             if sport == 'SOCCER':
-                ens_total = (overall_stats.get('ensemble') or {}).get('total', 0) if overall_stats else 0
-                results_stale_notice = weekly_tally_games == 0 and ens_total > 0
                 soccer_leagues = [
                     {
                         'name': lg,

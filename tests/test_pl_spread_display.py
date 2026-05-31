@@ -89,9 +89,44 @@ def test_mlb_spread_fade_idempotent(nhl):
     assert card["xgb_spread"] == first
 
 
-def test_ncaab_spread_untouched(nhl):
+def test_ncaab_spread_faded_via_batch(nhl):
     card = {"our_spread": 4.5, "xgb_spread": 3.5}
-    nhl._apply_mlb_spread_fade_batch("NCAAB", [card])
+    nhl._apply_model_fades_batch("NCAAB", [card])
+    assert card["our_spread"] == pytest.approx(-4.5)
+    assert card["xgb_spread"] == pytest.approx(-3.5)
+
+
+def test_soccer_spread_faded_via_batch(nhl):
+    card = {"our_spread": -1.5, "xgb_spread": 0.5}
+    nhl._apply_model_fades_batch("SOCCER", [card])
+    assert card["our_spread"] == pytest.approx(1.5)
+    assert card["xgb_spread"] == pytest.approx(-0.5)
+
+
+def test_nhl_spread_not_faded(nhl):
+    """NHL ATS grading is invariant under spread sign flip vs market line — skip fade."""
+    card = {"xgb_spread": 1.5}
+    nhl._apply_model_fades_batch("NHL", [card])
+    assert card["xgb_spread"] == pytest.approx(1.5)
+
+
+def test_wnba_ml_faded(nhl):
+    card = {"ensemble_prob": 62.0, "ens_prob": 62.0}
+    nhl._apply_ml_fade(card)
+    assert card["ensemble_prob"] == pytest.approx(38.0)
+    assert card["ens_prob"] == pytest.approx(38.0)
+
+
+def test_mlb_ou_faded_around_book(nhl):
+    card = {"xgb_total": 9.5, "our_total": 9.0, "book_total": 8.5}
+    nhl._apply_ou_fade(card, market_total=8.5)
+    assert card["xgb_total"] == pytest.approx(7.5)  # 2*8.5 - 9.5
+    assert card["our_total"] == pytest.approx(8.0)   # 2*8.5 - 9.0
+
+
+def test_nba_spread_not_faded(nhl):
+    card = {"our_spread": 4.5, "xgb_spread": 3.5}
+    nhl._apply_model_fades_batch("NBA", [card])
     assert card["our_spread"] == pytest.approx(4.5)
     assert card["xgb_spread"] == pytest.approx(3.5)
 
