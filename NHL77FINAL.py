@@ -1098,6 +1098,54 @@ def _round_to_half(value):
         return value
 
 
+def _mlb_fade_spread(val):
+    """Negate spread for MLB (parameter-level fade — model picks opposite ATS side)."""
+    if val is None:
+        return None
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return None
+    if v == 0:
+        return 0.0
+    return _round_to_half(-v)
+
+
+def _apply_mlb_spread_fade(d: dict) -> None:
+    """Invert XSharp + PL spreads on one game/prediction dict (MLB only, once)."""
+    if not isinstance(d, dict) or d.get('_mlb_spread_faded'):
+        return
+    faded = False
+    for key in ('xgb_spread', 'our_spread', 'xsharp_spread'):
+        if d.get(key) is not None:
+            d[key] = _mlb_fade_spread(d[key])
+            faded = True
+    if not faded:
+        return
+    if d.get('xgb_home_score') is not None and d.get('xgb_away_score') is not None:
+        d['xgb_home_score'], d['xgb_away_score'] = d['xgb_away_score'], d['xgb_home_score']
+    if d.get('xsharp_home_score') is not None and d.get('xsharp_away_score') is not None:
+        d['xsharp_home_score'], d['xsharp_away_score'] = (
+            d['xsharp_away_score'], d['xsharp_home_score'],
+        )
+    if d.get('our_spread') is not None and d.get('our_total') is not None:
+        h, a = _scores_from_spread_total(d['our_spread'], d['our_total'])
+        if h is not None:
+            d['our_home_pts'] = h
+            d['our_away_pts'] = a
+    if d.get('xgb_spread') is not None:
+        d['xsharp_spread'] = d['xgb_spread']
+    d['_mlb_spread_faded'] = True
+
+
+def _apply_mlb_spread_fade_batch(sport, items) -> None:
+    if sport != 'MLB' or not items:
+        return
+    for d in items:
+        if isinstance(d, dict):
+            _apply_mlb_spread_fade(d)
+
+
 # Card face win %: best model per sport (PL column = ensemble; XSharp = xgb_* only).
 BEST_MODEL_BY_SPORT = {
     'NHL': ('xgb_prob', 'XSharp'),
@@ -1630,13 +1678,15 @@ def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
         card.pop('disp_pl_spread', None)
         return
     sp = _round_to_half(float(sp))
-    hp = _pl_home_prob_for_spread_display(card)
-    if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
-        home_ml_fav = hp > 50.0
-        if home_ml_fav and sp < 0:
-            sp = -sp
-        elif not home_ml_fav and sp > 0:
-            sp = -sp
+    # MLB spread is faded at parameter level; do not re-align to ensemble ML.
+    if sport != 'MLB':
+        hp = _pl_home_prob_for_spread_display(card)
+        if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
+            home_ml_fav = hp > 50.0
+            if home_ml_fav and sp < 0:
+                sp = -sp
+            elif not home_ml_fav and sp > 0:
+                sp = -sp
     card['disp_pl_spread'] = sp
 
 
@@ -2222,7 +2272,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _set_card_book_lines(pred)
     _set_card_pl_spread(pred, sport=sport)
     if sport == 'MLB':
-        _flip_mlb_pick_spread_display(pred)
+        _set_mlb_spread_pick_label(pred)
     _set_card_game_time(pred)
     _set_card_pl_moneylines(pred)
     _set_card_projected_scores(pred)
@@ -4666,21 +4716,22 @@ def _set_card_game_time(card: dict) -> None:
         card['game_time'] = formatted
 
 
-def _flip_mlb_pick_spread_display(card: dict) -> None:
-    """Negate PL model spread on pick cards only (MLB run-line display is inverted)."""
-    raw = _best_pl_spread(card)
-    if raw is None:
-        raw = _first_pred_float(card, ('our_spread', 'market_spread', 'naive_spread'))
-    if raw is None:
+def _set_mlb_spread_pick_label(card: dict) -> None:
+    """Run-line pick label from faded model spread (same sign as disp_pl_spread)."""
+    sp = _safe_float(card.get('disp_pl_spread'))
+    if sp is None:
+        sp = _safe_float(_best_pl_spread(card))
+    if sp is None:
+        sp = _first_pred_float(card, ('our_spread', 'xgb_spread'))
+    if sp is None:
         return
-    card['disp_pl_spread'] = _round_to_half(-float(raw))
-    sp = card['disp_pl_spread']
     h = card.get('home_team_id') or card.get('home')
     a = card.get('away_team_id') or card.get('away')
-    if h and a and sp:
-        run_line = 1.5
-        pick_team = h if sp > 0 else a
-        card['spread_pick_label'] = f"{pick_team} {-run_line:+.1f}"
+    if not (h and a):
+        return
+    run_line = 1.5
+    pick_team = h if sp > 0 else a
+    card['spread_pick_label'] = f"{pick_team} {-run_line:+.1f}"
 
 # ============================================================================
 # V2 PREDICTION SYSTEM HELPER
@@ -4975,6 +5026,7 @@ def get_upcoming_predictions(sport, days=365):
                         _ensure_book_moneylines(_bp)
             except Exception as _bk_cache:
                 logger.debug(f"[{sport}] book refresh on predictions cache hit: {_bk_cache}")
+            _apply_mlb_spread_fade_batch(sport, out)
             return out
 
     # Load game data based on sport
@@ -6195,6 +6247,9 @@ def get_upcoming_predictions(sport, days=365):
     except Exception as _h2he:
         logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
 
+    # MLB: invert XSharp + PL spreads once (picks + cached predictions)
+    _apply_mlb_spread_fade_batch(sport, predictions)
+
     # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
     # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
     # the books use). Pre-computes every team in tonight's slate IN PARALLEL
@@ -7140,6 +7195,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         pass
                 g['xgb_total'] = xt
                 g['xgb_spread'] = xs
+                if sport == 'MLB':
+                    _apply_mlb_spread_fade(g)
+                    xs = g.get('xgb_spread')
                 _grade_xt = xt
                 if _grade_xt is None:
                     _grade_xt = _safe_float(g.get('our_total'))
