@@ -799,6 +799,123 @@ def _compute_odds_from_prob(home_prob_pct, vig=_ODDS_VIG, *, apply_vig=True, cla
     return out
 
 
+def _soccer_threeway_probs(binary_home, draw):
+    """Convert binary home prob (home + 0.5×draw) and draw to 3-way (0–1 each)."""
+    bh = _safe_float(binary_home)
+    dp = _safe_float(draw)
+    if bh is None or dp is None:
+        return None, None, None
+    if bh > 1.0:
+        bh /= 100.0
+    if dp > 1.0:
+        dp /= 100.0
+    hw = max(0.0, bh - 0.5 * dp)
+    aw = max(0.0, 1.0 - hw - dp)
+    total = hw + dp + aw
+    if total <= 0:
+        return None, None, None
+    return hw / total, dp / total, aw / total
+
+
+def _compute_odds_from_threeway(
+    home_pct, draw_pct, away_pct, vig=_ODDS_VIG, *, apply_vig=True, clamp_ml=True,
+):
+    """American ML for soccer 3-way (home / draw / away)."""
+    hp = _safe_float(home_pct)
+    dp = _safe_float(draw_pct)
+    ap = _safe_float(away_pct)
+    if hp is None or dp is None or ap is None:
+        return None
+    if hp <= 1.0:
+        hp *= 100.0
+    if dp <= 1.0:
+        dp *= 100.0
+    if ap <= 1.0:
+        ap *= 100.0
+    total = hp + dp + ap
+    if total <= 0:
+        return None
+    ph, pd, pa = hp / total, dp / total, ap / total
+    if apply_vig and vig:
+        vig_factor = 1 + vig
+        ph = min(ph * vig_factor, 0.99)
+        pd = min(pd * vig_factor, 0.99)
+        pa = min(pa * vig_factor, 0.99)
+        renorm = ph + pd + pa
+        if renorm > 0:
+            ph, pd, pa = ph / renorm, pd / renorm, pa / renorm
+    out = {
+        'moneyline_home': _prob_to_american(ph),
+        'moneyline_draw': _prob_to_american(pd),
+        'moneyline_away': _prob_to_american(pa),
+    }
+    if clamp_ml:
+        for k in out:
+            out[k] = _clamp_pl_american_ml(out[k])
+    return out
+
+
+def _soccer_ml_pick_correct(home_pct, draw_pct, away_pct, home_won, is_draw):
+    """Grade 3-way soccer ML: pick is highest of home/draw/away model %."""
+    if home_pct is None:
+        return None
+    dp = draw_pct if draw_pct is not None else 0.0
+    ap = away_pct if away_pct is not None else max(0.0, 100.0 - home_pct - dp)
+    pick = max(
+        [('home', home_pct), ('draw', dp), ('away', ap)],
+        key=lambda x: x[1],
+    )[0]
+    if is_draw:
+        return pick == 'draw'
+    if home_won is True:
+        return pick == 'home'
+    if home_won is False:
+        return pick == 'away'
+    return None
+
+
+def _soccer_model_correct(binary_home_dec, draw_dec, home_won, is_draw):
+    """Grade one soccer model prob (binary home + draw) against result."""
+    hw, dw, aw = _soccer_threeway_probs(binary_home_dec, draw_dec)
+    if hw is None:
+        return None
+    return _soccer_ml_pick_correct(hw * 100, dw * 100, aw * 100, home_won, is_draw)
+
+
+def _apply_soccer_ml_grading(
+    game_info,
+    *,
+    draw_dec,
+    glicko2_prob,
+    trueskill_prob,
+    elo_prob,
+    xgb_prob,
+    ens_prob,
+    home_won,
+    is_draw,
+):
+    """Set 3-way soccer ML correct flags; grade draws instead of skip_grading."""
+    if draw_dec is None:
+        game_info['glicko2_correct'] = (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None
+        game_info['trueskill_correct'] = (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None
+        game_info['elo_correct'] = (elo_prob >= 0.5) == home_won if home_won is not None else None
+        game_info['xgb_correct'] = (xgb_prob >= 0.5) == home_won if home_won is not None else None
+        game_info['ens_correct'] = (ens_prob >= 0.5) == home_won if ens_prob is not None and home_won is not None else None
+        game_info['skip_grading'] = home_won is None
+        return
+    _hw, _dw, _aw = _soccer_threeway_probs(ens_prob, draw_dec)
+    if _hw is not None:
+        game_info['draw_prob'] = round(_dw * 100, 1)
+        game_info['home_win_prob'] = round(_hw * 100, 1)
+        game_info['away_win_prob'] = round(_aw * 100, 1)
+    game_info['glicko2_correct'] = _soccer_model_correct(glicko2_prob, draw_dec, home_won, is_draw) if glicko2_prob is not None else None
+    game_info['trueskill_correct'] = _soccer_model_correct(trueskill_prob, draw_dec, home_won, is_draw) if trueskill_prob is not None else None
+    game_info['elo_correct'] = _soccer_model_correct(elo_prob, draw_dec, home_won, is_draw)
+    game_info['xgb_correct'] = _soccer_model_correct(xgb_prob, draw_dec, home_won, is_draw)
+    game_info['ens_correct'] = _soccer_model_correct(ens_prob, draw_dec, home_won, is_draw)
+    game_info['skip_grading'] = False
+
+
 def _fetch_engine_odds(sport, game_id, game_date=None, home_team=None, away_team=None):
     if not ODDS_ENGINE_URL:
         return None, "odds engine URL not configured"
@@ -1837,7 +1954,20 @@ def _set_card_pl_moneylines(card: dict) -> None:
 
     Uses ens_prob / ensemble_prob (consensus of Glicko2, TrueSkill, XGBoost, ELO)
     with vig applied.  This keeps PL completely independent of Books and XSharp.
+    Soccer: 3-way home/draw/away when draw_prob is present.
     """
+    draw_pct = _safe_float(card.get('draw_prob'))
+    home_win_pct = _safe_float(card.get('home_win_prob'))
+    away_win_pct = _safe_float(card.get('away_win_prob'))
+    if draw_pct is not None and home_win_pct is not None and away_win_pct is not None:
+        ml = _compute_odds_from_threeway(
+            home_win_pct, draw_pct, away_win_pct, apply_vig=True, clamp_ml=True,
+        )
+        if ml:
+            card['pl_model_home_ml'] = ml.get('moneyline_home')
+            card['pl_model_draw_ml'] = ml.get('moneyline_draw')
+            card['pl_model_away_ml'] = ml.get('moneyline_away')
+        return
     prob = (_safe_float(card.get('disp_ml_prob'))
             or _safe_float(card.get('ens_prob'))
             or _safe_float(card.get('ensemble_prob')))
@@ -2308,22 +2438,41 @@ def _finalize_prediction_odds(pred: dict) -> None:
 def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
     """Precompute card-face win % from the best model for this sport."""
     prob_key, label = BEST_MODEL_BY_SPORT.get(sport, ('ensemble_prob', 'Sharp Consensus'))
-    home_prob = _safe_float(pred.get(prob_key))
-    if home_prob is None and prob_key != 'ensemble_prob':
-        home_prob = _safe_float(pred.get('ensemble_prob'))
-    if home_prob is None:
-        home_prob = _safe_float(pred.get('elo_prob'))
-    if home_prob is not None:
-        if home_prob <= 1.0:
-            home_prob *= 100.0
-        home_prob = round(home_prob, 1)
-        away_prob = round(100.0 - home_prob, 1)
+    draw_pct = _safe_float(pred.get('draw_prob'))
+    home_win_pct = _safe_float(pred.get('home_win_prob'))
+    away_win_pct = _safe_float(pred.get('away_win_prob'))
+    if sport == 'SOCCER' and draw_pct is not None and home_win_pct is not None:
+        home_prob = round(home_win_pct, 1)
+        away_prob = round(away_win_pct if away_win_pct is not None else 100.0 - home_win_pct - draw_pct, 1)
+        draw_prob = round(draw_pct, 1)
+        pred['face_draw_prob'] = draw_prob
     else:
-        home_prob = away_prob = None
+        draw_prob = None
+        home_prob = _safe_float(pred.get(prob_key))
+        if home_prob is None and prob_key != 'ensemble_prob':
+            home_prob = _safe_float(pred.get('ensemble_prob'))
+        if home_prob is None:
+            home_prob = _safe_float(pred.get('elo_prob'))
+        if home_prob is not None:
+            if home_prob <= 1.0:
+                home_prob *= 100.0
+            home_prob = round(home_prob, 1)
+            away_prob = round(100.0 - home_prob, 1)
+        else:
+            home_prob = away_prob = None
     pred['face_model_label'] = label
     pred['face_home_prob'] = home_prob
     pred['face_away_prob'] = away_prob
-    if home_prob is not None:
+    if draw_prob is not None and home_prob is not None:
+        outcomes = [
+            ('home', home_prob, pred.get('home_team_id')),
+            ('draw', draw_prob, 'Draw'),
+            ('away', away_prob, pred.get('away_team_id')),
+        ]
+        _pick = max(outcomes, key=lambda x: x[1])
+        pred['face_pick_team'] = _pick[2]
+        pred['face_pick_confidence'] = _pick[1]
+    elif home_prob is not None:
         if home_prob >= away_prob:
             pred['face_pick_team'] = pred.get('home_team_id')
             pred['face_pick_confidence'] = home_prob
@@ -3035,13 +3184,18 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             'elo_prob':         round(elo_prob  * 100, 1),
             'xgb_prob':         round(xgb_prob  * 100, 1),
             'ens_prob':         round(ens_prob  * 100, 1),
-            'glicko2_correct':   (glicko2_prob   >= 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
-            'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-            'elo_correct':       (elo_prob  >= 0.5) == home_won if home_won is not None else None,
-            'xgb_correct':       (xgb_prob  >= 0.5) == home_won if home_won is not None else None,
-            'ens_correct':       (ens_prob  >= 0.5) == home_won if ens_prob is not None and home_won is not None else None,
-            'skip_grading':      True if home_won is None else False,
         }
+        _apply_soccer_ml_grading(
+            game_info,
+            draw_dec=None,
+            glicko2_prob=glicko2_prob,
+            trueskill_prob=trueskill_prob,
+            elo_prob=elo_prob,
+            xgb_prob=xgb_prob,
+            ens_prob=ens_prob,
+            home_won=home_won,
+            is_draw=is_draw,
+        )
         daily_results[game_info['date']]['games'].append(game_info)
     return daily_results
 
@@ -5962,7 +6116,20 @@ def get_upcoming_predictions(sport, days=365):
             game_dict['elo_prob'] = round(elo_prob * 100, 1) if elo_prob is not None else None
             game_dict['xgb_prob'] = round(xgb_prob * 100, 1) if xgb_prob is not None else None
             game_dict['ensemble_prob'] = round(ensemble_prob * 100, 1) if ensemble_prob is not None else None
-            if ensemble_prob is not None:
+            if sport == 'SOCCER' and soccer_pred and soccer_pred.get('draw_prob') is not None and ensemble_prob is not None:
+                _hw, _dw, _aw = _soccer_threeway_probs(ensemble_prob, soccer_pred['draw_prob'])
+                if _hw is not None:
+                    game_dict['draw_prob'] = round(_dw * 100, 1)
+                    game_dict['home_win_prob'] = round(_hw * 100, 1)
+                    game_dict['away_win_prob'] = round(_aw * 100, 1)
+                    _best = max(
+                        [('home', _hw, game['home_team_id']),
+                         ('draw', _dw, 'Draw'),
+                         ('away', _aw, game['away_team_id'])],
+                        key=lambda x: x[1],
+                    )
+                    game_dict['predicted_winner'] = _best[2]
+            elif ensemble_prob is not None:
                 game_dict['predicted_winner'] = game['home_team_id'] if ensemble_prob > 0.5 else game['away_team_id']
             elif elo_prob is not None:
                 game_dict['predicted_winner'] = game['home_team_id'] if elo_prob > 0.5 else game['away_team_id']
@@ -15257,14 +15424,20 @@ def sport_results(sport):
                         'elo_prob':         round(elo_prob  * 100, 1),
                         'xgb_prob':         round(xgb_prob  * 100, 1),
                         'ens_prob':         round(ens_prob  * 100, 1),
-                        'glicko2_correct':   (glicko2_prob   >= 0.5) == home_won if glicko2_prob   is not None and home_won is not None else None,
-                        'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-                        'elo_correct':       (elo_prob  >= 0.5) == home_won if home_won is not None else None,
-                        'xgb_correct':       (xgb_prob  >= 0.5) == home_won if home_won is not None else None,
-                        'ens_correct':       (ens_prob  >= 0.5) == home_won if home_won is not None else None,
-                        'skip_grading':      True if home_won is None else False,
                         'model_data_note':   model_note,
                     }
+                    _draw_dec = soccer_pred.get('draw_prob') if soccer_pred else None
+                    _apply_soccer_ml_grading(
+                        game_info,
+                        draw_dec=_draw_dec if sport == 'SOCCER' else None,
+                        glicko2_prob=glicko2_prob,
+                        trueskill_prob=trueskill_prob,
+                        elo_prob=elo_prob,
+                        xgb_prob=xgb_prob,
+                        ens_prob=ens_prob,
+                        home_won=home_won,
+                        is_draw=is_draw,
+                    )
                     daily_results[game_info['date']]['games'].append(game_info)
                 except Exception as _row_err:
                     _gid = None

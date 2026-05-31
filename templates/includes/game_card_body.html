@@ -172,9 +172,15 @@
         <div class="team-name">{{ team_short(away_id) }}</div>
         <div class="model-tag">{{ _face_label }}</div>
         <div class="win-pct">{% if _fa is not none %}{{ _fa }}<span class="unit">%</span>{% else %}—{% endif %}</div>
-        <div class="ml-line face-books-ml">
-            <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
-            <span class="ml-num {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</span>
+        <div class="ml-stack face-ml-stack">
+            <div class="ml-line face-books-ml">
+                <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+                <span class="ml-num {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</span>
+            </div>
+            <div class="ml-line face-pl-ml">
+                <span class="ml-src pl">Prediction Lab</span>
+                <span class="ml-num {% if pl_away is not none and pl_away < 0 %}fav{% elif pl_away is not none %}dog{% endif %}">{% if pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</span>
+            </div>
         </div>
     </div>
     <div class="matchup-at">@</div>
@@ -183,12 +189,33 @@
         <div class="team-name">{{ team_short(home_id) }}</div>
         <div class="model-tag">{{ _face_label }}</div>
         <div class="win-pct">{% if _fh is not none %}{{ _fh }}<span class="unit">%</span>{% else %}—{% endif %}</div>
-        <div class="ml-line face-books-ml">
-            <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
-            <span class="ml-num {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</span>
+        <div class="ml-stack face-ml-stack">
+            <div class="ml-line face-books-ml">
+                <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+                <span class="ml-num {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</span>
+            </div>
+            <div class="ml-line face-pl-ml">
+                <span class="ml-src pl">Prediction Lab</span>
+                <span class="ml-num {% if pl_home is not none and pl_home < 0 %}fav{% elif pl_home is not none %}dog{% endif %}">{% if pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</span>
+            </div>
         </div>
     </div>
 </div>
+
+{% if sport == 'SOCCER' and card.face_draw_prob is defined and card.face_draw_prob is not none %}
+{% set pl_draw = card.pl_model_draw_ml if card.pl_model_draw_ml is defined else none %}
+<div class="soccer-draw-row">
+    <div class="draw-slot">
+        <div class="model-tag">{{ _face_label }}</div>
+        <div class="draw-label">Draw</div>
+        <div class="win-pct draw-pct">{{ card.face_draw_prob }}<span class="unit">%</span></div>
+        <div class="ml-line face-pl-ml">
+            <span class="ml-src pl">Prediction Lab</span>
+            <span class="ml-num">{% if pl_draw is not none %}{% if pl_draw > 0 %}+{% endif %}{{ pl_draw }}{% else %}—{% endif %}</span>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div class="lines-strip">
     <div class="line-chip">
