@@ -342,6 +342,11 @@
         .line-chip { flex:1; text-align:center; background:#f8fafc; border-radius:10px; padding:8px 6px; border:1px solid #f1f5f9; }
         .line-chip-label { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:#64748b; margin-bottom:2px; }
         .line-chip-val { font-size:0.84em; font-weight:800; color:#0f172a; }
+        .line-chip.edge-chip { flex:0 0 auto; min-width:68px; }
+        .line-chip.edge-chip.pos { background:rgba(0,192,118,0.12); border-color:rgba(0,192,118,0.28); }
+        .line-chip.edge-chip.pos .line-chip-val { color:#059669; }
+        .line-chip.edge-chip.neg { background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.22); }
+        .line-chip.edge-chip.neg .line-chip-val { color:#dc2626; }
         .ai-pick-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:10px 14px; border-top:1px dashed #e2e8f0; background:linear-gradient(180deg,#fff 0%,#fafbfc 100%); }
         .ai-pick-text { font-size:0.82em; color:#334155; }
         .ai-pick-text strong { color:#0c1e3a; }

@@ -2085,6 +2085,7 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
     _set_card_pl_moneylines(g)
     _set_card_pl_spread(g, sport=sport)
     _set_card_projected_scores(g)
+    _set_card_edge_pct(g, sport=sport)
 
 
 def _finalize_daily_result_cards(sport, daily_results):
@@ -2436,6 +2437,62 @@ def _finalize_prediction_odds(pred: dict) -> None:
     pred['xsharp_away_score'] = pred.get('xgb_away_score')
 
 
+def _set_card_edge_pct(pred: dict, sport: str = 'NBA') -> None:
+    """Expose model-vs-book edge % on cards (MLB decision layer uses model_win_pct)."""
+    if sport != 'MLB':
+        pred['face_edge_pct'] = None
+        return
+
+    model_wp = _safe_float(pred.get('model_win_pct'))
+    if model_wp is None:
+        ens = _safe_float(pred.get('ensemble_prob'))
+        if ens is not None:
+            if ens <= 1.0:
+                ens *= 100.0
+            pw = pred.get('predicted_winner')
+            ht = pred.get('home_team_id')
+            home_picked = (pw == ht) if pw and ht else ens >= 50.0
+            model_wp = ens if home_picked else (100.0 - ens)
+
+    if model_wp is None:
+        cached = _safe_float(pred.get('edge_pct'))
+        pred['face_edge_pct'] = round(cached, 1) if cached is not None else None
+        return
+
+    home_ml = _safe_float(pred.get('book_home_moneyline'))
+    away_ml = _safe_float(pred.get('book_away_moneyline'))
+    if home_ml is None or away_ml is None:
+        cached = _safe_float(pred.get('edge_pct'))
+        pred['face_edge_pct'] = round(cached, 1) if cached is not None else None
+        return
+
+    pick_p = model_wp / 100.0
+    pw = pred.get('predicted_winner')
+    ht = pred.get('home_team_id')
+    at = pred.get('away_team_id')
+    if pw == ht:
+        pick_ml, opp_ml = home_ml, away_ml
+    elif pw == at:
+        pick_ml, opp_ml = away_ml, home_ml
+    else:
+        ens = _safe_float(pred.get('ensemble_prob'))
+        if ens is not None and ens <= 1.0:
+            ens *= 100.0
+        home_picked = (ens or 50.0) >= 50.0
+        pick_ml = home_ml if home_picked else away_ml
+        opp_ml = away_ml if home_picked else home_ml
+    _, devig, _, _ = calculate_ev_devigged(pick_p, pick_ml, opp_ml)
+    if devig is None:
+        cached = _safe_float(pred.get('edge_pct'))
+        pred['face_edge_pct'] = round(cached, 1) if cached is not None else None
+        return
+
+    edge = round((pick_p - devig) * 100.0, 1)
+    pred['edge_pct'] = edge
+    pred['face_edge_pct'] = edge
+    pred['implied_win_pct'] = round(devig * 100.0, 1)
+
+
 def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
     """Precompute card-face win % from the best model for this sport."""
     prob_key, label = BEST_MODEL_BY_SPORT.get(sport, ('ensemble_prob', 'Sharp Consensus'))
@@ -2575,6 +2632,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _set_card_game_time(pred)
     _set_card_pl_moneylines(pred)
     _set_card_projected_scores(pred)
+    _set_card_edge_pct(pred, sport=sport)
     _prepare_pred_card_face(pred, sport=sport)
 
 

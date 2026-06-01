@@ -273,3 +273,68 @@ def test_nba_unaffected_by_soccer_draw(nhl):
     nhl._prepare_pred_card_display(card, sport="NBA")
     assert "face_draw_prob" not in card or card.get("face_draw_prob") is None
     assert card.get("pl_model_home_ml") is not None
+
+
+def test_mlb_pick_card_sets_face_edge_pct(nhl):
+    card = {
+        "home_team_id": "Kansas City Royals",
+        "away_team_id": "Cincinnati Reds",
+        "ensemble_prob": 45.3,
+        "predicted_winner": "Cincinnati Reds",
+        "model_win_pct": 54.7,
+        "book_home_moneyline": -205,
+        "book_away_moneyline": 170,
+    }
+    nhl._prepare_pred_card_display(card, sport="MLB")
+    assert card.get("face_edge_pct") is not None
+    assert card["face_edge_pct"] > 5.0
+
+
+def test_mlb_edge_falls_back_to_cached_edge_pct(nhl):
+    card = {
+        "home_team_id": "New York Yankees",
+        "away_team_id": "Boston Red Sox",
+        "ensemble_prob": 58.4,
+        "predicted_winner": "New York Yankees",
+        "model_win_pct": 58.4,
+        "edge_pct": 4.8,
+    }
+    nhl._prepare_pred_card_display(card, sport="MLB")
+    assert card.get("face_edge_pct") == pytest.approx(4.8, abs=0.1)
+
+
+def test_mlb_edge_recomputes_after_book_hydration(nhl):
+    card = {
+        "home_team_id": "Kansas City Royals",
+        "away_team_id": "Cincinnati Reds",
+        "ensemble_prob": 45.3,
+        "predicted_winner": "Cincinnati Reds",
+        "model_win_pct": 54.7,
+        "edge_pct": 17.34,
+        "book_home_moneyline": -205,
+        "book_away_moneyline": 170,
+    }
+    nhl._prepare_pred_card_display(card, sport="MLB")
+    assert card.get("face_edge_pct") is not None
+    assert card["face_edge_pct"] > 5.0
+
+
+def test_nba_pick_card_has_no_face_edge_pct(nhl):
+    card = {
+        "home_team_id": "Boston Celtics",
+        "away_team_id": "New York Knicks",
+        "ensemble_prob": 63.1,
+        "book_home_moneyline": -205,
+        "book_away_moneyline": 170,
+    }
+    nhl._prepare_pred_card_display(card, sport="NBA")
+    assert card.get("face_edge_pct") is None
+
+
+def test_mlb_picks_page_renders_edge_chip(nhl):
+    from NHL77FINAL import app
+    with app.test_client() as c:
+        r = c.get("/mlb-picks", headers={"Host": "127.0.0.1"})
+    body = r.get_data(as_text=True)
+    assert r.status_code == 200
+    assert "edge-chip" in body or 'line-chip-label">Edge' in body

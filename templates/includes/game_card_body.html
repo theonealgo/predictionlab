@@ -147,6 +147,14 @@
         <span class="sf-label">Actual total</span>
         <span class="sf-val">{{ actual_total }}</span>
     </div>
+    {% set _res_edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
+    {% if _res_edge is none and card.edge_pct is defined %}{% set _res_edge = card.edge_pct %}{% endif %}
+    {% if _res_edge is not none %}
+    <div class="sf-item">
+        <span class="sf-label">Edge</span>
+        <span class="sf-val" style="color:{% if _res_edge > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if _res_edge > 0 %}+{% endif %}{{ "%.1f"|format(_res_edge) }}%</span>
+    </div>
+    {% endif %}
 </div>
 
 {% else %}
@@ -226,6 +234,14 @@
         <div class="line-chip-label">Books total</div>
         <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
+    {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
+    {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
+    {% if _edge is not none %}
+    <div class="line-chip edge-chip {% if _edge > 0 %}pos{% elif _edge < 0 %}neg{% endif %}">
+        <div class="line-chip-label">Edge</div>
+        <div class="line-chip-val">{% if _edge > 0 %}+{% endif %}{{ "%.1f"|format(_edge) }}%</div>
+    </div>
+    {% endif %}
 </div>
 
 {% if card.face_pick_team is defined and card.face_pick_team %}
