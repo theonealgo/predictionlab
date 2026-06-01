@@ -1958,7 +1958,9 @@ def _set_card_pl_moneylines(card: dict) -> None:
     draw_pct = _safe_float(card.get('draw_prob'))
     home_win_pct = _safe_float(card.get('home_win_prob'))
     away_win_pct = _safe_float(card.get('away_win_prob'))
-    if draw_pct is not None and home_win_pct is not None and away_win_pct is not None:
+    if draw_pct is not None and home_win_pct is not None:
+        if away_win_pct is None:
+            away_win_pct = max(0.0, 100.0 - home_win_pct - draw_pct)
         ml = _compute_odds_from_threeway(
             home_win_pct, draw_pct, away_win_pct, apply_vig=True, clamp_ml=True,
         )
@@ -2447,10 +2449,12 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
         pred['face_draw_prob'] = draw_prob
     else:
         draw_prob = None
-        # Keep soccer layers isolated: XSharp card face should use xgb_prob only
-        # unless 3-way draw decomposition is present.
+        # Soccer XSharp face: poisson_reg (xgb_prob) first; fall back to PL ensemble
+        # when xgb is missing but real ensemble data exists — never fake elo 50/50.
         if sport == 'SOCCER':
             home_prob = _safe_float(pred.get('xgb_prob'))
+            if home_prob is None:
+                home_prob = _safe_float(pred.get('ensemble_prob'))
         else:
             home_prob = _safe_float(pred.get(prob_key))
             if home_prob is None and prob_key != 'ensemble_prob':
@@ -4026,7 +4030,10 @@ def _hydrate_soccer_team_logos(team_names, league_code=None):
 def _canonical_soccer_league_name(league_name: str):
     if not league_name:
         return None
-    key = league_name.strip().lower()
+    stripped = league_name.strip()
+    if stripped in SOCCER_LEAGUE_ORDER:
+        return stripped
+    key = stripped.lower()
     return _SOCCER_LEAGUE_CANONICAL.get(key)
 
 def _canonical_soccer_league_from_event(event, competition):
@@ -4134,21 +4141,42 @@ def _get_soccer_model_bundle(completed_games, league_name=None):
         seen_keys.add(key)
         filtered.append(gd)
 
-    # Then supplement from DB if we don't have enough
-    if len(filtered) < 12:
+    # Supplement from DB using ESPN league-name variants (e.g. "Spanish LALIGA 2"
+    # for curated "Spanish Segunda División") — LIKE on canonical name misses rows.
+    _min_games = 10 if league_name else 12
+    if len(filtered) < _min_games:
         try:
             conn = get_db_connection()
-            league_filter = league_name or '%'
-            db_games = conn.execute('''
-                SELECT game_id, game_date, home_team_id, away_team_id,
-                       home_score, away_score, league
-                FROM games
-                WHERE sport = 'SOCCER'
-                  AND home_score IS NOT NULL
-                  AND league LIKE ?
-                ORDER BY game_date DESC
-                LIMIT 200
-            ''', (f'%{league_name}%' if league_name else '%',)).fetchall()
+            if league_name:
+                variants = _ensure_soccer_league_db_variants(conn)
+                league_names = sorted(variants.get(league_name) or {league_name})
+            else:
+                league_names = None
+            if league_names:
+                placeholders = ','.join('?' * len(league_names))
+                db_games = conn.execute(
+                    f'''
+                    SELECT game_id, game_date, home_team_id, away_team_id,
+                           home_score, away_score, league
+                    FROM games
+                    WHERE sport = 'SOCCER'
+                      AND home_score IS NOT NULL
+                      AND league IN ({placeholders})
+                    ORDER BY game_date DESC
+                    LIMIT 200
+                    ''',
+                    league_names,
+                ).fetchall()
+            else:
+                db_games = conn.execute('''
+                    SELECT game_id, game_date, home_team_id, away_team_id,
+                           home_score, away_score, league
+                    FROM games
+                    WHERE sport = 'SOCCER'
+                      AND home_score IS NOT NULL
+                    ORDER BY game_date DESC
+                    LIMIT 200
+                ''').fetchall()
             conn.close()
             for row in db_games:
                 key = (row['game_id'], row['home_team_id'], row['away_team_id'])
@@ -4159,7 +4187,7 @@ def _get_soccer_model_bundle(completed_games, league_name=None):
         except Exception as _e:
             logger.debug(f"[soccer] DB supplement failed: {_e}")
 
-    bundle = build_soccer_model_bundle(filtered, league_name=league_name)
+    bundle = build_soccer_model_bundle(filtered, league_name=league_name, min_games=_min_games)
     _trim_cache(_SOCCER_MODEL_CACHE, _SOCCER_MODEL_TTL, max_entries=50)
     _SOCCER_MODEL_CACHE[cache_key] = {'ts': now_ts, 'bundle': bundle}
     return bundle
@@ -5811,16 +5839,19 @@ def get_upcoming_predictions(sport, days=365):
     
     # Split into completed (for Elo training) and all (for predictions)
     completed_games = [g for d, g in all_games_with_dates if g.get('home_score') is not None]
+    soccer_history_count = None
     if sport == 'SOCCER':
         try:
             conn_hist = get_db_connection()
             rows = conn_hist.execute(
-                'SELECT game_id, home_team_id, away_team_id, home_score, away_score, game_date '
+                'SELECT game_id, home_team_id, away_team_id, home_score, away_score, '
+                'game_date, league '
                 'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL',
                 (sport,)
             ).fetchall()
             conn_hist.close()
             history = [dict(r) for r in rows]
+            soccer_history_count = len(history)
             if history:
                 existing_ids = {g.get('game_id') for g in completed_games if g.get('game_id')}
                 for g in history:
@@ -5828,22 +5859,8 @@ def get_upcoming_predictions(sport, days=365):
                     if gid and gid in existing_ids:
                         continue
                     completed_games.append(g)
-        except Exception as _se:
-            logger.debug(f"[SOCCER] history load failed: {_se}")
-    soccer_history_count = None
-    if sport == 'SOCCER':
-        try:
-            conn_hist = get_db_connection()
-            rows = conn_hist.execute(
-                'SELECT home_team_id, away_team_id, home_score, away_score, game_date '
-                'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL',
-                (sport,)
-            ).fetchall()
-            conn_hist.close()
-            history = [dict(r) for r in rows]
-            if history:
-                completed_games = completed_games + history
-            soccer_history_count = len(history)
+                    if gid:
+                        existing_ids.add(gid)
         except Exception as _se:
             logger.debug(f"[SOCCER] history load failed: {_se}")
             soccer_history_count = 0
