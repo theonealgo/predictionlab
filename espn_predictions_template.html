@@ -607,7 +607,7 @@
 
     {% if grouped_predictions %}
         {% for date in sorted_dates %}
-        <div class="date-section seo-hidden" id="date-{{ date }}">
+        <div class="date-section {% if date == (default_pick_date|default(today_date)) %}visible{% else %}seo-hidden{% endif %}" id="date-{{ date }}">
             <div class="date-header">
                 📅 {{ date }}
                 {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}

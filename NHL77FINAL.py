@@ -4066,7 +4066,7 @@ SOCCER_LEAGUE_ENDPOINTS = {
 }
 
 SOCCER_PICKS_DAYS_BACK = 1
-SOCCER_PICKS_DAYS_FORWARD = 7
+SOCCER_PICKS_DAYS_FORWARD = 13
 _SOCCER_ESPN_LEAGUE_ID_CACHE: dict = {}
 _SOCCER_ESPN_LEAGUE_ID_TTL = 86400
 _SOCCER_ALL_SCOREBOARD_URL = (
@@ -4112,8 +4112,8 @@ def _soccer_league_from_espn_uid(uid: str, id_map: dict):
     return id_map.get(match.group(1))
 
 
-def _fetch_soccer_upcoming_api_games(days_back=None, days_forward=None):
-    """Upcoming soccer games from ESPN soccer/all (one request per day, all leagues)."""
+def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
+    """Curated soccer games from ESPN soccer/all (one request per day, all leagues)."""
     days_back = SOCCER_PICKS_DAYS_BACK if days_back is None else days_back
     days_forward = SOCCER_PICKS_DAYS_FORWARD if days_forward is None else days_forward
     id_map = _espn_soccer_league_id_map()
@@ -4128,11 +4128,9 @@ def _fetch_soccer_upcoming_api_games(days_back=None, days_forward=None):
             continue
         if not isinstance(data, dict):
             continue
-        events = data.get('events', []) or []
-        for event in events:
+        for event in data.get('events', []) or []:
             status_name = (event.get('status') or {}).get('type', {}).get('name', '')
-            if status_name.startswith('STATUS_FINAL'):
-                continue
+            is_final = status_name.startswith('STATUS_FINAL')
             competition = (event.get('competitions', [{}])[0] or {})
             competitors = competition.get('competitors', []) or []
             if len(competitors) != 2:
@@ -4154,17 +4152,28 @@ def _fetch_soccer_upcoming_api_games(days_back=None, days_forward=None):
             league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_name) or 'all'
             event_dt = event.get('date', '') or competition.get('date', '')
             game_date = _espn_event_date_to_local(event_dt) or check_date.strftime('%Y-%m-%d')
+            home_score = away_score = None
+            if is_final:
+                try:
+                    home_score = int(home.get('score', 0))
+                    away_score = int(away.get('score', 0))
+                except Exception:
+                    continue
             api_games.append({
                 'game_id': f'SOCCER_{league_code}_{event_id}',
                 'home_team_id': home_team,
                 'away_team_id': away_team,
                 'game_date': game_date,
                 'event_date': event_dt or None,
-                'home_score': None,
-                'away_score': None,
+                'home_score': home_score,
+                'away_score': away_score,
                 'league': league_name,
             })
     return api_games
+
+
+def _fetch_soccer_upcoming_api_games(days_back=None, days_forward=None):
+    return _fetch_soccer_scoreboard_api_games(days_back=days_back, days_forward=days_forward)
 
 
 def _hydrate_soccer_team_logos(team_names, league_code=None):
@@ -5692,63 +5701,8 @@ def get_upcoming_predictions(sport, days=365):
             all_games_with_dates = []
     
     elif sport == 'SOCCER':
-        # Loop -1 to +13 days: need horizon for date nav + World Cup / int'l windows.
-        # Each league needs its own request; results are cached for 15 min.
-        api_games = []
-        for days_offset in range(-1, 14):
-            _check_date = datetime.now() + timedelta(days=days_offset)
-            _date_str   = _check_date.strftime('%Y%m%d')
-            for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
-                if not league_code:
-                    continue
-                url = (
-                    f"https://site.api.espn.com/apis/site/v2/sports/soccer/"
-                    f"{league_code}/scoreboard?dates={_date_str}"
-                )
-                try:
-                    data = _cached_get(url)
-                except Exception as e:
-                    logger.debug(f"Error fetching SOCCER {league_code} for {_date_str}: {e}")
-                    continue
-                league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
-                league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
-                events = data.get('events', []) if isinstance(data, dict) else []
-
-                for event in events:
-                    competition = event.get('competitions', [{}])[0]
-                    competitors = competition.get('competitors', [])
-                    if len(competitors) != 2:
-                        continue
-                    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
-                    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
-                    if not home or not away:
-                        continue
-                    _register_soccer_from_competitor(home)
-                    _register_soccer_from_competitor(away)
-                    home_team = home.get('team', {}).get('displayName', '')
-                    away_team = away.get('team', {}).get('displayName', '')
-                    event_id  = event.get('id', '')
-                    status_info  = event.get('status', {}).get('type', {})
-                    status_name  = status_info.get('name', '')
-                    home_score = away_score = None
-                    if status_name.startswith('STATUS_FINAL'):
-                        try:
-                            home_score = int(home.get('score', 0))
-                            away_score = int(away.get('score', 0))
-                        except Exception:
-                            pass
-                    event_dt  = event.get('date', '')
-                    game_date = _espn_event_date_to_local(event_dt) or _check_date.strftime('%Y-%m-%d')
-                    api_games.append({
-                        'game_id':      f"{sport}_{league_code}_{event_id}",
-                        'home_team_id': home_team,
-                        'away_team_id': away_team,
-                        'game_date':    game_date,
-                        'event_date':   event_dt or None,
-                        'home_score':   home_score,
-                        'away_score':   away_score,
-                        'league':       league_name,
-                    })
+        # ESPN soccer/all: ~9 requests for full multi-league slate (vs 300+ per-league calls).
+        api_games = _fetch_soccer_upcoming_api_games()
 
         # Enrich with stored predictions from database
         conn = get_db_connection()

@@ -1,4 +1,4 @@
-"""Soccer picks page: all-leagues default and optional league filter."""
+"""Soccer picks page: all-leagues default, ESPN/all fetch, multi-date nav."""
 import sys
 from pathlib import Path
 
@@ -53,8 +53,12 @@ def test_soccer_all_leagues_default_shows_every_league_and_date(nhl):
     assert leagues_ui[0]['name'] == 'All Leagues'
     assert leagues_ui[0]['active'] is True
     assert any(lg['name'] == 'English Premier League' and not lg['active'] for lg in leagues_ui[1:])
-    # Picker lists every curated league even when only one comp has games today.
-    assert len(leagues_ui) == 1 + len(nhl.SOCCER_LEAGUE_ORDER)
+
+
+def test_soccer_league_slider_lists_full_curated_order(nhl):
+    _, leagues_ui, _ = nhl._filter_soccer_picks(_sample_soccer_preds(), None)
+    pill_names = [lg['name'] for lg in leagues_ui[1:]]
+    assert pill_names == list(nhl.SOCCER_LEAGUE_ORDER)
 
 
 def test_soccer_league_slug_filters_to_one_league(nhl):
@@ -104,3 +108,64 @@ def test_soccer_picks_page_passes_multi_date_sorted_dates(nhl, monkeypatch):
     assert '2026-06-02' in captured['sorted_dates']
     assert '2026-06-03' in captured['sorted_dates']
     assert sum(len(g) for g in captured['grouped_predictions'].values()) == 3
+
+
+def _mock_soccer_all_payload():
+    """Two curated leagues on two dates via ESPN uid league ids."""
+    return [
+        {
+            'events': [
+                {
+                    'id': '9001',
+                    'date': '2026-06-02T19:00Z',
+                    'status': {'type': {'name': 'STATUS_SCHEDULED'}},
+                    'competitions': [{
+                        'uid': 's:600~l:700~e:9001~c:9001',
+                        'competitors': [
+                            {'homeAway': 'home', 'team': {'displayName': 'Arsenal'}, 'score': '0'},
+                            {'homeAway': 'away', 'team': {'displayName': 'Chelsea'}, 'score': '0'},
+                        ],
+                    }],
+                },
+                {
+                    'id': '9002',
+                    'date': '2026-06-03T19:00Z',
+                    'status': {'type': {'name': 'STATUS_SCHEDULED'}},
+                    'competitions': [{
+                        'uid': 's:600~l:740~e:9002~c:9002',
+                        'competitors': [
+                            {'homeAway': 'home', 'team': {'displayName': 'Real Madrid'}, 'score': '0'},
+                            {'homeAway': 'away', 'team': {'displayName': 'Barcelona'}, 'score': '0'},
+                        ],
+                    }],
+                },
+            ],
+        },
+    ]
+
+
+def test_fetch_soccer_scoreboard_api_games_multi_league_date(nhl, monkeypatch):
+    payloads = _mock_soccer_all_payload()
+    calls = {'n': 0}
+
+    def _fake_cached_get(url, **kwargs):
+        idx = calls['n']
+        calls['n'] += 1
+        return payloads[min(idx, len(payloads) - 1)]
+
+    monkeypatch.setattr(nhl, '_cached_get', _fake_cached_get)
+    monkeypatch.setattr(
+        nhl,
+        '_espn_soccer_league_id_map',
+        lambda: {'700': 'English Premier League', '740': 'Spanish LaLiga'},
+    )
+    monkeypatch.setattr(nhl, '_register_soccer_from_competitor', lambda *_a, **_k: None)
+
+    games = nhl._fetch_soccer_scoreboard_api_games(days_back=0, days_forward=0)
+    upcoming = [g for g in games if g.get('home_score') is None]
+    leagues = {g['league'] for g in upcoming}
+    dates = {g['game_date'] for g in upcoming}
+
+    assert len(upcoming) == 2
+    assert leagues == {'English Premier League', 'Spanish LaLiga'}
+    assert dates == {'2026-06-02', '2026-06-03'}
