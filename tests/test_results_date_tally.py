@@ -63,3 +63,62 @@ def test_sort_game_rows_by_date_desc_mixed_formats():
     ]
     sorted_rows = N._sort_game_rows_by_date_desc(rows)
     assert sorted_rows[0]['game_id'] == 'new'
+
+
+def test_nfl_sport_results_offseason_fallback_context(monkeypatch):
+    import NHL77FINAL as N
+
+    stale_date = '2020-01-01'
+    weekly_results = {
+        1: {
+            'games': [
+                {
+                    'date': stale_date,
+                    'skip_grading': False,
+                    'home_score': 24,
+                    'away_score': 17,
+                    'glicko2_prob': None,
+                    'glicko2_correct': None,
+                    'trueskill_prob': None,
+                    'trueskill_correct': None,
+                    'elo_prob': 54.0,
+                    'elo_correct': True,
+                    'xgb_prob': 46.0,
+                    'xgb_correct': False,
+                    'ens_prob': 58.0,
+                    'ens_correct': True,
+                }
+            ],
+            'glicko2': {'correct': 0, 'total': 0, 'accuracy': 0.0},
+            'trueskill': {'correct': 0, 'total': 0, 'accuracy': 0.0},
+            'elo': {'correct': 1, 'total': 1, 'accuracy': 100.0},
+            'xgboost': {'correct': 0, 'total': 1, 'accuracy': 0.0},
+            'ensemble': {'correct': 1, 'total': 1, 'accuracy': 100.0},
+        }
+    }
+
+    monkeypatch.setattr(N, 'update_nfl_scores', lambda: None)
+    monkeypatch.setattr(N, 'update_espn_scores', lambda _sport: None)
+    monkeypatch.setattr(N, 'calculate_nfl_weekly_performance', lambda: weekly_results)
+    monkeypatch.setattr(N, '_attach_engine_odds_to_daily_results', lambda *_args, **_kwargs: None)
+
+    captured = {}
+
+    def _fake_render(_template, **kwargs):
+        captured.update(kwargs)
+        return "ok"
+
+    monkeypatch.setattr(N, 'render_template_string', _fake_render)
+    out = N.sport_results('NFL')
+
+    assert out == "ok"
+    assert captured['results_stale_notice'] is True
+    assert captured['daily_tally_date'] == stale_date
+    assert captured['daily_tally_games'] == 1
+    assert captured['weekly_tally_games'] == 1
+    assert captured['weekly_tally']['glicko2']['total'] == 0
+    assert captured['weekly_tally']['trueskill']['total'] == 0
+    assert captured['weekly_tally']['elo']['total'] == 1
+    assert captured['weekly_tally']['xgboost']['total'] == 1
+    assert captured['weekly_tally']['ensemble']['total'] == 1
+    assert captured['weekly_tally_date_range'].endswith(f"to {stale_date}")

@@ -10264,11 +10264,16 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
     </div>
     
+    {% if results_stale_notice %}
+    <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#334155;text-align:center;">
+        No NFL games in the last 7 days; showing most recent available graded window.
+    </div>
+    {% endif %}
     {% if daily_tally %}
     <div class="daily-tally">
-        <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+        <h2>{% if results_stale_notice %}Latest Results Tally{% else %}Last Night's Tally{% endif %} — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
         <div class="daily-tally-grid">
-            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')]
+            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
             {% set m = daily_tally[m_key] %}
             <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                 <div class="daily-model">{{ m_label }}</div>
@@ -10290,7 +10295,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     {% endif %}
     {% if weekly_tally %}
     <div class="daily-tally">
-        <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+        <h2>{% if results_stale_notice %}Most Recent Week's Tally{% else %}Last 7 Days Tally{% endif %} — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
         <div class="daily-tally-grid">
             {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
             {% set m = weekly_tally[m_key] %}
@@ -14946,18 +14951,21 @@ def sport_results(sport):
             if weekly_results:
                 try:
                     overall_stats = compute_overall_stats_from_weekly(weekly_results)
-                    yesterday_dt = datetime.now() - timedelta(days=1)
-                    daily_tally_date = yesterday_dt.strftime('%Y-%m-%d')
-                    daily_tally = compute_daily_model_tally_from_weekly(weekly_results, daily_tally_date)
-                    daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
                     daily_results = _daily_results_from_weekly(weekly_results)
+                    yesterday_dt = datetime.now() - timedelta(days=1)
+                    tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+                    daily_tally = tally_bundle['daily_tally']
+                    daily_tally_date = tally_bundle['daily_tally_date']
+                    daily_tally_games = tally_bundle['daily_tally_games']
+                    weekly_tally = tally_bundle['weekly_tally']
+                    weekly_tally_date_range = tally_bundle['weekly_tally_date_range']
+                    weekly_tally_games = tally_bundle['weekly_tally_games']
+                    weekly_start_dt = tally_bundle['weekly_start_dt']
+                    weekly_end_dt = tally_bundle['weekly_end_dt']
+                    results_stale_notice = tally_bundle['results_stale_notice']
                     _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
-                    weekly_start_dt = yesterday_dt - timedelta(days=6)
-                    weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
-                    weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
-                    weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
                     roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
-                    roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                    roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
                     roi_total = compute_roi_for_range(daily_results, None, None)
                     roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
                     return render_template_string(
@@ -14975,7 +14983,8 @@ def sport_results(sport):
                         weekly_tally=weekly_tally,
                         weekly_tally_date_range=weekly_tally_date_range,
                         weekly_tally_games=weekly_tally_games,
-                        roi_cards=roi_cards
+                        roi_cards=roi_cards,
+                        results_stale_notice=results_stale_notice,
                     )
                 except Exception as nfl_tpl_err:
                     logger.exception(
@@ -15044,15 +15053,18 @@ def sport_results(sport):
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
             season_perf = _build_season_performance_summary(overall_stats, _st_stats)
-            daily_tally_date = yesterday
-            daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
-            daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
-            weekly_start_dt = yesterday_dt - timedelta(days=6)
-            weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
-            weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
-            weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+            tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+            daily_tally = tally_bundle['daily_tally']
+            daily_tally_date = tally_bundle['daily_tally_date']
+            daily_tally_games = tally_bundle['daily_tally_games']
+            weekly_tally = tally_bundle['weekly_tally']
+            weekly_tally_date_range = tally_bundle['weekly_tally_date_range']
+            weekly_tally_games = tally_bundle['weekly_tally_games']
+            weekly_start_dt = tally_bundle['weekly_start_dt']
+            weekly_end_dt = tally_bundle['weekly_end_dt']
+            results_stale_notice = tally_bundle['results_stale_notice']
             roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
-            roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+            roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
             return render_template_string(
@@ -15073,6 +15085,7 @@ def sport_results(sport):
                 weekly_tally_date_range=weekly_tally_date_range,
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
+                results_stale_notice=results_stale_notice,
                 soccer_leagues=None
             )
         
