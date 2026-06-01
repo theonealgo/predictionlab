@@ -1405,7 +1405,7 @@ def _apply_mlb_spread_fade_batch(sport, items) -> None:
 
 # Card face win %: best model per sport (PL column = ensemble; XSharp = xgb_* only).
 BEST_MODEL_BY_SPORT = {
-    'NHL': ('xgb_prob', 'XSharp'),
+    'NHL': ('ensemble_prob', 'Sharp Consensus'),
     'MLB': ('xgb_prob', 'XSharp'),
     'SOCCER': ('xgb_prob', 'XSharp'),
     'NBA': ('ensemble_prob', 'Sharp Consensus'),
@@ -2678,14 +2678,22 @@ def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
     ens = _safe_float(pred.get('ensemble_prob'))
     if our_sp is not None and abs(our_sp) >= _min_spread and ens is not None:
         implied = _spread_to_pct(our_sp)
-        if our_sp > 0 and ens < 50.0:
-            # Spread says home wins; pick incorrectly says away — override.
-            pred['ensemble_prob'] = round(implied, 1)
-            pred['predicted_winner'] = pred.get('home_team_id')
-        elif our_sp < 0 and ens >= 50.0:
-            # Spread says away wins; pick incorrectly says home — override.
-            pred['ensemble_prob'] = round(implied, 1)
-            pred['predicted_winner'] = pred.get('away_team_id')
+        if pred.get('is_v2'):
+            # V2 game: trust the calibrated ensemble model, not the efficiency spread.
+            # Only align predicted_winner with what the ensemble already says.
+            if ens >= 50.0:
+                pred['predicted_winner'] = pred.get('home_team_id')
+            else:
+                pred['predicted_winner'] = pred.get('away_team_id')
+        else:
+            if our_sp > 0 and ens < 50.0:
+                # Spread says home wins; pick incorrectly says away — override.
+                pred['ensemble_prob'] = round(implied, 1)
+                pred['predicted_winner'] = pred.get('home_team_id')
+            elif our_sp < 0 and ens >= 50.0:
+                # Spread says away wins; pick incorrectly says home — override.
+                pred['ensemble_prob'] = round(implied, 1)
+                pred['predicted_winner'] = pred.get('away_team_id')
 
     # ── XSharp: xgb_spread → xgb_prob ────────────────────────────────────
     xgb_sp = _safe_float(pred.get('xgb_spread'))
@@ -7003,11 +7011,16 @@ def get_upcoming_predictions(sport, days=365):
                 _spread_ev  = calculate_ev(_sp_cover_p, -110)
 
             # ── Total EV ──
-            _our_tot = _to_float_safe(_pred.get('our_total'))
-            _mkt_tot = _to_float_safe(_pred.get('market_total'))
+            # Prefer XSharp total (aligns with market); PL efficiency can over-project.
+            _xgb_tot  = _to_float_safe(_pred.get('xgb_total'))
+            _our_tot  = _xgb_tot if _xgb_tot is not None else _to_float_safe(_pred.get('our_total'))
+            _mkt_tot  = _to_float_safe(_pred.get('market_total'))
             _total_ev = None
             if _our_tot is not None and _mkt_tot is not None:
                 _tot_edge  = _our_tot - _mkt_tot
+                # Cap edge at ±4 pts (NBA/NCAAB) / ±1 (NHL/MLB) to prevent absurd EVs
+                _tot_cap   = {'NHL': 0.75, 'MLB': 0.75}.get(sport, 4.0)
+                _tot_edge  = max(-_tot_cap, min(_tot_cap, _tot_edge))
                 _over_p    = 0.5 * (1.0 + _math_ev.erf(_tot_edge / (_TOTAL_SIGMA * _math_ev.sqrt(2))))
                 _actual_p  = _over_p if _tot_edge >= 0 else (1.0 - _over_p)
                 _total_ev  = calculate_ev(_actual_p, -110)
@@ -14975,7 +14988,9 @@ def sport_predictions(sport, filter_date=None):
         share_image_src = url_for('share_predictions_image', token=_pred_token, fmt='jpg')
         share_image_view_url = url_for('share_predictions_view', token=_pred_token)
 
-    # Group upcoming games only (picks page — not season of finals)
+    # Group upcoming games for the picks page.
+    # When no upcoming games exist (end of season / between seasons) fall back to
+    # the most recent 7 days of completed games so the date picker is never blank.
     from collections import defaultdict
     grouped_predictions = defaultdict(list)
     for pred in predictions:
@@ -14987,8 +15002,29 @@ def sport_predictions(sport, filter_date=None):
             continue
         date_key = pred.get('game_date') or 'TBD'
         grouped_predictions[date_key].append(pred)
-    
-    # Sort dates — picks UI only shows days with upcoming games (avoids blank "today" tab)
+
+    if not grouped_predictions:
+        # No upcoming games — show completed games from the last 7 days
+        for pred in predictions:
+            if pred.get('home_score') is None:
+                continue
+            if not pred.get('home_team_id') or not pred.get('away_team_id'):
+                continue
+            if pred.get('home_team_id') == 'TBD' or pred.get('away_team_id') == 'TBD':
+                continue
+            date_key = pred.get('game_date') or 'TBD'
+            if date_key == 'TBD':
+                continue
+            try:
+                from datetime import date as _date_cls
+                _gd = _date_cls.fromisoformat(date_key)
+                _td = _date_cls.fromisoformat(today_date)
+                if (_td - _gd).days <= 7:
+                    grouped_predictions[date_key].append(pred)
+            except Exception:
+                pass
+
+    # Sort dates — picks UI shows upcoming games; falls back to recent completed games
     sorted_dates, default_pick_date = _picks_display_dates(grouped_predictions, today_date)
 
     # Filter to specific date if requested (daily SEO pages)

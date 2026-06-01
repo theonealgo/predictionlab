@@ -649,6 +649,8 @@
         <div class="nav-arrow" onclick="previousWeek()">‹</div>
         <div class="date-bubbles" id="dateBubbles"></div>
         <div class="nav-arrow" onclick="nextWeek()">›</div>
+        <select id="datePicker" onchange="pickDateFromSelect(this.value)" style="margin-left:10px;padding:6px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;font-size:0.84em;font-weight:600;cursor:pointer;display:none;" aria-label="Jump to date">
+        </select>
     </div>
 
     {% if sorted_dates %}
@@ -1033,9 +1035,34 @@
             if(date===today)b.classList.add('today');
             if(date===activeDate)b.classList.add('active');
             b.innerHTML=formatDate(date);
-            b.onclick=()=>{document.querySelectorAll('.date-bubble').forEach(x=>x.classList.remove('active'));b.classList.add('active');showDate(date);};
+            b.onclick=()=>{document.querySelectorAll('.date-bubble').forEach(x=>x.classList.remove('active'));b.classList.add('active');showDate(date);renderDatePicker();};
             c.appendChild(b);
         });
+        renderDatePicker();
+    }
+    function renderDatePicker() {
+        const sel = document.getElementById('datePicker');
+        if (!sel) return;
+        sel.innerHTML = '';
+        // Show all dates in the dropdown (full history)
+        const sorted = [...allDates].sort((a,b)=>b.localeCompare(a)); // newest first
+        sorted.forEach(date => {
+            const opt = document.createElement('option');
+            opt.value = date;
+            opt.textContent = formatDate(date) + (date === today ? ' (Today)' : '');
+            if (date === activeDate) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        sel.style.display = allDates.length > 1 ? 'inline-block' : 'none';
+    }
+    function pickDateFromSelect(date) {
+        if (!date || !allDates.includes(date)) return;
+        // Move bubble window to contain the selected date
+        const idx = allDates.indexOf(date);
+        if (idx >= 0) currentWeekStart = Math.max(0, idx - 3);
+        document.querySelectorAll('.date-bubble').forEach(x=>x.classList.remove('active'));
+        showDate(date);
+        renderDateBubbles();
     }
     function previousWeek(){if(currentWeekStart>0){currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderDateBubbles();}}
     function nextWeek(){if(currentWeekStart+datesPerWeek<allDates.length){currentWeekStart+=datesPerWeek;renderDateBubbles();}}
