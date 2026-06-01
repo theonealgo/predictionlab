@@ -2627,6 +2627,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _ensure_book_moneylines(pred)
     _set_card_book_lines(pred)
     _set_card_pl_spread(pred, sport=sport)
+    _sync_pick_winner_to_pl_spread(pred, sport=sport)
     if sport == 'MLB':
         _set_mlb_spread_pick_label(pred)
     _set_card_game_time(pred)
@@ -2634,6 +2635,21 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _set_card_projected_scores(pred)
     _set_card_edge_pct(pred, sport=sport)
     _prepare_pred_card_face(pred, sport=sport)
+
+
+def _sync_pick_winner_to_pl_spread(pred: dict, sport: str = 'NBA') -> None:
+    """Align predicted_winner with PL spread after disp sign normalization."""
+    if pred.get('home_score') is not None:
+        return
+    _min_spread = {'NHL': 0.3, 'MLB': 0.5, 'WNBA': 1.0}.get(sport, 3.0)
+    sp = _safe_float(pred.get('our_spread'))
+    if sp is None:
+        sp = _safe_float(pred.get('disp_pl_spread'))
+    if sp is None or abs(sp) < _min_spread:
+        return
+    pred['predicted_winner'] = (
+        pred.get('home_team_id') if sp > 0 else pred.get('away_team_id')
+    )
 
 
 def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
@@ -3985,7 +4001,15 @@ def _fetch_soccer_completed_games(conn, selected_league=None, limit=None):
     """Load completed soccer games for one curated league (or all if league is None)."""
     limit = limit or SOCCER_RESULTS_GAMES_PER_LEAGUE
     base_sql = '''
-        SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+        SELECT g.*,
+               p.elo_home_prob,
+               p.xgboost_home_prob,
+               p.logistic_home_prob,
+               p.win_probability,
+               p.catboost_home_prob,
+               p.meta_home_prob,
+               p.glicko_home_prob,
+               p.trueskill_home_prob
         FROM games g
         LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = 'SOCCER'
         WHERE g.sport = 'SOCCER' AND g.home_score IS NOT NULL

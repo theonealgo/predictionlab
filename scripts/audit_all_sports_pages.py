@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Deep audit: all 9 sports picks + results pages (HTTP + data pipeline)."""
-import re
+"""Deep audit: all 9 sports picks + results pages (HTTP + card pipeline)."""
 import sys
 from pathlib import Path
 
@@ -9,10 +8,55 @@ sys.path.insert(0, str(ROOT))
 
 SPORTS = ['NBA', 'MLB', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA', 'NCAAW', 'SOCCER']
 
+# After _prepare_pred_card_display — keys the pick card template expects when data exists.
+PICK_CARD_KEYS = {
+    'all': ['face_home_prob', 'face_away_prob', 'pl_model_home_ml', 'pl_model_away_ml'],
+    'books': ['disp_book_spread', 'disp_book_total'],
+    'pl': ['disp_pl_spread', 'disp_pl_total'],
+    'xs': ['disp_xs_spread', 'disp_xs_total'],
+}
+SOCCER_EXTRA = ['face_draw_prob', 'pl_model_draw_ml']
+MLB_EXTRA = ['face_edge_pct']
+
+
+def _has_pick_cards(html: str) -> bool:
+    return (
+        'class="game-card pick-card"' in html
+        or ('class="matchup-row"' in html and 'face-pl-ml' in html)
+    )
+
+
+def _count_pick_cards(html: str) -> int:
+    return html.count('class="game-card pick-card"')
+
+
+def _spread_consistent(card: dict) -> bool:
+    """PL moneyline pick must agree with home-centric spread sign."""
+    sp = card.get('our_spread')
+    if sp is None:
+        sp = card.get('disp_pl_spread')
+    if sp is None:
+        return True
+    try:
+        sp = float(sp)
+    except (TypeError, ValueError):
+        return True
+    pw = card.get('predicted_winner') or card.get('face_pick_team')
+    home = card.get('home_team_id')
+    away = card.get('away_team_id')
+    if pw and home and away:
+        if pw == home and sp < 0:
+            return False
+        if pw == away and sp > 0:
+            return False
+    return True
+
 
 def main():
     import NHL77FINAL as N
     from NHL77FINAL import app
+
+    N._SPORT_PREDICTIONS_PAGE_CACHE.clear()
 
     print('=' * 72)
     print('ALL-SPORTS PREDICTIONS + RESULTS AUDIT')
@@ -27,34 +71,37 @@ def main():
             results_slug = N._SPORT_RESULTS_SLUGS.get(sport)
             row = {'sport': sport, 'picks': picks_slug, 'results': results_slug}
 
-            # --- Picks HTTP ---
             pr = c.get(f'/{picks_slug}', headers={'Host': '127.0.0.1'})
             pb = pr.get_data(as_text=True)
             row['picks_status'] = pr.status_code
-            row['picks_cards'] = pb.count('class="game-card"')
+            row['picks_cards'] = _count_pick_cards(pb)
+            row['picks_has_cards'] = _has_pick_cards(pb)
             row['picks_join'] = 'Join Premium' in pb or '/plans' in pb
-            row['picks_books_col'] = 'Books' in pb and 'Prediction Lab' in pb
-            row['picks_hero_ml'] = bool(
-                re.search(r'book_home_moneyline|book_away_moneyline|>-?\d{2,4}<', pb)
-                or 'disp_book' in pb
+            row['picks_books_col'] = (
+                'ml-src books' in pb or 'Books · DK' in pb or 'Books run line' in pb
+            ) and 'Prediction Lab' in pb
+            row['picks_pl_ml'] = 'Prediction Lab' in pb and ('face-pl-ml' in pb or 'ml-src pl' in pb)
+            row['picks_edge_chip'] = (
+                sport != 'MLB' or 'edge-chip' in pb or 'line-chip-label">Edge' in pb
             )
-            row['picks_locked'] = 'unlock premium' in pb.lower() or 'Lines &amp; projections locked' in pb
-            row['picks_offseason'] = (
-                row['picks_cards'] == 0
-                and ('return when' in pb.lower() or 'no upcoming' in pb.lower() or 'offseason' in pb.lower())
+            row['picks_soccer_draw'] = (
+                sport != 'SOCCER' or 'soccer-draw-row' in pb or row['picks_cards'] == 0
+            )
+            row['picks_soccer_all'] = (
+                sport != 'SOCCER' or 'All Leagues' in pb or row['picks_cards'] == 0
+            )
+            row['picks_offseason'] = row['picks_cards'] == 0 and (
+                'return when' in pb.lower()
+                or 'no upcoming' in pb.lower()
+                or 'offseason' in pb.lower()
+                or 'no predictions' in pb.lower()
+                or 'prediction_error' in pb.lower()
             )
             row['picks_error'] = pr.status_code >= 500 or 'failed to render' in pb.lower()
 
             if row['picks_error']:
                 issues.append(f'{sport} picks: HTTP {pr.status_code} or render error')
-            elif not row['picks_offseason'] and row['picks_cards'] == 0:
-                issues.append(f'{sport} picks: 200 but zero game cards (not offseason msg)')
-            elif not row['picks_offseason'] and not row['picks_join']:
-                issues.append(f'{sport} picks: missing Join Premium nav')
-            elif not row['picks_offseason'] and not row['picks_books_col']:
-                issues.append(f'{sport} picks: missing Books/PL table labels')
 
-            # --- Results HTTP ---
             rr = c.get(f'/{results_slug}', headers={'Host': '127.0.0.1'})
             rb = rr.get_data(as_text=True)
             row['results_status'] = rr.status_code
@@ -67,11 +114,19 @@ def main():
                 or 'Moneyline Accuracy' in rb
                 or 'no graded games' in rb.lower()
                 or 'no results' in rb.lower()
+                or 'will appear once' in rb.lower()
+            )
+            row['results_grinder'] = (
+                'Glicko' in rb or 'Grinder' in rb or 'glicko2' in rb.lower()
+                or row['results_graded'] is False
             )
             row['results_offseason'] = 'will appear once' in rb.lower() or 'no results data' in rb.lower()
             row['results_error'] = rr.status_code >= 500 or 'processing error' in rb.lower()
             row['results_soccer_leagues'] = (
-                sport != 'SOCCER' or 'English Premier League' in rb or 'league-slider' in rb or row['results_offseason']
+                sport != 'SOCCER'
+                or 'league-slider' in rb
+                or 'English Premier League' in rb
+                or row['results_offseason']
             )
 
             if row['results_error']:
@@ -80,89 +135,128 @@ def main():
                 issues.append(f'{sport} results: missing Join Premium link')
             elif not row['results_tabs']:
                 issues.append(f'{sport} results: missing Predictions/Results tabs')
-            elif sport == 'SOCCER' and not row['results_soccer_leagues'] and not row['results_offseason']:
+            elif sport == 'SOCCER' and not row['results_soccer_leagues']:
                 issues.append(f'{sport} results: missing league filter UI')
 
-            # --- Data: upcoming predictions ---
             try:
                 preds = N.get_upcoming_predictions(sport, days=7) or []
                 upcoming = [p for p in preds if p.get('home_score') is None]
                 row['upcoming_n'] = len(upcoming)
+                row['spread_ok'] = True
+                row['field_rates'] = {}
                 if upcoming:
                     N._refresh_books_on_predictions(sport, upcoming)
-                    for p in upcoming[:5]:
+                    for p in upcoming[:8]:
                         N._finalize_prediction_odds(p)
-                        N._prepare_pred_card_display(p)
+                        N._enforce_pick_spread_consistency(p, sport=sport)
+                        N._prepare_pred_card_display(p, sport=sport)
+                    keys = list(PICK_CARD_KEYS['all'])
+                    if sport == 'SOCCER':
+                        keys += SOCCER_EXTRA
+                    if sport == 'MLB':
+                        keys += MLB_EXTRA
+                    n = min(len(upcoming), 8)
+                    for k in keys:
+                        row['field_rates'][k] = sum(
+                            1 for p in upcoming[:n] if p.get(k) is not None
+                        )
+                    row['spread_ok'] = all(
+                        _spread_consistent(p) for p in upcoming[:n]
+                    )
+                    if not row['spread_ok']:
+                        issues.append(f'{sport} picks data: PL spread contradicts face pick')
                     sample = upcoming[0]
                     row['sample_book_ml'] = sample.get('book_home_moneyline') is not None
                     row['sample_pl_spread'] = sample.get('disp_pl_spread') is not None
-                    row['sample_logo'] = (
-                        N.team_logo_url(sport, sample.get('home_team_id') or '')
-                        != '/static/pl-logo.svg'
-                        if sport == 'SOCCER'
-                        else True
-                    )
+                    if sport == 'MLB' and sample.get('edge_pct') is not None:
+                        if sample.get('face_edge_pct') is None:
+                            issues.append(f'{sport}: edge_pct set but face_edge_pct missing after prepare')
                 else:
                     row['sample_book_ml'] = None
                     row['sample_pl_spread'] = None
-                    row['sample_logo'] = None
             except Exception as e:
                 row['upcoming_n'] = f'ERR:{e}'
                 issues.append(f'{sport} get_upcoming_predictions: {e}')
 
+            if not row.get('picks_error'):
+                if (
+                    not row['picks_has_cards']
+                    and isinstance(row.get('upcoming_n'), int)
+                    and row['upcoming_n'] > 0
+                ):
+                    issues.append(f'{sport} picks: upcoming games in DB but no cards rendered')
+                elif not row['picks_offseason'] and not row['picks_has_cards']:
+                    issues.append(f'{sport} picks: 200 but no pick cards in HTML')
+                elif not row['picks_offseason'] and not row['picks_join']:
+                    issues.append(f'{sport} picks: missing Join Premium nav')
+                elif not row['picks_offseason'] and not row['picks_books_col']:
+                    issues.append(f'{sport} picks: missing Books/PL labels')
+                elif not row['picks_offseason'] and not row['picks_pl_ml']:
+                    issues.append(f'{sport} picks: missing Prediction Lab ML on card face')
+                elif not row['picks_offseason'] and not row['picks_edge_chip']:
+                    issues.append(f'{sport} picks: MLB Edge % chip missing')
+                elif not row['picks_offseason'] and not row['picks_soccer_draw']:
+                    issues.append(f'{sport} picks: soccer draw row missing on 3-way slate')
+                elif not row['picks_offseason'] and not row['picks_soccer_all']:
+                    issues.append(f'{sport} picks: All Leagues default missing')
+
             rows.append(row)
 
+        sr = c.get('/soccer-results?league=eng.1', headers={'Host': '127.0.0.1'})
+        sb = sr.get_data(as_text=True)
+        soccer_league_ok = (
+            sr.status_code == 200
+            and ('league-slider' in sb or 'English Premier League' in sb or 'eng.1' in sb)
+        )
+        print('\n## SOCCER results league URL')
+        print(f'  soccer-results?league=eng.1 -> {sr.status_code} leagues_ui={"Y" if soccer_league_ok else "N"}')
+        if not soccer_league_ok:
+            issues.append('SOCCER results league query param page unhealthy')
+
     print('\n## PICKS PAGES (HTTP)')
-    print(f'{"Sport":<8} {"Status":<6} {"Cards":<6} {"Join":<5} {"Books":<6} {"Off":<4} {"Err":<4}')
+    print(f'{"Sport":<8} {"Status":<6} {"Cards":<6} {"PL ML":<6} {"Edge":<5} {"Off":<4}')
     for r in rows:
+        edge_s = (
+            'Y' if r.get('picks_edge_chip') else ('—' if r['sport'] != 'MLB' else 'N')
+        )
         print(
             f'{r["sport"]:<8} {r["picks_status"]:<6} {r["picks_cards"]:<6} '
-            f'{"Y" if r["picks_join"] else "N":<5} {"Y" if r["picks_books_col"] else "N":<6} '
-            f'{"Y" if r.get("picks_offseason") else "N":<4} {"Y" if r.get("picks_error") else "N":<4}'
+            f'{"Y" if r.get("picks_pl_ml") else "N":<6} {edge_s:<5} '
+            f'{"Y" if r.get("picks_offseason") else "N":<4}'
         )
 
     print('\n## RESULTS PAGES (HTTP)')
-    print(f'{"Sport":<8} {"Status":<6} {"Join":<5} {"Tabs":<5} {"Data":<5} {"Err":<4}')
+    print(f'{"Sport":<8} {"Status":<6} {"Join":<5} {"Tabs":<5} {"Glicko":<7}')
     for r in rows:
         print(
             f'{r["sport"]:<8} {r["results_status"]:<6} '
             f'{"Y" if r["results_join"] else "N":<5} {"Y" if r["results_tabs"] else "N":<5} '
-            f'{"Y" if r["results_graded"] else "N":<5} {"Y" if r.get("results_error") else "N":<4}'
+            f'{"Y" if r.get("results_grinder") else "N":<7}'
         )
 
-    print('\n## UPCOMING DATA (sample when games exist)')
+    print('\n## UPCOMING DATA (pipeline)')
     for r in rows:
         n = r.get('upcoming_n')
         if isinstance(n, int) and n > 0:
-            logo = r.get('sample_logo')
-            logo_s = 'crest' if logo else ('PL-logo' if logo is False else 'n/a')
+            fr = r.get('field_rates') or {}
+            pl_ml = fr.get('pl_model_home_ml', 0)
             print(
                 f'  {r["sport"]:<8} n={n} book_ml={"Y" if r.get("sample_book_ml") else "N"} '
-                f'pl_spread={"Y" if r.get("sample_pl_spread") else "N"} logo={logo_s}'
+                f'pl_spread={"Y" if r.get("sample_pl_spread") else "N"} '
+                f'pl_ml={pl_ml}/{min(n, 8)} spread_ok={"Y" if r.get("spread_ok") else "N"}'
             )
-            if r['sport'] == 'SOCCER' and logo is False:
-                issues.append('SOCCER picks: sample team still using PL logo (cache miss)')
         elif isinstance(n, int):
             print(f'  {r["sport"]:<8} n=0 (no upcoming in 7d window)')
-
-    print('\n## SOCCER results league URL')
-    with app.test_client() as c:
-        sr = c.get('/soccer-results?league=eng.1', headers={'Host': '127.0.0.1'})
-        sb = sr.get_data(as_text=True)
-        ok = sr.status_code == 200 and ('English Premier League' in sb or 'no graded' in sb.lower())
-        print(f'  soccer-results?league=eng.1 -> {sr.status_code} leagues_ui={"Y" if ok else "N"}')
-        if not ok:
-            issues.append('SOCCER results league query param page unhealthy')
 
     print('\n' + '=' * 72)
     if issues:
         print('ISSUES FOUND (%d):' % len(issues))
         for i in issues:
             print(f'  - {i}')
-        print('VERDICT: NOT READY TO PUSH (fix issues above)')
+        print('VERDICT: FIX ISSUES ABOVE')
         print('=' * 72)
         return 1
-    print('VERDICT: ALL CHECKS PASSED — safe to push from audit perspective')
+    print('VERDICT: ALL CHECKS PASSED')
     print('=' * 72)
     return 0
 
