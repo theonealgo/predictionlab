@@ -53,6 +53,8 @@ def test_soccer_all_leagues_default_shows_every_league_and_date(nhl):
     assert leagues_ui[0]['name'] == 'All Leagues'
     assert leagues_ui[0]['active'] is True
     assert any(lg['name'] == 'English Premier League' and not lg['active'] for lg in leagues_ui[1:])
+    # Picker lists every curated league even when only one comp has games today.
+    assert len(leagues_ui) == 1 + len(nhl.SOCCER_LEAGUE_ORDER)
 
 
 def test_soccer_league_slug_filters_to_one_league(nhl):

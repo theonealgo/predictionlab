@@ -4065,6 +4065,107 @@ SOCCER_LEAGUE_ENDPOINTS = {
     'USL Championship': None,
 }
 
+SOCCER_PICKS_DAYS_BACK = 1
+SOCCER_PICKS_DAYS_FORWARD = 7
+_SOCCER_ESPN_LEAGUE_ID_CACHE: dict = {}
+_SOCCER_ESPN_LEAGUE_ID_TTL = 86400
+_SOCCER_ALL_SCOREBOARD_URL = (
+    'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard'
+)
+
+
+def _espn_soccer_league_id_map():
+    """ESPN numeric league id -> curated league name (cached ~24h)."""
+    now_ts = _time.time()
+    cached = _SOCCER_ESPN_LEAGUE_ID_CACHE.get('bundle')
+    if cached and (now_ts - cached.get('ts', 0)) < _SOCCER_ESPN_LEAGUE_ID_TTL:
+        return cached.get('data') or {}
+    id_map = {}
+    for label, code in SOCCER_LEAGUE_ENDPOINTS.items():
+        if not code:
+            continue
+        try:
+            data = _cached_get(
+                f'https://site.api.espn.com/apis/site/v2/sports/soccer/{code}/scoreboard',
+                timeout=8,
+            )
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        league_info = (data.get('leagues', [{}])[0] or {})
+        league_id = league_info.get('id')
+        if league_id is None:
+            continue
+        canonical = _canonical_soccer_league_name(league_info.get('name')) or label
+        id_map[str(league_id)] = canonical
+    _SOCCER_ESPN_LEAGUE_ID_CACHE['bundle'] = {'ts': now_ts, 'data': id_map}
+    return id_map
+
+
+def _soccer_league_from_espn_uid(uid: str, id_map: dict):
+    if not uid or not id_map:
+        return None
+    match = re.search(r'~l:(\d+)~', uid)
+    if not match:
+        return None
+    return id_map.get(match.group(1))
+
+
+def _fetch_soccer_upcoming_api_games(days_back=None, days_forward=None):
+    """Upcoming soccer games from ESPN soccer/all (one request per day, all leagues)."""
+    days_back = SOCCER_PICKS_DAYS_BACK if days_back is None else days_back
+    days_forward = SOCCER_PICKS_DAYS_FORWARD if days_forward is None else days_forward
+    id_map = _espn_soccer_league_id_map()
+    api_games = []
+    for days_offset in range(-days_back, days_forward + 1):
+        check_date = datetime.now() + timedelta(days=days_offset)
+        date_str = check_date.strftime('%Y%m%d')
+        try:
+            data = _cached_get(f'{_SOCCER_ALL_SCOREBOARD_URL}?dates={date_str}', timeout=15)
+        except Exception as e:
+            logger.debug(f'Error fetching SOCCER all scoreboard for {date_str}: {e}')
+            continue
+        if not isinstance(data, dict):
+            continue
+        events = data.get('events', []) or []
+        for event in events:
+            status_name = (event.get('status') or {}).get('type', {}).get('name', '')
+            if status_name.startswith('STATUS_FINAL'):
+                continue
+            competition = (event.get('competitions', [{}])[0] or {})
+            competitors = competition.get('competitors', []) or []
+            if len(competitors) != 2:
+                continue
+            league_name = _soccer_league_from_espn_uid(competition.get('uid', ''), id_map)
+            if not league_name:
+                league_name = _canonical_soccer_league_from_event(event, competition)
+            if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
+                continue
+            home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+            away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+            if not home or not away:
+                continue
+            _register_soccer_from_competitor(home)
+            _register_soccer_from_competitor(away)
+            home_team = (home.get('team') or {}).get('displayName', '')
+            away_team = (away.get('team') or {}).get('displayName', '')
+            event_id = event.get('id', '')
+            league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_name) or 'all'
+            event_dt = event.get('date', '') or competition.get('date', '')
+            game_date = _espn_event_date_to_local(event_dt) or check_date.strftime('%Y-%m-%d')
+            api_games.append({
+                'game_id': f'SOCCER_{league_code}_{event_id}',
+                'home_team_id': home_team,
+                'away_team_id': away_team,
+                'game_date': game_date,
+                'event_date': event_dt or None,
+                'home_score': None,
+                'away_score': None,
+                'league': league_name,
+            })
+    return api_games
+
 
 def _hydrate_soccer_team_logos(team_names, league_code=None):
     """Warm ESPN team ID cache for names missing from cache (lightweight scoreboard scan)."""
@@ -4166,7 +4267,8 @@ def _filter_soccer_picks(predictions, selected_slug=None):
         pred['league'] = league_name
         leagues.append(league_name)
         filtered.append(pred)
-    soccer_league_list = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
+    # Always show full curated league slider (ESPN may only have games in 1–2 comps today).
+    soccer_league_list = list(SOCCER_LEAGUE_ORDER)
     selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
     if selected_league:
         filtered = [p for p in filtered if p.get('league') == selected_league]
@@ -5533,7 +5635,7 @@ def get_upcoming_predictions(sport, days=365):
     """
     
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
-    cache_key = f"{sport}_upcoming_predictions_v5"
+    cache_key = f"{sport}_upcoming_predictions_v6"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
@@ -5590,10 +5692,10 @@ def get_upcoming_predictions(sport, days=365):
             all_games_with_dates = []
     
     elif sport == 'SOCCER':
-        # Loop -1 to +3 days (reduced from +7 to cut API calls on cold start).
+        # Loop -1 to +13 days: need horizon for date nav + World Cup / int'l windows.
         # Each league needs its own request; results are cached for 15 min.
         api_games = []
-        for days_offset in range(-1, 4):
+        for days_offset in range(-1, 14):
             _check_date = datetime.now() + timedelta(days=days_offset)
             _date_str   = _check_date.strftime('%Y%m%d')
             for league_label, league_code in SOCCER_LEAGUE_ENDPOINTS.items():
@@ -14763,7 +14865,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v16::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v17::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
