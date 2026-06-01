@@ -898,8 +898,8 @@ def _apply_soccer_ml_grading(
     if draw_dec is None:
         game_info['glicko2_correct'] = (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None
         game_info['trueskill_correct'] = (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None
-        game_info['elo_correct'] = (elo_prob >= 0.5) == home_won if home_won is not None else None
-        game_info['xgb_correct'] = (xgb_prob >= 0.5) == home_won if home_won is not None else None
+        game_info['elo_correct'] = (elo_prob >= 0.5) == home_won if elo_prob is not None and home_won is not None else None
+        game_info['xgb_correct'] = (xgb_prob >= 0.5) == home_won if xgb_prob is not None and home_won is not None else None
         game_info['ens_correct'] = (ens_prob >= 0.5) == home_won if ens_prob is not None and home_won is not None else None
         game_info['skip_grading'] = home_won is None
         return
@@ -15336,7 +15336,15 @@ def sport_results(sport):
                 completed_games = _sort_game_rows_by_date_desc(completed_games)
             else:
                 completed_games = conn.execute('''
-                    SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                    SELECT g.*,
+                           p.elo_home_prob,
+                           p.xgboost_home_prob,
+                           p.logistic_home_prob,
+                           p.win_probability,
+                           p.catboost_home_prob,
+                           p.meta_home_prob,
+                           p.glicko_home_prob,
+                           p.trueskill_home_prob
                     FROM games g
                     LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                     WHERE g.sport = ? AND g.home_score IS NOT NULL
@@ -15399,14 +15407,20 @@ def sport_results(sport):
                         if selected_league and league_name != selected_league:
                             continue
 
-                    # Stored DB probs
-                    elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                    # Stored DB probs (use explicit model columns only; never synthetic 50/50 defaults).
+                    glicko2_prob = _to_float_safe(game['glicko_home_prob'])
+                    trueskill_prob = _to_float_safe(game['trueskill_home_prob'])
+                    elo_prob = _to_float_safe(game['elo_home_prob'])
                     xgb_prob = _to_float_safe(game['xgboost_home_prob'])
-                    if xgb_prob is None:
-                        xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-                    ens_prob = _to_float_safe(game['win_probability'])
+                    ens_prob = _to_float_safe(game['meta_home_prob'])
                     if ens_prob is None:
-                        ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                        ens_prob = _to_float_safe(game['win_probability'])
+                    if glicko2_prob is None:
+                        glicko2_prob = _to_float_safe(game['catboost_home_prob'])
+                    if trueskill_prob is None:
+                        trueskill_prob = _to_float_safe(game['logistic_home_prob'])
+                    if elo_prob is None:
+                        elo_prob = _to_float_safe(game['catboost_home_prob'])
 
                     soccer_pred = None
                     model_note = None
@@ -15423,11 +15437,19 @@ def sport_results(sport):
                         ens_prob = soccer_pred.get('ensemble_prob') or ens_prob or elo_prob
                     else:
                         v2 = get_v2_prediction(sport, home_team, away_team, game_date) if sport != 'SOCCER' else None
-                        glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
-                        trueskill_prob = v2.get('trueskill_prob') if v2 else None
                         if v2:
-                            xgb_prob = v2.get('xgboost_prob', xgb_prob)
-                            ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
+                            if glicko2_prob is None:
+                                glicko2_prob = v2.get('glicko2_prob')
+                            if trueskill_prob is None:
+                                trueskill_prob = v2.get('trueskill_prob')
+                            if xgb_prob is None:
+                                xgb_prob = v2.get('xgboost_prob')
+                            if ens_prob is None:
+                                ens_prob = v2.get('home_prob')
+                            if ens_prob is None:
+                                ens_prob = _compute_ensemble_prob(
+                                    glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
+                                )
                         if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
                             model_note = model_note or "Soccer model outputs are unavailable for this matchup."
                     game_info = {
@@ -15442,9 +15464,9 @@ def sport_results(sport):
                         'is_draw':          is_draw,
                         'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
                         'trueskill_prob':   round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
-                        'elo_prob':         round(elo_prob  * 100, 1),
-                        'xgb_prob':         round(xgb_prob  * 100, 1),
-                        'ens_prob':         round(ens_prob  * 100, 1),
+                        'elo_prob':         round(elo_prob  * 100, 1) if elo_prob is not None else None,
+                        'xgb_prob':         round(xgb_prob  * 100, 1) if xgb_prob is not None else None,
+                        'ens_prob':         round(ens_prob  * 100, 1) if ens_prob is not None else None,
                         'model_data_note':   model_note,
                     }
                     _draw_dec = soccer_pred.get('draw_prob') if soccer_pred else None
