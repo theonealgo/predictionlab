@@ -685,7 +685,8 @@
                 {% set away_wins = is_final and pred.away_score > pred.home_score %}
                 {% set home_picked = pred.predicted_winner == pred.home_team_id %}
                 {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
-                {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
+                {% set _soc_active = (sport != 'SOCCER') or (pred.soccer_pick_active is defined and pred.soccer_pick_active) %}
+                {% set _odds_pass = ((_picked_ml is none) or (_picked_ml >= -150)) and _soc_active %}
                 <div class="game-card-stack">
                 <div class="game-card pick-card" data-league="{{ pred.league if pred.league else 'Other' }}">
                     {% set _force_rl = (sport == 'MLB') %}

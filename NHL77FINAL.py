@@ -2554,6 +2554,20 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
         else:
             pred['face_pick_confidence'] = None
 
+    # ── Soccer confidence gate ─────────────────────────────────────────────
+    # Only flag soccer picks where the inverted model is ≥60% confident.
+    # Below that threshold the edge is too thin to beat -110 vig consistently.
+    # Sets soccer_pick_active so the template can also suppress the pick arrow.
+    _SOCCER_PICK_MIN_CONF = 60.0
+    if sport == 'SOCCER':
+        _soc_conf = pred.get('face_pick_confidence')
+        if _soc_conf is not None and float(_soc_conf) >= _SOCCER_PICK_MIN_CONF:
+            pred['soccer_pick_active'] = True
+        else:
+            pred['face_pick_team'] = None
+            pred['face_pick_confidence'] = None
+            pred['soccer_pick_active'] = False
+
 
 def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     """Precompute odds fields for the picks template (avoids fragile nested Jinja)."""
