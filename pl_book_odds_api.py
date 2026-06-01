@@ -84,10 +84,14 @@ _SOCCER_LEAGUE_ALIASES = {
 }
 
 SOCCER_PROBE_SLUGS = [
+    # Tier 1 leagues (have DraftKings odds on ESPN Core API)
     'eng.1', 'esp.1', 'ger.1', 'ita.1', 'fra.1',
     'uefa.champions', 'uefa.europa', 'uefa.europa.conf',
     'usa.1', 'mex.1', 'ned.1', 'por.1', 'afc.champions',
     'conmebol.libertadores', 'concacaf.champions',
+    # Tier 2 / lower divisions (odds availability varies)
+    'eng.2', 'esp.2', 'ger.2', 'ita.2', 'fra.2',
+    'usa.open', 'mex.2',
 ]
 
 

@@ -4167,7 +4167,36 @@ def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
                     away_score = int(away.get('score', 0))
                 except Exception:
                     continue
-            api_games.append({
+            # Extract book odds directly from the scoreboard response.
+            # This covers lower-division leagues (esp.2, eng.2, etc.) that ESPN
+            # Core odds API doesn't serve, so the picks page shows real lines.
+            _sb_home_ml = _sb_away_ml = _sb_spread = _sb_total = None
+            _sb_source = None
+            for _odds_item in (competition.get('odds') or []):
+                if not isinstance(_odds_item, dict):
+                    continue
+                _prov = ((_odds_item.get('provider') or {}).get('name') or '').lower()
+                if 'live' in _prov:
+                    continue
+                try:
+                    _hml = (_odds_item.get('homeTeamOdds') or {}).get('moneyLine')
+                    _aml = (_odds_item.get('awayTeamOdds') or {}).get('moneyLine')
+                    if _hml is not None:
+                        _sb_home_ml = int(round(float(_hml)))
+                    if _aml is not None:
+                        _sb_away_ml = int(round(float(_aml)))
+                    _sp = _odds_item.get('spread')
+                    if _sp is not None:
+                        _sb_spread = float(_sp)
+                    _ou = _odds_item.get('overUnder')
+                    if _ou is not None:
+                        _sb_total = float(_ou)
+                    _sb_source = ((_odds_item.get('provider') or {}).get('name') or 'ESPN')
+                except (TypeError, ValueError):
+                    pass
+                if _sb_home_ml is not None or _sb_spread is not None:
+                    break  # use first valid provider
+            _game_entry = {
                 'game_id': f'SOCCER_{league_code}_{event_id}',
                 'home_team_id': home_team,
                 'away_team_id': away_team,
@@ -4176,7 +4205,16 @@ def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
                 'home_score': home_score,
                 'away_score': away_score,
                 'league': league_name,
-            })
+            }
+            if _sb_home_ml is not None:
+                _game_entry['book_home_moneyline'] = _sb_home_ml
+                _game_entry['book_away_moneyline'] = _sb_away_ml
+                _game_entry['book_odds_source'] = _sb_source or 'ESPN Scoreboard'
+            if _sb_spread is not None:
+                _game_entry['book_spread'] = _sb_spread
+            if _sb_total is not None:
+                _game_entry['book_total'] = _sb_total
+            api_games.append(_game_entry)
     return api_games
 
 
