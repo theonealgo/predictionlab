@@ -131,6 +131,35 @@ def test_nba_spread_not_faded(nhl):
     assert card["xgb_spread"] == pytest.approx(3.5)
 
 
+def test_enforce_pick_spread_consistency_fixes_nba_contradiction(nhl):
+    card = {
+        "home_team_id": "New York Knicks",
+        "away_team_id": "Cleveland Cavaliers",
+        "our_spread": 8.0,
+        "ensemble_prob": 38.0,
+        "predicted_winner": "Cleveland Cavaliers",
+    }
+    nhl._enforce_pick_spread_consistency(card, sport="NBA")
+    nhl._prepare_pred_card_display(card, sport="NBA")
+    assert card["ensemble_prob"] > 50.0
+    assert card["predicted_winner"] == "New York Knicks"
+    assert card["disp_pl_spread"] > 0
+
+
+def test_pred_card_pl_spread_ignores_pre_enforce_prob(nhl):
+    """Display spread must align to enforced/visible PL probability, not stale pre-enforce."""
+    card = {
+        "home_team_id": "Seattle Storm",
+        "away_team_id": "Las Vegas Aces",
+        "our_spread": 6.0,  # home favorite in card convention
+        "ensemble_prob": 64.0,  # enforced probability
+        "_ensemble_prob_pre_enforce": 42.0,  # stale pre-correction value
+    }
+    nhl._prepare_pred_card_display(card, sport="WNBA")
+    assert card["disp_pl_spread"] == pytest.approx(6.0)
+    assert card.get("face_pick_team") == "Seattle Storm"
+
+
 def test_mlb_daily_grading_uses_faded_xgb_spread(nhl, monkeypatch):
     """Positive raw xgb_spread → faded → away run-line pick in results grading."""
     monkeypatch.setattr(nhl, "_get_xgb_spread_model", lambda _s: None)

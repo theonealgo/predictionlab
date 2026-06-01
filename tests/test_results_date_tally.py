@@ -189,6 +189,64 @@ def test_wnba_results_uses_real_model_columns_for_tallies_and_cards(monkeypatch)
     assert first_game['trueskill_prob'] == 56.0
 
 
+def test_nba_results_uses_stale_tally_bundle(monkeypatch):
+    import NHL77FINAL as N
+
+    stale_date = '2026-05-25'
+    weekly_results = {
+        1: {
+            'games': [
+                {
+                    'date': stale_date,
+                    'skip_grading': False,
+                    'home_score': 110,
+                    'away_score': 102,
+                    'glicko2_prob': 58.0,
+                    'glicko2_correct': True,
+                    'trueskill_prob': 55.0,
+                    'trueskill_correct': True,
+                    'elo_prob': 54.0,
+                    'elo_correct': True,
+                    'xgb_prob': 52.0,
+                    'xgb_correct': True,
+                    'ens_prob': 57.0,
+                    'ens_correct': True,
+                }
+            ],
+            'glicko2': {'correct': 1, 'total': 1, 'accuracy': 100.0},
+            'trueskill': {'correct': 1, 'total': 1, 'accuracy': 100.0},
+            'elo': {'correct': 1, 'total': 1, 'accuracy': 100.0},
+            'xgboost': {'correct': 1, 'total': 1, 'accuracy': 100.0},
+            'ensemble': {'correct': 1, 'total': 1, 'accuracy': 100.0},
+        }
+    }
+
+    monkeypatch.setattr(N, 'update_nba_scores', lambda: None)
+    monkeypatch.setattr(N, 'calculate_nba_weekly_performance', lambda: weekly_results)
+    monkeypatch.setattr(N, '_attach_book_odds_to_daily_results', lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(N, '_cache_market_lines_for_results', lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(N, '_attach_engine_odds_to_daily_results', lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(N, '_compute_spread_total_for_daily', lambda *_args, **_kwargs: {'spread_graded': 0, 'total_graded': 0})
+    monkeypatch.setattr(N, '_finalize_daily_result_cards', lambda *_args, **_kwargs: None)
+
+    captured = {}
+
+    def _fake_render(_template, **kwargs):
+        captured.update(kwargs)
+        return "ok"
+
+    monkeypatch.setattr(N, 'render_template_string', _fake_render)
+    out = N.sport_results('NBA')
+
+    assert out == "ok"
+    assert captured['results_stale_notice'] is True
+    assert captured['daily_tally_date'] == stale_date
+    assert captured['daily_tally_games'] == 1
+    assert captured['weekly_tally_games'] == 1
+    assert captured['weekly_tally']['glicko2']['total'] == 1
+    assert captured['weekly_tally']['trueskill']['total'] == 1
+
+
 def test_wnba_results_does_not_fabricate_model_probs_when_absent(monkeypatch):
     import NHL77FINAL as N
 

@@ -1910,12 +1910,11 @@ def _set_card_book_lines(card: dict) -> None:
 
 def _pl_home_prob_for_spread_display(card: dict):
     """Home win % (0–100) used to sign-normalize disp_pl_spread for card UI only."""
-    pre = _safe_float(card.get('_ensemble_prob_pre_enforce'))
-    if pre is not None:
-        return _normalize_home_win_prob_pct(pre)
     disp = _safe_float(card.get('disp_ml_prob'))
     if disp is not None:
         return _normalize_home_win_prob_pct(disp)
+    # Do not use _ensemble_prob_pre_enforce here; it is intentionally pre-correction
+    # diagnostic state and can re-introduce spread/winner contradictions on cards.
     for key in ('ensemble_prob', 'ens_prob'):
         v = _safe_float(card.get(key))
         if v is not None:
@@ -15230,15 +15229,18 @@ def sport_results(sport):
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 _finalize_daily_result_cards(sport, daily_results)
                 season_perf = _build_season_performance_summary(overall_stats, _st_stats)
-                daily_tally_date = yesterday
-                daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
-                daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
-                weekly_start_dt = yesterday_dt - timedelta(days=6)
-                weekly_tally = compute_model_tally_for_range(daily_results, weekly_start_dt, yesterday_dt)
-                weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
-                weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday_dt.strftime('%Y-%m-%d')}"
+                tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+                daily_tally = tally_bundle['daily_tally']
+                daily_tally_date = tally_bundle['daily_tally_date']
+                daily_tally_games = tally_bundle['daily_tally_games']
+                weekly_tally = tally_bundle['weekly_tally']
+                weekly_tally_date_range = tally_bundle['weekly_tally_date_range']
+                weekly_tally_games = tally_bundle['weekly_tally_games']
+                weekly_start_dt = tally_bundle['weekly_start_dt']
+                weekly_end_dt = tally_bundle['weekly_end_dt']
+                results_stale_notice = tally_bundle['results_stale_notice']
                 roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
-                roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, yesterday_dt)
+                roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
                 roi_total = compute_roi_for_range(daily_results, None, None)
                 roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
                 rendered = render_template_string(
@@ -15258,7 +15260,8 @@ def sport_results(sport):
                     weekly_tally=weekly_tally,
                     weekly_tally_date_range=weekly_tally_date_range,
                     weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards
+                    roi_cards=roi_cards,
+                    results_stale_notice=results_stale_notice,
                 )
                 if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
                     _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)

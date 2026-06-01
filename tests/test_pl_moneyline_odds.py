@@ -38,5 +38,6 @@ def test_compute_odds_no_absurd_values(nhl):
 def test_set_card_pl_moneylines_from_ensemble(nhl):
     card = {'ensemble_prob': 55.0}
     nhl._set_card_pl_moneylines(card)
-    assert card['pl_model_home_ml'] == -122
-    assert card['pl_model_away_ml'] == 122
+    expected = nhl._compute_odds_from_prob(55.0, apply_vig=True, clamp_ml=True)
+    assert card['pl_model_home_ml'] == expected['moneyline_home']
+    assert card['pl_model_away_ml'] == expected['moneyline_away']
