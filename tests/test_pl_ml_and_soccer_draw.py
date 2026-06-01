@@ -53,6 +53,38 @@ def test_soccer_pick_card_draw_and_pl_ml(nhl):
     assert card.get("pl_model_away_ml") is not None
 
 
+def test_soccer_binary_probs_render_without_draw_fields(nhl):
+    card = {
+        "home_team_id": "Granada",
+        "away_team_id": "Almeria",
+        "xgb_prob": 58.0,
+        "ensemble_prob": 55.0,
+        "book_home_moneyline": -110,
+        "book_away_moneyline": -110,
+    }
+    nhl._prepare_pred_card_display(card, sport="SOCCER")
+    assert card.get("face_home_prob") == pytest.approx(58.0)
+    assert card.get("face_away_prob") == pytest.approx(42.0)
+    assert card.get("pl_model_home_ml") is not None
+    assert card.get("pl_model_away_ml") is not None
+
+
+def test_soccer_missing_model_data_no_fake_fifty_fifty(nhl):
+    card = {
+        "home_team_id": "Ceuta",
+        "away_team_id": "Albacete",
+        "elo_prob": 50.0,
+        "xgb_prob": None,
+        "ensemble_prob": None,
+    }
+    nhl._prepare_pred_card_display(card, sport="SOCCER")
+    assert card.get("face_home_prob") is None
+    assert card.get("face_away_prob") is None
+    assert card.get("face_pick_confidence") is None
+    assert card.get("pl_model_home_ml") is None
+    assert card.get("pl_model_away_ml") is None
+
+
 def test_soccer_ml_grading_draw_pick(nhl):
     info = {
         "glicko2_prob": 55.0,

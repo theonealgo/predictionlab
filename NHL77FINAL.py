@@ -2448,11 +2448,16 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
         pred['face_draw_prob'] = draw_prob
     else:
         draw_prob = None
-        home_prob = _safe_float(pred.get(prob_key))
-        if home_prob is None and prob_key != 'ensemble_prob':
-            home_prob = _safe_float(pred.get('ensemble_prob'))
-        if home_prob is None:
-            home_prob = _safe_float(pred.get('elo_prob'))
+        # Keep soccer layers isolated: XSharp card face should use xgb_prob only
+        # unless 3-way draw decomposition is present.
+        if sport == 'SOCCER':
+            home_prob = _safe_float(pred.get('xgb_prob'))
+        else:
+            home_prob = _safe_float(pred.get(prob_key))
+            if home_prob is None and prob_key != 'ensemble_prob':
+                home_prob = _safe_float(pred.get('ensemble_prob'))
+            if home_prob is None:
+                home_prob = _safe_float(pred.get('elo_prob'))
         if home_prob is not None:
             if home_prob <= 1.0:
                 home_prob *= 100.0
@@ -5981,11 +5986,14 @@ def get_upcoming_predictions(sport, days=365):
                 ensemble_prob = soccer_pred.get('ensemble_prob')
                 _g2_soc = soccer_pred.get('poisson_xg_prob')
                 _ts_soc = soccer_pred.get('markov_prob')
-                # Count how many valid model outputs we have
-                _valid_count = sum(1 for p in [elo_prob, xgb_prob, _g2_soc, _ts_soc] if p is not None and abs(p - 0.5) > 0.005)
-                if _valid_count < 2:
-                    # Insufficient data — don't show fake predictions
-                    elo_prob = 0.5
+                # Treat this as insufficient only when all model outputs are missing.
+                # A true 50/50 probability is still valid model output and should render.
+                _available_count = sum(
+                    1 for p in [elo_prob, xgb_prob, ensemble_prob, _g2_soc, _ts_soc] if p is not None
+                )
+                if _available_count == 0:
+                    # Insufficient data — avoid synthetic 50/50 defaults on card face.
+                    elo_prob = None
                     xgb_prob = None
                     ensemble_prob = None
                     game['glicko2_prob'] = None
@@ -6004,7 +6012,7 @@ def get_upcoming_predictions(sport, days=365):
                 game['is_v2'] = True
             elif sport == 'SOCCER' and not soccer_pred:
                 # Soccer without model data — show insufficient data
-                elo_prob = 0.5
+                elo_prob = None
                 xgb_prob = None
                 ensemble_prob = None
                 game['glicko2_prob'] = None
@@ -6134,7 +6142,7 @@ def get_upcoming_predictions(sport, days=365):
             elif elo_prob is not None:
                 game_dict['predicted_winner'] = game['home_team_id'] if elo_prob > 0.5 else game['away_team_id']
             else:
-                game_dict['predicted_winner'] = game['home_team_id']  # fallback
+                game_dict['predicted_winner'] = None if sport == 'SOCCER' else game['home_team_id']
             
             # Ensure date has no time in GUI
             from datetime import datetime as _dt
