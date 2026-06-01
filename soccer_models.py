@@ -343,41 +343,59 @@ class SoccerModelBundle:
         markov = self.markov.predict(reg['expected_home'], reg['expected_away'])
 
         def _to_home_win(prob_dict: dict) -> float:
+            # p(home win binary) = home_win + half-draw credit
             return prob_dict['home_win'] + 0.5 * prob_dict['draw']
 
-        xg_home = _to_home_win(xg)
-        reg_home = _to_home_win(reg)
-        markov_home = _to_home_win(markov)
-        elo_home_win = elo_home + 0.5 * elo_draw
+        def _to_away_win(prob_dict: dict) -> float:
+            # p(away win binary) = away_win + half-draw credit
+            # Mathematically: 1 - _to_home_win(prob_dict)
+            return prob_dict['away_win'] + 0.5 * prob_dict['draw']
 
-        # Weights derived from backtesting (EFL Championship, 237 games):
-        # ELO 48.5% > Grinder2 47.3% > Consensus 47.7% > XSharp/Takedown 46.4%
-        # ELO performs best → raised to 0.45; Poisson models reduced accordingly.
+        # Raw model outputs (home-favored direction)
+        xg_home_raw     = _to_home_win(xg)
+        reg_home_raw    = _to_home_win(reg)
+        markov_home_raw = _to_home_win(markov)
+        elo_home_raw    = elo_home + 0.5 * elo_draw
+
+        # ── INVERSION ────────────────────────────────────────────────────────
+        # All soccer models show <50% moneyline accuracy (46-49%) in backtesting,
+        # which means they are systematically wrong more often than right.
+        # Taking the OPPOSITE of each model's home/away pick converts that
+        # systematic error into a systematic edge:  46% → 54%, 47% → 53%, etc.
+        # Draw probability is symmetric — it does not need to be flipped.
+        # The inversion swaps home_win ↔ away_win while preserving draw weight:
+        #   inverted = away_win + 0.5*draw = 1 - (home_win + 0.5*draw)  ✓
+        # ─────────────────────────────────────────────────────────────────────
+        xg_home     = _to_away_win(xg)
+        reg_home    = _to_away_win(reg)
+        markov_home = _to_away_win(markov)
+        elo_home_win = 1.0 - elo_home_raw
+
+        # Equal weights post-inversion: pre-flip Poisson/Markov (46.4%) inverts
+        # to ~53.6%, ELO (48.5%) inverts to ~51.5% — differences are small,
+        # equal weights avoid over-fitting to a single league's backtest.
         weights = {
-            'xg':     (xg_home,       0.18),
-            'reg':    (reg_home,       0.18),
-            'markov': (markov_home,    0.14),
-            'elo':    (elo_home_win,   0.50),
+            'xg':     (xg_home,     0.25),
+            'reg':    (reg_home,    0.25),
+            'markov': (markov_home, 0.25),
+            'elo':    (elo_home_win, 0.25),
         }
         total_weight = sum(w for _, w in weights.values())
         ensemble = sum(p * w for p, w in weights.values()) / total_weight if total_weight > 0 else None
 
-        # Draw probability: weight matches model weights so it's consistent with pick
-        draw_prob = (
-            xg['draw']     * 0.18
-            + reg['draw']  * 0.18
-            + markov['draw'] * 0.14
-            + elo_draw     * 0.50
-        )
+        # Draw probability: symmetric — same regardless of which side wins
+        draw_prob = (xg['draw'] + reg['draw'] + markov['draw'] + elo_draw) / 4.0
 
+        # Projected scores: swap home/away to reflect the inverted assessment
+        # (the model now treats the "away" team's expected output as home output)
         return {
             'poisson_xg_prob': xg_home,
             'poisson_reg_prob': reg_home,
             'markov_prob': markov_home,
             'elo_prob': elo_home_win,
             'ensemble_prob': ensemble,
-            'expected_home_score': reg['expected_home'],
-            'expected_away_score': reg['expected_away'],
+            'expected_home_score': reg['expected_away'],
+            'expected_away_score': reg['expected_home'],
             'draw_prob': draw_prob,
         }
 
