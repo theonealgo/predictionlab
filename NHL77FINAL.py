@@ -4064,6 +4064,42 @@ def _soccer_league_from_slug(slug: str):
         return None
     return SOCCER_LEAGUE_SLUGS.get(slug.strip().lower())
 
+
+def _filter_soccer_picks(predictions, selected_slug=None):
+    """Curate soccer picks and league picker; filter only when ?league= is set."""
+    filtered = []
+    leagues = []
+    for pred in predictions:
+        league_raw = pred.get('league')
+        league_name = _canonical_soccer_league_name(league_raw) or league_raw
+        if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
+            continue
+        pred['league'] = league_name
+        leagues.append(league_name)
+        filtered.append(pred)
+    soccer_league_list = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
+    selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
+    if selected_league:
+        filtered = [p for p in filtered if p.get('league') == selected_league]
+    soccer_leagues = [
+        {
+            'name': 'All Leagues',
+            'slug': '',
+            'active': selected_league is None,
+            'url': '/soccer-picks',
+        }
+    ] + [
+        {
+            'name': lg,
+            'slug': _soccer_league_slug(lg),
+            'active': lg == selected_league,
+            'url': f"/soccer-picks?league={_soccer_league_slug(lg)}",
+        }
+        for lg in soccer_league_list
+    ]
+    return filtered, soccer_leagues, selected_league
+
+
 def _get_soccer_model_bundle(completed_games, league_name=None):
     league_key = _soccer_league_slug(league_name) if league_name else 'all'
     cache_key = f"soccer_bundle_{league_key}"
@@ -14716,41 +14752,9 @@ def sport_predictions(sport, filter_date=None):
     soccer_leagues = None
     selected_league = None
     if sport == 'SOCCER':
-        selected_slug = request.args.get('league')
-        filtered = []
-        leagues = []
-        for pred in predictions:
-            league_raw = pred.get('league')
-            league_name = _canonical_soccer_league_name(league_raw) or league_raw
-            if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
-                continue
-            pred['league'] = league_name
-            leagues.append(league_name)
-            filtered.append(pred)
-        soccer_league_list = _ordered_soccer_leagues(leagues) if leagues else SOCCER_LEAGUE_ORDER
-        selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
-        # Default to first available league if none selected (loading all leagues causes OOM)
-        if not selected_league and soccer_league_list:
-            selected_league = soccer_league_list[0]
-        if selected_league:
-            filtered = [p for p in filtered if p.get('league') == selected_league]
-        predictions = filtered
-        soccer_leagues = [
-            {
-                'name': 'All Leagues',
-                'slug': '',
-                'active': selected_league is None,
-                'url': '/soccer-picks',
-            }
-        ] + [
-            {
-                'name': lg,
-                'slug': _soccer_league_slug(lg),
-                'active': lg == selected_league,
-                'url': f"/soccer-picks?league={_soccer_league_slug(lg)}",
-            }
-            for lg in soccer_league_list
-        ]
+        predictions, soccer_leagues, selected_league = _filter_soccer_picks(
+            predictions, request.args.get('league'),
+        )
 
     try:
         today_date = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
