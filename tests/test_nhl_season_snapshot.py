@@ -220,5 +220,11 @@ def test_load_season_snapshot_from_repo():
     if snap is None:
         pytest.skip('NHL_2025-26_regular.json not built yet')
     assert snap['sport'] == 'NHL'
-    assert snap['games_in_scope'] <= 1312
-    assert snap['season_perf']['ml_total'] > 0
+    scope = snap.get('games_in_scope') or 0
+    assert scope <= 1312
+    assert scope > 1000
+    perf = snap['season_perf']
+    assert perf['ml_total'] > 1000
+    st = snap.get('spread_total_stats') or {}
+    assert st.get('spread_graded', 0) > 1000
+    assert st.get('total_graded', 0) > 1000

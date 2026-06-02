@@ -19,8 +19,10 @@ Heavy results pages re-grade every completed game on each request. For finished 
 2. Build snapshot (Render one-off job or locally against a DB copy):
 
    ```bash
-   PL_SKIP_V2_FOR_RESULTS=1 python scripts/build_season_snapshot.py --sport NHL --season 2025-26 --phase regular
+   python scripts/build_season_snapshot.py --sport NHL --season 2025-26 --phase regular
    ```
+
+   Snapshot builds set `PL_SNAPSHOT_BUILD=1` (full v2 ML + XGB spread/total). Do not use `PL_SKIP_V2_FOR_RESULTS` for snapshots.
 
 3. Review `data/season_snapshots/NHL_2025-26_regular.json` (games_in_scope, ML/spread/O/U).
 4. Commit the JSON (not `sports_predictions_original.db`), merge, deploy.

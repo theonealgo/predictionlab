@@ -3384,6 +3384,8 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, 
             ens_prob = _compute_ensemble_prob(
                 glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
             )
+        if sport == 'NHL' and elo_prob is None and glicko2_prob is not None:
+            elo_prob = glicko2_prob
 
         game_info = {
             'game_id':         game['game_id'],
@@ -7900,7 +7902,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
     """Compute XSharp spread/total grading for games already in daily_results (in-place).
     Returns aggregate stats dict (may be None for spread/total if model unavailable,
     but market lines and H2H are always attached)."""
-    st_cov = st_gr = tt_cor = tt_gr = 0
+    st_cov = st_gr = st_push = tt_cor = tt_gr = tt_push = 0
     try:
         # H2H last-10 "Our Total" (used as the O/U line the model is compared to)
         try:
@@ -7912,7 +7914,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
         except Exception as _ne:
             logger.debug(f"[nba-eff] pre-compute failed for {sport}: {_ne}")
         _game_count = sum(len(dd.get('games', [])) for dd in daily_results.values())
-        _skip_heavy_predict = _game_count > 500
+        _snapshot_build = _os.environ.get('PL_SNAPSHOT_BUILD') == '1'
+        _skip_heavy_predict = _game_count > 500 and not _snapshot_build
         _xgb = None
         _sp = None
         if not _skip_heavy_predict:
@@ -7943,19 +7946,18 @@ def _compute_spread_total_for_daily(sport, daily_results):
             has_extra = False
 
         try:
+            _line_limit = '' if _snapshot_build else ' LIMIT 2000'
             if has_extra:
-                rows = conn.execute('''
+                rows = conn.execute(f'''
                     SELECT game_id, game_date, home_team, away_team, spread, total, fetched_at
                     FROM betting_lines
                     WHERE sport=?
-                    ORDER BY fetched_at DESC
-                    LIMIT 2000
+                    ORDER BY fetched_at DESC{_line_limit}
                 ''', (sport,)).fetchall()
             else:
-                rows = conn.execute('''
+                rows = conn.execute(f'''
                     SELECT game_id, spread, total
-                    FROM betting_lines
-                    LIMIT 2000
+                    FROM betting_lines{_line_limit}
                 ''').fetchall()
             for r in rows:
                 if r['game_id']:
@@ -8074,6 +8076,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         pass
                 g['xgb_total'] = xt
                 g['xgb_spread'] = xs
+                if sport == 'NHL' and xs is not None:
+                    xs = -xs
+                    g['xgb_spread'] = xs
                 if sport in SPREAD_FADE_SPORTS:
                     _apply_spread_fade(g)
                     xs = g.get('xgb_spread')
@@ -8243,6 +8248,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             tt_gr += 1
                             if tp_ok:
                                 tt_cor += 1
+                        else:
+                            tp_disp = 'PUSH'
+                            tt_gr += 1
+                            tt_push += 1
                         strong = False
                         if our_total_h2h is not None:
                             h2h_edge = our_total_h2h - _grade_mt
@@ -8285,12 +8294,18 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             g['market_total_reason'] = "H2H last-10"
                         elif _OU_BENCH.get(sport):
                             mt = float(_OU_BENCH[sport])
-                            g['market_total_reason'] = "sport benchmark (not graded)"
-                            total_fallback_used = True
+                            g['market_total_reason'] = (
+                                "sport benchmark (snapshot)"
+                                if _snapshot_build else "sport benchmark (not graded)"
+                            )
+                            total_fallback_used = not _snapshot_build
                         elif adj_xt is not None:
                             mt = round(adj_xt, 1)
-                            g['market_total_reason'] = "XSharp total (not graded)"
-                            total_fallback_used = True
+                            g['market_total_reason'] = (
+                                "XSharp total (snapshot)"
+                                if _snapshot_build else "XSharp total (not graded)"
+                            )
+                            total_fallback_used = not _snapshot_build
                     g['market_spread'] = ms
                     g['market_total'] = mt if mt is not None else sportsbook_mt
                     if ms is None:
@@ -8298,17 +8313,26 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     if mt is None and sportsbook_mt is None:
                         g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
 
-                    # Fallback spread: if Vegas spread missing, use pick-em (0)
-                    # so every game with a model spread gets graded (not NHL — needs real book line).
+                    # Fallback spread: pick-em for non-NHL; NHL snapshot uses ±1.5 puck line.
                     if ms is None and xs is not None and sport != 'NHL':
                         ms = 0.0
                         g['market_spread_reason'] = "pick-em (fallback)"
+                    elif (
+                        ms is None and xs is not None and sport == 'NHL' and _snapshot_build
+                    ):
+                        ens = _safe_float(g.get('ens_prob'))
+                        if ens is not None:
+                            ms = -_PUCK_LINE_VALUE if ens >= 50 else _PUCK_LINE_VALUE
+                        else:
+                            ms = -_PUCK_LINE_VALUE if xs >= 0 else _PUCK_LINE_VALUE
+                        g['market_spread_reason'] = "puck line ±1.5 (fallback)"
                     g['market_spread'] = ms
                     if xs is not None and ms is not None:
                         dm = xs + ms
                         da = am + ms
                         if abs(dm) < 1e-9:
                             sp_disp = 'PUSH'
+                            st_push += 1
                         elif abs(da) < 1e-9:
                             sp_disp = 'HOME' if dm > 0 else 'AWAY'
                         else:
@@ -8341,6 +8365,10 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             tt_gr += 1
                             if tp_ok:
                                 tt_cor += 1
+                        else:
+                            tp_disp = 'PUSH'
+                            tt_gr += 1
+                            tt_push += 1
                         line_for_label = _grade_mt
                         strong = False
                         if our_total_h2h is not None:
@@ -8387,13 +8415,16 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 g['total_pick'] = tp_disp
                 g['total_correct'] = tp_ok
 
+        _tt_decided = tt_gr - tt_push
         stats = {
             'spread_covered': st_cov,
-            'spread_graded': st_gr,
+            'spread_graded': st_gr + st_push,
+            'spread_pushes': st_push,
             'spread_pct': round(st_cov / st_gr * 100, 1) if st_gr > 0 else None,
             'total_correct': tt_cor,
             'total_graded': tt_gr,
-            'total_pct': round(tt_cor / tt_gr * 100, 1) if tt_gr > 0 else None,
+            'total_pushes': tt_push,
+            'total_pct': round(tt_cor / _tt_decided * 100, 1) if _tt_decided > 0 else None,
         }
         if st_gr == 0 and tt_gr == 0:
             logger.warning(
@@ -8487,19 +8518,20 @@ def _build_season_performance_summary(
     sp_pct = st.get('spread_pct') if sp_gr > 0 else None
     ou_pct = st.get('total_pct') if ou_gr > 0 else None
     spread_note = ou_note = None
-    if ml_total and sp_gr < ml_total:
+    scope_total = int(games_in_scope or ml_total or 0)
+    if scope_total and sp_gr < scope_total:
         spread_note = (
-            f"Graded {sp_gr} of {ml_total} moneyline games "
+            f"Graded {sp_gr} of {scope_total} games in scope "
             "(needs book spread line + XSharp spread)"
         )
-    elif ml_total and sp_gr == 0:
+    elif scope_total and sp_gr == 0:
         spread_note = "No spread grades yet — missing book lines or XSharp spread"
-    if ml_total and ou_gr < ml_total:
+    if scope_total and ou_gr < scope_total:
         ou_note = (
-            f"Graded {ou_gr} of {ml_total} moneyline games "
+            f"Graded {ou_gr} of {scope_total} games in scope "
             "(needs posted O/U total + XSharp total)"
         )
-    elif ml_total and ou_gr == 0:
+    elif scope_total and ou_gr == 0:
         ou_note = "No O/U grades yet — missing posted totals on books"
     return {
         'ml_total': ml_total,

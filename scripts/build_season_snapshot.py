@@ -2,7 +2,10 @@
 """Build a frozen season snapshot JSON for results pages.
 
 Example:
-  PL_SKIP_V2_FOR_RESULTS=1 python scripts/build_season_snapshot.py --sport NHL --season 2025-26
+  python scripts/build_season_snapshot.py --sport NHL --season 2025-26
+
+Snapshot builds run full v2 ML + XGB spread/total grading (PL_SNAPSHOT_BUILD=1).
+Use PL_SKIP_V2_FOR_RESULTS=1 only for live results pages, not snapshot builds.
 """
 from __future__ import annotations
 
@@ -15,8 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-# DB-only grading for full-season builds (avoids 1300+ v2 inference calls).
-os.environ.setdefault('PL_SKIP_V2_FOR_RESULTS', '1')
+# Full-season snapshot: grade every completed game (XGB spread/total + v2 ML).
+os.environ['PL_SNAPSHOT_BUILD'] = '1'
+os.environ.pop('PL_SKIP_V2_FOR_RESULTS', None)
 
 
 def _parse_season(season: str) -> datetime:
@@ -36,7 +40,7 @@ def build_snapshot(sport: str, season: str, phase: str) -> Path:
     if phase == 'regular':
         start_dt, end_dt = N._nhl_results_regular_season_bounds(ref_dt)
         daily = N._banner_daily_results_for_range(
-            sport, start_dt, end_dt, playoffs=False, skip_v2=True,
+            sport, start_dt, end_dt, playoffs=False, skip_v2=False,
         )
         scope_label = 'NHL regular season (Oct–Apr)'
         games_expected = N.SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL')
@@ -100,7 +104,13 @@ def build_snapshot(sport: str, season: str, phase: str) -> Path:
         'roi_total': roi_total,
     }
     path = save_season_snapshot(payload, sport, season, phase)
-    print(f'Wrote {path} ({games_in_scope} games, ML {season_perf.get("ml_total")} graded)')
+    sp_gr = season_perf.get('spread_graded', 0)
+    ou_gr = season_perf.get('ou_graded', 0)
+    ml_total = season_perf.get('ml_total', 0)
+    print(
+        f'Wrote {path} ({games_in_scope} in scope, '
+        f'ML {ml_total}, spread {sp_gr}, O/U {ou_gr} graded)'
+    )
     return path
 
 
