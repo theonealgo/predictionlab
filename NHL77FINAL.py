@@ -4747,29 +4747,57 @@ def update_espn_scores(sport):
             updates_count = 0
             request_count = 0
 
-            try:
-                completed_count = conn.execute(
-                    "SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
-                    (sport,)
-                ).fetchone()[0]
-            except Exception:
-                completed_count = 0
-
-            days_back = 14 if completed_count < 50 else 7
-            max_requests = 140 if completed_count < 50 else 70
             today = datetime.now()
 
-            for days_offset in range(days_back):
-                if request_count >= max_requests:
-                    break
-                date_str = (today - timedelta(days=days_offset)).strftime('%Y%m%d')
+            # Detect gap: find most recent stored soccer result date
+            try:
+                _last_date_row = conn.execute(
+                    "SELECT MAX(game_date) FROM games WHERE sport=? AND home_score IS NOT NULL",
+                    (sport,)
+                ).fetchone()
+                _last_date_str = _last_date_row[0] if _last_date_row else None
+                if _last_date_str:
+                    _last_dt = datetime.strptime(_last_date_str[:10], '%Y-%m-%d')
+                    _gap_days = max(0, (today - _last_dt).days - 1)
+                else:
+                    _gap_days = 30
+            except Exception:
+                _gap_days = 14
+
+            # Use date-range API calls (one per league) when gap > 7 days,
+            # so we backfill months of missing data without hundreds of requests.
+            # ESPN supports dates=YYYYMMDD-YYYYMMDD for a range window.
+            _use_range = _gap_days > 7
+            if _use_range:
+                # Chunk into 30-day windows to stay within ESPN's response limits
+                _backfill_days = min(_gap_days + 2, 180)
+                _chunk_size = 30
+                _date_ranges = []
+                _ptr = 0
+                while _ptr < _backfill_days:
+                    _end_offset = _ptr
+                    _start_offset = min(_ptr + _chunk_size - 1, _backfill_days - 1)
+                    _start_str = (today - timedelta(days=_start_offset)).strftime('%Y%m%d')
+                    _end_str   = (today - timedelta(days=_end_offset)).strftime('%Y%m%d')
+                    _date_ranges.append(f"{_start_str}-{_end_str}")
+                    _ptr += _chunk_size
+                logger.info(f"[SOCCER] gap={_gap_days}d — backfilling {len(_date_ranges)} range(s) × {len(SOCCER_LEAGUE_ORDER)} leagues")
+            else:
+                _days_recent = max(7, _gap_days + 2)
+                _date_ranges = [
+                    (today - timedelta(days=d)).strftime('%Y%m%d')
+                    for d in range(_days_recent)
+                ]
+
+            max_requests = 300
+            for _dr in _date_ranges:
                 for league_label in SOCCER_LEAGUE_ORDER:
                     if request_count >= max_requests:
                         break
                     league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_label)
                     if not league_code:
                         continue
-                    url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={date_str}"
+                    url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={_dr}&limit=200"
                     request_count += 1
                     try:
                         response = requests.get(url, timeout=10)
@@ -4836,7 +4864,7 @@ def update_espn_scores(sport):
                                     INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
                                     """,
-                                    (sport, league_name or sport, game_id, 2025, game_date, home_team, away_team, home_score, away_score)
+                                    (sport, league_name or sport, game_id, today.year, game_date, home_team, away_team, home_score, away_score)
                                 )
                                 logger.info(f"Inserted new {sport} game: {away_team} @ {home_team} ({game_date})")
                             except Exception as insert_error:
@@ -14379,7 +14407,7 @@ def daily_report_page():
                         _soc_cursor.execute('UPDATE games SET home_score=?, away_score=?, status="final" WHERE game_id=? AND sport=? AND (home_score IS NULL OR home_score!=?)', (_soc_hs, _soc_as, _soc_gid, 'SOCCER', _soc_hs))
                     else:
                         try:
-                            _soc_cursor.execute('INSERT INTO games (sport,league,game_id,season,game_date,home_team_id,away_team_id,home_score,away_score,status) VALUES (?,?,?,?,?,?,?,?,?,"final")', ('SOCCER', _soc_lg_name, _soc_gid, 2025, _soc_gd, _soc_ht, _soc_at, _soc_hs, _soc_as))
+                            _soc_cursor.execute('INSERT INTO games (sport,league,game_id,season,game_date,home_team_id,away_team_id,home_score,away_score,status) VALUES (?,?,?,?,?,?,?,?,?,"final")', ('SOCCER', _soc_lg_name, _soc_gid, yesterday_dt.year, _soc_gd, _soc_ht, _soc_at, _soc_hs, _soc_as))
                             _soc_count += 1
                         except Exception:
                             pass
