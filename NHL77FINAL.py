@@ -3242,7 +3242,7 @@ def _daily_results_from_weekly(weekly_results):
             daily_results[date_key]['games'].append(game)
     return daily_results
 
-def _banner_daily_results_for_range(sport, start_dt, end_dt):
+def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, skip_v2=None):
     if sport == 'NFL':
         weekly_results = calculate_nfl_weekly_performance()
         return _daily_results_from_weekly(weekly_results) if weekly_results else None
@@ -3292,7 +3292,7 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
         ]
         rows = _sort_game_rows_by_date_desc(rows)[:600]
     else:
-        rows = _dedupe_nhl_game_rows(rows)
+        rows = _dedupe_nhl_game_rows(rows, apply_season_cap=not playoffs)
         rows = _sort_game_rows_by_date_desc(rows)
 
     if not rows:
@@ -3302,6 +3302,8 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
     daily_results = defaultdict(lambda: {'games': []})
     _nhl_v2_wall_start = _time.time() if sport == 'NHL' else None
     _NHL_V2_WALL_BUDGET = 25.0
+    if skip_v2 is None:
+        skip_v2 = _os.environ.get('PL_SKIP_V2_FOR_RESULTS') == '1'
     for game in rows:
         home_score = _to_float_safe(game['home_score'])
         away_score = _to_float_safe(game['away_score'])
@@ -3348,6 +3350,8 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
                 glicko2_prob is None or trueskill_prob is None
                 or xgb_prob is None or ens_prob is None
             )
+            if skip_v2 and sport == 'NHL':
+                _need_v2 = False
             _v2_budget_ok = True
             if sport == 'NHL' and _nhl_v2_wall_start is not None:
                 _v2_budget_ok = (_time.time() - _nhl_v2_wall_start) < _NHL_V2_WALL_BUDGET
@@ -10478,6 +10482,39 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <div style="border-top:1px solid rgba(15,23,42,0.12);padding-top:12px;"></div>
         </div>
 
+        {% if playoff_perf is defined and playoff_perf %}
+        <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.35em;color:#0f172a;">🏒 Playoff Performance (live)</h2>
+            {% if playoff_perf.scope_label %}
+            <p style="text-align:center;margin:0 0 10px;font-size:0.82em;color:#64748b;">{{ playoff_perf.scope_label }}{% if playoff_perf.games_in_scope %} — {{ playoff_perf.games_in_scope }} games graded{% endif %}</p>
+            {% endif %}
+            {% set sp = playoff_perf %}
+            <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    {% if sp.ml_total > 0 %}
+                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#00C076{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
+                    {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
+                </div>
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
+                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#00C076{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
+                    {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
+                </div>
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
+                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#00C076{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
+                    {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
 
         <!-- ── Model Records ── -->
         <h3 style="text-align:center;font-size:1.15em;margin:0 0 12px;color:#0f172a;">Moneyline Accuracy by Model</h3>
@@ -11022,7 +11059,7 @@ def _is_nhl_franchise_regular_season_row(row):
     return hk in _NHL_FRANCHISE_TEAM_KEYS and ak in _NHL_FRANCHISE_TEAM_KEYS
 
 
-def _dedupe_nhl_game_rows(rows):
+def _dedupe_nhl_game_rows(rows, *, apply_season_cap=True):
     """Drop duplicate NHL rows (mixed game_id / team aliases / int'l games)."""
     if not rows:
         return []
@@ -11039,6 +11076,8 @@ def _dedupe_nhl_game_rows(rows):
     deduped.sort(
         key=lambda r: parse_date(_normalize_game_date_key(r['game_date'])) or datetime.min,
     )
+    if not apply_season_cap:
+        return deduped
     cap = SPORT_REGULAR_SEASON_GAMES_PER_TEAM.get('NHL', 82)
     team_counts = {}
     kept = []
@@ -11103,6 +11142,67 @@ def _nhl_results_games_in_scope(daily_results):
     if league_max:
         return min(count, league_max)
     return count
+
+
+def _nhl_season_label(ref_dt=None):
+    ref_dt = ref_dt or datetime.now()
+    start, _ = _nhl_results_regular_season_bounds(ref_dt)
+    return f'{start.year}-{str(start.year + 1)[-2:]}'
+
+
+def _nhl_regular_season_complete(ref_dt=None):
+    ref_dt = ref_dt or datetime.now()
+    _, end = _nhl_results_regular_season_bounds(ref_dt)
+    return ref_dt.date() > end.date()
+
+
+def _nhl_playoff_window(ref_dt=None):
+    """May–Jun playoff window for the NHL season containing ref_dt."""
+    ref_dt = ref_dt or datetime.now()
+    _, reg_end = _nhl_results_regular_season_bounds(ref_dt)
+    start = datetime(reg_end.year, reg_end.month, reg_end.day) + timedelta(days=1)
+    end = min(ref_dt - timedelta(days=1), datetime(reg_end.year + 1, 6, 30))
+    if end < start:
+        end = start
+    return start, end
+
+
+def _load_nhl_season_snapshot(ref_dt=None, phase='regular'):
+    try:
+        from src.season_snapshots import load_season_snapshot
+    except ImportError:
+        return None
+    label = _nhl_season_label(ref_dt)
+    return load_season_snapshot('NHL', label, phase)
+
+
+def _stats_from_nhl_snapshot(snapshot):
+    if not snapshot:
+        return None
+    ou = snapshot.get('ou_summary') or {}
+    return {
+        'overall_stats': snapshot.get('overall_stats') or {},
+        'spread_total_stats': snapshot.get('spread_total_stats') or {},
+        'season_perf': snapshot.get('season_perf') or {},
+        'total_over': ou.get('total_over', 0),
+        'total_under': ou.get('total_under', 0),
+        'total_games_ou': ou.get('total_games_ou', 0),
+        'avg_total': ou.get('avg_total', 0),
+        'ou_bench': ou.get('ou_bench', 0),
+        'roi_total': snapshot.get('roi_total'),
+    }
+
+
+def _attach_nhl_display_grading(sport, daily_results):
+    """Book lines + spread/O/U for a small display slice (not full season)."""
+    if not daily_results or not _daily_results_game_count(daily_results):
+        return None
+    _attach_book_odds_to_daily_results(sport, daily_results, api_limit=80)
+    _cache_market_lines_for_results(sport, daily_results, limit=40)
+    _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
+    st = _compute_spread_total_for_daily(sport, daily_results)
+    _finalize_daily_result_cards(sport, daily_results)
+    return st
 
 
 def _results_season_bounds(sport, ref_dt=None):
@@ -15799,39 +15899,105 @@ def sport_results(sport):
                     _SPORT_RESULTS_CACHE[sync_key] = {'ts': now_ts}
             except Exception as e:
                 logger.error(f"NHL score sync failed (continuing with existing data): {e}")
-            yesterday_dt = datetime.now() - timedelta(days=1)
+
+            now_dt = datetime.now()
+            yesterday_dt = now_dt - timedelta(days=1)
+            regular_complete = _nhl_regular_season_complete(now_dt)
+            snapshot_stats = _stats_from_nhl_snapshot(
+                _load_nhl_season_snapshot(now_dt, 'regular')
+            ) if regular_complete else None
+
             season_start_dt, season_end_dt = _results_season_bounds('NHL', yesterday_dt)
             season_end_eff = min(season_end_dt, yesterday_dt) if season_end_dt else yesterday_dt
-            season_daily = _banner_daily_results_for_range(sport, season_start_dt, season_end_eff)
-            if not season_daily:
-                return _results_fallback_page(sport, "NHL results could not be loaded because no completed NHL games were available for grading yet.")
+            season_daily = None
+            if not snapshot_stats:
+                season_daily = _banner_daily_results_for_range(
+                    sport, season_start_dt, season_end_eff,
+                )
+                if not season_daily:
+                    return _results_fallback_page(
+                        sport,
+                        "NHL results could not be loaded because no completed NHL games "
+                        "were available for grading yet.",
+                    )
 
-            display_start_dt = yesterday_dt - timedelta(days=30)
-            daily_results = _subset_daily_results(season_daily, display_start_dt, yesterday_dt)
-            if not _daily_results_game_count(daily_results):
-                daily_results = season_daily
+            playoff_daily = None
+            playoff_perf = None
+            if regular_complete:
+                pf_start, pf_end = _nhl_playoff_window(now_dt)
+                pf_end_eff = min(pf_end, yesterday_dt)
+                if pf_start <= pf_end_eff:
+                    playoff_daily = _banner_daily_results_for_range(
+                        sport, pf_start, pf_end_eff, playoffs=True,
+                    )
+                if playoff_daily and _daily_results_game_count(playoff_daily):
+                    pf_st = _attach_nhl_display_grading(sport, playoff_daily)
+                    pf_overall = compute_overall_stats_from_daily(playoff_daily)
+                    playoff_perf = _build_season_performance_summary(
+                        pf_overall,
+                        pf_st,
+                        scope_label='NHL playoffs (live)',
+                        games_in_scope=_daily_results_game_count(playoff_daily),
+                    )
 
-            today_date = datetime.now().strftime('%Y-%m-%d')
+            if playoff_daily and _daily_results_game_count(playoff_daily):
+                daily_results = playoff_daily
+            elif snapshot_stats:
+                card_start = max(season_start_dt, yesterday_dt - timedelta(days=30))
+                daily_results = _banner_daily_results_for_range(
+                    sport, card_start, season_end_eff,
+                    playoffs=False, skip_v2=True,
+                )
+                if not daily_results or not _daily_results_game_count(daily_results):
+                    daily_results = defaultdict(lambda: {'games': []})
+                else:
+                    _attach_nhl_display_grading(sport, daily_results)
+            else:
+                display_start_dt = yesterday_dt - timedelta(days=30)
+                daily_results = _subset_daily_results(season_daily, display_start_dt, yesterday_dt)
+                if not _daily_results_game_count(daily_results):
+                    daily_results = season_daily
+
+            today_date = now_dt.strftime('%Y-%m-%d')
 
             try:
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=7)
 
-                overall_stats = compute_overall_stats_from_daily(season_daily)
-                _ov, _un, _gou, _avg, _bench = _ou_stats(season_daily, sport)
+                if snapshot_stats:
+                    overall_stats = snapshot_stats['overall_stats']
+                    _st_stats = snapshot_stats['spread_total_stats']
+                    season_perf = snapshot_stats['season_perf']
+                    _ov = snapshot_stats['total_over']
+                    _un = snapshot_stats['total_under']
+                    _gou = snapshot_stats['total_games_ou']
+                    _avg = snapshot_stats['avg_total']
+                    _bench = snapshot_stats['ou_bench']
+                    roi_total = snapshot_stats.get('roi_total') or {}
+                else:
+                    overall_stats = compute_overall_stats_from_daily(season_daily)
+                    _ov, _un, _gou, _avg, _bench = _ou_stats(season_daily, sport)
+                    _attach_book_odds_to_daily_results(sport, season_daily, api_limit=300)
+                    _cache_market_lines_for_results(sport, season_daily, limit=80)
+                    _attach_engine_odds_to_daily_results(sport, season_daily, limit=40)
+                    _st_stats = _compute_spread_total_for_daily(sport, season_daily)
+                    _finalize_daily_result_cards(sport, season_daily)
+                    season_perf = _build_season_performance_summary(
+                        overall_stats,
+                        _st_stats,
+                        scope_label='NHL regular season (Oct–Apr)',
+                        games_expected=SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL'),
+                        games_in_scope=_nhl_results_games_in_scope(season_daily),
+                    )
+                    roi_total = compute_roi_for_range(season_daily, None, None)
 
-                _attach_book_odds_to_daily_results(sport, season_daily, api_limit=300)
-                _cache_market_lines_for_results(sport, season_daily, limit=80)
-                _attach_engine_odds_to_daily_results(sport, season_daily, limit=40)
-                _st_stats = _compute_spread_total_for_daily(sport, season_daily)
-                _finalize_daily_result_cards(sport, season_daily)
-                season_perf = _build_season_performance_summary(
-                    overall_stats,
-                    _st_stats,
-                    scope_label='NHL regular season (Oct–Apr)',
-                    games_expected=SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL'),
-                    games_in_scope=_nhl_results_games_in_scope(season_daily),
-                )
+                if (
+                    not snapshot_stats
+                    and daily_results is not season_daily
+                    and _daily_results_game_count(daily_results)
+                ):
+                    _attach_nhl_display_grading(sport, daily_results)
+
                 tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
                 daily_tally = tally_bundle['daily_tally']
                 daily_tally_date = tally_bundle['daily_tally_date']
@@ -15844,7 +16010,8 @@ def sport_results(sport):
                 results_stale_notice = tally_bundle['results_stale_notice']
                 roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
                 roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
-                roi_total = compute_roi_for_range(season_daily, None, None)
+                if not snapshot_stats:
+                    roi_total = compute_roi_for_range(season_daily, None, None)
                 roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
 
                 rendered = render_template_string(
@@ -15858,6 +16025,7 @@ def sport_results(sport):
                     avg_total=_avg, ou_bench=_bench,
                     spread_total_stats=_st_stats,
                     season_perf=season_perf,
+                    playoff_perf=playoff_perf,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
                     daily_tally_games=daily_tally_games,
@@ -15867,7 +16035,10 @@ def sport_results(sport):
                     roi_cards=roi_cards,
                     results_stale_notice=results_stale_notice,
                 )
-                if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
+                if isinstance(rendered, str) and (
+                    (snapshot_stats or _daily_results_game_count(daily_results))
+                    and _results_page_html_usable(rendered)
+                ):
                     _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
                     _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
                 return rendered

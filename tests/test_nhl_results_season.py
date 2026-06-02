@@ -153,6 +153,8 @@ def test_nhl_sport_results_season_perf_uses_regular_season_scope(monkeypatch):
     display_daily['2026-03-01'] = {'games': season_daily['2026-03-01']['games'][:3]}
 
     monkeypatch.setattr(N, 'update_nhl_scores', lambda: None)
+    monkeypatch.setattr(N, '_load_nhl_season_snapshot', lambda *_a, **_k: None)
+    monkeypatch.setattr(N, '_nhl_regular_season_complete', lambda *_a, **_k: False)
     monkeypatch.setattr(
         N,
         '_results_season_bounds',
@@ -161,7 +163,7 @@ def test_nhl_sport_results_season_perf_uses_regular_season_scope(monkeypatch):
     monkeypatch.setattr(
         N,
         '_banner_daily_results_for_range',
-        lambda sport, start_dt, end_dt: season_daily,
+        lambda sport, start_dt, end_dt, **kwargs: season_daily,
     )
     monkeypatch.setattr(
         N,
