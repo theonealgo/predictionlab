@@ -255,8 +255,8 @@ def _results_page_html_usable(html: str) -> bool:
         return False
     if 'game-card' in low or 'week-section' in low:
         return True
-    # Snapshot-only offseason page may have season stats but no recent game cards.
-    if 'season performance' in low and ('nhl regular season' in low or '1309 of 1312' in low):
+    # Snapshot-only page: season banner without recent game cards.
+    if 'season performance' in low and 'moneyline accuracy by model' in low:
         return True
     return False
 
@@ -11210,16 +11210,21 @@ def _nhl_playoff_window(ref_dt=None):
 
 
 def _nhl_snapshot_json_path(ref_dt=None, phase='regular'):
+    """Resolved path to committed NHL season snapshot JSON (first existing candidate)."""
     label = _nhl_season_label(ref_dt)
-    return _os_v2.path.join(
-        _V2_BASE, 'data', 'season_snapshots', f'NHL_{label}_{phase}.json',
-    )
+    fname = f'NHL_{label}_{phase}.json'
+    for base in (_V2_BASE, _BASE_DIR, _os_v2.path.dirname(_os_v2.path.abspath(__file__))):
+        path = _os_v2.path.join(base, 'data', 'season_snapshots', fname)
+        if _os_v2.path.isfile(path):
+            return path
+    return _os_v2.path.join(_V2_BASE, 'data', 'season_snapshots', fname)
 
 
 def _load_nhl_season_snapshot(ref_dt=None, phase='regular'):
     """Load committed season JSON (no import side-effects — works on Render)."""
     path = _nhl_snapshot_json_path(ref_dt, phase)
     if not _os_v2.path.isfile(path):
+        logger.debug('NHL season snapshot missing: %s', path)
         return None
     try:
         with open(path, encoding='utf-8') as fh:
@@ -15959,29 +15964,35 @@ def sport_results(sport):
             now_dt = datetime.now()
             yesterday_dt = now_dt - timedelta(days=1)
             regular_complete = _nhl_regular_season_complete(now_dt)
-            snapshot_stats = _stats_from_nhl_snapshot(
-                _load_nhl_season_snapshot(now_dt, 'regular')
-            ) if regular_complete else None
+            results_snapshot_notice = None
+            snapshot_raw = (
+                _load_nhl_season_snapshot(now_dt, 'regular') if regular_complete else None
+            )
+            snapshot_stats = _stats_from_nhl_snapshot(snapshot_raw)
+            if regular_complete and snapshot_raw and not snapshot_stats:
+                logger.warning('NHL season snapshot present but stats extraction failed')
 
             season_start_dt, season_end_dt = _results_season_bounds('NHL', yesterday_dt)
             season_end_eff = min(season_end_dt, yesterday_dt) if season_end_dt else yesterday_dt
             season_daily = None
-            if not snapshot_stats and regular_complete:
-                snapshot_stats = _stats_from_nhl_snapshot(
-                    _load_nhl_season_snapshot(now_dt, 'regular'),
-                )
             if not snapshot_stats:
                 season_daily = _banner_daily_results_for_range(
                     sport, season_start_dt, season_end_eff,
                 )
                 if not season_daily:
-                    if regular_complete and _os_v2.path.isfile(
-                        _nhl_snapshot_json_path(now_dt, 'regular'),
-                    ):
-                        snapshot_stats = _stats_from_nhl_snapshot(
-                            _load_nhl_season_snapshot(now_dt, 'regular'),
-                        )
-                    if not snapshot_stats:
+                    if regular_complete:
+                        season_daily = defaultdict(lambda: {'games': []})
+                        if _os_v2.path.isfile(_nhl_snapshot_json_path(now_dt, 'regular')):
+                            snapshot_stats = _stats_from_nhl_snapshot(
+                                _load_nhl_season_snapshot(now_dt, 'regular'),
+                            )
+                        if not snapshot_stats:
+                            results_snapshot_notice = (
+                                'Frozen 2025-26 regular-season stats are not available on this '
+                                'server yet. Season summary will appear after deploy; playoff '
+                                'game cards load below when games are graded.'
+                            )
+                    else:
                         return _results_fallback_page(
                             sport,
                             "NHL results could not be loaded because no completed NHL games "

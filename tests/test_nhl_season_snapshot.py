@@ -213,6 +213,40 @@ def test_nhl_empty_page_regression_snapshot_when_banner_empty(monkeypatch):
     assert captured['season_perf']['ml_total'] == 1300
 
 
+def test_nhl_post_regular_missing_snapshot_renders_not_fallback(monkeypatch):
+    """Production regression: post-regular + no JSON + empty DB must not hard-fallback."""
+    N = _patch_nhl_results_common(monkeypatch)
+    monkeypatch.setattr(N, '_load_nhl_season_snapshot', lambda *_a, **_k: None)
+    monkeypatch.setattr(N, '_nhl_snapshot_json_path', lambda *_a, **_k: '/tmp/no_nhl_snapshot.json')
+    monkeypatch.setattr(
+        N,
+        '_banner_daily_results_for_range',
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(N, '_daily_results_game_count', lambda d: 0 if d is None else sum(
+        len(b.get('games') or []) for b in d.values()
+    ))
+
+    captured = {}
+
+    def _fake_render(_template, **kwargs):
+        captured.update(kwargs)
+        return 'ok'
+
+    monkeypatch.setattr(N, 'render_template_string', _fake_render)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 6, 2, 12, 0, 0)
+
+    monkeypatch.setattr(N, 'datetime', _FixedDatetime)
+
+    out = N.sport_results('NHL')
+    assert out == 'ok'
+    assert captured.get('results_snapshot_notice')
+
+
 def test_load_season_snapshot_from_repo():
     from src.season_snapshots import load_season_snapshot
 
