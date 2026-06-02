@@ -769,7 +769,19 @@
         </div>
         {% endfor %}
     {% else %}
+    {% if sport == 'SOCCER' and soccer_leagues %}
+    <div style="text-align:center;padding:48px 20px;max-width:520px;margin:0 auto;">
+        <div style="font-size:2em;margin-bottom:12px;">⚽</div>
+        <div style="font-size:1.1em;font-weight:700;color:#0f172a;margin-bottom:8px;">No upcoming fixtures</div>
+        <div style="color:#475569;font-size:0.92em;line-height:1.65;margin-bottom:20px;">
+            Most European leagues finished their 2025–26 seasons in May. Picks will return when the new season kicks off in August.<br>
+            Leagues still active: <strong>Spanish Segunda División playoffs</strong>, <strong>Copa Libertadores</strong>, <strong>MLS</strong>.
+        </div>
+        <a href="/soccer-results" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">View Season Results →</a>
+    </div>
+    {% else %}
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
+    {% endif %}
     {% endif %}
 
     <!-- Internal links to recent dated pages (past dates only) -->
