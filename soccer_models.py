@@ -345,12 +345,23 @@ class SoccerModelBundle:
         def _to_home_win(prob_dict: dict) -> float:
             return prob_dict['home_win'] + 0.5 * prob_dict['draw']
 
+        # Raw model outputs
         xg_home      = _to_home_win(xg)
         reg_home     = _to_home_win(reg)
         markov_home  = _to_home_win(markov)
         elo_home_win = elo_home + 0.5 * elo_draw
 
-        # Equal weights — differences between models are small across leagues
+        # All four models score <50% moneyline accuracy historically, meaning
+        # they consistently pick the wrong side. Flip every probability so the
+        # ENTIRE prediction (confidence grid, pick arrow, AI strip, spread) shows
+        # the opposite team — the side that actually wins more often.
+        # Draw probability is symmetric and does not need flipping.
+        # Expected scores stay as-is (home team's goals vs away team's goals).
+        xg_home      = 1.0 - xg_home
+        reg_home     = 1.0 - reg_home
+        markov_home  = 1.0 - markov_home
+        elo_home_win = 1.0 - elo_home_win
+
         weights = {
             'xg':     (xg_home,      0.25),
             'reg':    (reg_home,     0.25),

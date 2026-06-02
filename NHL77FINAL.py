@@ -2574,25 +2574,11 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
         else:
             pred['face_pick_confidence'] = None
 
-    # ── Soccer: flip pick selection + confidence gate ─────────────────────
-    # All soccer models score <50% moneyline accuracy → systematically wrong.
-    # Fix: take the OPPOSITE team from what each model selected.
-    # Model probabilities displayed on the card are unchanged (honest outputs);
-    # only the AI pick recommendation is flipped to the contrarian side.
-    # Draw picks are kept as-is (no meaningful flip for a three-way draw).
-    # Gate: only surface the pick when model confidence ≥ 60%.
+    # ── Soccer confidence gate ────────────────────────────────────────────
+    # Probabilities are already flipped at source (soccer_models.py).
+    # Only surface picks where the model is ≥60% confident after the flip.
     _SOCCER_PICK_MIN_CONF = 60.0
     if sport == 'SOCCER':
-        _orig_pick = pred.get('face_pick_team')
-        _home_id   = pred.get('home_team_id')
-        _away_id   = pred.get('away_team_id')
-        if _orig_pick == _home_id:
-            pred['face_pick_team']   = _away_id
-            pred['predicted_winner'] = _away_id
-        elif _orig_pick == _away_id:
-            pred['face_pick_team']   = _home_id
-            pred['predicted_winner'] = _home_id
-        # confidence stays the same — reflects how strongly the model was wrong
         _soc_conf = pred.get('face_pick_confidence')
         if _soc_conf is not None and float(_soc_conf) >= _SOCCER_PICK_MIN_CONF:
             pred['soccer_pick_active'] = True
