@@ -590,6 +590,7 @@ def _normalize_team_key(team_name: str) -> str:
     txt = re.sub(r'[^a-z0-9]+', '', txt)
     alias_map = {
         'utahhockeyclub': 'utahmammoth',
+        'vegasknights': 'vegasgoldenknights',
     }
     txt = alias_map.get(txt, txt)
     return txt
@@ -3240,7 +3241,15 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
         conn = get_db_connection()
         if sport == 'NHL' and start_sql and end_sql:
             rows = conn.execute('''
-                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                SELECT g.*,
+                       p.elo_home_prob,
+                       p.xgboost_home_prob,
+                       p.logistic_home_prob,
+                       p.win_probability,
+                       p.catboost_home_prob,
+                       p.meta_home_prob,
+                       p.glicko_home_prob,
+                       p.trueskill_home_prob
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ?
@@ -3272,6 +3281,7 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
         ]
         rows = _sort_game_rows_by_date_desc(rows)[:600]
     else:
+        rows = _dedupe_nhl_game_rows(rows)
         rows = _sort_game_rows_by_date_desc(rows)
 
     if not rows:
@@ -3279,6 +3289,8 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
 
     from collections import defaultdict
     daily_results = defaultdict(lambda: {'games': []})
+    _nhl_v2_wall_start = _time.time() if sport == 'NHL' else None
+    _NHL_V2_WALL_BUDGET = 25.0
     for game in rows:
         home_score = _to_float_safe(game['home_score'])
         away_score = _to_float_safe(game['away_score'])
@@ -3299,25 +3311,64 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                 continue
 
-        elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+        elo_prob = _to_float_safe(game['elo_home_prob'])
         xgb_prob = _to_float_safe(game['xgboost_home_prob'])
-        if xgb_prob is None:
-            xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
         ens_prob = _to_float_safe(game['win_probability'])
-        if ens_prob is None:
-            ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+        glicko2_prob = _to_float_safe(game['glicko_home_prob']) if sport == 'NHL' else None
+        trueskill_prob = _to_float_safe(game['trueskill_home_prob']) if sport == 'NHL' else None
+        if sport == 'NHL':
+            if ens_prob is None:
+                ens_prob = _to_float_safe(game['meta_home_prob'])
+            if glicko2_prob is None:
+                glicko2_prob = _to_float_safe(game['catboost_home_prob'])
+            if trueskill_prob is None:
+                trueskill_prob = _to_float_safe(game['logistic_home_prob'])
+            if elo_prob is None:
+                elo_prob = _to_float_safe(game['catboost_home_prob'])
+        else:
+            if xgb_prob is None:
+                xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+            if ens_prob is None:
+                ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
 
         v2 = None
         if sport != 'SOCCER':
-            _gd = parse_date(game_date) if game_date else None
-            _days_ago = (datetime.now() - _gd).days if _gd else 999
-            if sport != 'NHL' or _days_ago <= 21:
-                v2 = get_v2_prediction(sport, home_team, away_team, game_date)
-        glicko2_prob = v2.get('glicko2_prob') if v2 else None
-        trueskill_prob = v2.get('trueskill_prob') if v2 else None
+            _need_v2 = (
+                glicko2_prob is None or trueskill_prob is None
+                or xgb_prob is None or ens_prob is None
+            )
+            _v2_budget_ok = True
+            if sport == 'NHL' and _nhl_v2_wall_start is not None:
+                _v2_budget_ok = (_time.time() - _nhl_v2_wall_start) < _NHL_V2_WALL_BUDGET
+            if _need_v2 and _v2_budget_ok:
+                if sport != 'NHL':
+                    _gd = parse_date(game_date) if game_date else None
+                    _days_ago = (datetime.now() - _gd).days if _gd else 999
+                    if _days_ago <= 21:
+                        v2 = get_v2_prediction(sport, home_team, away_team, game_date)
+                else:
+                    v2 = get_v2_prediction(sport, home_team, away_team, game_date)
         if v2:
+            if glicko2_prob is None:
+                glicko2_prob = v2.get('glicko2_prob')
+            if trueskill_prob is None:
+                trueskill_prob = v2.get('trueskill_prob')
+            if xgb_prob is None:
+                xgb_prob = v2.get('xgboost_prob')
+            if ens_prob is None:
+                ens_prob = v2.get('home_prob')
+        if sport == 'NHL' and v2:
+            xgb_prob = v2.get('xgboost_prob', xgb_prob)
+            ens_prob = _compute_ensemble_prob(
+                glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob,
+            )
+        elif v2:
             xgb_prob = v2.get('xgboost_prob', xgb_prob)
             ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
+        elif sport == 'NHL' and ens_prob is None:
+            ens_prob = _compute_ensemble_prob(
+                glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
+            )
 
         game_info = {
             'game_id':         game['game_id'],
@@ -3331,9 +3382,9 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             'is_draw':          is_draw,
             'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
             'trueskill_prob':   round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
-            'elo_prob':         round(elo_prob  * 100, 1),
-            'xgb_prob':         round(xgb_prob  * 100, 1),
-            'ens_prob':         round(ens_prob  * 100, 1),
+            'elo_prob':         round(elo_prob  * 100, 1) if elo_prob is not None else None,
+            'xgb_prob':         round(xgb_prob  * 100, 1) if xgb_prob is not None else None,
+            'ens_prob':         round(ens_prob  * 100, 1) if ens_prob is not None else None,
         }
         _apply_soccer_ml_grading(
             game_info,
@@ -8171,8 +8222,8 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         g['market_total_reason'] = g.get('market_total_reason') or "no sportsbook total line found"
 
                     # Fallback spread: if Vegas spread missing, use pick-em (0)
-                    # so every game with a model spread gets graded.
-                    if ms is None and xs is not None:
+                    # so every game with a model spread gets graded (not NHL — needs real book line).
+                    if ms is None and xs is not None and sport != 'NHL':
                         ms = 0.0
                         g['market_spread_reason'] = "pick-em (fallback)"
                     g['market_spread'] = ms
@@ -10838,6 +10889,147 @@ def _nhl_results_regular_season_bounds(ref_dt=None):
     start = datetime(season_start_year, sm, sd)
     end = datetime(season_start_year + 1, em, ed)
     return start, end
+
+
+_NHL_FRANCHISE_TEAM_KEYS = frozenset({
+    'anaheimducks', 'bostonbruins', 'buffalosabres', 'calgaryflames',
+    'carolinahurricanes', 'chicagoblackhawks', 'coloradoavalanche',
+    'columbusbluejackets', 'dallasstars', 'detroitredwings', 'edmontonoilers',
+    'floridapanthers', 'losangeleskings', 'minnesotawild', 'montrealcanadiens',
+    'nashvillepredators', 'newjerseydevils', 'newyorkislanders', 'newyorkrangers',
+    'ottawasenators', 'philadelphiaflyers', 'pittsburghpenguins', 'sanjosesharks',
+    'seattlekraken', 'stlouisblues', 'tampabaylightning', 'torontomapleleafs',
+    'utahmammoth', 'vancouvercanucks', 'vegasgoldenknights', 'washingtoncapitals',
+    'winnipegjets',
+})
+
+
+def _nhl_results_match_key(row):
+    """Canonical (date, home, away) for NHL results dedupe."""
+    if isinstance(row, dict):
+        raw_date = row.get('game_date') or row.get('date')
+        home = row.get('home_team_id') or row.get('home')
+        away = row.get('away_team_id') or row.get('away')
+    else:
+        raw_date = row['game_date']
+        home = row['home_team_id']
+        away = row['away_team_id']
+    game_date = _normalize_game_date_key(raw_date)
+    if not game_date:
+        return None
+    hk = _normalize_team_key_for_sport('NHL', home)
+    ak = _normalize_team_key_for_sport('NHL', away)
+    if not hk or not ak:
+        return None
+    return (game_date, hk, ak)
+
+
+def _nhl_row_prediction_score(row):
+    """Prefer DB rows that carry stored model probabilities."""
+    prob_cols = (
+        'glicko_home_prob', 'trueskill_home_prob', 'meta_home_prob',
+        'elo_home_prob', 'xgboost_home_prob', 'catboost_home_prob',
+        'win_probability',
+    )
+    score = 0
+    for col in prob_cols:
+        try:
+            if row[col] is not None:
+                score += 1
+        except (KeyError, IndexError, TypeError):
+            pass
+    return score
+
+
+def _is_nhl_franchise_regular_season_row(row):
+    key = _nhl_results_match_key(row)
+    if not key:
+        return False
+    _, hk, ak = key
+    return hk in _NHL_FRANCHISE_TEAM_KEYS and ak in _NHL_FRANCHISE_TEAM_KEYS
+
+
+def _dedupe_nhl_game_rows(rows):
+    """Drop duplicate NHL rows (mixed game_id / team aliases / int'l games)."""
+    if not rows:
+        return []
+    best = {}
+    for row in rows:
+        if not _is_nhl_franchise_regular_season_row(row):
+            continue
+        key = _nhl_results_match_key(row)
+        score = _nhl_row_prediction_score(row)
+        prev = best.get(key)
+        if prev is None or score > prev[0]:
+            best[key] = (score, row)
+    deduped = [pair[1] for pair in best.values()]
+    deduped.sort(
+        key=lambda r: parse_date(_normalize_game_date_key(r['game_date'])) or datetime.min,
+    )
+    cap = SPORT_REGULAR_SEASON_GAMES_PER_TEAM.get('NHL', 82)
+    team_counts = {}
+    kept = []
+    for row in deduped:
+        _, hk, ak = _nhl_results_match_key(row)
+        if team_counts.get(hk, 0) >= cap or team_counts.get(ak, 0) >= cap:
+            continue
+        team_counts[hk] = team_counts.get(hk, 0) + 1
+        team_counts[ak] = team_counts.get(ak, 0) + 1
+        kept.append(row)
+    league_max = SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL')
+    if league_max and len(kept) > league_max:
+        kept = kept[:league_max]
+    return kept
+
+
+def _dedupe_daily_results(daily_results, sport=None):
+    """Remove duplicate games inside daily_results buckets (NHL only)."""
+    if sport != 'NHL' or not daily_results:
+        return daily_results
+    from collections import defaultdict
+    best = {}
+    for bucket in daily_results.values():
+        for game in bucket.get('games') or []:
+            key = _nhl_results_match_key(game)
+            if not key or not _is_nhl_franchise_regular_season_row(game):
+                continue
+            score = _nhl_row_prediction_score(game)
+            prev = best.get(key)
+            if prev is None or score > prev[0]:
+                best[key] = (score, game)
+    if not best:
+        return daily_results
+    out = defaultdict(lambda: {'games': []})
+    ordered = sorted(
+        (pair[1] for pair in best.values()),
+        key=lambda g: parse_date(g.get('date')) or datetime.min,
+        reverse=True,
+    )
+    cap = SPORT_REGULAR_SEASON_GAMES_PER_TEAM.get('NHL', 82)
+    team_counts = {}
+    league_max = SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL')
+    for game in ordered:
+        key = _nhl_results_match_key(game)
+        if not key:
+            continue
+        _, hk, ak = key
+        if team_counts.get(hk, 0) >= cap or team_counts.get(ak, 0) >= cap:
+            continue
+        if league_max and sum(len(b.get('games') or []) for b in out.values()) >= league_max:
+            break
+        team_counts[hk] = team_counts.get(hk, 0) + 1
+        team_counts[ak] = team_counts.get(ak, 0) + 1
+        out[game.get('date') or key[0]]['games'].append(game)
+    return out
+
+
+def _nhl_results_games_in_scope(daily_results):
+    """Graded NHL regular-season games for banner subtitle (never above league max)."""
+    count = _daily_results_game_count(daily_results)
+    league_max = SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL')
+    if league_max:
+        return min(count, league_max)
+    return count
 
 
 def _results_season_bounds(sport, ref_dt=None):
@@ -15565,7 +15757,7 @@ def sport_results(sport):
                     _st_stats,
                     scope_label='NHL regular season (Oct–Apr)',
                     games_expected=SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL'),
-                    games_in_scope=_daily_results_game_count(season_daily),
+                    games_in_scope=_nhl_results_games_in_scope(season_daily),
                 )
                 tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
                 daily_tally = tally_bundle['daily_tally']

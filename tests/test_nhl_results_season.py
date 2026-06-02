@@ -60,6 +60,70 @@ def test_subset_daily_results_filters_dates():
     assert len(sub['2026-01-02']['games']) == 1
 
 
+def test_dedupe_nhl_game_rows_removes_duplicate_matchups():
+    import NHL77FINAL as N
+
+    rows = [
+        {
+            'game_id': 'NHL_2025_269',
+            'game_date': '2025-11-13',
+            'home_team_id': 'Columbus Blue Jackets',
+            'away_team_id': 'Edmonton Oilers',
+            'home_score': 5,
+            'away_score': 4,
+            'elo_home_prob': None,
+        },
+        {
+            'game_id': 'NHL_2025020274',
+            'game_date': '2025-11-13',
+            'home_team_id': 'Columbus Blue Jackets',
+            'away_team_id': 'Edmonton Oilers',
+            'home_score': 5,
+            'away_score': 4,
+            'elo_home_prob': 0.55,
+        },
+    ]
+    out = N._dedupe_nhl_game_rows(rows)
+    assert len(out) == 1
+    assert out[0]['game_id'] == 'NHL_2025020274'
+
+
+def test_dedupe_nhl_game_rows_excludes_international_teams():
+    import NHL77FINAL as N
+
+    rows = [
+        {
+            'game_id': 'INTL_1',
+            'game_date': '2026-02-10',
+            'home_team_id': 'USA',
+            'away_team_id': 'CAN',
+            'home_score': 3,
+            'away_score': 2,
+        },
+        {
+            'game_id': 'NHL_1',
+            'game_date': '2026-02-10',
+            'home_team_id': 'Boston Bruins',
+            'away_team_id': 'Toronto Maple Leafs',
+            'home_score': 4,
+            'away_score': 3,
+            'elo_home_prob': 0.52,
+        },
+    ]
+    out = N._dedupe_nhl_game_rows(rows)
+    assert len(out) == 1
+    assert out[0]['game_id'] == 'NHL_1'
+
+
+def test_nhl_results_games_in_scope_never_exceeds_league_max():
+    import NHL77FINAL as N
+
+    daily = defaultdict(lambda: {'games': []})
+    for i in range(1400):
+        daily['2026-03-01']['games'].append({'game_id': f'g{i}'})
+    assert N._nhl_results_games_in_scope(daily) == 1312
+
+
 def test_nhl_sport_results_season_perf_uses_regular_season_scope(monkeypatch):
     import NHL77FINAL as N
 
@@ -137,5 +201,53 @@ def test_nhl_sport_results_season_perf_uses_regular_season_scope(monkeypatch):
     assert sp['scope_label'] == 'NHL regular season (Oct–Apr)'
     assert sp['games_expected'] == 1312
     assert sp['games_in_scope'] == 50
+    assert sp['games_in_scope'] <= 1312
     assert captured['overall_stats']['ensemble']['total'] == 50
+    assert captured['overall_stats']['glicko2']['total'] == 50
+    assert captured['overall_stats']['trueskill']['total'] == 50
     assert len(captured['daily_results']['2026-03-01']['games']) == 3
+
+
+def test_nhl_banner_daily_wires_glicko_trueskill_from_db(monkeypatch):
+    import NHL77FINAL as N
+
+    row = {
+        'game_id': 'NHL_TEST_1',
+        'game_date': '2026-01-15',
+        'home_team_id': 'Boston Bruins',
+        'away_team_id': 'Toronto Maple Leafs',
+        'home_score': 4,
+        'away_score': 3,
+        'league': 'NHL',
+        'elo_home_prob': 0.54,
+        'xgboost_home_prob': 0.57,
+        'logistic_home_prob': 0.56,
+        'win_probability': 0.58,
+        'meta_home_prob': 0.58,
+        'catboost_home_prob': 0.61,
+        'glicko_home_prob': 0.61,
+        'trueskill_home_prob': 0.56,
+    }
+
+    class _Cursor:
+        def fetchall(self):
+            return [row]
+
+    class _Conn:
+        def execute(self, *_args, **_kwargs):
+            return _Cursor()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(N, 'get_db_connection', lambda: _Conn())
+    monkeypatch.setattr(N, 'get_v2_prediction', lambda *_a, **_k: None)
+
+    start = datetime(2025, 10, 1)
+    end = datetime(2026, 4, 30)
+    daily = N._banner_daily_results_for_range('NHL', start, end)
+    game = daily['2026-01-15']['games'][0]
+    assert game['glicko2_prob'] == 61.0
+    assert game['trueskill_prob'] == 56.0
+    assert game['glicko2_correct'] is True
+    assert game['trueskill_correct'] is True
