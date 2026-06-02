@@ -1406,7 +1406,7 @@ def _apply_mlb_spread_fade_batch(sport, items) -> None:
 # Card face win %: best model per sport (PL column = ensemble; XSharp = xgb_* only).
 BEST_MODEL_BY_SPORT = {
     'NHL': ('ensemble_prob', 'Sharp Consensus'),
-    'MLB': ('xgb_prob', 'XSharp'),
+    'MLB': ('ensemble_prob', 'Sharp Consensus'),
     'SOCCER': ('xgb_prob', 'XSharp'),
     'NBA': ('ensemble_prob', 'Sharp Consensus'),
     'WNBA': ('ensemble_prob', 'Sharp Consensus'),
@@ -1989,20 +1989,35 @@ def _set_card_pl_moneylines(card: dict) -> None:
 
 def _set_card_projected_scores(card: dict) -> None:
     """Projected Score box — derive PL/XSharp from spread+total (half-point increments)."""
+    _home_id = card.get('home_team_id') or card.get('home')
+    _picked   = card.get('predicted_winner')
+
     ps = _safe_float(card.get('disp_pl_spread')) or _safe_float(card.get('our_spread'))
     pt = _safe_float(card.get('disp_pl_total')) or _safe_float(card.get('our_total'))
     if ps is not None and pt is not None:
         xh, xa = _scores_from_spread_total(ps, pt)
         if xh is not None:
-            card['pl_proj_home_pts'] = _round_to_half(xh)
-            card['pl_proj_away_pts'] = _round_to_half(xa)
+            # Suppress PL score when it contradicts the pick direction.
+            # Happens on V2 games where the efficiency model and the ensemble disagree.
+            _pl_winner = _home_id if xh >= xa else card.get('away_team_id') or card.get('away')
+            if _picked and _pl_winner and _pl_winner != _picked:
+                pass  # do not set — score would say opposite team wins
+            else:
+                card['pl_proj_home_pts'] = _round_to_half(xh)
+                card['pl_proj_away_pts'] = _round_to_half(xa)
+
     xs = _safe_float(card.get('disp_xs_spread')) or _safe_float(card.get('xgb_spread'))
     xt = _safe_float(card.get('disp_xs_total')) or _safe_float(card.get('xgb_total'))
     if xs is not None and xt is not None:
         xh, xa = _scores_from_spread_total(xs, xt)
         if xh is not None:
-            card['xs_proj_home_pts'] = _round_to_half(xh)
-            card['xs_proj_away_pts'] = _round_to_half(xa)
+            # Same guard for XSharp projected score
+            _xs_winner = _home_id if xh >= xa else card.get('away_team_id') or card.get('away')
+            if _picked and _xs_winner and _xs_winner != _picked:
+                pass
+            else:
+                card['xs_proj_home_pts'] = _round_to_half(xh)
+                card['xs_proj_away_pts'] = _round_to_half(xa)
 
 
 def _attach_nba_efficiency_to_daily_results(sport, daily_results) -> None:
@@ -2562,6 +2577,17 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
             pred['face_pick_confidence'] = round(_fp if _fp >= 50 else 100.0 - _fp, 1)
         else:
             pred['face_pick_confidence'] = None
+
+    # Final safety: face_pick_team must always match predicted_winner.
+    # Prevents split display where card face names one team but pick strip names another.
+    _pw = pred.get('predicted_winner')
+    if _pw and pred.get('face_pick_team') and pred['face_pick_team'] != _pw and sport != 'SOCCER':
+        pred['face_pick_team'] = _pw
+        _fp2 = _safe_float(pred.get('ensemble_prob'))
+        if _fp2 is not None:
+            if _fp2 <= 1.0:
+                _fp2 *= 100.0
+            pred['face_pick_confidence'] = round(_fp2 if _fp2 >= 50 else 100.0 - _fp2, 1)
 
 
 
