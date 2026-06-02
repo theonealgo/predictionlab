@@ -345,10 +345,19 @@ class SoccerModelBundle:
         def _to_home_win(prob_dict: dict) -> float:
             return prob_dict['home_win'] + 0.5 * prob_dict['draw']
 
+        # Raw picks from each model
         xg_home      = _to_home_win(xg)
         reg_home     = _to_home_win(reg)
         markov_home  = _to_home_win(markov)
         elo_home_win = elo_home + 0.5 * elo_draw
+
+        # Models are consistently picking the wrong winner (<50% accuracy).
+        # Flip each model's winner pick so we select the opposite team.
+        # Draw probability is symmetric — no flip needed.
+        xg_home      = 1.0 - xg_home
+        reg_home     = 1.0 - reg_home
+        markov_home  = 1.0 - markov_home
+        elo_home_win = 1.0 - elo_home_win
 
         weights = {
             'xg':     (xg_home,      0.25),
