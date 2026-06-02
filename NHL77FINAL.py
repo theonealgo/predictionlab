@@ -875,24 +875,10 @@ def _soccer_ml_pick_correct(home_pct, draw_pct, away_pct, home_won, is_draw):
 
 
 def _soccer_model_correct(binary_home_dec, draw_dec, home_won, is_draw):
-    """Grade one soccer model prob (binary home + draw) against result.
-
-    Soccer models are systematically wrong (<50% accuracy), so we grade the
-    FLIPPED pick — i.e. the opposite of what each model selected. This makes
-    results/performance stats reflect the edge from the contrarian strategy:
-    46% accuracy → graded as 54% (we took the other side every time).
-    Draw picks are kept as-is (no meaningful flip for a three-way draw).
-    """
+    """Grade one soccer model prob (binary home + draw) against result."""
     hw, dw, aw = _soccer_threeway_probs(binary_home_dec, draw_dec)
     if hw is None:
         return None
-    # Determine what the model originally picked
-    orig_pick = max([('home', hw), ('draw', dw), ('away', aw)], key=lambda x: x[1])[0]
-    # Flip home↔away; leave draw unchanged
-    if orig_pick == 'home':
-        hw, aw = aw, hw      # swap so 'home' bucket now represents the away pick
-    elif orig_pick == 'away':
-        hw, aw = aw, hw      # swap so 'away' bucket now represents the home pick
     return _soccer_ml_pick_correct(hw * 100, dw * 100, aw * 100, home_won, is_draw)
 
 
@@ -910,29 +896,23 @@ def _apply_soccer_ml_grading(
 ):
     """Set 3-way soccer ML correct flags; grade draws instead of skip_grading."""
     if draw_dec is None:
-        # No draw data — fall back to binary flip grading
-        def _bin_flip(p):
-            if p is None or home_won is None:
-                return None
-            flipped_pick_home = p < 0.5   # model picked away → flip to home
-            return flipped_pick_home == home_won
-        game_info['glicko2_correct']   = _bin_flip(glicko2_prob)
-        game_info['trueskill_correct'] = _bin_flip(trueskill_prob)
-        game_info['elo_correct']       = _bin_flip(elo_prob)
-        game_info['xgb_correct']       = _bin_flip(xgb_prob)
-        game_info['ens_correct']       = _bin_flip(ens_prob)
+        game_info['glicko2_correct'] = (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None
+        game_info['trueskill_correct'] = (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None
+        game_info['elo_correct'] = (elo_prob >= 0.5) == home_won if elo_prob is not None and home_won is not None else None
+        game_info['xgb_correct'] = (xgb_prob >= 0.5) == home_won if xgb_prob is not None and home_won is not None else None
+        game_info['ens_correct'] = (ens_prob >= 0.5) == home_won if ens_prob is not None and home_won is not None else None
         game_info['skip_grading'] = home_won is None
         return
     _hw, _dw, _aw = _soccer_threeway_probs(ens_prob, draw_dec)
     if _hw is not None:
-        game_info['draw_prob']      = round(_dw * 100, 1)
-        game_info['home_win_prob']  = round(_hw * 100, 1)
-        game_info['away_win_prob']  = round(_aw * 100, 1)
-    game_info['glicko2_correct']   = _soccer_model_correct(glicko2_prob,   draw_dec, home_won, is_draw) if glicko2_prob   is not None else None
+        game_info['draw_prob'] = round(_dw * 100, 1)
+        game_info['home_win_prob'] = round(_hw * 100, 1)
+        game_info['away_win_prob'] = round(_aw * 100, 1)
+    game_info['glicko2_correct'] = _soccer_model_correct(glicko2_prob, draw_dec, home_won, is_draw) if glicko2_prob is not None else None
     game_info['trueskill_correct'] = _soccer_model_correct(trueskill_prob, draw_dec, home_won, is_draw) if trueskill_prob is not None else None
-    game_info['elo_correct']       = _soccer_model_correct(elo_prob,       draw_dec, home_won, is_draw)
-    game_info['xgb_correct']       = _soccer_model_correct(xgb_prob,       draw_dec, home_won, is_draw)
-    game_info['ens_correct']       = _soccer_model_correct(ens_prob,       draw_dec, home_won, is_draw)
+    game_info['elo_correct'] = _soccer_model_correct(elo_prob, draw_dec, home_won, is_draw)
+    game_info['xgb_correct'] = _soccer_model_correct(xgb_prob, draw_dec, home_won, is_draw)
+    game_info['ens_correct'] = _soccer_model_correct(ens_prob, draw_dec, home_won, is_draw)
     game_info['skip_grading'] = False
 
 
@@ -2574,18 +2554,6 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
         else:
             pred['face_pick_confidence'] = None
 
-    # ── Soccer confidence gate ────────────────────────────────────────────
-    # Probabilities are already flipped at source (soccer_models.py).
-    # Only surface picks where the model is ≥60% confident after the flip.
-    _SOCCER_PICK_MIN_CONF = 60.0
-    if sport == 'SOCCER':
-        _soc_conf = pred.get('face_pick_confidence')
-        if _soc_conf is not None and float(_soc_conf) >= _SOCCER_PICK_MIN_CONF:
-            pred['soccer_pick_active'] = True
-        else:
-            pred['face_pick_team']       = None
-            pred['face_pick_confidence'] = None
-            pred['soccer_pick_active']   = False
 
 
 def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
