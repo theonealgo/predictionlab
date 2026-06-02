@@ -4878,6 +4878,10 @@ def update_espn_scores(sport):
             conn.close()
             if updates_count > 0:
                 logger.info(f"Successfully updated {updates_count} {sport} game scores.")
+                # Clear results page HTML cache so next load shows fresh data
+                stale = [k for k in _SPORT_RESULTS_CACHE if k.startswith(f'{sport}_daily_results_html')]
+                for _sk in stale:
+                    _SPORT_RESULTS_CACHE.pop(_sk, None)
             else:
                 logger.info(f"No {sport} score updates needed.")
         except Exception as e:
@@ -15569,14 +15573,21 @@ def sport_results(sport):
                         and _results_page_html_usable(cached_html)
                     ):
                         return cached_html
-            # Update scores at most once every 10 minutes per sport.
+            # Update scores in background so the page is never blocked by API calls.
+            # Soccer backfill can take 30-60s (100+ requests); run async always.
             sync_key = f'{sport}_results_score_sync_ts'
             sync_entry = _SPORT_RESULTS_CACHE.get(sync_key)
             sync_last_ts = sync_entry.get('ts') if isinstance(sync_entry, dict) else None
             now_ts = _time.time()
             if sync_last_ts is None or (now_ts - sync_last_ts) >= 600:
-                update_espn_scores(sport)
                 _SPORT_RESULTS_CACHE[sync_key] = {'ts': now_ts}
+                import threading as _thr
+                _thr.Thread(
+                    target=update_espn_scores,
+                    args=(sport,),
+                    daemon=True,
+                    name=f'score-sync-{sport}',
+                ).start()
             
             conn = get_db_connection()
             soccer_league_counts = {}
