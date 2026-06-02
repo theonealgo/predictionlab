@@ -208,6 +208,83 @@ def test_nhl_sport_results_season_perf_uses_regular_season_scope(monkeypatch):
     assert len(captured['daily_results']['2026-03-01']['games']) == 3
 
 
+def test_dedupe_nhl_game_rows_keeps_abbreviation_team_names():
+    import NHL77FINAL as N
+
+    rows = [
+        {
+            'game_id': 'NHL_ABBR_1',
+            'game_date': '2026-01-15',
+            'home_team_id': 'BOS',
+            'away_team_id': 'TOR',
+            'home_score': 4,
+            'away_score': 2,
+            'elo_home_prob': 0.54,
+        },
+    ]
+    out = N._dedupe_nhl_game_rows(rows)
+    assert len(out) == 1
+    assert out[0]['game_id'] == 'NHL_ABBR_1'
+
+
+def test_nhl_banner_daily_never_empty_when_db_has_completed_games():
+    import NHL77FINAL as N
+
+    yesterday = datetime(2026, 6, 1)
+    start, end = N._results_season_bounds('NHL', yesterday)
+    end_eff = min(end, yesterday) if end else yesterday
+    daily = N._banner_daily_results_for_range('NHL', start, end_eff)
+    assert daily is not None, 'banner must not return None when completed games exist'
+    count = N._daily_results_game_count(daily)
+    assert count > 0, 'banner must include graded NHL games in regular-season window'
+    assert count <= 1312
+    assert N._nhl_results_games_in_scope(daily) == count
+
+
+def test_nhl_banner_survives_missing_optional_prediction_columns(monkeypatch):
+    import NHL77FINAL as N
+
+    row = {
+        'game_id': 'NHL_TEST_1',
+        'game_date': '2026-01-15',
+        'home_team_id': 'Boston Bruins',
+        'away_team_id': 'Toronto Maple Leafs',
+        'home_score': 4,
+        'away_score': 3,
+        'league': 'NHL',
+        'elo_home_prob': 0.54,
+        'xgboost_home_prob': 0.57,
+        'logistic_home_prob': 0.56,
+        'win_probability': 0.58,
+    }
+
+    class _Cursor:
+        def fetchall(self):
+            return [row]
+
+    class _Conn:
+        def execute(self, *_args, **_kwargs):
+            return _Cursor()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(N, '_predictions_prob_select_sql', lambda _conn=None: (
+        'p.elo_home_prob,\n'
+        '                       p.xgboost_home_prob,\n'
+        '                       p.logistic_home_prob,\n'
+        '                       p.win_probability'
+    ))
+    monkeypatch.setattr(N, 'get_db_connection', lambda: _Conn())
+    monkeypatch.setattr(N, 'get_v2_prediction', lambda *_a, **_k: None)
+
+    start = datetime(2025, 10, 1)
+    end = datetime(2026, 4, 30)
+    daily = N._banner_daily_results_for_range('NHL', start, end)
+    assert daily is not None
+    assert len(daily['2026-01-15']['games']) == 1
+
+
 def test_nhl_banner_daily_wires_glicko_trueskill_from_db(monkeypatch):
     import NHL77FINAL as N
 

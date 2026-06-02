@@ -595,7 +595,23 @@ def _normalize_team_key(team_name: str) -> str:
     txt = alias_map.get(txt, txt)
     return txt
 
+_NHL_TEAM_ABBREV_ALIASES = {
+    'ana': 'anaheimducks', 'bos': 'bostonbruins', 'buf': 'buffalosabres',
+    'cgy': 'calgaryflames', 'car': 'carolinahurricanes', 'chi': 'chicagoblackhawks',
+    'col': 'coloradoavalanche', 'cbj': 'columbusbluejackets', 'dal': 'dallasstars',
+    'det': 'detroitredwings', 'edm': 'edmontonoilers', 'fla': 'floridapanthers',
+    'lak': 'losangeleskings', 'min': 'minnesotawild', 'mtl': 'montrealcanadiens',
+    'nsh': 'nashvillepredators', 'njd': 'newjerseydevils', 'nyi': 'newyorkislanders',
+    'nyr': 'newyorkrangers', 'ott': 'ottawasenators', 'phi': 'philadelphiaflyers',
+    'pit': 'pittsburghpenguins', 'sjs': 'sanjosesharks', 'sea': 'seattlekraken',
+    'stl': 'stlouisblues', 'tb': 'tampabaylightning', 'tbl': 'tampabaylightning',
+    'tor': 'torontomapleleafs', 'van': 'vancouvercanucks', 'vgk': 'vegasgoldenknights',
+    'wsh': 'washingtoncapitals', 'wpg': 'winnipegjets', 'uta': 'utahmammoth',
+    'utah': 'utahmammoth',
+}
+
 _TEAM_ALIAS_BY_SPORT = {
+    'NHL': _NHL_TEAM_ABBREV_ALIASES,
     'NBA': {
         'atl': 'atlantahawks',
         'bos': 'bostonceltics',
@@ -3240,16 +3256,10 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
     try:
         conn = get_db_connection()
         if sport == 'NHL' and start_sql and end_sql:
-            rows = conn.execute('''
+            prob_sql = _predictions_prob_select_sql(conn)
+            rows = conn.execute(f'''
                 SELECT g.*,
-                       p.elo_home_prob,
-                       p.xgboost_home_prob,
-                       p.logistic_home_prob,
-                       p.win_probability,
-                       p.catboost_home_prob,
-                       p.meta_home_prob,
-                       p.glicko_home_prob,
-                       p.trueskill_home_prob
+                       {prob_sql}
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ?
@@ -3271,7 +3281,8 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
                 LIMIT 1200
             ''', (sport, sport)).fetchall()
         conn.close()
-    except Exception:
+    except Exception as e:
+        logger.error(f"_banner_daily_results_for_range failed for {sport}: {e}")
         return None
 
     if sport != 'NHL':
@@ -3311,20 +3322,20 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
             if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                 continue
 
-        elo_prob = _to_float_safe(game['elo_home_prob'])
-        xgb_prob = _to_float_safe(game['xgboost_home_prob'])
-        ens_prob = _to_float_safe(game['win_probability'])
-        glicko2_prob = _to_float_safe(game['glicko_home_prob']) if sport == 'NHL' else None
-        trueskill_prob = _to_float_safe(game['trueskill_home_prob']) if sport == 'NHL' else None
+        elo_prob = _to_float_safe(_row_field(game, 'elo_home_prob'))
+        xgb_prob = _to_float_safe(_row_field(game, 'xgboost_home_prob'))
+        ens_prob = _to_float_safe(_row_field(game, 'win_probability'))
+        glicko2_prob = _to_float_safe(_row_field(game, 'glicko_home_prob')) if sport == 'NHL' else None
+        trueskill_prob = _to_float_safe(_row_field(game, 'trueskill_home_prob')) if sport == 'NHL' else None
         if sport == 'NHL':
             if ens_prob is None:
-                ens_prob = _to_float_safe(game['meta_home_prob'])
+                ens_prob = _to_float_safe(_row_field(game, 'meta_home_prob'))
             if glicko2_prob is None:
-                glicko2_prob = _to_float_safe(game['catboost_home_prob'])
+                glicko2_prob = _to_float_safe(_row_field(game, 'catboost_home_prob'))
             if trueskill_prob is None:
-                trueskill_prob = _to_float_safe(game['logistic_home_prob'])
+                trueskill_prob = _to_float_safe(_row_field(game, 'logistic_home_prob'))
             if elo_prob is None:
-                elo_prob = _to_float_safe(game['catboost_home_prob'])
+                elo_prob = _to_float_safe(_row_field(game, 'catboost_home_prob'))
         else:
             if xgb_prob is None:
                 xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
@@ -5257,10 +5268,72 @@ def _ensure_engine_odds_columns():
         logger.debug(f"[engine_odds] column ensure failed: {_e}")
 
 
+_PREDICTIONS_PROB_SELECT_CACHE = None
+
+
+def _row_field(row, key, default=None):
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
+def _predictions_prob_select_sql(conn=None):
+    """Build predictions JOIN columns that exist in this DB (avoids missing-column SQL failures)."""
+    global _PREDICTIONS_PROB_SELECT_CACHE
+    if _PREDICTIONS_PROB_SELECT_CACHE is not None:
+        return _PREDICTIONS_PROB_SELECT_CACHE
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        table_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()
+        }
+    finally:
+        if close_conn:
+            conn.close()
+    base = (
+        'p.elo_home_prob',
+        'p.xgboost_home_prob',
+        'p.logistic_home_prob',
+        'p.win_probability',
+    )
+    optional = (
+        'catboost_home_prob',
+        'meta_home_prob',
+        'glicko_home_prob',
+        'trueskill_home_prob',
+    )
+    parts = list(base) + [f'p.{col}' for col in optional if col in table_cols]
+    _PREDICTIONS_PROB_SELECT_CACHE = ',\n                       '.join(parts)
+    return _PREDICTIONS_PROB_SELECT_CACHE
+
+
+def _ensure_predictions_prob_columns():
+    """Add optional Grinder2/Takedown columns when missing (older production DBs)."""
+    global _PREDICTIONS_PROB_SELECT_CACHE
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()}
+        for col in ('catboost_home_prob', 'glicko_home_prob', 'trueskill_home_prob'):
+            if col not in cols:
+                conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} REAL")
+        conn.commit()
+        conn.close()
+        _PREDICTIONS_PROB_SELECT_CACHE = None
+    except Exception as _e:
+        logger.debug(f"[predictions] column ensure failed: {_e}")
+
+
 # Run on every startup — creates tables if missing, no-op if they exist
 try:
     init_db()
     _ensure_engine_odds_columns()
+    _ensure_predictions_prob_columns()
 except Exception as _dbe:
     logger.warning(f"init_db failed: {_dbe}")
 
