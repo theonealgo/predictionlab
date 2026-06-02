@@ -3233,27 +3233,46 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
         weekly_results = calculate_nba_weekly_performance()
         return _daily_results_from_weekly(weekly_results) if weekly_results else None
 
+    start_sql = start_dt.strftime('%Y-%m-%d') if start_dt else None
+    end_sql = end_dt.strftime('%Y-%m-%d') if end_dt else None
+
     try:
         conn = get_db_connection()
-        rows = conn.execute('''
-            SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
-            FROM games g
-            LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
-            WHERE g.sport = ?
-              AND g.home_score IS NOT NULL
-              AND g.away_score IS NOT NULL
-            ORDER BY g.game_date DESC
-            LIMIT 1200
-        ''', (sport, sport)).fetchall()
+        if sport == 'NHL' and start_sql and end_sql:
+            rows = conn.execute('''
+                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                FROM games g
+                LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                WHERE g.sport = ?
+                  AND g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                  AND date(g.game_date) >= ?
+                  AND date(g.game_date) <= ?
+                ORDER BY g.game_date DESC
+            ''', (sport, sport, start_sql, end_sql)).fetchall()
+        else:
+            rows = conn.execute('''
+                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                FROM games g
+                LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                WHERE g.sport = ?
+                  AND g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                ORDER BY g.game_date DESC
+                LIMIT 1200
+            ''', (sport, sport)).fetchall()
         conn.close()
     except Exception:
         return None
 
-    rows = [
-        r for r in rows
-        if _date_in_range(_normalize_game_date_key(r['game_date']), start_dt, end_dt)
-    ]
-    rows = _sort_game_rows_by_date_desc(rows)[:600]
+    if sport != 'NHL':
+        rows = [
+            r for r in rows
+            if _date_in_range(_normalize_game_date_key(r['game_date']), start_dt, end_dt)
+        ]
+        rows = _sort_game_rows_by_date_desc(rows)[:600]
+    else:
+        rows = _sort_game_rows_by_date_desc(rows)
 
     if not rows:
         return None
@@ -3288,7 +3307,12 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt):
         if ens_prob is None:
             ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
 
-        v2 = get_v2_prediction(sport, home_team, away_team, game_date) if sport != 'SOCCER' else None
+        v2 = None
+        if sport != 'SOCCER':
+            _gd = parse_date(game_date) if game_date else None
+            _days_ago = (datetime.now() - _gd).days if _gd else 999
+            if sport != 'NHL' or _days_ago <= 21:
+                v2 = get_v2_prediction(sport, home_team, away_team, game_date)
         glicko2_prob = v2.get('glicko2_prob') if v2 else None
         trueskill_prob = v2.get('trueskill_prob') if v2 else None
         if v2:
@@ -7326,37 +7350,44 @@ def calculate_nfl_weekly_performance():
         return None
 
 def calculate_nhl_weekly_performance():
-    """Calculate NHL model performance week by week
-    
-    Uses data from database since NHL doesn't have a simple API like nfl_data_py.
-    Returns a consistent sample of the most recent fully-graded games so every
-    model is compared over the same set.
+    """Calculate NHL model performance for the current regular season (Oct–Apr).
+
+    Used by legacy callers; the results page uses _banner_daily_results_for_range.
+    V2 inference runs only for games in the last 21 days to avoid worker timeouts.
     """
     try:
+        import time as _t
         from datetime import datetime, timedelta
+        _wall_start = _t.time()
+        _WALL_BUDGET = 25.0  # seconds — must finish before Render's 30s timeout
+
         conn = get_db_connection()
 
-        # Build the NHL results page from a consistent recent sample.
-        target_games = 200
-        candidate_games = 320
-
-        # Get recent completed NHL games through yesterday only.
-        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        yesterday_dt = datetime.now() - timedelta(days=1)
+        season_start_dt, season_end_dt = _nhl_results_regular_season_bounds(yesterday_dt)
+        season_start = season_start_dt.strftime('%Y-%m-%d')
+        yesterday = min(season_end_dt, yesterday_dt).strftime('%Y-%m-%d')
 
         games = conn.execute('''
             SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
                    p.elo_home_prob, p.xgboost_home_prob, p.meta_home_prob
             FROM games g
-            LEFT JOIN predictions p ON (p.sport = 'NHL' AND (p.game_id = g.game_id OR 
-                (date(p.game_date) = date(g.game_date) AND p.home_team_id = g.home_team_id AND p.away_team_id = g.away_team_id)))
+            LEFT JOIN predictions p ON (
+                p.sport = 'NHL' AND (
+                    p.game_id = g.game_id OR
+                    (date(p.game_date) = date(g.game_date)
+                     AND p.home_team_id = g.home_team_id
+                     AND p.away_team_id = g.away_team_id)
+                )
+            )
             WHERE g.sport = 'NHL'
               AND g.home_score IS NOT NULL
               AND g.away_score IS NOT NULL
+              AND date(g.game_date) >= ?
               AND date(g.game_date) <= ?
             ORDER BY g.game_date DESC
-            LIMIT ?
-        ''', (yesterday, candidate_games)).fetchall()
+        ''', (season_start, yesterday)).fetchall()
         conn.close()
         
         if not games:
@@ -7381,24 +7412,27 @@ def calculate_nhl_weekly_performance():
                 else None
             )
 
-            if elo_prob is None and xgb_prob is None and meta_prob is None:
-                continue
-            if elo_prob is None:
-                elo_prob = meta_prob if meta_prob is not None else xgb_prob
-            # Compute v2 predictions for the selected recent window only.
-            # Only compute for recent games where v2 data matters most.
+            # Stop if we've used the wall-clock budget (prevents Render timeout).
+            if _t.time() - _wall_start > _WALL_BUDGET:
+                logger.info(f"[NHL results] wall budget hit after {included_games} games")
+                break
+
             glicko2_prob = None
             trueskill_prob = None
             v2 = None
-            try:
-                v2 = get_v2_prediction('NHL', game['home_team_id'], game['away_team_id'], game['game_date'])
-                glicko2_prob = v2.get('glicko2_prob') if v2 else None
-                trueskill_prob = v2.get('trueskill_prob') if v2 else None
-            except Exception:
-                pass
+            days_ago = (datetime.now() - game_date).days if game_date else 999
+            if days_ago <= 21:
+                try:
+                    v2 = get_v2_prediction('NHL', game['home_team_id'], game['away_team_id'], game['game_date'])
+                    glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
+                    trueskill_prob = v2.get('trueskill_prob') if v2 else None
+                except Exception:
+                    pass
 
             if xgb_prob is None and v2:
                 xgb_prob = v2.get('xgboost_prob', xgb_prob)
+            if elo_prob is None:
+                elo_prob = xgb_prob
             if xgb_prob is None:
                 xgb_prob = elo_prob
             if meta_prob is None:
@@ -7406,9 +7440,8 @@ def calculate_nhl_weekly_performance():
                     glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob
                 )
 
-            # Keep recent completed games even if some model probs are missing.
-            # Tally logic already skips missing model fields per game.
-            if all(prob is None for prob in [glicko2_prob, trueskill_prob, elo_prob, xgb_prob, meta_prob]):
+            # Skip only if we truly have nothing (V2 model unavailable for this matchup).
+            if all(p is None for p in [glicko2_prob, trueskill_prob, elo_prob, xgb_prob, meta_prob]):
                 continue
 
             actual_home_win = game['home_score'] > game['away_score']
@@ -7463,8 +7496,6 @@ def calculate_nhl_weekly_performance():
                 'ens_correct':       meta_correct,
             })
             included_games += 1
-            if included_games >= target_games:
-                break
 
         for week in weekly_results:
             for model in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
@@ -8309,7 +8340,14 @@ def compute_overall_stats_from_daily(daily_results):
     return overall
 
 
-def _build_season_performance_summary(overall_stats, spread_total_stats):
+def _build_season_performance_summary(
+    overall_stats,
+    spread_total_stats,
+    *,
+    scope_label=None,
+    games_expected=None,
+    games_in_scope=None,
+):
     """Season banner metrics with honest per-market game counts (ML vs spread vs O/U)."""
     ens = (overall_stats or {}).get('ensemble') or {}
     ml_total = int(ens.get('total') or 0)
@@ -8347,6 +8385,9 @@ def _build_season_performance_summary(overall_stats, spread_total_stats):
         'ou_correct': int(st.get('total_correct') or 0),
         'ou_pct': ou_pct,
         'ou_note': ou_note,
+        'scope_label': scope_label,
+        'games_expected': games_expected,
+        'games_in_scope': games_in_scope,
     }
 
 
@@ -10262,14 +10303,16 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
-            {% if sport == 'SOCCER' and selected_league and league_db_total is defined and league_db_total %}
+            {% set sp = season_perf if season_perf is defined and season_perf else none %}
+            {% if sp and sp.scope_label %}
+            <p style="text-align:center;margin:0 0 10px;font-size:0.82em;color:#64748b;">{{ sp.scope_label }}{% if sp.games_in_scope is not none and sp.games_expected %} — {{ sp.games_in_scope }} of {{ sp.games_expected }} regular-season games graded{% endif %}</p>
+            {% elif sport == 'SOCCER' and selected_league and league_db_total is defined and league_db_total %}
             <p style="text-align:center;margin:0 0 10px;font-size:0.82em;color:#64748b;">Showing recent results for this league ({{ league_db_total }} completed games in database).</p>
             {% endif %}
             <div id="seasonInfoBox" style="display:none;background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.78em;color:#334155;line-height:1.6;text-align:center;">
                 Moneyline, spread, and O/U are graded separately. A game can count toward moneyline (model pick vs final) but not toward spread or O/U if the sportsbook line or XSharp projection was missing. Subtitles under spread/O/U show how many of the moneyline-graded games were also graded for that market.
             </div>
             <div style="text-align:center;margin-bottom:14px;"><span onclick="var b=document.getElementById('seasonInfoBox');b.style.display=b.style.display==='none'?'block':'none';" style="cursor:pointer;font-size:0.75em;color:#475569;border:1px solid rgba(15,23,42,0.18);border-radius:12px;padding:3px 10px;background:#f8fafc;">ⓘ What do these numbers mean?</span></div>
-            {% set sp = season_perf if season_perf is defined and season_perf else none %}
             {% if not sp and overall_stats and overall_stats.ensemble %}
             {% set _ens = overall_stats.ensemble %}
             {% set sp = {'ml_total': _ens.total, 'ml_correct': _ens.correct, 'ml_accuracy': _ens.accuracy, 'spread_graded': 0, 'spread_covered': 0, 'spread_pct': none, 'spread_note': none, 'ou_graded': 0, 'ou_correct': 0, 'ou_pct': none, 'ou_note': none} %}
@@ -10737,6 +10780,18 @@ _SEASON_WINDOWS = {
     'SOCCER':((8, 1), (6, 30)),
 }
 
+# Regular-season game counts per team (wire sport-by-sport in results; NHL first).
+SPORT_REGULAR_SEASON_GAMES_PER_TEAM = {
+    'NHL': 82,
+    # 'NBA': 82,
+    # 'MLB': 162,
+}
+_NHL_RESULTS_REGULAR_SEASON_MD = ((10, 1), (4, 30))  # Oct–Apr regular season (excludes playoffs)
+_NHL_TEAMS = 32
+SPORT_REGULAR_SEASON_LEAGUE_GAMES = {
+    'NHL': SPORT_REGULAR_SEASON_GAMES_PER_TEAM['NHL'] * _NHL_TEAMS // 2,
+}
+
 _SPORT_MIN_LIVE_DATES = {
     'WNBA': datetime(2026, 5, 8),
 }
@@ -10768,6 +10823,41 @@ def _season_window_for_date(sport, today):
             start = datetime(today.year - 1, sm, sd)
             end = datetime(today.year, em, ed)
     return start, end
+
+
+def _nhl_results_regular_season_bounds(ref_dt=None):
+    """Oct–Apr bounds for the NHL season that contains ref_dt (regular season only)."""
+    ref_dt = ref_dt or datetime.now()
+    (sm, sd), (em, ed) = _NHL_RESULTS_REGULAR_SEASON_MD
+    if (ref_dt.month, ref_dt.day) >= (sm, sd):
+        season_start_year = ref_dt.year
+    elif (ref_dt.month, ref_dt.day) <= (em, ed):
+        season_start_year = ref_dt.year - 1
+    else:
+        season_start_year = ref_dt.year - 1
+    start = datetime(season_start_year, sm, sd)
+    end = datetime(season_start_year + 1, em, ed)
+    return start, end
+
+
+def _results_season_bounds(sport, ref_dt=None):
+    """Date window for season-performance stats on results pages (NHL wired)."""
+    if sport == 'NHL':
+        return _nhl_results_regular_season_bounds(ref_dt)
+    return _season_window_for_date(sport, ref_dt or datetime.now())
+
+
+def _subset_daily_results(daily_results, start_dt, end_dt):
+    """Shallow slice of daily_results by calendar date (shared game dicts)."""
+    from collections import defaultdict
+    if not daily_results:
+        return defaultdict(lambda: {'games': []})
+    out = defaultdict(lambda: {'games': []})
+    for date_key, bucket in daily_results.items():
+        if _date_in_range(date_key, start_dt, end_dt):
+            out[date_key]['games'] = list(bucket.get('games') or [])
+    return out
+
 
 def get_season_status(sport, today=None):
     today = today or datetime.now()
@@ -15445,10 +15535,16 @@ def sport_results(sport):
             except Exception as e:
                 logger.error(f"NHL score sync failed (continuing with existing data): {e}")
             yesterday_dt = datetime.now() - timedelta(days=1)
-            lookback_start_dt = yesterday_dt - timedelta(days=140)
-            daily_results = _banner_daily_results_for_range(sport, lookback_start_dt, yesterday_dt)
-            if not daily_results:
+            season_start_dt, season_end_dt = _results_season_bounds('NHL', yesterday_dt)
+            season_end_eff = min(season_end_dt, yesterday_dt) if season_end_dt else yesterday_dt
+            season_daily = _banner_daily_results_for_range(sport, season_start_dt, season_end_eff)
+            if not season_daily:
                 return _results_fallback_page(sport, "NHL results could not be loaded because no completed NHL games were available for grading yet.")
+
+            display_start_dt = yesterday_dt - timedelta(days=30)
+            daily_results = _subset_daily_results(season_daily, display_start_dt, yesterday_dt)
+            if not _daily_results_game_count(daily_results):
+                daily_results = season_daily
 
             today_date = datetime.now().strftime('%Y-%m-%d')
 
@@ -15456,15 +15552,21 @@ def sport_results(sport):
                 yesterday = yesterday_dt.strftime('%Y-%m-%d')
                 sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=7)
 
-                overall_stats = compute_overall_stats_from_daily(daily_results)
-                _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
+                overall_stats = compute_overall_stats_from_daily(season_daily)
+                _ov, _un, _gou, _avg, _bench = _ou_stats(season_daily, sport)
 
-                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
-                _cache_market_lines_for_results(sport, daily_results, limit=80)
-                _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
-                _st_stats = _compute_spread_total_for_daily(sport, daily_results)
-                _finalize_daily_result_cards(sport, daily_results)
-                season_perf = _build_season_performance_summary(overall_stats, _st_stats)
+                _attach_book_odds_to_daily_results(sport, season_daily, api_limit=300)
+                _cache_market_lines_for_results(sport, season_daily, limit=80)
+                _attach_engine_odds_to_daily_results(sport, season_daily, limit=40)
+                _st_stats = _compute_spread_total_for_daily(sport, season_daily)
+                _finalize_daily_result_cards(sport, season_daily)
+                season_perf = _build_season_performance_summary(
+                    overall_stats,
+                    _st_stats,
+                    scope_label='NHL regular season (Oct–Apr)',
+                    games_expected=SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('NHL'),
+                    games_in_scope=_daily_results_game_count(season_daily),
+                )
                 tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
                 daily_tally = tally_bundle['daily_tally']
                 daily_tally_date = tally_bundle['daily_tally_date']
@@ -15477,7 +15579,7 @@ def sport_results(sport):
                 results_stale_notice = tally_bundle['results_stale_notice']
                 roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
                 roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
-                roi_total = compute_roi_for_range(daily_results, None, None)
+                roi_total = compute_roi_for_range(season_daily, None, None)
                 roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
 
                 rendered = render_template_string(
