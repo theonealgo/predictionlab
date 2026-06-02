@@ -1969,9 +1969,18 @@ def _set_card_pl_moneylines(card: dict) -> None:
             card['pl_model_draw_ml'] = ml.get('moneyline_draw')
             card['pl_model_away_ml'] = ml.get('moneyline_away')
         return
-    prob = (_safe_float(card.get('disp_ml_prob'))
-            or _safe_float(card.get('ens_prob'))
-            or _safe_float(card.get('ensemble_prob')))
+    # V2 games (NHL/NBA/MLB/NFL): always use calibrated ensemble_prob for PL odds.
+    # disp_ml_prob is efficiency-spread-derived and can point the opposite direction
+    # from the V2 model — e.g. efficiency says Knicks -4 (Spurs 37%) while V2 says
+    # Spurs 64%. Using disp_ml_prob would produce Spurs +198 while the pick is Spurs.
+    # The favourite picked by the model MUST have a negative moneyline.
+    if card.get('is_v2'):
+        prob = (_safe_float(card.get('ensemble_prob'))
+                or _safe_float(card.get('ens_prob')))
+    else:
+        prob = (_safe_float(card.get('disp_ml_prob'))
+                or _safe_float(card.get('ens_prob'))
+                or _safe_float(card.get('ensemble_prob')))
     ml = _compute_odds_from_prob(prob, apply_vig=True, clamp_ml=True)
     if ml:
         card['pl_model_home_ml'] = ml.get('moneyline_home')
