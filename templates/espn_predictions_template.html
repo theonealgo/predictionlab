@@ -267,9 +267,15 @@
         .tab:hover { background:rgba(15,23,42,0.06); }
         .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 14px; }
         .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
-        .league-pill { background:#f8fafc; border:2px solid rgba(15,23,42,0.14); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#334155; text-decoration:none; display:inline-flex; align-items:center; }
+        .league-pill { background:#f8fafc; border:2px solid rgba(15,23,42,0.14); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#334155; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
         .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
+        .league-pill.live-league { border-color:#00C076; color:#059669; background:rgba(0,192,118,0.07); }
+        .league-pill.live-league.active { background:#00C076; border-color:#00C076; color:#fff; }
         .league-pill:hover { border-color:#fbbf24; }
+        .league-pill .live-dot { width:7px; height:7px; border-radius:50%; background:#00C076; flex-shrink:0; animation:livepulse 1.4s ease-in-out infinite; }
+        @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.8);} }
+        .date-bubble.today-bubble { border-color:#00C076 !important; color:#059669 !important; font-weight:700; }
+        .date-bubble.today-bubble.active { background:#00C076 !important; color:#fff !important; }
         .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }
         .nav-arrow { background:rgba(146,64,14,0.12); border:2px solid #92400e; color:#92400e; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
         .nav-arrow:hover { background:rgba(146,64,14,0.22); transform:scale(1.1); }
@@ -633,10 +639,13 @@
     <div class="league-slider">
         <div class="league-badges" id="leagueBubbles">
             {% for lg in soccer_leagues %}
-            <a class="league-pill {% if lg.active %}active{% endif %}" href="{{ lg.url }}">{{ lg.name }}</a>
+            <a class="league-pill {% if lg.active %}active{% endif %} {% if lg.live %}live-league{% endif %}" href="{{ lg.url }}">
+                {% if lg.live %}<span class="live-dot"></span>{% endif %}{{ lg.name }}
+            </a>
             {% endfor %}
         </div>
     </div>
+    <div style="font-size:0.75em;color:#475569;text-align:center;margin:-6px 0 10px;"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#00C076;display:inline-block;"></span> Green = active fixtures</span></div>
     {% endif %}
 
     {% if prediction_error %}
@@ -769,13 +778,12 @@
         </div>
         {% endfor %}
     {% else %}
-    {% if sport == 'SOCCER' and soccer_leagues %}
+    {% if sport == 'SOCCER' %}
     <div style="text-align:center;padding:48px 20px;max-width:520px;margin:0 auto;">
         <div style="font-size:2em;margin-bottom:12px;">⚽</div>
-        <div style="font-size:1.1em;font-weight:700;color:#0f172a;margin-bottom:8px;">No upcoming fixtures</div>
+        <div style="font-size:1.1em;font-weight:700;color:#0f172a;margin-bottom:8px;">No fixtures available for this league</div>
         <div style="color:#475569;font-size:0.92em;line-height:1.65;margin-bottom:20px;">
-            Most European leagues finished their 2025–26 seasons in May. Picks will return when the new season kicks off in August.<br>
-            Leagues still active: <strong>Spanish Segunda División playoffs</strong>, <strong>Copa Libertadores</strong>, <strong>MLS</strong>.
+            Select a <span style="color:#059669;font-weight:700;">green league</span> above to see active picks, or check the results page for completed season data.
         </div>
         <a href="/soccer-results" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">View Season Results →</a>
     </div>
@@ -1044,9 +1052,14 @@
         if(!week.includes(activeDate)){if(week.length>0){activeDate=week[0];showDate(activeDate);}}
         week.forEach(date=>{
             const b=document.createElement('div'); b.className='date-bubble';
-            if(date===today)b.classList.add('today');
-            if(date===activeDate)b.classList.add('active');
-            b.innerHTML=formatDate(date);
+            const isToday = date===today;
+            const isFuture = date > today;
+            if(isToday) b.classList.add('today','today-bubble');
+            if(date===activeDate) b.classList.add('active');
+            // Label: "Today", "Tomorrow", or formatted date
+            let label = isToday ? '📅 Today' : (isFuture && (new Date(date+'T12:00:00') - new Date(today+'T12:00:00') < 86400000*2) ? 'Tomorrow' : formatDate(date));
+            b.innerHTML = label;
+            b.title = date;
             b.onclick=()=>{document.querySelectorAll('.date-bubble').forEach(x=>x.classList.remove('active'));b.classList.add('active');showDate(date);renderDatePicker();};
             c.appendChild(b);
         });

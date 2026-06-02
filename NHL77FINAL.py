@@ -4350,6 +4350,12 @@ def _filter_soccer_picks(predictions, selected_slug=None):
     """Curate soccer picks and league picker; filter only when ?league= is set."""
     filtered = []
     leagues = []
+    leagues_with_upcoming = set()  # leagues that have at least one upcoming game
+    try:
+        _today = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+    except Exception:
+        _today = datetime.now().strftime('%Y-%m-%d')
+
     for pred in predictions:
         league_raw = pred.get('league')
         league_name = _canonical_soccer_league_name(league_raw) or league_raw
@@ -4358,16 +4364,26 @@ def _filter_soccer_picks(predictions, selected_slug=None):
         pred['league'] = league_name
         leagues.append(league_name)
         filtered.append(pred)
+        # Mark leagues that have games today or in the future
+        gd = pred.get('game_date') or ''
+        if gd >= _today and pred.get('home_score') is None:
+            leagues_with_upcoming.add(league_name)
+
     # Always show full curated league slider (ESPN may only have games in 1–2 comps today).
     soccer_league_list = list(SOCCER_LEAGUE_ORDER)
     selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
     if selected_league:
         filtered = [p for p in filtered if p.get('league') == selected_league]
+
+    # leagues_with_any: leagues that have any predictions at all (upcoming or recent)
+    leagues_with_any = set(leagues)
     soccer_leagues = [
         {
             'name': 'All Leagues',
             'slug': '',
             'active': selected_league is None,
+            'live': bool(leagues_with_upcoming),
+            'has_games': bool(leagues_with_any),
             'url': '/soccer-picks',
         }
     ] + [
@@ -4375,6 +4391,8 @@ def _filter_soccer_picks(predictions, selected_slug=None):
             'name': lg,
             'slug': _soccer_league_slug(lg),
             'active': lg == selected_league,
+            'live': lg in leagues_with_upcoming,
+            'has_games': lg in leagues_with_any,
             'url': f"/soccer-picks?league={_soccer_league_slug(lg)}",
         }
         for lg in soccer_league_list
@@ -15094,13 +15112,25 @@ def sport_predictions(sport, filter_date=None):
         share_image_src = url_for('share_predictions_image', token=_pred_token, fmt='jpg')
         share_image_view_url = url_for('share_predictions_view', token=_pred_token)
 
-    # Group upcoming games for the picks page.
-    # When no upcoming games exist (end of season / between seasons) fall back to
-    # the most recent 7 days of completed games so the date picker is never blank.
+    # Group games for the picks page.
+    # Soccer always includes completed games from the last 21 days so leagues
+    # don't go blank after their season ends — users can still see what was picked.
+    # Other sports: upcoming games only, with a 7-day fallback when season is over.
     from collections import defaultdict
+    from datetime import date as _date_cls
+    _cutoff_21 = (datetime.now() - timedelta(days=21)).strftime('%Y-%m-%d')
+
     grouped_predictions = defaultdict(list)
     for pred in predictions:
-        if pred.get('home_score') is not None:
+        _has_score = pred.get('home_score') is not None
+        _is_upcoming = not _has_score
+        # Soccer: also show completed games from last 21 days
+        _is_soccer_recent = (
+            sport == 'SOCCER' and
+            _has_score and
+            (pred.get('game_date') or '') >= _cutoff_21
+        )
+        if not _is_upcoming and not _is_soccer_recent:
             continue
         if not pred.get('home_team_id') or not pred.get('away_team_id'):
             continue
@@ -15109,8 +15139,8 @@ def sport_predictions(sport, filter_date=None):
         date_key = pred.get('game_date') or 'TBD'
         grouped_predictions[date_key].append(pred)
 
+    # For non-soccer (or soccer with no DB results in feed): fallback to last 7 days
     if not grouped_predictions:
-        # No upcoming games — show completed games from the last 7 days
         for pred in predictions:
             if pred.get('home_score') is None:
                 continue
@@ -15122,7 +15152,6 @@ def sport_predictions(sport, filter_date=None):
             if date_key == 'TBD':
                 continue
             try:
-                from datetime import date as _date_cls
                 _gd = _date_cls.fromisoformat(date_key)
                 _td = _date_cls.fromisoformat(today_date)
                 if (_td - _gd).days <= 7:
