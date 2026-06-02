@@ -253,7 +253,12 @@ def _results_page_html_usable(html: str) -> bool:
         )
     ):
         return False
-    return 'game-card' in low or 'week-section' in low
+    if 'game-card' in low or 'week-section' in low:
+        return True
+    # Snapshot-only offseason page may have season stats but no recent game cards.
+    if 'season performance' in low and ('nhl regular season' in low or '1309 of 1312' in low):
+        return True
+    return False
 
 
 def _trim_cache(cache: dict, ttl: float, max_entries: int = 200) -> None:
@@ -10321,7 +10326,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
         {% set label_ensemble = 'Consensus' %}
-        {% if daily_results and overall_stats %}
+        {% if results_snapshot_notice %}
+        <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#9a3412;text-align:center;">
+            {{ results_snapshot_notice }}
+        </div>
+        {% endif %}
+        {% if overall_stats %}
         {% if soccer_leagues %}
         <div class="league-slider">
             <div class="league-badges" id="leagueBubbles">
@@ -11199,13 +11209,27 @@ def _nhl_playoff_window(ref_dt=None):
     return start, end
 
 
-def _load_nhl_season_snapshot(ref_dt=None, phase='regular'):
-    try:
-        from src.season_snapshots import load_season_snapshot
-    except ImportError:
-        return None
+def _nhl_snapshot_json_path(ref_dt=None, phase='regular'):
     label = _nhl_season_label(ref_dt)
-    return load_season_snapshot('NHL', label, phase)
+    return _os_v2.path.join(
+        _V2_BASE, 'data', 'season_snapshots', f'NHL_{label}_{phase}.json',
+    )
+
+
+def _load_nhl_season_snapshot(ref_dt=None, phase='regular'):
+    """Load committed season JSON (no import side-effects — works on Render)."""
+    path = _nhl_snapshot_json_path(ref_dt, phase)
+    if not _os_v2.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding='utf-8') as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning('NHL season snapshot read failed (%s): %s', path, exc)
+        return None
+    if not isinstance(data, dict) or data.get('sport') != 'NHL':
+        return None
+    return data
 
 
 def _stats_from_nhl_snapshot(snapshot):
@@ -15906,7 +15930,7 @@ def sport_results(sport):
             )
         
         if sport == 'NHL':
-            cache_key = f'{sport}_moneyline_results_html'
+            cache_key = f'{sport}_moneyline_results_html_v2'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
@@ -15942,16 +15966,27 @@ def sport_results(sport):
             season_start_dt, season_end_dt = _results_season_bounds('NHL', yesterday_dt)
             season_end_eff = min(season_end_dt, yesterday_dt) if season_end_dt else yesterday_dt
             season_daily = None
+            if not snapshot_stats and regular_complete:
+                snapshot_stats = _stats_from_nhl_snapshot(
+                    _load_nhl_season_snapshot(now_dt, 'regular'),
+                )
             if not snapshot_stats:
                 season_daily = _banner_daily_results_for_range(
                     sport, season_start_dt, season_end_eff,
                 )
                 if not season_daily:
-                    return _results_fallback_page(
-                        sport,
-                        "NHL results could not be loaded because no completed NHL games "
-                        "were available for grading yet.",
-                    )
+                    if regular_complete and _os_v2.path.isfile(
+                        _nhl_snapshot_json_path(now_dt, 'regular'),
+                    ):
+                        snapshot_stats = _stats_from_nhl_snapshot(
+                            _load_nhl_season_snapshot(now_dt, 'regular'),
+                        )
+                    if not snapshot_stats:
+                        return _results_fallback_page(
+                            sport,
+                            "NHL results could not be loaded because no completed NHL games "
+                            "were available for grading yet.",
+                        )
 
             playoff_daily = None
             playoff_perf = None
@@ -16058,6 +16093,7 @@ def sport_results(sport):
                     spread_total_stats=_st_stats,
                     season_perf=season_perf,
                     playoff_perf=playoff_perf,
+                    results_snapshot_notice=results_snapshot_notice,
                     daily_tally=daily_tally,
                     daily_tally_date=daily_tally_date,
                     daily_tally_games=daily_tally_games,
