@@ -10326,7 +10326,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
         {% set label_ensemble = 'Consensus' %}
-        {% if results_snapshot_notice %}
+        {% if results_snapshot_notice is defined and results_snapshot_notice %}
         <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#9a3412;text-align:center;">
             {{ results_snapshot_notice }}
         </div>
@@ -15931,11 +15931,12 @@ def sport_results(sport):
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
                 results_stale_notice=results_stale_notice,
+                results_snapshot_notice=None,
                 soccer_leagues=None
             )
         
         if sport == 'NHL':
-            cache_key = f'{sport}_moneyline_results_html_v2'
+            cache_key = f'{sport}_moneyline_results_html_v3'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
@@ -16209,6 +16210,7 @@ def sport_results(sport):
                     weekly_tally_games=weekly_tally_games,
                     roi_cards=roi_cards,
                     results_stale_notice=results_stale_notice,
+                    results_snapshot_notice=None,
                 )
                 if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
                     _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
@@ -16517,6 +16519,7 @@ def sport_results(sport):
                 roi_cards=roi_cards,
                 soccer_leagues=soccer_leagues,
                 results_stale_notice=results_stale_notice,
+                results_snapshot_notice=None,
                 selected_league=selected_league,
                 league_db_total=soccer_league_counts.get(selected_league, 0) if sport == 'SOCCER' else None,
             )
