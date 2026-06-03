@@ -65,3 +65,26 @@ def test_all_sports_results_route(monkeypatch):
     assert out == 'ok'
     assert captured['page'] == 'all-sports-results'
     assert captured['dashboard_rows'] == []
+
+
+def test_all_sports_results_http_ok():
+    import NHL77FINAL as N
+
+    with N.app.test_client() as client:
+        resp = client.get('/all-sports-results')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'All Sports Results' in html
+
+
+def test_all_sports_results_survives_snapshot_import_failure(monkeypatch):
+    import NHL77FINAL as N
+
+    def _boom():
+        raise ImportError('simulated missing src.season_snapshots')
+
+    monkeypatch.setattr(N, '_load_all_sports_season_snapshots', _boom)
+    with N.app.test_client() as client:
+        resp = client.get('/all-sports-results')
+    assert resp.status_code == 200
+    assert 'All Sports Results' in resp.get_data(as_text=True)

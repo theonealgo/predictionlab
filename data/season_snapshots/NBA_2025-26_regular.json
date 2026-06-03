@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T00:25:56Z",
+  "built_at": "2026-06-03T02:35:27Z",
   "games_expected": 1230,
   "games_in_scope": 1293,
   "ou_summary": {
@@ -11,43 +11,43 @@
   },
   "overall_stats": {
     "elo": {
-      "accuracy": 62.9,
-      "correct": 800,
-      "total": 1272
+      "accuracy": 63.0,
+      "correct": 814,
+      "total": 1293
     },
     "ensemble": {
       "accuracy": 62.6,
-      "correct": 796,
-      "total": 1272
+      "correct": 810,
+      "total": 1293
     },
     "glicko2": {
-      "accuracy": 50.0,
-      "correct": 3,
-      "total": 6
+      "accuracy": 69.1,
+      "correct": 893,
+      "total": 1293
     },
     "trueskill": {
-      "accuracy": 50.0,
-      "correct": 3,
-      "total": 6
+      "accuracy": 63.6,
+      "correct": 822,
+      "total": 1293
     },
     "xgboost": {
-      "accuracy": 63.3,
-      "correct": 805,
-      "total": 1272
+      "accuracy": 63.5,
+      "correct": 821,
+      "total": 1293
     }
   },
   "phase": "regular",
   "roi_total": {
     "moneyline": {
-      "graded": 1250,
-      "losses": 464,
+      "graded": 1271,
+      "losses": 471,
       "missing_odds": 0,
       "pushes": 22,
       "reason": null,
-      "roi_pct": 25.76,
-      "units_risked": 1250,
-      "units_won": 322.0,
-      "wins": 786
+      "roi_pct": 25.89,
+      "units_risked": 1271,
+      "units_won": 329.0,
+      "wins": 800
     },
     "spread": {
       "graded": 1258,
@@ -78,8 +78,8 @@
     "games_expected": 1230,
     "games_in_scope": 1293,
     "ml_accuracy": 62.6,
-    "ml_correct": 796,
-    "ml_total": 1272,
+    "ml_correct": 810,
+    "ml_total": 1293,
     "ou_correct": 791,
     "ou_graded": 1291,
     "ou_note": "Graded 1291 of 1293 games in scope (needs posted O/U total + XSharp total)",

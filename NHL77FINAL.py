@@ -17,6 +17,7 @@ import io
 import uuid
 import importlib
 import importlib.util
+import glob
 import types
 from collections import defaultdict
 from flask_cors import CORS
@@ -7788,8 +7789,47 @@ def calculate_nhl_weekly_performance():
         logger.error(f"Error calculating NHL weekly performance: {e}")
         return None
 
+_NBA_FROZEN_V2_RESULTS_CACHE: dict = {}
+
+
+def _nba_model_probs_for_grading(game_row, home_team, away_team, game_date_key):
+    """DB-first NBA moneyline probs for results grading; frozen v2 fills historical gaps."""
+    glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
+        'NBA',
+        home_team,
+        away_team,
+        game_row,
+        game_date_key,
+        skip_v2=True,
+    )
+    stored_ens = _to_float_safe(_row_field(game_row, 'win_probability'))
+    if stored_ens is not None:
+        ens_prob = stored_ens
+    elif ens_prob is None:
+        ens_prob = _to_float_safe(_row_field(game_row, 'meta_home_prob'))
+
+    if glicko2_prob is None or trueskill_prob is None:
+        cache_key = f'{home_team}|{away_team}|{game_date_key}'
+        if cache_key not in _NBA_FROZEN_V2_RESULTS_CACHE:
+            _NBA_FROZEN_V2_RESULTS_CACHE[cache_key] = _frozen_get_v2_prediction(
+                'NBA', home_team, away_team, game_date_key,
+            )
+        v2 = _NBA_FROZEN_V2_RESULTS_CACHE[cache_key]
+        if v2:
+            if glicko2_prob is None:
+                glicko2_prob = _to_float_safe(v2.get('glicko2_prob'))
+            if trueskill_prob is None:
+                trueskill_prob = _to_float_safe(v2.get('trueskill_prob'))
+            if xgb_prob is None:
+                xgb_prob = _to_float_safe(v2.get('xgboost_prob'))
+            if elo_prob is None:
+                elo_prob = _to_float_safe(v2.get('home_prob'))
+
+    return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
+
+
 def calculate_nba_weekly_performance():
-    """Calculate NBA model performance week by week using v2 model predictions."""
+    """Calculate NBA model performance week by week using stored + frozen model predictions."""
     def to_float(val):
         if val is None:
             return None
@@ -7814,12 +7854,13 @@ def calculate_nba_weekly_performance():
         conn = get_db_connection()
         from datetime import datetime, timedelta
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        prob_sql = _predictions_prob_select_sql(conn)
 
-        games = conn.execute('''
+        games = conn.execute(f'''
             SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
-                   p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability,
-                   p.predicted_total
+                   p.predicted_total,
+                   {prob_sql}
             FROM games g
             LEFT JOIN predictions p
               ON p.sport = 'NBA' AND (
@@ -7861,26 +7902,12 @@ def calculate_nba_weekly_performance():
             days_since_start = (game_date - season_start).days
             week = (days_since_start // 7) + 1
 
-            # Stored DB predictions
-            elo_prob  = to_float(game['elo_home_prob'])
-            xgb_prob  = to_float(game['xgboost_home_prob']) or elo_prob
-            ens_prob  = to_float(game['win_probability']) or elo_prob
-
-            # V2 live inference only for recent games (full-season v2 on ~1.3k games timeouts Render)
-            glicko2_prob = trueskill_prob = None
-            v2 = None
-            days_ago = (datetime.now() - game_date).days if game_date else 999
-            if days_ago <= 21:
-                v2 = get_v2_prediction('NBA', home_team, away_team, game['game_date'])
-            if v2:
-                glicko2_prob = v2.get('glicko2_prob')
-                trueskill_prob = v2.get('trueskill_prob')
-                xgb_prob = v2.get('xgboost_prob', xgb_prob)
-                if elo_prob is None:
-                    elo_prob = v2.get('home_prob')
-                ens_prob = _compute_ensemble_prob(
-                    glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob,
-                )
+            game_date_key = _normalize_game_date_key(game['game_date'])
+            glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _nba_model_probs_for_grading(
+                game, home_team, away_team, game_date_key,
+            )
+            if xgb_prob is None:
+                xgb_prob = elo_prob
 
             actual_home_win = home_score > away_score
 
@@ -11557,18 +11584,29 @@ _ML_DASHBOARD_MODELS = (
 )
 
 
+def _all_sports_snapshot_dir():
+    """Resolved snapshot directory (same multi-base lookup as NHL snapshots — no src import)."""
+    for base in (_V2_BASE, _BASE_DIR, _os_v2.path.dirname(_os_v2.path.abspath(__file__))):
+        path = _os_v2.path.join(base, 'data', 'season_snapshots')
+        if _os_v2.path.isdir(path):
+            return path
+    return _os_v2.path.join(_V2_BASE, 'data', 'season_snapshots')
+
+
 def _load_all_sports_season_snapshots():
     """Load newest committed regular-season JSON per sport (no live regrade)."""
-    from src.season_snapshots import SNAPSHOT_DIR
+    snap_dir = _all_sports_snapshot_dir()
     rows = []
-    if not SNAPSHOT_DIR.is_dir():
+    if not _os_v2.path.isdir(snap_dir):
+        logger.debug('All-sports snapshot dir missing: %s', snap_dir)
         return rows
     for sport in ALL_SPORTS_DASHBOARD_SPORTS:
-        paths = sorted(SNAPSHOT_DIR.glob(f'{sport}_*_regular.json'), reverse=True)
+        pattern = _os_v2.path.join(snap_dir, f'{sport}_*_regular.json')
+        paths = sorted(glob.glob(pattern), reverse=True)
         snap = None
         for path in paths:
             try:
-                with path.open(encoding='utf-8') as fh:
+                with open(path, encoding='utf-8') as fh:
                     data = json.load(fh)
             except (OSError, json.JSONDecodeError):
                 continue
@@ -15239,6 +15277,28 @@ def promo_top_picks_today():
     return render_template_string(PROMO_TOP_PICKS_TEMPLATE, picks=picks)
 
 
+@app.route('/all-sports-results')
+def all_sports_results_page():
+    """Season dashboard from frozen JSON snapshots (no live regrade on load)."""
+    try:
+        snapshots = _load_all_sports_season_snapshots()
+        dashboard_rows = _build_all_sports_dashboard_rows(snapshots)
+    except Exception:
+        logger.exception('all_sports_results_page failed loading snapshots')
+        dashboard_rows = []
+    return render_template_string(
+        ALL_SPORTS_RESULTS_TEMPLATE,
+        page='all-sports-results',
+        page_title='All Sports Results | Season Model Performance | predictionlab.io',
+        page_description=(
+            'Season moneyline, spread, and over/under model results across NHL, NBA, MLB, '
+            'NFL, NCAAB, NCAAF, WNBA, and Soccer — loaded from frozen snapshots.'
+        ),
+        dashboard_rows=dashboard_rows,
+        ml_models=_ML_DASHBOARD_MODELS,
+    )
+
+
 # ── SEO picks routes ──────────────────────────────────────────────────────────
 
 @app.route('/<slug>')
@@ -15310,24 +15370,6 @@ def sport_home(sport):
     if slug:
         return redirect(f'/{slug}', code=301)
     return "Sport not found", 404
-
-
-@app.route('/all-sports-results')
-def all_sports_results_page():
-    """Season dashboard from frozen JSON snapshots (no live regrade on load)."""
-    snapshots = _load_all_sports_season_snapshots()
-    dashboard_rows = _build_all_sports_dashboard_rows(snapshots)
-    return render_template_string(
-        ALL_SPORTS_RESULTS_TEMPLATE,
-        page='all-sports-results',
-        page_title='All Sports Results | Season Model Performance | predictionlab.io',
-        page_description=(
-            'Season moneyline, spread, and over/under model results across NHL, NBA, MLB, '
-            'NFL, NCAAB, NCAAF, WNBA, and Soccer — loaded from frozen snapshots.'
-        ),
-        dashboard_rows=dashboard_rows,
-        ml_models=_ML_DASHBOARD_MODELS,
-    )
 
 
 @app.route('/daily-report')
