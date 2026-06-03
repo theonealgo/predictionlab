@@ -3434,6 +3434,47 @@ def _model_probs_from_row_and_v2(
         )
     return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
 
+
+_FROZEN_V2_RESULTS_GRADING_CACHE: dict = {}
+_NBA_FROZEN_V2_RESULTS_CACHE = _FROZEN_V2_RESULTS_GRADING_CACHE
+
+
+def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_key):
+    """DB-first moneyline probs for results grading; frozen v2 fills historical gaps."""
+    glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
+        sport,
+        home_team,
+        away_team,
+        game_row,
+        game_date_key,
+        skip_v2=True,
+    )
+    stored_ens = _to_float_safe(_row_field(game_row, 'win_probability'))
+    if stored_ens is not None:
+        ens_prob = stored_ens
+    elif ens_prob is None:
+        ens_prob = _to_float_safe(_row_field(game_row, 'meta_home_prob'))
+
+    if glicko2_prob is None or trueskill_prob is None:
+        cache_key = f'{sport}|{home_team}|{away_team}|{game_date_key}'
+        if cache_key not in _FROZEN_V2_RESULTS_GRADING_CACHE:
+            _FROZEN_V2_RESULTS_GRADING_CACHE[cache_key] = _frozen_get_v2_prediction(
+                sport, home_team, away_team, game_date_key,
+            )
+        v2 = _FROZEN_V2_RESULTS_GRADING_CACHE[cache_key]
+        if v2:
+            if glicko2_prob is None:
+                glicko2_prob = _to_float_safe(v2.get('glicko2_prob'))
+            if trueskill_prob is None:
+                trueskill_prob = _to_float_safe(v2.get('trueskill_prob'))
+            if xgb_prob is None:
+                xgb_prob = _to_float_safe(v2.get('xgboost_prob'))
+            if elo_prob is None:
+                elo_prob = _to_float_safe(v2.get('home_prob'))
+
+    return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
+
+
 def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, skip_v2=None):
     if sport == 'NFL':
         weekly_results = calculate_nfl_weekly_performance()
@@ -3500,10 +3541,6 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, 
 
     from collections import defaultdict
     daily_results = defaultdict(lambda: {'games': []})
-    _nhl_v2_wall_start = _time.time() if sport == 'NHL' else None
-    _NHL_V2_WALL_BUDGET = 25.0
-    if skip_v2 is None:
-        skip_v2 = _os.environ.get('PL_SKIP_V2_FOR_RESULTS') == '1'
     for game in rows:
         home_score = _to_float_safe(game['home_score'])
         away_score = _to_float_safe(game['away_score'])
@@ -3524,17 +3561,8 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, 
             if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                 continue
 
-        _v2_budget_ok = True
-        if sport == 'NHL' and _nhl_v2_wall_start is not None:
-            _v2_budget_ok = (_time.time() - _nhl_v2_wall_start) < _NHL_V2_WALL_BUDGET
-        glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
-            sport,
-            home_team,
-            away_team,
-            game,
-            game_date,
-            skip_v2=skip_v2,
-            v2_budget_ok=_v2_budget_ok,
+        glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_for_grading(
+            sport, game, home_team, away_team, game_date,
         )
 
         game_info = {
@@ -7789,43 +7817,9 @@ def calculate_nhl_weekly_performance():
         logger.error(f"Error calculating NHL weekly performance: {e}")
         return None
 
-_NBA_FROZEN_V2_RESULTS_CACHE: dict = {}
-
-
 def _nba_model_probs_for_grading(game_row, home_team, away_team, game_date_key):
-    """DB-first NBA moneyline probs for results grading; frozen v2 fills historical gaps."""
-    glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
-        'NBA',
-        home_team,
-        away_team,
-        game_row,
-        game_date_key,
-        skip_v2=True,
-    )
-    stored_ens = _to_float_safe(_row_field(game_row, 'win_probability'))
-    if stored_ens is not None:
-        ens_prob = stored_ens
-    elif ens_prob is None:
-        ens_prob = _to_float_safe(_row_field(game_row, 'meta_home_prob'))
-
-    if glicko2_prob is None or trueskill_prob is None:
-        cache_key = f'{home_team}|{away_team}|{game_date_key}'
-        if cache_key not in _NBA_FROZEN_V2_RESULTS_CACHE:
-            _NBA_FROZEN_V2_RESULTS_CACHE[cache_key] = _frozen_get_v2_prediction(
-                'NBA', home_team, away_team, game_date_key,
-            )
-        v2 = _NBA_FROZEN_V2_RESULTS_CACHE[cache_key]
-        if v2:
-            if glicko2_prob is None:
-                glicko2_prob = _to_float_safe(v2.get('glicko2_prob'))
-            if trueskill_prob is None:
-                trueskill_prob = _to_float_safe(v2.get('trueskill_prob'))
-            if xgb_prob is None:
-                xgb_prob = _to_float_safe(v2.get('xgboost_prob'))
-            if elo_prob is None:
-                elo_prob = _to_float_safe(v2.get('home_prob'))
-
-    return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
+    """NBA wrapper — see _model_probs_for_grading."""
+    return _model_probs_for_grading('NBA', game_row, home_team, away_team, game_date_key)
 
 
 def calculate_nba_weekly_performance():
@@ -16846,9 +16840,9 @@ def sport_results(sport):
                         if selected_league and league_name != selected_league:
                             continue
 
-                    # Stored DB probs + v2 (Edge = catboost via helper).
-                    glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
-                        sport, home_team, away_team, game, game_date,
+                    # Stored DB probs + frozen v2 backfill (no 21-day live v2 cap).
+                    glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_for_grading(
+                        sport, game, home_team, away_team, game_date,
                     )
 
                     soccer_pred = None
