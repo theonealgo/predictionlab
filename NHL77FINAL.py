@@ -10832,7 +10832,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% else %}
         <div class="daily-tally" style="text-align:center;">
-            No completed games in the last 7 days.
+            —
         </div>
         {% endif %}
 
@@ -11257,7 +11257,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     </div>
     {% else %}
     <div class="daily-tally" style="text-align:center;">
-        No completed games in the last 7 days.
+        —
     </div>
     {% endif %}
     {% if weekly_results and overall_stats %}
