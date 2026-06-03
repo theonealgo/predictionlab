@@ -1,0 +1,116 @@
+{
+  "built_at": "2026-06-03T00:32:48Z",
+  "games_expected": 264,
+  "games_in_scope": 15,
+  "ou_summary": {
+    "avg_total": 165.4,
+    "ou_bench": 158.0,
+    "total_games_ou": 15,
+    "total_over": 9,
+    "total_under": 6
+  },
+  "overall_stats": {
+    "elo": {
+      "accuracy": 60.0,
+      "correct": 3,
+      "total": 5
+    },
+    "ensemble": {
+      "accuracy": 40.0,
+      "correct": 2,
+      "total": 5
+    },
+    "glicko2": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "trueskill": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "xgboost": {
+      "accuracy": 60.0,
+      "correct": 3,
+      "total": 5
+    }
+  },
+  "phase": "regular",
+  "roi_total": {
+    "moneyline": {
+      "graded": 5,
+      "losses": 3,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": -20.0,
+      "units_risked": 5,
+      "units_won": -1.0,
+      "wins": 2
+    },
+    "spread": {
+      "graded": 15,
+      "losses": 9,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": -20.0,
+      "units_risked": 15,
+      "units_won": -3.0,
+      "wins": 6
+    },
+    "total": {
+      "graded": 15,
+      "losses": 7,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": 6.67,
+      "units_risked": 15,
+      "units_won": 1.0,
+      "wins": 8
+    }
+  },
+  "schema_version": 1,
+  "season": "2026-27",
+  "season_perf": {
+    "games_expected": 264,
+    "games_in_scope": 15,
+    "ml_accuracy": 40.0,
+    "ml_correct": 2,
+    "ml_total": 5,
+    "ou_correct": 8,
+    "ou_graded": 15,
+    "ou_note": null,
+    "ou_pct": 53.3,
+    "scope_label": "WNBA season",
+    "spread_covered": 6,
+    "spread_graded": 15,
+    "spread_note": null,
+    "spread_pct": 40.0
+  },
+  "sport": "WNBA",
+  "spread_total_stats": {
+    "pl_spread_covered": 5,
+    "pl_spread_graded": 10,
+    "pl_spread_pct": 50.0,
+    "pl_spread_pushes": 0,
+    "pl_total_correct": 8,
+    "pl_total_graded": 10,
+    "pl_total_pct": 80.0,
+    "pl_total_pushes": 0,
+    "spread_covered": 6,
+    "spread_graded": 15,
+    "spread_pct": 40.0,
+    "spread_pushes": 0,
+    "total_correct": 8,
+    "total_graded": 15,
+    "total_pct": 53.3,
+    "total_pushes": 0
+  },
+  "window": {
+    "end": "2026-06-01",
+    "start": "2026-05-08"
+  }
+}

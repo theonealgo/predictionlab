@@ -1,0 +1,116 @@
+{
+  "built_at": "2026-06-03T00:25:56Z",
+  "games_expected": 1230,
+  "games_in_scope": 1293,
+  "ou_summary": {
+    "avg_total": 229.6,
+    "ou_bench": 226.0,
+    "total_games_ou": 1271,
+    "total_over": 702,
+    "total_under": 569
+  },
+  "overall_stats": {
+    "elo": {
+      "accuracy": 62.9,
+      "correct": 800,
+      "total": 1272
+    },
+    "ensemble": {
+      "accuracy": 62.6,
+      "correct": 796,
+      "total": 1272
+    },
+    "glicko2": {
+      "accuracy": 50.0,
+      "correct": 3,
+      "total": 6
+    },
+    "trueskill": {
+      "accuracy": 50.0,
+      "correct": 3,
+      "total": 6
+    },
+    "xgboost": {
+      "accuracy": 63.3,
+      "correct": 805,
+      "total": 1272
+    }
+  },
+  "phase": "regular",
+  "roi_total": {
+    "moneyline": {
+      "graded": 1250,
+      "losses": 464,
+      "missing_odds": 0,
+      "pushes": 22,
+      "reason": null,
+      "roi_pct": 25.76,
+      "units_risked": 1250,
+      "units_won": 322.0,
+      "wins": 786
+    },
+    "spread": {
+      "graded": 1258,
+      "losses": 477,
+      "missing_odds": 0,
+      "pushes": 14,
+      "reason": null,
+      "roi_pct": 24.17,
+      "units_risked": 1258,
+      "units_won": 304.0,
+      "wins": 781
+    },
+    "total": {
+      "graded": 1285,
+      "losses": 494,
+      "missing_odds": 0,
+      "pushes": 6,
+      "reason": null,
+      "roi_pct": 23.11,
+      "units_risked": 1285,
+      "units_won": 297.0,
+      "wins": 791
+    }
+  },
+  "schema_version": 1,
+  "season": "2025-26",
+  "season_perf": {
+    "games_expected": 1230,
+    "games_in_scope": 1293,
+    "ml_accuracy": 62.6,
+    "ml_correct": 796,
+    "ml_total": 1272,
+    "ou_correct": 791,
+    "ou_graded": 1291,
+    "ou_note": "Graded 1291 of 1293 games in scope (needs posted O/U total + XSharp total)",
+    "ou_pct": 61.6,
+    "scope_label": "NBA season",
+    "spread_covered": 781,
+    "spread_graded": 1272,
+    "spread_note": "Graded 1272 of 1293 games in scope (needs book spread line + XSharp spread)",
+    "spread_pct": 62.1
+  },
+  "sport": "NBA",
+  "spread_total_stats": {
+    "pl_spread_covered": 833,
+    "pl_spread_graded": 1220,
+    "pl_spread_pct": 69.8,
+    "pl_spread_pushes": 27,
+    "pl_total_correct": 878,
+    "pl_total_graded": 1226,
+    "pl_total_pct": 72.0,
+    "pl_total_pushes": 6,
+    "spread_covered": 781,
+    "spread_graded": 1272,
+    "spread_pct": 62.1,
+    "spread_pushes": 14,
+    "total_correct": 791,
+    "total_graded": 1291,
+    "total_pct": 61.6,
+    "total_pushes": 6
+  },
+  "window": {
+    "end": "2026-06-01",
+    "start": "2025-10-01"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "built_at": "2026-06-03T00:35:47Z",
+  "games_expected": null,
+  "games_in_scope": 2746,
+  "ou_summary": {
+    "avg_total": 3.0,
+    "ou_bench": 0,
+    "total_games_ou": 2570,
+    "total_over": 2570,
+    "total_under": 0
+  },
+  "overall_stats": {
+    "elo": {
+      "accuracy": 74.5,
+      "correct": 1540,
+      "total": 2066
+    },
+    "ensemble": {
+      "accuracy": 75.6,
+      "correct": 1562,
+      "total": 2066
+    },
+    "glicko2": {
+      "accuracy": 72.0,
+      "correct": 1487,
+      "total": 2066
+    },
+    "trueskill": {
+      "accuracy": 74.9,
+      "correct": 1548,
+      "total": 2066
+    },
+    "xgboost": {
+      "accuracy": 74.9,
+      "correct": 1548,
+      "total": 2066
+    }
+  },
+  "phase": "regular",
+  "roi_total": {
+    "moneyline": {
+      "graded": 2066,
+      "losses": 504,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": 51.21,
+      "units_risked": 2066,
+      "units_won": 1058.0,
+      "wins": 1562
+    },
+    "spread": {
+      "graded": 1916,
+      "losses": 695,
+      "missing_odds": 0,
+      "pushes": 124,
+      "reason": null,
+      "roi_pct": 27.45,
+      "units_risked": 1916,
+      "units_won": 526.0,
+      "wins": 1221
+    },
+    "total": {
+      "graded": 1982,
+      "losses": 773,
+      "missing_odds": 0,
+      "pushes": 58,
+      "reason": null,
+      "roi_pct": 22.0,
+      "units_risked": 1982,
+      "units_won": 436.0,
+      "wins": 1209
+    }
+  },
+  "schema_version": 1,
+  "season": "2025-26",
+  "season_perf": {
+    "games_expected": null,
+    "games_in_scope": 2746,
+    "ml_accuracy": 75.6,
+    "ml_correct": 1562,
+    "ml_total": 2066,
+    "ou_correct": 1527,
+    "ou_graded": 2708,
+    "ou_note": "Graded 2708 of 2746 games in scope (needs posted O/U total + XSharp total)",
+    "ou_pct": 58.1,
+    "scope_label": "Soccer season",
+    "spread_covered": 1541,
+    "spread_graded": 2537,
+    "spread_note": "Graded 2537 of 2746 games in scope (needs book spread line + XSharp spread)",
+    "spread_pct": 65.0
+  },
+  "sport": "SOCCER",
+  "spread_total_stats": {
+    "pl_spread_covered": 969,
+    "pl_spread_graded": 1432,
+    "pl_spread_pct": 82.3,
+    "pl_spread_pushes": 254,
+    "pl_total_correct": 1013,
+    "pl_total_graded": 1505,
+    "pl_total_pct": 70.8,
+    "pl_total_pushes": 74,
+    "spread_covered": 1541,
+    "spread_graded": 2537,
+    "spread_pct": 65.0,
+    "spread_pushes": 165,
+    "total_correct": 1527,
+    "total_graded": 2708,
+    "total_pct": 58.1,
+    "total_pushes": 81
+  },
+  "window": {
+    "end": "2026-06-01",
+    "start": "2025-08-01"
+  }
+}

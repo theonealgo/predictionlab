@@ -35,7 +35,9 @@ def build_snapshot(sport: str, season: str, phase: str) -> Path:
 
     ref_dt = _parse_season(season)
     if sport != 'NHL':
-        raise SystemExit('Only NHL is wired for snapshot builds in this release.')
+        raise SystemExit(
+            'Use scripts/compute_all_sport_season_stats.py --write-snapshots for non-NHL sports.'
+        )
 
     if phase == 'regular':
         start_dt, end_dt = N._nhl_results_regular_season_bounds(ref_dt)
@@ -116,7 +118,7 @@ def build_snapshot(sport: str, season: str, phase: str) -> Path:
 
 def main():
     parser = argparse.ArgumentParser(description='Build frozen season results snapshot JSON.')
-    parser.add_argument('--sport', required=True, help='Sport code (NHL)')
+    parser.add_argument('--sport', required=True, help='Sport code (NHL, NBA, MLB, …)')
     parser.add_argument('--season', required=True, help='Season label e.g. 2025-26')
     parser.add_argument('--phase', default='regular', choices=('regular', 'playoffs'))
     args = parser.parse_args()

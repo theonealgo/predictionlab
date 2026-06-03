@@ -1,0 +1,116 @@
+{
+  "built_at": "2026-06-03T00:32:42Z",
+  "games_expected": 816,
+  "games_in_scope": 755,
+  "ou_summary": {
+    "avg_total": 52.9,
+    "ou_bench": 56.0,
+    "total_games_ou": 755,
+    "total_over": 306,
+    "total_under": 449
+  },
+  "overall_stats": {
+    "elo": {
+      "accuracy": 85.2,
+      "correct": 643,
+      "total": 755
+    },
+    "ensemble": {
+      "accuracy": 85.2,
+      "correct": 643,
+      "total": 755
+    },
+    "glicko2": {
+      "accuracy": 85.7,
+      "correct": 647,
+      "total": 755
+    },
+    "trueskill": {
+      "accuracy": 83.7,
+      "correct": 632,
+      "total": 755
+    },
+    "xgboost": {
+      "accuracy": 85.2,
+      "correct": 643,
+      "total": 755
+    }
+  },
+  "phase": "regular",
+  "roi_total": {
+    "moneyline": {
+      "graded": 755,
+      "losses": 112,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": 70.33,
+      "units_risked": 755,
+      "units_won": 531.0,
+      "wins": 643
+    },
+    "spread": {
+      "graded": 634,
+      "losses": 131,
+      "missing_odds": 0,
+      "pushes": 2,
+      "reason": null,
+      "roi_pct": 58.68,
+      "units_risked": 634,
+      "units_won": 372.0,
+      "wins": 503
+    },
+    "total": {
+      "graded": 629,
+      "losses": 159,
+      "missing_odds": 0,
+      "pushes": 7,
+      "reason": null,
+      "roi_pct": 49.44,
+      "units_risked": 629,
+      "units_won": 311.0,
+      "wins": 470
+    }
+  },
+  "schema_version": 1,
+  "season": "2025-26",
+  "season_perf": {
+    "games_expected": 816,
+    "games_in_scope": 755,
+    "ml_accuracy": 85.2,
+    "ml_correct": 643,
+    "ml_total": 755,
+    "ou_correct": 470,
+    "ou_graded": 636,
+    "ou_note": "Graded 636 of 755 games in scope (needs posted O/U total + XSharp total)",
+    "ou_pct": 74.7,
+    "scope_label": "NCAA Football season",
+    "spread_covered": 503,
+    "spread_graded": 636,
+    "spread_note": "Graded 636 of 755 games in scope (needs book spread line + XSharp spread)",
+    "spread_pct": 79.3
+  },
+  "sport": "NCAAF",
+  "spread_total_stats": {
+    "pl_spread_covered": 5,
+    "pl_spread_graded": 8,
+    "pl_spread_pct": 62.5,
+    "pl_spread_pushes": 0,
+    "pl_total_correct": 6,
+    "pl_total_graded": 8,
+    "pl_total_pct": 75.0,
+    "pl_total_pushes": 0,
+    "spread_covered": 503,
+    "spread_graded": 636,
+    "spread_pct": 79.3,
+    "spread_pushes": 2,
+    "total_correct": 470,
+    "total_graded": 636,
+    "total_pct": 74.7,
+    "total_pushes": 7
+  },
+  "window": {
+    "end": "2026-01-20",
+    "start": "2025-08-15"
+  }
+}

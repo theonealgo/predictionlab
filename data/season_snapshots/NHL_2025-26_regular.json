@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-02T18:13:24Z",
+  "built_at": "2026-06-03T00:23:55Z",
   "games_expected": 1312,
   "games_in_scope": 1309,
   "ou_summary": {
@@ -11,13 +11,13 @@
   },
   "overall_stats": {
     "elo": {
-      "accuracy": 57.8,
-      "correct": 757,
+      "accuracy": 58.7,
+      "correct": 769,
       "total": 1309
     },
     "ensemble": {
-      "accuracy": 58.3,
-      "correct": 763,
+      "accuracy": 60.3,
+      "correct": 789,
       "total": 1309
     },
     "glicko2": {
@@ -40,36 +40,36 @@
   "roi_total": {
     "moneyline": {
       "graded": 1309,
-      "losses": 547,
+      "losses": 519,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 16.42,
+      "roi_pct": 20.7,
       "units_risked": 1309,
-      "units_won": 215.0,
-      "wins": 762
+      "units_won": 271.0,
+      "wins": 790
     },
     "spread": {
-      "graded": 1298,
-      "losses": 448,
+      "graded": 1291,
+      "losses": 467,
       "missing_odds": 0,
-      "pushes": 10,
+      "pushes": 17,
       "reason": null,
-      "roi_pct": 30.97,
-      "units_risked": 1298,
-      "units_won": 402.0,
-      "wins": 850
+      "roi_pct": 27.65,
+      "units_risked": 1291,
+      "units_won": 357.0,
+      "wins": 824
     },
     "total": {
-      "graded": 1197,
-      "losses": 565,
+      "graded": 1198,
+      "losses": 563,
       "missing_odds": 0,
-      "pushes": 111,
+      "pushes": 110,
       "reason": null,
-      "roi_pct": 5.6,
-      "units_risked": 1197,
-      "units_won": 67.0,
-      "wins": 632
+      "roi_pct": 6.01,
+      "units_risked": 1198,
+      "units_won": 72.0,
+      "wins": 635
     }
   },
   "schema_version": 1,
@@ -77,29 +77,37 @@
   "season_perf": {
     "games_expected": 1312,
     "games_in_scope": 1309,
-    "ml_accuracy": 58.3,
-    "ml_correct": 763,
+    "ml_accuracy": 60.3,
+    "ml_correct": 789,
     "ml_total": 1309,
-    "ou_correct": 632,
+    "ou_correct": 635,
     "ou_graded": 1308,
     "ou_note": "Graded 1308 of 1309 games in scope (needs posted O/U total + XSharp total)",
-    "ou_pct": 52.8,
-    "scope_label": "NHL regular season (Oct\u2013Apr)",
-    "spread_covered": 850,
+    "ou_pct": 53.0,
+    "scope_label": "NHL season",
+    "spread_covered": 824,
     "spread_graded": 1308,
     "spread_note": "Graded 1308 of 1309 games in scope (needs book spread line + XSharp spread)",
-    "spread_pct": 65.5
+    "spread_pct": 63.8
   },
   "sport": "NHL",
   "spread_total_stats": {
-    "spread_covered": 850,
+    "pl_spread_covered": 879,
+    "pl_spread_graded": 1292,
+    "pl_spread_pct": 75.4,
+    "pl_spread_pushes": 126,
+    "pl_total_correct": 652,
+    "pl_total_graded": 1292,
+    "pl_total_pct": 55.2,
+    "pl_total_pushes": 110,
+    "spread_covered": 824,
     "spread_graded": 1308,
-    "spread_pct": 65.5,
-    "spread_pushes": 10,
-    "total_correct": 632,
+    "spread_pct": 63.8,
+    "spread_pushes": 17,
+    "total_correct": 635,
     "total_graded": 1308,
-    "total_pct": 52.8,
-    "total_pushes": 111
+    "total_pct": 53.0,
+    "total_pushes": 110
   },
   "window": {
     "end": "2026-04-30",

@@ -1,0 +1,116 @@
+{
+  "built_at": "2026-06-03T00:30:08Z",
+  "games_expected": 5430,
+  "games_in_scope": 1926,
+  "ou_summary": {
+    "avg_total": 150.7,
+    "ou_bench": 145.0,
+    "total_games_ou": 1926,
+    "total_over": 1112,
+    "total_under": 814
+  },
+  "overall_stats": {
+    "elo": {
+      "accuracy": 82.3,
+      "correct": 1586,
+      "total": 1926
+    },
+    "ensemble": {
+      "accuracy": 82.6,
+      "correct": 1590,
+      "total": 1926
+    },
+    "glicko2": {
+      "accuracy": 84.1,
+      "correct": 1620,
+      "total": 1926
+    },
+    "trueskill": {
+      "accuracy": 80.1,
+      "correct": 1543,
+      "total": 1926
+    },
+    "xgboost": {
+      "accuracy": 82.5,
+      "correct": 1588,
+      "total": 1926
+    }
+  },
+  "phase": "regular",
+  "roi_total": {
+    "moneyline": {
+      "graded": 1926,
+      "losses": 336,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": 65.11,
+      "units_risked": 1926,
+      "units_won": 1254.0,
+      "wins": 1590
+    },
+    "spread": {
+      "graded": 1712,
+      "losses": 603,
+      "missing_odds": 0,
+      "pushes": 13,
+      "reason": null,
+      "roi_pct": 29.56,
+      "units_risked": 1712,
+      "units_won": 506.0,
+      "wins": 1109
+    },
+    "total": {
+      "graded": 1722,
+      "losses": 595,
+      "missing_odds": 0,
+      "pushes": 3,
+      "reason": null,
+      "roi_pct": 30.89,
+      "units_risked": 1722,
+      "units_won": 532.0,
+      "wins": 1127
+    }
+  },
+  "schema_version": 1,
+  "season": "2025-26",
+  "season_perf": {
+    "games_expected": 5430,
+    "games_in_scope": 1926,
+    "ml_accuracy": 82.6,
+    "ml_correct": 1590,
+    "ml_total": 1926,
+    "ou_correct": 1127,
+    "ou_graded": 1725,
+    "ou_note": "Graded 1725 of 1926 games in scope (needs posted O/U total + XSharp total)",
+    "ou_pct": 65.4,
+    "scope_label": "NCAA Basketball season",
+    "spread_covered": 1109,
+    "spread_graded": 1725,
+    "spread_note": "Graded 1725 of 1926 games in scope (needs book spread line + XSharp spread)",
+    "spread_pct": 64.8
+  },
+  "sport": "NCAAB",
+  "spread_total_stats": {
+    "pl_spread_covered": 89,
+    "pl_spread_graded": 102,
+    "pl_spread_pct": 89.9,
+    "pl_spread_pushes": 3,
+    "pl_total_correct": 89,
+    "pl_total_graded": 102,
+    "pl_total_pct": 87.3,
+    "pl_total_pushes": 0,
+    "spread_covered": 1109,
+    "spread_graded": 1725,
+    "spread_pct": 64.8,
+    "spread_pushes": 13,
+    "total_correct": 1127,
+    "total_graded": 1725,
+    "total_pct": 65.4,
+    "total_pushes": 3
+  },
+  "window": {
+    "end": "2026-04-15",
+    "start": "2025-11-01"
+  }
+}

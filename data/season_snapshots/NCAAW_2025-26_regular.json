@@ -1,0 +1,116 @@
+{
+  "built_at": "2026-06-03T00:30:09Z",
+  "games_expected": 5430,
+  "games_in_scope": 8,
+  "ou_summary": {
+    "avg_total": 135.9,
+    "ou_bench": 140.0,
+    "total_games_ou": 8,
+    "total_over": 3,
+    "total_under": 5
+  },
+  "overall_stats": {
+    "elo": {
+      "accuracy": 100.0,
+      "correct": 8,
+      "total": 8
+    },
+    "ensemble": {
+      "accuracy": 100.0,
+      "correct": 8,
+      "total": 8
+    },
+    "glicko2": {
+      "accuracy": 100.0,
+      "correct": 8,
+      "total": 8
+    },
+    "trueskill": {
+      "accuracy": 100.0,
+      "correct": 8,
+      "total": 8
+    },
+    "xgboost": {
+      "accuracy": 100.0,
+      "correct": 8,
+      "total": 8
+    }
+  },
+  "phase": "regular",
+  "roi_total": {
+    "moneyline": {
+      "graded": 8,
+      "losses": 0,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": 100.0,
+      "units_risked": 8,
+      "units_won": 8.0,
+      "wins": 8
+    },
+    "spread": {
+      "graded": 0,
+      "losses": 0,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": "No graded picks in range.",
+      "roi_pct": null,
+      "units_risked": 0,
+      "units_won": 0.0,
+      "wins": 0
+    },
+    "total": {
+      "graded": 0,
+      "losses": 0,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": "No graded picks in range.",
+      "roi_pct": null,
+      "units_risked": 0,
+      "units_won": 0.0,
+      "wins": 0
+    }
+  },
+  "schema_version": 1,
+  "season": "2025-26",
+  "season_perf": {
+    "games_expected": 5430,
+    "games_in_scope": 8,
+    "ml_accuracy": 100.0,
+    "ml_correct": 8,
+    "ml_total": 8,
+    "ou_correct": 0,
+    "ou_graded": 0,
+    "ou_note": "Graded 0 of 8 games in scope (needs posted O/U total + XSharp total)",
+    "ou_pct": null,
+    "scope_label": "NCAA Women's Basketball season",
+    "spread_covered": 0,
+    "spread_graded": 0,
+    "spread_note": "Graded 0 of 8 games in scope (needs book spread line + XSharp spread)",
+    "spread_pct": null
+  },
+  "sport": "NCAAW",
+  "spread_total_stats": {
+    "pl_spread_covered": 0,
+    "pl_spread_graded": 0,
+    "pl_spread_pct": null,
+    "pl_spread_pushes": 0,
+    "pl_total_correct": 0,
+    "pl_total_graded": 0,
+    "pl_total_pct": null,
+    "pl_total_pushes": 0,
+    "spread_covered": 0,
+    "spread_graded": 0,
+    "spread_pct": null,
+    "spread_pushes": 0,
+    "total_correct": 0,
+    "total_graded": 0,
+    "total_pct": null,
+    "total_pushes": 0
+  },
+  "window": {
+    "end": "2026-04-15",
+    "start": "2025-11-01"
+  }
+}

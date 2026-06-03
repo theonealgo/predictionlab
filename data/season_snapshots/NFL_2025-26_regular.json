@@ -1,0 +1,116 @@
+{
+  "built_at": "2026-06-03T00:27:21Z",
+  "games_expected": 272,
+  "games_in_scope": 294,
+  "ou_summary": {
+    "avg_total": 45.9,
+    "ou_bench": 47.0,
+    "total_games_ou": 294,
+    "total_over": 124,
+    "total_under": 170
+  },
+  "overall_stats": {
+    "elo": {
+      "accuracy": 71.1,
+      "correct": 209,
+      "total": 294
+    },
+    "ensemble": {
+      "accuracy": 67.0,
+      "correct": 197,
+      "total": 294
+    },
+    "glicko2": {
+      "accuracy": 77.2,
+      "correct": 227,
+      "total": 294
+    },
+    "trueskill": {
+      "accuracy": 68.7,
+      "correct": 202,
+      "total": 294
+    },
+    "xgboost": {
+      "accuracy": 67.3,
+      "correct": 198,
+      "total": 294
+    }
+  },
+  "phase": "regular",
+  "roi_total": {
+    "moneyline": {
+      "graded": 293,
+      "losses": 97,
+      "missing_odds": 0,
+      "pushes": 1,
+      "reason": null,
+      "roi_pct": 33.79,
+      "units_risked": 293,
+      "units_won": 99.0,
+      "wins": 196
+    },
+    "spread": {
+      "graded": 259,
+      "losses": 55,
+      "missing_odds": 0,
+      "pushes": 1,
+      "reason": null,
+      "roi_pct": 57.53,
+      "units_risked": 259,
+      "units_won": 149.0,
+      "wins": 204
+    },
+    "total": {
+      "graded": 148,
+      "losses": 55,
+      "missing_odds": 0,
+      "pushes": 114,
+      "reason": null,
+      "roi_pct": 25.68,
+      "units_risked": 148,
+      "units_won": 38.0,
+      "wins": 93
+    }
+  },
+  "schema_version": 1,
+  "season": "2025-26",
+  "season_perf": {
+    "games_expected": 272,
+    "games_in_scope": 294,
+    "ml_accuracy": 67.0,
+    "ml_correct": 197,
+    "ml_total": 294,
+    "ou_correct": 93,
+    "ou_graded": 262,
+    "ou_note": "Graded 262 of 294 games in scope (needs posted O/U total + XSharp total)",
+    "ou_pct": 62.8,
+    "scope_label": "NFL season",
+    "spread_covered": 204,
+    "spread_graded": 260,
+    "spread_note": "Graded 260 of 294 games in scope (needs book spread line + XSharp spread)",
+    "spread_pct": 78.8
+  },
+  "sport": "NFL",
+  "spread_total_stats": {
+    "pl_spread_covered": 186,
+    "pl_spread_graded": 214,
+    "pl_spread_pct": 89.9,
+    "pl_spread_pushes": 7,
+    "pl_total_correct": 61,
+    "pl_total_graded": 214,
+    "pl_total_pct": 61.0,
+    "pl_total_pushes": 114,
+    "spread_covered": 204,
+    "spread_graded": 260,
+    "spread_pct": 78.8,
+    "spread_pushes": 1,
+    "total_correct": 93,
+    "total_graded": 262,
+    "total_pct": 62.8,
+    "total_pushes": 114
+  },
+  "window": {
+    "end": "2026-02-20",
+    "start": "2025-09-01"
+  }
+}

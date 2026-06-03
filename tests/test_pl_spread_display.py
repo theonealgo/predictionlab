@@ -110,18 +110,50 @@ def test_nhl_spread_not_faded(nhl):
     assert card["xgb_spread"] == pytest.approx(1.5)
 
 
+def test_wnba_xsharp_spread_faded_not_pl(nhl):
+    card = {'our_spread': 4.5, 'xgb_spread': 3.5}
+    nhl._apply_model_fades_batch('WNBA', [card])
+    assert card['xgb_spread'] == pytest.approx(-3.5)
+    assert card['our_spread'] == pytest.approx(4.5)
+
+
+def test_wnba_ml_selective_fade_below_55(nhl):
+    card = {
+        'ensemble_prob': 62.0, 'ens_prob': 62.0,
+        'elo_prob': 58.0, 'xgb_prob': 52.0,
+        'glicko2_prob': 54.0, 'trueskill_prob': 51.0,
+    }
+    nhl._apply_model_fades_batch('WNBA', [card])
+    assert card['ensemble_prob'] == pytest.approx(62.0)
+    assert card['ens_prob'] == pytest.approx(62.0)
+    assert card['elo_prob'] == pytest.approx(42.0)
+    assert card['xgb_prob'] == pytest.approx(48.0)
+    assert card['glicko2_prob'] == pytest.approx(46.0)
+    assert card['trueskill_prob'] == pytest.approx(49.0)
+
+
+def test_soccer_ml_all_models_faded(nhl):
+    card = {
+        'glicko2_prob': 62.0, 'trueskill_prob': 58.0, 'elo_prob': 55.0,
+        'xgb_prob': 60.0, 'ens_prob': 57.0,
+    }
+    nhl._apply_model_fades_batch('SOCCER', [card])
+    assert card['glicko2_prob'] == pytest.approx(38.0)
+    assert card['ens_prob'] == pytest.approx(43.0)
+
+
+def test_mlb_spread_not_faded_via_batch(nhl):
+    card = {'our_spread': 1.5, 'xgb_spread': 1.5}
+    nhl._apply_model_fades_batch('MLB', [card])
+    assert card['our_spread'] == pytest.approx(1.5)
+    assert card['xgb_spread'] == pytest.approx(1.5)
+
+
 def test_wnba_ml_faded(nhl):
-    card = {"ensemble_prob": 62.0, "ens_prob": 62.0}
-    nhl._apply_ml_fade(card)
-    assert card["ensemble_prob"] == pytest.approx(38.0)
-    assert card["ens_prob"] == pytest.approx(38.0)
-
-
-def test_mlb_ou_faded_around_book(nhl):
-    card = {"xgb_total": 9.5, "our_total": 9.0, "book_total": 8.5}
-    nhl._apply_ou_fade(card, market_total=8.5)
-    assert card["xgb_total"] == pytest.approx(7.5)  # 2*8.5 - 9.5
-    assert card["our_total"] == pytest.approx(8.0)   # 2*8.5 - 9.0
+    card = {'ensemble_prob': 62.0, 'ens_prob': 62.0, 'elo_prob': 58.0}
+    nhl._apply_model_fades_batch('WNBA', [card])
+    assert card['ensemble_prob'] == pytest.approx(62.0)
+    assert card['elo_prob'] == pytest.approx(42.0)
 
 
 def test_nba_spread_not_faded(nhl):
@@ -160,8 +192,8 @@ def test_pred_card_pl_spread_ignores_pre_enforce_prob(nhl):
     assert card.get("face_pick_team") == "Seattle Storm"
 
 
-def test_mlb_daily_grading_uses_faded_xgb_spread(nhl, monkeypatch):
-    """Positive raw xgb_spread → faded → away run-line pick in results grading."""
+def test_mlb_daily_grading_no_spread_fade(nhl, monkeypatch):
+    """MLB spread fade removed — raw xgb_spread preserved in results grading."""
     monkeypatch.setattr(nhl, "_get_xgb_spread_model", lambda _s: None)
     monkeypatch.setattr(nhl, "_score_predictor_instance", lambda _s: None)
     monkeypatch.setattr(nhl, "_attach_h2h_projection_to_daily_results", lambda *a, **k: None)
@@ -182,9 +214,7 @@ def test_mlb_daily_grading_uses_faded_xgb_spread(nhl, monkeypatch):
     }
     stats = nhl._compute_spread_total_for_daily("MLB", daily)
     g = daily["2026-05-01"]["games"][0]
-    assert g["xgb_spread"] == pytest.approx(-1.5)
-    assert "Royals" in (g.get("spread_pick_label") or "")
-    assert stats["spread_graded"] == 1
+    assert g["xgb_spread"] == pytest.approx(1.5)
 
 
 class _FakeConn:

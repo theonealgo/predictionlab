@@ -1250,9 +1250,14 @@ def _round_to_half(value):
 
 # Model-level fade: invert pick parameters when historical win rate < ~55%.
 # Book odds layer is never modified.
-SPREAD_FADE_SPORTS = frozenset({'MLB', 'NCAAB', 'SOCCER'})
-ML_FADE_SPORTS = frozenset({'WNBA'})
-OU_FADE_SPORTS = frozenset({'MLB'})
+SPREAD_FADE_SPORTS = frozenset({'NCAAB', 'SOCCER'})
+XSHARP_SPREAD_FADE_SPORTS = frozenset({'WNBA'})
+SOCCER_ML_FADE_SPORTS = frozenset({'SOCCER'})
+# WNBA season ML models below 55% (Consensus/ensemble kept as-is at ~60%).
+WNBA_ML_FADE_PROB_KEYS = (
+    'glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob',
+)
+OU_FADE_SPORTS = frozenset()
 
 
 def _fade_spread(val):
@@ -1339,6 +1344,107 @@ def _apply_nhl_spread_fade(d: dict) -> None:
     _apply_spread_fade(d)
 
 
+def _apply_xsharp_spread_fade(d: dict) -> None:
+    """Invert XSharp spread only (WNBA — PL our_spread unchanged)."""
+    if not isinstance(d, dict) or d.get('_xsharp_spread_faded'):
+        return
+    faded = False
+    for key in ('xgb_spread', 'xsharp_spread'):
+        if d.get(key) is not None:
+            d[key] = _fade_spread(d[key])
+            faded = True
+    if not faded:
+        return
+    if d.get('xgb_home_score') is not None and d.get('xgb_away_score') is not None:
+        d['xgb_home_score'], d['xgb_away_score'] = d['xgb_away_score'], d['xgb_home_score']
+    if d.get('xsharp_home_score') is not None and d.get('xsharp_away_score') is not None:
+        d['xsharp_home_score'], d['xsharp_away_score'] = (
+            d['xsharp_away_score'], d['xsharp_home_score'],
+        )
+    d['_xsharp_spread_faded'] = True
+
+
+def _apply_selective_ml_fade(d: dict, prob_keys) -> None:
+    """Invert listed ML probability fields (0–1 or 0–100)."""
+    if not isinstance(d, dict):
+        return
+    faded = False
+    for key in prob_keys:
+        if d.get(key) is not None:
+            d[key] = _fade_ml_prob(d[key])
+            faded = True
+    if faded:
+        d['_ml_faded'] = True
+
+
+def _apply_soccer_ml_fade(d: dict) -> None:
+    """Invert all soccer ML model probabilities (strong anti-predictive)."""
+    if not isinstance(d, dict) or d.get('_soccer_ml_faded'):
+        return
+    faded = False
+    for key in (
+        'glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob',
+        'ens_prob', 'ensemble_prob', 'win_probability',
+    ):
+        if d.get(key) is not None:
+            d[key] = _fade_ml_prob(d[key])
+            faded = True
+    if not faded:
+        return
+    if d.get('our_home_pts') is not None and d.get('our_away_pts') is not None:
+        d['our_home_pts'], d['our_away_pts'] = d['our_away_pts'], d['our_home_pts']
+    if d.get('xgb_home_score') is not None and d.get('xgb_away_score') is not None:
+        d['xgb_home_score'], d['xgb_away_score'] = d['xgb_away_score'], d['xgb_home_score']
+    d['_soccer_ml_faded'] = True
+    d['_ml_faded'] = True
+
+
+def _prob_as_fraction(val):
+    p = _safe_float(val)
+    if p is None:
+        return None
+    return p / 100.0 if p > 1 else p
+
+
+def _recompute_daily_ml_grading_after_fade(g: dict, sport: str) -> None:
+    """Refresh per-model correct flags after ML parameter fades."""
+    if not isinstance(g, dict) or g.get('skip_grading'):
+        return
+    home_won = g.get('home_win')
+    is_draw = bool(g.get('is_draw'))
+    if sport == 'SOCCER':
+        g2 = _prob_as_fraction(g.get('glicko2_prob'))
+        ts = _prob_as_fraction(g.get('trueskill_prob'))
+        el = _prob_as_fraction(g.get('elo_prob'))
+        xg = _prob_as_fraction(g.get('xgb_prob'))
+        ens = _prob_as_fraction(g.get('ens_prob'))
+        _apply_soccer_ml_grading(
+            g,
+            draw_dec=None,
+            glicko2_prob=g2,
+            trueskill_prob=ts,
+            elo_prob=el,
+            xgb_prob=xg,
+            ens_prob=ens,
+            home_won=home_won,
+            is_draw=is_draw,
+        )
+        return
+    if home_won is None:
+        return
+    for prob_key, correct_key in (
+        ('glicko2_prob', 'glicko2_correct'),
+        ('trueskill_prob', 'trueskill_correct'),
+        ('elo_prob', 'elo_correct'),
+        ('xgb_prob', 'xgb_correct'),
+        ('ens_prob', 'ens_correct'),
+    ):
+        p = _prob_as_fraction(g.get(prob_key))
+        if p is None:
+            continue
+        g[correct_key] = (p >= 0.5) == home_won
+
+
 def _apply_ml_fade(d: dict) -> None:
     """Invert PL ensemble moneyline probability (once)."""
     if not isinstance(d, dict) or d.get('_ml_faded'):
@@ -1406,11 +1512,28 @@ def _recompute_ml_correct_after_fade(g: dict) -> None:
 def _apply_model_fades_for_sport(sport, d: dict, *, market_total=None) -> None:
     if sport in SPREAD_FADE_SPORTS:
         _apply_spread_fade(d)
-    if sport in ML_FADE_SPORTS:
-        _apply_ml_fade(d)
-        _recompute_ml_correct_after_fade(d)
+    elif sport in XSHARP_SPREAD_FADE_SPORTS:
+        _apply_xsharp_spread_fade(d)
+    if sport in SOCCER_ML_FADE_SPORTS:
+        _apply_soccer_ml_fade(d)
+    elif sport == 'WNBA':
+        _apply_selective_ml_fade(d, WNBA_ML_FADE_PROB_KEYS)
     if sport in OU_FADE_SPORTS:
         _apply_ou_fade(d, market_total=market_total)
+
+
+def _apply_fades_to_daily_results(sport, daily_results) -> None:
+    """Apply model-parameter fades + regrade ML flags for a daily_results dict."""
+    if not daily_results:
+        return
+    needs_ml_regrade = sport in SOCCER_ML_FADE_SPORTS or sport == 'WNBA'
+    for bucket in daily_results.values():
+        for g in bucket.get('games') or []:
+            if not isinstance(g, dict):
+                continue
+            _apply_model_fades_for_sport(sport, g)
+            if needs_ml_regrade:
+                _recompute_daily_ml_grading_after_fade(g, sport)
 
 
 def _apply_model_fades_batch(sport, items) -> None:
@@ -3247,21 +3370,90 @@ def _daily_results_from_weekly(weekly_results):
             daily_results[date_key]['games'].append(game)
     return daily_results
 
+
+def _model_probs_from_row_and_v2(
+    sport,
+    home_team,
+    away_team,
+    game_row,
+    game_date,
+    *,
+    skip_v2=False,
+    v2_budget_ok=True,
+):
+    """Load Grinder2/Takedown/Edge/XSharp/Consensus probs (0–1) from DB row + optional v2."""
+    glicko2_prob = _to_float_safe(_row_field(game_row, 'glicko_home_prob'))
+    trueskill_prob = _to_float_safe(_row_field(game_row, 'trueskill_home_prob'))
+    elo_prob = _to_float_safe(_row_field(game_row, 'elo_home_prob'))
+    xgb_prob = _to_float_safe(_row_field(game_row, 'xgboost_home_prob'))
+    ens_prob = _to_float_safe(_row_field(game_row, 'meta_home_prob'))
+    if ens_prob is None:
+        ens_prob = _to_float_safe(_row_field(game_row, 'win_probability'))
+    if glicko2_prob is None:
+        glicko2_prob = _to_float_safe(_row_field(game_row, 'catboost_home_prob'))
+    if trueskill_prob is None:
+        trueskill_prob = _to_float_safe(_row_field(game_row, 'logistic_home_prob'))
+    if elo_prob is None:
+        elo_prob = _to_float_safe(_row_field(game_row, 'catboost_home_prob'))
+
+    _snapshot_build = _os.environ.get('PL_SNAPSHOT_BUILD') == '1'
+    need_v2 = any(
+        p is None for p in (glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob)
+    )
+    if skip_v2 and sport == 'NHL':
+        need_v2 = False
+    if sport != 'SOCCER' and need_v2 and v2_budget_ok:
+        run_v2 = _snapshot_build or sport == 'NHL'
+        if not run_v2 and game_date:
+            _gd = parse_date(game_date)
+            if _gd:
+                run_v2 = (datetime.now() - _gd).days <= 21
+        if run_v2:
+            v2 = get_v2_prediction(sport, home_team, away_team, game_date)
+            if v2:
+                if glicko2_prob is None:
+                    glicko2_prob = v2.get('glicko2_prob')
+                if trueskill_prob is None:
+                    trueskill_prob = v2.get('trueskill_prob')
+                if xgb_prob is None:
+                    xgb_prob = v2.get('xgboost_prob')
+                if ens_prob is None:
+                    ens_prob = v2.get('home_prob')
+                if elo_prob is None:
+                    elo_prob = v2.get('catboost_prob')
+    if sport == 'NHL' and ens_prob is None:
+        ens_prob = _compute_ensemble_prob(
+            glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
+        )
+    elif ens_prob is None and any(
+        p is not None for p in (glicko2_prob, trueskill_prob, xgb_prob, elo_prob)
+    ):
+        ens_prob = _compute_ensemble_prob(
+            glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
+        )
+    return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
+
 def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, skip_v2=None):
     if sport == 'NFL':
         weekly_results = calculate_nfl_weekly_performance()
-        return _daily_results_from_weekly(weekly_results) if weekly_results else None
+        if weekly_results:
+            daily = _daily_results_from_weekly(weekly_results)
+            if daily and _daily_results_game_count(daily):
+                return daily
     if sport == 'NBA':
         weekly_results = calculate_nba_weekly_performance()
-        return _daily_results_from_weekly(weekly_results) if weekly_results else None
+        if weekly_results:
+            daily = _daily_results_from_weekly(weekly_results)
+            if daily and _daily_results_game_count(daily):
+                return daily
 
     start_sql = start_dt.strftime('%Y-%m-%d') if start_dt else None
     end_sql = end_dt.strftime('%Y-%m-%d') if end_dt else None
 
     try:
         conn = get_db_connection()
-        if sport == 'NHL' and start_sql and end_sql:
-            prob_sql = _predictions_prob_select_sql(conn)
+        prob_sql = _predictions_prob_select_sql(conn)
+        if start_sql and end_sql:
             rows = conn.execute(f'''
                 SELECT g.*,
                        {prob_sql}
@@ -3275,30 +3467,32 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, 
                 ORDER BY g.game_date DESC
             ''', (sport, sport, start_sql, end_sql)).fetchall()
         else:
-            rows = conn.execute('''
-                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+            rows = conn.execute(f'''
+                SELECT g.*,
+                       {prob_sql}
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ?
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
                 ORDER BY g.game_date DESC
-                LIMIT 1200
+                LIMIT 5000
             ''', (sport, sport)).fetchall()
         conn.close()
     except Exception as e:
         logger.error(f"_banner_daily_results_for_range failed for {sport}: {e}")
         return None
 
-    if sport != 'NHL':
+    if sport == 'NHL':
+        rows = _dedupe_nhl_game_rows(rows, apply_season_cap=not playoffs)
+    elif start_sql and end_sql:
         rows = [
             r for r in rows
             if _date_in_range(_normalize_game_date_key(r['game_date']), start_dt, end_dt)
         ]
-        rows = _sort_game_rows_by_date_desc(rows)[:600]
-    else:
-        rows = _dedupe_nhl_game_rows(rows, apply_season_cap=not playoffs)
-        rows = _sort_game_rows_by_date_desc(rows)
+    rows = _sort_game_rows_by_date_desc(rows)
+    if sport != 'NHL' and not _os.environ.get('PL_SNAPSHOT_BUILD') == '1':
+        rows = rows[:800]
 
     if not rows:
         return None
@@ -3329,68 +3523,18 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, 
             if not league_name or league_name not in SOCCER_LEAGUE_ORDER:
                 continue
 
-        elo_prob = _to_float_safe(_row_field(game, 'elo_home_prob'))
-        xgb_prob = _to_float_safe(_row_field(game, 'xgboost_home_prob'))
-        ens_prob = _to_float_safe(_row_field(game, 'win_probability'))
-        glicko2_prob = _to_float_safe(_row_field(game, 'glicko_home_prob')) if sport == 'NHL' else None
-        trueskill_prob = _to_float_safe(_row_field(game, 'trueskill_home_prob')) if sport == 'NHL' else None
-        if sport == 'NHL':
-            if ens_prob is None:
-                ens_prob = _to_float_safe(_row_field(game, 'meta_home_prob'))
-            if glicko2_prob is None:
-                glicko2_prob = _to_float_safe(_row_field(game, 'catboost_home_prob'))
-            if trueskill_prob is None:
-                trueskill_prob = _to_float_safe(_row_field(game, 'logistic_home_prob'))
-            if elo_prob is None:
-                elo_prob = _to_float_safe(_row_field(game, 'catboost_home_prob'))
-        else:
-            if xgb_prob is None:
-                xgb_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-            if ens_prob is None:
-                ens_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-
-        v2 = None
-        if sport != 'SOCCER':
-            _need_v2 = (
-                glicko2_prob is None or trueskill_prob is None
-                or xgb_prob is None or ens_prob is None
-            )
-            if skip_v2 and sport == 'NHL':
-                _need_v2 = False
-            _v2_budget_ok = True
-            if sport == 'NHL' and _nhl_v2_wall_start is not None:
-                _v2_budget_ok = (_time.time() - _nhl_v2_wall_start) < _NHL_V2_WALL_BUDGET
-            if _need_v2 and _v2_budget_ok:
-                if sport != 'NHL':
-                    _gd = parse_date(game_date) if game_date else None
-                    _days_ago = (datetime.now() - _gd).days if _gd else 999
-                    if _days_ago <= 21:
-                        v2 = get_v2_prediction(sport, home_team, away_team, game_date)
-                else:
-                    v2 = get_v2_prediction(sport, home_team, away_team, game_date)
-        if v2:
-            if glicko2_prob is None:
-                glicko2_prob = v2.get('glicko2_prob')
-            if trueskill_prob is None:
-                trueskill_prob = v2.get('trueskill_prob')
-            if xgb_prob is None:
-                xgb_prob = v2.get('xgboost_prob')
-            if ens_prob is None:
-                ens_prob = v2.get('home_prob')
-        if sport == 'NHL' and v2:
-            xgb_prob = v2.get('xgboost_prob', xgb_prob)
-            ens_prob = _compute_ensemble_prob(
-                glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob,
-            )
-        elif v2:
-            xgb_prob = v2.get('xgboost_prob', xgb_prob)
-            ens_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)
-        elif sport == 'NHL' and ens_prob is None:
-            ens_prob = _compute_ensemble_prob(
-                glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
-            )
-        if sport == 'NHL' and elo_prob is None and glicko2_prob is not None:
-            elo_prob = glicko2_prob
+        _v2_budget_ok = True
+        if sport == 'NHL' and _nhl_v2_wall_start is not None:
+            _v2_budget_ok = (_time.time() - _nhl_v2_wall_start) < _NHL_V2_WALL_BUDGET
+        glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
+            sport,
+            home_team,
+            away_team,
+            game,
+            game_date,
+            skip_v2=skip_v2,
+            v2_budget_ok=_v2_budget_ok,
+        )
 
         game_info = {
             'game_id':         game['game_id'],
@@ -5702,6 +5846,7 @@ def get_v2_prediction(sport, home_team, away_team, game_date=None):
             'glicko2_prob': row.get('glicko2_prob'),
             'trueskill_prob': row.get('trueskill_prob'),
             'xgboost_prob': row.get('xgboost_prob'),
+            'catboost_prob': row.get('catboost_prob'),
             
             # Ratings
             'home_glicko2': row.get('home_glicko2'),
@@ -7908,7 +8053,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
     Returns aggregate stats dict (may be None for spread/total if model unavailable,
     but market lines and H2H are always attached)."""
     st_cov = st_gr = st_push = tt_cor = tt_gr = tt_push = 0
+    pl_st_cov = pl_st_gr = pl_st_push = pl_tt_cor = pl_tt_gr = pl_tt_push = 0
     try:
+        _apply_fades_to_daily_results(sport, daily_results)
         # H2H last-10 "Our Total" (used as the O/U line the model is compared to)
         try:
             _attach_h2h_projection_to_daily_results(sport, daily_results, n=10)
@@ -8084,12 +8231,6 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 if sport == 'NHL' and xs is not None:
                     xs = -xs
                     g['xgb_spread'] = xs
-                if sport in SPREAD_FADE_SPORTS:
-                    _apply_spread_fade(g)
-                    xs = g.get('xgb_spread')
-                if sport in ML_FADE_SPORTS:
-                    _apply_ml_fade(g)
-                    _recompute_ml_correct_after_fade(g)
                 _grade_xt = xt
                 if _grade_xt is None:
                     _grade_xt = _safe_float(g.get('our_total'))
@@ -8351,6 +8492,19 @@ def _compute_spread_total_for_daily(sport, daily_results):
                     elif xs is None:
                         g['spread_pick_reason'] = "model score unavailable"
 
+                    ps = _safe_float(g.get('our_spread'))
+                    if ps is not None and ms is not None:
+                        dm_pl = ps + ms
+                        da_pl = am + ms
+                        if abs(dm_pl) < 1e-9:
+                            pl_st_push += 1
+                        elif abs(da_pl) >= 1e-9:
+                            pl_side = 'HOME' if dm_pl > 0 else 'AWAY'
+                            act_side = 'HOME' if da_pl > 0 else 'AWAY'
+                            pl_st_gr += 1
+                            if pl_side == act_side:
+                                pl_st_cov += 1
+
                     _grade_mt = sportsbook_mt if sportsbook_mt is not None else (mt if not total_fallback_used else None)
                     if sport in OU_FADE_SPORTS and _grade_mt is not None:
                         _apply_ou_fade(g, market_total=_grade_mt)
@@ -8380,6 +8534,16 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             h2h_edge = our_total_h2h - _grade_mt
                             strong = (h2h_edge > 0 and edge > 0) or (h2h_edge < 0 and edge < 0)
                         g['strong_ou'] = strong and abs(edge) >= _ou_edge_threshold(sport)
+                        pl_tot = _safe_float(g.get('our_total'))
+                        if pl_tot is not None:
+                            pl_pick = 'OVER' if pl_tot >= _grade_mt else 'UNDER'
+                            if abs(at - _grade_mt) >= 1e-9:
+                                pl_tt_gr += 1
+                                if pl_pick == ('OVER' if at > _grade_mt else 'UNDER'):
+                                    pl_tt_cor += 1
+                            else:
+                                pl_tt_gr += 1
+                                pl_tt_push += 1
                     elif adj_xt is not None and mt is not None and total_fallback_used:
                         edge = adj_xt - mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
@@ -8421,6 +8585,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                 g['total_correct'] = tp_ok
 
         _tt_decided = tt_gr - tt_push
+        _pl_tt_decided = pl_tt_gr - pl_tt_push
         stats = {
             'spread_covered': st_cov,
             'spread_graded': st_gr + st_push,
@@ -8430,6 +8595,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
             'total_graded': tt_gr,
             'total_pushes': tt_push,
             'total_pct': round(tt_cor / _tt_decided * 100, 1) if _tt_decided > 0 else None,
+            'pl_spread_covered': pl_st_cov,
+            'pl_spread_graded': pl_st_gr + pl_st_push,
+            'pl_spread_pushes': pl_st_push,
+            'pl_spread_pct': round(pl_st_cov / pl_st_gr * 100, 1) if pl_st_gr > 0 else None,
+            'pl_total_correct': pl_tt_cor,
+            'pl_total_graded': pl_tt_gr,
+            'pl_total_pushes': pl_tt_push,
+            'pl_total_pct': round(pl_tt_cor / _pl_tt_decided * 100, 1) if _pl_tt_decided > 0 else None,
         }
         if st_gr == 0 and tt_gr == 0:
             logger.warning(
@@ -9210,6 +9383,7 @@ BASE_TEMPLATE = """
                     <div class="footer-heading">Product</div>
                     <a href="/faq">FAQ</a>
                     <a href="/daily-report">Daily results report</a>
+                    <a href="/all-sports-results">All sports results</a>
                     <a href="/search">Search</a>
                     <a href="/performance">Model performance</a>
                     <a href="/ai-sports-betting-picks-today">AI picks today</a>
@@ -9230,7 +9404,7 @@ BASE_TEMPLATE = """
     </footer>
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -9500,6 +9674,113 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
 # ============================================================================
 # DAILY REPORT TEMPLATE (marketing / proof-of-performance)
 # ============================================================================
+
+ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+    body{background:#ffffff !important;color:#0f172a;}
+    .asr-wrap{max-width:1100px;margin:0 auto;padding:10px 0 60px;}
+    .asr-header{text-align:center;margin-bottom:28px;}
+    .asr-header h1{font-size:1.75em;margin-bottom:8px;}
+    .asr-header p{color:#475569;font-size:0.95em;max-width:640px;margin:0 auto;line-height:1.6;}
+    .asr-section{margin-bottom:32px;}
+    .asr-section h2{font-size:1.15em;margin:0 0 12px;color:#0f172a;}
+    .asr-table-wrap{overflow-x:auto;border:1px solid rgba(15,23,42,0.12);border-radius:12px;background:#fff;}
+    table.asr-table{width:100%;border-collapse:collapse;font-size:0.88em;}
+    table.asr-table th,table.asr-table td{padding:10px 12px;text-align:center;border-bottom:1px solid rgba(15,23,42,0.08);}
+    table.asr-table th{background:#f8fafc;font-weight:700;color:#334155;font-size:0.78em;text-transform:uppercase;letter-spacing:0.04em;}
+    table.asr-table td:first-child,table.asr-table th:first-child{text-align:left;min-width:120px;}
+    table.asr-table tr:last-child td{border-bottom:none;}
+    table.asr-table a.sport-link{color:#0f172a;font-weight:700;text-decoration:none;}
+    table.asr-table a.sport-link:hover{color:#00529B;text-decoration:underline;}
+    .asr-pct{font-weight:800;font-size:1.05em;}
+    .asr-rec{font-size:0.78em;color:#64748b;margin-top:2px;}
+    .asr-n{font-size:0.72em;color:#94a3b8;}
+    .asr-empty{text-align:center;padding:48px 20px;color:#64748b;border:1px dashed rgba(15,23,42,0.2);border-radius:12px;}
+    .asr-note{font-size:0.82em;color:#64748b;margin-top:8px;}
+    """
+).replace('{% block content %}{% endblock %}', """
+    <div class="asr-wrap">
+        <div class="asr-header">
+            <h1>All Sports Results</h1>
+            <p>Season-to-date model performance from frozen snapshots — moneyline, spread vs books (XSharp &amp; Prediction Lab), and over/under. Updated when season snapshots are rebuilt.</p>
+        </div>
+
+        {% if not dashboard_rows %}
+        <div class="asr-empty">Season snapshots are not available yet. Run <code>scripts/compute_all_sport_season_stats.py --write-snapshots</code> to build them.</div>
+        {% else %}
+
+        <div class="asr-section">
+            <h2>Moneyline</h2>
+            <div class="asr-table-wrap">
+                <table class="asr-table">
+                    <thead>
+                        <tr>
+                            <th>Sport</th>
+                            {% for _k, label in ml_models %}<th>{{ label }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in dashboard_rows %}
+                        <tr>
+                            <td><a class="sport-link" href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
+                            {% for key, label in ml_models %}
+                            {% set c = row.ml[key] %}
+                            <td>
+                                {% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}</div><div class="asr-n">n={{ c.n }}</div>{% else %}—{% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="asr-section">
+            <h2>Spread vs book</h2>
+            <p class="asr-note">XSharp = model spread layer; PL = Prediction Lab <code>our_spread</code> vs posted book line.</p>
+            <div class="asr-table-wrap">
+                <table class="asr-table">
+                    <thead><tr><th>Sport</th><th>XSharp</th><th>PL</th></tr></thead>
+                    <tbody>
+                        {% for row in dashboard_rows %}
+                        <tr>
+                            <td><a class="sport-link" href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
+                            {% for col in ('spread_xsharp', 'spread_pl') %}
+                            {% set c = row[col] %}
+                            <td>{% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}</div><div class="asr-n">n={{ c.n }}</div>{% else %}—{% endif %}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="asr-section">
+            <h2>Over / Under vs book</h2>
+            <p class="asr-note">XSharp = model total layer; PL = Prediction Lab <code>our_total</code> vs posted book total.</p>
+            <div class="asr-table-wrap">
+                <table class="asr-table">
+                    <thead><tr><th>Sport</th><th>XSharp</th><th>PL</th></tr></thead>
+                    <tbody>
+                        {% for row in dashboard_rows %}
+                        <tr>
+                            <td><a class="sport-link" href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
+                            {% for col in ('ou_xsharp', 'ou_pl') %}
+                            {% set c = row[col] %}
+                            <td>{% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}</div><div class="asr-n">n={{ c.n }}</div>{% else %}—{% endif %}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+""")
 
 DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
@@ -10983,17 +11264,27 @@ _SEASON_WINDOWS = {
     'SOCCER':((8, 1), (6, 30)),
 }
 
-# Regular-season game counts per team (wire sport-by-sport in results; NHL first).
+# Regular-season game counts per team (league totals = teams * games / 2 where applicable).
 SPORT_REGULAR_SEASON_GAMES_PER_TEAM = {
     'NHL': 82,
-    # 'NBA': 82,
-    # 'MLB': 162,
+    'NBA': 82,
+    'MLB': 162,
+    'NFL': 17,
+    'WNBA': 44,
+    'NCAAF': 12,
+    'NCAAB': 30,
+    'NCAAW': 30,
+}
+_SPORT_TEAM_COUNTS = {
+    'NHL': 32, 'NBA': 30, 'MLB': 30, 'NFL': 32, 'WNBA': 12,
+    'NCAAF': 136, 'NCAAB': 362, 'NCAAW': 362,
+}
+SPORT_REGULAR_SEASON_LEAGUE_GAMES = {
+    s: SPORT_REGULAR_SEASON_GAMES_PER_TEAM[s] * _SPORT_TEAM_COUNTS[s] // 2
+    for s in SPORT_REGULAR_SEASON_GAMES_PER_TEAM
+    if s in _SPORT_TEAM_COUNTS
 }
 _NHL_RESULTS_REGULAR_SEASON_MD = ((10, 1), (4, 30))  # Oct–Apr regular season (excludes playoffs)
-_NHL_TEAMS = 32
-SPORT_REGULAR_SEASON_LEAGUE_GAMES = {
-    'NHL': SPORT_REGULAR_SEASON_GAMES_PER_TEAM['NHL'] * _NHL_TEAMS // 2,
-}
 
 _SPORT_MIN_LIVE_DATES = {
     'WNBA': datetime(2026, 5, 8),
@@ -11252,6 +11543,123 @@ def _stats_from_nhl_snapshot(snapshot):
         'ou_bench': ou.get('ou_bench', 0),
         'roi_total': snapshot.get('roi_total'),
     }
+
+
+ALL_SPORTS_DASHBOARD_SPORTS = [
+    'NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER',
+]
+_ML_DASHBOARD_MODELS = (
+    ('glicko2', 'Grinder2'),
+    ('trueskill', 'Takedown'),
+    ('elo', 'Edge'),
+    ('xgboost', 'XSharp'),
+    ('ensemble', 'Consensus'),
+)
+
+
+def _load_all_sports_season_snapshots():
+    """Load newest committed regular-season JSON per sport (no live regrade)."""
+    from src.season_snapshots import SNAPSHOT_DIR
+    rows = []
+    if not SNAPSHOT_DIR.is_dir():
+        return rows
+    for sport in ALL_SPORTS_DASHBOARD_SPORTS:
+        paths = sorted(SNAPSHOT_DIR.glob(f'{sport}_*_regular.json'), reverse=True)
+        snap = None
+        for path in paths:
+            try:
+                with path.open(encoding='utf-8') as fh:
+                    data = json.load(fh)
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(data, dict) and data.get('sport') == sport:
+                snap = data
+                break
+        if snap:
+            rows.append(snap)
+    return rows
+
+
+def _fmt_snapshot_ml_cell(overall, model_key):
+    m = (overall or {}).get(model_key) or {}
+    total = int(m.get('total') or 0)
+    correct = int(m.get('correct') or 0)
+    if total <= 0:
+        return {'pct': None, 'record': '—', 'n': 0}
+    pct = m.get('accuracy')
+    if pct is None:
+        pct = round(correct / total * 100, 1)
+    return {
+        'pct': pct,
+        'record': f'{correct}-{total - correct}',
+        'n': total,
+    }
+
+
+def _fmt_snapshot_market_cell(st, *, graded_key, win_key, pct_key, push_key=None):
+    st = st or {}
+    graded = int(st.get(graded_key) or 0)
+    if graded <= 0:
+        return {'pct': None, 'record': '—', 'n': 0}
+    wins = int(st.get(win_key) or 0)
+    pushes = int(st.get(push_key) or 0) if push_key else 0
+    losses = max(0, graded - pushes - wins)
+    return {
+        'pct': st.get(pct_key),
+        'record': f'{wins}-{losses}',
+        'n': graded,
+    }
+
+
+def _build_all_sports_dashboard_rows(snapshots):
+    rows = []
+    for snap in snapshots:
+        sport = snap.get('sport')
+        if sport not in SPORTS:
+            continue
+        overall = snap.get('overall_stats') or {}
+        st = snap.get('spread_total_stats') or {}
+        ml_cols = {
+            key: _fmt_snapshot_ml_cell(overall, key) for key, _ in _ML_DASHBOARD_MODELS
+        }
+        rows.append({
+            'sport': sport,
+            'name': SPORTS[sport]['name'],
+            'icon': SPORTS[sport].get('icon', ''),
+            'season': snap.get('season') or '',
+            'games_in_scope': snap.get('games_in_scope'),
+            'ml': ml_cols,
+            'spread_xsharp': _fmt_snapshot_market_cell(
+                st,
+                graded_key='spread_graded',
+                win_key='spread_covered',
+                pct_key='spread_pct',
+                push_key='spread_pushes',
+            ),
+            'spread_pl': _fmt_snapshot_market_cell(
+                st,
+                graded_key='pl_spread_graded',
+                win_key='pl_spread_covered',
+                pct_key='pl_spread_pct',
+                push_key='pl_spread_pushes',
+            ),
+            'ou_xsharp': _fmt_snapshot_market_cell(
+                st,
+                graded_key='total_graded',
+                win_key='total_correct',
+                pct_key='total_pct',
+                push_key='total_pushes',
+            ),
+            'ou_pl': _fmt_snapshot_market_cell(
+                st,
+                graded_key='pl_total_graded',
+                win_key='pl_total_correct',
+                pct_key='pl_total_pct',
+                push_key='pl_total_pushes',
+            ),
+            'results_url': f"/sport/{sport}/results",
+        })
+    return rows
 
 
 def _attach_nhl_display_grading(sport, daily_results):
@@ -12844,6 +13252,7 @@ def landing_page():
                 <div class="footer-heading">Product</div>
                 <a href="/faq">FAQ</a>
                 <a href="/daily-report">Daily results report</a>
+                <a href="/all-sports-results">All sports results</a>
                 <a href="/search">Search</a>
                 <a href="/performance">Model performance</a>
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
@@ -12876,7 +13285,7 @@ def landing_page():
 {% endif %}
 
 <script>
-    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
     function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
     function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
     function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -14745,6 +15154,7 @@ def sitemap_xml():
                 urls.append((daily_url, 'daily', '0.7'))
 
     # Static pages
+    urls.append((_SITE_DOMAIN + '/all-sports-results', 'weekly', '0.75'))
     urls.append((_SITE_DOMAIN + '/daily-report', 'daily', '0.8'))
     urls.append((_SITE_DOMAIN + '/plans', 'weekly', '0.8'))
     urls.append((_SITE_DOMAIN + '/tutorial', 'monthly', '0.5'))
@@ -14900,6 +15310,24 @@ def sport_home(sport):
     if slug:
         return redirect(f'/{slug}', code=301)
     return "Sport not found", 404
+
+
+@app.route('/all-sports-results')
+def all_sports_results_page():
+    """Season dashboard from frozen JSON snapshots (no live regrade on load)."""
+    snapshots = _load_all_sports_season_snapshots()
+    dashboard_rows = _build_all_sports_dashboard_rows(snapshots)
+    return render_template_string(
+        ALL_SPORTS_RESULTS_TEMPLATE,
+        page='all-sports-results',
+        page_title='All Sports Results | Season Model Performance | predictionlab.io',
+        page_description=(
+            'Season moneyline, spread, and over/under model results across NHL, NBA, MLB, '
+            'NFL, NCAAB, NCAAF, WNBA, and Soccer — loaded from frozen snapshots.'
+        ),
+        dashboard_rows=dashboard_rows,
+        ml_models=_ML_DASHBOARD_MODELS,
+    )
 
 
 @app.route('/daily-report')
@@ -16294,22 +16722,32 @@ def sport_results(sport):
                 )
                 completed_games = _sort_game_rows_by_date_desc(completed_games)
             else:
-                completed_games = conn.execute('''
-                    SELECT g.*,
-                           p.elo_home_prob,
-                           p.xgboost_home_prob,
-                           p.logistic_home_prob,
-                           p.win_probability,
-                           p.catboost_home_prob,
-                           p.meta_home_prob,
-                           p.glicko_home_prob,
-                           p.trueskill_home_prob
-                    FROM games g
-                    LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
-                    WHERE g.sport = ? AND g.home_score IS NOT NULL
-                    LIMIT 800
-                ''', (sport, sport)).fetchall()
-                completed_games = _sort_game_rows_by_date_desc(completed_games)[:500]
+                prob_sql = _predictions_prob_select_sql(conn)
+                season_start_dt, season_end_dt = _results_season_bounds(sport, datetime.now())
+                season_end_sql = season_end_dt.strftime('%Y-%m-%d') if season_end_dt else None
+                season_start_sql = season_start_dt.strftime('%Y-%m-%d') if season_start_dt else None
+                if season_start_sql and season_end_sql:
+                    completed_games = conn.execute(f'''
+                        SELECT g.*,
+                               {prob_sql}
+                        FROM games g
+                        LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                        WHERE g.sport = ? AND g.home_score IS NOT NULL
+                          AND date(g.game_date) >= ?
+                          AND date(g.game_date) <= ?
+                        ORDER BY g.game_date DESC
+                    ''', (sport, sport, season_start_sql, season_end_sql)).fetchall()
+                else:
+                    completed_games = conn.execute(f'''
+                        SELECT g.*,
+                               {prob_sql}
+                        FROM games g
+                        LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                        WHERE g.sport = ? AND g.home_score IS NOT NULL
+                        ORDER BY g.game_date DESC
+                        LIMIT 3000
+                    ''', (sport, sport)).fetchall()
+                completed_games = _sort_game_rows_by_date_desc(completed_games)
             conn.close()
             soccer_bundle = None
             if sport == 'SOCCER':
@@ -16366,20 +16804,10 @@ def sport_results(sport):
                         if selected_league and league_name != selected_league:
                             continue
 
-                    # Stored DB probs (use explicit model columns only; never synthetic 50/50 defaults).
-                    glicko2_prob = _to_float_safe(game['glicko_home_prob'])
-                    trueskill_prob = _to_float_safe(game['trueskill_home_prob'])
-                    elo_prob = _to_float_safe(game['elo_home_prob'])
-                    xgb_prob = _to_float_safe(game['xgboost_home_prob'])
-                    ens_prob = _to_float_safe(game['meta_home_prob'])
-                    if ens_prob is None:
-                        ens_prob = _to_float_safe(game['win_probability'])
-                    if glicko2_prob is None:
-                        glicko2_prob = _to_float_safe(game['catboost_home_prob'])
-                    if trueskill_prob is None:
-                        trueskill_prob = _to_float_safe(game['logistic_home_prob'])
-                    if elo_prob is None:
-                        elo_prob = _to_float_safe(game['catboost_home_prob'])
+                    # Stored DB probs + v2 (Edge = catboost via helper).
+                    glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
+                        sport, home_team, away_team, game, game_date,
+                    )
 
                     soccer_pred = None
                     model_note = None
@@ -16394,23 +16822,8 @@ def sport_results(sport):
                         elo_prob = soccer_pred.get('elo_prob') or elo_prob
                         xgb_prob = soccer_pred.get('poisson_reg_prob') or xgb_prob or elo_prob
                         ens_prob = soccer_pred.get('ensemble_prob') or ens_prob or elo_prob
-                    else:
-                        v2 = get_v2_prediction(sport, home_team, away_team, game_date) if sport != 'SOCCER' else None
-                        if v2:
-                            if glicko2_prob is None:
-                                glicko2_prob = v2.get('glicko2_prob')
-                            if trueskill_prob is None:
-                                trueskill_prob = v2.get('trueskill_prob')
-                            if xgb_prob is None:
-                                xgb_prob = v2.get('xgboost_prob')
-                            if ens_prob is None:
-                                ens_prob = v2.get('home_prob')
-                            if ens_prob is None:
-                                ens_prob = _compute_ensemble_prob(
-                                    glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
-                                )
-                        if sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
-                            model_note = model_note or "Soccer model outputs are unavailable for this matchup."
+                    elif sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
+                        model_note = model_note or "Soccer model outputs are unavailable for this matchup."
                     game_info = {
                         'game_id':         game['game_id'],
                         'date':             game_date or 'Unknown',
