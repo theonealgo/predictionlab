@@ -2724,17 +2724,6 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
         else:
             pred['face_pick_confidence'] = None
 
-    # Final safety: face_pick_team must always match predicted_winner.
-    # Prevents split display where card face names one team but pick strip names another.
-    _pw = pred.get('predicted_winner')
-    if _pw and pred.get('face_pick_team') and pred['face_pick_team'] != _pw and sport != 'SOCCER':
-        pred['face_pick_team'] = _pw
-        _fp2 = _safe_float(pred.get('ensemble_prob'))
-        if _fp2 is not None:
-            if _fp2 <= 1.0:
-                _fp2 *= 100.0
-            pred['face_pick_confidence'] = round(_fp2 if _fp2 >= 50 else 100.0 - _fp2, 1)
-
 
 
 def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
@@ -3421,7 +3410,12 @@ def _model_probs_from_row_and_v2(
                 if ens_prob is None:
                     ens_prob = v2.get('home_prob')
                 if elo_prob is None:
-                    elo_prob = v2.get('catboost_prob')
+                    elo_prob = v2.get('catboost_prob') or v2.get('home_prob')
+
+    if elo_prob is None:
+        elo_prob = _to_float_safe(_row_field(game_row, 'catboost_home_prob'))
+    if elo_prob is None and ens_prob is not None:
+        elo_prob = ens_prob
     if sport == 'NHL' and ens_prob is None:
         ens_prob = _compute_ensemble_prob(
             glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
@@ -5469,17 +5463,6 @@ def _predictions_prob_select_sql(conn=None):
     global _PREDICTIONS_PROB_SELECT_CACHE
     if _PREDICTIONS_PROB_SELECT_CACHE is not None:
         return _PREDICTIONS_PROB_SELECT_CACHE
-    close_conn = False
-    if conn is None:
-        conn = get_db_connection()
-        close_conn = True
-    try:
-        table_cols = {
-            row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()
-        }
-    finally:
-        if close_conn:
-            conn.close()
     base = (
         'p.elo_home_prob',
         'p.xgboost_home_prob',
@@ -5492,6 +5475,19 @@ def _predictions_prob_select_sql(conn=None):
         'glicko_home_prob',
         'trueskill_home_prob',
     )
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+    try:
+        table_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()
+        }
+    except Exception:
+        table_cols = set(optional)
+    finally:
+        if close_conn:
+            conn.close()
     parts = list(base) + [f'p.{col}' for col in optional if col in table_cols]
     _PREDICTIONS_PROB_SELECT_CACHE = ',\n                       '.join(parts)
     return _PREDICTIONS_PROB_SELECT_CACHE
@@ -5680,7 +5676,7 @@ def _sort_game_rows_by_date_desc(rows):
     )
 
 
-def _compute_results_tally_bundle(daily_results, yesterday_dt):
+def _compute_results_tally_bundle(daily_results, yesterday_dt, *, season_start_dt=None):
     """Daily + weekly tallies; when the calendar week is empty, use the latest 7-day window with games."""
     yesterday = yesterday_dt.strftime('%Y-%m-%d')
     weekly_start_dt = yesterday_dt - timedelta(days=6)
@@ -5694,12 +5690,15 @@ def _compute_results_tally_bundle(daily_results, yesterday_dt):
     weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
 
     if not daily_tally and daily_results:
-        fallback_day = max(
-            (d for d in daily_results if daily_results[d].get('games')),
-            key=lambda d: parse_date(d) or datetime.min,
-            default=None,
-        )
-        if fallback_day:
+        dated = [
+            (parse_date(dk), dk)
+            for dk, bucket in daily_results.items()
+            if dk and bucket.get('games') and parse_date(dk)
+        ]
+        if season_start_dt:
+            dated = [(dt, dk) for dt, dk in dated if dt >= season_start_dt]
+        if dated:
+            fallback_day = max(dated, key=lambda x: x[0])[1]
             daily_tally_date = fallback_day
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
 
@@ -5709,10 +5708,12 @@ def _compute_results_tally_bundle(daily_results, yesterday_dt):
             for dk, bucket in daily_results.items()
             if dk and bucket.get('games') and parse_date(dk)
         ]
+        if season_start_dt:
+            dated = [(dt, dk) for dt, dk in dated if dt >= season_start_dt]
         if dated:
             dated.sort(key=lambda x: x[0], reverse=True)
             latest_dt, _ = dated[0]
-            fallback_start = latest_dt - timedelta(days=6)
+            fallback_start = max(latest_dt - timedelta(days=6), season_start_dt) if season_start_dt else latest_dt - timedelta(days=6)
             weekly_start_dt = fallback_start
             weekly_end_dt = latest_dt
             weekly_tally = compute_model_tally_for_range(
@@ -5722,8 +5723,6 @@ def _compute_results_tally_bundle(daily_results, yesterday_dt):
             weekly_tally_date_range = (
                 f"{fallback_start.strftime('%Y-%m-%d')} to {latest_dt.strftime('%Y-%m-%d')}"
             )
-            results_stale_notice = weekly_tally_games > 0
-
     daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
     return {
         'daily_tally': daily_tally,
@@ -8698,6 +8697,79 @@ def compute_overall_stats_from_daily(daily_results):
     return overall
 
 
+_ML_PERF_MODEL_KEYS = (
+    ('glicko2', 'Grinder2'),
+    ('trueskill', 'Takedown'),
+    ('elo', 'Edge'),
+    ('xgboost', 'XSharp'),
+    ('ensemble', 'Sharp Consensus'),
+)
+
+
+def _best_ml_model_stats(overall_stats):
+    """Highest-accuracy moneyline model with at least one graded game."""
+    best = None
+    for key, label in _ML_PERF_MODEL_KEYS:
+        m = (overall_stats or {}).get(key) or {}
+        total = int(m.get('total') or 0)
+        if total <= 0:
+            continue
+        acc = m.get('accuracy')
+        if acc is None:
+            acc = round(int(m.get('correct') or 0) / total * 100, 1)
+        if (
+            best is None
+            or acc > best['accuracy']
+            or (acc == best['accuracy'] and total > best['total'])
+        ):
+            best = {
+                'key': key,
+                'label': label,
+                'total': total,
+                'correct': int(m.get('correct') or 0),
+                'accuracy': acc,
+            }
+    return best
+
+
+def _best_market_side(st, *, xsharp_prefix, pl_prefix, xsharp_label, pl_label):
+    """Pick better-performing spread or O/U layer (XSharp vs PL) when both exist."""
+    st = st or {}
+
+    def _side(prefix):
+        if prefix == 'spread':
+            graded = int(st.get('spread_graded') or 0)
+            wins = int(st.get('spread_covered') or 0)
+            pct = st.get('spread_pct')
+        elif prefix == 'total':
+            graded = int(st.get('total_graded') or 0)
+            wins = int(st.get('total_correct') or 0)
+            pct = st.get('total_pct')
+        elif prefix == 'pl_spread':
+            graded = int(st.get('pl_spread_graded') or 0)
+            wins = int(st.get('pl_spread_covered') or 0)
+            pct = st.get('pl_spread_pct')
+        else:
+            graded = int(st.get('pl_total_graded') or 0)
+            wins = int(st.get('pl_total_correct') or 0)
+            pct = st.get('pl_total_pct')
+        if graded <= 0 or pct is None:
+            return None
+        return {'graded': graded, 'wins': wins, 'pct': pct}
+
+    xs = _side(xsharp_prefix)
+    pl = _side(pl_prefix)
+    if xs and pl:
+        pick = xs if xs['pct'] >= pl['pct'] else pl
+        label = xsharp_label if xs['pct'] >= pl['pct'] else pl_label
+        return label, pick['pct'], pick['wins'], pick['graded']
+    if xs:
+        return xsharp_label, xs['pct'], xs['wins'], xs['graded']
+    if pl:
+        return pl_label, pl['pct'], pl['wins'], pl['graded']
+    return xsharp_label, None, 0, 0
+
+
 def _build_season_performance_summary(
     overall_stats,
     spread_total_stats,
@@ -8706,47 +8778,67 @@ def _build_season_performance_summary(
     games_expected=None,
     games_in_scope=None,
 ):
-    """Season banner metrics with honest per-market game counts (ML vs spread vs O/U)."""
-    ens = (overall_stats or {}).get('ensemble') or {}
-    ml_total = int(ens.get('total') or 0)
-    ml_correct = int(ens.get('correct') or 0)
-    ml_accuracy = ens.get('accuracy') if ml_total > 0 else None
+    """Season banner metrics — headline ML/spread/O/U use best-performing model per market."""
     st = spread_total_stats or {}
-    sp_gr = int(st.get('spread_graded') or 0)
-    ou_gr = int(st.get('total_graded') or 0)
-    sp_pct = st.get('spread_pct') if sp_gr > 0 else None
-    ou_pct = st.get('total_pct') if ou_gr > 0 else None
-    spread_note = ou_note = None
-    scope_total = int(games_in_scope or ml_total or 0)
-    if scope_total and sp_gr < scope_total:
-        spread_note = (
-            f"Graded {sp_gr} of {scope_total} games in scope "
-            "(needs book spread line + XSharp spread)"
-        )
-    elif scope_total and sp_gr == 0:
-        spread_note = "No spread grades yet — missing book lines or XSharp spread"
-    if scope_total and ou_gr < scope_total:
-        ou_note = (
-            f"Graded {ou_gr} of {scope_total} games in scope "
-            "(needs posted O/U total + XSharp total)"
-        )
-    elif scope_total and ou_gr == 0:
-        ou_note = "No O/U grades yet — missing posted totals on books"
+    best_ml = _best_ml_model_stats(overall_stats)
+    if best_ml:
+        ml_total = best_ml['total']
+        ml_correct = best_ml['correct']
+        ml_accuracy = best_ml['accuracy']
+        ml_model_label = best_ml['label']
+        ml_model_key = best_ml['key']
+    else:
+        ens = (overall_stats or {}).get('ensemble') or {}
+        ml_total = int(ens.get('total') or 0)
+        ml_correct = int(ens.get('correct') or 0)
+        ml_accuracy = ens.get('accuracy') if ml_total > 0 else None
+        ml_model_label = 'Sharp Consensus'
+        ml_model_key = 'ensemble'
+
+    spread_label, sp_pct, sp_wins, sp_gr = _best_market_side(
+        st,
+        xsharp_prefix='spread',
+        pl_prefix='pl_spread',
+        xsharp_label='XSharp',
+        pl_label='Prediction Lab',
+    )
+    ou_label, ou_pct, ou_wins, ou_gr = _best_market_side(
+        st,
+        xsharp_prefix='total',
+        pl_prefix='pl_total',
+        xsharp_label='XSharp',
+        pl_label='Prediction Lab',
+    )
     return {
         'ml_total': ml_total,
         'ml_correct': ml_correct,
         'ml_accuracy': ml_accuracy,
+        'ml_model_label': ml_model_label,
+        'ml_model_key': ml_model_key,
         'spread_graded': sp_gr,
-        'spread_covered': int(st.get('spread_covered') or 0),
+        'spread_covered': sp_wins,
         'spread_pct': sp_pct,
-        'spread_note': spread_note,
+        'spread_model_label': spread_label,
+        'spread_note': None,
         'ou_graded': ou_gr,
-        'ou_correct': int(st.get('total_correct') or 0),
+        'ou_correct': ou_wins,
         'ou_pct': ou_pct,
-        'ou_note': ou_note,
+        'ou_model_label': ou_label,
+        'ou_note': None,
         'scope_label': scope_label,
         'games_expected': games_expected,
         'games_in_scope': games_in_scope,
+    }
+
+
+def _results_page_meta(sport):
+    name = SPORTS[sport]['name']
+    return {
+        'page_title': f'{name} Results | predictionlab.io',
+        'page_description': (
+            f'{name} season model accuracy and verified betting results — '
+            'moneyline, spread, and over/under performance.'
+        ),
     }
 
 
@@ -9716,15 +9808,14 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     table.asr-table a.sport-link:hover{color:#00529B;text-decoration:underline;}
     .asr-pct{font-weight:800;font-size:1.05em;}
     .asr-rec{font-size:0.78em;color:#64748b;margin-top:2px;}
-    .asr-n{font-size:0.72em;color:#94a3b8;}
+    .asr-info{cursor:help;opacity:0.75;font-size:0.85em;}
     .asr-empty{text-align:center;padding:48px 20px;color:#64748b;border:1px dashed rgba(15,23,42,0.2);border-radius:12px;}
-    .asr-note{font-size:0.82em;color:#64748b;margin-top:8px;}
     """
 ).replace('{% block content %}{% endblock %}', """
     <div class="asr-wrap">
         <div class="asr-header">
-            <h1>All Sports Results</h1>
-            <p>Season-to-date model performance from frozen snapshots — moneyline, spread vs books (XSharp &amp; Prediction Lab), and over/under. Updated when season snapshots are rebuilt.</p>
+            <h1>All Sports Prediction Results</h1>
+            <p>Track season-to-date model accuracy for moneyline, spread, and over/under picks across all sports. Updated regularly from verified season snapshots.</p>
         </div>
 
         {% if not dashboard_rows %}
@@ -9748,7 +9839,7 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             {% for key, label in ml_models %}
                             {% set c = row.ml[key] %}
                             <td>
-                                {% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}</div><div class="asr-n">n={{ c.n }}</div>{% else %}—{% endif %}
+                                {% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<span class="asr-info" title="Number of Games"> ⓘ</span></div>{% else %}—{% endif %}
                             </td>
                             {% endfor %}
                         </tr>
@@ -9760,7 +9851,6 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <div class="asr-section">
             <h2>Spread vs book</h2>
-            <p class="asr-note">XSharp = model spread layer; PL = Prediction Lab <code>our_spread</code> vs posted book line.</p>
             <div class="asr-table-wrap">
                 <table class="asr-table">
                     <thead><tr><th>Sport</th><th>XSharp</th><th>PL</th></tr></thead>
@@ -9770,7 +9860,7 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <td><a class="sport-link" href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
                             {% for col in ('spread_xsharp', 'spread_pl') %}
                             {% set c = row[col] %}
-                            <td>{% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}</div><div class="asr-n">n={{ c.n }}</div>{% else %}—{% endif %}</td>
+                            <td>{% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<span class="asr-info" title="Number of Games"> ⓘ</span></div>{% else %}—{% endif %}</td>
                             {% endfor %}
                         </tr>
                         {% endfor %}
@@ -9781,7 +9871,6 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <div class="asr-section">
             <h2>Over / Under vs book</h2>
-            <p class="asr-note">XSharp = model total layer; PL = Prediction Lab <code>our_total</code> vs posted book total.</p>
             <div class="asr-table-wrap">
                 <table class="asr-table">
                     <thead><tr><th>Sport</th><th>XSharp</th><th>PL</th></tr></thead>
@@ -9791,7 +9880,7 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <td><a class="sport-link" href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
                             {% for col in ('ou_xsharp', 'ou_pl') %}
                             {% set c = row[col] %}
-                            <td>{% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}</div><div class="asr-n">n={{ c.n }}</div>{% else %}—{% endif %}</td>
+                            <td>{% if c.n %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<span class="asr-info" title="Number of Games"> ⓘ</span></div>{% else %}—{% endif %}</td>
                             {% endfor %}
                         </tr>
                         {% endfor %}
@@ -10643,17 +10732,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             </div>
         </div>
         {% endif %}
-        {% if results_stale_notice %}
-        <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#334155;text-align:center;">
-            No games in the last 7 days for this league; showing most recent available results.
-        </div>
-        {% endif %}
         {% set ens = overall_stats.ensemble %}
 
         <!-- ── Daily Tally ── -->
         {% if daily_tally %}
         <div class="daily-tally">
-            <h2>{% if results_stale_notice %}Latest Results Tally{% else %}Last Night's Tally{% endif %} — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+            <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in model_cards %}
@@ -10704,7 +10788,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Last 7 Days Tally ── -->
         {% if weekly_tally %}
         <div class="daily-tally">
-            <h2>{% if results_stale_notice %}Most Recent Week's Tally{% else %}Last 7 Days Tally{% endif %} — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+            <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in model_cards %}
@@ -10776,50 +10860,39 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% set sp = season_perf if season_perf is defined and season_perf else none %}
-            {% if sp and sp.scope_label %}
-            <p style="text-align:center;margin:0 0 10px;font-size:0.82em;color:#64748b;">{{ sp.scope_label }}{% if sp.games_in_scope is not none and sp.games_expected %} — {{ sp.games_in_scope }} of {{ sp.games_expected }} regular-season games graded{% endif %}</p>
-            {% elif sport == 'SOCCER' and selected_league and league_db_total is defined and league_db_total %}
-            <p style="text-align:center;margin:0 0 10px;font-size:0.82em;color:#64748b;">Showing recent results for this league ({{ league_db_total }} completed games in database).</p>
-            {% endif %}
-            <div id="seasonInfoBox" style="display:none;background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.78em;color:#334155;line-height:1.6;text-align:center;">
-                Moneyline, spread, and O/U are graded separately. A game can count toward moneyline (model pick vs final) but not toward spread or O/U if the sportsbook line or XSharp projection was missing. Subtitles under spread/O/U show how many of the moneyline-graded games were also graded for that market.
-            </div>
-            <div style="text-align:center;margin-bottom:14px;"><span onclick="var b=document.getElementById('seasonInfoBox');b.style.display=b.style.display==='none'?'block':'none';" style="cursor:pointer;font-size:0.75em;color:#475569;border:1px solid rgba(15,23,42,0.18);border-radius:12px;padding:3px 10px;background:#f8fafc;">ⓘ What do these numbers mean?</span></div>
             {% if not sp and overall_stats and overall_stats.ensemble %}
             {% set _ens = overall_stats.ensemble %}
-            {% set sp = {'ml_total': _ens.total, 'ml_correct': _ens.correct, 'ml_accuracy': _ens.accuracy, 'spread_graded': 0, 'spread_covered': 0, 'spread_pct': none, 'spread_note': none, 'ou_graded': 0, 'ou_correct': 0, 'ou_pct': none, 'ou_note': none} %}
+            {% set sp = {'ml_total': _ens.total, 'ml_correct': _ens.correct, 'ml_accuracy': _ens.accuracy, 'ml_model_label': 'Sharp Consensus', 'spread_graded': 0, 'spread_covered': 0, 'spread_pct': none, 'spread_model_label': 'XSharp', 'ou_graded': 0, 'ou_correct': 0, 'ou_pct': none, 'ou_model_label': 'XSharp'} %}
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline (Consensus)</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#00C076{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} ({{ sp.ml_total }} games)</div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
                     <div style="font-size:0.85em;color:#64748b;">no graded games</div>
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread (XSharp)</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#00C076{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} ({{ sp.spread_graded }} graded)</div>
-                    {% if sp.spread_note %}<div style="font-size:0.72em;color:#64748b;margin-top:6px;line-height:1.35;">{{ sp.spread_note }}</div>{% endif %}
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
-                    <div style="font-size:0.85em;color:#64748b;">{% if sp and sp.spread_note %}{{ sp.spread_note }}{% else %}not graded yet{% endif %}</div>
+                    <div style="font-size:0.85em;color:#64748b;">not graded yet</div>
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U (XSharp)</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#00C076{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} ({{ sp.ou_graded }} graded)</div>
-                    {% if sp.ou_note %}<div style="font-size:0.72em;color:#64748b;margin-top:6px;line-height:1.35;">{{ sp.ou_note }}</div>{% endif %}
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
-                    <div style="font-size:0.85em;color:#64748b;">{% if sp and sp.ou_note %}{{ sp.ou_note }}{% else %}not graded yet{% endif %}</div>
+                    <div style="font-size:0.85em;color:#64748b;">not graded yet</div>
                     {% endif %}
                 </div>
             </div>
@@ -11139,14 +11212,9 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
     </div>
     
-    {% if results_stale_notice %}
-    <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.15);border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#334155;text-align:center;">
-        No NFL games in the last 7 days; showing most recent available graded window.
-    </div>
-    {% endif %}
     {% if daily_tally %}
     <div class="daily-tally">
-        <h2>{% if results_stale_notice %}Latest Results Tally{% else %}Last Night's Tally{% endif %} — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+        <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
         <div class="daily-tally-grid">
             {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
             {% set m = daily_tally[m_key] %}
@@ -11170,7 +11238,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     {% endif %}
     {% if weekly_tally %}
     <div class="daily-tally">
-        <h2>{% if results_stale_notice %}Most Recent Week's Tally{% else %}Last 7 Days Tally{% endif %} — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+        <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
         <div class="daily-tally-grid">
             {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
             {% set m = weekly_tally[m_key] %}
@@ -11553,10 +11621,20 @@ def _stats_from_nhl_snapshot(snapshot):
     if not snapshot:
         return None
     ou = snapshot.get('ou_summary') or {}
+    overall_stats = snapshot.get('overall_stats') or {}
+    spread_total_stats = snapshot.get('spread_total_stats') or {}
+    old_perf = snapshot.get('season_perf') or {}
+    season_perf = _build_season_performance_summary(
+        overall_stats,
+        spread_total_stats,
+        scope_label=old_perf.get('scope_label'),
+        games_expected=snapshot.get('games_expected'),
+        games_in_scope=snapshot.get('games_in_scope'),
+    )
     return {
-        'overall_stats': snapshot.get('overall_stats') or {},
-        'spread_total_stats': snapshot.get('spread_total_stats') or {},
-        'season_perf': snapshot.get('season_perf') or {},
+        'overall_stats': overall_stats,
+        'spread_total_stats': spread_total_stats,
+        'season_perf': season_perf,
         'total_over': ou.get('total_over', 0),
         'total_under': ou.get('total_under', 0),
         'total_games_ou': ou.get('total_games_ou', 0),
@@ -16238,6 +16316,7 @@ def sport_predictions(sport, filter_date=None):
 
 def sport_results(sport):
     """Show model performance results for a sport"""
+    season_start_dt = None
     try:
         if sport not in SPORTS:
             return "Sport not found", 404
@@ -16262,7 +16341,9 @@ def sport_results(sport):
                     overall_stats = compute_overall_stats_from_weekly(weekly_results)
                     daily_results = _daily_results_from_weekly(weekly_results)
                     yesterday_dt = datetime.now() - timedelta(days=1)
-                    tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+                    tally_bundle = _compute_results_tally_bundle(
+                daily_results, yesterday_dt, season_start_dt=season_start_dt,
+            )
                     daily_tally = tally_bundle['daily_tally']
                     daily_tally_date = tally_bundle['daily_tally_date']
                     daily_tally_games = tally_bundle['daily_tally_games']
@@ -16279,6 +16360,7 @@ def sport_results(sport):
                     roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
                     return render_template_string(
                         NFL_WEEKLY_RESULTS_TEMPLATE,
+                        **_results_page_meta(sport),
                         page=sport,
                         sport=sport,
                         sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
@@ -16362,7 +16444,9 @@ def sport_results(sport):
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
             season_perf = _build_season_performance_summary(overall_stats, _st_stats)
-            tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+            tally_bundle = _compute_results_tally_bundle(
+                daily_results, yesterday_dt, season_start_dt=season_start_dt,
+            )
             daily_tally = tally_bundle['daily_tally']
             daily_tally_date = tally_bundle['daily_tally_date']
             daily_tally_games = tally_bundle['daily_tally_games']
@@ -16378,6 +16462,7 @@ def sport_results(sport):
             roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
             return render_template_string(
                 DAILY_RESULTS_TEMPLATE,
+                **_results_page_meta(sport),
                 page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                 sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
                 sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
@@ -16541,7 +16626,21 @@ def sport_results(sport):
                 ):
                     _attach_nhl_display_grading(sport, daily_results)
 
-                tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+                week_start = yesterday_dt - timedelta(days=6)
+                week_end = min(yesterday_dt, season_end_eff)
+                tally_daily = _banner_daily_results_for_range(
+                    sport, week_start, week_end, playoffs=False, skip_v2=True,
+                )
+                if tally_daily and _daily_results_game_count(tally_daily):
+                    _attach_nhl_display_grading(sport, tally_daily)
+                elif season_daily and _daily_results_game_count(season_daily):
+                    tally_daily = season_daily
+                else:
+                    tally_daily = daily_results
+
+                tally_bundle = _compute_results_tally_bundle(
+                    tally_daily, yesterday_dt, season_start_dt=season_start_dt,
+                )
                 daily_tally = tally_bundle['daily_tally']
                 daily_tally_date = tally_bundle['daily_tally_date']
                 daily_tally_games = tally_bundle['daily_tally_games']
@@ -16559,6 +16658,7 @@ def sport_results(sport):
 
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
+                    **_results_page_meta(sport),
                     page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                     sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
                     sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
@@ -16641,7 +16741,9 @@ def sport_results(sport):
                 _st_stats = _compute_spread_total_for_daily(sport, daily_results)
                 _finalize_daily_result_cards(sport, daily_results)
                 season_perf = _build_season_performance_summary(overall_stats, _st_stats)
-                tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+                tally_bundle = _compute_results_tally_bundle(
+                daily_results, yesterday_dt, season_start_dt=season_start_dt,
+            )
                 daily_tally = tally_bundle['daily_tally']
                 daily_tally_date = tally_bundle['daily_tally_date']
                 daily_tally_games = tally_bundle['daily_tally_games']
@@ -16657,6 +16759,7 @@ def sport_results(sport):
                 roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE,
+                    **_results_page_meta(sport),
                     page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                     sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
                     sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
@@ -16700,7 +16803,7 @@ def sport_results(sport):
                 selected_league = _soccer_league_from_slug(selected_slug)
                 if not selected_league and selected_slug:
                     selected_league = None
-            cache_key = f'{sport}_daily_results_html'
+            cache_key = f'{sport}_daily_results_html_v2'
             skip_cache = False
             if sport == 'SOCCER':
                 if selected_league:
@@ -16920,7 +17023,9 @@ def sport_results(sport):
                     f"[{sport}] results O/U still 0 graded after book attach "
                     f"(check /data betting_lines totals + pl_book_odds_api on Render)"
                 )
-            tally_bundle = _compute_results_tally_bundle(daily_results, yesterday_dt)
+            tally_bundle = _compute_results_tally_bundle(
+                daily_results, yesterday_dt, season_start_dt=season_start_dt,
+            )
             daily_tally = tally_bundle['daily_tally']
             daily_tally_date = tally_bundle['daily_tally_date']
             daily_tally_games = tally_bundle['daily_tally_games']
@@ -16950,6 +17055,7 @@ def sport_results(sport):
 
             rendered = render_template_string(
                 DAILY_RESULTS_TEMPLATE,
+                **_results_page_meta(sport),
                 page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                 sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
                 sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
@@ -16980,6 +17086,7 @@ def sport_results(sport):
         performance = calculate_model_performance(sport)
         return render_template_string(
             RESULTS_TEMPLATE,
+            **_results_page_meta(sport),
             page=sport,
             sport=sport,
             sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),

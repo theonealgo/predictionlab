@@ -47,7 +47,7 @@ def test_compute_results_tally_bundle_falls_back_to_latest_week():
     yesterday_dt = datetime(2026, 5, 30)
     bundle = N._compute_results_tally_bundle(daily, yesterday_dt)
 
-    assert bundle['results_stale_notice'] is True
+    assert bundle['results_stale_notice'] is False
     assert bundle['weekly_tally_games'] == 1
     assert bundle['weekly_tally_date_range'] == '2026-05-06 to 2026-05-12'
     assert bundle['daily_tally_date'] == '2026-05-12'
@@ -112,7 +112,7 @@ def test_nfl_sport_results_offseason_fallback_context(monkeypatch):
     out = N.sport_results('NFL')
 
     assert out == "ok"
-    assert captured['results_stale_notice'] is True
+    assert captured['results_stale_notice'] is False
     assert captured['daily_tally_date'] == stale_date
     assert captured['daily_tally_games'] == 1
     assert captured['weekly_tally_games'] == 1
@@ -239,7 +239,7 @@ def test_nba_results_uses_stale_tally_bundle(monkeypatch):
     out = N.sport_results('NBA')
 
     assert out == "ok"
-    assert captured['results_stale_notice'] is True
+    assert captured['results_stale_notice'] is False
     assert captured['daily_tally_date'] == stale_date
     assert captured['daily_tally_games'] == 1
     assert captured['weekly_tally_games'] == 1

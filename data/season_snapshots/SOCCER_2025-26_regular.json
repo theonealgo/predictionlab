@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T00:35:47Z",
+  "built_at": "2026-06-03T14:14:08Z",
   "games_expected": null,
   "games_in_scope": 2746,
   "ou_summary": {
@@ -50,26 +50,26 @@
       "wins": 1562
     },
     "spread": {
-      "graded": 1916,
-      "losses": 695,
+      "graded": 1924,
+      "losses": 770,
       "missing_odds": 0,
-      "pushes": 124,
+      "pushes": 116,
       "reason": null,
-      "roi_pct": 27.45,
-      "units_risked": 1916,
-      "units_won": 526.0,
-      "wins": 1221
+      "roi_pct": 19.96,
+      "units_risked": 1924,
+      "units_won": 384.0,
+      "wins": 1154
     },
     "total": {
-      "graded": 1982,
-      "losses": 773,
+      "graded": 2025,
+      "losses": 758,
       "missing_odds": 0,
-      "pushes": 58,
+      "pushes": 15,
       "reason": null,
-      "roi_pct": 22.0,
-      "units_risked": 1982,
-      "units_won": 436.0,
-      "wins": 1209
+      "roi_pct": 25.14,
+      "units_risked": 2025,
+      "units_won": 509.0,
+      "wins": 1267
     }
   },
   "schema_version": 1,
@@ -79,38 +79,42 @@
     "games_in_scope": 2746,
     "ml_accuracy": 75.6,
     "ml_correct": 1562,
+    "ml_model_key": "ensemble",
+    "ml_model_label": "Sharp Consensus",
     "ml_total": 2066,
-    "ou_correct": 1527,
-    "ou_graded": 2708,
-    "ou_note": "Graded 2708 of 2746 games in scope (needs posted O/U total + XSharp total)",
-    "ou_pct": 58.1,
+    "ou_correct": 1117,
+    "ou_graded": 1505,
+    "ou_model_label": "Prediction Lab",
+    "ou_note": null,
+    "ou_pct": 75.2,
     "scope_label": "Soccer season",
-    "spread_covered": 1541,
-    "spread_graded": 2537,
-    "spread_note": "Graded 2537 of 2746 games in scope (needs book spread line + XSharp spread)",
-    "spread_pct": 65.0
+    "spread_covered": 991,
+    "spread_graded": 1486,
+    "spread_model_label": "Prediction Lab",
+    "spread_note": null,
+    "spread_pct": 80.7
   },
   "sport": "SOCCER",
   "spread_total_stats": {
-    "pl_spread_covered": 969,
-    "pl_spread_graded": 1432,
-    "pl_spread_pct": 82.3,
-    "pl_spread_pushes": 254,
-    "pl_total_correct": 1013,
+    "pl_spread_covered": 991,
+    "pl_spread_graded": 1486,
+    "pl_spread_pct": 80.7,
+    "pl_spread_pushes": 258,
+    "pl_total_correct": 1117,
     "pl_total_graded": 1505,
-    "pl_total_pct": 70.8,
-    "pl_total_pushes": 74,
-    "spread_covered": 1541,
-    "spread_graded": 2537,
-    "spread_pct": 65.0,
-    "spread_pushes": 165,
-    "total_correct": 1527,
+    "pl_total_pct": 75.2,
+    "pl_total_pushes": 19,
+    "spread_covered": 1564,
+    "spread_graded": 2665,
+    "spread_pct": 62.2,
+    "spread_pushes": 151,
+    "total_correct": 1609,
     "total_graded": 2708,
-    "total_pct": 58.1,
-    "total_pushes": 81
+    "total_pct": 59.9,
+    "total_pushes": 21
   },
   "window": {
-    "end": "2026-06-01",
+    "end": "2026-06-02",
     "start": "2025-08-01"
   }
 }

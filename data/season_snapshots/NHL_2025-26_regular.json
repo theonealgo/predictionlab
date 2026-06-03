@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T00:23:55Z",
+  "built_at": "2026-06-03T14:07:16Z",
   "games_expected": 1312,
   "games_in_scope": 1309,
   "ou_summary": {
@@ -11,14 +11,14 @@
   },
   "overall_stats": {
     "elo": {
-      "accuracy": 58.7,
-      "correct": 769,
+      "accuracy": 59.7,
+      "correct": 782,
       "total": 1309
     },
     "ensemble": {
-      "accuracy": 60.3,
-      "correct": 789,
-      "total": 1309
+      "accuracy": 54.3,
+      "correct": 151,
+      "total": 278
     },
     "glicko2": {
       "accuracy": 58.4,
@@ -39,37 +39,37 @@
   "phase": "regular",
   "roi_total": {
     "moneyline": {
-      "graded": 1309,
-      "losses": 519,
+      "graded": 278,
+      "losses": 126,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 20.7,
-      "units_risked": 1309,
-      "units_won": 271.0,
-      "wins": 790
+      "roi_pct": 9.35,
+      "units_risked": 278,
+      "units_won": 26.0,
+      "wins": 152
     },
     "spread": {
-      "graded": 1291,
-      "losses": 467,
+      "graded": 1234,
+      "losses": 337,
       "missing_odds": 0,
-      "pushes": 17,
+      "pushes": 74,
       "reason": null,
-      "roi_pct": 27.65,
-      "units_risked": 1291,
-      "units_won": 357.0,
-      "wins": 824
+      "roi_pct": 45.38,
+      "units_risked": 1234,
+      "units_won": 560.0,
+      "wins": 897
     },
     "total": {
       "graded": 1198,
-      "losses": 563,
+      "losses": 564,
       "missing_odds": 0,
       "pushes": 110,
       "reason": null,
-      "roi_pct": 6.01,
+      "roi_pct": 5.84,
       "units_risked": 1198,
-      "units_won": 72.0,
-      "wins": 635
+      "units_won": 70.0,
+      "wins": 634
     }
   },
   "schema_version": 1,
@@ -77,36 +77,40 @@
   "season_perf": {
     "games_expected": 1312,
     "games_in_scope": 1309,
-    "ml_accuracy": 60.3,
-    "ml_correct": 789,
+    "ml_accuracy": 59.7,
+    "ml_correct": 782,
+    "ml_model_key": "elo",
+    "ml_model_label": "Edge",
     "ml_total": 1309,
-    "ou_correct": 635,
-    "ou_graded": 1308,
-    "ou_note": "Graded 1308 of 1309 games in scope (needs posted O/U total + XSharp total)",
-    "ou_pct": 53.0,
+    "ou_correct": 654,
+    "ou_graded": 1292,
+    "ou_model_label": "Prediction Lab",
+    "ou_note": null,
+    "ou_pct": 55.3,
     "scope_label": "NHL season",
-    "spread_covered": 824,
-    "spread_graded": 1308,
-    "spread_note": "Graded 1308 of 1309 games in scope (needs book spread line + XSharp spread)",
-    "spread_pct": 63.8
+    "spread_covered": 958,
+    "spread_graded": 1292,
+    "spread_model_label": "Prediction Lab",
+    "spread_note": null,
+    "spread_pct": 80.0
   },
   "sport": "NHL",
   "spread_total_stats": {
-    "pl_spread_covered": 879,
+    "pl_spread_covered": 958,
     "pl_spread_graded": 1292,
-    "pl_spread_pct": 75.4,
-    "pl_spread_pushes": 126,
-    "pl_total_correct": 652,
+    "pl_spread_pct": 80.0,
+    "pl_spread_pushes": 94,
+    "pl_total_correct": 654,
     "pl_total_graded": 1292,
-    "pl_total_pct": 55.2,
+    "pl_total_pct": 55.3,
     "pl_total_pushes": 110,
-    "spread_covered": 824,
+    "spread_covered": 897,
     "spread_graded": 1308,
-    "spread_pct": 63.8,
-    "spread_pushes": 17,
-    "total_correct": 635,
+    "spread_pct": 72.7,
+    "spread_pushes": 74,
+    "total_correct": 634,
     "total_graded": 1308,
-    "total_pct": 53.0,
+    "total_pct": 52.9,
     "total_pushes": 110
   },
   "window": {

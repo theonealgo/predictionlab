@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T00:30:09Z",
+  "built_at": "2026-06-03T14:11:07Z",
   "games_expected": 5430,
   "games_in_scope": 8,
   "ou_summary": {
@@ -79,15 +79,19 @@
     "games_in_scope": 8,
     "ml_accuracy": 100.0,
     "ml_correct": 8,
+    "ml_model_key": "glicko2",
+    "ml_model_label": "Grinder2",
     "ml_total": 8,
     "ou_correct": 0,
     "ou_graded": 0,
-    "ou_note": "Graded 0 of 8 games in scope (needs posted O/U total + XSharp total)",
+    "ou_model_label": "XSharp",
+    "ou_note": null,
     "ou_pct": null,
     "scope_label": "NCAA Women's Basketball season",
     "spread_covered": 0,
     "spread_graded": 0,
-    "spread_note": "Graded 0 of 8 games in scope (needs book spread line + XSharp spread)",
+    "spread_model_label": "XSharp",
+    "spread_note": null,
     "spread_pct": null
   },
   "sport": "NCAAW",

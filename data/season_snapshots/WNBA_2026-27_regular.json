@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T00:32:48Z",
+  "built_at": "2026-06-03T14:12:43Z",
   "games_expected": 264,
   "games_in_scope": 15,
   "ou_summary": {
@@ -77,18 +77,22 @@
   "season_perf": {
     "games_expected": 264,
     "games_in_scope": 15,
-    "ml_accuracy": 40.0,
-    "ml_correct": 2,
+    "ml_accuracy": 60.0,
+    "ml_correct": 3,
+    "ml_model_key": "elo",
+    "ml_model_label": "Edge",
     "ml_total": 5,
     "ou_correct": 8,
-    "ou_graded": 15,
+    "ou_graded": 10,
+    "ou_model_label": "Prediction Lab",
     "ou_note": null,
-    "ou_pct": 53.3,
+    "ou_pct": 80.0,
     "scope_label": "WNBA season",
-    "spread_covered": 6,
-    "spread_graded": 15,
+    "spread_covered": 5,
+    "spread_graded": 10,
+    "spread_model_label": "Prediction Lab",
     "spread_note": null,
-    "spread_pct": 40.0
+    "spread_pct": 50.0
   },
   "sport": "WNBA",
   "spread_total_stats": {
@@ -110,7 +114,7 @@
     "total_pushes": 0
   },
   "window": {
-    "end": "2026-06-01",
+    "end": "2026-06-02",
     "start": "2026-05-08"
   }
 }

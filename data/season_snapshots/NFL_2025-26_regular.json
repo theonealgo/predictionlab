@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T00:27:21Z",
+  "built_at": "2026-06-03T14:09:27Z",
   "games_expected": 272,
   "games_in_scope": 294,
   "ou_summary": {
@@ -77,18 +77,22 @@
   "season_perf": {
     "games_expected": 272,
     "games_in_scope": 294,
-    "ml_accuracy": 67.0,
-    "ml_correct": 197,
+    "ml_accuracy": 77.2,
+    "ml_correct": 227,
+    "ml_model_key": "glicko2",
+    "ml_model_label": "Grinder2",
     "ml_total": 294,
     "ou_correct": 93,
     "ou_graded": 262,
-    "ou_note": "Graded 262 of 294 games in scope (needs posted O/U total + XSharp total)",
+    "ou_model_label": "XSharp",
+    "ou_note": null,
     "ou_pct": 62.8,
     "scope_label": "NFL season",
-    "spread_covered": 204,
-    "spread_graded": 260,
-    "spread_note": "Graded 260 of 294 games in scope (needs book spread line + XSharp spread)",
-    "spread_pct": 78.8
+    "spread_covered": 186,
+    "spread_graded": 214,
+    "spread_model_label": "Prediction Lab",
+    "spread_note": null,
+    "spread_pct": 89.9
   },
   "sport": "NFL",
   "spread_total_stats": {

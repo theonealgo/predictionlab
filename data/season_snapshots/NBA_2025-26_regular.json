@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T02:35:27Z",
+  "built_at": "2026-06-03T14:08:18Z",
   "games_expected": 1230,
   "games_in_scope": 1293,
   "ou_summary": {
@@ -77,18 +77,22 @@
   "season_perf": {
     "games_expected": 1230,
     "games_in_scope": 1293,
-    "ml_accuracy": 62.6,
-    "ml_correct": 810,
+    "ml_accuracy": 69.1,
+    "ml_correct": 893,
+    "ml_model_key": "glicko2",
+    "ml_model_label": "Grinder2",
     "ml_total": 1293,
-    "ou_correct": 791,
-    "ou_graded": 1291,
-    "ou_note": "Graded 1291 of 1293 games in scope (needs posted O/U total + XSharp total)",
-    "ou_pct": 61.6,
+    "ou_correct": 878,
+    "ou_graded": 1226,
+    "ou_model_label": "Prediction Lab",
+    "ou_note": null,
+    "ou_pct": 72.0,
     "scope_label": "NBA season",
-    "spread_covered": 781,
-    "spread_graded": 1272,
-    "spread_note": "Graded 1272 of 1293 games in scope (needs book spread line + XSharp spread)",
-    "spread_pct": 62.1
+    "spread_covered": 833,
+    "spread_graded": 1220,
+    "spread_model_label": "Prediction Lab",
+    "spread_note": null,
+    "spread_pct": 69.8
   },
   "sport": "NBA",
   "spread_total_stats": {
@@ -110,7 +114,7 @@
     "total_pushes": 6
   },
   "window": {
-    "end": "2026-06-01",
+    "end": "2026-06-02",
     "start": "2025-10-01"
   }
 }

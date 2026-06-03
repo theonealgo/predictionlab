@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T00:30:08Z",
+  "built_at": "2026-06-03T14:11:07Z",
   "games_expected": 5430,
   "games_in_scope": 1926,
   "ou_summary": {
@@ -77,18 +77,22 @@
   "season_perf": {
     "games_expected": 5430,
     "games_in_scope": 1926,
-    "ml_accuracy": 82.6,
-    "ml_correct": 1590,
+    "ml_accuracy": 84.1,
+    "ml_correct": 1620,
+    "ml_model_key": "glicko2",
+    "ml_model_label": "Grinder2",
     "ml_total": 1926,
-    "ou_correct": 1127,
-    "ou_graded": 1725,
-    "ou_note": "Graded 1725 of 1926 games in scope (needs posted O/U total + XSharp total)",
-    "ou_pct": 65.4,
+    "ou_correct": 89,
+    "ou_graded": 102,
+    "ou_model_label": "Prediction Lab",
+    "ou_note": null,
+    "ou_pct": 87.3,
     "scope_label": "NCAA Basketball season",
-    "spread_covered": 1109,
-    "spread_graded": 1725,
-    "spread_note": "Graded 1725 of 1926 games in scope (needs book spread line + XSharp spread)",
-    "spread_pct": 64.8
+    "spread_covered": 89,
+    "spread_graded": 102,
+    "spread_model_label": "Prediction Lab",
+    "spread_note": null,
+    "spread_pct": 89.9
   },
   "sport": "NCAAB",
   "spread_total_stats": {

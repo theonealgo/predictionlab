@@ -178,6 +178,41 @@ def test_enforce_pick_spread_consistency_fixes_nba_contradiction(nhl):
     assert card["disp_pl_spread"] > 0
 
 
+def test_face_pick_matches_sharp_consensus_not_pl_spread(nhl):
+    """AI pick strip must follow Sharp Consensus side, not PL spread pick."""
+    card = {
+        "home_team_id": "New York Knicks",
+        "away_team_id": "San Antonio Spurs",
+        "our_spread": 4.5,
+        "ensemble_prob": 35.9,
+        "glicko2_prob": 35.0,
+        "trueskill_prob": 36.0,
+        "elo_prob": 34.0,
+        "xgb_prob": 35.0,
+        "predicted_winner": "New York Knicks",
+    }
+    nhl._prepare_pred_card_display(card, sport="NBA")
+    assert card["face_pick_team"] == "San Antonio Spurs"
+    assert card["face_pick_confidence"] == pytest.approx(64.1)
+
+
+def test_season_perf_uses_best_ml_model(nhl):
+    overall = {
+        "glicko2": {"total": 100, "correct": 69, "accuracy": 69.0},
+        "ensemble": {"total": 100, "correct": 62, "accuracy": 62.0},
+        "elo": {"total": 100, "correct": 63, "accuracy": 63.0},
+    }
+    st = {"spread_graded": 90, "spread_covered": 50, "spread_pct": 55.6,
+          "pl_spread_graded": 90, "pl_spread_covered": 60, "pl_spread_pct": 66.7}
+    perf = nhl._build_season_performance_summary(overall, st)
+    assert perf["ml_model_label"] == "Grinder2"
+    assert perf["ml_accuracy"] == 69.0
+    assert perf["spread_model_label"] == "Prediction Lab"
+    assert perf["spread_pct"] == 66.7
+    assert perf["spread_note"] is None
+    assert perf["ou_note"] is None
+
+
 def test_pred_card_pl_spread_ignores_pre_enforce_prob(nhl):
     """Display spread must align to enforced/visible PL probability, not stale pre-enforce."""
     card = {
