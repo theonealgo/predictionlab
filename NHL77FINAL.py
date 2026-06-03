@@ -9815,11 +9815,11 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <div class="asr-wrap">
         <div class="asr-header">
             <h1>All Sports Prediction Results</h1>
-            <p>Track season-to-date model accuracy for moneyline, spread, and over/under picks across all sports. Updated regularly from verified season snapshots.</p>
+            <p>Track season-to-date model accuracy for moneyline, spread, and over/under picks across all sports. Updated regularly as games finalize.</p>
         </div>
 
         {% if not dashboard_rows %}
-        <div class="asr-empty">Season snapshots are not available yet. Run <code>scripts/compute_all_sport_season_stats.py --write-snapshots</code> to build them.</div>
+        <div class="asr-empty">Season results are not available yet. Check back after the next update.</div>
         {% else %}
 
         <div class="asr-section">
@@ -10749,7 +10749,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
-                    <div class="daily-rec">no graded games</div>
+                    <div class="daily-rec">—</div>
                     {% endif %}
                 </div>
                 {% endfor %}
@@ -10781,7 +10781,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% else %}
         <div class="daily-tally" style="text-align:center;">
-            No graded games for {{ daily_tally_date }}.
+            No completed games for {{ daily_tally_date }}.
         </div>
         {% endif %}
 
@@ -10800,7 +10800,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
-                    <div class="daily-rec">no graded games</div>
+                    <div class="daily-rec">—</div>
                     {% endif %}
                 </div>
                 {% endfor %}
@@ -10832,7 +10832,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
         {% else %}
         <div class="daily-tally" style="text-align:center;">
-            No graded games for last 7 days.
+            No completed games in the last 7 days.
         </div>
         {% endif %}
 
@@ -10872,7 +10872,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
-                    <div style="font-size:0.85em;color:#64748b;">no graded games</div>
+                    <div style="font-size:0.85em;color:#64748b;">—</div>
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
@@ -10945,7 +10945,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="model-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                 {% else %}
                 <div class="model-acc" style="color:#94a3b8;">—</div>
-                <div class="model-rec">no graded games</div>
+                <div class="model-rec">—</div>
                 {% endif %}
             </div>
             {% endfor %}
@@ -11225,7 +11225,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                 {% else %}
                 <div class="daily-acc" style="color:#94a3b8;">—</div>
-                <div class="daily-rec">no graded games</div>
+                <div class="daily-rec">—</div>
                 {% endif %}
             </div>
             {% endfor %}
@@ -11233,7 +11233,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     </div>
     {% else %}
     <div class="daily-tally" style="text-align:center;">
-        No graded games for {{ daily_tally_date }}.
+        No completed games for {{ daily_tally_date }}.
     </div>
     {% endif %}
     {% if weekly_tally %}
@@ -11249,7 +11249,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                 {% else %}
                 <div class="daily-acc" style="color:#94a3b8;">—</div>
-                <div class="daily-rec">no graded games</div>
+                <div class="daily-rec">—</div>
                 {% endif %}
             </div>
             {% endfor %}
@@ -11257,7 +11257,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     </div>
     {% else %}
     <div class="daily-tally" style="text-align:center;">
-        No graded games for last 7 days.
+        No completed games in the last 7 days.
     </div>
     {% endif %}
     {% if weekly_results and overall_stats %}
@@ -15364,7 +15364,7 @@ def all_sports_results_page():
         page_title='All Sports Results | Season Model Performance | predictionlab.io',
         page_description=(
             'Season moneyline, spread, and over/under model results across NHL, NBA, MLB, '
-            'NFL, NCAAB, NCAAF, WNBA, and Soccer — loaded from frozen snapshots.'
+            'NFL, NCAAB, NCAAF, WNBA, and Soccer.'
         ),
         dashboard_rows=dashboard_rows,
         ml_models=_ML_DASHBOARD_MODELS,
