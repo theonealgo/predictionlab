@@ -110,3 +110,33 @@ def test_ncaab_banner_grading_skips_live_v2(monkeypatch):
     game = next(iter(daily.values()))['games'][0]
     assert game['glicko2_prob'] == 55.0
     assert game['trueskill_prob'] == 54.0
+
+
+def test_nhl_consensus_computed_when_win_probability_missing(monkeypatch):
+    """Consensus ML grades full season when only component probs exist (not win_probability)."""
+    import NHL77FINAL as N
+
+    monkeypatch.setattr(N, 'get_v2_prediction', lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        N,
+        '_frozen_get_v2_prediction',
+        lambda sport, home, away, game_date=None: {
+            'glicko2_prob': 0.55,
+            'trueskill_prob': 0.54,
+            'xgboost_prob': 0.56,
+            'home_prob': 0.53,
+        },
+    )
+
+    row = _make_row('NHL', '2025-11-01', glicko=None, trueskill=None, ens=None, elo=0.52, xgb=0.51)
+    row['win_probability'] = None
+    row['meta_home_prob'] = None
+    N._FROZEN_V2_RESULTS_GRADING_CACHE.clear()
+
+    g2, ts, el, xg, ens = N._model_probs_for_grading(
+        'NHL', row, row['home_team_id'], row['away_team_id'], '2025-11-01',
+    )
+    assert g2 == 0.55
+    assert ts == 0.54
+    assert ens is not None
+    assert ens == N._compute_ensemble_prob(g2, ts, xg, el, fallback=None)

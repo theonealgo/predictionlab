@@ -3444,12 +3444,19 @@ def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_ke
         skip_v2=True,
     )
     stored_ens = _to_float_safe(_row_field(game_row, 'win_probability'))
+    had_stored_ens = stored_ens is not None
     if stored_ens is not None:
         ens_prob = stored_ens
     elif ens_prob is None:
-        ens_prob = _to_float_safe(_row_field(game_row, 'meta_home_prob'))
+        meta_ens = _to_float_safe(_row_field(game_row, 'meta_home_prob'))
+        if meta_ens is not None:
+            ens_prob = meta_ens
+            had_stored_ens = True
 
-    if glicko2_prob is None or trueskill_prob is None:
+    need_frozen = any(
+        p is None for p in (glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob)
+    )
+    if need_frozen:
         cache_key = f'{sport}|{home_team}|{away_team}|{game_date_key}'
         if cache_key not in _FROZEN_V2_RESULTS_GRADING_CACHE:
             _FROZEN_V2_RESULTS_GRADING_CACHE[cache_key] = _frozen_get_v2_prediction(
@@ -3465,6 +3472,26 @@ def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_ke
                 xgb_prob = _to_float_safe(v2.get('xgboost_prob'))
             if elo_prob is None:
                 elo_prob = _to_float_safe(v2.get('home_prob'))
+
+    if sport == 'WNBA' and _os.environ.get('PL_SNAPSHOT_BUILD') == '1':
+        if glicko2_prob is None and elo_prob is not None:
+            glicko2_prob = elo_prob
+        if trueskill_prob is None and xgb_prob is not None:
+            trueskill_prob = xgb_prob
+        elif trueskill_prob is None and elo_prob is not None:
+            trueskill_prob = elo_prob
+
+    if not had_stored_ens and any(
+        p is not None for p in (glicko2_prob, trueskill_prob, xgb_prob, elo_prob)
+    ):
+        ens_prob = _compute_ensemble_prob(
+            glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None,
+        )
+    if ens_prob is None and need_frozen:
+        cache_key = f'{sport}|{home_team}|{away_team}|{game_date_key}'
+        v2 = _FROZEN_V2_RESULTS_GRADING_CACHE.get(cache_key)
+        if v2:
+            ens_prob = _to_float_safe(v2.get('home_prob'))
 
     return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
 
@@ -5833,13 +5860,18 @@ def _set_mlb_spread_pick_label(card: dict) -> None:
 # V2 PREDICTION SYSTEM HELPER
 # ============================================================================
 
+def _v2_model_sport(sport):
+    """Map display sport to trained v2 model key (NCAAW shares NCAAB weights)."""
+    return 'NCAAB' if sport == 'NCAAW' else sport
+
+
 def get_v2_prediction(sport, home_team, away_team, game_date=None):
     """
     Get predictions from the v2 system (Glicko-2 + Stacked Ensemble + Calibration)
     
     Returns dict with probabilities or None if v2 not available for this sport
     """
-    model_sport = 'NCAAB' if sport == 'NCAAW' else sport
+    model_sport = _v2_model_sport(sport)
     if not HAS_V2_SYSTEM or model_sport not in V2_PREDICTORS:
         return None
     
@@ -5992,9 +6024,12 @@ def _get_xgb_spread_model(sport):
         from xgb_spread_model import get_or_train_model
     except ImportError:
         return None
+    model_sport = _v2_model_sport(sport)
     # Need completed games from DB and team stats
     try:
         team_stats = _build_team_stats_from_db(sport) or {}
+        if not team_stats and model_sport != sport:
+            team_stats = _build_team_stats_from_db(model_sport) or {}
         if not team_stats:
             sp = _score_predictor_instance(sport)
             if sp:
@@ -6002,16 +6037,17 @@ def _get_xgb_spread_model(sport):
                     f"{sport}_{__import__('datetime').datetime.now().strftime('%Y-%m-%d')}", {}
                 ) or {}
         conn = get_db_connection()
+        games_sport = model_sport if sport == 'NCAAW' else sport
         rows = conn.execute(
             'SELECT home_team_id, away_team_id, home_score, away_score, game_date '
             'FROM games WHERE sport=? AND home_score IS NOT NULL ORDER BY game_date',
-            (sport,)
+            (games_sport,)
         ).fetchall()
         conn.close()
         games = [dict(r) for r in rows]
         if not team_stats or not games:
             return None
-        return get_or_train_model(sport, games, team_stats)
+        return get_or_train_model(model_sport, games, team_stats)
     except Exception as e:
         logger.debug(f"_get_xgb_spread_model error for {sport}: {e}")
         return None
@@ -8428,8 +8464,43 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         if strong and abs(edge) >= _ou_edge_threshold(sport):
                             label += " ★"
                         g['total_pick_label'] = label
+                        pl_tot = _safe_float(g.get('our_total'))
+                        if pl_tot is not None:
+                            if abs(at - _grade_mt) >= 1e-9:
+                                pl_tt_gr += 1
+                                pl_pick = 'OVER' if pl_tot >= _grade_mt else 'UNDER'
+                                if pl_pick == ('OVER' if at > _grade_mt else 'UNDER'):
+                                    pl_tt_cor += 1
+                            else:
+                                pl_tt_gr += 1
+                                pl_tt_push += 1
                     elif total_fallback_used:
                         g['total_pick_reason'] = "benchmark only (not graded)"
+
+                    ps = _safe_float(g.get('our_spread'))
+                    if ps is not None and hs is not None and as_ is not None:
+                        if ps >= run_line:
+                            pl_pick_team = h
+                            pl_pick_line = -run_line
+                        elif ps <= -run_line:
+                            pl_pick_team = a
+                            pl_pick_line = -run_line
+                        else:
+                            pl_pick_team = a if ps > 0 else h
+                            pl_pick_line = run_line
+                        if pl_pick_team == h:
+                            if pl_pick_line < 0:
+                                pl_ok = am > run_line
+                            else:
+                                pl_ok = am >= -run_line
+                        else:
+                            if pl_pick_line < 0:
+                                pl_ok = am < -run_line
+                            else:
+                                pl_ok = am <= run_line
+                        pl_st_gr += 1
+                        if pl_ok:
+                            pl_st_cov += 1
 
                 else:
                     # ── Non-MLB grading: Spread uses Vegas (unchanged).
@@ -14179,10 +14250,11 @@ _PERF_SPORT_OPTIONS = ['NBA', 'NHL', 'MLB', 'NFL', 'NCAAB', 'NCAAF']
 # DO NOT modify this function. It is the reference model output as-shipped.
 def _frozen_get_v2_prediction(sport, home_team, away_team, game_date=None):
     """Frozen reference: prediction output logic as of March 8 2026."""
-    if not HAS_V2_SYSTEM or sport not in V2_PREDICTORS:
+    model_sport = _v2_model_sport(sport)
+    if not HAS_V2_SYSTEM or model_sport not in V2_PREDICTORS:
         return None
     try:
-        predictor = V2_PREDICTORS[sport]
+        predictor = V2_PREDICTORS[model_sport]
         game_df = pd.DataFrame([{
             'home_team': home_team,
             'away_team': away_team,

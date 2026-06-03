@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T14:11:07Z",
+  "built_at": "2026-06-03T17:41:49Z",
   "games_expected": 5430,
   "games_in_scope": 8,
   "ou_summary": {
@@ -50,26 +50,26 @@
       "wins": 8
     },
     "spread": {
-      "graded": 0,
-      "losses": 0,
+      "graded": 5,
+      "losses": 1,
       "missing_odds": 0,
       "pushes": 0,
-      "reason": "No graded picks in range.",
-      "roi_pct": null,
-      "units_risked": 0,
-      "units_won": 0.0,
-      "wins": 0
+      "reason": null,
+      "roi_pct": 60.0,
+      "units_risked": 5,
+      "units_won": 3.0,
+      "wins": 4
     },
     "total": {
-      "graded": 0,
-      "losses": 0,
+      "graded": 5,
+      "losses": 2,
       "missing_odds": 0,
       "pushes": 0,
-      "reason": "No graded picks in range.",
-      "roi_pct": null,
-      "units_risked": 0,
-      "units_won": 0.0,
-      "wins": 0
+      "reason": null,
+      "roi_pct": 20.0,
+      "units_risked": 5,
+      "units_won": 1.0,
+      "wins": 3
     }
   },
   "schema_version": 1,
@@ -82,17 +82,17 @@
     "ml_model_key": "glicko2",
     "ml_model_label": "Grinder2",
     "ml_total": 8,
-    "ou_correct": 0,
-    "ou_graded": 0,
+    "ou_correct": 3,
+    "ou_graded": 5,
     "ou_model_label": "XSharp",
     "ou_note": null,
-    "ou_pct": null,
+    "ou_pct": 60.0,
     "scope_label": "NCAA Women's Basketball season",
-    "spread_covered": 0,
-    "spread_graded": 0,
+    "spread_covered": 4,
+    "spread_graded": 5,
     "spread_model_label": "XSharp",
     "spread_note": null,
-    "spread_pct": null
+    "spread_pct": 80.0
   },
   "sport": "NCAAW",
   "spread_total_stats": {
@@ -104,13 +104,13 @@
     "pl_total_graded": 0,
     "pl_total_pct": null,
     "pl_total_pushes": 0,
-    "spread_covered": 0,
-    "spread_graded": 0,
-    "spread_pct": null,
+    "spread_covered": 4,
+    "spread_graded": 5,
+    "spread_pct": 80.0,
     "spread_pushes": 0,
-    "total_correct": 0,
-    "total_graded": 0,
-    "total_pct": null,
+    "total_correct": 3,
+    "total_graded": 5,
+    "total_pct": 60.0,
     "total_pushes": 0
   },
   "window": {

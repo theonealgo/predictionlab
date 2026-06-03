@@ -1,116 +1,116 @@
 {
-  "built_at": "2026-06-03T14:12:43Z",
+  "built_at": "2026-06-03T17:43:14Z",
   "games_expected": 264,
-  "games_in_scope": 15,
+  "games_in_scope": 21,
   "ou_summary": {
-    "avg_total": 165.4,
+    "avg_total": 164.4,
     "ou_bench": 158.0,
-    "total_games_ou": 15,
-    "total_over": 9,
-    "total_under": 6
+    "total_games_ou": 21,
+    "total_over": 13,
+    "total_under": 8
   },
   "overall_stats": {
     "elo": {
-      "accuracy": 60.0,
-      "correct": 3,
-      "total": 5
+      "accuracy": 54.5,
+      "correct": 6,
+      "total": 11
     },
     "ensemble": {
-      "accuracy": 40.0,
-      "correct": 2,
-      "total": 5
+      "accuracy": 54.5,
+      "correct": 6,
+      "total": 11
     },
     "glicko2": {
-      "accuracy": 0.0,
-      "correct": 0,
-      "total": 0
+      "accuracy": 54.5,
+      "correct": 6,
+      "total": 11
     },
     "trueskill": {
-      "accuracy": 0.0,
-      "correct": 0,
-      "total": 0
+      "accuracy": 45.5,
+      "correct": 5,
+      "total": 11
     },
     "xgboost": {
-      "accuracy": 60.0,
-      "correct": 3,
-      "total": 5
+      "accuracy": 45.5,
+      "correct": 5,
+      "total": 11
     }
   },
   "phase": "regular",
   "roi_total": {
     "moneyline": {
-      "graded": 5,
-      "losses": 3,
+      "graded": 11,
+      "losses": 5,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": -20.0,
-      "units_risked": 5,
-      "units_won": -1.0,
-      "wins": 2
-    },
-    "spread": {
-      "graded": 15,
-      "losses": 9,
-      "missing_odds": 0,
-      "pushes": 0,
-      "reason": null,
-      "roi_pct": -20.0,
-      "units_risked": 15,
-      "units_won": -3.0,
+      "roi_pct": 9.09,
+      "units_risked": 11,
+      "units_won": 1.0,
       "wins": 6
     },
-    "total": {
-      "graded": 15,
-      "losses": 7,
+    "spread": {
+      "graded": 21,
+      "losses": 12,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 6.67,
-      "units_risked": 15,
+      "roi_pct": -14.29,
+      "units_risked": 21,
+      "units_won": -3.0,
+      "wins": 9
+    },
+    "total": {
+      "graded": 21,
+      "losses": 10,
+      "missing_odds": 0,
+      "pushes": 0,
+      "reason": null,
+      "roi_pct": 4.76,
+      "units_risked": 21,
       "units_won": 1.0,
-      "wins": 8
+      "wins": 11
     }
   },
   "schema_version": 1,
   "season": "2026-27",
   "season_perf": {
     "games_expected": 264,
-    "games_in_scope": 15,
-    "ml_accuracy": 60.0,
-    "ml_correct": 3,
-    "ml_model_key": "elo",
-    "ml_model_label": "Edge",
-    "ml_total": 5,
-    "ou_correct": 8,
-    "ou_graded": 10,
+    "games_in_scope": 21,
+    "ml_accuracy": 54.5,
+    "ml_correct": 6,
+    "ml_model_key": "glicko2",
+    "ml_model_label": "Grinder2",
+    "ml_total": 11,
+    "ou_correct": 11,
+    "ou_graded": 15,
     "ou_model_label": "Prediction Lab",
     "ou_note": null,
-    "ou_pct": 80.0,
+    "ou_pct": 73.3,
     "scope_label": "WNBA season",
-    "spread_covered": 5,
-    "spread_graded": 10,
+    "spread_covered": 8,
+    "spread_graded": 15,
     "spread_model_label": "Prediction Lab",
     "spread_note": null,
-    "spread_pct": 50.0
+    "spread_pct": 53.3
   },
   "sport": "WNBA",
   "spread_total_stats": {
-    "pl_spread_covered": 5,
-    "pl_spread_graded": 10,
-    "pl_spread_pct": 50.0,
+    "pl_spread_covered": 8,
+    "pl_spread_graded": 15,
+    "pl_spread_pct": 53.3,
     "pl_spread_pushes": 0,
-    "pl_total_correct": 8,
-    "pl_total_graded": 10,
-    "pl_total_pct": 80.0,
+    "pl_total_correct": 11,
+    "pl_total_graded": 15,
+    "pl_total_pct": 73.3,
     "pl_total_pushes": 0,
-    "spread_covered": 6,
-    "spread_graded": 15,
-    "spread_pct": 40.0,
+    "spread_covered": 9,
+    "spread_graded": 21,
+    "spread_pct": 42.9,
     "spread_pushes": 0,
-    "total_correct": 8,
-    "total_graded": 15,
-    "total_pct": 53.3,
+    "total_correct": 11,
+    "total_graded": 21,
+    "total_pct": 52.4,
     "total_pushes": 0
   },
   "window": {
