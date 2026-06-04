@@ -162,13 +162,8 @@
 {% set _face_label = card.face_model_label if card.face_model_label is defined else 'Sharp Consensus' %}
 {% set _fh = card.face_home_prob if card.face_home_prob is defined else none %}
 {% set _fa = card.face_away_prob if card.face_away_prob is defined else none %}
-{% set _face_pick = card.face_pick_team if card.face_pick_team is defined else none %}
-{% set _away_favored = _face_pick and _face_pick == away_id %}
-{% set _home_favored = _face_pick and _face_pick == home_id %}
-{% if not _face_pick %}
 {% set _away_favored = _fa is not none and _fh is not none and _fa > _fh %}
 {% set _home_favored = _fh is not none and _fa is not none and _fh > _fa %}
-{% endif %}
 {% set _book_spread_lbl = 'Books run line' if sport == 'MLB' else ('Books puck line' if sport == 'NHL' else 'Books spread') %}
 {% set _books_src = 'Books · DK' if card.book_provider is defined and card.book_provider and 'draftkings' in card.book_provider|lower else 'Books' %}
 {% set _book_ml_est = card.book_ml_estimated is defined and card.book_ml_estimated %}
@@ -183,7 +178,7 @@
     <div class="team-slot {% if _away_favored %}favored{% endif %}">
         <img class="team-logo" src="{{ team_logo_url(sport, away_id) }}" alt="" width="52" height="52" loading="lazy">
         <div class="team-name">{{ team_short(away_id) }}</div>
-        <div class="model-tag">{% if _face_pick and _face_pick == away_id %}{{ _face_label }}{% else %}Win prob{% endif %}</div>
+        <div class="model-tag">{{ _face_label }}</div>
         <div class="win-pct">{% if _fa is not none %}{{ _fa }}<span class="unit">%</span>{% else %}—{% endif %}</div>
         <div class="ml-stack face-ml-stack">
             <div class="ml-line face-books-ml">
@@ -200,7 +195,7 @@
     <div class="team-slot {% if _home_favored %}favored{% endif %}">
         <img class="team-logo" src="{{ team_logo_url(sport, home_id) }}" alt="" width="52" height="52" loading="lazy">
         <div class="team-name">{{ team_short(home_id) }}</div>
-        <div class="model-tag">{% if _face_pick and _face_pick == home_id %}{{ _face_label }}{% else %}Win prob{% endif %}</div>
+        <div class="model-tag">{{ _face_label }}</div>
         <div class="win-pct">{% if _fh is not none %}{{ _fh }}<span class="unit">%</span>{% else %}—{% endif %}</div>
         <div class="ml-stack face-ml-stack">
             <div class="ml-line face-books-ml">
