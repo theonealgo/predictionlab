@@ -2056,46 +2056,16 @@ def _set_card_book_lines(card: dict) -> None:
 
 def _pl_home_prob_for_spread_display(card: dict):
     """Home win % (0–100) used to sign-normalize disp_pl_spread for card UI only."""
-    # Prefer Sharp Consensus (ensemble) over efficiency-derived disp_ml_prob so PL
-    # spread display matches the featured pick when models disagree with efficiency.
-    for key in ('ensemble_prob', 'ens_prob', 'disp_ml_prob'):
+    disp = _safe_float(card.get('disp_ml_prob'))
+    if disp is not None:
+        return _normalize_home_win_prob_pct(disp)
+    # Do not use _ensemble_prob_pre_enforce here; it is intentionally pre-correction
+    # diagnostic state and can re-introduce spread/winner contradictions on cards.
+    for key in ('ensemble_prob', 'ens_prob'):
         v = _safe_float(card.get(key))
         if v is not None:
             return _normalize_home_win_prob_pct(v)
     return None
-
-
-def _model_probs_unanimous_side(pred: dict):
-    """Return 'home' or 'away' when 2+ model ML probs agree; else None."""
-    keys = ('glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob', 'ensemble_prob', 'ens_prob')
-    sides = []
-    for key in keys:
-        v = _safe_float(pred.get(key))
-        if v is None:
-            continue
-        if v <= 1.0:
-            v *= 100.0
-        if abs(v - 50.0) < 0.05:
-            return None
-        sides.append('home' if v >= 50.0 else 'away')
-    if len(sides) < 2:
-        return None
-    return sides[0] if len(set(sides)) == 1 else None
-
-
-def _sync_card_display_to_face_pick(pred: dict, sport: str = 'NBA') -> None:
-    """After face pick is set, align predicted_winner to consensus — PL spread stays honest."""
-    if pred.get('home_score') is not None:
-        return
-    pick = pred.get('face_pick_team')
-    if not pick:
-        return
-    home_id = pred.get('home_team_id')
-    away_id = pred.get('away_team_id')
-    if not (home_id and away_id):
-        return
-    pred['predicted_winner'] = pick
-    _set_card_pl_moneylines(pred)
 
 
 def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
@@ -2112,8 +2082,8 @@ def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
         card.pop('disp_pl_spread', None)
         return
     sp = _round_to_half(float(sp))
-    # Efficiency PL spread: show model line as computed — do not flip to match ensemble ML.
-    if sport != 'MLB' and card.get('our_method') not in ('efficiency', 'team-avg-fallback'):
+    # MLB spread is faded at parameter level; do not re-align to ensemble ML.
+    if sport != 'MLB':
         hp = _pl_home_prob_for_spread_display(card)
         if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
             home_ml_fav = hp > 50.0
@@ -2145,12 +2115,18 @@ def _set_card_pl_moneylines(card: dict) -> None:
             card['pl_model_draw_ml'] = ml.get('moneyline_draw')
             card['pl_model_away_ml'] = ml.get('moneyline_away')
         return
-    # PL column = Sharp Consensus (ensemble). disp_ml_prob is efficiency-spread-derived
-    # and can oppose unanimous model picks — e.g. efficiency Knicks -4 while all models
-    # pick Spurs 64%. Featured pick ML must match consensus side.
-    prob = (_safe_float(card.get('ensemble_prob'))
-            or _safe_float(card.get('ens_prob'))
-            or _safe_float(card.get('disp_ml_prob')))
+    # V2 games (NHL/NBA/MLB/NFL): always use calibrated ensemble_prob for PL odds.
+    # disp_ml_prob is efficiency-spread-derived and can point the opposite direction
+    # from the V2 model — e.g. efficiency says Knicks -4 (Spurs 37%) while V2 says
+    # Spurs 64%. Using disp_ml_prob would produce Spurs +198 while the pick is Spurs.
+    # The favourite picked by the model MUST have a negative moneyline.
+    if card.get('is_v2'):
+        prob = (_safe_float(card.get('ensemble_prob'))
+                or _safe_float(card.get('ens_prob')))
+    else:
+        prob = (_safe_float(card.get('disp_ml_prob'))
+                or _safe_float(card.get('ens_prob'))
+                or _safe_float(card.get('ensemble_prob')))
     ml = _compute_odds_from_prob(prob, apply_vig=True, clamp_ml=True)
     if ml:
         card['pl_model_home_ml'] = ml.get('moneyline_home')
@@ -2190,11 +2166,51 @@ def _set_card_projected_scores(card: dict) -> None:
                 card['xs_proj_away_pts'] = _round_to_half(xa)
 
 
-from src import team_efficiency_attach as _eff_attach
-
-EFFICIENCY_SPORTS = _eff_attach.EFFICIENCY_SPORTS
-LABEL_EFFICIENCY = _eff_attach.LABEL_EFFICIENCY
-_attach_nba_efficiency_to_daily_results = _eff_attach.attach_efficiency_to_daily_results
+def _attach_nba_efficiency_to_daily_results(sport, daily_results) -> None:
+    """Attach PL spread/total (and scores) on completed NBA games from efficiency data."""
+    if sport not in ('NBA', 'WNBA') or not daily_results:
+        return
+    try:
+        from team_efficiency import precompute_team_efficiencies, compute_efficiency_projection_from
+        from weighted_total_predictor import prefetch_recent_scoreboards
+    except ImportError:
+        return
+    try:
+        prefetch_recent_scoreboards(sport=sport, days=14)
+        teams, games = set(), []
+        for dd in daily_results.values():
+            for g in dd.get('games', []):
+                h, a = g.get('home'), g.get('away')
+                if h and a:
+                    teams.add(h)
+                    teams.add(a)
+                    games.append(g)
+        if not teams:
+            return
+        eff_map = precompute_team_efficiencies(
+            list(teams), sport=sport, n_games=5,
+            max_lookback_days=14, total_budget_seconds=12.0, max_workers=12,
+        )
+        for g in games:
+            h, a = g.get('home'), g.get('away')
+            he, ae = eff_map.get(h), eff_map.get(a)
+            if not (he and ae):
+                continue
+            proj = compute_efficiency_projection_from(
+                he, ae, sport=sport,
+                xsharp_total=g.get('xgb_total'),
+                xsharp_spread=g.get('xgb_spread'),
+            )
+            if g.get('our_spread') is None and proj.get('projected_spread') is not None:
+                g['our_spread'] = _round_to_half(proj['projected_spread'])
+            if g.get('our_total') is None and proj.get('projected_total') is not None:
+                g['our_total'] = _round_to_half(proj['projected_total'])
+            if g.get('our_home_pts') is None and proj.get('home_pts') is not None:
+                g['our_home_pts'] = round(float(proj['home_pts']))
+            if g.get('our_away_pts') is None and proj.get('away_pts') is not None:
+                g['our_away_pts'] = round(float(proj['away_pts']))
+    except Exception as _nba_eff:
+        logger.debug(f"[nba-eff] daily results attach failed: {_nba_eff}")
 
 
 def _fill_xsharp_from_efficiency_if_missing(g: dict, sport: str) -> None:
@@ -2240,7 +2256,6 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
     _set_card_pl_spread(g, sport=sport)
     _set_card_projected_scores(g)
     _set_card_edge_pct(g, sport=sport)
-    _set_efficiency_prob_on_card(g, sport=sport)
 
 
 def _finalize_daily_result_cards(sport, daily_results):
@@ -2648,18 +2663,6 @@ def _set_card_edge_pct(pred: dict, sport: str = 'NBA') -> None:
     pred['implied_win_pct'] = round(devig * 100.0, 1)
 
 
-def _set_efficiency_prob_on_card(pred: dict, sport: str = 'NBA') -> None:
-    """Team Efficiency model row — ML prob from efficiency spread (independent of ensemble)."""
-    sp = _safe_float(pred.get('our_spread'))
-    if sp is None:
-        pred['efficiency_prob'] = None
-        return
-    try:
-        pred['efficiency_prob'] = _eff_attach.spread_to_home_prob_pct(sp, sport)
-    except (TypeError, ValueError):
-        pred['efficiency_prob'] = None
-
-
 def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
     """Precompute card-face win % from the best model for this sport."""
     prob_key, label = BEST_MODEL_BY_SPORT.get(sport, ('ensemble_prob', 'Sharp Consensus'))
@@ -2802,9 +2805,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _set_card_pl_moneylines(pred)
     _set_card_projected_scores(pred)
     _set_card_edge_pct(pred, sport=sport)
-    _set_efficiency_prob_on_card(pred, sport=sport)
     _prepare_pred_card_face(pred, sport=sport)
-    _sync_card_display_to_face_pick(pred, sport=sport)
 
 
 def _sync_pick_winner_to_pl_spread(pred: dict, sport: str = 'NBA') -> None:
@@ -2848,10 +2849,9 @@ def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
     ens = _safe_float(pred.get('ensemble_prob'))
     if our_sp is not None and abs(our_sp) >= _min_spread and ens is not None:
         implied = _spread_to_pct(our_sp)
-        unanimous = _model_probs_unanimous_side(pred)
-        trust_ensemble = pred.get('is_v2') or unanimous is not None
-        if trust_ensemble:
-            # V2 or all models agree: trust Sharp Consensus, not efficiency spread.
+        if pred.get('is_v2'):
+            # V2 game: trust the calibrated ensemble model, not the efficiency spread.
+            # Only align predicted_winner with what the ensemble already says.
             if ens >= 50.0:
                 pred['predicted_winner'] = pred.get('home_team_id')
             else:
@@ -7333,10 +7333,125 @@ def get_upcoming_predictions(sport, days=365):
     # Model-level fades (spread / ML / O-U) once per prediction dict
     _apply_model_fades_batch(sport, predictions)
 
-    try:
-        _eff_attach.attach_efficiency_to_predictions(sport, predictions)
-    except Exception as _eff_pe:
-        logger.debug(f"[eff] picks attach failed for {sport}: {_eff_pe}")
+    # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
+    # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
+    # the books use). Pre-computes every team in tonight's slate IN PARALLEL
+    # with a 10s wall-clock budget so a slow ESPN response can never freeze
+    # the page. Falls back to per-team last-3 scoring averages when box-score
+    # data isn't usable.
+    if sport == 'NBA':
+        _nba_t0 = _time.time()
+        try:
+            from team_efficiency import (
+                precompute_team_efficiencies,
+                compute_efficiency_projection_from,
+            )
+            from weighted_total_predictor import (
+                compute_team_avg_projection,
+                prefetch_recent_scoreboards,
+            )
+
+            # 1) Warm scoreboard cache in parallel (≤2s typical)
+            prefetch_recent_scoreboards(sport='NBA', days=14)
+
+            # 2) Pre-compute efficiency for every unique team, in parallel,
+            #    with a HARD 10s budget. Teams that don't finish → None →
+            #    will fall back to per-team-avg in the prediction loop below.
+            unique_teams = []
+            seen = set()
+            for pred in predictions:
+                for t in (pred.get('home_team_id'), pred.get('away_team_id')):
+                    if t and t not in seen:
+                        seen.add(t)
+                        unique_teams.append(t)
+
+            eff_map = precompute_team_efficiencies(
+                unique_teams, sport='NBA', n_games=5,
+                max_lookback_days=14, total_budget_seconds=10.0, max_workers=16,
+            )
+
+            # 3) Attach to each prediction
+            eff_hits = eff_misses = 0
+            for pred in predictions:
+                ht = pred.get('home_team_id')
+                at = pred.get('away_team_id')
+                if not (ht and at):
+                    continue
+                xs_total  = pred.get('xgb_total')
+                xs_spread = pred.get('xgb_spread')
+                home_eff = eff_map.get(ht)
+                away_eff = eff_map.get(at)
+
+                if home_eff and away_eff:
+                    proj = compute_efficiency_projection_from(
+                        home_eff, away_eff, sport='NBA',
+                        xsharp_total=xs_total, xsharp_spread=xs_spread,
+                    )
+                    pred['our_spread'] = _round_to_half(proj['projected_spread'])
+                    pred['our_total'] = _round_to_half(proj['projected_total'])
+                    if pred['our_spread'] is not None and pred['our_total'] is not None:
+                        _h, _a = _scores_from_spread_total(pred['our_spread'], pred['our_total'])
+                        if _h is not None:
+                            pred['our_home_pts'] = _h
+                            pred['our_away_pts'] = _a
+                        else:
+                            pred['our_home_pts'] = _round_to_half(proj['home_pts']) if proj['home_pts'] is not None else None
+                            pred['our_away_pts'] = _round_to_half(proj['away_pts']) if proj['away_pts'] is not None else None
+                    else:
+                        pred['our_home_pts'] = _round_to_half(proj['home_pts']) if proj['home_pts'] is not None else None
+                        pred['our_away_pts'] = _round_to_half(proj['away_pts']) if proj['away_pts'] is not None else None
+                    pred['our_home_eff'] = home_eff
+                    pred['our_away_eff'] = away_eff
+                    pred['our_pace']     = proj['avg_pace']
+                    pred['our_method']   = 'efficiency'
+                    pred['pl_variance_tier']   = proj.get('variance_tier')
+                    pred['pl_confidence_tier'] = proj.get('confidence_tier')
+                    # Consensus total: blend PL efficiency + XSharp totals
+                    if xs_total is not None and pred['our_total'] is not None:
+                        _delta = abs(float(pred['our_total']) - float(xs_total))
+                        if _delta <= 0.5:
+                            pred['consensus_total'] = _round_to_half(
+                                (float(pred['our_total']) + float(xs_total)) / 2.0
+                            )
+                        else:
+                            pred['consensus_total'] = _round_to_half(
+                                0.6 * float(pred['our_total']) + 0.4 * float(xs_total)
+                            )
+                        pred['pl_model_delta'] = round(float(pred['our_total']) - float(xs_total), 1)
+                    eff_hits += 1
+                    continue
+
+                # Fallback: per-team last-3 scoring average
+                try:
+                    fb = compute_team_avg_projection(
+                        home_team=ht, away_team=at, sport='NBA',
+                        xsharp_total=xs_total, xsharp_spread=xs_spread,
+                        n_games=3, max_lookback_days=14,
+                    )
+                except Exception as _fb_e:
+                    fb = None
+                    logger.debug(f"[team-avg fallback] {ht} vs {at}: {_fb_e}")
+                if fb:
+                    pred['our_total']       = fb['projected_total']
+                    pred['our_spread']      = fb['projected_spread']
+                    pred['our_home_avg']    = fb['home_avg']
+                    pred['our_away_avg']    = fb['away_avg']
+                    pred['our_total_games'] = fb['games_used']
+                    pred['our_method']      = 'team-avg-fallback'
+                    if xs_total is not None:
+                        o, u = fb['total_record']
+                        pred['total_trend_record']  = f"{o}-{u} Over"
+                    if xs_spread is not None:
+                        c, n = fb['spread_record']
+                        pred['spread_trend_record'] = f"{c}-{n} ATS"
+                eff_misses += 1
+
+            logger.info(
+                f"[NBA proj] efficiency={eff_hits} fallback={eff_misses} "
+                f"total_time={_time.time() - _nba_t0:.2f}s"
+            )
+        except Exception as _nbae:
+            logger.debug(f"[NBA projection] attach failed: {_nbae}")
 
     # ── EV calculations for NBA / WNBA / NHL / MLB / NFL upcoming games ─────
     if sport in ('NBA', 'WNBA', 'NHL', 'MLB', 'NFL'):
@@ -8003,10 +8118,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
         except Exception as _h2he:
             logger.debug(f"[h2h] daily attach failed for {sport}: {_h2he}")
         try:
-            _eff_attach.attach_efficiency_to_daily_results(sport, daily_results)
-            _eff_attach.apply_efficiency_ml_grading(sport, daily_results)
+            _attach_nba_efficiency_to_daily_results(sport, daily_results)
         except Exception as _ne:
-            logger.debug(f"[eff] pre-compute failed for {sport}: {_ne}")
+            logger.debug(f"[nba-eff] pre-compute failed for {sport}: {_ne}")
         _game_count = sum(len(dd.get('games', [])) for dd in daily_results.values())
         _snapshot_build = _os.environ.get('PL_SNAPSHOT_BUILD') == '1'
         _skip_heavy_predict = _game_count > 500 and not _snapshot_build
@@ -8631,7 +8745,6 @@ def compute_overall_stats_from_daily(daily_results):
         ('elo',       'elo_correct', 'elo_prob'),
         ('xgboost',   'xgb_correct', 'xgb_prob'),
         ('ensemble',  'ens_correct', 'ens_prob'),
-        ('efficiency', 'efficiency_correct', 'efficiency_prob'),
     ]
     overall = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
     
@@ -8661,7 +8774,6 @@ _ML_PERF_MODEL_KEYS = (
     ('elo', 'Edge'),
     ('xgboost', 'XSharp'),
     ('ensemble', 'Sharp Consensus'),
-    ('efficiency', 'Team Efficiency'),
 )
 
 
@@ -8844,7 +8956,6 @@ def compute_daily_model_tally(daily_results, target_date):
         ('elo',       'elo_correct', 'elo_prob'),
         ('xgboost',   'xgb_correct', 'xgb_prob'),
         ('ensemble',  'ens_correct', 'ens_prob'),
-        ('efficiency', 'efficiency_correct', 'efficiency_prob'),
     ]
     tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
     for game in day_bucket.get('games', []):
@@ -8900,7 +9011,6 @@ def compute_model_tally_for_range(daily_results, start_date=None, end_date=None)
         ('elo',       'elo_correct', 'elo_prob'),
         ('xgboost',   'xgb_correct', 'xgb_prob'),
         ('ensemble',  'ens_correct', 'ens_prob'),
-        ('efficiency', 'efficiency_correct', 'efficiency_prob'),
     ]
     tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
     total_games = 0
@@ -9458,7 +9568,6 @@ BASE_TEMPLATE = """
                     <a href="/faq">FAQ</a>
                     <a href="/daily-report">Daily results report</a>
                     <a href="/all-sports-results">All sports results</a>
-                    <a href="/team-efficiency-results">Team efficiency results</a>
                     <a href="/search">Search</a>
                     <a href="/performance">Model performance</a>
                     <a href="/ai-sports-betting-picks-today">AI picks today</a>
@@ -9479,7 +9588,7 @@ BASE_TEMPLATE = """
     </footer>
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Team Efficiency Results',h:'/team-efficiency-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -9749,55 +9858,6 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
 # ============================================================================
 # DAILY REPORT TEMPLATE (marketing / proof-of-performance)
 # ============================================================================
-
-TEAM_EFFICIENCY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
-    '{% block extra_styles %}{% endblock %}',
-    """
-    body{background:#ffffff !important;color:#0f172a;}
-    .ter-wrap{max-width:900px;margin:0 auto;padding:10px 0 60px;}
-    .ter-header{text-align:center;margin-bottom:28px;}
-    .ter-header h1{font-size:1.75em;margin-bottom:8px;}
-    .ter-header p{color:#475569;font-size:0.95em;max-width:640px;margin:0 auto;line-height:1.6;}
-    .ter-table-wrap{overflow-x:auto;border:1px solid rgba(15,23,42,0.12);border-radius:12px;background:#fff;}
-    table.ter-table{width:100%;border-collapse:collapse;font-size:0.9em;}
-    table.ter-table th,table.ter-table td{padding:12px 14px;text-align:center;border-bottom:1px solid rgba(15,23,42,0.08);}
-    table.ter-table th{background:#f8fafc;font-weight:700;color:#334155;font-size:0.78em;text-transform:uppercase;}
-    table.ter-table td:first-child,table.ter-table th:first-child{text-align:left;}
-    table.ter-table tr:last-child td{border-bottom:none;}
-    .ter-pct{font-weight:800;font-size:1.1em;}
-    .ter-rec{font-size:0.78em;color:#64748b;margin-top:2px;}
-    .ter-na{color:#94a3b8;}
-    """
-).replace('{% block content %}{% endblock %}', """
-    <div class="ter-wrap">
-        <div class="ter-header">
-            <h1>⚡ Team Efficiency Results</h1>
-            <p>Moneyline accuracy for the Team Efficiency model — spread/total derived from recent ORtg, DRtg, and pace (ESPN box scores). Graded when efficiency data is available for both teams.</p>
-            <p style="margin-top:12px;font-size:0.88em;"><a href="/all-sports-results">← All sports results</a></p>
-        </div>
-        <div class="ter-table-wrap">
-            <table class="ter-table">
-                <thead><tr><th>Sport</th><th>ML accuracy</th><th>Record</th><th>Games</th></tr></thead>
-                <tbody>
-                    {% for row in efficiency_rows %}
-                    <tr>
-                        <td><a href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
-                        {% if row.cell.n %}
-                        <td><span class="ter-pct">{{ row.cell.pct }}%</span></td>
-                        <td>{{ row.cell.record }}</td>
-                        <td>{{ row.cell.n }}</td>
-                        {% elif row.supported %}
-                        <td colspan="3" class="ter-na">— (no graded games yet)</td>
-                        {% else %}
-                        <td colspan="3" class="ter-na">— (box-score data not available)</td>
-                        {% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-""")
 
 ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     '{% block extra_styles %}{% endblock %}',
@@ -10687,8 +10747,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     /* Pick confidence grid (results cards) */
     .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
     .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-    .pick-conf-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; align-items:stretch; }
-    @media(max-width:640px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
+    .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
+    @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
     .pc-box { background:#ffffff; border:1px solid #E2E8F0; border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:3px; min-width:0; min-height:86px; box-shadow:0 1px 4px rgba(15,23,42,0.05); }
     .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
     .pc-box.correct { border-color:rgba(16,185,129,0.5); }
@@ -10722,12 +10782,11 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
     </div>
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('⚡ Efficiency','efficiency'),('🏆 Consensus','ensemble')] %}
+        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
-        {% set label_efficiency = 'Efficiency' %}
         {% set label_ensemble = 'Consensus' %}
         {% if results_snapshot_notice is defined and results_snapshot_notice %}
         <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#9a3412;text-align:center;">
@@ -11009,7 +11068,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                         {'name': label_trueskill, 'prob': game.trueskill_prob, 'correct': game.trueskill_correct, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': game.elo_prob, 'correct': game.elo_correct, 'key': 'elo'},
                         {'name': label_xgb, 'prob': game.xgb_prob, 'correct': game.xgb_correct, 'key': 'xgb'},
-                        {'name': label_efficiency, 'prob': game.efficiency_prob, 'correct': game.efficiency_correct, 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': game.ens_prob, 'correct': game.ens_correct, 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
@@ -11666,7 +11724,6 @@ _ML_DASHBOARD_MODELS = (
     ('elo', 'Edge'),
     ('xgboost', 'XSharp'),
     ('ensemble', 'Consensus'),
-    ('efficiency', 'Efficiency'),
 )
 
 
@@ -11849,7 +11906,6 @@ def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
         ('trueskill', 'Takedown'),
         ('elo', 'Edge'),
         ('xgboost', 'XSharp'),
-        ('efficiency', 'Team Efficiency'),
         ('ensemble', 'Consensus'),
     ]
     best_key = None
@@ -13410,7 +13466,7 @@ def landing_page():
 {% endif %}
 
 <script>
-    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Team Efficiency Results',h:'/team-efficiency-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
     function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
     function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
     function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -15281,7 +15337,6 @@ def sitemap_xml():
 
     # Static pages
     urls.append((_SITE_DOMAIN + '/all-sports-results', 'weekly', '0.75'))
-    urls.append((_SITE_DOMAIN + '/team-efficiency-results', 'weekly', '0.7'))
     urls.append((_SITE_DOMAIN + '/daily-report', 'daily', '0.8'))
     urls.append((_SITE_DOMAIN + '/plans', 'weekly', '0.8'))
     urls.append((_SITE_DOMAIN + '/tutorial', 'monthly', '0.5'))
@@ -15364,64 +15419,6 @@ def promo_top_picks_today():
     log_site_visit('/promo/top-picks-today')
     picks = build_todays_top_picks()
     return render_template_string(PROMO_TOP_PICKS_TEMPLATE, picks=picks)
-
-
-@app.route('/team-efficiency-results')
-def team_efficiency_results_page():
-    """Cross-sport Team Efficiency moneyline performance."""
-    rows = []
-    for sport in ALL_SPORTS_DASHBOARD_SPORTS:
-        if sport not in SPORTS:
-            continue
-        cell = {'pct': None, 'record': '—', 'n': 0, 'sport': sport}
-        try:
-            snap_dir = _all_sports_snapshot_dir()
-            pattern = _os_v2.path.join(snap_dir, f'{sport}_*_regular.json')
-            paths = sorted(glob.glob(pattern), reverse=True)
-            overall = None
-            for path in paths:
-                try:
-                    with open(path, encoding='utf-8') as fh:
-                        data = json.load(fh)
-                    if isinstance(data, dict) and data.get('sport') == sport:
-                        overall = data.get('overall_stats') or {}
-                        break
-                except (OSError, json.JSONDecodeError):
-                    continue
-            if overall and overall.get('efficiency'):
-                cell = _fmt_snapshot_ml_cell(overall, 'efficiency')
-            elif sport in EFFICIENCY_SPORTS:
-                season_start, season_end = _results_season_bounds(sport, datetime.now())
-                daily = _banner_daily_results_for_range(sport, season_start, season_end)
-                if daily:
-                    _eff_attach.attach_efficiency_to_daily_results(sport, daily)
-                    _eff_attach.apply_efficiency_ml_grading(sport, daily)
-                    stats = compute_overall_stats_from_daily(daily).get('efficiency') or {}
-                    total = int(stats.get('total') or 0)
-                    correct = int(stats.get('correct') or 0)
-                    if total > 0:
-                        cell = {
-                            'pct': stats.get('accuracy') or round(correct / total * 100, 1),
-                            'record': f'{correct}-{total - correct}',
-                            'n': total,
-                        }
-        except Exception as exc:
-            logger.debug(f'efficiency results row failed for {sport}: {exc}')
-        rows.append({
-            'sport': sport,
-            'name': SPORTS[sport]['name'],
-            'icon': SPORTS[sport].get('icon', ''),
-            'cell': cell,
-            'supported': sport in EFFICIENCY_SPORTS,
-            'results_url': f'/sport/{sport}/results',
-        })
-    return render_template_string(
-        TEAM_EFFICIENCY_RESULTS_TEMPLATE,
-        page='team-efficiency-results',
-        page_title='Team Efficiency Results | predictionlab.io',
-        page_description='Season moneyline accuracy for the Team Efficiency model (ORtg/DRtg/pace) across all sports.',
-        efficiency_rows=rows,
-    )
 
 
 @app.route('/all-sports-results')
