@@ -290,9 +290,9 @@
         .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
         .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         .date-header { font-size:1.25em; margin-bottom:14px; color:#0F172A; font-weight:700; }
-        .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
+        .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
         @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
-        .game-card-stack { min-width:0; max-width:420px; width:100%; justify-self:stretch; display:flex; flex-direction:column; }
+        .game-card-stack { min-width:0; max-width:460px; width:100%; justify-self:stretch; display:flex; flex-direction:column; }
         .game-card-stack .game-card { flex:0 0 auto; border-radius:12px 12px 0 0; }
         .game-card-stack .game-card.pick-card { border-radius:16px; }
         .game-card-stack .game-card.pick-card + .analysis-toggle { border-radius:0; border-top:1px solid rgba(15,23,42,0.08); margin-top:0; }
@@ -448,8 +448,8 @@
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
         .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
-        @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; align-items:stretch; }
+        @media(max-width:640px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
         .pc-box {
             background:#ffffff;
             border:1px solid #E2E8F0;
@@ -713,6 +713,7 @@
                         {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
                         {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.efficiency_prob, 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
