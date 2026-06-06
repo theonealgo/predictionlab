@@ -77,6 +77,29 @@ def test_all_sports_results_http_ok():
     assert 'All Sports Results' in html
 
 
+def test_all_sports_dashboard_excludes_individual_sports():
+    import NHL77FINAL as N
+
+    individual = {'TENNIS', 'UFC', 'GOLF'}
+    assert not individual.intersection(N.ALL_SPORTS_DASHBOARD_SPORTS)
+
+
+def test_load_all_sports_snapshots_skips_missing_without_placeholder(tmp_path, monkeypatch):
+    import NHL77FINAL as N
+
+    snap_dir = tmp_path / 'season_snapshots'
+    snap_dir.mkdir()
+    (snap_dir / 'NHL_2025-26_regular.json').write_text(
+        '{"sport": "NHL", "season": "2025-26", "overall_stats": {}, "spread_total_stats": {}}',
+        encoding='utf-8',
+    )
+    monkeypatch.setattr(N, '_all_sports_snapshot_dir', lambda: str(snap_dir))
+    rows = N._load_all_sports_season_snapshots()
+    sports = {r['sport'] for r in rows}
+    assert sports == {'NHL'}
+    assert all(not r.get('_placeholder') for r in rows)
+
+
 def test_all_sports_results_survives_snapshot_import_failure(monkeypatch):
     import NHL77FINAL as N
 

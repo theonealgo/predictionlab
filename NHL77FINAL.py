@@ -8469,11 +8469,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             if abs(at - _grade_mt) >= 1e-9:
                                 pl_tt_gr += 1
                                 pl_pick = 'OVER' if pl_tot >= _grade_mt else 'UNDER'
-                                if pl_pick == ('OVER' if at > _grade_mt else 'UNDER'):
+                                pl_tot_ok = pl_pick == ('OVER' if at > _grade_mt else 'UNDER')
+                                if pl_tot_ok:
                                     pl_tt_cor += 1
+                                g['pl_total_correct'] = pl_tot_ok
                             else:
                                 pl_tt_gr += 1
                                 pl_tt_push += 1
+                                g['pl_total_correct'] = None
                     elif total_fallback_used:
                         g['total_pick_reason'] = "benchmark only (not graded)"
 
@@ -8501,6 +8504,7 @@ def _compute_spread_total_for_daily(sport, daily_results):
                         pl_st_gr += 1
                         if pl_ok:
                             pl_st_cov += 1
+                        g['pl_spread_correct'] = pl_ok
 
                 else:
                     # ── Non-MLB grading: Spread uses Vegas (unchanged).
@@ -8595,6 +8599,9 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             pl_st_gr += 1
                             if pl_side == act_side:
                                 pl_st_cov += 1
+                            g['pl_spread_correct'] = (pl_side == act_side)
+                        elif abs(dm_pl) < 1e-9:
+                            g['pl_spread_correct'] = None
 
                     _grade_mt = sportsbook_mt if sportsbook_mt is not None else (mt if not total_fallback_used else None)
                     if sport in OU_FADE_SPORTS and _grade_mt is not None:
@@ -8630,11 +8637,14 @@ def _compute_spread_total_for_daily(sport, daily_results):
                             pl_pick = 'OVER' if pl_tot >= _grade_mt else 'UNDER'
                             if abs(at - _grade_mt) >= 1e-9:
                                 pl_tt_gr += 1
-                                if pl_pick == ('OVER' if at > _grade_mt else 'UNDER'):
+                                pl_tot_ok = pl_pick == ('OVER' if at > _grade_mt else 'UNDER')
+                                if pl_tot_ok:
                                     pl_tt_cor += 1
+                                g['pl_total_correct'] = pl_tot_ok
                             else:
                                 pl_tt_gr += 1
                                 pl_tt_push += 1
+                                g['pl_total_correct'] = None
                     elif adj_xt is not None and mt is not None and total_fallback_used:
                         edge = adj_xt - mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
@@ -14226,6 +14236,14 @@ def api_performance_data():
 
 
 _PERF_MODEL_ORDER = ['Grinder2', 'Takedown', 'Edge', 'XSharp', 'Consensus']
+_TEAM_PERF_MODEL_ORDER = _PERF_MODEL_ORDER + ['Efficiency']
+_TEAM_PERF_ML_CONFIG = [
+    ('glicko2_prob', 'Grinder2'),
+    ('trueskill_prob', 'Takedown'),
+    ('elo_prob', 'Edge'),
+    ('xgb_prob', 'XSharp'),
+    ('ens_prob', 'Consensus'),
+]
 _PERF_BUCKET_ORDER = [
     '85%+',
     '80-84%',
@@ -14348,7 +14366,6 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
     # Aggregate containers
     main_rollup = {}
     sport_rows = {}
-    team_rows = {}
 
     pred_sql_exact = """
         SELECT elo_home_prob, logistic_home_prob, xgboost_home_prob, catboost_home_prob, meta_home_prob
@@ -14436,14 +14453,6 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
             sport_rows[sport_key]['wins'] += correct
             sport_rows[sport_key]['losses'] += (1 - correct)
 
-            # Team-specific rollup (picked team + confidence bucket)
-            team_key = (sport, picked_team, model, bucket)
-            if team_key not in team_rows:
-                team_rows[team_key] = {'total': 0, 'wins': 0, 'losses': 0}
-            team_rows[team_key]['total'] += 1
-            team_rows[team_key]['wins'] += correct
-            team_rows[team_key]['losses'] += (1 - correct)
-
     conn.close()
 
     def _cell(data):
@@ -14462,20 +14471,93 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
         for sport in sports_present
     }
 
-    # Team cards: one row per team with per-model record and win %
-    team_model_rollup = {}
-    for (sport, team, model, _bucket), vals in team_rows.items():
-        key = (sport, team, model)
-        if key not in team_model_rollup:
-            team_model_rollup[key] = {'total': 0, 'wins': 0, 'losses': 0}
-        team_model_rollup[key]['total'] += vals['total']
-        team_model_rollup[key]['wins'] += vals['wins']
-        team_model_rollup[key]['losses'] += vals['losses']
+    return main_table, sport_tables
+
+
+def _team_perf_ml_correct_for_team(game, team, prob_key):
+    """Grade moneyline from the given team's perspective (every game they played)."""
+    home, away = game.get('home'), game.get('away')
+    if team not in (home, away):
+        return None
+    prob = game.get(prob_key)
+    if prob is None:
+        return None
+    if game.get('is_draw') or game.get('home_win') is None:
+        return None
+    is_home = team == home
+    team_prob = float(prob) if is_home else (100.0 - float(prob))
+    picked_this_team = team_prob >= 50.0
+    team_won = bool(game['home_win']) if is_home else (not bool(game['home_win']))
+    return picked_this_team == team_won
+
+
+def _team_perf_accumulate(rollup, sport, team, model, correct):
+    if correct is None:
+        return
+    key = (sport, team, model)
+    if key not in rollup:
+        rollup[key] = {'total': 0, 'wins': 0, 'losses': 0}
+    rollup[key]['total'] += 1
+    if correct:
+        rollup[key]['wins'] += 1
+    else:
+        rollup[key]['losses'] += 1
+
+
+def _build_team_performance_rows(sport_filter: str = ''):
+    """
+    Team cards: full current-season graded picks per team (ML + spread + O/U).
+    Independent of the main performance page last-N filter.
+    """
+    sports = [sport_filter] if sport_filter else list(_PERF_SPORT_OPTIONS)
+    rollup = {}
+    ref_dt = datetime.now()
+
+    for sport in sports:
+        if sport not in _PERF_SPORT_OPTIONS:
+            continue
+        start_dt, end_dt = _results_season_bounds(sport, ref_dt)
+        daily_results = _banner_daily_results_for_range(sport, start_dt, end_dt)
+        if not daily_results:
+            continue
+        try:
+            _compute_spread_total_for_daily(sport, daily_results)
+        except Exception as exc:
+            logger.warning(f"[team-perf] spread/total grading failed for {sport}: {exc}")
+
+        for day_data in daily_results.values():
+            for game in day_data.get('games', []):
+                if game.get('skip_grading'):
+                    continue
+                home = game.get('home')
+                away = game.get('away')
+                if not home or not away:
+                    continue
+                for team in (home, away):
+                    for prob_key, model in _TEAM_PERF_ML_CONFIG:
+                        correct = _team_perf_ml_correct_for_team(game, team, prob_key)
+                        _team_perf_accumulate(rollup, sport, team, model, correct)
+
+                    sp_pick = game.get('spread_pick')
+                    sp_ok = game.get('spread_correct')
+                    if sp_pick not in (None, 'PUSH') and sp_ok is not None:
+                        _team_perf_accumulate(rollup, sport, team, 'XSharp', sp_ok)
+
+                    tp_pick = game.get('total_pick')
+                    tp_ok = game.get('total_correct')
+                    if tp_pick not in (None, 'PUSH') and tp_ok is not None:
+                        _team_perf_accumulate(rollup, sport, team, 'XSharp', tp_ok)
+
+                    pl_sp = game.get('pl_spread_correct')
+                    if pl_sp is not None:
+                        _team_perf_accumulate(rollup, sport, team, 'Efficiency', pl_sp)
+
+                    pl_tot = game.get('pl_total_correct')
+                    if pl_tot is not None:
+                        _team_perf_accumulate(rollup, sport, team, 'Efficiency', pl_tot)
 
     by_team = {}
-    for (sport, team, model), vals in team_model_rollup.items():
-        if sport_filter and sport != sport_filter:
-            continue
+    for (sport, team, model), vals in rollup.items():
         team_key = (sport, team)
         if team_key not in by_team:
             by_team[team_key] = {'sport': sport, 'team': team, 'models': {}, 'total_n': 0}
@@ -14491,16 +14573,13 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
         by_team[team_key]['total_n'] += n
 
     team_chart_rows = []
-    for _, row in by_team.items():
-        ordered_models = {}
-        for m in _PERF_MODEL_ORDER:
-            ordered_models[m] = row['models'].get(m)
+    for row in by_team.values():
+        ordered_models = {m: row['models'].get(m) for m in _TEAM_PERF_MODEL_ORDER}
         row['models'] = ordered_models
         team_chart_rows.append(row)
 
     team_chart_rows.sort(key=lambda x: (-x['total_n'], x['team']))
-    team_chart_rows = team_chart_rows[:120]
-    return main_table, sport_tables, team_chart_rows
+    return team_chart_rows[:120]
 
 
 @app.route('/player-props')
@@ -14753,7 +14832,8 @@ def performance_page():
     if last_n_raw in ('50', '100', '200'):
         last_n = int(last_n_raw)
 
-    main_table, sport_tables, team_chart_rows = _build_performance_page_data(sport_filter=sport, last_n=last_n)
+    main_table, sport_tables = _build_performance_page_data(sport_filter=sport, last_n=last_n)
+    team_chart_rows = _build_team_performance_rows(sport_filter=sport)
     return render_template(
         'performance.html',
         page='performance',
@@ -14761,6 +14841,7 @@ def performance_page():
         selected_last_n=(str(last_n) if last_n else ''),
         sport_options=_PERF_SPORT_OPTIONS,
         model_order=_PERF_MODEL_ORDER,
+        team_model_order=_TEAM_PERF_MODEL_ORDER,
         bucket_order=_PERF_BUCKET_ORDER,
         main_table=main_table,
         sport_tables=sport_tables,
