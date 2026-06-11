@@ -34,6 +34,10 @@ def test_homepage_spacing_transparency_and_glossary_contrast_are_locked():
     assert "margin-left: max(140px" in homepage
     assert ".pl2-breadcrumb { display: none; }" not in homepage
     assert "display: block; left: 10px; width: 36px" in homepage
+    assert "background: hsl(45 25% 99% / .68);" in homepage
+    assert ".pl2-sec.band { background: hsl(0 0% 92% / .62); }" in homepage
+    assert "background: hsl(0 0% 92% / .68);" in homepage
+    assert "backdrop-filter: blur(5px);" in homepage
     assert "background: #0b0b0a" in homepage
     assert "color: var(--pl-accent)" in homepage
 

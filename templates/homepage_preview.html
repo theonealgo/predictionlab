@@ -196,9 +196,11 @@
     /* ── Editorial sections ─────────────────────────────────── */
     .pl2-sec {
         position: relative; z-index: 10; padding: 112px 0 104px;
-        border-bottom: 1px solid var(--pl-line); background: hsl(0 0% 100%);
+        border-bottom: 1px solid var(--pl-line);
+        background: hsl(45 25% 99% / .68);
+        backdrop-filter: blur(5px);
     }
-    .pl2-sec.band { background: hsl(0 0% 96.1%); }
+    .pl2-sec.band { background: hsl(0 0% 92% / .62); }
     .pl2-sec-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 10px; }
     .pl2-sec h2 {
         margin: 14px 0 0; font-family: Arial, Helvetica, sans-serif;
@@ -352,7 +354,11 @@
     .pl2-plan.premium li::before { content: "+"; }
 
     /* Footer */
-    .pl2-footer { position: relative; z-index: 10; padding: 76px 0 36px; background: var(--pl-band); }
+    .pl2-footer {
+        position: relative; z-index: 10; padding: 76px 0 36px;
+        background: hsl(0 0% 92% / .68);
+        backdrop-filter: blur(5px);
+    }
     .pl2-footer h2 { margin: 12px 0 4px; font-size: clamp(2.4rem, 5vw, 4rem); font-weight: 950; letter-spacing: -.015em; }
     .pl2-footer-sub { color: var(--pl-muted); font: 700 .8rem var(--pl-mono); }
     .pl2-footer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin-top: 44px; padding-top: 30px; border-top: 1px solid var(--pl-line-dark); }
@@ -372,7 +378,7 @@
     }
     .pl2-footer-bottom a { color: var(--pl-muted); text-decoration: none; margin-left: 16px; }
     .pl2-footer-bottom a:hover { color: var(--pl-ink); }
-    .pl2-knowledge { background: hsl(45 25% 99% / .88); color: var(--pl-ink); }
+    .pl2-knowledge { background: hsl(45 25% 99% / .72); color: var(--pl-ink); }
     .pl2-knowledge h2 { color: hsl(0 0% 2%); opacity: 1; }
     .pl2-knowledge .pl2-mono { color: hsl(0 0% 32%); opacity: 1; }
     .pl2-knowledge .pl2-sec-top .pl2-mono { color: hsl(0 0% 18%); }
@@ -385,10 +391,10 @@
     #sec-forecasting,
     #sec-pricing,
     .pl2-footer {
-        background: var(--pl-band);
+        background: hsl(0 0% 92% / .68);
         border-top: 1px solid var(--pl-line-dark);
         border-bottom: 1px solid var(--pl-line-dark);
-        backdrop-filter: none;
+        backdrop-filter: blur(5px);
     }
     #sec-forecasting .pl2-sec-top > div > .pl2-mono,
     #sec-pricing .pl2-sec-top > div > .pl2-mono,
@@ -419,7 +425,7 @@
     .pl2-model-meta strong { font-size: 2.5rem; }
     .pl2-meter { height: 5px; }
     .pl2-live.on i { background: var(--pl-accent); }
-    #sec-board .pl2-rows { background: hsl(0 0% 100%); }
+    #sec-board .pl2-rows { background: hsl(0 0% 100% / .72); }
     #sec-board .pl2-chip.ghost {
         color: hsl(0 0% 25%);
         background: hsl(0 0% 97%);
