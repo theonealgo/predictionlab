@@ -22,7 +22,7 @@ SPORTS_SLUGS = [
 
 def check(path: str, body: str) -> dict:
     low = body.lower()
-    cards = body.count('class="game-card"')
+    cards = body.count('class="game-card pick-card"')
     visible = len(re.findall(r'class="date-section visible"', body))
     hidden_only = cards > 0 and visible == 0 and 'date-section seo-hidden' in body
     m = re.search(r"const defaultPickDate = '([^']*)'", body)
@@ -31,7 +31,7 @@ def check(path: str, body: str) -> dict:
     if default_date and f'id="date-{default_date}"' in body:
         idx = body.find(f'id="date-{default_date}"')
         chunk = body[idx : idx + 80000]
-        cards_on_default = chunk.count('class="game-card"')
+        cards_on_default = chunk.count('class="game-card pick-card"')
     return {
         'bytes': len(body),
         'cards': cards,

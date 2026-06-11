@@ -797,12 +797,12 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
                     {% set show_pick_arrow = (not is_final) and _odds_pass %}
                     {% set card_details_id = 'card-details-' ~ date ~ '-' ~ loop.index0 %}
                     {% set conf_models = [
-                        {'name': 'Grinder2', 'prob': pred.glicko2_prob, 'key': 'glicko2'},
-                        {'name': 'Takedown', 'prob': pred.trueskill_prob, 'key': 'trueskill'},
-                        {'name': 'Edge', 'prob': pred.elo_prob, 'key': 'elo'},
-                        {'name': 'XSharp', 'prob': pred.xgb_prob, 'key': 'xgb'},
-                        {'name': 'Efficiency', 'prob': pred.efficiency_prob, 'key': 'efficiency'},
-                        {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
+                        {'name': 'Grinder2', 'prob': pred.glicko2_prob|default(none), 'key': 'glicko2'},
+                        {'name': 'Takedown', 'prob': pred.trueskill_prob|default(none), 'key': 'trueskill'},
+                        {'name': 'Edge', 'prob': pred.elo_prob|default(none), 'key': 'elo'},
+                        {'name': 'XSharp', 'prob': pred.xgb_prob|default(none), 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.efficiency_prob|default(none), 'key': 'efficiency'},
+                        {'name': label_ensemble, 'prob': pred.ensemble_prob|default(none), 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}

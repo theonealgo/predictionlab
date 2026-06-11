@@ -2734,11 +2734,7 @@ def _finalize_prediction_odds(pred: dict) -> None:
 
 
 def _set_card_edge_pct(pred: dict, sport: str = 'NBA') -> None:
-    """Expose model-vs-book edge % on cards (MLB decision layer uses model_win_pct)."""
-    if sport != 'MLB':
-        pred['face_edge_pct'] = None
-        return
-
+    """Expose model-vs-book edge % on cards (for all sports)."""
     model_wp = _safe_float(pred.get('model_win_pct'))
     if model_wp is None:
         ens = _safe_float(pred.get('ensemble_prob'))
@@ -7294,33 +7290,37 @@ def get_upcoming_predictions(sport, days=365):
                 home_rating = get_elo(game['home_team_id'])
                 away_rating = get_elo(game['away_team_id'])
                 elo_prob = expected_score(home_rating, away_rating)
-                
+
                 # Basic enhancements for non-v2 sports
                 goalie_boost = 0.0
                 if game.get('home_goalie_save_pct') and game.get('away_goalie_save_pct'):
                     save_pct_diff = float(game['home_goalie_save_pct']) - float(game['away_goalie_save_pct'])
                     goalie_boost = save_pct_diff * 0.3
-                
+
                 market_boost = 0.0
                 if game.get('home_implied_prob') and game.get('away_implied_prob'):
                     market_home_prob = float(game['home_implied_prob'])
                     market_boost = (market_home_prob - 0.5) * 0.15
-                
+
                 home_stats = get_home_away_stats(game['home_team_id'])
                 away_stats = get_home_away_stats(game['away_team_id'])
                 home_win_pct = home_stats['home_wins'] / home_stats['home_games'] if home_stats['home_games'] > 0 else 0.5
                 away_win_pct = away_stats['away_wins'] / away_stats['away_games'] if away_stats['away_games'] > 0 else 0.5
                 split_boost = (home_win_pct - away_win_pct) * 0.1
-                
+
                 xgb_prob = min(0.95, max(0.05, elo_prob + goalie_boost + market_boost * 0.5 + split_boost))
 
                 if game.get('home_implied_prob'):
                     ensemble_prob = (xgb_prob * 0.5 + elo_prob * 0.3 + float(game['home_implied_prob']) * 0.2)
                 else:
                     ensemble_prob = (xgb_prob * 0.6 + elo_prob * 0.4)
-                
+
                 if sport == 'NFL':
                     ensemble_prob = elo_prob
+
+                # Set Grinder2 and Takedown to elo_prob in fallback (ensures cards don't show "—")
+                game['glicko2_prob'] = elo_prob
+                game['trueskill_prob'] = elo_prob
 
             # Finished games: restore the published Elo / XSharp / ensemble snapshot
             # from the predictions row so displayed picks cannot drift after the final.
@@ -11633,19 +11633,19 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% set card = game %}
                     {% set is_results = true %}
                     {% set is_final = true %}
-                    {% set is_premium = true %}
+                    {% set is_premium = is_premium|default(false) %}
                     {% set spread_label = _spread_label %}
                     {% set force_rl = _force_rl %}
                     {% set away_score = game.away_score %}
                     {% set home_score = game.home_score %}
                     {% set show_pick_arrow = false %}
                     {% set conf_models = [
-                        {'name': label_glicko2, 'prob': game.glicko2_prob, 'correct': game.glicko2_correct, 'key': 'glicko2'},
-                        {'name': label_trueskill, 'prob': game.trueskill_prob, 'correct': game.trueskill_correct, 'key': 'trueskill'},
-                        {'name': label_elo, 'prob': game.elo_prob, 'correct': game.elo_correct, 'key': 'elo'},
-                        {'name': label_xgb, 'prob': game.xgb_prob, 'correct': game.xgb_correct, 'key': 'xgb'},
-                        {'name': label_efficiency, 'prob': game.efficiency_prob, 'correct': game.efficiency_correct, 'key': 'efficiency'},
-                        {'name': label_ensemble, 'prob': game.ens_prob, 'correct': game.ens_correct, 'key': 'consensus'}
+                        {'name': label_glicko2, 'prob': game.glicko2_prob|default(none), 'correct': game.glicko2_correct|default(none), 'key': 'glicko2'},
+                        {'name': label_trueskill, 'prob': game.trueskill_prob|default(none), 'correct': game.trueskill_correct|default(none), 'key': 'trueskill'},
+                        {'name': label_elo, 'prob': game.elo_prob|default(none), 'correct': game.elo_correct|default(none), 'key': 'elo'},
+                        {'name': label_xgb, 'prob': game.xgb_prob|default(none), 'correct': game.xgb_correct|default(none), 'key': 'xgb'},
+                        {'name': label_efficiency, 'prob': game.efficiency_prob|default(none), 'correct': game.efficiency_correct|default(none), 'key': 'efficiency'},
+                        {'name': label_ensemble, 'prob': game.ens_prob|default(none), 'correct': game.ens_correct|default(none), 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
                     {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;padding:4px 12px 8px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
@@ -18902,6 +18902,11 @@ def sport_predictions(sport, filter_date=None):
             pred['_ensemble_prob_pre_enforce'] = _ens_pre
         _enforce_pick_spread_consistency(pred, sport=sport)
         _prepare_pred_card_display(pred, sport=sport)
+        # Safety: ensure efficiency_prob exists (required by templates)
+        if 'efficiency_prob' not in pred:
+            pred['efficiency_prob'] = None
+        if 'efficiency_correct' not in pred:
+            pred['efficiency_correct'] = None
 
     try:
         from flask_login import current_user as _cu

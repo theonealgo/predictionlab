@@ -14,6 +14,17 @@ Components:
     - evaluation: Log loss, Brier score, calibration curves, ROI
 """
 
+import warnings as _warnings
+
+# sklearn warns when predicting from a plain ndarray on models that were fit with
+# named DataFrame columns. Column order is preserved at predict time, so this is
+# benign noise — silence just this one message (not all UserWarnings).
+_warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names",
+    category=UserWarning,
+)
+
 from .rating_engines import Glicko2Rating, MarginRating, EloFeatureGenerator, TrueSkillRating
 from .feature_engineering import AdvancedFeatureEngineer
 from .base_models import BaseModelTrainer, PoissonScoreModel

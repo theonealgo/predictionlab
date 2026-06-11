@@ -30,14 +30,21 @@ def test_shared_footer_uses_text_wordmark_not_logo_image():
 def test_homepage_spacing_transparency_and_glossary_contrast_are_locked():
     homepage = _read("templates/homepage_preview.html")
 
-    assert "background: hsl(45 25% 99% / .56);" in homepage
-    assert "margin-left: max(140px" in homepage
+    assert "background: hsl(45 35% 99.5% / .78);" in homepage
+    assert "margin-left: max(220px" in homepage
+    assert "backdrop-filter: none !important;" in homepage
     assert ".pl2-breadcrumb { display: none; }" not in homepage
     assert "display: block; left: 10px; width: 36px" in homepage
-    assert "background: hsl(45 25% 99% / .68);" in homepage
-    assert ".pl2-sec.band { background: hsl(0 0% 92% / .62); }" in homepage
-    assert "background: hsl(0 0% 92% / .68);" in homepage
-    assert "backdrop-filter: blur(5px);" in homepage
+    assert "background: hsl(45 25% 99% / .84);" in homepage
+    assert ".pl2-sec.band { background: hsl(45 18% 97% / .78); }" in homepage
+    assert "width: 2px; height: 38px;" in homepage
+    assert "background: var(--pl-accent);" in homepage
+    assert "background: transparent;" in homepage
+    assert ".pl2-stat b .pl2-countup" in homepage
+    assert ".pl2-stat > span" in homepage
+    assert "padding: clamp(280px, 19vw, 360px) 0 180px;" in homepage
+    assert "@media (min-width: 981px) and (max-height: 950px)" not in homepage
+    assert 'aria-label="Live season performance"' not in homepage
     assert "background: #0b0b0a" in homepage
     assert "color: var(--pl-accent)" in homepage
 
@@ -50,6 +57,17 @@ def test_shared_theme_preserves_logo_header_and_translucent_page_shells():
     assert "background: rgba(251,251,248,.82);" in theme
     assert ".directory-wordmark" in theme
     assert "font: 800 12px/1.4" in theme
+
+
+def test_shared_header_matches_research_reference_navigation():
+    header = _read("templates/partials/research_header.html")
+    theme = _read("static/css/research-theme.css")
+
+    assert "<span>PL /</span><b>PREDICTION LAB</b>" in header
+    assert 'aria-label="Open menu"' in header
+    assert 'aria-label="Search"' in header
+    assert 'href="/blog">Blog</a>' not in header
+    assert "background: var(--pl-neon);" in theme
 
 
 def test_primary_layouts_load_the_shared_research_theme():

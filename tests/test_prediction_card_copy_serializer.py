@@ -214,3 +214,11 @@ def test_best_ev_market_has_matching_ev_value_in_paid_render_and_copy():
     assert "Spread EV" in rendered
     assert "Spread EV: +9.1%" in copied
     assert "Best EV Market: Spread" in copied
+
+
+def test_picks_template_tolerates_missing_optional_efficiency_probability():
+    template = (ROOT / "templates" / "espn_predictions_template.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "'prob': pred.efficiency_prob|default(none)" in template

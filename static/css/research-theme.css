@@ -13,12 +13,12 @@
     top: 0;
     z-index: 2000;
     min-height: 64px;
-    padding: 0 clamp(18px, 4vw, 58px);
+    padding: 0 max(22px, calc((100vw - 1440px) / 2));
     display: flex;
     align-items: center;
     gap: 24px;
     border-bottom: 1px solid var(--pl-line);
-    background: rgba(251, 251, 248, .78);
+    background: rgba(251, 251, 248, .92);
     backdrop-filter: blur(12px);
 }
 .pl2-burger {
@@ -80,13 +80,15 @@
 .pl2-search:hover { background: var(--pl-neon); border-color: var(--pl-neon); }
 .pl2-cta {
     padding: 11px 16px;
-    border: 1px solid var(--pl-ink);
+    border: 1px solid var(--pl-neon);
+    background: var(--pl-neon);
     color: var(--pl-ink);
     font: 900 .67rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     letter-spacing: .08em;
     text-decoration: none;
     text-transform: uppercase;
 }
+.pl2-cta:hover { border-color: var(--pl-ink); }
 
 html { background: var(--pl-paper); }
 body.research-site {

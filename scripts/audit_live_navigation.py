@@ -40,7 +40,7 @@ PATHS = (
 )
 
 
-def audit(path: str) -> tuple[str, int, int, int]:
+def audit(path: str) -> tuple[str, int, int, int, bool]:
     request = Request(BASE_URL + path, headers={"User-Agent": "PredictionLabLinkAudit/1.0"})
     with urlopen(request, timeout=60) as response:
         html = response.read().decode("utf-8", errors="replace")
@@ -49,6 +49,11 @@ def audit(path: str) -> tuple[str, int, int, int]:
             response.status,
             html.count('class="pl2-header"'),
             html.count('class="site-directory-footer"'),
+            (
+                'refreshing this page right now' in html.lower()
+                or 'upstream data/model dependency failed' in html.lower()
+                or 'failed to render' in html.lower()
+            ),
         )
 
 
@@ -61,16 +66,17 @@ def main() -> int:
             try:
                 rows.append(future.result())
             except Exception as exc:
-                rows.append((path, 0, 0, 0))
+                rows.append((path, 0, 0, 0, True))
                 print(f"{path:<40} ERROR {exc}")
 
     failed = False
-    for path, status, headers, footers in sorted(rows):
-        ok = status == 200 and headers == 1 and footers == 1
+    for path, status, headers, footers, fallback in sorted(rows):
+        ok = status == 200 and headers == 1 and footers == 1 and not fallback
         failed = failed or not ok
         print(
             f"{path:<40} status={status:<3} "
-            f"headers={headers} footers={footers} {'OK' if ok else 'FAIL'}"
+            f"headers={headers} footers={footers} fallback={int(fallback)} "
+            f"{'OK' if ok else 'FAIL'}"
         )
     return 1 if failed else 0
 
