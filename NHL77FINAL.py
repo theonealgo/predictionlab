@@ -9777,48 +9777,7 @@ BASE_TEMPLATE = """
     <link rel="stylesheet" href="/static/css/research-theme.css">
 </head>
 <body class="research-site">
-    <div class="navbar">
-    <div class="navbar-content">
-        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
-        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality">
-            <img class="pl-brand-logo__img" src="/static/pl-logo.svg" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false">
-        </a>
-
-        <div class="nav-search-wrap">
-            <div class="nav-search" onclick="openSrch()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
-            </div>
-        </div>
-
-        <div class="nav-actions">
-            <div class="acct-wrap">
-                <button type="button" class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </button>
-                <div class="acct-menu" id="acctMenu">
-                    {% if not is_premium %}
-                    <a href="/plans">Join Premium</a>
-                    {% endif %}
-                    {% if is_logged_in %}
-                    <a href="/logout">Sign Out</a>
-                    {% else %}
-                    <a href="/login">Sign In</a>
-                    <a href="/signup">Sign Up</a>
-                    {% endif %}
-                    <div class="acct-menu-divider"></div>
-                    <a href="/faq">Help</a>
-                </div>
-                {% if not is_premium %}
-                <a href="/plans" class="nav-cta-premium">Join Premium</a>
-                {% endif %}
-                {% if not is_logged_in %}
-                <a href="/plans" class="nav-cta">Get Started</a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
+    {% include "partials/research_header.html" %}
     
     <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
     <div class="tv-drawer" id="tvDrawer">
@@ -14139,45 +14098,7 @@ def landing_page():
 <body class="research-site">
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<!-- Navbar -->
-<div class="navbar">
-    <div class="navbar-content">
-        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
-        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/pl-logo.svg" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
-        <div class="nav-search-wrap">
-            <div class="nav-search" onclick="openSrch()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
-            </div>
-        </div>
-        <div class="nav-actions">
-            <div class="acct-wrap">
-                <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </button>
-                <div class="acct-menu" id="acctMenu">
-                    {% if not is_premium %}
-                    <a href="/plans">Join Premium</a>
-                    {% endif %}
-                    {% if is_logged_in %}
-                    <a href="/logout">Sign Out</a>
-                    {% else %}
-                    <a href="/login">Sign In</a>
-                    <a href="/signup">Sign Up</a>
-                    {% endif %}
-                    <div class="acct-menu-divider"></div>
-                    <a href="/faq">Help</a>
-                </div>
-            </div>
-            {% if not is_premium %}
-            <a href="/plans" class="nav-cta-premium">Join Premium</a>
-            {% endif %}
-            {% if not is_logged_in %}
-            <a href="/signup" class="nav-cta">Get Started</a>
-            {% endif %}
-        </div>
-    </div>
-</div>
+{% include "partials/research_header.html" %}
 
 <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
 <div class="tv-drawer" id="tvDrawer">
@@ -19030,22 +18951,12 @@ def sport_predictions(sport, filter_date=None):
             logger.warning("Serving last known-good %s picks page after render failure", sport)
             return cached_html
         return _predictions_fallback_page(sport, filter_date=filter_date)
-    _default_games = grouped_predictions.get(default_pick_date, []) if grouped_predictions else []
-    _default_with_books = sum(
-        1 for g in _default_games
-        if isinstance(g, dict) and g.get('book_home_moneyline') is not None
-    )
-    _books_ok_for_cache = (
-        not _default_games
-        or _default_with_books >= max(1, min(3, len(_default_games)))
-    )
     if (
         cache_key
         and rendered
         and grouped_predictions
         and sorted_dates
-        and _books_ok_for_cache
-        and rendered.count('class="game-card"') >= 1
+        and 'class="game-card' in rendered
         and 'no predictions available' not in rendered.lower()
         and 'upstream data/model dependency failed' not in rendered.lower()
     ):

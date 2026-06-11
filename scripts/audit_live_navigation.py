@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Audit canonical public navigation links against the running local site."""
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.request import Request, urlopen
+
+
+BASE_URL = "http://127.0.0.1:5002"
+PATHS = (
+    "/",
+    "/ai-sports-betting-picks-today",
+    "/all-sports-results",
+    "/blog",
+    "/contact",
+    "/daily-report",
+    "/edge-performance",
+    "/faq",
+    "/login",
+    "/mlb-picks",
+    "/nba-picks",
+    "/ncaab-picks",
+    "/ncaaf-picks",
+    "/ncaaw-picks",
+    "/nfl-picks",
+    "/nhl-picks",
+    "/our-model-vs-sportsbooks",
+    "/performance",
+    "/plans",
+    "/player-props",
+    "/privacy",
+    "/responsible-gaming",
+    "/results/downloads",
+    "/search",
+    "/signup",
+    "/soccer-picks",
+    "/terms",
+    "/tutorial",
+    "/what-are-ai-sports-betting-picks",
+    "/wnba-picks",
+)
+
+
+def audit(path: str) -> tuple[str, int, int, int]:
+    request = Request(BASE_URL + path, headers={"User-Agent": "PredictionLabLinkAudit/1.0"})
+    with urlopen(request, timeout=60) as response:
+        html = response.read().decode("utf-8", errors="replace")
+        return (
+            path,
+            response.status,
+            html.count('class="pl2-header"'),
+            html.count('class="site-directory-footer"'),
+        )
+
+
+def main() -> int:
+    rows = []
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {executor.submit(audit, path): path for path in PATHS}
+        for future in as_completed(futures):
+            path = futures[future]
+            try:
+                rows.append(future.result())
+            except Exception as exc:
+                rows.append((path, 0, 0, 0))
+                print(f"{path:<40} ERROR {exc}")
+
+    failed = False
+    for path, status, headers, footers in sorted(rows):
+        ok = status == 200 and headers == 1 and footers == 1
+        failed = failed or not ok
+        print(
+            f"{path:<40} status={status:<3} "
+            f"headers={headers} footers={footers} {'OK' if ok else 'FAIL'}"
+        )
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

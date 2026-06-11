@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Prediction Lab Landing Page Preview{% endblock %}
-{% block head_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block title %}Prediction Labs | AI Sports Predictions and Betting Research{% endblock %}
+{% block head_meta %}
+{% if request.path == "/homepage-preview" %}<meta name="robots" content="noindex,nofollow">{% endif %}
+{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -49,7 +51,11 @@
     }
 
     .pl2-scroll { position: relative; z-index: 10; }
-    .pl2-shell { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
+    .pl2-shell {
+        width: min(1120px, calc(100% - 180px));
+        margin-left: max(140px, calc((100% - 1120px) / 2));
+        margin-right: auto;
+    }
     .pl2-mono { font: 800 .66rem var(--pl-mono); letter-spacing: .16em; text-transform: uppercase; color: hsl(0 0% 34%); }
 
     /* ── Active breadcrumb (scroll spy) ─────────────────────── */
@@ -132,7 +138,7 @@
     .pl2-hero {
         position: relative; min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
         overflow: hidden; padding: 118px 0 92px;
-        background: hsl(45 25% 99% / .76);
+        background: hsl(45 25% 99% / .56);
     }
     .pl2-hero-lens {
         position: absolute; z-index: 0; pointer-events: none; border-radius: 50%;
@@ -146,7 +152,7 @@
     .pl2-eyebrow::before { content: ""; width: 48px; height: 1px; background: var(--pl-accent); }
     .pl2-hero h1 {
         margin: 0 0 30px; font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(3.7rem, 7.7vw, 7.2rem);
+        font-size: clamp(3.25rem, 7vw, 6.7rem);
         line-height: .88; letter-spacing: 0; font-weight: 950; text-transform: uppercase;
     }
     .pl2-h1-row { display: flex; align-items: flex-end; justify-content: flex-start; gap: clamp(42px, 9vw, 150px); }
@@ -371,7 +377,7 @@
     .pl2-knowledge .pl2-mono { color: hsl(0 0% 32%); opacity: 1; }
     .pl2-knowledge .pl2-sec-top .pl2-mono { color: hsl(0 0% 18%); }
     .pl2-knowledge .pl2-term { background: hsl(0 0% 100% / .84); border-color: hsl(0 0% 76%); }
-    .pl2-knowledge .pl2-term b { display: inline-block; background: var(--pl-night); padding: 6px 8px; }
+    .pl2-knowledge .pl2-term b { display: inline-block; background: #0b0b0a; padding: 7px 9px; }
     .pl2-knowledge .pl2-term b mark { color: var(--pl-accent); background: transparent; border: 0; padding: 0; }
     .pl2-knowledge .pl2-term p { color: hsl(0 0% 30%); font-family: var(--pl-mono); }
 
@@ -446,7 +452,8 @@
         .pl2-sports, .pl2-units, .pl2-steps, .pl2-gloss, .pl2-footer-grid { grid-template-columns: 1fr; }
         .pl2-sec { padding: 56px 0 50px; }
         .pl2-login { display: none; }
-        .pl2-hero { background: hsl(45 25% 99% / .82); }
+        .pl2-hero { min-height: auto; padding: 88px 0 64px; background: hsl(45 25% 99% / .64); }
+        .pl2-hero h1 { font-size: clamp(2.75rem, 15vw, 4.25rem); }
     }
 
 </style>
@@ -466,8 +473,6 @@
         <span class="pl2-rail" aria-hidden="true">{% for _ in range(8) %}<i{% if loop.first %} class="active"{% endif %}></i>{% endfor %}</span>
         <span id="pl2BreadcrumbText"></span>
     </div>
-
-    {% include "partials/research_header.html" %}
 
     <div class="pl2-scroll">
         <!-- HeroSection -->

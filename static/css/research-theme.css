@@ -7,6 +7,87 @@
     --pl-neon: #c7ff2e;
 }
 
+/* Canonical site header. Keep this shared across every public page family. */
+.pl2-header {
+    position: sticky;
+    top: 0;
+    z-index: 2000;
+    min-height: 64px;
+    padding: 0 clamp(18px, 4vw, 58px);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    border-bottom: 1px solid var(--pl-line);
+    background: rgba(251, 251, 248, .78);
+    backdrop-filter: blur(12px);
+}
+.pl2-burger {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--pl-line);
+    background: transparent;
+    cursor: pointer;
+}
+.pl2-burger i,
+.pl2-burger i::before,
+.pl2-burger i::after {
+    content: "";
+    display: block;
+    position: relative;
+    width: 16px;
+    height: 1px;
+    background: var(--pl-ink);
+}
+.pl2-burger i::before { position: absolute; top: -5px; }
+.pl2-burger i::after { position: absolute; top: 5px; }
+.pl2-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    color: var(--pl-ink);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.pl2-brand b { font: 950 .92rem/1 Arial, Helvetica, sans-serif; letter-spacing: .02em; }
+.pl2-brand span {
+    color: var(--pl-muted);
+    font: 800 .62rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .18em;
+}
+.pl2-nav { display: flex; gap: 26px; margin-left: auto; }
+.pl2-nav a,
+.pl2-login {
+    color: var(--pl-muted);
+    font: 800 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .12em;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+.pl2-nav a:hover,
+.pl2-login:hover { color: var(--pl-ink); }
+.pl2-header-actions { display: flex; align-items: center; gap: 20px; }
+.pl2-search {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--pl-line);
+    background: transparent;
+    cursor: pointer;
+}
+.pl2-search:hover { background: var(--pl-neon); border-color: var(--pl-neon); }
+.pl2-cta {
+    padding: 11px 16px;
+    border: 1px solid var(--pl-ink);
+    color: var(--pl-ink);
+    font: 900 .67rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
 html { background: var(--pl-paper); }
 body.research-site {
     color: var(--pl-ink);
@@ -119,7 +200,8 @@ body.research-site .layout-main {
     padding: clamp(24px, 4vw, 54px);
     border: 1px solid var(--pl-line);
     border-radius: 0;
-    background: rgba(251,251,248,.90);
+    background: rgba(251,251,248,.82);
+    backdrop-filter: blur(6px);
 }
 body.research-site > .container {
     width: min(100% - 48px, 1280px);
@@ -129,7 +211,8 @@ body.research-site > .container {
     padding: clamp(24px, 4vw, 54px);
     border: 1px solid var(--pl-line);
     border-radius: 0;
-    background: rgba(251,251,248,.90);
+    background: rgba(251,251,248,.82);
+    backdrop-filter: blur(6px);
 }
 body.research-site h1,
 body.research-site h2,
@@ -201,6 +284,15 @@ body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-
     text-transform: uppercase;
     letter-spacing: 2.5px;
 }
+.site-directory-footer .directory-wordmark {
+    display: inline-block;
+    margin: 8px 0 4px;
+    color: var(--pl-neon);
+    font: 800 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+    text-decoration: none;
+}
+.site-directory-footer .directory-wordmark:hover { color: #b7ef1d; }
 .site-directory-footer h2 {
     margin: 12px 0 7px;
     color: #fff;
@@ -247,6 +339,10 @@ body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-
 .site-directory-footer .directory-bottom a:hover { color: var(--pl-neon); }
 
 @media (max-width: 900px) {
+    .pl2-header { padding: 0 16px; gap: 14px; }
+    .pl2-nav { display: none; }
+    .pl2-header-actions { margin-left: auto; gap: 10px; }
+    .pl2-login { display: none; }
     body.research-site .navbar-content { padding: 0 14px; }
     body.research-site .navbar-content > .logo { min-width: 0; }
     body.research-site .nav-cta-premium { display: none; }
@@ -259,6 +355,9 @@ body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-
     .site-directory-footer .directory-bottom { flex-direction: column; }
 }
 @media (max-width: 560px) {
+    .pl2-header { min-height: 58px; }
+    .pl2-brand span, .pl2-search { display: none; }
+    .pl2-cta { padding: 9px 10px; font-size: .58rem; }
     body.research-site .navbar-content > .logo img { max-width: 128px; }
     body.research-site .nav-cta { padding: 10px; font-size: 9px; }
     .site-directory-footer { padding: 52px 18px 22px; }

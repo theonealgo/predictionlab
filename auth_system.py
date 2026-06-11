@@ -758,9 +758,11 @@ LOGIN_TEMPLATE = """
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://predictionlab.io/login">
 <link rel="canonical" href="https://predictionlab.io/login">
+<link rel="stylesheet" href="/static/css/research-theme.css">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
+{% include "partials/research_header.html" %}
 <div class="auth-container">
     <h1 style="position:absolute;left:-9999px;">Log in to predictionlab.io AI sports picks platform</h1>
     <div class="auth-title">🔐 Login</div>
@@ -780,6 +782,7 @@ LOGIN_TEMPLATE = """
     <div class="auth-link">Don't have an account? <a href="/signup">Sign up</a></div>
     <div class="auth-link" style="margin-top:10px;"><a href="/">← Back to Home</a></div>
 </div>
+{% include "partials/site_directory_footer.html" %}
 </body></html>
 """
 
@@ -795,9 +798,11 @@ SIGNUP_TEMPLATE = """
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://predictionlab.io/signup">
 <link rel="canonical" href="https://predictionlab.io/signup">
+<link rel="stylesheet" href="/static/css/research-theme.css">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """
 </head><body>
+{% include "partials/research_header.html" %}
 <div class="auth-container">
     <h1 style="position:absolute;left:-9999px;">Sign up for predictionlab.io AI sports picks access</h1>
     <div class="auth-title">Create Account</div>
@@ -818,6 +823,7 @@ SIGNUP_TEMPLATE = """
     <div class="auth-link">Already have an account? <a href="/login">Log in</a></div>
     <div class="auth-link" style="margin-top:10px;"><a href="/">← Back to Home</a></div>
 </div>
+{% include "partials/site_directory_footer.html" %}
 </body></html>
 """
 

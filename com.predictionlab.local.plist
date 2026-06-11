@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.predictionlab.local</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.13/bin/python3</string>
+        <string>/Users/nimamesghali/Sports Sandbox/Sports Sandbox/NHL77FINAL.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/nimamesghali/Sports Sandbox/Sports Sandbox</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>5002</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+        <key>MPLCONFIGDIR</key>
+        <string>/private/tmp/predictionlab-matplotlib</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/nimamesghali/Sports Sandbox/Sports Sandbox/app.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/nimamesghali/Sports Sandbox/Sports Sandbox/app.log</string>
+</dict>
+</plist>
