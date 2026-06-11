@@ -99,16 +99,43 @@ def _cached_get(url: str, timeout: int = 3):
     return data
 
 
+def _parse_display_stat(dv) -> Optional[float]:
+    """Parse ESPN displayValue — plain number or made-attempted (e.g. '40-88' → 88)."""
+    if dv is None:
+        return None
+    text = str(dv).strip()
+    if not text:
+        return None
+    if '-' in text:
+        parts = text.split('-')
+        if len(parts) >= 2:
+            try:
+                return float(parts[-1].strip())
+            except (TypeError, ValueError):
+                return None
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
 def _stat_value(stats_list, *candidate_names) -> Optional[float]:
     """Pull a numeric stat from ESPN's `statistics` array, tolerating multiple
     field names. Returns None if nothing matches.
 
-    ESPN sometimes uses camelCase ('fieldGoalsAttempted'), sometimes a
-    `displayValue` string, sometimes just `name` + `value`.
+    ESPN sometimes uses camelCase ('fieldGoalsAttempted'), compound names
+    ('fieldGoalsMade-fieldGoalsAttempted' → display '40-88'), or plain
+    `displayValue` strings when `value` is null.
     """
     if not stats_list:
         return None
     candidates_lower = {n.lower() for n in candidate_names}
+    compound_attempted = {
+        'fieldgoalsattempted': 'fieldgoalsmade-fieldgoalsattempted',
+        'fga': 'fieldgoalsmade-fieldgoalsattempted',
+        'freethrowsattempted': 'freethrowsmade-freethrowsattempted',
+        'fta': 'freethrowsmade-freethrowsattempted',
+    }
     for s in stats_list:
         if not isinstance(s, dict):
             continue
@@ -120,12 +147,21 @@ def _stat_value(stats_list, *candidate_names) -> Optional[float]:
                     return float(v)
                 except (TypeError, ValueError):
                     pass
-            dv = s.get('displayValue')
-            if dv:
-                try:
-                    return float(dv)
-                except (TypeError, ValueError):
-                    pass
+            parsed = _parse_display_stat(s.get('displayValue'))
+            if parsed is not None:
+                return parsed
+    for want in candidates_lower:
+        compound = compound_attempted.get(want)
+        if not compound:
+            continue
+        for s in stats_list:
+            if not isinstance(s, dict):
+                continue
+            name = (s.get('name') or '').lower()
+            if name == compound:
+                parsed = _parse_display_stat(s.get('displayValue'))
+                if parsed is not None:
+                    return parsed
     return None
 
 
@@ -202,20 +238,21 @@ def _extract_team_boxscore(summary_data, team_name: str) -> Optional[Dict]:
 
 def _list_team_recent_game_ids(team_name: str, sport: str,
                                 max_lookback_days: int = 21,
-                                n: int = 5) -> List[Tuple[str, int]]:
+                                n: int = 5,
+                                as_of: Optional[datetime] = None) -> List[Tuple[str, int]]:
     """Return list of (event_id, minutes_played_guess) for `team_name`'s last
-    `n` completed games. minutes_played_guess is 48 for regulation, +5 per OT.
+    `n` completed games before `as_of`. minutes_played_guess is 48 for regulation, +5 per OT.
     """
     path = _ESPN_PATHS.get(sport)
     if not path:
         return []
-    today = datetime.now()
+    end = as_of or datetime.now()
     out: List[Tuple[str, int]] = []
 
     for d in range(1, max_lookback_days + 1):
         if len(out) >= n:
             break
-        date_str = (today - timedelta(days=d)).strftime('%Y%m%d')
+        date_str = (end - timedelta(days=d)).strftime('%Y%m%d')
         url = f"https://site.api.espn.com/apis/site/v2/sports/{path}/scoreboard?dates={date_str}"
         data = _cached_get(url, timeout=3)
         if not data:
@@ -317,10 +354,12 @@ def _aggregate_efficiency(games_box: List[Dict]) -> Optional[Dict[str, float]]:
 def compute_team_efficiency(team_name: str, sport: str = 'NBA',
                             n_games: int = 5,
                             max_lookback_days: int = 21,
-                            max_workers: int = 8) -> Optional[Dict[str, float]]:
-    """Top-level: fetch box scores for `team_name`'s last `n_games` and
-    return aggregate {ortg, drtg, pace, games, ppg, opp_ppg}. Cached 10 min."""
-    cache_key = (sport, team_name, n_games)
+                            max_workers: int = 8,
+                            as_of: Optional[datetime] = None) -> Optional[Dict[str, float]]:
+    """Top-level: fetch box scores for `team_name`'s last `n_games` before `as_of`
+    and return aggregate {ortg, drtg, pace, games, ppg, opp_ppg}. Cached 10 min."""
+    as_of = as_of or datetime.now()
+    cache_key = (sport, team_name, n_games, as_of.strftime('%Y-%m-%d'))
     entry = _TEAM_EFF_CACHE.get(cache_key)
     now = time.time()
     if entry and (now - entry['ts']) < _TEAM_EFF_TTL:
@@ -330,7 +369,7 @@ def compute_team_efficiency(team_name: str, sport: str = 'NBA',
     if not path:
         return None
 
-    ids = _list_team_recent_game_ids(team_name, sport, max_lookback_days, n_games)
+    ids = _list_team_recent_game_ids(team_name, sport, max_lookback_days, n_games, as_of=as_of)
     if not ids:
         _TEAM_EFF_CACHE[cache_key] = {'data': None, 'ts': now}
         return None
@@ -464,7 +503,8 @@ def precompute_team_efficiencies(team_names: List[str], sport: str = 'NBA',
                                   n_games: int = 5,
                                   max_lookback_days: int = 14,
                                   total_budget_seconds: float = 10.0,
-                                  max_workers: int = 16) -> Dict[str, Optional[Dict]]:
+                                  max_workers: int = 16,
+                                  as_of: Optional[datetime] = None) -> Dict[str, Optional[Dict]]:
     """Compute ORtg/DRtg/Pace for every team in `team_names` in parallel,
     with a HARD wall-clock budget. Teams that don't finish in time get None.
 
@@ -483,7 +523,9 @@ def precompute_team_efficiencies(team_names: List[str], sport: str = 'NBA',
     workers = min(max_workers, max(2, len(unique)))
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futures = {
-            ex.submit(compute_team_efficiency, t, sport, n_games, max_lookback_days, 4): t
+            ex.submit(
+                compute_team_efficiency, t, sport, n_games, max_lookback_days, 4, as_of,
+            ): t
             for t in unique
         }
         try:

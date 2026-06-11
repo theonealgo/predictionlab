@@ -1,0 +1,256 @@
+======================================================================
+  PredictionLab Site Audit — 2026-06-04 19:50:41
+  Target: http://127.0.0.1:5001
+  Run ID: 20260604_195041
+  Duration: 90.0s
+======================================================================
+  OVERALL: WARN
+  ✅ 56 passed | ⚠️  18 warnings | ❌ 0 failures | ℹ️  0 info
+======================================================================
+
+── ROUTES AUDIT ──────────────────────────────
+  ✅ [PASS] Homepage
+       HTTP 200
+       URL: /
+  ✅ [PASS] Health Check
+       HTTP 200
+       URL: /healthz
+  ✅ [PASS] Login Page
+       HTTP 200
+       URL: /login
+  ✅ [PASS] Signup Page
+       HTTP 200
+       URL: /signup
+  ✅ [PASS] Plans & Pricing
+       HTTP 200
+       URL: /plans
+  ✅ [PASS] Contact
+       HTTP 200
+       URL: /contact
+  ✅ [PASS] Privacy Policy
+       HTTP 200
+       URL: /privacy
+  ✅ [PASS] Terms of Service
+       HTTP 200
+       URL: /terms
+  ✅ [PASS] FAQ
+       HTTP 200
+       URL: /faq
+  ✅ [PASS] Tutorial
+       HTTP 200
+       URL: /tutorial
+  ✅ [PASS] Responsible Gaming
+       HTTP 200
+       URL: /responsible-gaming
+  ✅ [PASS] AI Picks Today
+       HTTP 200
+       URL: /ai-sports-betting-picks-today
+  ✅ [PASS] What Are AI Picks
+       HTTP 200
+       URL: /what-are-ai-sports-betting-picks
+  ✅ [PASS] Model vs Sportsbooks
+       HTTP 200
+       URL: /our-model-vs-sportsbooks
+  ✅ [PASS] Search
+       HTTP 200
+       URL: /search
+  ✅ [PASS] All Sports Results
+       HTTP 200
+       URL: /all-sports-results
+  ⚠️ [WARN] Daily Report
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+       URL: /daily-report
+  ⚠️ [WARN] Results Redirect
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+       URL: /results
+  ⚠️ [WARN] NBA Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /nba-picks
+  ⚠️ [WARN] NHL Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /nhl-picks
+  ⚠️ [WARN] NFL Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nfl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /nfl-picks
+  ⚠️ [WARN] MLB Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /mlb-picks
+  ✅ [PASS] NCAAB Picks
+       HTTP 200
+       URL: /ncaab-picks
+  ⚠️ [WARN] NCAAF Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaaf-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout
+       URL: /ncaaf-picks
+  ✅ [PASS] NCAAW Picks
+       HTTP 200
+       URL: /ncaaw-picks
+  ⚠️ [WARN] WNBA Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /wnba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=
+       URL: /wnba-picks
+  ⚠️ [WARN] Soccer Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+       URL: /soccer-picks
+  ⚠️ [WARN] World Cup Picks
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks?league=fifa.world (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed
+       URL: /soccer-picks?league=fifa.world
+  ⚠️ [WARN] NBA Results
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-results (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout
+       URL: /nba-results
+  ⚠️ [WARN] NHL Results
+       Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-results (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout
+       URL: /nhl-results
+  ✅ [PASS] MLB Results
+       HTTP 200
+       URL: /mlb-results
+  ✅ [PASS] Model Performance (auth redirect ok)
+       HTTP 200
+       URL: /performance
+  ✅ [PASS] Robots.txt
+       HTTP 200
+       URL: /robots.txt
+  ✅ [PASS] Sitemap XML
+       HTTP 200
+       URL: /sitemap.xml
+  ✅ [PASS] Sports API
+       HTTP 200
+       URL: /api/sports
+  ✅ [PASS] Search API
+       HTTP 200
+       URL: /api/search?q=nba
+  ✅ [PASS] Player Props (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /player-props
+  ✅ [PASS] Picks CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /picks/export.csv
+  ✅ [PASS] Results CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /results/export.csv
+  ✅ [PASS] Audit CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /performance/audit.csv
+  ✅ [PASS] 404 Handler
+       HTTP 404
+       URL: /this-page-does-not-exist-xyz123
+  ⚠️ [WARN] Sport page /nba-picks
+       HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /nba-picks
+  ⚠️ [WARN] Sport page /nhl-picks
+       HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /nhl-picks
+  ⚠️ [WARN] Sport page /nfl-picks
+       HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nfl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /nfl-picks
+  ⚠️ [WARN] Sport page /mlb-picks
+       HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+       URL: /mlb-picks
+  ✅ [PASS] Sport page /ncaab-picks
+       HTTP 200
+       URL: /ncaab-picks
+  ✅ [PASS] Sport page /ncaaf-picks
+       HTTP 200
+       URL: /ncaaf-picks
+  ✅ [PASS] Sport page /ncaaw-picks
+       HTTP 200
+       URL: /ncaaw-picks
+  ⚠️ [WARN] Sport page /wnba-picks
+       HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /wnba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=
+       URL: /wnba-picks
+  ⚠️ [WARN] Sport page /soccer-picks
+       HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+       URL: /soccer-picks
+
+── CONTENT AUDIT ──────────────────────────────
+  ✅ [PASS] Stale content scan
+       No stale/forbidden strings found in page content
+  ✅ [PASS] Debug mode
+       No debug mode indicators found
+  ✅ [PASS] Page size: /nba-picks
+       90,796 bytes
+       URL: /nba-picks
+  ✅ [PASS] Page size: /nhl-picks
+       93,856 bytes
+       URL: /nhl-picks
+
+── NAVIGATION AUDIT ──────────────────────────────
+  ✅ [PASS] Nav link: /nba-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /nhl-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /nfl-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /mlb-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /ncaab-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /ncaaf-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /wnba-picks
+       Found in navigation
+  ✅ [PASS] Footer link: /plans
+       Present in footer
+  ✅ [PASS] Footer link: /privacy
+       Present in footer
+  ✅ [PASS] Footer link: /terms
+       Present in footer
+  ✅ [PASS] Footer link: /contact
+       Present in footer
+  ✅ [PASS] Footer link: /faq
+       Present in footer
+  ✅ [PASS] Footer link: /responsible-gaming
+       Present in footer
+  ✅ [PASS] Footer link: /daily-report
+       Present in footer
+  ✅ [PASS] Footer link: /performance
+       Present in footer
+  ✅ [PASS] Footer link: /ai-sports-betting-picks-today
+       Present in footer
+  ✅ [PASS] Footer link: /what-are-ai-sports-betting-picks
+       Present in footer
+  ✅ [PASS] Footer link: /our-model-vs-sportsbooks
+       Present in footer
+  ✅ [PASS] Props menu: no forbidden links
+       Props & Models menu is clean
+  ✅ [PASS] Internal link spot-check
+       Checked 9 key links — none returned 404
+
+
+══════════════════════════════════════════════════════════════════════
+  WARNINGS SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ⚠️  Daily Report: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Results Redirect: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  NBA Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  NHL Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  NFL Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  MLB Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  NCAAF Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  WNBA Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Soccer Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  World Cup Picks: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  NBA Results: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  NHL Results: Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Sport page /nba-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Sport page /nhl-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Sport page /nfl-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Sport page /mlb-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Sport page /wnba-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+  ⚠️  Sport page /soccer-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 

@@ -1,0 +1,68 @@
+{
+  "built_at": "2026-06-06T21:47:41Z",
+  "games_expected": null,
+  "games_in_scope": 0,
+  "ou_summary": {},
+  "overall_stats": {
+    "efficiency": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "elo": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "ensemble": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "glicko2": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "trueskill": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "xgboost": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    }
+  },
+  "phase": "regular",
+  "roi_total": null,
+  "schema_version": 1,
+  "season": "2026-27",
+  "season_perf": {
+    "games_expected": null,
+    "games_in_scope": 0,
+    "ml_accuracy": null,
+    "ml_correct": 0,
+    "ml_model_key": "ensemble",
+    "ml_model_label": "Sharp Consensus",
+    "ml_total": 0,
+    "ou_correct": 0,
+    "ou_graded": 0,
+    "ou_model_label": "XSharp",
+    "ou_note": null,
+    "ou_pct": null,
+    "scope_label": "Golf season",
+    "spread_covered": 0,
+    "spread_graded": 0,
+    "spread_model_label": "XSharp",
+    "spread_note": null,
+    "spread_pct": null
+  },
+  "sport": "GOLF",
+  "spread_total_stats": {},
+  "window": {
+    "end": "2026-06-05",
+    "start": "2026-01-01"
+  }
+}

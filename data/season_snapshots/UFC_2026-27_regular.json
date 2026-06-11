@@ -1,0 +1,85 @@
+{
+  "built_at": "2026-06-06T21:47:08Z",
+  "games_expected": null,
+  "games_in_scope": 214,
+  "ou_summary": {},
+  "overall_stats": {
+    "efficiency": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
+    "elo": {
+      "accuracy": 53.7,
+      "correct": 115,
+      "total": 214
+    },
+    "ensemble": {
+      "accuracy": 53.7,
+      "correct": 115,
+      "total": 214
+    },
+    "glicko2": {
+      "accuracy": 53.7,
+      "correct": 115,
+      "total": 214
+    },
+    "trueskill": {
+      "accuracy": 53.7,
+      "correct": 115,
+      "total": 214
+    },
+    "xgboost": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    }
+  },
+  "phase": "regular",
+  "roi_total": null,
+  "schema_version": 1,
+  "season": "2026-27",
+  "season_perf": {
+    "games_expected": null,
+    "games_in_scope": 214,
+    "ml_accuracy": 53.7,
+    "ml_correct": 115,
+    "ml_model_key": "glicko2",
+    "ml_model_label": "Grinder2",
+    "ml_total": 214,
+    "ou_correct": 0,
+    "ou_graded": 0,
+    "ou_model_label": "XSharp",
+    "ou_note": null,
+    "ou_pct": null,
+    "scope_label": "UFC / MMA season",
+    "spread_covered": 0,
+    "spread_graded": 0,
+    "spread_model_label": "XSharp",
+    "spread_note": null,
+    "spread_pct": null
+  },
+  "sport": "UFC",
+  "spread_total_stats": {
+    "pl_spread_covered": 0,
+    "pl_spread_graded": 0,
+    "pl_spread_pct": null,
+    "pl_spread_pushes": 0,
+    "pl_total_correct": 0,
+    "pl_total_graded": 0,
+    "pl_total_pct": null,
+    "pl_total_pushes": 0,
+    "spread_covered": 0,
+    "spread_graded": 0,
+    "spread_pct": null,
+    "spread_pushes": 0,
+    "total_correct": 0,
+    "total_graded": 0,
+    "total_pct": null,
+    "total_pushes": 0
+  },
+  "window": {
+    "end": "2026-06-05",
+    "start": "2026-01-01"
+  }
+}

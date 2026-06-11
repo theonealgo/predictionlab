@@ -1,0 +1,271 @@
+======================================================================
+  PredictionLab Site Audit — 2026-06-05 08:00:14
+  Target: http://127.0.0.1:5001
+  Run ID: 20260605_080014
+  Duration: 3091.8s
+======================================================================
+  OVERALL: WARN
+  ✅ 66 passed | ⚠️  11 warnings | ❌ 0 failures | ℹ️  10 info
+======================================================================
+
+── ROUTES AUDIT ──────────────────────────────
+  ✅ [PASS] Health Check
+       HTTP 200
+       URL: /healthz
+  ✅ [PASS] Login Page
+       HTTP 200
+       URL: /login
+  ✅ [PASS] Signup Page
+       HTTP 200
+       URL: /signup
+  ✅ [PASS] Plans & Pricing
+       HTTP 200
+       URL: /plans
+  ✅ [PASS] Contact
+       HTTP 200
+       URL: /contact
+  ✅ [PASS] Privacy Policy
+       HTTP 200
+       URL: /privacy
+  ✅ [PASS] Terms of Service
+       HTTP 200
+       URL: /terms
+  ✅ [PASS] FAQ
+       HTTP 200
+       URL: /faq
+  ✅ [PASS] Tutorial
+       HTTP 200
+       URL: /tutorial
+  ✅ [PASS] Responsible Gaming
+       HTTP 200
+       URL: /responsible-gaming
+  ✅ [PASS] AI Picks Today
+       HTTP 200
+       URL: /ai-sports-betting-picks-today
+  ✅ [PASS] What Are AI Picks
+       HTTP 200
+       URL: /what-are-ai-sports-betting-picks
+  ✅ [PASS] Model vs Sportsbooks
+       HTTP 200
+       URL: /our-model-vs-sportsbooks
+  ✅ [PASS] All Sports Results
+       HTTP 200
+       URL: /all-sports-results
+  ✅ [PASS] MLB Results
+       HTTP 200
+       URL: /mlb-results
+  ✅ [PASS] Model Performance (auth redirect ok)
+       HTTP 200
+       URL: /performance
+  ✅ [PASS] Robots.txt
+       HTTP 200
+       URL: /robots.txt
+  ✅ [PASS] Sitemap XML
+       HTTP 200
+       URL: /sitemap.xml
+  ✅ [PASS] Sports API
+       HTTP 200
+       URL: /api/sports
+  ✅ [PASS] Search API
+       HTTP 200
+       URL: /api/search?q=nba
+  ✅ [PASS] Player Props (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /player-props
+  ✅ [PASS] Picks CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /picks/export.csv
+  ✅ [PASS] Results CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /results/export.csv
+  ✅ [PASS] Audit CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /performance/audit.csv
+  ✅ [PASS] 404 Handler
+       HTTP 404
+       URL: /this-page-does-not-exist-xyz123
+  ✅ [PASS] Sport page /tennis-picks
+       HTTP 200
+       URL: /tennis-picks
+  ✅ [PASS] Sport page /ufc-picks
+       HTTP 200
+       URL: /ufc-picks
+  ✅ [PASS] Sport page /golf-picks
+       HTTP 200
+       URL: /golf-picks
+  ⚠️ [WARN] Slow pages on local server
+       16 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+       Detail: /, /search, /daily-report, /results, /nba-picks, /nhl-picks, /nfl-picks, /mlb-picks
+
+── CONTENT AUDIT ──────────────────────────────
+  ✅ [PASS] Stale content scan
+       No stale/forbidden strings found in page content
+  ✅ [PASS] Debug mode
+       No debug mode indicators found
+  ✅ [PASS] Page size: /nba-picks
+       90,929 bytes
+       URL: /nba-picks
+  ✅ [PASS] Page size: /nhl-picks
+       88,203 bytes
+       URL: /nhl-picks
+
+── NAVIGATION AUDIT ──────────────────────────────
+  ✅ [PASS] Nav link: /nba-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /nhl-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /nfl-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /mlb-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /ncaab-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /ncaaf-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /wnba-picks
+       Found in navigation
+  ✅ [PASS] Footer link: /plans
+       Present in footer
+  ✅ [PASS] Footer link: /privacy
+       Present in footer
+  ✅ [PASS] Footer link: /terms
+       Present in footer
+  ✅ [PASS] Footer link: /contact
+       Present in footer
+  ✅ [PASS] Footer link: /faq
+       Present in footer
+  ✅ [PASS] Footer link: /responsible-gaming
+       Present in footer
+  ✅ [PASS] Footer link: /daily-report
+       Present in footer
+  ✅ [PASS] Footer link: /performance
+       Present in footer
+  ✅ [PASS] Footer link: /ai-sports-betting-picks-today
+       Present in footer
+  ✅ [PASS] Footer link: /what-are-ai-sports-betting-picks
+       Present in footer
+  ✅ [PASS] Footer link: /our-model-vs-sportsbooks
+       Present in footer
+  ✅ [PASS] Props menu: no forbidden links
+       Props & Models menu is clean
+  ✅ [PASS] Internal link spot-check
+       Checked 7 key links — none returned 404
+
+── CARDS AUDIT ──────────────────────────────
+  ℹ️ [INFO] Card count: NBA
+       3 prediction card(s) found
+       URL: /nba-picks
+  ✅ [PASS] Card fields: NBA
+       All required card field classes present
+       URL: /nba-picks
+  ✅ [PASS] Probability range: NBA
+       All 6 probability values in range [0,100]
+       URL: /nba-picks
+  ℹ️ [INFO] Confidence values: NBA
+       3 confidence value(s), range: 58.2%–64.1%
+       URL: /nba-picks
+  ℹ️ [INFO] Card count: NHL
+       3 prediction card(s) found
+       URL: /nhl-picks
+  ✅ [PASS] Card fields: NHL
+       All required card field classes present
+       URL: /nhl-picks
+  ✅ [PASS] Probability range: NHL
+       All 6 probability values in range [0,100]
+       URL: /nhl-picks
+  ℹ️ [INFO] Confidence values: NHL
+       3 confidence value(s), range: 64.3%–67.0%
+       URL: /nhl-picks
+  ⚠️ [WARN] Card audit: mlb-picks
+       Page too small or empty — no cards audited
+       URL: /mlb-picks
+  ℹ️ [INFO] Card count: WNBA
+       23 prediction card(s) found
+       URL: /wnba-picks
+  ✅ [PASS] Card fields: WNBA
+       All required card field classes present
+       URL: /wnba-picks
+  ✅ [PASS] Probability range: WNBA
+       All 46 probability values in range [0,100]
+       URL: /wnba-picks
+  ℹ️ [INFO] Confidence values: WNBA
+       23 confidence value(s), range: 54.3%–85.1%
+       URL: /wnba-picks
+  ℹ️ [INFO] Card count: SOCCER
+       32 prediction card(s) found
+       URL: /soccer-picks
+  ✅ [PASS] Card fields: SOCCER
+       All required card field classes present
+       URL: /soccer-picks
+  ✅ [PASS] Probability range: SOCCER
+       All 64 probability values in range [0,100]
+       URL: /soccer-picks
+  ℹ️ [INFO] Confidence values: SOCCER
+       32 confidence value(s), range: 39.6%–69.6%
+       URL: /soccer-picks
+
+── MODELS AUDIT ──────────────────────────────
+  ⚠️ [WARN] Model labels: NBA
+       Missing model label(s): ['Grinder2', 'Takedown']
+       URL: /nba-picks
+  ⚠️ [WARN] Stale model name: NBA
+       Found stale model reference: 'placeholder'
+       URL: /nba-picks
+  ℹ️ [INFO] Pick attribution: NBA
+       Pick attributed to: Sharp Consensus
+       URL: /nba-picks
+  ⚠️ [WARN] Model labels: NHL
+       Missing model label(s): ['Grinder2', 'Takedown']
+       URL: /nhl-picks
+  ⚠️ [WARN] Stale model name: NHL
+       Found stale model reference: 'placeholder'
+       URL: /nhl-picks
+  ℹ️ [INFO] Pick attribution: NHL
+       Pick attributed to: Sharp Consensus
+       URL: /nhl-picks
+  ⚠️ [WARN] Performance page: Grinder2
+       Model NOT found on performance page
+  ⚠️ [WARN] Performance page: Takedown
+       Model NOT found on performance page
+  ✅ [PASS] Performance page: Edge
+       Model appears on performance page
+  ⚠️ [WARN] Performance page: XSharp
+       Model NOT found on performance page
+  ⚠️ [WARN] Performance page: Consensus
+       Model NOT found on performance page
+
+── RESULTS AUDIT ──────────────────────────────
+  ✅ [PASS] Results page load
+       Page loaded (64,853 bytes)
+  ⚠️ [WARN] Results math validation
+       24 possible pct mismatches
+       Detail: 0-4 → calc 0.0% vs displayed 58.4%; 0-4 → calc 0.0% vs displayed 57.4%; 764-545 → calc 58.4% vs displayed 59.7%; 782-527 → calc 59.7% vs displayed 58.4%; 762-547 → calc 58.2% vs displayed 70.6%
+  ✅ [PASS] Daily report loads
+       Daily report page: 47,358 bytes
+
+── CSV AUDIT ──────────────────────────────
+  ✅ [PASS] Picks export CSV
+       Correctly requires auth (302 redirect)
+       URL: /picks/export.csv
+  ✅ [PASS] Results export CSV
+       Correctly requires auth (302 redirect)
+       URL: /results/export.csv
+  ✅ [PASS] Performance audit CSV
+       Correctly requires auth (302 redirect)
+       URL: /performance/audit.csv
+
+
+══════════════════════════════════════════════════════════════════════
+  WARNINGS SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ⚠️  Slow pages on local server: 16 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+  ⚠️  Card audit: mlb-picks: Page too small or empty — no cards audited
+  ⚠️  Model labels: NBA: Missing model label(s): ['Grinder2', 'Takedown']
+  ⚠️  Stale model name: NBA: Found stale model reference: 'placeholder'
+  ⚠️  Model labels: NHL: Missing model label(s): ['Grinder2', 'Takedown']
+  ⚠️  Stale model name: NHL: Found stale model reference: 'placeholder'
+  ⚠️  Performance page: Grinder2: Model NOT found on performance page
+  ⚠️  Performance page: Takedown: Model NOT found on performance page
+  ⚠️  Performance page: XSharp: Model NOT found on performance page
+  ⚠️  Performance page: Consensus: Model NOT found on performance page
+  ⚠️  Results math validation: 24 possible pct mismatches

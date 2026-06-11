@@ -54,6 +54,48 @@ def test_compute_results_tally_bundle_falls_back_to_latest_week():
     assert bundle['daily_tally']['ensemble']['total'] == 1
 
 
+def test_soccer_weekly_tally_uses_last_seven_matchdays():
+    import NHL77FINAL as N
+
+    daily = defaultdict(lambda: {'games': []})
+    for dk in ('2026-05-12', '2026-02-21', '2026-02-14', '2026-02-07'):
+        daily[dk]['games'].append({
+            'skip_grading': False,
+            'glicko2_prob': 55.0,
+            'glicko2_correct': True,
+            'ens_prob': 52.0,
+            'ens_correct': True,
+        })
+    yesterday_dt = datetime(2026, 6, 3)
+    bundle = N._compute_results_tally_bundle(
+        daily, yesterday_dt, sport='SOCCER',
+    )
+    assert bundle['weekly_tally_games'] == 4
+    assert bundle['weekly_tally_date_range'] == '2026-02-07 to 2026-05-12'
+    assert bundle['weekly_tally']['glicko2']['total'] == 4
+
+
+def test_soccer_weekly_tally_prefers_matchdays_over_sparse_calendar_week():
+    """UCL-style: 1 game in calendar week still uses last 7 matchdays."""
+    import NHL77FINAL as N
+
+    daily = defaultdict(lambda: {'games': []})
+    for dk in ('2026-06-01', '2026-05-20', '2026-05-13', '2026-05-06'):
+        daily[dk]['games'].append({
+            'skip_grading': False,
+            'glicko2_prob': 55.0,
+            'glicko2_correct': True,
+            'ens_prob': 52.0,
+            'ens_correct': True,
+        })
+    yesterday_dt = datetime(2026, 6, 3)
+    bundle = N._compute_results_tally_bundle(
+        daily, yesterday_dt, sport='SOCCER',
+    )
+    assert bundle['weekly_tally_games'] == 4
+    assert bundle['weekly_tally_date_range'] == '2026-05-06 to 2026-06-01'
+
+
 def test_sort_game_rows_by_date_desc_mixed_formats():
     import NHL77FINAL as N
 
@@ -223,6 +265,8 @@ def test_nba_results_uses_stale_tally_bundle(monkeypatch):
 
     monkeypatch.setattr(N, 'update_nba_scores', lambda: None)
     monkeypatch.setattr(N, 'calculate_nba_weekly_performance', lambda: weekly_results)
+    import sports.NBA as nba_mod
+    monkeypatch.setattr(nba_mod, 'calculate_nba_weekly_performance', lambda: weekly_results)
     monkeypatch.setattr(N, '_attach_book_odds_to_daily_results', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, '_cache_market_lines_for_results', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, '_attach_engine_odds_to_daily_results', lambda *_args, **_kwargs: None)
@@ -307,3 +351,33 @@ def test_wnba_results_does_not_fabricate_model_probs_when_absent(monkeypatch):
     first_game = captured['daily_results'][first_date]['games'][0]
     assert first_game['glicko2_prob'] is None
     assert first_game['trueskill_prob'] is None
+
+
+def test_results_date_query_param_in_html():
+    import NHL77FINAL as N
+
+    with N.app.test_client() as client:
+        resp = client.get('/nba-results?date=2026-05-30')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'resultsDateSelect' in html
+    assert '2026-05-30' in html
+
+
+def test_apply_results_date_filter_single_day():
+    import NHL77FINAL as N
+    from collections import defaultdict
+
+    daily = defaultdict(lambda: {'games': []})
+    daily['2026-05-29']['games'].append({'home': 'A', 'away': 'B'})
+    daily['2026-05-30']['games'].append({'home': 'C', 'away': 'D'})
+    sorted_dates = ['2026-05-30', '2026-05-29']
+
+    with N.app.test_request_context('/nba-results?date=2026-05-30'):
+        view, dates, selected, available = N._apply_results_date_filter(daily, sorted_dates)
+
+    assert selected == '2026-05-30'
+    assert dates == ['2026-05-30']
+    assert len(view['2026-05-30']['games']) == 1
+    assert '2026-05-29' not in view
+    assert available == ['2026-05-30', '2026-05-29']

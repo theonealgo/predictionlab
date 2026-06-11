@@ -229,8 +229,9 @@
         @media(max-width:720px){.footer-columns-3{grid-template-columns:1fr;gap:22px;}}
     </style>
     {% block extra_styles %}{% endblock %}
+    <link rel="stylesheet" href="/static/css/research-theme.css">
 </head>
-<body>
+<body class="research-site">
 <div class="navbar">
     <div class="navbar-content">
         <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
@@ -296,7 +297,10 @@
       {% endif %}
       <div class="tv-menu-list">
         <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button type="button" class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <a class="tv-menu-btn" href="/plans" style="text-decoration:none;"><span class="tv-menu-label">Pricing</span><span class="tv-menu-arrow">&#8250;</span></a>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('account')"><span class="tv-menu-label">Account</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('tools')"><span class="tv-menu-label">Tools &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
         <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
         <button type="button" class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
         <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
@@ -345,7 +349,7 @@
         <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
         <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
         <a class="share-icon" href="https://www.instagram.com/" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
-        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="https://www.tiktok.com/upload?lang=en" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
         <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
         <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
         <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
@@ -353,41 +357,7 @@
         <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
     </div>
 </div>
-<footer class="site-footer">
-    <div class="footer-outer">
-        <div class="footer-brand"><a href="/" class="logo">predictionlab.io</a></div>
-        <div class="footer-columns-3">
-            <div class="footer-col-blk">
-                <div class="footer-heading">Company</div>
-                <a href="/plans">Plans &amp; pricing</a>
-                <a href="/tutorial">Tutorial</a>
-                <a href="/contact">Contact us</a>
-                <a href="/privacy">Privacy</a>
-                <a href="/terms">Terms</a>
-                <a href="/responsible-gaming">Responsible gaming</a>
-            </div>
-            <div class="footer-col-blk">
-                <div class="footer-heading">Product</div>
-                <a href="/faq">FAQ</a>
-                <a href="/daily-report">Daily results report</a>
-                <a href="/search">Search</a>
-                <a href="/performance">Model performance</a>
-                <a href="/ai-sports-betting-picks-today">AI picks today</a>
-                <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
-                <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
-            </div>
-            <div class="footer-col-blk">
-                <div class="footer-heading">Social</div>
-                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X (Twitter)</a>
-                <a href="https://www.instagram.com/" target="_blank" rel="noopener">Instagram</a>
-                <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
-                <a href="https://predictionlab.io" target="_blank" rel="noopener">TikTok</a>
-                <a href="https://predictionlab.io" target="_blank" rel="noopener">YouTube</a>
-            </div>
-        </div>
-        <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
-    </div>
-</footer>
+{% include "partials/site_directory_footer.html" %}
 {% if not is_premium|default(false) %}
 <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
     <div class="join-premium-inner">
@@ -401,12 +371,15 @@
 {% endif %}
 <script>
 var TV_MENUS={
-  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-picks'}{%- endif -%},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},
-  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
-  results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},
+  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-picks'}{%- endif -%},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},
+  account:{title:'Account',items:[{% if is_logged_in %}{l:'Sign Out',h:'/logout'}{% else %}{l:'Sign In',h:'/login'},{l:'Create Account',h:'/signup',cls:'highlight'}{% endif %},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ / Help',h:'/faq'}]},
+  props:{title:'Props',items:[{l:'Player Props',h:'/player-props'}]},
+  tools:{title:'Tools & Models',items:[{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
+  results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Edge Performance',h:'/edge-performance'},{l:'Download CSV',h:'/results/downloads'}]},
   community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://www.instagram.com/',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
   company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
 };
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},account:{title:'Account',items:[{% if is_logged_in %}{l:'Sign Out',h:'/logout'}{% else %}{l:'Sign In',h:'/login'},{l:'Create Account',h:'/signup',cls:'highlight'}{% endif %},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ / Help',h:'/faq'}]},props:{title:'Props',items:[{l:'Player Props',h:'/player-props'}]},tools:{title:'Tools & Models',items:[{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Edge Performance',h:'/edge-performance'},{l:'Download CSV',h:'/results/downloads'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://www.instagram.com/',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
   if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';
@@ -435,17 +408,40 @@ var _srchDefaults=[
   {l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},
   {l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},
   {l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{%- if soccer_enabled -%},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{%- endif -%},
+  {l:'Tennis Picks',h:'/tennis-picks',s:'all'},{l:'UFC Picks',h:'/ufc-picks',s:'all'},{l:'Golf Picks',h:'/golf-picks',s:'all'},
   {l:'Player Props',h:'/player-props',s:'props'},
   {l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}
 ];
 function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){var i=document.getElementById('srchInput');if(i){i.focus();i.removeAttribute('readonly');}},60);renderSrchItems('');}
 function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';var i=document.getElementById('srchInput');if(i)i.value='';}
 function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
+function srchEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);});}
+function srchLink(label,href,sport){return'<a class="srch-item" href="'+srchEsc(href||'/search')+'"><span class="srch-item-label">'+srchEsc(label)+'</span><span class="srch-item-sport">'+srchEsc((sport||'all').toUpperCase())+'</span></a>';}
 function renderSrchItems(q){
-  var items=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&(!q||i.l.toLowerCase().includes(q.toLowerCase()));});
+  q=(q||'').trim();
   var el=document.getElementById('srchItems');
-  if(!items.length){el.innerHTML='<div class="srch-empty">No results found</div>';return;}
-  el.innerHTML=items.map(function(i){return'<a class="srch-item" href="'+i.h+'"><span class="srch-item-label">'+i.l+'</span><span class="srch-item-sport">'+i.s.toUpperCase()+'</span></a>';}).join('');
+  if(!el)return;
+  if(!q){
+    var items=_srchDefaults.filter(function(i){return _srchFilter==='all'||i.s===_srchFilter;});
+    el.innerHTML=items.map(function(i){return srchLink(i.l,i.h,i.s);}).join('');
+    return;
+  }
+  el.innerHTML='<div class="srch-empty">Searching...</div>';
+  fetch('/api/search?query='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
+    .then(function(r){return r.ok?r.json():Promise.reject();})
+    .then(function(data){
+      var rows=[];
+      if(data.suggested_route){rows.push(srchLink('Best match for "'+q+'"',data.suggested_route,'go'));}
+      (data.page_results||[]).forEach(function(r){rows.push(srchLink(r.label||'Page',r.route||data.suggested_route||'/',r.sport||'site'));});
+      (data.team_results||[]).forEach(function(r){rows.push(srchLink((r.away_team||'Away')+' vs '+(r.home_team||'Home'),data.suggested_route||('/'+String(r.sport||'').toLowerCase()+'-picks'),r.sport));});
+      (data.espn_results||[]).forEach(function(r){rows.push(srchLink((r.away_team||'Away')+' at '+(r.home_team||'Home'),data.suggested_route||'/search?query='+encodeURIComponent(q),r.sport));});
+      (data.model_results||[]).forEach(function(r){rows.push(srchLink((r.sport||'Model')+' '+(r.model||'performance')+' '+(r.accuracy||''),'/performance',r.sport||'model'));});
+      if(!rows.length){
+        rows=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&i.l.toLowerCase().includes(q.toLowerCase());}).map(function(i){return srchLink(i.l,i.h,i.s);});
+      }
+      el.innerHTML=rows.length?rows.join(''):'<div class="srch-empty">No results found. Press Enter to search.</div>';
+    })
+    .catch(function(){el.innerHTML='<div class="srch-empty">Search temporarily unavailable. Press Enter to search.</div>';});
 }
 document.addEventListener('DOMContentLoaded',function(){
   var inp=document.getElementById('srchInput');

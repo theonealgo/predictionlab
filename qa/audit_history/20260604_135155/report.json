@@ -1,0 +1,631 @@
+{
+  "run_id": "20260604_135155",
+  "timestamp": "2026-06-04 13:51:55",
+  "base_url": "http://127.0.0.1:5001",
+  "duration": 242.78685903549194,
+  "overall": "FAIL",
+  "summary": {
+    "passes": 71,
+    "warnings": 3,
+    "failures": 3,
+    "infos": 0
+  },
+  "checks": [
+    {
+      "label": "Homepage",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/"
+    },
+    {
+      "label": "Health Check",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/healthz"
+    },
+    {
+      "label": "Login Page",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/login"
+    },
+    {
+      "label": "Signup Page",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/signup"
+    },
+    {
+      "label": "Plans & Pricing",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/plans"
+    },
+    {
+      "label": "Contact",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/contact"
+    },
+    {
+      "label": "Privacy Policy",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/privacy"
+    },
+    {
+      "label": "Terms of Service",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/terms"
+    },
+    {
+      "label": "FAQ",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/faq"
+    },
+    {
+      "label": "Tutorial",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/tutorial"
+    },
+    {
+      "label": "Responsible Gaming",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/responsible-gaming"
+    },
+    {
+      "label": "AI Picks Today",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/ai-sports-betting-picks-today"
+    },
+    {
+      "label": "What Are AI Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/what-are-ai-sports-betting-picks"
+    },
+    {
+      "label": "Model vs Sportsbooks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/our-model-vs-sportsbooks"
+    },
+    {
+      "label": "Search",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/search"
+    },
+    {
+      "label": "All Sports Results",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/all-sports-results"
+    },
+    {
+      "label": "Daily Report",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/daily-report"
+    },
+    {
+      "label": "Results Redirect",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/results"
+    },
+    {
+      "label": "NBA Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "NHL Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "NFL Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nfl-picks"
+    },
+    {
+      "label": "MLB Picks",
+      "status": "FAIL",
+      "message": "Connection error",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by ReadTimeoutError(\"HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=15)\"))",
+      "auditor": "routes",
+      "url": "/mlb-picks"
+    },
+    {
+      "label": "NCAAB Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/ncaab-picks"
+    },
+    {
+      "label": "NCAAF Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/ncaaf-picks"
+    },
+    {
+      "label": "NCAAW Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/ncaaw-picks"
+    },
+    {
+      "label": "WNBA Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/wnba-picks"
+    },
+    {
+      "label": "Soccer Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/soccer-picks"
+    },
+    {
+      "label": "World Cup Picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/soccer-picks?league=fifa.world"
+    },
+    {
+      "label": "NBA Results",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nba-results"
+    },
+    {
+      "label": "NHL Results",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nhl-results"
+    },
+    {
+      "label": "MLB Results",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/mlb-results"
+    },
+    {
+      "label": "Model Performance (auth redirect ok)",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/performance"
+    },
+    {
+      "label": "Robots.txt",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/robots.txt"
+    },
+    {
+      "label": "Sitemap XML",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/sitemap.xml"
+    },
+    {
+      "label": "Sports API",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/api/sports"
+    },
+    {
+      "label": "Search API",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/api/search?q=nba"
+    },
+    {
+      "label": "Player Props (needs login)",
+      "status": "PASS",
+      "message": "Correctly redirects (HTTP 302)",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/player-props"
+    },
+    {
+      "label": "Picks CSV (needs login)",
+      "status": "PASS",
+      "message": "Correctly redirects (HTTP 302)",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/picks/export.csv"
+    },
+    {
+      "label": "Results CSV (needs login)",
+      "status": "PASS",
+      "message": "Correctly redirects (HTTP 302)",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/results/export.csv"
+    },
+    {
+      "label": "Audit CSV (needs login)",
+      "status": "PASS",
+      "message": "Correctly redirects (HTTP 302)",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/performance/audit.csv"
+    },
+    {
+      "label": "404 Handler",
+      "status": "PASS",
+      "message": "Correct HTTP 404",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/this-page-does-not-exist-xyz123"
+    },
+    {
+      "label": "Sport page /nba-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "Sport page /nhl-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "Sport page /nfl-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/nfl-picks"
+    },
+    {
+      "label": "Sport page /mlb-picks",
+      "status": "FAIL",
+      "message": "HTTP -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/mlb-picks"
+    },
+    {
+      "label": "Sport page /ncaab-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/ncaab-picks"
+    },
+    {
+      "label": "Sport page /ncaaf-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/ncaaf-picks"
+    },
+    {
+      "label": "Sport page /ncaaw-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/ncaaw-picks"
+    },
+    {
+      "label": "Sport page /wnba-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/wnba-picks"
+    },
+    {
+      "label": "Sport page /soccer-picks",
+      "status": "PASS",
+      "message": "HTTP 200",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/soccer-picks"
+    },
+    {
+      "label": "Stale content scan",
+      "status": "PASS",
+      "message": "No stale/forbidden strings found in page content",
+      "detail": "",
+      "auditor": "content",
+      "url": ""
+    },
+    {
+      "label": "Debug mode",
+      "status": "PASS",
+      "message": "No debug mode indicators found",
+      "detail": "",
+      "auditor": "content",
+      "url": ""
+    },
+    {
+      "label": "Page size: /nba-picks",
+      "status": "PASS",
+      "message": "88,681 bytes",
+      "detail": "",
+      "auditor": "content",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "Page size: /nhl-picks",
+      "status": "PASS",
+      "message": "93,892 bytes",
+      "detail": "",
+      "auditor": "content",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "Nav link: /nba-picks",
+      "status": "PASS",
+      "message": "Found in navigation",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Nav link: /nhl-picks",
+      "status": "PASS",
+      "message": "Found in navigation",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Nav link: /nfl-picks",
+      "status": "PASS",
+      "message": "Found in navigation",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Nav link: /mlb-picks",
+      "status": "PASS",
+      "message": "Found in navigation",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Nav link: /ncaab-picks",
+      "status": "PASS",
+      "message": "Found in navigation",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Nav link: /ncaaf-picks",
+      "status": "PASS",
+      "message": "Found in navigation",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Nav link: /wnba-picks",
+      "status": "PASS",
+      "message": "Found in navigation",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /plans",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /privacy",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /terms",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /contact",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /faq",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /responsible-gaming",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /daily-report",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /performance",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /ai-sports-betting-picks-today",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /what-are-ai-sports-betting-picks",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Footer link: /our-model-vs-sportsbooks",
+      "status": "PASS",
+      "message": "Present in footer",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Duplicate nav link: /plans",
+      "status": "WARN",
+      "message": "Appears 3x in page HTML (may be intentional if in both nav + footer)",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Duplicate nav link: /mlb-picks",
+      "status": "WARN",
+      "message": "Appears 6x in page HTML (may be intentional if in both nav + footer)",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Duplicate nav link: /nba-picks",
+      "status": "WARN",
+      "message": "Appears 3x in page HTML (may be intentional if in both nav + footer)",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Props menu: forbidden link",
+      "status": "FAIL",
+      "message": "'/daily-report' is in Props & Models menu \u2014 should only be in Results & Tracking",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Internal link spot-check",
+      "status": "PASS",
+      "message": "Checked 20 links \u2014 none returned 404",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    }
+  ]
+}

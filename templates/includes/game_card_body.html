@@ -25,7 +25,7 @@
     <div class="teams-split">
         <div class="team-col away">
             <img class="team-logo" src="{{ team_logo_url(sport, away_id) }}" alt="" width="48" height="48" loading="lazy">
-            <div class="team-name">{{ team_short(away_id) }}</div>
+            <div class="team-name">{{ team_short(away_id, sport) }}</div>
             {% if is_final %}
             <div class="final-score {% if away_wins %}score-winner{% endif %}">{{ away_score }}</div>
             {% else %}
@@ -45,7 +45,7 @@
         <div class="teams-at">@</div>
         <div class="team-col home">
             <img class="team-logo" src="{{ team_logo_url(sport, home_id) }}" alt="" width="48" height="48" loading="lazy">
-            <div class="team-name">{{ team_short(home_id) }}</div>
+            <div class="team-name">{{ team_short(home_id, sport) }}</div>
             {% if is_final %}
             <div class="final-score {% if home_wins %}score-winner{% endif %}">{{ home_score }}</div>
             {% else %}
@@ -120,7 +120,7 @@
             <div class="pc-name">{{ m.name }}</div>
             {% if m.prob is not none %}
             <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
-            <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ home_id }}{% else %}{{ away_id }}{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
+            <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ home_id }}{% else %}{{ away_id }}{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id, sport) }}{% else %}{{ team_short(away_id, sport) }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
             {% else %}
             <div class="pc-val" style="color:#64748b;">—</div>
             <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
@@ -162,8 +162,13 @@
 {% set _face_label = card.face_model_label if card.face_model_label is defined else 'Sharp Consensus' %}
 {% set _fh = card.face_home_prob if card.face_home_prob is defined else none %}
 {% set _fa = card.face_away_prob if card.face_away_prob is defined else none %}
+{% set _face_pick = card.face_pick_team if card.face_pick_team is defined else none %}
+{% set _away_favored = _face_pick and _face_pick == away_id %}
+{% set _home_favored = _face_pick and _face_pick == home_id %}
+{% if not _face_pick %}
 {% set _away_favored = _fa is not none and _fh is not none and _fa > _fh %}
 {% set _home_favored = _fh is not none and _fa is not none and _fh > _fa %}
+{% endif %}
 {% set _book_spread_lbl = 'Books run line' if sport == 'MLB' else ('Books puck line' if sport == 'NHL' else 'Books spread') %}
 {% set _books_src = 'Books · DK' if card.book_provider is defined and card.book_provider and 'draftkings' in card.book_provider|lower else 'Books' %}
 {% set _book_ml_est = card.book_ml_estimated is defined and card.book_ml_estimated %}
@@ -177,8 +182,8 @@
 <div class="matchup-row">
     <div class="team-slot {% if _away_favored %}favored{% endif %}">
         <img class="team-logo" src="{{ team_logo_url(sport, away_id) }}" alt="" width="52" height="52" loading="lazy">
-        <div class="team-name">{{ team_short(away_id) }}</div>
-        <div class="model-tag">{{ _face_label }}</div>
+        <div class="team-name">{{ team_short(away_id, sport) }}</div>
+        <div class="model-tag">{% if _face_pick and _face_pick == away_id %}{{ _face_label }}{% else %}Win prob{% endif %}</div>
         <div class="win-pct">{% if _fa is not none %}{{ _fa }}<span class="unit">%</span>{% else %}—{% endif %}</div>
         <div class="ml-stack face-ml-stack">
             <div class="ml-line face-books-ml">
@@ -194,8 +199,8 @@
     <div class="matchup-at">@</div>
     <div class="team-slot {% if _home_favored %}favored{% endif %}">
         <img class="team-logo" src="{{ team_logo_url(sport, home_id) }}" alt="" width="52" height="52" loading="lazy">
-        <div class="team-name">{{ team_short(home_id) }}</div>
-        <div class="model-tag">{{ _face_label }}</div>
+        <div class="team-name">{{ team_short(home_id, sport) }}</div>
+        <div class="model-tag">{% if _face_pick and _face_pick == home_id %}{{ _face_label }}{% else %}Win prob{% endif %}</div>
         <div class="win-pct">{% if _fh is not none %}{{ _fh }}<span class="unit">%</span>{% else %}—{% endif %}</div>
         <div class="ml-stack face-ml-stack">
             <div class="ml-line face-books-ml">
@@ -226,6 +231,7 @@
 {% endif %}
 
 <div class="lines-strip">
+    {% if is_premium|default(false) %}
     <div class="line-chip">
         <div class="line-chip-label">{{ _book_spread_lbl }}</div>
         <div class="line-chip-val">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</div>
@@ -234,12 +240,19 @@
         <div class="line-chip-label">Books total</div>
         <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
+    {% endif %}
     {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
     {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
     {% if _edge is not none %}
     <div class="line-chip edge-chip {% if _edge > 0 %}pos{% elif _edge < 0 %}neg{% endif %}">
         <div class="line-chip-label">Edge</div>
         <div class="line-chip-val">{% if _edge > 0 %}+{% endif %}{{ "%.1f"|format(_edge) }}%</div>
+    </div>
+    {% endif %}
+    {% if card.ml_ev is defined and card.ml_ev is not none %}
+    <div class="line-chip edge-chip {% if card.ml_ev > 0 %}pos{% elif card.ml_ev < 0 %}neg{% endif %}">
+        <div class="line-chip-label">Moneyline EV</div>
+        <div class="line-chip-val">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</div>
     </div>
     {% endif %}
 </div>
@@ -257,6 +270,9 @@
 {% endif %}
 
 <footer class="card-footer">
+    <button type="button" class="copy-pick-btn" onclick="copySinglePick(this)" title="Copy this pick to clipboard">
+        Copy Pick
+    </button>
     <button type="button" class="view-details-btn" aria-expanded="false" aria-controls="{{ _details_id }}" onclick="togglePickDetails(this)">
         View Details <span class="chevron">▾</span>
     </button>
@@ -319,7 +335,7 @@
                 <div class="pc-name">{{ m.name }}</div>
                 {% if m.prob is not none %}
                 <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
-                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}</div>
+                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id, sport) }}{% else %}{{ team_short(away_id, sport) }}{% endif %}</div>
                 {% else %}
                 <div class="pc-val" style="color:#64748b;">—</div>
                 <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
@@ -337,17 +353,94 @@
         </div>
         {% endif %}
         {% if card.ml_ev is defined and card.ml_ev is not none %}
-        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
+        <div class="sf-item"><span class="sf-label">Moneyline EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
+        {% endif %}
+        {% if card.spread_ev is defined and card.spread_ev is not none %}
+        <div class="sf-item"><span class="sf-label">Spread EV</span><span class="sf-val" style="color:{% if card.spread_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.spread_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.spread_ev) }}%</span></div>
         {% endif %}
         {% if card.total_ev is defined and card.total_ev is not none %}
         <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if card.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.total_ev) }}%</span></div>
         {% endif %}
-        {% if card.best_ev_pick is defined and card.best_ev_pick %}
-        <div class="sf-item"><span class="sf-label">Best EV</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ card.best_ev_pick }}</span></div>
+        {% set _best_ev_market = card.best_ev_market if card.best_ev_market is defined and card.best_ev_market else (card.best_ev_pick if card.best_ev_pick is defined else none) %}
+        {% if _best_ev_market %}
+        <div class="sf-item"><span class="sf-label">Best EV Market</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ _best_ev_market }}</span></div>
+        <div class="sf-item">
+            <span class="sf-label">Recommended Premium Market</span>
+            <span class="sf-val">
+                {% if _best_ev_market == 'Spread' %}
+                    {% if card.spread_pick_label %}{{ card.spread_pick_label }}{% elif card.spread_pick_reason is defined and card.spread_pick_reason %}{{ card.spread_pick_reason }}{% else %}Recommended Side: Not available · Reason: Missing spread pick side from data{% endif %}
+                {% elif _best_ev_market == 'Total' %}
+                    {% if card.total_pick_label %}{{ card.total_pick_label }}{% elif card.total_pick_reason is defined and card.total_pick_reason %}{{ card.total_pick_reason }}{% else %}Recommended Side: Not available · Reason: Missing total pick side from data{% endif %}
+                {% elif _best_ev_market == 'Moneyline' %}
+                    {% if card.face_pick_team is defined and card.face_pick_team %}{{ card.face_pick_team }}{% elif card.predicted_winner is defined %}{{ card.predicted_winner }}{% else %}Recommended Side: Not available · Reason: Missing moneyline pick side from data{% endif %}
+                {% else %}
+                    Recommended Side: Not available · Reason: Missing market pick side from data
+                {% endif %}
+            </span>
+        </div>
         {% endif %}
     </div>
     {% else %}
-    <div class="odds-pricing-locked" style="padding:14px;font-size:0.84em;text-align:center;">🔒 Lines &amp; projections locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.</div>
+    <div class="odds-pricing-locked" style="padding:14px;font-size:0.84em;text-align:center;">
+        🔒 Premium models locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.
+        <div style="margin-top:10px;display:grid;gap:6px;text-align:left;max-width:360px;margin-left:auto;margin-right:auto;color:#475569;">
+            <div>Spread model available</div>
+            <div>Total model available</div>
+            <div>Projected score available</div>
+            <div>Model-by-model confidence available</div>
+            <div>EV market breakdown available</div>
+        </div>
+    </div>
     {% endif %}
 </div>
+{% set _best_ev_market = card.best_ev_market if card.best_ev_market is defined and card.best_ev_market else (card.best_ev_pick if card.best_ev_pick is defined else none) %}
+{% set _recommended_spread = card.spread_pick_label if card.spread_pick_label else (card.spread_pick_reason if card.spread_pick_reason is defined else none) %}
+{% set _recommended_total = card.total_pick_label if card.total_pick_label else (card.total_pick_reason if card.total_pick_reason is defined else none) %}
+{% set _recommended_ml = card.face_pick_team if card.face_pick_team is defined and card.face_pick_team else (card.predicted_winner if card.predicted_winner is defined else none) %}
+{% set _copy_payload = {
+    'access': {'isPremium': is_premium|default(false)},
+    'sport': (sport_info.icon ~ ' ' ~ sport_info.name) if sport_info is defined else sport,
+    'sportKey': sport,
+    'gameTime': card.game_time if card.game_time is defined else none,
+    'awayTeam': away_id,
+    'homeTeam': home_id,
+    'awayWinProb': _fa,
+    'homeWinProb': _fh,
+    'sharpConsensusLabel': _face_label,
+    'moneyline': {
+        'awayBooks': bk_away,
+        'homeBooks': bk_home,
+        'awayPredictionLab': pl_away,
+        'homePredictionLab': pl_home,
+        'aiPick': card.face_pick_team if card.face_pick_team is defined else none,
+        'confidence': card.face_pick_confidence if card.face_pick_confidence is defined else none,
+        'ev': card.ml_ev if card.ml_ev is defined else none,
+        'edge': _edge
+    },
+    'analysis': {
+        'totalTrendRecord': card.total_trend_record if card.total_trend_record is defined else none,
+        'spreadTrendRecord': card.spread_trend_record if card.spread_trend_record is defined else none
+    },
+    'premium': ({
+        'spreadLabel': spread_label,
+        'booksSpread': fmt_spread_line(_disp_bs, home_id, away_id, force_rl),
+        'predictionLabSpread': fmt_spread_line(_disp_ps, home_id, away_id, force_rl),
+        'xsharpSpread': fmt_spread_line(_disp_xs, home_id, away_id, force_rl),
+        'booksTotal': ('O/U ' ~ fmt_half(_disp_bt)) if _disp_bt is not none else none,
+        'predictionLabTotal': fmt_half(_disp_pt) if _disp_pt is not none else none,
+        'xsharpTotal': fmt_half(_disp_xt) if _disp_xt is not none else none,
+        'predictionLabScore': fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) if _pl_ah is not none else none,
+        'xsharpScore': fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) if _xs_ah is not none else none,
+        'spreadEv': card.spread_ev if card.spread_ev is defined else none,
+        'totalEv': card.total_ev if card.total_ev is defined else none,
+        'bestEvMarket': _best_ev_market,
+        'recommendedPremiumMarket': _recommended_spread if _best_ev_market == 'Spread' else (_recommended_total if _best_ev_market == 'Total' else (_recommended_ml if _best_ev_market == 'Moneyline' else none)),
+        'recommendedReason': 'Missing spread pick side from data' if _best_ev_market == 'Spread' and not _recommended_spread else ('Missing total pick side from data' if _best_ev_market == 'Total' and not _recommended_total else ('Missing moneyline pick side from data' if _best_ev_market == 'Moneyline' and not _recommended_ml else none)),
+        'spreadPick': _recommended_spread,
+        'totalPick': _recommended_total,
+        'h2hLast10Total': (fmt_half(card.h2h_last10_total) ~ (' (' ~ card.h2h_last10_games ~ ' games)' if card.h2h_last10_games is defined and card.h2h_last10_games else '')) if card.h2h_last10_total is defined and card.h2h_last10_total is not none else none,
+        'models': conf_models
+    } if is_premium|default(false) else none)
+} %}
+<script type="application/json" class="prediction-card-data">{{ _copy_payload|tojson }}</script>
 {% endif %}

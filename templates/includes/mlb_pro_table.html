@@ -1,0 +1,151 @@
+{# ─────────────────────────────────────────────────────────────────────────────
+   Pro Table View — one row per game, all card data in a single wide table.
+   Works for every team-vs-team sport. Rendered alongside (not instead of) the
+   card grid; JS toggles visibility. Expects in context: _date_preds (list of
+   pred dicts), date (str), sport (str), is_premium (bool).
+   Reuses the SAME pred data as the cards — no fabricated values.
+   ───────────────────────────────────────────────────────────────────────────── #}
+{% from 'includes/score_macros.html' import fmt_half, fmt_labeled_proj, team_short, fmt_spread_line %}
+{% set prem = is_premium|default(false) %}
+{# Run line / puck line are a fixed ±1.5; every other sport shows the real spread. #}
+{% set _is_rl = sport in ('MLB', 'NHL') %}
+{% set _spread_word = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
+
+{% macro mlbpt_model_cell(prob, home_id, away_id, sport) -%}
+  {%- if prob is not none -%}
+    {%- set picked_home = prob >= 50 -%}
+    {%- set conf = prob if picked_home else (100 - prob) -%}
+    <div class="mlbpt-mteam">{{ team_short(home_id, sport) if picked_home else team_short(away_id, sport) }}</div>
+    <div class="mlbpt-mconf">{{ "%.1f"|format(conf) }}%</div>
+  {%- else -%}<span class="mlbpt-dash">—</span>{%- endif -%}
+{%- endmacro %}
+
+<div class="mlbpt-title">{{ (sport_info.name if (sport_info is defined and sport_info) else sport) }} Picks — {{ date }}</div>
+<div class="mlbpt-scrollhint"><span class="mlbpt-arrows">⟷</span> Scroll sideways to see every column</div>
+<div class="mlbpt-scrollwrap">
+<div class="mlbpt-scroll">
+<table class="mlbpt-table">
+  <thead>
+    <tr>
+      <th class="mlbpt-sticky mlbpt-c-time">Time (EST)</th>
+      <th class="mlbpt-sticky mlbpt-c-away">Away</th>
+      <th class="mlbpt-sticky mlbpt-c-home">Home</th>
+      <th>Books {{ _spread_word }} / Total{% if not prem %} 🔒{% endif %}</th>
+      <th>Odds &amp; Lines — Prediction Lab{% if not prem %} 🔒{% endif %}</th>
+      <th>Odds &amp; Lines — XSharp{% if not prem %} 🔒{% endif %}</th>
+      <th>Grinder2{% if not prem %} 🔒{% endif %}</th>
+      <th>Takedown{% if not prem %} 🔒{% endif %}</th>
+      <th>Edge{% if not prem %} 🔒{% endif %}</th>
+      <th>XSharp{% if not prem %} 🔒{% endif %}</th>
+      <th>Efficiency{% if not prem %} 🔒{% endif %}</th>
+      <th>Sharp Consensus{% if not prem %} 🔒{% endif %}</th>
+      <th>H2H Avg Total{% if not prem %} 🔒{% endif %}</th>
+      <th>EV</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for pred in _date_preds %}
+    {% set card = pred %}
+    {% set away_id = pred.away_team_id %}
+    {% set home_id = pred.home_team_id %}
+    {% set bk_away = pred.book_away_moneyline if pred.book_away_moneyline is defined and pred.book_away_moneyline else none %}
+    {% set bk_home = pred.book_home_moneyline if pred.book_home_moneyline is defined and pred.book_home_moneyline else none %}
+    {% set pl_away = pred.pl_model_away_ml if pred.pl_model_away_ml is defined else none %}
+    {% set pl_home = pred.pl_model_home_ml if pred.pl_model_home_ml is defined else none %}
+    {% set _face_label = pred.face_model_label if pred.face_model_label is defined else 'Sharp Consensus' %}
+    {% set _fa = pred.face_away_prob if pred.face_away_prob is defined else none %}
+    {% set _fh = pred.face_home_prob if pred.face_home_prob is defined else none %}
+    {% set _face_pick = pred.face_pick_team if pred.face_pick_team is defined else none %}
+    {% set _disp_bs = pred.disp_book_spread if pred.disp_book_spread is defined else none %}
+    {% set _disp_ps = pred.disp_pl_spread if pred.disp_pl_spread is defined else none %}
+    {% set _disp_xs = pred.disp_xs_spread if pred.disp_xs_spread is defined else none %}
+    {% set _disp_bt = pred.disp_book_total if pred.disp_book_total is defined else none %}
+    {% set _disp_pt = pred.disp_pl_total if pred.disp_pl_total is defined else none %}
+    {% set _disp_xt = pred.disp_xs_total if pred.disp_xs_total is defined else none %}
+    {% set _pl_ah = pred.pl_proj_away_pts if pred.pl_proj_away_pts is defined else none %}
+    {% set _pl_hh = pred.pl_proj_home_pts if pred.pl_proj_home_pts is defined else none %}
+    {% set _xs_ah = pred.xs_proj_away_pts if pred.xs_proj_away_pts is defined else none %}
+    {% set _xs_hh = pred.xs_proj_home_pts if pred.xs_proj_home_pts is defined else none %}
+    {% set _ml_ev = pred.ml_ev if pred.ml_ev is defined else none %}
+    {% set _sp_ev = pred.spread_ev if pred.spread_ev is defined else none %}
+    {% set _to_ev = pred.total_ev if pred.total_ev is defined else none %}
+    {% set _best_ev = pred.best_ev_market if pred.best_ev_market is defined and pred.best_ev_market else none %}
+    {% set _away_pick = _face_pick and _face_pick == away_id %}
+    {% set _home_pick = _face_pick and _face_pick == home_id %}
+    <tr class="mlbpt-row">
+      <td class="mlbpt-sticky mlbpt-c-time">{% if pred.game_time is defined and pred.game_time is not none %}{{ pred.game_time | replace(' ET', '') | replace(' EST', '') | replace(' EDT', '') }}{% else %}Upcoming{% endif %}</td>
+
+      {# ── Away ── #}
+      <td class="mlbpt-sticky mlbpt-c-away {% if _away_pick %}mlbpt-picked{% endif %}">
+        <div class="mlbpt-team">
+          <img class="mlbpt-logo" src="{{ team_logo_url(sport, away_id) }}" alt="" width="26" height="26" loading="lazy">
+          <span class="mlbpt-tname">{{ team_short(away_id, sport) }}</span>
+        </div>
+        <div class="mlbpt-wp"><span class="mlbpt-wplabel">{% if _away_pick %}{{ _face_label }}{% else %}Win Prob{% endif %}</span><span class="mlbpt-wppct">{% if _fa is not none %}{{ _fa }}%{% else %}—{% endif %}</span></div>
+        <div class="mlbpt-odds"><span>Books:</span> {% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</div>
+        <div class="mlbpt-odds"><span>PL:</span> {% if pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</div>
+      </td>
+
+      {# ── Home ── #}
+      <td class="mlbpt-sticky mlbpt-c-home {% if _home_pick %}mlbpt-picked{% endif %}">
+        <div class="mlbpt-team">
+          <img class="mlbpt-logo" src="{{ team_logo_url(sport, home_id) }}" alt="" width="26" height="26" loading="lazy">
+          <span class="mlbpt-tname">{{ team_short(home_id, sport) }}</span>
+        </div>
+        <div class="mlbpt-wp"><span class="mlbpt-wplabel">{% if _home_pick %}{{ _face_label }}{% else %}Win Prob{% endif %}</span><span class="mlbpt-wppct">{% if _fh is not none %}{{ _fh }}%{% else %}—{% endif %}</span></div>
+        <div class="mlbpt-odds"><span>Books:</span> {% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</div>
+        <div class="mlbpt-odds"><span>PL:</span> {% if pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</div>
+      </td>
+
+      {# ── Books Run Line / Total (premium), stacked with short team names ── #}
+      <td class="mlbpt-lines">{% if prem %}
+        <div>{% if _disp_bs is not none %}{{ fmt_spread_line(_disp_bs, team_short(home_id, sport), team_short(away_id, sport), _is_rl) }}{% else %}—{% endif %}</div>
+        <div>{% if _disp_bt is not none %}Total {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
+      {% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+
+      {# ── Odds & Lines — Prediction Lab (premium) ── #}
+      <td class="mlbpt-lines">{% if prem %}
+        <div><b>Spread:</b> {% if _disp_ps is not none %}{{ fmt_spread_line(_disp_ps, team_short(home_id, sport), team_short(away_id, sport), _is_rl) }}{% else %}—{% endif %}</div>
+        <div><b>Total:</b> {% if _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</div>
+        {# Projected score derived from the spread+total shown above, so it is never blank and always consistent with them. #}
+        {% set _pl_h2 = (((_disp_pt + _disp_ps) | round) / 2) if (_disp_pt is not none and _disp_ps is not none) else none %}
+        {% set _pl_a2 = (_disp_pt - _pl_h2) if _pl_h2 is not none else none %}
+        {% if _pl_a2 is not none %}<div class="mlbpt-scorehead"><b>Score</b></div>
+        <div class="mlbpt-scoreline">{{ team_short(away_id, sport) }} {{ fmt_half(_pl_a2) }}</div>
+        <div class="mlbpt-scoreline">{{ team_short(home_id, sport) }} {{ fmt_half(_pl_h2) }}</div>{% else %}<div><b>Score:</b> —</div>{% endif %}
+      {% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+
+      {# ── Odds & Lines — XSharp (premium) ── #}
+      <td class="mlbpt-lines">{% if prem %}
+        <div><b>Spread:</b> {% if _disp_xs is not none %}{{ fmt_spread_line(_disp_xs, team_short(home_id, sport), team_short(away_id, sport), _is_rl) }}{% else %}—{% endif %}</div>
+        <div><b>Total:</b> {% if _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</div>
+        {% set _xs_h2 = (((_disp_xt + _disp_xs) | round) / 2) if (_disp_xt is not none and _disp_xs is not none) else none %}
+        {% set _xs_a2 = (_disp_xt - _xs_h2) if _xs_h2 is not none else none %}
+        {% if _xs_a2 is not none %}<div class="mlbpt-scorehead"><b>Score</b></div>
+        <div class="mlbpt-scoreline">{{ team_short(away_id, sport) }} {{ fmt_half(_xs_a2) }}</div>
+        <div class="mlbpt-scoreline">{{ team_short(home_id, sport) }} {{ fmt_half(_xs_h2) }}</div>{% else %}<div><b>Score:</b> —</div>{% endif %}
+      {% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+
+      {# ── Model columns (premium) ── #}
+      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.glicko2_prob if pred.glicko2_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.trueskill_prob if pred.trueskill_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.elo_prob if pred.elo_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.xgb_prob if pred.xgb_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.efficiency_prob if pred.efficiency_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.ensemble_prob if pred.ensemble_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+
+      {# ── H2H Last 10 (premium), value stacked over the game count ── #}
+      <td class="mlbpt-h2h">{% if prem %}{% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}<div>{{ fmt_half(pred.h2h_last10_total) }}</div>{% if pred.h2h_last10_games is defined and pred.h2h_last10_games %}<div class="mlbpt-sub">({{ pred.h2h_last10_games }} game{% if pred.h2h_last10_games != 1 %}s{% endif %})</div>{% endif %}{% else %}<span class="mlbpt-dash">—</span>{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+
+      {# ── EV: Moneyline (free) + Spread/Total (premium), stacked in one column ── #}
+      <td class="mlbpt-ev">
+        <div><span>ML</span> {% if _ml_ev is not none %}<b class="{% if _ml_ev > 0 %}mlbpt-pos{% elif _ml_ev < 0 %}mlbpt-neg{% endif %}">{% if _ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(_ml_ev) }}%</b>{% else %}<span class="mlbpt-dash">—</span>{% endif %}</div>
+        <div><span>Spread</span> {% if prem %}{% if _sp_ev is not none %}<b class="{% if _sp_ev > 0 %}mlbpt-pos{% elif _sp_ev < 0 %}mlbpt-neg{% endif %}">{% if _sp_ev > 0 %}+{% endif %}{{ "%.1f"|format(_sp_ev) }}%</b>{% else %}<span class="mlbpt-dash">—</span>{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</div>
+        <div><span>Total</span> {% if prem %}{% if _to_ev is not none %}<b class="{% if _to_ev > 0 %}mlbpt-pos{% elif _to_ev < 0 %}mlbpt-neg{% endif %}">{% if _to_ev > 0 %}+{% endif %}{{ "%.1f"|format(_to_ev) }}%</b>{% else %}<span class="mlbpt-dash">—</span>{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>

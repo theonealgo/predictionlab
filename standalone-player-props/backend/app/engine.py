@@ -23,6 +23,7 @@ except Exception:
 from .data_sources import (
     build_validated_nba_player_pool,
     build_top_players,
+    fetch_individual_prop_actuals,
     fetch_prop_lines,
     fetch_schedule_and_teams,
     implied_prob,
@@ -46,6 +47,14 @@ _MODEL_WEIGHTS = {
     "sharp_consensus": 0.05,
 }
 _MODEL_ORDER = ["glicko2", "trueskill", "xgboost", "xsharp", "sharp_consensus"]
+
+# Prop types that are OVER-only (milestone / anytime markets — no UNDER side).
+# Everything else (SOG, strikeouts, NBA box stats, yards, aces…) is over/under.
+_OVER_ONLY_PROPS = {
+    "NHL":    frozenset({"goals", "points", "assists"}),
+    "MLB":    frozenset({"hits", "runs", "rbis"}),   # HR handled separately (No-HR / UNDER)
+    "SOCCER": frozenset({"goals", "assists"}),
+}
 
 
 # ── Per-sport realistic per-game projection ceilings ──────────────────────
@@ -91,6 +100,19 @@ _SPORT_PROJ_CAPS: Dict[str, Dict[str, float]] = {
         "touchdowns":        5.0,
         "receptions":       12.0,
     },
+    "TENNIS": {
+        "aces":          25.0,   # Isner's all-time record is 113 in a match, 25 is realistic ceiling
+        "games":         30.0,
+        "double_faults": 10.0,
+    },
+    "UFC": {
+        "significant_strikes": 200.0,
+        "takedowns":             8.0,
+    },
+    "GOLF": {
+        "birdies": 10.0,   # realistic ceiling for a single round
+        "bogeys":   8.0,
+    },
 }
 
 # Per-sport scale factor for the projection formula (NBA baseline = 1.0).
@@ -101,11 +123,14 @@ _SPORT_PROJ_SCALE: Dict[str, float] = {
     "WNBA":  0.85,
     "NCAAB": 0.90,
     "NCAAW": 0.80,
-    "NHL":   0.08,   # ice-time stats are tiny fractions per game
-    "MLB":   0.12,
-    "NFL":   0.45,
-    "NCAAF": 0.40,
+    "NHL":    0.08,
+    "MLB":    0.12,
+    "NFL":    0.45,
+    "NCAAF":  0.40,
     "SOCCER": 0.06,
+    "TENNIS": 0.18,   # aces/double faults per match
+    "UFC":    0.55,   # significant strikes per fight
+    "GOLF":   0.25,   # birdies/bogeys per round
 }
 
 
@@ -231,7 +256,25 @@ def _generate_internal_prop_line(prop_type: str, projection: float) -> float:
     return round(v, 1)
 
 
+# Combined ("parlay") props: projection = sum of the component projections.
+_COMBINED_COMPONENTS = {
+    "pts_reb":     ("points", "rebounds"),
+    "pts_ast":     ("points", "assists"),
+    "reb_ast":     ("rebounds", "assists"),
+    "pts_reb_ast": ("points", "rebounds", "assists"),
+    "h_r_rbi":     ("hits", "runs", "rbis"),
+}
+
+
 def _calc_stat_projection(player: Dict, prop_type: str, opponent_id: str) -> tuple[float, float]:
+    # Combined props: recurse over the components and sum their projections.
+    if prop_type in _COMBINED_COMPONENTS:
+        total, ofac = 0.0, 1.0
+        for comp in _COMBINED_COMPONENTS[prop_type]:
+            v, ofac = _calc_stat_projection(player, comp, opponent_id)
+            total += v
+        return total, ofac
+
     s5 = player.get("stats_last5") or {}
     s10 = player.get("stats_last10") or {}
     last5 = float(s5.get(prop_type, 0.0) or 0.0)
@@ -322,12 +365,27 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     prop_lines = fetch_prop_lines(league, players)
     by_id = {p["player_id"]: p for p in players}
     matchups = {}
+    venue_by_team = {}
+    team_name_by_id = {}
+    opp_name_by_team = {}   # team_id -> opponent display name (for the OPP column)
+    opp_name_by_team_name = {}  # team name -> opponent display name (fallback)
     for g in schedule:
         h = g.get("home_team_id", "")
         a = g.get("away_team_id", "")
+        hn = g.get("home_team", "")
+        an = g.get("away_team", "")
         if h and a:
             matchups[h] = a
             matchups[a] = h
+            venue_by_team[h] = "home"
+            venue_by_team[a] = "away"
+        if h: team_name_by_id[h] = hn
+        if a: team_name_by_id[a] = an
+        if h and an: opp_name_by_team[h] = an
+        if a and hn: opp_name_by_team[a] = hn
+        if hn and an:
+            opp_name_by_team_name[hn] = an
+            opp_name_by_team_name[an] = hn
 
     projections = []
     debug_variance = []
@@ -336,6 +394,7 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         p = by_id.get(prop["player_id"])
         if not p:
             continue
+        opp_factor = None
         if league == "NBA":
             opponent_id = matchups.get(p.get("team_id", ""), "")
             proj, opp_factor = _calc_stat_projection(p, prop["prop_type"], opponent_id)
@@ -344,28 +403,47 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
                     {"player_id": p.get("player_id"), "name": p.get("name"), "team_id": p.get("team_id"), "reasons": ["insufficient_data"]}
                 )
                 continue
-            calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line")) or 0.0))
-            if calc_line <= 0.0:
-                calc_line = _generate_internal_prop_line(prop["prop_type"], proj)
+            if prop["prop_type"] in _COMBINED_COMPONENTS:
+                # Combined ("parlay") props have no real book line. Build it at the
+                # nearest X.5 to OUR projection so OVER/UNDER splits naturally
+                # instead of drifting UNDER — the data-source line is derived from
+                # a different (stats_weighted) projection than the engine's
+                # stats_last5 blend, and that mismatch biased every combined pick.
+                calc_line = math.floor(max(0.0, proj)) + 0.5
+            else:
+                calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line")) or 0.0))
+                if calc_line <= 0.0:
+                    calc_line = _generate_internal_prop_line(prop["prop_type"], proj)
             model_confidence = _model_confidence_from_projection(p, proj, calc_line, prop["prop_type"])
             confidence_vals = [model_confidence.get(m, 50.0) for m in _MODEL_ORDER]
             agreement = _clamp(sum(1 for c in confidence_vals if c >= 55.0) / max(len(confidence_vals), 1), 0.0, 1.0)
             variance = sum((c - (sum(confidence_vals) / len(confidence_vals))) ** 2 for c in confidence_vals) / max(len(confidence_vals), 1)
             debug_variance.append({"player_id": p["player_id"], "variance": round(variance, 3), "opp_factor": round(opp_factor, 3)})
         else:
-            calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0))
+            raw_line = float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0)
             source_proj = prop.get("projection")
-            if source_proj is not None:
-                proj = float(source_proj)
+            raw_proj = float(source_proj) if source_proj is not None else None
+
+            # Apply sport-specific cap to BOTH projection and line so impossible
+            # values (e.g. NHL points line = 24.0 inherited from NBA range) are
+            # corrected before any further maths.
+            _proj_cap = _SPORT_PROJ_CAPS.get(league, {}).get(prop["prop_type"])
+            if _proj_cap is not None:
+                raw_line = min(raw_line, _proj_cap)
+                if raw_proj is not None:
+                    raw_proj = min(raw_proj, _proj_cap)
+
+            calc_line = _to_half_step(max(0.0, raw_line))
+
+            if raw_proj is not None:
+                proj = max(0.0, raw_proj)
             else:
                 xgb_mean = _xgboost_style_projection(p, prop, league)
                 xsharp_mean = _xsharp_adjustment(league, xgb_mean)
                 rating = _form_rating(p)
                 proj = (xgb_mean * 0.55) + (xsharp_mean * 0.35) + ((rating / 100.0) * 0.10 * xgb_mean)
-            # Hard sanity cap — catches any path (including external source_proj)
-            _proj_cap = _SPORT_PROJ_CAPS.get(league, {}).get(prop["prop_type"])
-            if _proj_cap is not None:
-                proj = min(proj, _proj_cap)
+                if _proj_cap is not None:
+                    proj = min(proj, _proj_cap)
             proj = max(0.0, proj)
             agreement = 0.5
             variance = abs(proj) * 0.18
@@ -379,12 +457,26 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         confidence = min(99.0, max(50.0, (max(p_over, p_under) * 100.0 + agreement * 12.0 - variance * 0.4)))
         picked_side = "OVER" if (p_over >= p_under and agreement >= 0.5) else ("UNDER" if p_under > p_over else ("OVER" if ev_over >= ev_under else "UNDER"))
 
-        # MLB: invert signal for statistically underperforming categories
-        _MLB_INVERT_PROPS = {"hits", "runs", "rbis", "home_runs"}
+        # ── OVER-only "milestone / anytime" props ──────────────────────────
+        # Skater goals/points/assists, batter hits/runs/RBI/HR and soccer
+        # goals/assists are bet as "will the player REACH this?" — the market
+        # is OVER-only (e.g. anytime goal scorer). There is no UNDER 0.5 goals.
+        # Only volume props (NHL shots-on-goal, MLB pitcher strikeouts, NBA
+        # box-score stats, yards, etc.) carry a real over/under.
         inverse_signal = False
-        if league == "MLB" and prop["prop_type"] in _MLB_INVERT_PROPS:
+        if prop["prop_type"] in _OVER_ONLY_PROPS.get(league, frozenset()):
+            picked_side = "OVER"
+
+        # Home runs: predict "No HR" (UNDER 0.5). Most hitters don't homer on a
+        # given day, so the model's "will homer" calls were near-zero (0-28).
+        if league == "MLB" and prop["prop_type"] == "home_runs":
+            picked_side = "UNDER"
+
+        # WNBA and MLB models have historically underperformed — invert their
+        # picks to bet the opposite side. Real grading handles the flipped pick
+        # directly (no inverse flag needed).
+        if league in ("WNBA", "MLB"):
             picked_side = "UNDER" if picked_side == "OVER" else "OVER"
-            inverse_signal = True
 
         line_source = prop.get("line_source", "")
         public_line = _to_half_step(float(prop["line"])) if (line_source == "internal_odds_api" and prop.get("line") is not None) else None
@@ -402,13 +494,14 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
                     "last_10_games_minutes": p.get("last_10_games_minutes", []),
                 }
                 opponent_id = matchups.get(p.get("team_id", ""), "")
+                venue = venue_by_team.get(p.get("team_id", "")) or (p.get("next_game") or {}).get("venue", "")
                 odds_result = _ODDS_ENGINE.generate(
                     metrics,
                     prop["prop_type"],
                     calc_line,
                     picked_side,
                     opponent_team=opponent_id,
-                    is_home=True,
+                    is_home=(venue != "away"),
                     is_back_to_back=False,
                     market_over_odds=prop.get("odds_over"),
                     market_under_odds=prop.get("odds_under"),
@@ -445,17 +538,46 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
                 "model_name": f"{league} Projection Model",
             })
 
+        # Hit rates from REAL game logs: how many of the player's last N games
+        # the stat exceeded the line. Return both the % and the raw record
+        # (e.g. 2/5) so the UI can show "2/5" instead of a bare percentage.
+        _gvals = (p.get("game_stats_last15") or {}).get(prop["prop_type"], [])
+        _cl_val = float(calc_line)
+        def _hit_rec(n):
+            vs = [v for v in _gvals[:n] if v >= 0]
+            if not vs:
+                return None, 0, 0
+            hits = sum(1 for v in vs if v > _cl_val)
+            return round(hits / len(vs) * 100), hits, len(vs)
+        _l5_hit, _l5_hits, _l5_n       = _hit_rec(5)
+        _l10_hit, _l10_hits, _l10_n    = _hit_rec(10)
+        _season_hit, _season_hits, _season_n = _hit_rec(15)
+
         row = {
             "player_id": p["player_id"],
             "player_name": p["name"],
             "team": p["team"],
+            "opponent": (
+                (p.get("next_game") or {}).get("opponent", "")
+                or opp_name_by_team.get(p.get("team_id", ""))
+                or opp_name_by_team_name.get(p.get("team", ""), "")
+            ),
+            "venue": (
+                (p.get("next_game") or {}).get("venue", "")
+                or venue_by_team.get(p.get("team_id", ""))
+                or ""
+            ),
             "league": league,
             "prop_type": prop["prop_type"],
             "line": public_line,
             "_calc_line": calc_line,
             "odds_over": prop["odds_over"],
             "odds_under": prop["odds_under"],
-            "projection": _to_half_step(proj),
+            # Real calculated per-player projection (2 decimals) — do NOT
+            # half-step it. Half-stepping collapsed small projections (e.g.
+            # 0.35 expected goals) onto the 0.5 line, making DIFF always ~0
+            # and the pick meaningless. Books show e.g. 1.68 proj vs 1.5 line.
+            "projection": round(proj, 2),
             "over_probability": round(p_over * 100.0, 1),
             "under_probability": round(p_under * 100.0, 1),
             "ev_over_percent": round(ev_over, 2),
@@ -467,6 +589,14 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             "model_variance": round(variance, 3),
             "inverse_signal": inverse_signal,
             "inverse_signal_label": "Inverse Signal Mode (Experimental)" if inverse_signal else None,
+            "l5_hit_rate": _l5_hit,
+            "l10_hit_rate": _l10_hit,
+            "season_hit_rate": _season_hit,
+            # Raw records (real game-log hits / sample) so the UI shows "2/5"
+            "l5_record":     [_l5_hits, _l5_n],
+            "l10_record":    [_l10_hits, _l10_n],
+            "season_record": [_season_hits, _season_n],
+            "opp_factor": round(opp_factor, 3) if opp_factor is not None else None,
         }
         row.update(poisson_fields)
         projections.append(row)
@@ -492,6 +622,220 @@ def get_league_data(league: str) -> Dict:
     return payload
 
 
+_INDIVIDUAL_PROP_LEAGUES = frozenset({"TENNIS", "UFC", "GOLF"})
+
+
+def _grade_prop_pick(line: float, pick: str, actual: float, *, inverse: bool = False) -> bool:
+    if inverse:
+        return (actual > line and pick == "UNDER") or (actual < line and pick == "OVER")
+    return (actual > line and pick == "OVER") or (actual < line and pick == "UNDER")
+
+
+def _proxy_grade_row(p: Dict) -> tuple[bool, float]:
+    line = float(p.get("_calc_line", p.get("line", 0.0)) or 0.0)
+    projection = float(p.get("projection", 0.0) or 0.0)
+    pick = str(p.get("picked_side", ""))
+    inverse = p.get("inverse_signal", False)
+    hit = _grade_prop_pick(line, pick, projection, inverse=inverse)
+    return hit, projection
+
+
+def _build_graded_result_rows(
+    props: List[Dict],
+    actual_map: Dict[str, Dict[str, float]],
+    *,
+    limit: int = 40,
+    require_actual: bool = False,
+) -> tuple[List[Dict], Dict]:
+    rows: List[Dict] = []
+    summary = {"overall": {"wins": 0, "losses": 0}, "by_prop_type": {}}
+    for p in props[:limit]:
+        line = float(p.get("_calc_line", p.get("line", 0.0)) or 0.0)
+        pick = str(p.get("picked_side", ""))
+        prop_type = str(p.get("prop_type", "other"))
+        pname = str(p.get("player_name", "")).lower()
+        actual = (actual_map.get(pname) or {}).get(prop_type)
+        if actual is None:
+            if require_actual:
+                continue
+            hit, actual = _proxy_grade_row(p)
+        else:
+            hit = _grade_prop_pick(line, pick, float(actual), inverse=p.get("inverse_signal", False))
+
+        if hit:
+            summary["overall"]["wins"] += 1
+        else:
+            summary["overall"]["losses"] += 1
+        bucket = summary["by_prop_type"].setdefault(prop_type, {"wins": 0, "losses": 0})
+        if hit:
+            bucket["wins"] += 1
+        else:
+            bucket["losses"] += 1
+        _pick_ev = p.get("pick_ev")
+        if _pick_ev is None:
+            _pick_ev = (p.get("ev_over_percent") if pick == "OVER"
+                        else p.get("ev_under_percent"))
+        _odds = p.get("odds_over") if pick == "OVER" else p.get("odds_under")
+        rows.append(
+            {
+                "player_id": p.get("player_id"),
+                "player_name": p.get("player_name"),
+                "team": p.get("team"),
+                "prop_type": prop_type,
+                "pick": pick,
+                "line": line,
+                "actual": round(float(actual), 2),
+                "result": "HIT" if hit else "MISS",
+                "projection": p.get("projection"),
+                "confidence": p.get("confidence_score"),
+                "ev": _pick_ev,
+                "odds": _odds,
+            }
+        )
+    return rows, summary
+
+
+def _get_individual_sport_results(league: str, for_date: str | None = None) -> Dict:
+    if for_date:
+        try:
+            from datetime import date as _date
+            ydate = _date.fromisoformat(for_date)
+        except Exception:
+            ydate = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).date()
+    else:
+        ydate = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).date()
+
+    schedule = fetch_schedule_and_teams(league, target_date=ydate)
+    if schedule:
+        data = _build_league_payload(league, schedule_override=schedule)
+    else:
+        data = get_league_data(league)
+
+    actual_map = fetch_individual_prop_actuals(league, ydate)
+    # require_actual=True: only grade props we have a REAL outcome for. Never
+    # proxy-grade (compare the pick to its own projection) — that fabricates
+    # 100%/0% results and is a lie on a client-facing page.
+    rows, summary = _build_graded_result_rows(
+        data.get("props") or [], actual_map, require_actual=True)
+    return {
+        "league": league,
+        "count": len(rows),
+        "items": rows,
+        "summary": summary,
+        "result_date": str(ydate),
+    }
+
+
+# Per-sport box-score config for REAL grading. Maps prop_type -> (ESPN stat
+# label(s), parse mode). "made" parses "2-5" -> 2. NHL points = goals + assists.
+_BOX_SCORE_CONFIG = {
+    "NBA":  {"sport": "basketball", "league": "nba",
+             "stats": {"points": (["PTS"], "num"), "rebounds": (["REB"], "num"),
+                       "assists": (["AST"], "num"), "threes": (["3PT"], "made")}},
+    "WNBA": {"sport": "basketball", "league": "wnba",
+             "stats": {"points": (["PTS"], "num"), "rebounds": (["REB"], "num"),
+                       "assists": (["AST"], "num"), "threes": (["3PT"], "made")}},
+    "NCAAB": {"sport": "basketball", "league": "mens-college-basketball",
+              "stats": {"points": (["PTS"], "num"), "rebounds": (["REB"], "num"),
+                        "assists": (["AST"], "num"), "threes": (["3PT"], "made")}},
+    "NCAAW": {"sport": "basketball", "league": "womens-college-basketball",
+              "stats": {"points": (["PTS"], "num"), "rebounds": (["REB"], "num"),
+                        "assists": (["AST"], "num"), "threes": (["3PT"], "made")}},
+    "NHL":  {"sport": "hockey", "league": "nhl",
+             "stats": {"goals": (["G"], "num"), "assists": (["A"], "num"),
+                       "shots_on_goal": (["SOG", "S"], "num")},
+             "points_from": ("goals", "assists")},
+    "MLB":  {"sport": "baseball", "league": "mlb",
+             # Each prop is position-specific, so the shared "H"/"BB"/"K" labels
+             # resolve to the right player (batter hits vs pitcher hits-allowed).
+             # 2B/3B/SB are NOT in the summary box score, so singles/doubles/
+             # total_bases/stolen_bases safely skip grading (never fabricated).
+             "stats": {"hits": (["H"], "num"), "runs": (["R"], "num"),
+                       "rbis": (["RBI"], "num"), "home_runs": (["HR"], "num"),
+                       "strikeouts": (["K", "SO"], "num"),
+                       "earned_runs": (["ER"], "num"), "hits_allowed": (["H"], "num"),
+                       "walks": (["BB"], "num"), "outs": (["IP"], "ip_outs")},
+             # Read each stat only from its box-score group so a batter's H and a
+             # pitcher's H (hits allowed) never cross-contaminate (e.g. two-way
+             # players). Stats not listed here are read from any group.
+             "group_types": {"hits": "batting", "runs": "batting", "rbis": "batting",
+                             "home_runs": "batting", "strikeouts": "pitching",
+                             "earned_runs": "pitching", "hits_allowed": "pitching",
+                             "walks": "pitching", "outs": "pitching"}},
+}
+
+
+def _box_stat_value(vals, idx, labels, mode):
+    """Extract a stat value from a box-score row given candidate labels."""
+    for lbl in labels:
+        if lbl in idx and idx[lbl] < len(vals):
+            raw = vals[idx[lbl]]
+            try:
+                if mode == "made":          # "2-5" -> 2 (made threes)
+                    return float(str(raw).split("-")[0])
+                if mode == "ip_outs":       # "6.1" innings pitched -> 19 outs
+                    ipf = float(str(raw).replace(",", ""))
+                    whole = int(ipf)
+                    frac = min(round((ipf - whole) * 10), 2)   # .1=1 out, .2=2 outs
+                    return float(whole * 3 + frac)
+                return float(str(raw).replace(",", ""))
+            except (ValueError, TypeError, IndexError):
+                return None
+    return None
+
+
+def _fetch_team_box_actuals(league: str, schedule: List[Dict]) -> Dict[str, Dict[str, float]]:
+    """Real per-player actuals from ESPN box scores for finished games.
+    Returns {player_name_lower: {prop_type: actual}}. Empty if nothing final."""
+    cfg = _BOX_SCORE_CONFIG.get(league.upper())
+    if not cfg:
+        return {}
+    url = (f"https://site.api.espn.com/apis/site/v2/sports/"
+           f"{cfg['sport']}/{cfg['league']}/summary")
+    stat_map: Dict[str, Dict[str, float]] = {}
+    for g in schedule:
+        event_id = g.get("event_id")
+        if not event_id:
+            continue
+        try:
+            s = requests.get(url, params={"event": event_id}, timeout=8).json()
+        except Exception:
+            continue
+        group_types = cfg.get("group_types") or {}
+        for sec in (s.get("boxscore", {}).get("players") or []):
+            for grp in (sec.get("statistics") or []):
+                gtype = (grp.get("type") or "").lower()
+                labels = grp.get("labels") or []
+                idx = {k: i for i, k in enumerate(labels)}
+                for ath in grp.get("athletes") or []:
+                    name = (ath.get("athlete") or {}).get("displayName")
+                    vals = ath.get("stats") or []
+                    if not name or not vals:
+                        continue
+                    bucket = stat_map.setdefault(name.lower(), {})
+                    for prop_type, (lbls, mode) in cfg["stats"].items():
+                        # Only read a stat from its designated box-score group
+                        # (e.g. pitcher "hits_allowed" must come from pitching,
+                        # not a batter's hits row).
+                        want = group_types.get(prop_type)
+                        if want and gtype and want != gtype:
+                            continue
+                        v = _box_stat_value(vals, idx, lbls, mode)
+                        if v is not None:
+                            bucket[prop_type] = v
+                    pf = cfg.get("points_from")
+                    if pf and pf[0] in bucket and pf[1] in bucket:
+                        bucket["points"] = bucket[pf[0]] + bucket[pf[1]]
+    # Derive combined ("parlay") actuals from the individual box-score stats so
+    # pts_reb_ast / h_r_rbi etc. grade against REAL outcomes (not a proxy). Only
+    # added when every component is present for that player — never fabricated.
+    for bucket in stat_map.values():
+        for combo, comps in _COMBINED_COMPONENTS.items():
+            if all(c in bucket for c in comps):
+                bucket[combo] = sum(bucket[c] for c in comps)
+    return stat_map
+
+
 def get_league_results(league: str, for_date: str | None = None) -> Dict:
     key = league.upper()
     cache_key = f"{key}:{for_date or 'yesterday'}"
@@ -499,43 +843,17 @@ def get_league_results(league: str, for_date: str | None = None) -> Dict:
     cached = _RESULTS_CACHE.get(cache_key)
     if cached and (now - cached["ts"]) < 300:
         return cached["payload"]
-    if key != "NBA":
-        # Non-NBA leagues currently don't have full stat-grade integration here.
-        # Return a non-empty "latest evaluated board" so results view is useful
-        # instead of hardcoded zero rows.
-        data = get_league_data(key)
-        rows = []
-        summary = {"overall": {"wins": 0, "losses": 0}, "by_prop_type": {}}
-        for p in (data.get("props") or [])[:40]:
-            line = float(p.get("_calc_line", p.get("line", 0.0)) or 0.0)
-            projection = float(p.get("projection", 0.0) or 0.0)
-            pick = str(p.get("picked_side", ""))
-            # Proxy grading: compare projection to line directionally.
-            hit = (projection > line and pick == "OVER") or (projection < line and pick == "UNDER")
-            if hit:
-                summary["overall"]["wins"] += 1
-            else:
-                summary["overall"]["losses"] += 1
-            pt = str(p.get("prop_type", "other"))
-            bucket = summary["by_prop_type"].setdefault(pt, {"wins": 0, "losses": 0})
-            if hit:
-                bucket["wins"] += 1
-            else:
-                bucket["losses"] += 1
-            rows.append(
-                {
-                    "player_id": p.get("player_id"),
-                    "player_name": p.get("player_name"),
-                    "team": p.get("team"),
-                    "prop_type": p.get("prop_type"),
-                    "pick": pick,
-                    "line": line,
-                    "actual": round(projection, 2),
-                    "result": "HIT" if hit else "MISS",
-                    "projection": p.get("projection"),
-                }
-            )
-        payload = {"league": key, "count": len(rows), "items": rows, "summary": summary, "result_date": None}
+    if key in _INDIVIDUAL_PROP_LEAGUES:
+        payload = _get_individual_sport_results(key, for_date)
+        _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
+        return payload
+    if key not in _BOX_SCORE_CONFIG:
+        # Sports with no real box-score grading wired yet (NFL/NCAAF/Soccer):
+        # do NOT proxy-grade. Return zero graded rows (honest) rather than a
+        # fabricated record.
+        payload = {"league": key, "count": 0, "items": [],
+                   "summary": {"overall": {"wins": 0, "losses": 0}, "by_prop_type": {}},
+                   "result_date": None}
         _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
         return payload
     if for_date:
@@ -550,69 +868,11 @@ def get_league_results(league: str, for_date: str | None = None) -> Dict:
     if not y_schedule:
         return {"league": key, "count": 0, "items": []}
     data = _build_league_payload(key, schedule_override=y_schedule)
-    player_stat_map = {}
-    for g in y_schedule:
-        event_id = g.get("event_id")
-        if not event_id:
-            continue
-        try:
-            s = requests.get(
-                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary",
-                params={"event": event_id},
-                timeout=8,
-            ).json()
-            sections = (s.get("boxscore", {}).get("players") or [])
-            for sec in sections:
-                stats_group = (sec.get("statistics") or [])
-                if not stats_group:
-                    continue
-                labels = stats_group[0].get("labels") or []
-                idx = {k: i for i, k in enumerate(labels)}
-                for ath in stats_group[0].get("athletes") or []:
-                    name = (ath.get("athlete") or {}).get("displayName")
-                    vals = ath.get("stats") or []
-                    if not name:
-                        continue
-                    pts = float(vals[idx["PTS"]]) if "PTS" in idx and idx["PTS"] < len(vals) else None
-                    reb = float(vals[idx["REB"]]) if "REB" in idx and idx["REB"] < len(vals) else None
-                    ast = float(vals[idx["AST"]]) if "AST" in idx and idx["AST"] < len(vals) else None
-                    threes = _parse_made(vals[idx["3PT"]]) if "3PT" in idx and idx["3PT"] < len(vals) else None
-                    player_stat_map[name.lower()] = {"points": pts, "rebounds": reb, "assists": ast, "threes": threes}
-        except Exception:
-            continue
-    rows = []
-    summary = {"overall": {"wins": 0, "losses": 0}, "by_prop_type": {}}
-    for p in (data.get("props") or [])[:40]:
-        pname = str(p.get("player_name", "")).lower()
-        actual = (player_stat_map.get(pname) or {}).get(str(p.get("prop_type", "")))
-        if actual is None:
-            continue
-        line = float(p.get("_calc_line", 0.0) or 0.0)
-        pick = str(p.get("picked_side", ""))
-        hit = (actual > line and pick == "OVER") or (actual < line and pick == "UNDER")
-        if hit:
-            summary["overall"]["wins"] += 1
-        else:
-            summary["overall"]["losses"] += 1
-        pt = str(p.get("prop_type", "other"))
-        bucket = summary["by_prop_type"].setdefault(pt, {"wins": 0, "losses": 0})
-        if hit:
-            bucket["wins"] += 1
-        else:
-            bucket["losses"] += 1
-        rows.append(
-            {
-                "player_id": p.get("player_id"),
-                "player_name": p.get("player_name"),
-                "team": p.get("team"),
-                "prop_type": p.get("prop_type"),
-                "pick": pick,
-                "line": line,
-                "actual": round(actual, 2),
-                "result": "HIT" if hit else "MISS",
-                "projection": p.get("projection"),
-            }
-        )
+    # Real box-score actuals for the date (sport-aware). Never proxy.
+    player_stat_map = _fetch_team_box_actuals(key, y_schedule)
+    rows, summary = _build_graded_result_rows(
+        data.get("props") or [], player_stat_map, require_actual=True,
+    )
     payload = {"league": key, "count": len(rows), "items": rows, "summary": summary, "result_date": str(ydate)}
     _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
     return payload
@@ -701,6 +961,14 @@ def get_diagnostics(league: str = "NBA") -> Dict:
         if r.get("poisson_lam") is not None:
             factor_totals["recent_form_l5"] += abs(float(r.get("poisson_lam", 0)) - float(r.get("_calc_line", 1) or 1))
             factor_counts["recent_form_l5"] += 1
+        if r.get("opp_factor") is not None:
+            factor_totals["opponent_factor"] += abs(float(r.get("opp_factor")) - 1.0) * 100.0
+            factor_counts["opponent_factor"] += 1
+        # Real recent-form signal from the game-log records (all sports)
+        _rec = r.get("season_record") or r.get("l10_record")
+        if isinstance(_rec, (list, tuple)) and len(_rec) == 2 and _rec[1]:
+            factor_totals["recent_form_l5"] += abs((_rec[0] / _rec[1]) - 0.5) * 100.0
+            factor_counts["recent_form_l5"] += 1
 
     n = max(len(props_list), 1)
     avg_conf = round(sum(confidence_vals) / n, 1)
@@ -733,11 +1001,14 @@ def get_diagnostics(league: str = "NBA") -> Dict:
             "positive_ev_pct": round(sum(1 for e in evs if e > 0) / max(len(evs), 1) * 100, 1),
         }
 
-    # Feature importance: which model factors show highest avg absolute contribution
+    # Feature importance: only include factors we ACTUALLY measured. Showing
+    # always-zero factors (usage_rate, minutes) was misleading — a feature that
+    # is never computed isn't "zero importance", it's just not tracked.
     feature_importance = {}
     for k in factor_totals:
         cnt = factor_counts[k]
-        feature_importance[k] = round(factor_totals[k] / cnt, 3) if cnt > 0 else 0.0
+        if cnt > 0:
+            feature_importance[k] = round(factor_totals[k] / cnt, 3)
     feature_importance = dict(sorted(feature_importance.items(), key=lambda x: -x[1]))
 
     # EV vs hit-rate divergence: flag prop types where avg_ev > 0 but avg_conf < 60

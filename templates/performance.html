@@ -4,50 +4,56 @@
 
 {% block extra_styles %}
 <style>
-.perf-wrap{max-width:1180px;margin:0 auto;}
-.perf-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:20px 18px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
-.perf-head{margin-bottom:14px;}
-.perf-head h1{font-size:1.7rem;color:#0f172a;margin:0 0 8px;}
-.perf-head p{color:#475569;font-size:0.94rem;margin:0;}
-.perf-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:14px 0 18px;}
-.perf-filters label{display:flex;flex-direction:column;gap:6px;font-size:0.82rem;color:#334155;font-weight:700;}
-.perf-filters select{min-width:170px;padding:9px 10px;border:1px solid #E0E4E8;border-radius:10px;background:#fff;color:#0f172a;}
-.perf-filters button{padding:10px 14px;border-radius:10px;border:1px solid #00529B;background:#00529B;color:#fff;font-weight:800;cursor:pointer;}
-.perf-table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #E0E4E8;border-radius:12px;}
-.perf-table th,.perf-table td{padding:10px;border-bottom:1px solid #E0E4E8;border-right:1px solid #E0E4E8;text-align:center;vertical-align:middle;}
-.perf-table tr:last-child td{border-bottom:none;}
-.perf-table th:last-child,.perf-table td:last-child{border-right:none;}
-.perf-table thead th{background:#F4F7F9;color:#0f172a;font-size:0.83rem;font-weight:800;}
-.bucket-cell{font-weight:800;color:#0f172a;background:#f8fafc;font-size:0.84rem;}
-.perf-stat{display:flex;flex-direction:column;gap:2px;line-height:1.2;min-height:72px;align-items:center;justify-content:center;border-radius:8px;}
-.perf-win{font-size:1.04rem;font-weight:900;color:#0f172a;}
-.perf-rec{font-size:0.82rem;font-weight:700;color:#334155;}
-.perf-n{font-size:0.74rem;color:#64748b;}
-.perf-red{background:rgba(239,68,68,0.16);}
-.perf-yellow{background:rgba(251,191,36,0.2);}
-.perf-green{background:rgba(16,185,129,0.18);}
-.perf-gray{background:#f1f5f9;color:#94a3b8;}
-.perf-gray .perf-win,.perf-gray .perf-rec,.perf-gray .perf-n{color:#94a3b8;}
-.perf-note{margin-top:10px;color:#475569;font-size:0.84rem;}
-.perf-tools{margin-top:10px;display:flex;justify-content:flex-end;}
-.perf-tools a{font-size:0.83rem;text-decoration:none;color:#00529B;font-weight:800;}
+.perf-wrap{max-width:1240px;margin:0 auto;padding:0 4px;}
+.perf-card{background:#fff;border:1px solid #e6eaf0;border-radius:18px;padding:24px;box-shadow:0 6px 24px rgba(15,23,42,0.05);margin-bottom:18px;}
+.perf-head h1{font-size:2rem;color:#0f172a;margin:0 0 6px;font-weight:900;letter-spacing:-0.02em;}
+.perf-head p{color:#64748b;font-size:0.95rem;margin:0;line-height:1.55;max-width:680px;}
+/* Filter bar */
+.perf-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin:18px 0 4px;padding:14px 16px;background:#f8fafc;border:1px solid #eef2f6;border-radius:14px;}
+.perf-filters label{display:flex;flex-direction:column;gap:6px;font-size:0.72rem;color:#64748b;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;}
+.perf-filters select{min-width:180px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:0.9rem;font-weight:700;cursor:pointer;transition:border-color .15s;}
+.perf-filters select:hover,.perf-filters select:focus{border-color:#2563eb;outline:none;}
+.perf-filters button{padding:11px 20px;border-radius:10px;border:none;background:#0f172a;color:#fff;font-weight:800;font-size:0.86rem;cursor:pointer;transition:background .15s;}
+.perf-filters button:hover{background:#1e293b;}
+.perf-hint{font-size:0.74rem;color:#94a3b8;font-weight:600;margin-left:auto;align-self:center;}
+/* Table */
+.perf-table-scroll{overflow-x:auto;border-radius:14px;border:1px solid #eef2f6;margin-top:16px;}
+.perf-table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px;}
+.perf-table th,.perf-table td{padding:0;text-align:center;vertical-align:middle;}
+.perf-table thead th{background:#0f172a;color:#fff;font-size:0.74rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;padding:13px 10px;position:sticky;top:0;}
+.perf-table thead th:first-child{text-align:left;padding-left:16px;border-top-left-radius:0;}
+.perf-table tbody tr:nth-child(even){background:#fbfcfe;}
+.bucket-cell{font-weight:800;color:#0f172a;font-size:0.86rem;text-align:left;padding:10px 16px !important;border-right:1px solid #eef2f6;white-space:nowrap;}
+.perf-table td{padding:6px;}
+.perf-stat{display:flex;flex-direction:column;gap:1px;line-height:1.25;min-height:66px;align-items:center;justify-content:center;border-radius:10px;padding:8px 4px;}
+.perf-win{font-size:1.12rem;font-weight:900;letter-spacing:-0.01em;}
+.perf-rec{font-size:0.8rem;font-weight:700;color:#475569;}
+.perf-n{font-size:0.68rem;color:#94a3b8;font-weight:600;}
+.perf-red{background:rgba(239,68,68,0.10);}.perf-red .perf-win{color:#dc2626;}
+.perf-yellow{background:rgba(245,158,11,0.12);}.perf-yellow .perf-win{color:#d97706;}
+.perf-green{background:rgba(16,185,129,0.12);}.perf-green .perf-win{color:#059669;}
+.perf-gray{background:#f8fafc;}
+.perf-gray .perf-win,.perf-gray .perf-rec,.perf-gray .perf-n{color:#cbd5e1;}
+.perf-note{margin-top:12px;color:#64748b;font-size:0.82rem;display:inline-flex;align-items:center;gap:6px;background:#f8fafc;padding:8px 12px;border-radius:8px;}
+.perf-tools{margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;}
+.perf-tools a{font-size:0.84rem;text-decoration:none;color:#2563eb;font-weight:800;display:inline-flex;align-items:center;gap:5px;}
 .perf-tools a:hover{text-decoration:underline;}
-.sport-block{margin-top:18px;}
-.sport-title{font-size:1.02rem;font-weight:900;color:#0f172a;margin:0 0 8px;}
-.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;}
-.team-explainer{
-    margin:0 0 12px;
-    color:#475569;
-    font-size:0.84rem;
-    line-height:1.55;
-}
-.team-card{border:1px solid #E0E4E8;border-radius:12px;padding:12px;background:#fff;}
-.team-card h3{margin:0 0 8px;font-size:0.98rem;color:#0f172a;}
+.sport-block{margin-top:8px;}
+.sport-title{font-size:1.15rem;font-weight:900;color:#0f172a;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+.sport-sub-title{font-size:1rem;font-weight:800;color:#334155;margin:18px 0 8px;padding-top:14px;border-top:1px solid #eef2f6;}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.team-explainer{margin:0 0 14px;color:#64748b;font-size:0.85rem;line-height:1.6;}
+.team-card{border:1px solid #eef2f6;border-radius:14px;padding:14px;background:#fff;}
+.team-card h3{margin:0 0 10px;font-size:0.98rem;color:#0f172a;font-weight:800;}
 .team-mini{width:100%;border-collapse:collapse;}
-.team-mini th,.team-mini td{padding:5px 6px;font-size:0.78rem;border-bottom:1px solid #E0E4E8;text-align:left;color:#334155;}
-.team-mini th{font-weight:800;color:#0f172a;background:#F8FAFC;}
+.team-mini th,.team-mini td{padding:6px 8px;font-size:0.8rem;border-bottom:1px solid #f1f5f9;text-align:left;color:#475569;}
+.team-mini th{font-weight:800;color:#64748b;text-transform:uppercase;font-size:0.66rem;letter-spacing:0.4px;}
 .team-mini tr:last-child td{border-bottom:none;}
+@media(max-width:600px){.perf-card{padding:16px;}.perf-head h1{font-size:1.5rem;}}
 </style>
+<script>
+function perfAutoApply(sel){ if(sel && sel.form) sel.form.submit(); }
+</script>
 {% endblock %}
 
 {% block content %}
@@ -60,24 +66,29 @@
 
         <form method="GET" action="/performance" class="perf-filters">
             <label>Sport
-                <select name="sport">
-                    <option value="" {% if not selected_sport %}selected{% endif %}>All</option>
+                <select name="sport" onchange="perfAutoApply(this)">
+                    <option value="" {% if not selected_sport %}selected{% endif %}>All Sports</option>
                     {% for s in sport_options %}
                     <option value="{{ s }}" {% if selected_sport == s %}selected{% endif %}>{{ s }}</option>
                     {% endfor %}
                 </select>
             </label>
-            <label>Last Number of Games
-                <select name="last_n">
-                    <option value="" {% if not selected_last_n %}selected{% endif %}>All</option>
-                    <option value="50" {% if selected_last_n == '50' %}selected{% endif %}>Last 50</option>
-                    <option value="100" {% if selected_last_n == '100' %}selected{% endif %}>Last 100</option>
-                    <option value="200" {% if selected_last_n == '200' %}selected{% endif %}>Last 200</option>
+            <label>Timeframe
+                <select name="last_n" onchange="perfAutoApply(this)">
+                    <option value="" {% if not selected_last_n %}selected{% endif %}>All-time</option>
+                    <option value="50" {% if selected_last_n == '50' %}selected{% endif %}>Last 50 games</option>
+                    <option value="100" {% if selected_last_n == '100' %}selected{% endif %}>Last 100 games</option>
+                    <option value="200" {% if selected_last_n == '200' %}selected{% endif %}>Last 200 games</option>
                 </select>
             </label>
             <button type="submit">Apply</button>
+            <span class="perf-hint">Changing a filter updates instantly</span>
         </form>
+        {% if selected_sport or selected_last_n %}
+        <div style="margin:14px 0 0;font-size:0.84rem;color:#475569;">Showing: <strong>{{ selected_sport or 'All sports' }}</strong>{% if selected_last_n %} · last <strong>{{ selected_last_n }}</strong> games{% else %} · all-time{% endif %}</div>
+        {% endif %}
 
+        <div class="perf-table-scroll">
         <table class="perf-table">
             <thead>
                 <tr>
@@ -95,7 +106,7 @@
                         {% set cell = main_table[bucket][model] %}
                         {% if not cell %}
                         <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
-                        {% elif cell.n < 10 %}
+                        {% elif cell.n < 20 %}
                         <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
                         {% else %}
                             {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
@@ -106,11 +117,11 @@
                 {% endfor %}
             </tbody>
         </table>
-        <div class="perf-note">52.4% is the break-even win rate for standard -110 lines.</div>
+        </div>
+        <div class="perf-note">📊 52.4% is the break-even win rate for standard −110 lines. Samples under 20 are hidden.</div>
         <div class="perf-tools">
-            <a href="/performance/audit.csv?sport={{ selected_sport }}&last_n={{ selected_last_n or '50' }}">Download audit CSV (Excel)</a>
-            &nbsp;&nbsp;
-            <a href="/results/export.csv{% if selected_sport %}?sport={{ selected_sport }}{% endif %}">Download results export CSV</a>
+            <a href="/performance/audit.csv?sport={{ selected_sport }}&last_n={{ selected_last_n or '50' }}">⬇ Download audit CSV (Excel)</a>
+            <a href="/results/export.csv{% if selected_sport %}?sport={{ selected_sport }}{% endif %}">⬇ Download results export CSV</a>
         </div>
     </div>
 
@@ -137,7 +148,7 @@
                             {% set cell = table_data[bucket][model] %}
                             {% if not cell %}
                             <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
-                            {% elif cell.n < 10 %}
+                            {% elif cell.n < 20 %}
                             <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
                             {% else %}
                                 {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
@@ -155,6 +166,7 @@
     </div>
     {% endif %}
 
+    {% if selected_sport %}
     <div class="perf-card sport-block">
         <h2 class="sport-title">Team Model Performance</h2>
         <p class="team-explainer">
@@ -178,7 +190,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for model in model_order %}
+                        {% for model in team_model_order %}
                             {% set md = row.models[model] %}
                         <tr>
                             <td>{{ model }}</td>
@@ -202,5 +214,6 @@
         <p style="color:#64748b;">No team-specific rows for current filters.</p>
         {% endif %}
     </div>
+    {% endif %}
 </div>
 {% endblock %}

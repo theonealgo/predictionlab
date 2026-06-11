@@ -1,0 +1,38 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260607_080049  |  2026-06-07 08:00:49
+Target: http://127.0.0.1:5001
+
+
+WARNINGS (should investigate):
+  - [routes] Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+    Detail: /nba-results
+  - [cards] Model clustering: SOCCER: 85% of probabilities are between 49.0% and 51.0% — possible fallback model detected
+    Page: /soccer-picks
+  - [models] Model labels: NBA: Missing model label(s): ['Grinder2', 'Takedown']
+    Page: /nba-picks
+  - [models] Stale model name: NBA: Found stale model reference: 'placeholder'
+    Page: /nba-picks
+  - [models] Model labels: NHL: Missing model label(s): ['Grinder2', 'Takedown']
+    Page: /nhl-picks
+  - [models] Stale model name: NHL: Found stale model reference: 'placeholder'
+    Page: /nhl-picks
+  - [models] Model labels: MLB: Missing model label(s): ['Grinder2', 'Takedown']
+    Page: /mlb-picks
+  - [models] Stale model name: MLB: Found stale model reference: 'placeholder'
+    Page: /mlb-picks
+  - [models] Performance page: Grinder2: Model NOT found on performance page
+  - [models] Performance page: Takedown: Model NOT found on performance page
+  - [models] Performance page: XSharp: Model NOT found on performance page
+  - [models] Performance page: Consensus: Model NOT found on performance page
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

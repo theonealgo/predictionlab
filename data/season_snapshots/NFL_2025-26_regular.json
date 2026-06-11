@@ -1,117 +1,125 @@
 {
-  "built_at": "2026-06-03T17:40:20Z",
+  "built_at": "2026-06-04T17:00:22Z",
   "games_expected": 272,
-  "games_in_scope": 285,
+  "games_in_scope": 294,
   "ou_summary": {
-    "avg_total": 46.0,
+    "avg_total": 45.9,
     "ou_bench": 47.0,
-    "total_games_ou": 285,
-    "total_over": 121,
-    "total_under": 164
+    "total_games_ou": 294,
+    "total_over": 124,
+    "total_under": 170
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 80.6,
+      "correct": 237,
+      "total": 294
+    },
     "elo": {
-      "accuracy": 68.1,
-      "correct": 194,
-      "total": 285
+      "accuracy": 71.1,
+      "correct": 209,
+      "total": 294
     },
     "ensemble": {
-      "accuracy": 72.3,
-      "correct": 206,
-      "total": 285
+      "accuracy": 67.0,
+      "correct": 197,
+      "total": 294
     },
     "glicko2": {
-      "accuracy": 71.6,
-      "correct": 204,
-      "total": 285
+      "accuracy": 77.2,
+      "correct": 227,
+      "total": 294
     },
     "trueskill": {
-      "accuracy": 70.5,
-      "correct": 201,
-      "total": 285
+      "accuracy": 68.7,
+      "correct": 202,
+      "total": 294
     },
     "xgboost": {
-      "accuracy": 72.3,
-      "correct": 206,
-      "total": 285
+      "accuracy": 67.3,
+      "correct": 198,
+      "total": 294
     }
   },
   "phase": "regular",
   "roi_total": {
     "moneyline": {
-      "graded": 284,
-      "losses": 79,
+      "graded": 293,
+      "losses": 97,
       "missing_odds": 0,
       "pushes": 1,
       "reason": null,
-      "roi_pct": 44.37,
-      "units_risked": 284,
-      "units_won": 126.0,
-      "wins": 205
+      "roi_pct": 33.79,
+      "units_risked": 293,
+      "units_won": 99.0,
+      "win_pct": 66.89,
+      "wins": 196
     },
     "spread": {
-      "graded": 282,
-      "losses": 69,
+      "graded": 259,
+      "losses": 55,
       "missing_odds": 0,
       "pushes": 1,
       "reason": null,
-      "roi_pct": 51.06,
-      "units_risked": 282,
-      "units_won": 144.0,
-      "wins": 213
+      "roi_pct": 57.53,
+      "units_risked": 259,
+      "units_won": 149.0,
+      "win_pct": 78.76,
+      "wins": 204
     },
     "total": {
-      "graded": 175,
-      "losses": 73,
+      "graded": 148,
+      "losses": 55,
       "missing_odds": 0,
-      "pushes": 110,
+      "pushes": 114,
       "reason": null,
-      "roi_pct": 16.57,
-      "units_risked": 175,
-      "units_won": 29.0,
-      "wins": 102
+      "roi_pct": 25.68,
+      "units_risked": 148,
+      "units_won": 38.0,
+      "win_pct": 62.84,
+      "wins": 93
     }
   },
   "schema_version": 1,
   "season": "2025-26",
   "season_perf": {
     "games_expected": 272,
-    "games_in_scope": 285,
-    "ml_accuracy": 72.3,
-    "ml_correct": 206,
-    "ml_model_key": "xgboost",
-    "ml_model_label": "XSharp",
-    "ml_total": 285,
-    "ou_correct": 58,
-    "ou_graded": 209,
-    "ou_model_label": "Prediction Lab",
+    "games_in_scope": 294,
+    "ml_accuracy": 80.6,
+    "ml_correct": 237,
+    "ml_model_key": "efficiency",
+    "ml_model_label": "Team Efficiency",
+    "ml_total": 294,
+    "ou_correct": 93,
+    "ou_graded": 262,
+    "ou_model_label": "XSharp",
     "ou_note": null,
-    "ou_pct": 58.6,
+    "ou_pct": 62.8,
     "scope_label": "NFL season",
-    "spread_covered": 180,
-    "spread_graded": 209,
+    "spread_covered": 198,
+    "spread_graded": 238,
     "spread_model_label": "Prediction Lab",
     "spread_note": null,
-    "spread_pct": 89.1
+    "spread_pct": 86.1
   },
   "sport": "NFL",
   "spread_total_stats": {
-    "pl_spread_covered": 180,
-    "pl_spread_graded": 209,
-    "pl_spread_pct": 89.1,
-    "pl_spread_pushes": 7,
-    "pl_total_correct": 58,
-    "pl_total_graded": 209,
-    "pl_total_pct": 58.6,
-    "pl_total_pushes": 110,
-    "spread_covered": 213,
-    "spread_graded": 283,
-    "spread_pct": 75.5,
+    "pl_spread_covered": 198,
+    "pl_spread_graded": 238,
+    "pl_spread_pct": 86.1,
+    "pl_spread_pushes": 8,
+    "pl_total_correct": 61,
+    "pl_total_graded": 214,
+    "pl_total_pct": 61.0,
+    "pl_total_pushes": 114,
+    "spread_covered": 204,
+    "spread_graded": 260,
+    "spread_pct": 78.8,
     "spread_pushes": 1,
-    "total_correct": 102,
-    "total_graded": 285,
-    "total_pct": 58.3,
-    "total_pushes": 110
+    "total_correct": 93,
+    "total_graded": 262,
+    "total_pct": 62.8,
+    "total_pushes": 114
   },
   "window": {
     "end": "2026-02-20",

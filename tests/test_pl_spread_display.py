@@ -185,15 +185,49 @@ def test_face_pick_matches_sharp_consensus_not_pl_spread(nhl):
         "away_team_id": "San Antonio Spurs",
         "our_spread": 4.5,
         "ensemble_prob": 35.9,
+        "our_method": "efficiency",
         "glicko2_prob": 35.0,
         "trueskill_prob": 36.0,
         "elo_prob": 34.0,
         "xgb_prob": 35.0,
         "predicted_winner": "New York Knicks",
     }
+    nhl._enforce_pick_spread_consistency(card, sport="NBA")
     nhl._prepare_pred_card_display(card, sport="NBA")
     assert card["face_pick_team"] == "San Antonio Spurs"
     assert card["face_pick_confidence"] == pytest.approx(64.1)
+    assert card["predicted_winner"] == "San Antonio Spurs"
+    assert card["ensemble_prob"] == pytest.approx(35.9)
+    assert card["disp_pl_spread"] == pytest.approx(4.5)
+    assert card["pl_model_away_ml"] is not None
+    assert card["pl_model_home_ml"] is not None
+    assert card["pl_model_away_ml"] < card["pl_model_home_ml"]
+
+
+def test_knicks_spurs_unanimous_models_no_opposing_pick(nhl):
+    """Knicks @ Spurs: all models pick Spurs — card must not show Knicks as pick anywhere."""
+    card = {
+        "home_team_id": "New York Knicks",
+        "away_team_id": "San Antonio Spurs",
+        "our_spread": 5.5,
+        "ensemble_prob": 35.9,
+        "glicko2_prob": 35.0,
+        "trueskill_prob": 36.0,
+        "elo_prob": 34.0,
+        "xgb_prob": 35.0,
+        "ens_prob": 35.9,
+        "predicted_winner": "New York Knicks",
+        "our_method": "efficiency",
+    }
+    nhl._enforce_pick_spread_consistency(card, sport="NBA")
+    nhl._prepare_pred_card_display(card, sport="NBA")
+    assert card["face_pick_team"] == "San Antonio Spurs"
+    assert card["predicted_winner"] == "San Antonio Spurs"
+    assert card["disp_pl_spread"] == pytest.approx(5.5)
+    assert card["efficiency_prob"] is not None
+    assert card["efficiency_prob"] >= 50.0
+    assert card["pl_model_away_ml"] < 0
+    assert card["pl_model_home_ml"] > 0
 
 
 def test_season_perf_uses_best_ml_model(nhl):

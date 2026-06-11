@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PredictionLab QA Report — 2026-06-09 08:00:55</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+          margin:0;padding:0;background:#f8fafc;color:#0f172a;}
+    .wrap{max-width:1100px;margin:0 auto;padding:32px 24px;}
+    .header{background:#0f172a;color:#fff;border-radius:14px;padding:28px 32px;margin-bottom:28px;}
+    .header h1{margin:0 0 6px;font-size:1.5rem;}
+    .header p{margin:0;color:#94a3b8;font-size:0.88rem;}
+    .summary{display:flex;gap:16px;margin-bottom:28px;flex-wrap:wrap;}
+    .stat-card{flex:1;min-width:120px;background:#fff;border:1px solid #e2e8f0;
+                border-radius:12px;padding:16px 20px;text-align:center;}
+    .stat-num{font-size:2rem;font-weight:900;line-height:1;}
+    .stat-lbl{font-size:0.72rem;font-weight:700;text-transform:uppercase;
+               letter-spacing:0.5px;color:#64748b;margin-top:4px;}
+    .overall{padding:16px 24px;border-radius:12px;margin-bottom:28px;
+              font-weight:800;font-size:1.1rem;}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>🔍 PredictionLab Automated QA Report</h1>
+    <p>Run: 20260609_080055 &nbsp;|&nbsp; 2026-06-09 08:00:55 &nbsp;|&nbsp;
+       Target: http://127.0.0.1:5003 &nbsp;|&nbsp; Duration: 257.5s</p>
+  </div>
+
+  <div class="overall" style="background:#fffbeb;color:#f59e0b;
+                               border:2px solid #f59e0b;">
+    Overall Result: WARN — 134 passed,
+    10 warnings, 0 failures
+  </div>
+
+  <div class="summary">
+    <div class="stat-card">
+      <div class="stat-num" style="color:#22c55e;">134</div>
+      <div class="stat-lbl">Passed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:#f59e0b;">10</div>
+      <div class="stat-lbl">Warnings</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:#ef4444;">0</div>
+      <div class="stat-lbl">Failures</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:#3b82f6;">13</div>
+      <div class="stat-lbl">Info</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">157</div>
+      <div class="stat-lbl">Total Checks</div>
+    </div>
+  </div>
+
+  
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Routes Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅47 ⚠️1 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/" style="color:#2563eb;font-size:0.8em;">/</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Health Check</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/healthz" style="color:#2563eb;font-size:0.8em;">/healthz</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Login Page</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/login" style="color:#2563eb;font-size:0.8em;">/login</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Signup Page</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/signup" style="color:#2563eb;font-size:0.8em;">/signup</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Plans & Pricing</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/plans" style="color:#2563eb;font-size:0.8em;">/plans</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Contact</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/contact" style="color:#2563eb;font-size:0.8em;">/contact</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Privacy Policy</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/privacy" style="color:#2563eb;font-size:0.8em;">/privacy</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Terms of Service</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/terms" style="color:#2563eb;font-size:0.8em;">/terms</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">FAQ</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/faq" style="color:#2563eb;font-size:0.8em;">/faq</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Tutorial</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/tutorial" style="color:#2563eb;font-size:0.8em;">/tutorial</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Responsible Gaming</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/responsible-gaming" style="color:#2563eb;font-size:0.8em;">/responsible-gaming</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">AI Picks Today</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/ai-sports-betting-picks-today" style="color:#2563eb;font-size:0.8em;">/ai-sports-betting-picks-today</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">What Are AI Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/what-are-ai-sports-betting-picks" style="color:#2563eb;font-size:0.8em;">/what-are-ai-sports-betting-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Model vs Sportsbooks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/our-model-vs-sportsbooks" style="color:#2563eb;font-size:0.8em;">/our-model-vs-sportsbooks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Search</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/search" style="color:#2563eb;font-size:0.8em;">/search</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">All Sports Results</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/all-sports-results" style="color:#2563eb;font-size:0.8em;">/all-sports-results</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Daily Report</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/daily-report" style="color:#2563eb;font-size:0.8em;">/daily-report</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Edge Performance</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/edge-performance" style="color:#2563eb;font-size:0.8em;">/edge-performance</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results Downloads</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/results/downloads" style="color:#2563eb;font-size:0.8em;">/results/downloads</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results Redirect</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/results" style="color:#2563eb;font-size:0.8em;">/results</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NBA Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NHL Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NFL Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/nfl-picks" style="color:#2563eb;font-size:0.8em;">/nfl-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">MLB Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NCAAB Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/ncaab-picks" style="color:#2563eb;font-size:0.8em;">/ncaab-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NCAAF Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/ncaaf-picks" style="color:#2563eb;font-size:0.8em;">/ncaaf-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NCAAW Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/ncaaw-picks" style="color:#2563eb;font-size:0.8em;">/ncaaw-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">WNBA Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/wnba-picks" style="color:#2563eb;font-size:0.8em;">/wnba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Soccer Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/soccer-picks" style="color:#2563eb;font-size:0.8em;">/soccer-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">World Cup Picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/soccer-picks?league=fifa.world" style="color:#2563eb;font-size:0.8em;">/soccer-picks?league=fifa.world</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NHL Results</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/nhl-results" style="color:#2563eb;font-size:0.8em;">/nhl-results</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">MLB Results</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/mlb-results" style="color:#2563eb;font-size:0.8em;">/mlb-results</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Model Performance (auth redirect ok)</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/performance" style="color:#2563eb;font-size:0.8em;">/performance</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Robots.txt</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/robots.txt" style="color:#2563eb;font-size:0.8em;">/robots.txt</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Sitemap XML</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/sitemap.xml" style="color:#2563eb;font-size:0.8em;">/sitemap.xml</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">LLMs.txt</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/llms.txt" style="color:#2563eb;font-size:0.8em;">/llms.txt</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">AI.txt</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/ai.txt" style="color:#2563eb;font-size:0.8em;">/ai.txt</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Sports API</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/api/sports" style="color:#2563eb;font-size:0.8em;">/api/sports</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Search API</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/api/search?q=nba" style="color:#2563eb;font-size:0.8em;">/api/search?q=nba</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Player Props (needs login)</td><td style="padding:8px 12px;color:#475569;">Correctly redirects (HTTP 302)<a href="/player-props" style="color:#2563eb;font-size:0.8em;">/player-props</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks CSV (needs login)</td><td style="padding:8px 12px;color:#475569;">Correctly redirects (HTTP 302)<a href="/picks/export.csv" style="color:#2563eb;font-size:0.8em;">/picks/export.csv</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results CSV (needs login)</td><td style="padding:8px 12px;color:#475569;">Correctly redirects (HTTP 302)<a href="/results/export.csv" style="color:#2563eb;font-size:0.8em;">/results/export.csv</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Audit CSV (needs login)</td><td style="padding:8px 12px;color:#475569;">Correctly redirects (HTTP 302)<a href="/performance/audit.csv" style="color:#2563eb;font-size:0.8em;">/performance/audit.csv</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">404 Handler</td><td style="padding:8px 12px;color:#475569;">HTTP 404<a href="/this-page-does-not-exist-xyz123" style="color:#2563eb;font-size:0.8em;">/this-page-does-not-exist-xyz123</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Sport page /tennis-picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/tennis-picks" style="color:#2563eb;font-size:0.8em;">/tennis-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Sport page /ufc-picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/ufc-picks" style="color:#2563eb;font-size:0.8em;">/ufc-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Sport page /golf-picks</td><td style="padding:8px 12px;color:#475569;">HTTP 200<a href="/golf-picks" style="color:#2563eb;font-size:0.8em;">/golf-picks</a></td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Slow pages on local server</td><td style="padding:8px 12px;color:#475569;">1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production<div style="color:#64748b;font-size:0.8em;margin-top:3px;">/nba-results</div></td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Content Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅31 ⚠️0 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Stale content scan</td><td style="padding:8px 12px;color:#475569;">No stale/forbidden strings found in page content</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Debug mode</td><td style="padding:8px 12px;color:#475569;">No debug mode indicators found</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Page size: /nba-picks</td><td style="padding:8px 12px;color:#475569;">124,087 bytes<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Page size: /nhl-picks</td><td style="padding:8px 12px;color:#475569;">121,669 bytes<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: NHL</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: NHL</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: NBA</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: NBA</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: MLB</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: MLB</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: NFL</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: NFL</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: NCAAB</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: NCAAB</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: NCAAW</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: NCAAW</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: NCAAF</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: NCAAF</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: WNBA</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: WNBA</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: Soccer</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: Soccer</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: Tennis</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: Tennis</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: UFC</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: UFC</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Homepage grid: Golf</td><td style="padding:8px 12px;color:#475569;">Listed in Today's Picks by Sport</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results dashboard: Golf</td><td style="padding:8px 12px;color:#475569;">Listed on all-sports-results</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">All Sports Results cell coverage</td><td style="padding:8px 12px;color:#475569;">87 stat cell(s), 23 explicit non-stat status cell(s)<a href="/all-sports-results" style="color:#2563eb;font-size:0.8em;">/all-sports-results</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Search API</td><td style="padding:8px 12px;color:#475569;">/api/search?query=Detroit returned 6 result(s)</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Search overlay wiring</td><td style="padding:8px 12px;color:#475569;">Navbar search overlay calls /api/search</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Navigation Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅31 ⚠️0 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /nba-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /nhl-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /nfl-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /mlb-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /ncaab-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /ncaaf-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /ncaaw-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks & Predictions: has /wnba-picks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Props: has /player-props</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Tools & Models: has /performance</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Tools & Models: has /ai-sports-betting-picks-today</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Tools & Models: has /our-model-vs-sportsbooks</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Tools & Models: has /tutorial</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results & Tracking: has /all-sports-results</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results & Tracking: has /daily-report</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results & Tracking: has /results/downloads</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results & Tracking: has /edge-performance</td><td style="padding:8px 12px;color:#475569;">Present in correct section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Menu section placement</td><td style="padding:8px 12px;color:#475569;">No link appears in more than one menu section</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Search section tags</td><td style="padding:8px 12px;color:#475569;">No results page mis-tagged in the search overlay</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /plans</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /privacy</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /terms</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /contact</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /faq</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /responsible-gaming</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /daily-report</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /performance</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /ai-sports-betting-picks-today</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /what-are-ai-sports-betting-picks</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Footer link: /our-model-vs-sportsbooks</td><td style="padding:8px 12px;color:#475569;">Present in footer</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Internal link spot-check</td><td style="padding:8px 12px;color:#475569;">Checked 9 key links — none returned 404</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Cards Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅10 ⚠️1 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Card count: NBA</td><td style="padding:8px 12px;color:#475569;">3 prediction card(s) found<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Card fields: NBA</td><td style="padding:8px 12px;color:#475569;">All required card field classes present<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Probability range: NBA</td><td style="padding:8px 12px;color:#475569;">All 6 probability values in range [0,100]<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Confidence values: NBA</td><td style="padding:8px 12px;color:#475569;">3 confidence value(s), range: 58.2%–64.1%<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Card count: NHL</td><td style="padding:8px 12px;color:#475569;">3 prediction card(s) found<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Card fields: NHL</td><td style="padding:8px 12px;color:#475569;">All required card field classes present<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Probability range: NHL</td><td style="padding:8px 12px;color:#475569;">All 6 probability values in range [0,100]<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Confidence values: NHL</td><td style="padding:8px 12px;color:#475569;">3 confidence value(s), range: 63.8%–66.5%<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Card count: MLB</td><td style="padding:8px 12px;color:#475569;">63 prediction card(s) found<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Card fields: MLB</td><td style="padding:8px 12px;color:#475569;">All required card field classes present<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Probability range: MLB</td><td style="padding:8px 12px;color:#475569;">All 126 probability values in range [0,100]<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Confidence values: MLB</td><td style="padding:8px 12px;color:#475569;">63 confidence value(s), range: 50.9%–100.0%<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Card count: WNBA</td><td style="padding:8px 12px;color:#475569;">21 prediction card(s) found<a href="/wnba-picks" style="color:#2563eb;font-size:0.8em;">/wnba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Card fields: WNBA</td><td style="padding:8px 12px;color:#475569;">All required card field classes present<a href="/wnba-picks" style="color:#2563eb;font-size:0.8em;">/wnba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Probability range: WNBA</td><td style="padding:8px 12px;color:#475569;">All 42 probability values in range [0,100]<a href="/wnba-picks" style="color:#2563eb;font-size:0.8em;">/wnba-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Confidence values: WNBA</td><td style="padding:8px 12px;color:#475569;">21 confidence value(s), range: 51.4%–85.1%<a href="/wnba-picks" style="color:#2563eb;font-size:0.8em;">/wnba-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Card count: SOCCER</td><td style="padding:8px 12px;color:#475569;">46 prediction card(s) found<a href="/soccer-picks" style="color:#2563eb;font-size:0.8em;">/soccer-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Card fields: SOCCER</td><td style="padding:8px 12px;color:#475569;">All required card field classes present<a href="/soccer-picks" style="color:#2563eb;font-size:0.8em;">/soccer-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Probability range: SOCCER</td><td style="padding:8px 12px;color:#475569;">All 92 probability values in range [0,100]<a href="/soccer-picks" style="color:#2563eb;font-size:0.8em;">/soccer-picks</a></td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Model clustering: SOCCER</td><td style="padding:8px 12px;color:#475569;">91% of probabilities are between 49.0% and 51.0% — possible fallback model detected<a href="/soccer-picks" style="color:#2563eb;font-size:0.8em;">/soccer-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Confidence values: SOCCER</td><td style="padding:8px 12px;color:#475569;">46 confidence value(s), range: 50.0%–57.7%<a href="/soccer-picks" style="color:#2563eb;font-size:0.8em;">/soccer-picks</a></td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Models Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅4 ⚠️7 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Model labels: NBA</td><td style="padding:8px 12px;color:#475569;">All expected model labels found<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Stale model name: NBA</td><td style="padding:8px 12px;color:#475569;">Found stale model reference: 'placeholder'<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Pick attribution: NBA</td><td style="padding:8px 12px;color:#475569;">Pick attributed to: Sharp Consensus<a href="/nba-picks" style="color:#2563eb;font-size:0.8em;">/nba-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Model labels: NHL</td><td style="padding:8px 12px;color:#475569;">All expected model labels found<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Stale model name: NHL</td><td style="padding:8px 12px;color:#475569;">Found stale model reference: 'placeholder'<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Pick attribution: NHL</td><td style="padding:8px 12px;color:#475569;">Pick attributed to: Sharp Consensus<a href="/nhl-picks" style="color:#2563eb;font-size:0.8em;">/nhl-picks</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Model labels: MLB</td><td style="padding:8px 12px;color:#475569;">All expected model labels found<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Stale model name: MLB</td><td style="padding:8px 12px;color:#475569;">Found stale model reference: 'placeholder'<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#eff6ff;"><td style="padding:8px 12px;font-size:1.1em;">ℹ️</td><td style="padding:8px 12px;font-weight:700;color:#3b82f6;">INFO</td><td style="padding:8px 12px;font-weight:600;">Pick attribution: MLB</td><td style="padding:8px 12px;color:#475569;">Pick attributed to: Sharp Consensus<a href="/mlb-picks" style="color:#2563eb;font-size:0.8em;">/mlb-picks</a></td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Performance page: Grinder2</td><td style="padding:8px 12px;color:#475569;">Model NOT found on performance page</td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Performance page: Takedown</td><td style="padding:8px 12px;color:#475569;">Model NOT found on performance page</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Performance page: Edge</td><td style="padding:8px 12px;color:#475569;">Model appears on performance page</td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Performance page: XSharp</td><td style="padding:8px 12px;color:#475569;">Model NOT found on performance page</td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">Performance page: Consensus</td><td style="padding:8px 12px;color:#475569;">Model NOT found on performance page</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Results Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅4 ⚠️0 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results page load</td><td style="padding:8px 12px;color:#475569;">Page loaded (77,073 bytes)</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results math validation</td><td style="padding:8px 12px;color:#475569;">Validated 87 pct+record cells — displayed percentages match the math</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Model anomaly check</td><td style="padding:8px 12px;color:#475569;">No fabricated/anomalous records over the sample threshold</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Daily report loads</td><td style="padding:8px 12px;color:#475569;">Daily report page: 49,412 bytes</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Csv Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅3 ⚠️0 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Picks export CSV</td><td style="padding:8px 12px;color:#475569;">Correctly requires auth (302 redirect)<a href="/picks/export.csv" style="color:#2563eb;font-size:0.8em;">/picks/export.csv</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Results export CSV</td><td style="padding:8px 12px;color:#475569;">Correctly requires auth (302 redirect)<a href="/results/export.csv" style="color:#2563eb;font-size:0.8em;">/results/export.csv</a></td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">Performance audit CSV</td><td style="padding:8px 12px;color:#475569;">Correctly requires auth (302 redirect)<a href="/performance/audit.csv" style="color:#2563eb;font-size:0.8em;">/performance/audit.csv</a></td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-bottom:32px;">
+          <h2 style="font-size:1rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:0.5px;color:#0f172a;border-bottom:2px solid #e2e8f0;
+                     padding-bottom:8px;margin-bottom:12px;">
+            Props Audit
+            <span style="font-size:0.8em;font-weight:600;color:#64748b;margin-left:8px;">
+              ✅4 ⚠️1 ❌0
+            </span>
+          </h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <tbody><tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NBA line sanity</td><td style="padding:8px 12px;color:#475569;">All 48 lines within realistic bounds</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">WNBA line sanity</td><td style="padding:8px 12px;color:#475569;">All 50 lines within realistic bounds</td></tr>
+<tr style="background:#fffbeb;"><td style="padding:8px 12px;font-size:1.1em;">⚠️</td><td style="padding:8px 12px;font-weight:700;color:#f59e0b;">WARN</td><td style="padding:8px 12px;font-weight:600;">WNBA diagnostics: feature collapse</td><td style="padding:8px 12px;color:#475569;">Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">NHL line sanity</td><td style="padding:8px 12px;color:#475569;">All 50 lines within realistic bounds</td></tr>
+<tr style="background:#f0fdf4;"><td style="padding:8px 12px;font-size:1.1em;">✅</td><td style="padding:8px 12px;font-weight:700;color:#22c55e;">PASS</td><td style="padding:8px 12px;font-weight:600;">MLB line sanity</td><td style="padding:8px 12px;color:#475569;">All 326 lines within realistic bounds</td></tr></tbody>
+          </table>
+        </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,313 @@
+======================================================================
+  PredictionLab Site Audit — 2026-06-10 10:03:41
+  Target: http://127.0.0.1:5001
+  Run ID: 20260610_100341
+  Duration: 148.3s
+======================================================================
+  OVERALL: FAIL
+  ✅ 89 passed | ⚠️  3 warnings | ❌ 17 failures | ℹ️  0 info
+======================================================================
+
+── ROUTES AUDIT ──────────────────────────────
+  ✅ [PASS] Homepage
+       HTTP 200
+       URL: /
+  ✅ [PASS] Health Check
+       HTTP 200
+       URL: /healthz
+  ✅ [PASS] Login Page
+       HTTP 200
+       URL: /login
+  ✅ [PASS] Signup Page
+       HTTP 200
+       URL: /signup
+  ✅ [PASS] Plans & Pricing
+       HTTP 200
+       URL: /plans
+  ✅ [PASS] Contact
+       HTTP 200
+       URL: /contact
+  ✅ [PASS] Privacy Policy
+       HTTP 200
+       URL: /privacy
+  ✅ [PASS] Terms of Service
+       HTTP 200
+       URL: /terms
+  ✅ [PASS] FAQ
+       HTTP 200
+       URL: /faq
+  ✅ [PASS] Tutorial
+       HTTP 200
+       URL: /tutorial
+  ✅ [PASS] Responsible Gaming
+       HTTP 200
+       URL: /responsible-gaming
+  ✅ [PASS] AI Picks Today
+       HTTP 200
+       URL: /ai-sports-betting-picks-today
+  ✅ [PASS] What Are AI Picks
+       HTTP 200
+       URL: /what-are-ai-sports-betting-picks
+  ✅ [PASS] Model vs Sportsbooks
+       HTTP 200
+       URL: /our-model-vs-sportsbooks
+  ✅ [PASS] Search
+       HTTP 200
+       URL: /search
+  ✅ [PASS] All Sports Results
+       HTTP 200
+       URL: /all-sports-results
+  ✅ [PASS] Daily Report
+       HTTP 200
+       URL: /daily-report
+  ✅ [PASS] Edge Performance
+       HTTP 200
+       URL: /edge-performance
+  ✅ [PASS] Results Downloads
+       HTTP 200
+       URL: /results/downloads
+  ✅ [PASS] Results Redirect
+       HTTP 200
+       URL: /results
+  ✅ [PASS] NBA Picks
+       HTTP 200
+       URL: /nba-picks
+  ✅ [PASS] NHL Picks
+       HTTP 200
+       URL: /nhl-picks
+  ✅ [PASS] NFL Picks
+       HTTP 200
+       URL: /nfl-picks
+  ✅ [PASS] MLB Picks
+       HTTP 200
+       URL: /mlb-picks
+  ✅ [PASS] NCAAB Picks
+       HTTP 200
+       URL: /ncaab-picks
+  ✅ [PASS] NCAAF Picks
+       HTTP 200
+       URL: /ncaaf-picks
+  ✅ [PASS] NCAAW Picks
+       HTTP 200
+       URL: /ncaaw-picks
+  ✅ [PASS] WNBA Picks
+       HTTP 200
+       URL: /wnba-picks
+  ✅ [PASS] Soccer Picks
+       HTTP 200
+       URL: /soccer-picks
+  ✅ [PASS] World Cup Picks
+       HTTP 200
+       URL: /soccer-picks?league=fifa.world
+  ✅ [PASS] NHL Results
+       HTTP 200
+       URL: /nhl-results
+  ✅ [PASS] MLB Results
+       HTTP 200
+       URL: /mlb-results
+  ✅ [PASS] Model Performance (auth redirect ok)
+       HTTP 200
+       URL: /performance
+  ✅ [PASS] Robots.txt
+       HTTP 200
+       URL: /robots.txt
+  ✅ [PASS] Sitemap XML
+       HTTP 200
+       URL: /sitemap.xml
+  ✅ [PASS] LLMs.txt
+       HTTP 200
+       URL: /llms.txt
+  ✅ [PASS] AI.txt
+       HTTP 200
+       URL: /ai.txt
+  ✅ [PASS] Sports API
+       HTTP 200
+       URL: /api/sports
+  ✅ [PASS] Search API
+       HTTP 200
+       URL: /api/search?q=nba
+  ✅ [PASS] Player Props (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /player-props
+  ✅ [PASS] Picks CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /picks/export.csv
+  ✅ [PASS] Results CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /results/export.csv
+  ✅ [PASS] Audit CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /performance/audit.csv
+  ✅ [PASS] 404 Handler
+       HTTP 404
+       URL: /this-page-does-not-exist-xyz123
+  ✅ [PASS] Sport page /tennis-picks
+       HTTP 200
+       URL: /tennis-picks
+  ✅ [PASS] Sport page /ufc-picks
+       HTTP 200
+       URL: /ufc-picks
+  ✅ [PASS] Sport page /golf-picks
+       HTTP 200
+       URL: /golf-picks
+  ⚠️ [WARN] Slow pages on local server
+       1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+       Detail: /nba-results
+
+── CONTENT AUDIT ──────────────────────────────
+  ✅ [PASS] Stale content scan
+       No stale/forbidden strings found in page content
+  ✅ [PASS] Debug mode
+       No debug mode indicators found
+  ✅ [PASS] Page size: /nba-picks
+       126,855 bytes
+       URL: /nba-picks
+  ✅ [PASS] Page size: /nhl-picks
+       124,160 bytes
+       URL: /nhl-picks
+  ✅ [PASS] Homepage grid: NHL
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: NHL
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: NBA
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: NBA
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: MLB
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: MLB
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: NFL
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: NFL
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: NCAAB
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: NCAAB
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: NCAAW
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: NCAAW
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: NCAAF
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: NCAAF
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: WNBA
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: WNBA
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: Soccer
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: Soccer
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: Tennis
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: Tennis
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: UFC
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: UFC
+       Listed on all-sports-results
+  ✅ [PASS] Homepage grid: Golf
+       Listed in Today's Picks by Sport
+  ✅ [PASS] Results dashboard: Golf
+       Listed on all-sports-results
+  ✅ [PASS] All Sports Results cell coverage
+       87 stat cell(s), 23 explicit non-stat status cell(s)
+       URL: /all-sports-results
+  ✅ [PASS] Search API
+       /api/search?query=Detroit returned 6 result(s)
+  ✅ [PASS] Search overlay wiring
+       Navbar search overlay calls /api/search
+
+── NAVIGATION AUDIT ──────────────────────────────
+  ❌ [FAIL] Picks & Predictions: missing /nba-picks
+       Required link /nba-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Picks & Predictions: missing /nhl-picks
+       Required link /nhl-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Picks & Predictions: missing /nfl-picks
+       Required link /nfl-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Picks & Predictions: missing /mlb-picks
+       Required link /mlb-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Picks & Predictions: missing /ncaab-picks
+       Required link /ncaab-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Picks & Predictions: missing /ncaaf-picks
+       Required link /ncaaf-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Picks & Predictions: missing /ncaaw-picks
+       Required link /ncaaw-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Picks & Predictions: missing /wnba-picks
+       Required link /wnba-picks is NOT in the Picks & Predictions menu
+  ❌ [FAIL] Props: missing /player-props
+       Required link /player-props is NOT in the Props menu
+  ❌ [FAIL] Tools & Models: missing /performance
+       Required link /performance is NOT in the Tools & Models menu
+  ❌ [FAIL] Tools & Models: missing /ai-sports-betting-picks-today
+       Required link /ai-sports-betting-picks-today is NOT in the Tools & Models menu
+  ❌ [FAIL] Tools & Models: missing /our-model-vs-sportsbooks
+       Required link /our-model-vs-sportsbooks is NOT in the Tools & Models menu
+  ❌ [FAIL] Tools & Models: missing /tutorial
+       Required link /tutorial is NOT in the Tools & Models menu
+  ❌ [FAIL] Results & Tracking: missing /all-sports-results
+       Required link /all-sports-results is NOT in the Results & Tracking menu
+  ❌ [FAIL] Results & Tracking: missing /daily-report
+       Required link /daily-report is NOT in the Results & Tracking menu
+  ❌ [FAIL] Results & Tracking: missing /results/downloads
+       Required link /results/downloads is NOT in the Results & Tracking menu
+  ❌ [FAIL] Results & Tracking: missing /edge-performance
+       Required link /edge-performance is NOT in the Results & Tracking menu
+  ✅ [PASS] Menu section placement
+       No link appears in more than one menu section
+  ✅ [PASS] Footer link: /plans
+       Present in footer
+  ✅ [PASS] Footer link: /privacy
+       Present in footer
+  ✅ [PASS] Footer link: /terms
+       Present in footer
+  ✅ [PASS] Footer link: /contact
+       Present in footer
+  ✅ [PASS] Footer link: /faq
+       Present in footer
+  ✅ [PASS] Footer link: /responsible-gaming
+       Present in footer
+  ✅ [PASS] Footer link: /daily-report
+       Present in footer
+  ✅ [PASS] Footer link: /performance
+       Present in footer
+  ✅ [PASS] Footer link: /ai-sports-betting-picks-today
+       Present in footer
+  ⚠️ [WARN] Footer link: /what-are-ai-sports-betting-picks
+       Not found in footer — verify manually
+  ⚠️ [WARN] Footer link: /our-model-vs-sportsbooks
+       Not found in footer — verify manually
+  ✅ [PASS] Internal link spot-check
+       Checked 9 key links — none returned 404
+
+
+══════════════════════════════════════════════════════════════════════
+  FAILURES SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ❌ Picks & Predictions: missing /nba-picks: Required link /nba-picks is NOT in the Picks & Predictions menu
+  ❌ Picks & Predictions: missing /nhl-picks: Required link /nhl-picks is NOT in the Picks & Predictions menu
+  ❌ Picks & Predictions: missing /nfl-picks: Required link /nfl-picks is NOT in the Picks & Predictions menu
+  ❌ Picks & Predictions: missing /mlb-picks: Required link /mlb-picks is NOT in the Picks & Predictions menu
+  ❌ Picks & Predictions: missing /ncaab-picks: Required link /ncaab-picks is NOT in the Picks & Predictions menu
+  ❌ Picks & Predictions: missing /ncaaf-picks: Required link /ncaaf-picks is NOT in the Picks & Predictions menu
+  ❌ Picks & Predictions: missing /ncaaw-picks: Required link /ncaaw-picks is NOT in the Picks & Predictions menu
+  ❌ Picks & Predictions: missing /wnba-picks: Required link /wnba-picks is NOT in the Picks & Predictions menu
+  ❌ Props: missing /player-props: Required link /player-props is NOT in the Props menu
+  ❌ Tools & Models: missing /performance: Required link /performance is NOT in the Tools & Models menu
+  ❌ Tools & Models: missing /ai-sports-betting-picks-today: Required link /ai-sports-betting-picks-today is NOT in the Tools & Models menu
+  ❌ Tools & Models: missing /our-model-vs-sportsbooks: Required link /our-model-vs-sportsbooks is NOT in the Tools & Models menu
+  ❌ Tools & Models: missing /tutorial: Required link /tutorial is NOT in the Tools & Models menu
+  ❌ Results & Tracking: missing /all-sports-results: Required link /all-sports-results is NOT in the Results & Tracking menu
+  ❌ Results & Tracking: missing /daily-report: Required link /daily-report is NOT in the Results & Tracking menu
+  ❌ Results & Tracking: missing /results/downloads: Required link /results/downloads is NOT in the Results & Tracking menu
+  ❌ Results & Tracking: missing /edge-performance: Required link /edge-performance is NOT in the Results & Tracking menu
+
+══════════════════════════════════════════════════════════════════════
+  WARNINGS SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ⚠️  Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+  ⚠️  Footer link: /what-are-ai-sports-betting-picks: Not found in footer — verify manually
+  ⚠️  Footer link: /our-model-vs-sportsbooks: Not found in footer — verify manually

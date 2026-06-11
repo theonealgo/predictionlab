@@ -1,0 +1,479 @@
+{
+  "run_id": "20260606_080017",
+  "timestamp": "2026-06-06 08:00:17",
+  "base_url": "http://127.0.0.1:5001",
+  "duration": 798.126002073288,
+  "overall": "FAIL",
+  "summary": {
+    "passes": 2,
+    "warnings": 15,
+    "failures": 41,
+    "infos": 0
+  },
+  "checks": [
+    {
+      "label": "Homepage",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: / (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f390>: Failed to establish a new co",
+      "auditor": "routes",
+      "url": "/"
+    },
+    {
+      "label": "Health Check",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /healthz (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f4d0>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/healthz"
+    },
+    {
+      "label": "Login Page",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f390>: Failed to establish a n",
+      "auditor": "routes",
+      "url": "/login"
+    },
+    {
+      "label": "Signup Page",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /signup (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f250>: Failed to establish a ",
+      "auditor": "routes",
+      "url": "/signup"
+    },
+    {
+      "label": "Plans & Pricing",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /plans (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e350>: Failed to establish a n",
+      "auditor": "routes",
+      "url": "/plans"
+    },
+    {
+      "label": "Contact",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /contact (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e210>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/contact"
+    },
+    {
+      "label": "Privacy Policy",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /privacy (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d090>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/privacy"
+    },
+    {
+      "label": "Terms of Service",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /terms (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c410>: Failed to establish a n",
+      "auditor": "routes",
+      "url": "/terms"
+    },
+    {
+      "label": "FAQ",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /faq (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5fb10>: Failed to establish a new",
+      "auditor": "routes",
+      "url": "/faq"
+    },
+    {
+      "label": "Tutorial",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /tutorial (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f9d0>: Failed to establish ",
+      "auditor": "routes",
+      "url": "/tutorial"
+    },
+    {
+      "label": "Responsible Gaming",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /responsible-gaming (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb4550>: Failed to ",
+      "auditor": "routes",
+      "url": "/responsible-gaming"
+    },
+    {
+      "label": "AI Picks Today",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ai-sports-betting-picks-today (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb4410>:",
+      "auditor": "routes",
+      "url": "/ai-sports-betting-picks-today"
+    },
+    {
+      "label": "What Are AI Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /what-are-ai-sports-betting-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb531",
+      "auditor": "routes",
+      "url": "/what-are-ai-sports-betting-picks"
+    },
+    {
+      "label": "Model vs Sportsbooks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /our-model-vs-sportsbooks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb4f50>: Fail",
+      "auditor": "routes",
+      "url": "/our-model-vs-sportsbooks"
+    },
+    {
+      "label": "Search",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /search (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c050>: Failed to establish a ",
+      "auditor": "routes",
+      "url": "/search"
+    },
+    {
+      "label": "All Sports Results",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /all-sports-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f9d0>: Failed to ",
+      "auditor": "routes",
+      "url": "/all-sports-results"
+    },
+    {
+      "label": "Daily Report",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c410>: Failed to establ",
+      "auditor": "routes",
+      "url": "/daily-report"
+    },
+    {
+      "label": "Results Redirect",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5dd10>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/results"
+    },
+    {
+      "label": "NBA Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e210>: Failed to establish",
+      "auditor": "routes",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "NHL Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e5d0>: Failed to establish",
+      "auditor": "routes",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "NFL Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nfl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f110>: Failed to establish",
+      "auditor": "routes",
+      "url": "/nfl-picks"
+    },
+    {
+      "label": "MLB Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e990>: Failed to establish",
+      "auditor": "routes",
+      "url": "/mlb-picks"
+    },
+    {
+      "label": "NCAAB Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaab-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd02d0>: Failed to establi",
+      "auditor": "routes",
+      "url": "/ncaab-picks"
+    },
+    {
+      "label": "NCAAF Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaaf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd0550>: Failed to establi",
+      "auditor": "routes",
+      "url": "/ncaaf-picks"
+    },
+    {
+      "label": "NCAAW Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaaw-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd0cd0>: Failed to establi",
+      "auditor": "routes",
+      "url": "/ncaaw-picks"
+    },
+    {
+      "label": "WNBA Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /wnba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd0e10>: Failed to establis",
+      "auditor": "routes",
+      "url": "/wnba-picks"
+    },
+    {
+      "label": "Soccer Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e990>: Failed to establ",
+      "auditor": "routes",
+      "url": "/soccer-picks"
+    },
+    {
+      "label": "World Cup Picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks?league=fifa.world (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd16d0>",
+      "auditor": "routes",
+      "url": "/soccer-picks?league=fifa.world"
+    },
+    {
+      "label": "NBA Results",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5ed50>: Failed to establi",
+      "auditor": "routes",
+      "url": "/nba-results"
+    },
+    {
+      "label": "NHL Results",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f390>: Failed to establi",
+      "auditor": "routes",
+      "url": "/nhl-results"
+    },
+    {
+      "label": "MLB Results",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d950>: Failed to establi",
+      "auditor": "routes",
+      "url": "/mlb-results"
+    },
+    {
+      "label": "Model Performance (auth redirect ok)",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /performance (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5de50>: Failed to establi",
+      "auditor": "routes",
+      "url": "/performance"
+    },
+    {
+      "label": "Robots.txt",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /robots.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d6d0>: Failed to establis",
+      "auditor": "routes",
+      "url": "/robots.txt"
+    },
+    {
+      "label": "Sitemap XML",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /sitemap.xml (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5ca50>: Failed to establi",
+      "auditor": "routes",
+      "url": "/sitemap.xml"
+    },
+    {
+      "label": "Sports API",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /api/sports (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5fc50>: Failed to establis",
+      "auditor": "routes",
+      "url": "/api/sports"
+    },
+    {
+      "label": "Search API",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /api/search?q=nba (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd1810>: Failed to es",
+      "auditor": "routes",
+      "url": "/api/search?q=nba"
+    },
+    {
+      "label": "Player Props (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/player-props"
+    },
+    {
+      "label": "Picks CSV (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/picks/export.csv"
+    },
+    {
+      "label": "Results CSV (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/results/export.csv"
+    },
+    {
+      "label": "Audit CSV (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/performance/audit.csv"
+    },
+    {
+      "label": "404 Handler",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /this-page-does-not-exist-xyz123 (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5fd90",
+      "auditor": "routes",
+      "url": "/this-page-does-not-exist-xyz123"
+    },
+    {
+      "label": "Sport page /tennis-picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /tennis-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f9d0>: Failed to establ",
+      "auditor": "routes",
+      "url": "/tennis-picks"
+    },
+    {
+      "label": "Sport page /ufc-picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ufc-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c050>: Failed to establish",
+      "auditor": "routes",
+      "url": "/ufc-picks"
+    },
+    {
+      "label": "Sport page /golf-picks",
+      "status": "FAIL",
+      "message": "Connection refused \u2014 server may be down",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /golf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d090>: Failed to establis",
+      "auditor": "routes",
+      "url": "/golf-picks"
+    },
+    {
+      "label": "Stale content scan",
+      "status": "PASS",
+      "message": "No stale/forbidden strings found in page content",
+      "detail": "",
+      "auditor": "content",
+      "url": ""
+    },
+    {
+      "label": "Debug mode",
+      "status": "PASS",
+      "message": "No debug mode indicators found",
+      "detail": "",
+      "auditor": "content",
+      "url": ""
+    },
+    {
+      "label": "Page size: /nba-picks",
+      "status": "WARN",
+      "message": "Page is only 0 bytes \u2014 possible error or empty page",
+      "detail": "",
+      "auditor": "content",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "Page size: /nhl-picks",
+      "status": "WARN",
+      "message": "Page is only 0 bytes \u2014 possible error or empty page",
+      "detail": "",
+      "auditor": "content",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "Navigation fetch",
+      "status": "FAIL",
+      "message": "Could not load homepage for nav audit",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Card audit: nba-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "Card audit: nhl-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "Card audit: mlb-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/mlb-picks"
+    },
+    {
+      "label": "Card audit: wnba-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/wnba-picks"
+    },
+    {
+      "label": "Card audit: soccer-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/soccer-picks"
+    },
+    {
+      "label": "Results page load",
+      "status": "WARN",
+      "message": "Could not load /all-sports-results",
+      "detail": "",
+      "auditor": "results",
+      "url": ""
+    },
+    {
+      "label": "Picks export CSV",
+      "status": "WARN",
+      "message": "Unexpected HTTP -1",
+      "detail": "",
+      "auditor": "csv",
+      "url": "/picks/export.csv"
+    },
+    {
+      "label": "Results export CSV",
+      "status": "WARN",
+      "message": "Unexpected HTTP -1",
+      "detail": "",
+      "auditor": "csv",
+      "url": "/results/export.csv"
+    },
+    {
+      "label": "Performance audit CSV",
+      "status": "WARN",
+      "message": "Unexpected HTTP -1",
+      "detail": "",
+      "auditor": "csv",
+      "url": "/performance/audit.csv"
+    }
+  ]
+}

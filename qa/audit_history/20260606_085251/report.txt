@@ -1,0 +1,21 @@
+======================================================================
+  PredictionLab Site Audit — 2026-06-06 08:52:51
+  Target: http://127.0.0.1:59999
+  Run ID: 20260606_085251
+  Duration: 1.0s
+======================================================================
+  OVERALL: FAIL
+  ✅ 0 passed | ⚠️  0 warnings | ❌ 1 failures | ℹ️  0 info
+======================================================================
+
+── PREFLIGHT AUDIT ──────────────────────────────
+  ❌ [FAIL] Server preflight
+       Server not running on http://127.0.0.1:59999 — start Flask before audit
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=59999): Max retries exceeded with url: /healthz (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b05090>: Failed to establish 
+       URL: http://127.0.0.1:59999
+
+
+══════════════════════════════════════════════════════════════════════
+  FAILURES SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ❌ Server preflight: Server not running on http://127.0.0.1:59999 — start Flask before audit

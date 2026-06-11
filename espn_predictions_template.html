@@ -647,6 +647,7 @@
                         {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
                         {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.efficiency_prob, 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     <div class="premium-protected">
@@ -716,7 +717,7 @@
             </div>
         </div>
         {% endfor %}
-    {% else %}
+    {% elif not prediction_error %}
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
     {% endif %}
 
@@ -894,7 +895,7 @@
                         ${routeLine}
                         ${modelItems ? `<p><strong>Model Performance</strong></p><ul>${modelItems}</ul>` : ''}
                         ${localTeamItems ? `<p style="margin-top:10px;"><strong>Our Prediction Matches</strong></p><ul>${localTeamItems}</ul>` : ''}
-                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest ESPN Matchups</strong></p><ul>${espnItems}</ul>` : ''}
+                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest Matchups</strong></p><ul>${espnItems}</ul>` : ''}
                         ${empty}
                     `;
                 } catch (_err) {

@@ -1,0 +1,34 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260604_134759  |  2026-06-04 13:47:59
+Target: http://127.0.0.1:5001
+
+FAILURES (must fix):
+  - [routes] Daily Report: Connection error
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=15)"))
+    Page: /daily-report
+  - [routes] MLB Picks: Connection error
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=15)"))
+    Page: /mlb-picks
+  - [routes] NBA Results: Connection error
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-results (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=15)"))
+    Page: /nba-results
+  - [routes] Sport page /mlb-picks: HTTP -1
+    Page: /mlb-picks
+  - [navigation] Props menu: forbidden link: '/daily-report' is in Props & Models menu — should only be in Results & Tracking
+
+WARNINGS (should investigate):
+  - [navigation] Duplicate nav link: /plans: Appears 3x in page HTML (may be intentional if in both nav + footer)
+  - [navigation] Duplicate nav link: /mlb-picks: Appears 6x in page HTML (may be intentional if in both nav + footer)
+  - [navigation] Duplicate nav link: /nba-picks: Appears 3x in page HTML (may be intentional if in both nav + footer)
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

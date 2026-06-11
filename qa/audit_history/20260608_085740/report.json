@@ -1,0 +1,23 @@
+{
+  "run_id": "20260608_085740",
+  "timestamp": "2026-06-08 08:57:40",
+  "base_url": "http://127.0.0.1:5001",
+  "duration": 1.2319817543029785,
+  "overall": "FAIL",
+  "summary": {
+    "passes": 0,
+    "warnings": 0,
+    "failures": 1,
+    "infos": 0
+  },
+  "checks": [
+    {
+      "label": "Server preflight",
+      "status": "FAIL",
+      "message": "Server not running on http://127.0.0.1:5001 \u2014 start Flask before audit",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /healthz (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106839090>: Failed to establish a",
+      "auditor": "preflight",
+      "url": "http://127.0.0.1:5001"
+    }
+  ]
+}

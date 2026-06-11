@@ -1,0 +1,22 @@
+{
+  "models": [
+    {"key": "glicko2",           "display": "Grinder2",  "required": true},
+    {"key": "trueskill",         "display": "Takedown",  "required": true},
+    {"key": "xgb_prob",          "display": "Edge",      "required": true},
+    {"key": "xsharp_prob",       "display": "XSharp",    "required": false},
+    {"key": "consensus_prob",    "display": "Consensus", "required": true}
+  ],
+  "probability_bounds": {"min": 0.0, "max": 1.0},
+  "clustering_detection": {
+    "range_low": 0.495,
+    "range_high": 0.505,
+    "warning_threshold_pct": 80
+  },
+  "expected_page_labels": [
+    "Grinder2", "Takedown", "Edge", "XSharp", "Consensus",
+    "Sharp Consensus", "via"
+  ],
+  "stale_model_names": [
+    "fallback", "default model", "placeholder"
+  ]
+}

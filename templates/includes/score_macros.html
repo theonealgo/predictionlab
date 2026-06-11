@@ -1,6 +1,7 @@
 {# Shared score / line display helpers — used by predictions + results cards #}
-{% macro team_short(name) -%}
-{{ (name|string).split()[-1] }}
+{% macro team_short(name, team_sport=none) -%}
+{% set s = (name|string).strip() %}
+{% if team_sport == 'SOCCER' %}{{ s }}{% else %}{{ s.split()[-1] }}{% endif %}
 {%- endmacro %}
 {% macro fmt_half(v) -%}
 {%- if v is not none -%}
@@ -9,9 +10,9 @@
 {%- endif -%}
 {%- endmacro %}
 
-{% macro fmt_labeled_final(away_team, away_score, home_team, home_score) -%}
+{% macro fmt_labeled_final(away_team, away_score, home_team, home_score, team_sport=none) -%}
 {%- if away_score is not none and home_score is not none -%}
-<span class="score-full">{{ away_team }} {{ away_score }} – {{ home_team }} {{ home_score }}</span><span class="score-compact">{{ team_short(away_team) }} {{ away_score }} – {{ team_short(home_team) }} {{ home_score }}</span>
+<span class="score-full">{{ away_team }} {{ away_score }} – {{ home_team }} {{ home_score }}</span><span class="score-compact">{{ team_short(away_team, team_sport) }} {{ away_score }} – {{ team_short(home_team, team_sport) }} {{ home_score }}</span>
 {%- else -%}—{%- endif -%}
 {%- endmacro %}
 
@@ -25,9 +26,9 @@
 {%- if v is not none -%}{% if v > 0 %}+{% endif %}{{ v }}{%- else -%}—{%- endif -%}
 {%- endmacro %}
 
-{% macro fmt_dual_american_ml(away_team, away_ml, home_team, home_ml) -%}
+{% macro fmt_dual_american_ml(away_team, away_ml, home_team, home_ml, team_sport=none) -%}
 {%- if away_ml is not none and home_ml is not none -%}
-{{ team_short(away_team) }} {% if away_ml > 0 %}+{% endif %}{{ away_ml }} · {{ team_short(home_team) }} {% if home_ml > 0 %}+{% endif %}{{ home_ml }}
+{{ team_short(away_team, team_sport) }} {% if away_ml > 0 %}+{% endif %}{{ away_ml }} · {{ team_short(home_team, team_sport) }} {% if home_ml > 0 %}+{% endif %}{{ home_ml }}
 {%- else -%}—{%- endif -%}
 {%- endmacro %}
 

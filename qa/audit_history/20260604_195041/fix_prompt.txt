@@ -1,0 +1,72 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260604_195041  |  2026-06-04 19:50:41
+Target: http://127.0.0.1:5001
+
+
+WARNINGS (should investigate):
+  - [routes] Daily Report: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+    Page: /daily-report
+  - [routes] Results Redirect: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+    Page: /results
+  - [routes] NBA Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /nba-picks
+  - [routes] NHL Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /nhl-picks
+  - [routes] NFL Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nfl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /nfl-picks
+  - [routes] MLB Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /mlb-picks
+  - [routes] NCAAF Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaaf-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout
+    Page: /ncaaf-picks
+  - [routes] WNBA Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /wnba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=
+    Page: /wnba-picks
+  - [routes] Soccer Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+    Page: /soccer-picks
+  - [routes] World Cup Picks: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks?league=fifa.world (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed
+    Page: /soccer-picks?league=fifa.world
+  - [routes] NBA Results: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-results (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout
+    Page: /nba-results
+  - [routes] NHL Results: Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-results (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout
+    Page: /nhl-results
+  - [routes] Sport page /nba-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /nba-picks
+  - [routes] Sport page /nhl-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /nhl-picks
+  - [routes] Sport page /nfl-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nfl-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /nfl-picks
+  - [routes] Sport page /mlb-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=6
+    Page: /mlb-picks
+  - [routes] Sport page /wnba-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /wnba-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=
+    Page: /wnba-picks
+  - [routes] Sport page /soccer-picks: HTTP error on picks page — Page exists but is slow to respond — check for heavy queries 
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeou
+    Page: /soccer-picks
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

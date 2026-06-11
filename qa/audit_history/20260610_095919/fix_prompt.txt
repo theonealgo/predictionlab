@@ -1,0 +1,20 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260610_095919  |  2026-06-10 09:59:19
+Target: http://127.0.0.1:5001
+
+
+WARNINGS (should investigate):
+  - [routes] Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+    Detail: /nba-results
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

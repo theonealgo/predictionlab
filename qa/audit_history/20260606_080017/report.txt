@@ -1,0 +1,296 @@
+======================================================================
+  PredictionLab Site Audit — 2026-06-06 08:00:17
+  Target: http://127.0.0.1:5001
+  Run ID: 20260606_080017
+  Duration: 798.1s
+======================================================================
+  OVERALL: FAIL
+  ✅ 2 passed | ⚠️  15 warnings | ❌ 41 failures | ℹ️  0 info
+======================================================================
+
+── ROUTES AUDIT ──────────────────────────────
+  ❌ [FAIL] Homepage
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: / (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f390>: Failed to establish a new co
+       URL: /
+  ❌ [FAIL] Health Check
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /healthz (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f4d0>: Failed to establish a
+       URL: /healthz
+  ❌ [FAIL] Login Page
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f390>: Failed to establish a n
+       URL: /login
+  ❌ [FAIL] Signup Page
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /signup (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f250>: Failed to establish a 
+       URL: /signup
+  ❌ [FAIL] Plans & Pricing
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /plans (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e350>: Failed to establish a n
+       URL: /plans
+  ❌ [FAIL] Contact
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /contact (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e210>: Failed to establish a
+       URL: /contact
+  ❌ [FAIL] Privacy Policy
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /privacy (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d090>: Failed to establish a
+       URL: /privacy
+  ❌ [FAIL] Terms of Service
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /terms (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c410>: Failed to establish a n
+       URL: /terms
+  ❌ [FAIL] FAQ
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /faq (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5fb10>: Failed to establish a new
+       URL: /faq
+  ❌ [FAIL] Tutorial
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /tutorial (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f9d0>: Failed to establish 
+       URL: /tutorial
+  ❌ [FAIL] Responsible Gaming
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /responsible-gaming (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb4550>: Failed to 
+       URL: /responsible-gaming
+  ❌ [FAIL] AI Picks Today
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ai-sports-betting-picks-today (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb4410>:
+       URL: /ai-sports-betting-picks-today
+  ❌ [FAIL] What Are AI Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /what-are-ai-sports-betting-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb531
+       URL: /what-are-ai-sports-betting-picks
+  ❌ [FAIL] Model vs Sportsbooks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /our-model-vs-sportsbooks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bb4f50>: Fail
+       URL: /our-model-vs-sportsbooks
+  ❌ [FAIL] Search
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /search (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c050>: Failed to establish a 
+       URL: /search
+  ❌ [FAIL] All Sports Results
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /all-sports-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f9d0>: Failed to 
+       URL: /all-sports-results
+  ❌ [FAIL] Daily Report
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c410>: Failed to establ
+       URL: /daily-report
+  ❌ [FAIL] Results Redirect
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5dd10>: Failed to establish a
+       URL: /results
+  ❌ [FAIL] NBA Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e210>: Failed to establish
+       URL: /nba-picks
+  ❌ [FAIL] NHL Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e5d0>: Failed to establish
+       URL: /nhl-picks
+  ❌ [FAIL] NFL Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nfl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f110>: Failed to establish
+       URL: /nfl-picks
+  ❌ [FAIL] MLB Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e990>: Failed to establish
+       URL: /mlb-picks
+  ❌ [FAIL] NCAAB Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaab-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd02d0>: Failed to establi
+       URL: /ncaab-picks
+  ❌ [FAIL] NCAAF Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaaf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd0550>: Failed to establi
+       URL: /ncaaf-picks
+  ❌ [FAIL] NCAAW Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ncaaw-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd0cd0>: Failed to establi
+       URL: /ncaaw-picks
+  ❌ [FAIL] WNBA Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /wnba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd0e10>: Failed to establis
+       URL: /wnba-picks
+  ❌ [FAIL] Soccer Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5e990>: Failed to establ
+       URL: /soccer-picks
+  ❌ [FAIL] World Cup Picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /soccer-picks?league=fifa.world (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd16d0>
+       URL: /soccer-picks?league=fifa.world
+  ❌ [FAIL] NBA Results
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5ed50>: Failed to establi
+       URL: /nba-results
+  ❌ [FAIL] NHL Results
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nhl-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f390>: Failed to establi
+       URL: /nhl-results
+  ❌ [FAIL] MLB Results
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d950>: Failed to establi
+       URL: /mlb-results
+  ❌ [FAIL] Model Performance (auth redirect ok)
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /performance (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5de50>: Failed to establi
+       URL: /performance
+  ❌ [FAIL] Robots.txt
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /robots.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d6d0>: Failed to establis
+       URL: /robots.txt
+  ❌ [FAIL] Sitemap XML
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /sitemap.xml (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5ca50>: Failed to establi
+       URL: /sitemap.xml
+  ❌ [FAIL] Sports API
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /api/sports (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5fc50>: Failed to establis
+       URL: /api/sports
+  ❌ [FAIL] Search API
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /api/search?q=nba (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106bd1810>: Failed to es
+       URL: /api/search?q=nba
+  ⚠️ [WARN] Player Props (needs login)
+       Expected [302], got -1
+       URL: /player-props
+  ⚠️ [WARN] Picks CSV (needs login)
+       Expected [302], got -1
+       URL: /picks/export.csv
+  ⚠️ [WARN] Results CSV (needs login)
+       Expected [302], got -1
+       URL: /results/export.csv
+  ⚠️ [WARN] Audit CSV (needs login)
+       Expected [302], got -1
+       URL: /performance/audit.csv
+  ❌ [FAIL] 404 Handler
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /this-page-does-not-exist-xyz123 (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5fd90
+       URL: /this-page-does-not-exist-xyz123
+  ❌ [FAIL] Sport page /tennis-picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /tennis-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5f9d0>: Failed to establ
+       URL: /tennis-picks
+  ❌ [FAIL] Sport page /ufc-picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /ufc-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5c050>: Failed to establish
+       URL: /ufc-picks
+  ❌ [FAIL] Sport page /golf-picks
+       Connection refused — server may be down
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /golf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x106b5d090>: Failed to establis
+       URL: /golf-picks
+
+── CONTENT AUDIT ──────────────────────────────
+  ✅ [PASS] Stale content scan
+       No stale/forbidden strings found in page content
+  ✅ [PASS] Debug mode
+       No debug mode indicators found
+  ⚠️ [WARN] Page size: /nba-picks
+       Page is only 0 bytes — possible error or empty page
+       URL: /nba-picks
+  ⚠️ [WARN] Page size: /nhl-picks
+       Page is only 0 bytes — possible error or empty page
+       URL: /nhl-picks
+
+── NAVIGATION AUDIT ──────────────────────────────
+  ❌ [FAIL] Navigation fetch
+       Could not load homepage for nav audit
+
+── CARDS AUDIT ──────────────────────────────
+  ⚠️ [WARN] Card audit: nba-picks
+       Page too small or empty — no cards audited
+       URL: /nba-picks
+  ⚠️ [WARN] Card audit: nhl-picks
+       Page too small or empty — no cards audited
+       URL: /nhl-picks
+  ⚠️ [WARN] Card audit: mlb-picks
+       Page too small or empty — no cards audited
+       URL: /mlb-picks
+  ⚠️ [WARN] Card audit: wnba-picks
+       Page too small or empty — no cards audited
+       URL: /wnba-picks
+  ⚠️ [WARN] Card audit: soccer-picks
+       Page too small or empty — no cards audited
+       URL: /soccer-picks
+
+── RESULTS AUDIT ──────────────────────────────
+  ⚠️ [WARN] Results page load
+       Could not load /all-sports-results
+
+── CSV AUDIT ──────────────────────────────
+  ⚠️ [WARN] Picks export CSV
+       Unexpected HTTP -1
+       URL: /picks/export.csv
+  ⚠️ [WARN] Results export CSV
+       Unexpected HTTP -1
+       URL: /results/export.csv
+  ⚠️ [WARN] Performance audit CSV
+       Unexpected HTTP -1
+       URL: /performance/audit.csv
+
+
+══════════════════════════════════════════════════════════════════════
+  FAILURES SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ❌ Homepage: Connection refused — server may be down
+  ❌ Health Check: Connection refused — server may be down
+  ❌ Login Page: Connection refused — server may be down
+  ❌ Signup Page: Connection refused — server may be down
+  ❌ Plans & Pricing: Connection refused — server may be down
+  ❌ Contact: Connection refused — server may be down
+  ❌ Privacy Policy: Connection refused — server may be down
+  ❌ Terms of Service: Connection refused — server may be down
+  ❌ FAQ: Connection refused — server may be down
+  ❌ Tutorial: Connection refused — server may be down
+  ❌ Responsible Gaming: Connection refused — server may be down
+  ❌ AI Picks Today: Connection refused — server may be down
+  ❌ What Are AI Picks: Connection refused — server may be down
+  ❌ Model vs Sportsbooks: Connection refused — server may be down
+  ❌ Search: Connection refused — server may be down
+  ❌ All Sports Results: Connection refused — server may be down
+  ❌ Daily Report: Connection refused — server may be down
+  ❌ Results Redirect: Connection refused — server may be down
+  ❌ NBA Picks: Connection refused — server may be down
+  ❌ NHL Picks: Connection refused — server may be down
+  ❌ NFL Picks: Connection refused — server may be down
+  ❌ MLB Picks: Connection refused — server may be down
+  ❌ NCAAB Picks: Connection refused — server may be down
+  ❌ NCAAF Picks: Connection refused — server may be down
+  ❌ NCAAW Picks: Connection refused — server may be down
+  ❌ WNBA Picks: Connection refused — server may be down
+  ❌ Soccer Picks: Connection refused — server may be down
+  ❌ World Cup Picks: Connection refused — server may be down
+  ❌ NBA Results: Connection refused — server may be down
+  ❌ NHL Results: Connection refused — server may be down
+  ❌ MLB Results: Connection refused — server may be down
+  ❌ Model Performance (auth redirect ok): Connection refused — server may be down
+  ❌ Robots.txt: Connection refused — server may be down
+  ❌ Sitemap XML: Connection refused — server may be down
+  ❌ Sports API: Connection refused — server may be down
+  ❌ Search API: Connection refused — server may be down
+  ❌ 404 Handler: Connection refused — server may be down
+  ❌ Sport page /tennis-picks: Connection refused — server may be down
+  ❌ Sport page /ufc-picks: Connection refused — server may be down
+  ❌ Sport page /golf-picks: Connection refused — server may be down
+  ❌ Navigation fetch: Could not load homepage for nav audit
+
+══════════════════════════════════════════════════════════════════════
+  WARNINGS SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ⚠️  Player Props (needs login): Expected [302], got -1
+  ⚠️  Picks CSV (needs login): Expected [302], got -1
+  ⚠️  Results CSV (needs login): Expected [302], got -1
+  ⚠️  Audit CSV (needs login): Expected [302], got -1
+  ⚠️  Page size: /nba-picks: Page is only 0 bytes — possible error or empty page
+  ⚠️  Page size: /nhl-picks: Page is only 0 bytes — possible error or empty page
+  ⚠️  Card audit: nba-picks: Page too small or empty — no cards audited
+  ⚠️  Card audit: nhl-picks: Page too small or empty — no cards audited
+  ⚠️  Card audit: mlb-picks: Page too small or empty — no cards audited
+  ⚠️  Card audit: wnba-picks: Page too small or empty — no cards audited
+  ⚠️  Card audit: soccer-picks: Page too small or empty — no cards audited
+  ⚠️  Results page load: Could not load /all-sports-results
+  ⚠️  Picks export CSV: Unexpected HTTP -1
+  ⚠️  Results export CSV: Unexpected HTTP -1
+  ⚠️  Performance audit CSV: Unexpected HTTP -1

@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T17:43:13Z",
+  "built_at": "2026-06-04T17:04:42Z",
   "games_expected": 816,
   "games_in_scope": 755,
   "ou_summary": {
@@ -10,6 +10,11 @@
     "total_under": 449
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 85.2,
+      "correct": 643,
+      "total": 755
+    },
     "elo": {
       "accuracy": 85.2,
       "correct": 643,
@@ -47,17 +52,19 @@
       "roi_pct": 70.33,
       "units_risked": 755,
       "units_won": 531.0,
+      "win_pct": 85.17,
       "wins": 643
     },
     "spread": {
-      "graded": 634,
-      "losses": 131,
+      "graded": 635,
+      "losses": 132,
       "missing_odds": 0,
       "pushes": 2,
       "reason": null,
-      "roi_pct": 58.68,
-      "units_risked": 634,
-      "units_won": 372.0,
+      "roi_pct": 58.43,
+      "units_risked": 635,
+      "units_won": 371.0,
+      "win_pct": 79.21,
       "wins": 503
     },
     "total": {
@@ -69,6 +76,7 @@
       "roi_pct": 49.44,
       "units_risked": 629,
       "units_won": 311.0,
+      "win_pct": 74.72,
       "wins": 470
     }
   },
@@ -89,24 +97,24 @@
     "ou_pct": 75.0,
     "scope_label": "NCAA Football season",
     "spread_covered": 503,
-    "spread_graded": 636,
+    "spread_graded": 637,
     "spread_model_label": "XSharp",
     "spread_note": null,
-    "spread_pct": 79.3
+    "spread_pct": 79.2
   },
   "sport": "NCAAF",
   "spread_total_stats": {
-    "pl_spread_covered": 5,
-    "pl_spread_graded": 8,
-    "pl_spread_pct": 62.5,
-    "pl_spread_pushes": 0,
+    "pl_spread_covered": 34,
+    "pl_spread_graded": 51,
+    "pl_spread_pct": 68.0,
+    "pl_spread_pushes": 1,
     "pl_total_correct": 6,
     "pl_total_graded": 8,
     "pl_total_pct": 75.0,
     "pl_total_pushes": 0,
     "spread_covered": 503,
-    "spread_graded": 636,
-    "spread_pct": 79.3,
+    "spread_graded": 637,
+    "spread_pct": 79.2,
     "spread_pushes": 2,
     "total_correct": 470,
     "total_graded": 636,

@@ -1,0 +1,19 @@
+{
+  "required_css_classes": [
+    "league-badge",
+    "team-name",
+    "win-pct",
+    "ai-pick-text",
+    "confidence",
+    "ml-num"
+  ],
+  "required_text_patterns": [
+    {"pattern": "\\d+\\.\\d+%",          "label": "Win probability percentage"},
+    {"pattern": "(?:Home Win|Away Win|Over|Under|Draw|[A-Z][a-z]+ [A-Z][a-z]+)", "label": "Pick team/direction"},
+    {"pattern": "Confidence",             "label": "Confidence label"}
+  ],
+  "probability_range": {"min": 0, "max": 100},
+  "valid_pick_patterns": ["Home Win", "Away Win", "Over", "Under", "Draw"],
+  "min_cards_per_sport": 0,
+  "expected_sports": ["NBA", "NHL", "NFL", "MLB", "NCAAB", "NCAAF", "WNBA", "SOCCER"]
+}

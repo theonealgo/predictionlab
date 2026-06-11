@@ -1,120 +1,68 @@
 [
   {
-    "sport": "NHL",
-    "season": "2025-26",
+    "sport": "GOLF",
+    "season": "2026-27",
     "phase": "regular",
     "window": {
-      "start": "2025-10-01",
-      "end": "2026-04-30"
+      "start": "2026-01-01",
+      "end": "2026-06-05"
     },
-    "games_in_scope": 1309,
-    "games_expected": 1312,
+    "games_in_scope": 0,
+    "games_expected": null,
     "overall_stats": {
       "glicko2": {
-        "correct": 764,
-        "total": 1309,
-        "accuracy": 58.4
+        "correct": 0,
+        "total": 0,
+        "accuracy": 0.0
       },
       "trueskill": {
-        "correct": 752,
-        "total": 1309,
-        "accuracy": 57.4
+        "correct": 0,
+        "total": 0,
+        "accuracy": 0.0
       },
       "elo": {
-        "correct": 782,
-        "total": 1309,
-        "accuracy": 59.7
+        "correct": 0,
+        "total": 0,
+        "accuracy": 0.0
       },
       "xgboost": {
-        "correct": 762,
-        "total": 1309,
-        "accuracy": 58.2
+        "correct": 0,
+        "total": 0,
+        "accuracy": 0.0
       },
       "ensemble": {
-        "correct": 765,
-        "total": 1309,
-        "accuracy": 58.4
+        "correct": 0,
+        "total": 0,
+        "accuracy": 0.0
+      },
+      "efficiency": {
+        "correct": 0,
+        "total": 0,
+        "accuracy": 0.0
       }
     },
-    "spread_total_stats": {
-      "spread_covered": 838,
-      "spread_graded": 1308,
-      "spread_pushes": 14,
-      "spread_pct": 64.8,
-      "total_correct": 626,
-      "total_graded": 1308,
-      "total_pushes": 110,
-      "total_pct": 52.3,
-      "pl_spread_covered": 878,
-      "pl_spread_graded": 1292,
-      "pl_spread_pushes": 131,
-      "pl_spread_pct": 75.6,
-      "pl_total_correct": 655,
-      "pl_total_graded": 1292,
-      "pl_total_pushes": 110,
-      "pl_total_pct": 55.4
-    },
+    "spread_total_stats": {},
     "season_perf": {
-      "ml_total": 1309,
-      "ml_correct": 782,
-      "ml_accuracy": 59.7,
-      "ml_model_label": "Edge",
-      "ml_model_key": "elo",
-      "spread_graded": 1292,
-      "spread_covered": 878,
-      "spread_pct": 75.6,
-      "spread_model_label": "Prediction Lab",
+      "ml_total": 0,
+      "ml_correct": 0,
+      "ml_accuracy": null,
+      "ml_model_label": "Sharp Consensus",
+      "ml_model_key": "ensemble",
+      "spread_graded": 0,
+      "spread_covered": 0,
+      "spread_pct": null,
+      "spread_model_label": "XSharp",
       "spread_note": null,
-      "ou_graded": 1292,
-      "ou_correct": 655,
-      "ou_pct": 55.4,
-      "ou_model_label": "Prediction Lab",
+      "ou_graded": 0,
+      "ou_correct": 0,
+      "ou_pct": null,
+      "ou_model_label": "XSharp",
       "ou_note": null,
-      "scope_label": "NHL season",
-      "games_expected": 1312,
-      "games_in_scope": 1309
+      "scope_label": "Golf season",
+      "games_expected": null,
+      "games_in_scope": 0
     },
-    "ou_summary": {
-      "total_over": 614,
-      "total_under": 695,
-      "total_games_ou": 1309,
-      "avg_total": 6.3,
-      "ou_bench": 6.1
-    },
-    "roi_total": {
-      "moneyline": {
-        "wins": 766,
-        "losses": 543,
-        "pushes": 0,
-        "units_won": 223.0,
-        "units_risked": 1309,
-        "graded": 1309,
-        "missing_odds": 0,
-        "roi_pct": 17.04,
-        "reason": null
-      },
-      "spread": {
-        "wins": 838,
-        "losses": 456,
-        "pushes": 14,
-        "units_won": 382.0,
-        "units_risked": 1294,
-        "graded": 1294,
-        "missing_odds": 0,
-        "roi_pct": 29.52,
-        "reason": null
-      },
-      "total": {
-        "wins": 626,
-        "losses": 572,
-        "pushes": 110,
-        "units_won": 54.0,
-        "units_risked": 1198,
-        "graded": 1198,
-        "missing_odds": 0,
-        "roi_pct": 4.51,
-        "reason": null
-      }
-    }
+    "ou_summary": {},
+    "roi_total": null
   }
 ]

@@ -276,10 +276,10 @@
         @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.8);} }
         .date-bubble.today-bubble { border-color:#00C076 !important; color:#059669 !important; font-weight:700; }
         .date-bubble.today-bubble.active { background:#00C076 !important; color:#fff !important; }
-        .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }
+        .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; max-width:100%; min-width:0; }
         .nav-arrow { background:rgba(146,64,14,0.12); border:2px solid #92400e; color:#92400e; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
         .nav-arrow:hover { background:rgba(146,64,14,0.22); transform:scale(1.1); }
-        .date-bubbles { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
+        .date-bubbles { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; min-width:0; flex:1 1 auto; }
         .date-bubble { background:#fff; border:2px solid rgba(15,23,42,0.18); border-radius:22px; padding:9px 16px; min-width:105px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.86em; color:#0f172a; }
         .date-bubble:hover { border-color:#92400e; }
         .date-bubble.active { background:#f59e0b; border-color:#d97706; color:#0f172a; font-weight:700; }
@@ -290,9 +290,9 @@
         .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
         .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         .date-header { font-size:1.25em; margin-bottom:14px; color:#0F172A; font-weight:700; }
-        .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
+        .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
         @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
-        .game-card-stack { min-width:0; max-width:420px; width:100%; justify-self:stretch; display:flex; flex-direction:column; }
+        .game-card-stack { min-width:0; max-width:460px; width:100%; justify-self:stretch; display:flex; flex-direction:column; }
         .game-card-stack .game-card { flex:0 0 auto; border-radius:12px 12px 0 0; }
         .game-card-stack .game-card.pick-card { border-radius:16px; }
         .game-card-stack .game-card.pick-card + .analysis-toggle { border-radius:0; border-top:1px solid rgba(15,23,42,0.08); margin-top:0; }
@@ -448,8 +448,8 @@
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
         .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
-        @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; align-items:stretch; }
+        @media(max-width:640px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
         .pc-box {
             background:#ffffff;
             border:1px solid #E2E8F0;
@@ -567,7 +567,7 @@
         .injury-list { display:flex; flex-wrap:wrap; gap:6px; }
         .injury-pill { display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:0.72em; font-weight:600; }
         .injury-pill.doubtful { background:rgba(251,191,36,0.15); border-color:rgba(146,64,14,0.45); color:#92400e; }
-        .social-export-wrap{max-width:960px;margin:24px auto 0;padding:0 8px;}
+        .social-export-wrap{max-width:960px;margin:24px auto 24px;padding:0 8px;}
         .social-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
         .social-export-title{font-size:0.9em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
         .social-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -589,16 +589,96 @@
         .nav-group-items a:hover { opacity: 1; color: #00529B; }
     </style>
     <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
+    <link rel="stylesheet" href="/static/css/research-theme.css">
 </head>
-<body>
+<body class="research-site">
 {% include 'includes/picks_nav_chrome.html' %}
+<style id="mlbpt-styles">
+/* ── MLB Pro Table View (site palette: navy #00529B + green #00C076) ──── */
+.mlbpt-toggle{display:inline-flex;gap:4px;background:#eef2f7;border:1px solid #d3dce6;border-radius:12px;padding:4px;margin:0 0 14px;}
+.mlbpt-toggle-btn{appearance:none;border:none;background:transparent;color:#475569;font-weight:800;font-size:.84rem;padding:8px 16px;border-radius:9px;cursor:pointer;transition:all .15s;}
+.mlbpt-toggle-btn.active{background:#00529B;color:#fff;}
+.mlbpt-view{display:none;}
+body.picks-view-table .date-section.visible .games-grid{display:none;}
+body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
+.mlbpt-title{font-size:1.05rem;font-weight:800;color:#00529B;margin:4px 0 4px;}
+.mlbpt-scrollhint{display:flex;align-items:center;gap:8px;font-size:.76rem;font-weight:700;color:#00529B;margin:0 0 8px;}
+.mlbpt-arrows{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:#00529B;color:#fff;font-size:.92rem;animation:mlbpt-nudge 1.4s ease-in-out infinite;}
+@keyframes mlbpt-nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+.mlbpt-scrollwrap{position:relative;}
+.mlbpt-scrollwrap::after{content:"";position:absolute;top:0;right:0;width:44px;height:100%;pointer-events:none;border-radius:0 12px 12px 0;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.96));transition:opacity .2s;}
+.mlbpt-scrollwrap.at-end::after{opacity:0;}
+.mlbpt-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #d3dce6;border-radius:12px;background:#fff;scrollbar-color:#94a3b8 #eef2f7;}
+.mlbpt-scroll::-webkit-scrollbar{height:13px;}
+.mlbpt-scroll::-webkit-scrollbar-track{background:#eef2f7;border-radius:0 0 12px 12px;}
+.mlbpt-scroll::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:7px;border:3px solid #eef2f7;}
+.mlbpt-scroll::-webkit-scrollbar-thumb:hover{background:#64748b;}
+.mlbpt-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:.74rem;color:#0f172a;}
+/* Header text WRAPS (stacks) so each column shrinks to its BODY content width.
+   width:1px forces the th to shrink-wrap; the body cells drive the real width,
+   and the heading stacks onto multiple lines to fit. Sticky columns keep their
+   fixed size via their own min-width. */
+.mlbpt-table thead th{position:sticky;top:0;z-index:2;width:1px;background:#00529B;color:#fff;font-weight:700;text-align:left;padding:8px 9px;white-space:normal;line-height:1.18;vertical-align:bottom;border-bottom:3px solid #00C076;font-size:.69rem;}
+/* Every cell carries a SOLID background + clips overflow so nothing shows through or spills past the frozen columns while scrolling. */
+.mlbpt-table td{padding:9px 11px;border-bottom:1px solid #eef2f7;vertical-align:top;white-space:nowrap;background:#fff;}
+.mlbpt-table tbody tr:hover td{background:#eef6f1;}
+.mlbpt-sticky{position:sticky;z-index:1;background:#fff;overflow:hidden;}
+.mlbpt-table tbody tr:hover .mlbpt-sticky{background:#eef6f1;}
+.mlbpt-table thead th.mlbpt-sticky{z-index:4;background:#00529B;}
+/* Time wraps too (e.g. "6:35 PM" / "ET") so it never gets clipped in a narrow column. */
+.mlbpt-table td.mlbpt-c-time,.mlbpt-table th.mlbpt-c-time{white-space:normal;padding-left:6px;padding-right:6px;}
+.mlbpt-c-time{left:0;min-width:58px;max-width:58px;}
+.mlbpt-c-away{left:58px;min-width:122px;max-width:122px;}
+.mlbpt-c-home{left:180px;min-width:122px;max-width:122px;border-right:1px solid #d3dce6;box-shadow:4px 0 6px rgba(15,23,42,.07);}
+.mlbpt-team{display:flex;align-items:center;gap:6px;font-weight:800;}
+.mlbpt-logo{border-radius:50%;flex-shrink:0;object-fit:contain;width:22px;height:22px;}
+.mlbpt-tname{overflow:hidden;text-overflow:ellipsis;}
+.mlbpt-wp{font-size:.66rem;color:#334155;margin-top:3px;}
+/* Win-prob / Sharp Consensus label stacks, with the % on its own line below — keeps the column narrow. */
+.mlbpt-wplabel{color:#0a7d52;font-weight:700;display:block;white-space:normal;line-height:1.2;}
+.mlbpt-wppct{display:block;font-weight:800;color:#0f172a;}
+.mlbpt-odds{font-size:.66rem;color:#475569;}
+.mlbpt-odds span{color:#94a3b8;}
+/* Picked team: SOLID green tint (opaque) — no bleed-through on the frozen cells. */
+.mlbpt-picked{background:#e7f7ef!important;box-shadow:inset 3px 0 0 #00C076;}
+.mlbpt-table tbody tr:hover .mlbpt-picked{background:#dbf2e6!important;}
+.mlbpt-lines div{font-size:.68rem;line-height:1.5;}
+.mlbpt-lines b{color:#64748b;font-weight:600;}
+.mlbpt-scorehead{margin-top:3px;}
+.mlbpt-scoreline{font-size:.68rem;color:#334155;line-height:1.4;font-weight:600;}
+.mlbpt-model{text-align:center;}
+.mlbpt-mteam{font-weight:700;font-size:.64rem;color:#475569;}
+.mlbpt-mconf{font-size:.92rem;font-weight:800;color:#0f172a;line-height:1.1;}
+.mlbpt-h2h>div:first-child{font-size:.86rem;font-weight:800;}
+.mlbpt-h2h .mlbpt-sub{font-size:.6rem;color:#94a3b8;font-weight:600;}
+.mlbpt-ev div{font-size:.68rem;line-height:1.55;}
+.mlbpt-ev div span{color:#94a3b8;margin-right:2px;}
+.mlbpt-ev b{font-weight:800;}
+.mlbpt-pos{color:#15803d;}
+.mlbpt-neg{color:#b91c1c;}
+.mlbpt-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.68rem;font-weight:800;}
+.mlbpt-badge-ev{background:#dcfce7;color:#0a7d52;}
+.mlbpt-lock{opacity:.65;}
+.mlbpt-dash{color:#94a3b8;}
+@media(max-width:768px){
+  /* Phones: smaller font + narrower frozen Time/Away/Home so there's room to
+     scroll the rest without the frozen block eating the whole screen. */
+  .mlbpt-table{font-size:.7rem;}
+  .mlbpt-table thead th{padding:8px 8px;font-size:.64rem;}
+  .mlbpt-table td{padding:8px 8px;}
+  .mlbpt-c-time{min-width:50px;max-width:50px;}
+  .mlbpt-c-away{left:50px;min-width:108px;max-width:108px;}
+  .mlbpt-c-home{left:158px;min-width:108px;max-width:108px;}
+  .mlbpt-mconf{font-size:.82rem;}
+}
+</style>
 <div class="search-results-wrap">
     <div id="searchResultsPicks" class="search-results" aria-live="polite"></div>
 </div>
 <div class="container">
 
-    <div class="header">
-        <h1 id="pageHeading">{{ sport_info.icon }} {{ sport_info.name }} AI Picks, Predictions and Model Probabilities</h1>
+    <div class="header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <h1 id="pageHeading" style="margin:0;">{{ sport_info.icon }} {{ sport_info.name }} AI Picks, Predictions and Model Probabilities</h1>
     </div>
 
     <!-- SEO text block -->
@@ -620,14 +700,22 @@
     </div>
 
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}{% if sport == 'SOCCER' and selected_league_slug %}?league={{ selected_league_slug }}{% endif %}" class="tab active">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}{% if sport == 'SOCCER' and selected_league_slug %}?league={{ selected_league_slug }}{% endif %}" class="tab">🎯 Results</a>
         {% if not is_premium|default(false) %}
         <a href="/plans" class="tab" style="margin-left:auto;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;">⭐ Join Premium</a>
         {% endif %}
     </div>
     {% if not is_premium|default(false) %}
     <div class="premium-upsell-strip">Unlock spreads, totals, and projected scores — <a href="/plans">Join Premium →</a></div>
+    {% endif %}
+    {# Pro Table View is available on every head-to-head sport (Golf shows golfer-vs-golfer matchups). #}
+    {% set _pro_table_ok = sport in ('NHL','NBA','MLB','NFL','NCAAB','NCAAW','NCAAF','WNBA','SOCCER','TENNIS','UFC','GOLF') %}
+    {% if _pro_table_ok and grouped_predictions %}
+    <div class="mlbpt-toggle" role="tablist" aria-label="{{ sport }} view mode">
+        <button type="button" class="mlbpt-toggle-btn active" data-view="cards" role="tab" aria-selected="true" onclick="setPicksView('cards')">🃏 Cards View</button>
+        <button type="button" class="mlbpt-toggle-btn" data-view="table" role="tab" aria-selected="false" onclick="setPicksView('table')">📊 Pro Table View</button>
+    </div>
     {% endif %}
     {% set label_glicko2 = 'Grinder2' %}
     {% set label_trueskill = 'Takedown' %}
@@ -677,13 +765,13 @@
                 📅 {{ date }}
                 {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
             </div>
+            {% if sport == 'SOCCER' %}
+            {% set _date_preds = grouped_predictions[date]|sort(attribute='league') %}
+            {% else %}
+            {% set _date_preds = grouped_predictions[date] %}
+            {% endif %}
             <div class="games-grid">
                 {% set _prev_league = namespace(val='') %}
-                {% if sport == 'SOCCER' %}
-                {% set _date_preds = grouped_predictions[date]|sort(attribute='league') %}
-                {% else %}
-                {% set _date_preds = grouped_predictions[date] %}
-                {% endif %}
                 {% for pred in _date_preds %}
                 {% if sport == 'SOCCER' and pred.league and pred.league != _prev_league.val %}
                 {% set _prev_league.val = pred.league %}
@@ -709,10 +797,11 @@
                     {% set show_pick_arrow = (not is_final) and _odds_pass %}
                     {% set card_details_id = 'card-details-' ~ date ~ '-' ~ loop.index0 %}
                     {% set conf_models = [
-                        {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
-                        {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
-                        {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
-                        {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Grinder2', 'prob': pred.glicko2_prob, 'key': 'glicko2'},
+                        {'name': 'Takedown', 'prob': pred.trueskill_prob, 'key': 'trueskill'},
+                        {'name': 'Edge', 'prob': pred.elo_prob, 'key': 'elo'},
+                        {'name': 'XSharp', 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.efficiency_prob, 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
@@ -775,6 +864,11 @@
                 </div>
                 {% endfor %}
             </div>
+            {% if _pro_table_ok %}
+            <div class="mlbpt-view">
+                {% include 'includes/mlb_pro_table.html' %}
+            </div>
+            {% endif %}
         </div>
         {% endfor %}
     {% else %}
@@ -785,9 +879,9 @@
         <div style="color:#475569;font-size:0.92em;line-height:1.65;margin-bottom:20px;">
             Select a <span style="color:#059669;font-weight:700;">green league</span> above to see active picks, or check the results page for completed season data.
         </div>
-        <a href="/soccer-results" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">View Season Results →</a>
+        <a href="/soccer-results{% if selected_league_slug %}?league={{ selected_league_slug }}{% endif %}" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">View Season Results →</a>
     </div>
-    {% else %}
+    {% elif not prediction_error %}
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
     {% endif %}
     {% endif %}
@@ -808,6 +902,13 @@
             {% endif %}
             {% endfor %}
         </div>
+    </div>
+    {% endif %}
+
+    {% if grouped_predictions %}
+    <div style="display:flex;justify-content:center;margin:22px 0 6px;">
+        <button type="button" class="copy-all-predictions-btn" onclick="copyAllPredictions()" title="Copy all predictions on the visible date to clipboard"
+            style="background:#0f172a;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:0.84rem;font-weight:800;cursor:pointer;white-space:nowrap;">📋 Copy All</button>
     </div>
     {% endif %}
 
@@ -860,7 +961,7 @@
         <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
     </div>
 </div>
-<footer class="site-footer">
+<footer class="site-footer" style="display:none">
     <div class="footer-outer">
         <div class="footer-brand"><a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a></div>
         <div class="footer-columns-3">
@@ -877,6 +978,7 @@
                 <div class="footer-heading">Product</div>
                 <a href="/#faq">FAQ</a>
                 <a href="/daily-report">Daily results report</a>
+                <a href="/all-sports-results">All sports results</a>
                 <a href="/search">Search</a>
                 <a href="/performance">Model performance</a>
                 <a href="/ai-sports-betting-picks-today">AI picks today</a>
@@ -895,6 +997,7 @@
         <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
     </div>
 </footer>
+{% include "partials/site_directory_footer.html" %}
 {% if not is_premium|default(false) %}
 <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
     <div class="join-premium-inner">
@@ -965,18 +1068,20 @@
                     const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`, { headers: { 'Accept': 'application/json' } });
                     const data = await resp.json();
                     const modelLine = data.matched_model ? `<p><strong>Model:</strong> ${data.matched_model.public_name} -> ${data.matched_model.internal_name}${data.confidence_threshold ? ` (confidence >= ${data.confidence_threshold}%)` : ''}</p>` : '';
+                    const pageItems = (data.page_results || []).map(r => `<li><a href="${r.route || '/'}">${r.label || r.route || 'Page'}</a>${r.sport ? ` <small>${String(r.sport).toUpperCase()}</small>` : ''}</li>`).join('');
                     const modelItems = (data.model_results || []).map(r => `<li>${r.sport}: ${r.record} (${r.accuracy}%)${r.filtered_games !== null && r.filtered_games !== undefined ? ` - ${r.filtered_games} games at threshold` : ''}</li>`).join('');
                     const localTeamItems = (data.team_results || []).map(r => `<li>${r.sport}: ${r.away_team} vs ${r.home_team} (${r.game_date}) - pick: ${r.predicted_winner} (${r.win_probability}%)</li>`).join('');
                     const espnItems = (data.espn_results || []).map(r => `<li>${r.sport}: ${r.away_team} at ${r.home_team} (${r.status})</li>`).join('');
                     const routeLine = data.suggested_route ? `<p><strong>Suggested page:</strong> <a href="${data.suggested_route}">${data.suggested_route}</a></p>` : '';
-                    const empty = (!modelItems && !localTeamItems && !espnItems) ? '<p>No matches found yet. Try a team name, league, or model alias.</p>' : '';
+                    const empty = (!pageItems && !modelItems && !localTeamItems && !espnItems) ? '<p>No matches found yet. Try a team name, league, player, or model alias.</p>' : '';
                     resultsEl.innerHTML = `
                         <h3>Search Results</h3>
                         ${modelLine}
                         ${routeLine}
+                        ${pageItems ? `<p><strong>Pages, Teams & Players</strong></p><ul>${pageItems}</ul>` : ''}
                         ${modelItems ? `<p><strong>Model Performance</strong></p><ul>${modelItems}</ul>` : ''}
                         ${localTeamItems ? `<p style="margin-top:10px;"><strong>Our Prediction Matches</strong></p><ul>${localTeamItems}</ul>` : ''}
-                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest ESPN Matchups</strong></p><ul>${espnItems}</ul>` : ''}
+                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest Matchups</strong></p><ul>${espnItems}</ul>` : ''}
                         ${empty}
                     `;
                 } catch (_err) {
@@ -995,7 +1100,9 @@
             if (burger) burger.setAttribute('aria-expanded', 'false');
         }
     });
-    const allDates = {{ sorted_dates|tojson }};
+    const allDates = {{ (all_picker_dates if all_picker_dates is defined and all_picker_dates else sorted_dates)|tojson }};
+    const SEO_SLUG = '{{ sport_seo_slug }}';
+    const MONTH_SLUGS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
     const today = '{{ today_date }}';
     const defaultPickDate = '{{ default_pick_date|default(today_date) }}';
     let currentWeekStart = 0, activeDate = defaultPickDate || today;
@@ -1008,12 +1115,221 @@
     }
     const sportIcon = '{{ sport_info.icon }}';
     const sportName = '{{ sport_info.name }}';
+
+    function cleanCopyValue(value) {
+        if (value === null || value === undefined || value === '' || value === '—') return '';
+        return String(value).replace(/\s+/g, ' ').trim();
+    }
+    function formatCopyPct(value) {
+        const v = cleanCopyValue(value);
+        if (!v) return '';
+        return v.endsWith('%') ? v : `${v}%`;
+    }
+    function formatCopyOdds(value) {
+        const v = cleanCopyValue(value);
+        if (!v) return '';
+        const n = Number(v);
+        if (!Number.isNaN(n) && n > 0) return `+${n}`;
+        return v;
+    }
+    function formatCopyEv(value) {
+        const v = cleanCopyValue(value);
+        if (!v) return '';
+        if (v.endsWith('%')) return v.startsWith('-') || v.startsWith('+') ? v : `+${v}`;
+        const n = Number(v);
+        if (Number.isNaN(n)) return v;
+        return `${n > 0 ? '+' : ''}${n.toFixed(1)}%`;
+    }
+    function predictionCardData(card) {
+        const node = card && card.querySelector('.prediction-card-data');
+        if (!node) return null;
+        try { return JSON.parse(node.textContent || '{}'); }
+        catch (_err) { return null; }
+    }
+    function copyLine(lines, label, value) {
+        const v = cleanCopyValue(value);
+        if (v) lines.push(`${label}: ${v}`);
+    }
+    function modelPickLine(model, homeTeam, awayTeam) {
+        if (!model || model.prob === null || model.prob === undefined || model.prob === '') return '';
+        const raw = Number(model.prob);
+        if (Number.isNaN(raw)) return `${model.name}: ${model.prob}`;
+        const pickedHome = raw >= 50;
+        const confidence = pickedHome ? raw : (100 - raw);
+        const side = pickedHome ? homeTeam : awayTeam;
+        return `${model.name}: ${confidence.toFixed(1)}% ${side}`;
+    }
+    function serializePredictionCard(card) {
+        const data = predictionCardData(card);
+        if (!data) return '';
+        const ml = data.moneyline || {};
+        const premium = data.premium || {};
+        const isPremium = !!(data.access && data.access.isPremium && premium);
+        const lines = [];
+
+        lines.push(cleanCopyValue(data.sport) || sportName);
+        if (cleanCopyValue(data.gameTime)) lines.push(cleanCopyValue(data.gameTime));
+        lines.push('');
+
+        lines.push(cleanCopyValue(data.awayTeam));
+        copyLine(lines, 'Win Prob', formatCopyPct(data.awayWinProb));
+        copyLine(lines, 'Books', formatCopyOdds(ml.awayBooks));
+        copyLine(lines, 'Prediction Lab', formatCopyOdds(ml.awayPredictionLab));
+        lines.push('');
+
+        lines.push(cleanCopyValue(data.homeTeam));
+        if (cleanCopyValue(data.sharpConsensusLabel)) copyLine(lines, 'Sharp Consensus', formatCopyPct(data.homeWinProb));
+        else copyLine(lines, 'Win Prob', formatCopyPct(data.homeWinProb));
+        copyLine(lines, 'Books', formatCopyOdds(ml.homeBooks));
+        copyLine(lines, 'Prediction Lab', formatCopyOdds(ml.homePredictionLab));
+        lines.push('');
+
+        copyLine(lines, 'AI Pick', ml.aiPick);
+        copyLine(lines, 'Confidence', formatCopyPct(ml.confidence));
+        copyLine(lines, 'Moneyline EV', formatCopyEv(ml.ev));
+        copyLine(lines, 'Edge', formatCopyEv(ml.edge));
+
+        const analysis = data.analysis || {};
+        const analysisLines = [];
+        if (cleanCopyValue(analysis.method)) analysisLines.push(`Method: ${cleanCopyValue(analysis.method)}`);
+        if (cleanCopyValue(analysis.spreadTrendRecord)) analysisLines.push(`Spread trend: ${cleanCopyValue(analysis.spreadTrendRecord)}`);
+        if (cleanCopyValue(analysis.totalTrendRecord)) analysisLines.push(`Total trend: ${cleanCopyValue(analysis.totalTrendRecord)}`);
+        if (analysisLines.length) copyLine(lines, 'Analysis', analysisLines.join(' | '));
+
+        if (isPremium) {
+            lines.push('');
+            lines.push('Odds & Lines');
+            copyLine(lines, `Books ${premium.spreadLabel || 'Spread'}`, premium.booksSpread);
+            copyLine(lines, `Prediction Lab ${premium.spreadLabel || 'Spread'}`, premium.predictionLabSpread);
+            copyLine(lines, `XSharp ${premium.spreadLabel || 'Spread'}`, premium.xsharpSpread);
+            copyLine(lines, 'Books Total', premium.booksTotal);
+            copyLine(lines, 'Prediction Lab Total', premium.predictionLabTotal);
+            copyLine(lines, 'XSharp Total', premium.xsharpTotal);
+
+            if (cleanCopyValue(premium.predictionLabScore) || cleanCopyValue(premium.xsharpScore)) {
+                lines.push('');
+                lines.push('Projected Score');
+                copyLine(lines, 'Prediction Lab', premium.predictionLabScore);
+                copyLine(lines, 'XSharp', premium.xsharpScore);
+            }
+
+            lines.push('');
+            lines.push('EV Breakdown');
+            copyLine(lines, 'Moneyline EV', formatCopyEv(ml.ev));
+            copyLine(lines, 'Spread EV', formatCopyEv(premium.spreadEv));
+            copyLine(lines, 'Total EV', formatCopyEv(premium.totalEv));
+            copyLine(lines, 'Best EV Market', premium.bestEvMarket);
+            if (cleanCopyValue(premium.bestEvMarket)) {
+                if (cleanCopyValue(premium.recommendedPremiumMarket)) {
+                    copyLine(lines, 'Recommended Premium Market', premium.recommendedPremiumMarket);
+                } else {
+                    copyLine(lines, 'Recommended Side', 'Not available');
+                    copyLine(lines, 'Reason', premium.recommendedReason || 'Missing pick side from data');
+                }
+            }
+
+            copyLine(lines, 'Best Spread Side', premium.spreadPick);
+            copyLine(lines, 'Best Total Side', premium.totalPick);
+            copyLine(lines, 'H2H Last 10 Total', premium.h2hLast10Total);
+
+            const modelLines = Array.isArray(premium.models)
+                ? premium.models.map(m => modelPickLine(m, data.homeTeam, data.awayTeam)).filter(Boolean)
+                : [];
+            if (modelLines.length) {
+                lines.push('');
+                lines.push('Pick Confidence');
+                lines.push(...modelLines);
+            }
+        }
+
+        return lines.filter(line => line !== null && line !== undefined).join('\n').replace(/\n{3,}/g, '\n\n');
+    }
+    function writePredictionTextToClipboard(text, buttons) {
+        const btns = buttons && buttons.length ? buttons : [];
+        const done = ok => {
+            btns.forEach(btn => {
+                const o = btn.getAttribute('data-orig-text') || btn.textContent;
+                btn.setAttribute('data-orig-text', o);
+                btn.textContent = ok ? '✓ Copied!' : 'Copy failed';
+                if(ok) btn.style.background='#059669';
+                setTimeout(()=>{btn.textContent=o; btn.style.background='#0f172a';}, 1600);
+            });
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(()=>done(true)).catch(()=>done(false));
+        } else {
+            const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select();
+            let ok=false; try{ok=document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(ok);
+        }
+    }
+    /* ── Copy All predictions on the visible date to the clipboard ── */
+    function copyAllPredictions() {
+        const sec = document.querySelector('.date-section.visible') || document;
+        const cards = Array.from(sec.querySelectorAll('.game-card.pick-card'));
+        const lines = cards.map(card => serializePredictionCard(card)).filter(Boolean);
+        if (!lines.length) return;
+        const dateLbl = (typeof activeDate !== 'undefined' && activeDate) ? activeDate : '';
+        const header = `${sportName} AI Picks${dateLbl ? ' — ' + dateLbl : ''}\n${'='.repeat(40)}`;
+        writePredictionTextToClipboard(header + '\n\n' + lines.join('\n\n----------------------------------------\n\n'), Array.from(document.querySelectorAll('.copy-all-predictions-btn')));
+    }
+    function copySinglePick(btn) {
+        const card = btn && btn.closest('.game-card.pick-card');
+        const text = serializePredictionCard(card);
+        if (!text) return;
+        writePredictionTextToClipboard(text, [btn]);
+    }
+    /* ── MLB Pro Table View: toggle + per-row copy (reuses the card serializer,
+       so free users copy only free fields and paid users copy everything) ── */
+    function setPicksView(view) {
+        if (!document.querySelector('.mlbpt-toggle')) return;  // MLB only — never leak to other sports
+        const isTable = view === 'table';
+        document.body.classList.toggle('picks-view-table', isTable);
+        document.querySelectorAll('.mlbpt-toggle-btn').forEach(b => {
+            const on = b.getAttribute('data-view') === view;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        try { localStorage.setItem('mlbPicksView', view); } catch (e) {}
+        if (isTable) mlbptInitScrollFades();
+    }
+    // Hide the right-edge "more columns" fade once the user has scrolled to the end.
+    function mlbptInitScrollFades() {
+        document.querySelectorAll('.mlbpt-scrollwrap').forEach(function (wrap) {
+            const sc = wrap.querySelector('.mlbpt-scroll');
+            if (!sc) return;
+            const upd = function () {
+                wrap.classList.toggle('at-end', sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 2);
+            };
+            if (!sc.dataset.fadeBound) {
+                sc.dataset.fadeBound = '1';
+                sc.addEventListener('scroll', upd, { passive: true });
+                window.addEventListener('resize', upd);
+            }
+            upd();
+        });
+    }
+    (function restoreMlbView(){
+        try {
+            if (document.querySelector('.mlbpt-toggle') && localStorage.getItem('mlbPicksView') === 'table') {
+                setPicksView('table');
+            }
+        } catch (e) {}
+    })();
+
     function showDate(date) {
+        const sec=document.getElementById('date-'+date);
+        if(!sec){
+            // Date outside the rendered window: open that day's own page.
+            const parts=date.split('-');
+            if(parts.length===3 && SEO_SLUG){
+                window.location='/'+SEO_SLUG+'-'+MONTH_SLUGS[parseInt(parts[1],10)-1]+'-'+parseInt(parts[2],10)+'-'+parts[0];
+                return;
+            }
+        }
         document.querySelectorAll('.date-section').forEach(s=>{
             s.classList.remove('visible');
             s.classList.add('seo-hidden');
         });
-        const sec=document.getElementById('date-'+date);
         if(sec){sec.classList.remove('seo-hidden');sec.classList.add('visible');activeDate=date;}
         // Update heading with selected date
         const h=document.getElementById('pageHeading');

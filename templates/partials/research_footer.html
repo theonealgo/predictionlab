@@ -1,0 +1,52 @@
+<footer class="pl2-footer" id="sec-footer" data-bc="08 · Site Index" data-rail="7">
+    <div class="pl2-shell">
+        <span class="pl2-mono pl2-terminal-label">Site Index</span>
+        <h2>Prediction Lab Directory</h2>
+        <div class="pl2-footer-sub">AI-powered sports betting picks. Daily. Transparent. Data-driven.</div>
+
+        <div class="pl2-footer-grid">
+            <div>
+                <h5>AI Picks by Sport</h5>
+                {% for s in landing_sports %}<a href="/{{ s.seo_slug }}">{{ s.name }} AI Picks</a>{% endfor %}
+            </div>
+            <div>
+                <h5>Research Tools</h5>
+                <a href="/performance">Model Performance</a>
+                <a href="/edge-performance">Edge Performance</a>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/daily-report">Daily Results Report</a>
+                <a href="/player-props">Player Props</a>
+                <a href="/results/downloads">Data Downloads</a>
+            </div>
+            <div>
+                <h5>Access</h5>
+                <a href="/ai-sports-betting-picks-today">Free Picks</a>
+                <a href="/plans">Premium Edge — $4.99/wk</a>
+                <a href="/plans">Monthly Plan — $19.99</a>
+                <a href="/plans">Yearly Plan — $149.99</a>
+                <a href="/login">Sign In</a>
+                <a href="/signup">Create Account</a>
+            </div>
+            <div>
+                <h5>Company</h5>
+                <a href="/faq">FAQ</a>
+                <a href="/tutorial">Tutorial</a>
+                <a href="/contact">Contact</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/responsible-gaming">Responsible Gaming</a>
+            </div>
+        </div>
+
+        <div class="pl2-footer-bottom">
+            <span>© 2026 Prediction Lab. All rights reserved.</span>
+            <span>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.tiktok.com/@predictionlab" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://reddit.com/r/sportsbetting" target="_blank" rel="noopener">Reddit</a>
+            </span>
+            <span>For entertainment purposes. Bet responsibly.</span>
+        </div>
+    </div>
+</footer>

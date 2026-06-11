@@ -1,0 +1,40 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260606_154355  |  2026-06-06 15:43:55
+Target: http://127.0.0.1:5003
+
+
+WARNINGS (should investigate):
+  - [routes] Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+    Detail: /nba-results
+  - [cards] Model clustering: SOCCER: 83% of probabilities are between 49.0% and 51.0% — possible fallback model detected
+    Page: /soccer-picks
+  - [models] Model labels: NBA: Missing model label(s): ['Grinder2', 'Takedown']
+    Page: /nba-picks
+  - [models] Stale model name: NBA: Found stale model reference: 'placeholder'
+    Page: /nba-picks
+  - [models] Model labels: NHL: Missing model label(s): ['Grinder2', 'Takedown']
+    Page: /nhl-picks
+  - [models] Stale model name: NHL: Found stale model reference: 'placeholder'
+    Page: /nhl-picks
+  - [models] Model labels: MLB: Missing model label(s): ['Grinder2', 'Takedown']
+    Page: /mlb-picks
+  - [models] Stale model name: MLB: Found stale model reference: 'placeholder'
+    Page: /mlb-picks
+  - [models] Performance page: Grinder2: Model NOT found on performance page
+  - [models] Performance page: Takedown: Model NOT found on performance page
+  - [models] Performance page: XSharp: Model NOT found on performance page
+  - [models] Performance page: Consensus: Model NOT found on performance page
+  - [results] Results math validation: 24 possible pct mismatches
+    Detail: 0-4 → calc 0.0% vs displayed 58.4%; 0-4 → calc 0.0% vs displayed 57.4%; 764-545 → calc 58.4% vs displayed 59.7%; 782-527 → calc 59.7% vs displayed 58.4%; 762-547 → calc 58.2% vs displayed 70.6%
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

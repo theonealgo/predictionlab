@@ -1,0 +1,241 @@
+======================================================================
+  PredictionLab Site Audit — 2026-06-04 13:47:59
+  Target: http://127.0.0.1:5001
+  Run ID: 20260604_134759
+  Duration: 353.3s
+======================================================================
+  OVERALL: FAIL
+  ✅ 69 passed | ⚠️  3 warnings | ❌ 5 failures | ℹ️  0 info
+======================================================================
+
+── ROUTES AUDIT ──────────────────────────────
+  ✅ [PASS] Homepage
+       HTTP 200
+       URL: /
+  ✅ [PASS] Health Check
+       HTTP 200
+       URL: /healthz
+  ✅ [PASS] Login Page
+       HTTP 200
+       URL: /login
+  ✅ [PASS] Signup Page
+       HTTP 200
+       URL: /signup
+  ✅ [PASS] Plans & Pricing
+       HTTP 200
+       URL: /plans
+  ✅ [PASS] Contact
+       HTTP 200
+       URL: /contact
+  ✅ [PASS] Privacy Policy
+       HTTP 200
+       URL: /privacy
+  ✅ [PASS] Terms of Service
+       HTTP 200
+       URL: /terms
+  ✅ [PASS] FAQ
+       HTTP 200
+       URL: /faq
+  ✅ [PASS] Tutorial
+       HTTP 200
+       URL: /tutorial
+  ✅ [PASS] Responsible Gaming
+       HTTP 200
+       URL: /responsible-gaming
+  ✅ [PASS] AI Picks Today
+       HTTP 200
+       URL: /ai-sports-betting-picks-today
+  ✅ [PASS] What Are AI Picks
+       HTTP 200
+       URL: /what-are-ai-sports-betting-picks
+  ✅ [PASS] Model vs Sportsbooks
+       HTTP 200
+       URL: /our-model-vs-sportsbooks
+  ✅ [PASS] Search
+       HTTP 200
+       URL: /search
+  ✅ [PASS] All Sports Results
+       HTTP 200
+       URL: /all-sports-results
+  ❌ [FAIL] Daily Report
+       Connection error
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /daily-report (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=15)"))
+       URL: /daily-report
+  ✅ [PASS] Results Redirect
+       HTTP 200
+       URL: /results
+  ✅ [PASS] NBA Picks
+       HTTP 200
+       URL: /nba-picks
+  ✅ [PASS] NHL Picks
+       HTTP 200
+       URL: /nhl-picks
+  ✅ [PASS] NFL Picks
+       HTTP 200
+       URL: /nfl-picks
+  ❌ [FAIL] MLB Picks
+       Connection error
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /mlb-picks (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=15)"))
+       URL: /mlb-picks
+  ✅ [PASS] NCAAB Picks
+       HTTP 200
+       URL: /ncaab-picks
+  ✅ [PASS] NCAAF Picks
+       HTTP 200
+       URL: /ncaaf-picks
+  ✅ [PASS] NCAAW Picks
+       HTTP 200
+       URL: /ncaaw-picks
+  ✅ [PASS] WNBA Picks
+       HTTP 200
+       URL: /wnba-picks
+  ✅ [PASS] Soccer Picks
+       HTTP 200
+       URL: /soccer-picks
+  ✅ [PASS] World Cup Picks
+       HTTP 200
+       URL: /soccer-picks?league=fifa.world
+  ❌ [FAIL] NBA Results
+       Connection error
+       Detail: HTTPConnectionPool(host='127.0.0.1', port=5001): Max retries exceeded with url: /nba-results (Caused by ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1', port=5001): Read timed out. (read timeout=15)"))
+       URL: /nba-results
+  ✅ [PASS] NHL Results
+       HTTP 200
+       URL: /nhl-results
+  ✅ [PASS] MLB Results
+       HTTP 200
+       URL: /mlb-results
+  ✅ [PASS] Model Performance (auth redirect ok)
+       HTTP 200
+       URL: /performance
+  ✅ [PASS] Robots.txt
+       HTTP 200
+       URL: /robots.txt
+  ✅ [PASS] Sitemap XML
+       HTTP 200
+       URL: /sitemap.xml
+  ✅ [PASS] Sports API
+       HTTP 200
+       URL: /api/sports
+  ✅ [PASS] Search API
+       HTTP 200
+       URL: /api/search?q=nba
+  ✅ [PASS] Player Props (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /player-props
+  ✅ [PASS] Picks CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /picks/export.csv
+  ✅ [PASS] Results CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /results/export.csv
+  ✅ [PASS] Audit CSV (needs login)
+       Correctly redirects (HTTP 302)
+       URL: /performance/audit.csv
+  ✅ [PASS] 404 Handler
+       Correct HTTP 404
+       URL: /this-page-does-not-exist-xyz123
+  ✅ [PASS] Sport page /nba-picks
+       HTTP 200
+       URL: /nba-picks
+  ✅ [PASS] Sport page /nhl-picks
+       HTTP 200
+       URL: /nhl-picks
+  ✅ [PASS] Sport page /nfl-picks
+       HTTP 200
+       URL: /nfl-picks
+  ❌ [FAIL] Sport page /mlb-picks
+       HTTP -1
+       URL: /mlb-picks
+  ✅ [PASS] Sport page /ncaab-picks
+       HTTP 200
+       URL: /ncaab-picks
+  ✅ [PASS] Sport page /ncaaf-picks
+       HTTP 200
+       URL: /ncaaf-picks
+  ✅ [PASS] Sport page /ncaaw-picks
+       HTTP 200
+       URL: /ncaaw-picks
+  ✅ [PASS] Sport page /wnba-picks
+       HTTP 200
+       URL: /wnba-picks
+  ✅ [PASS] Sport page /soccer-picks
+       HTTP 200
+       URL: /soccer-picks
+
+── CONTENT AUDIT ──────────────────────────────
+  ✅ [PASS] Stale content scan
+       No stale/forbidden strings found in page content
+  ✅ [PASS] Debug mode
+       No debug mode indicators found
+  ✅ [PASS] Page size: /nba-picks
+       88,681 bytes
+       URL: /nba-picks
+  ✅ [PASS] Page size: /nhl-picks
+       93,892 bytes
+       URL: /nhl-picks
+
+── NAVIGATION AUDIT ──────────────────────────────
+  ✅ [PASS] Nav link: /nba-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /nhl-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /nfl-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /mlb-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /ncaab-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /ncaaf-picks
+       Found in navigation
+  ✅ [PASS] Nav link: /wnba-picks
+       Found in navigation
+  ✅ [PASS] Footer link: /plans
+       Present in footer
+  ✅ [PASS] Footer link: /privacy
+       Present in footer
+  ✅ [PASS] Footer link: /terms
+       Present in footer
+  ✅ [PASS] Footer link: /contact
+       Present in footer
+  ✅ [PASS] Footer link: /faq
+       Present in footer
+  ✅ [PASS] Footer link: /responsible-gaming
+       Present in footer
+  ✅ [PASS] Footer link: /daily-report
+       Present in footer
+  ✅ [PASS] Footer link: /performance
+       Present in footer
+  ✅ [PASS] Footer link: /ai-sports-betting-picks-today
+       Present in footer
+  ✅ [PASS] Footer link: /what-are-ai-sports-betting-picks
+       Present in footer
+  ✅ [PASS] Footer link: /our-model-vs-sportsbooks
+       Present in footer
+  ⚠️ [WARN] Duplicate nav link: /plans
+       Appears 3x in page HTML (may be intentional if in both nav + footer)
+  ⚠️ [WARN] Duplicate nav link: /mlb-picks
+       Appears 6x in page HTML (may be intentional if in both nav + footer)
+  ⚠️ [WARN] Duplicate nav link: /nba-picks
+       Appears 3x in page HTML (may be intentional if in both nav + footer)
+  ❌ [FAIL] Props menu: forbidden link
+       '/daily-report' is in Props & Models menu — should only be in Results & Tracking
+  ✅ [PASS] Internal link spot-check
+       Checked 20 links — none returned 404
+
+
+══════════════════════════════════════════════════════════════════════
+  FAILURES SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ❌ Daily Report: Connection error
+  ❌ MLB Picks: Connection error
+  ❌ NBA Results: Connection error
+  ❌ Sport page /mlb-picks: HTTP -1
+  ❌ Props menu: forbidden link: '/daily-report' is in Props & Models menu — should only be in Results & Tracking
+
+══════════════════════════════════════════════════════════════════════
+  WARNINGS SUMMARY
+══════════════════════════════════════════════════════════════════════
+  ⚠️  Duplicate nav link: /plans: Appears 3x in page HTML (may be intentional if in both nav + footer)
+  ⚠️  Duplicate nav link: /mlb-picks: Appears 6x in page HTML (may be intentional if in both nav + footer)
+  ⚠️  Duplicate nav link: /nba-picks: Appears 3x in page HTML (may be intentional if in both nav + footer)

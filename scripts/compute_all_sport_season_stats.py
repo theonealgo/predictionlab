@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compute season results stats for all 9 sports (for review before deploy).
+"""Compute season results stats for all 12 sports (for review before deploy).
 
 Usage:
   PL_SNAPSHOT_BUILD=1 python3 scripts/compute_all_sport_season_stats.py
@@ -20,7 +20,11 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault('PL_SNAPSHOT_BUILD', '1')
 os.environ.pop('PL_SKIP_V2_FOR_RESULTS', None)
 
-SPORTS = ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER']
+SPORTS = [
+    'NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER',
+    'TENNIS', 'UFC', 'GOLF',
+]
+INDIVIDUAL_SPORTS = {'TENNIS', 'UFC', 'GOLF'}
 
 
 def _season_label(N, sport, ref_dt):
@@ -37,6 +41,59 @@ def compute_sport(N, sport: str) -> dict:
     yesterday = ref_dt - timedelta(days=1)
     start_dt, end_dt = N._results_season_bounds(sport, yesterday)
     end_eff = min(end_dt, yesterday) if end_dt else yesterday
+
+    if sport in INDIVIDUAL_SPORTS:
+        daily = N._banner_daily_results_for_range(sport, start_dt, end_eff)
+        if not daily or not N._daily_results_game_count(daily):
+            season = _season_label(N, sport, ref_dt)
+            empty_overall = N._normalize_overall_stats({})
+            return {
+                'sport': sport,
+                'season': season,
+                'phase': 'regular',
+                'window': {
+                    'start': start_dt.strftime('%Y-%m-%d') if start_dt else None,
+                    'end': end_eff.strftime('%Y-%m-%d') if end_eff else None,
+                },
+                'games_in_scope': 0,
+                'games_expected': None,
+                'overall_stats': empty_overall,
+                'spread_total_stats': {},
+                'season_perf': N._build_season_performance_summary(
+                    empty_overall, {},
+                    scope_label=f'{N.SPORTS[sport]["name"]} season',
+                    games_expected=None,
+                    games_in_scope=0,
+                ),
+                'ou_summary': {},
+                'roi_total': None,
+            }
+        overall = N.compute_overall_stats_from_daily(daily)
+        st = N._compute_spread_total_for_daily(sport, daily, skip_efficiency=True)
+        games_in_scope = N._daily_results_game_count(daily)
+        season = _season_label(N, sport, ref_dt)
+        season_perf = N._build_season_performance_summary(
+            overall, st,
+            scope_label=f'{N.SPORTS[sport]["name"]} season',
+            games_expected=None,
+            games_in_scope=games_in_scope,
+        )
+        return {
+            'sport': sport,
+            'season': season,
+            'phase': 'regular',
+            'window': {
+                'start': start_dt.strftime('%Y-%m-%d') if start_dt else None,
+                'end': end_eff.strftime('%Y-%m-%d') if end_eff else None,
+            },
+            'games_in_scope': games_in_scope,
+            'games_expected': None,
+            'overall_stats': overall,
+            'spread_total_stats': st,
+            'season_perf': season_perf,
+            'ou_summary': {},
+            'roi_total': None,
+        }
 
     if sport == 'SOCCER':
         conn = N.get_db_connection()
@@ -106,8 +163,8 @@ def compute_sport(N, sport: str) -> dict:
     N._cache_market_lines_for_results(sport, daily, limit=120)
     N._attach_engine_odds_to_daily_results(sport, daily, limit=80)
     st = N._compute_spread_total_for_daily(sport, daily)
-    N._finalize_daily_result_cards(sport, daily)
     overall = N.compute_overall_stats_from_daily(daily)
+    N._finalize_daily_result_cards(sport, daily)
     games_in_scope = (
         N._nhl_results_games_in_scope(daily) if sport == 'NHL'
         else N._daily_results_game_count(daily)
@@ -171,7 +228,7 @@ def main():
     targets = args.sports or SPORTS
     results = []
     written = []
-    print(f'{"Sport":<8} {"Games":>6} {"Exp":>6}  {"Edge":>18} {"XSharp":>18} {"Cons":>18}  {"Sprd":>8} {"O/U":>8}')
+    print(f'{"Sport":<8} {"Games":>6} {"Exp":>6}  {"Edge":>18} {"XSharp":>18} {"Cons":>18} {"Eff":>18}  {"Sprd":>8} {"O/U":>8}')
     print('-' * 100)
     for sport in targets:
         print(f'Computing {sport}...', file=sys.stderr, flush=True)
@@ -191,7 +248,8 @@ def main():
             f'{row.get("games_expected") or "—":>6}  '
             f'{_fmt_model(o, "elo"):>18} '
             f'{_fmt_model(o, "xgboost"):>18} '
-            f'{_fmt_model(o, "ensemble"):>18}  '
+            f'{_fmt_model(o, "ensemble"):>18} '
+            f'{_fmt_model(o, "efficiency"):>18}  '
             f'{sp.get("spread_graded", 0):>8} '
             f'{sp.get("ou_graded", 0):>8}'
         )

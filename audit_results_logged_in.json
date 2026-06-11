@@ -1,0 +1,278 @@
+{
+  "auth": {
+    "ok": true,
+    "status": 302,
+    "signed_in_nav": true,
+    "redirect": "/",
+    "email": "nmesghali@gmail.com",
+    "plans_status": 200,
+    "plans_premium_hint": true
+  },
+  "routes": [
+    {
+      "url": "/",
+      "name": "home",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/all-sports-results",
+      "name": "all-sports-results",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/team-efficiency-results",
+      "name": "team-efficiency-results",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/plans",
+      "name": "plans",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/login",
+      "name": "login-get",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/nba-picks",
+      "name": "footer:/nba-picks",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/nba-results",
+      "name": "footer:/nba-results",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/all-sports-results",
+      "name": "footer:/all-sports-results",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/performance",
+      "name": "footer:/performance",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/tutorial",
+      "name": "footer:/tutorial",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/nhl-picks",
+      "name": "NHL-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 4,
+      "title": null
+    },
+    {
+      "url": "/nhl-results",
+      "name": "NHL-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": ""
+    },
+    {
+      "url": "/nba-picks",
+      "name": "NBA-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 3,
+      "title": null
+    },
+    {
+      "url": "/nba-results",
+      "name": "NBA-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "NBA Results | predictionlab.io"
+    },
+    {
+      "url": "/nfl-picks",
+      "name": "NFL-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 70,
+      "title": null
+    },
+    {
+      "url": "/nfl-results",
+      "name": "NFL-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "NFL Results | predictionlab.io"
+    },
+    {
+      "url": "/mlb-picks",
+      "name": "MLB-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 61,
+      "title": null
+    },
+    {
+      "url": "/mlb-results",
+      "name": "MLB-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "MLB Results | predictionlab.io"
+    },
+    {
+      "url": "/ncaab-picks",
+      "name": "NCAAB-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 0,
+      "title": null
+    },
+    {
+      "url": "/ncaab-results",
+      "name": "NCAAB-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "NCAA Basketball Results | predictionlab.io"
+    },
+    {
+      "url": "/ncaaf-picks",
+      "name": "NCAAF-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 7,
+      "title": null
+    },
+    {
+      "url": "/ncaaf-results",
+      "name": "NCAAF-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "NCAA Football Results | predictionlab.io"
+    },
+    {
+      "url": "/wnba-picks",
+      "name": "WNBA-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 23,
+      "title": null
+    },
+    {
+      "url": "/wnba-results",
+      "name": "WNBA-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "WNBA Results | predictionlab.io"
+    },
+    {
+      "url": "/ncaaw-picks",
+      "name": "NCAAW-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 0,
+      "title": null
+    },
+    {
+      "url": "/ncaaw-results",
+      "name": "NCAAW-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "NCAA Women&#39;s Basketball Results | predictionlab.io"
+    },
+    {
+      "url": "/soccer-picks",
+      "name": "SOCCER-picks",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": 28,
+      "title": null
+    },
+    {
+      "url": "/soccer-results",
+      "name": "SOCCER-results",
+      "status": 200,
+      "pass": true,
+      "issues": [],
+      "cards": null,
+      "title": "Soccer Results | predictionlab.io"
+    },
+    {
+      "url": "/soccer-results?league=eng.1",
+      "name": "soccer-results?league=eng.1",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    },
+    {
+      "url": "/soccer-results?league=uefa.champions",
+      "name": "soccer-results?league=uefa.champions",
+      "status": 200,
+      "pass": true,
+      "issues": []
+    }
+  ],
+  "issues_fixed": [],
+  "issues_open": [
+    "NBA PL spread flipped vs home pick (data pipeline)",
+    "NBA PL spread flipped vs away pick (data pipeline)",
+    "NBA PL spread flipped vs away pick (data pipeline)",
+    "MLB PL spread flipped vs away pick (data pipeline)",
+    "MLB PL spread flipped vs away pick (data pipeline)",
+    "WNBA PL spread flipped vs away pick (data pipeline)",
+    "WNBA PL spread flipped vs away pick (data pipeline)",
+    "SOCCER PL spread flipped vs home pick (data pipeline)",
+    "SOCCER PL spread flipped vs away pick (data pipeline)",
+    "SOCCER PL spread flipped vs away pick (data pipeline)",
+    "SOCCER PL spread flipped vs home pick (data pipeline)"
+  ],
+  "summary": {
+    "pass": 30,
+    "fail": 0,
+    "total": 30
+  }
+}

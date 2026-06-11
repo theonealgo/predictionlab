@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T17:41:49Z",
+  "built_at": "2026-06-04T17:02:35Z",
   "games_expected": 5430,
   "games_in_scope": 8,
   "ou_summary": {
@@ -10,6 +10,11 @@
     "total_under": 5
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 100.0,
+      "correct": 8,
+      "total": 8
+    },
     "elo": {
       "accuracy": 100.0,
       "correct": 8,
@@ -47,18 +52,20 @@
       "roi_pct": 100.0,
       "units_risked": 8,
       "units_won": 8.0,
+      "win_pct": 100.0,
       "wins": 8
     },
     "spread": {
-      "graded": 5,
-      "losses": 1,
+      "graded": 8,
+      "losses": 2,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 60.0,
-      "units_risked": 5,
-      "units_won": 3.0,
-      "wins": 4
+      "roi_pct": 50.0,
+      "units_risked": 8,
+      "units_won": 4.0,
+      "win_pct": 75.0,
+      "wins": 6
     },
     "total": {
       "graded": 5,
@@ -69,6 +76,7 @@
       "roi_pct": 20.0,
       "units_risked": 5,
       "units_won": 1.0,
+      "win_pct": 60.0,
       "wins": 3
     }
   },
@@ -88,25 +96,25 @@
     "ou_note": null,
     "ou_pct": 60.0,
     "scope_label": "NCAA Women's Basketball season",
-    "spread_covered": 4,
-    "spread_graded": 5,
+    "spread_covered": 6,
+    "spread_graded": 8,
     "spread_model_label": "XSharp",
     "spread_note": null,
-    "spread_pct": 80.0
+    "spread_pct": 75.0
   },
   "sport": "NCAAW",
   "spread_total_stats": {
-    "pl_spread_covered": 0,
-    "pl_spread_graded": 0,
-    "pl_spread_pct": null,
+    "pl_spread_covered": 5,
+    "pl_spread_graded": 7,
+    "pl_spread_pct": 71.4,
     "pl_spread_pushes": 0,
     "pl_total_correct": 0,
     "pl_total_graded": 0,
     "pl_total_pct": null,
     "pl_total_pushes": 0,
-    "spread_covered": 4,
-    "spread_graded": 5,
-    "spread_pct": 80.0,
+    "spread_covered": 6,
+    "spread_graded": 8,
+    "spread_pct": 75.0,
     "spread_pushes": 0,
     "total_correct": 3,
     "total_graded": 5,

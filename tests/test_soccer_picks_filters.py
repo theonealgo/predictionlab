@@ -55,10 +55,20 @@ def test_soccer_all_leagues_default_shows_every_league_and_date(nhl):
     assert any(lg['name'] == 'English Premier League' and not lg['active'] for lg in leagues_ui[1:])
 
 
+def test_soccer_league_picks_urls_use_espn_slug(nhl):
+    _, leagues_ui, _ = nhl._filter_soccer_picks([], None)
+    epl = next(row for row in leagues_ui if row['name'] == 'English Premier League')
+    assert epl['url'] == '/soccer-picks?league=eng.1'
+    wc = next(row for row in leagues_ui if row['name'] == 'FIFA World Cup')
+    assert wc['url'] == '/soccer-picks?league=fifa.world'
+    assert len([row for row in leagues_ui if row['name'] != 'All Leagues']) == len(nhl.SOCCER_LEAGUE_ORDER)
+
+
 def test_soccer_league_slider_lists_full_curated_order(nhl):
     _, leagues_ui, _ = nhl._filter_soccer_picks(_sample_soccer_preds(), None)
     pill_names = [lg['name'] for lg in leagues_ui[1:]]
     assert pill_names == list(nhl.SOCCER_LEAGUE_ORDER)
+    assert len(leagues_ui) == 1 + len(nhl.SOCCER_LEAGUE_ORDER)
 
 
 def test_soccer_league_slug_filters_to_one_league(nhl):

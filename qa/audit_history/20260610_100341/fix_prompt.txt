@@ -1,0 +1,40 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260610_100341  |  2026-06-10 10:03:41
+Target: http://127.0.0.1:5001
+
+FAILURES (must fix):
+  - [navigation] Picks & Predictions: missing /nba-picks: Required link /nba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nhl-picks: Required link /nhl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nfl-picks: Required link /nfl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /mlb-picks: Required link /mlb-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaab-picks: Required link /ncaab-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaf-picks: Required link /ncaaf-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaw-picks: Required link /ncaaw-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /wnba-picks: Required link /wnba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Props: missing /player-props: Required link /player-props is NOT in the Props menu
+  - [navigation] Tools & Models: missing /performance: Required link /performance is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /ai-sports-betting-picks-today: Required link /ai-sports-betting-picks-today is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /our-model-vs-sportsbooks: Required link /our-model-vs-sportsbooks is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /tutorial: Required link /tutorial is NOT in the Tools & Models menu
+  - [navigation] Results & Tracking: missing /all-sports-results: Required link /all-sports-results is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /daily-report: Required link /daily-report is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /results/downloads: Required link /results/downloads is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /edge-performance: Required link /edge-performance is NOT in the Results & Tracking menu
+
+WARNINGS (should investigate):
+  - [routes] Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+    Detail: /nba-results
+  - [navigation] Footer link: /what-are-ai-sports-betting-picks: Not found in footer — verify manually
+  - [navigation] Footer link: /our-model-vs-sportsbooks: Not found in footer — verify manually
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T17:41:49Z",
+  "built_at": "2026-06-04T17:02:35Z",
   "games_expected": 5430,
   "games_in_scope": 1926,
   "ou_summary": {
@@ -10,6 +10,11 @@
     "total_under": 814
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 82.2,
+      "correct": 1583,
+      "total": 1926
+    },
     "elo": {
       "accuracy": 82.3,
       "correct": 1586,
@@ -17,7 +22,7 @@
     },
     "ensemble": {
       "accuracy": 82.6,
-      "correct": 1590,
+      "correct": 1591,
       "total": 1926
     },
     "glicko2": {
@@ -40,36 +45,39 @@
   "roi_total": {
     "moneyline": {
       "graded": 1926,
-      "losses": 336,
+      "losses": 335,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 65.11,
+      "roi_pct": 65.21,
       "units_risked": 1926,
-      "units_won": 1254.0,
-      "wins": 1590
+      "units_won": 1256.0,
+      "win_pct": 82.61,
+      "wins": 1591
     },
     "spread": {
-      "graded": 1712,
+      "graded": 1722,
       "losses": 603,
       "missing_odds": 0,
       "pushes": 13,
       "reason": null,
-      "roi_pct": 29.56,
-      "units_risked": 1712,
-      "units_won": 506.0,
-      "wins": 1109
+      "roi_pct": 29.97,
+      "units_risked": 1722,
+      "units_won": 516.0,
+      "win_pct": 64.98,
+      "wins": 1119
     },
     "total": {
-      "graded": 1722,
-      "losses": 595,
+      "graded": 1728,
+      "losses": 615,
       "missing_odds": 0,
-      "pushes": 3,
+      "pushes": 7,
       "reason": null,
-      "roi_pct": 30.89,
-      "units_risked": 1722,
-      "units_won": 532.0,
-      "wins": 1127
+      "roi_pct": 28.82,
+      "units_risked": 1728,
+      "units_won": 498.0,
+      "win_pct": 64.41,
+      "wins": 1113
     }
   },
   "schema_version": 1,
@@ -82,36 +90,36 @@
     "ml_model_key": "glicko2",
     "ml_model_label": "Grinder2",
     "ml_total": 1926,
-    "ou_correct": 89,
-    "ou_graded": 102,
+    "ou_correct": 405,
+    "ou_graded": 632,
     "ou_model_label": "Prediction Lab",
     "ou_note": null,
-    "ou_pct": 87.3,
+    "ou_pct": 64.7,
     "scope_label": "NCAA Basketball season",
-    "spread_covered": 89,
-    "spread_graded": 102,
+    "spread_covered": 1090,
+    "spread_graded": 1662,
     "spread_model_label": "Prediction Lab",
     "spread_note": null,
-    "spread_pct": 89.9
+    "spread_pct": 66.9
   },
   "sport": "NCAAB",
   "spread_total_stats": {
-    "pl_spread_covered": 89,
-    "pl_spread_graded": 102,
-    "pl_spread_pct": 89.9,
-    "pl_spread_pushes": 3,
-    "pl_total_correct": 89,
-    "pl_total_graded": 102,
-    "pl_total_pct": 87.3,
-    "pl_total_pushes": 0,
-    "spread_covered": 1109,
-    "spread_graded": 1725,
-    "spread_pct": 64.8,
+    "pl_spread_covered": 1090,
+    "pl_spread_graded": 1662,
+    "pl_spread_pct": 66.9,
+    "pl_spread_pushes": 32,
+    "pl_total_correct": 405,
+    "pl_total_graded": 632,
+    "pl_total_pct": 64.7,
+    "pl_total_pushes": 6,
+    "spread_covered": 1119,
+    "spread_graded": 1735,
+    "spread_pct": 65.0,
     "spread_pushes": 13,
-    "total_correct": 1127,
-    "total_graded": 1725,
-    "total_pct": 65.4,
-    "total_pushes": 3
+    "total_correct": 1113,
+    "total_graded": 1735,
+    "total_pct": 64.4,
+    "total_pushes": 7
   },
   "window": {
     "end": "2026-04-15",
