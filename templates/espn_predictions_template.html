@@ -808,6 +808,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
                     <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
                     <div id="{{ analysis_id }}" class="analysis-panel">
+                        {% if is_premium|default(false) %}
                         {% if pred.our_method == 'efficiency' and pred.our_home_eff and pred.our_away_eff %}
                         <div class="analysis-title">Efficiency-based projection (last 5 games)</div>
                         <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
@@ -829,6 +830,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
                             {% endif %}
                         </div>
                         {% endif %}
+                        {% endif %}{# /premium gate on projection + XSharp-line analysis #}
                         {% set _away_injuries = pred.away_injuries if pred.away_injuries is not none else [] %}
                         {% set _home_injuries = pred.home_injuries if pred.home_injuries is not none else [] %}
                         {% set _away_suspended = _away_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
