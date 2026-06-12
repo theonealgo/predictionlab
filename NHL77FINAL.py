@@ -4,7 +4,21 @@ predictionlab.io - Multi-Sport Prediction Platform
 ==================================================
 Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
+
+LEGACY SHARED CORE
+------------------
+This filename is historical. It no longer means this file is only for hockey.
+The canonical launcher is ``app.py``. New sport-specific behavior should go in
+``sports/<SPORT>.py`` whenever practical; this module currently remains the
+shared Flask, database, odds, grading, page-rendering, and route assembly layer.
+
+See ``ARCHITECTURE_GUIDE.md`` for a plain-English section map and ownership
+rules before changing this file.
 """
+
+# ============================================================================
+# 1. IMPORTS, OPTIONAL MODEL LOADING, LOGGING, AND GLOBAL CACHES
+# ============================================================================
 
 from flask.json.provider import DefaultJSONProvider
 from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, make_response, send_from_directory, abort, has_request_context
@@ -2251,7 +2265,13 @@ def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
     """
     sp = _best_pl_spread(card)
     if sp is None:
-        sp = _first_pred_float(card, ('our_spread', 'market_spread', 'naive_spread'))
+        # SOCCER MODEL-LINE GUARD: the sportsbook line is not a PL projection.
+        candidates = (
+            ('our_spread', 'naive_spread')
+            if sport == 'SOCCER'
+            else ('our_spread', 'market_spread', 'naive_spread')
+        )
+        sp = _first_pred_float(card, candidates)
     if sp is None:
         card.pop('disp_pl_spread', None)
         return
@@ -2914,13 +2934,14 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
         else:
             pred['face_pick_team'] = pred.get('home_team_id') or 'Home'
 
-    # Safety: ensure face_pick_confidence is always set
+    # CARD CONFIDENCE FALLBACK: team sports may use a neutral placeholder, but
+    # soccer must stay blank when no real model or market-informed output exists.
     if not pred.get('face_pick_confidence'):
         fhp = _safe_float(pred.get('face_home_prob'))
         fap = _safe_float(pred.get('face_away_prob'))
         if fhp is not None:
             pred['face_pick_confidence'] = round(fhp if fhp >= 50 else fap, 1) if fap else round(fhp, 1)
-        else:
+        elif sport != 'SOCCER':
             pred['face_pick_confidence'] = 50.0
 
 
@@ -2931,26 +2952,43 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
         return
     _raw_pl_sp = _best_pl_spread(pred)
     if _raw_pl_sp is None:
+        # SOCCER MODEL-LINE GUARD: never relabel a raw sportsbook spread as PL.
+        _pl_spread_candidates = (
+            ('our_spread', 'naive_spread')
+            if sport == 'SOCCER'
+            else ('our_spread', 'market_spread', 'naive_spread')
+        )
         _raw_pl_sp = _first_pred_float(
-            pred, ('our_spread', 'market_spread', 'naive_spread'),
+            pred, _pl_spread_candidates,
         )
         if _raw_pl_sp is not None:
             _raw_pl_sp = _round_to_half(_raw_pl_sp)
     pred['disp_pl_total'] = _best_pl_total(pred)
     if pred['disp_pl_total'] is None:
+        _pl_total_candidates = (
+            ('our_total', 'naive_total', 'h2h_last10_total')
+            if sport == 'SOCCER'
+            else ('our_total', 'naive_total', 'market_total', 'h2h_last10_total')
+        )
         pred['disp_pl_total'] = _first_pred_float(
-            pred, ('our_total', 'naive_total', 'market_total', 'h2h_last10_total'),
+            pred, _pl_total_candidates,
         )
         if pred['disp_pl_total'] is not None:
             pred['disp_pl_total'] = _round_to_half(pred['disp_pl_total'])
-    pred['disp_xs_spread'] = _first_pred_float(
-        pred, ('xsharp_spread', 'xgb_spread', 'naive_spread', 'market_spread'),
+    _xs_spread_candidates = (
+        ('xsharp_spread', 'xgb_spread', 'naive_spread')
+        if sport == 'SOCCER'
+        else ('xsharp_spread', 'xgb_spread', 'naive_spread', 'market_spread')
     )
+    pred['disp_xs_spread'] = _first_pred_float(pred, _xs_spread_candidates)
     if pred['disp_xs_spread'] is not None:
         pred['disp_xs_spread'] = _round_to_half(pred['disp_xs_spread'])
-    pred['disp_xs_total'] = _first_pred_float(
-        pred, ('xsharp_total', 'xgb_total', 'naive_total', 'market_total'),
+    _xs_total_candidates = (
+        ('xsharp_total', 'xgb_total', 'naive_total')
+        if sport == 'SOCCER'
+        else ('xsharp_total', 'xgb_total', 'naive_total', 'market_total')
     )
+    pred['disp_xs_total'] = _first_pred_float(pred, _xs_total_candidates)
     if pred['disp_xs_total'] is not None:
         pred['disp_xs_total'] = _round_to_half(pred['disp_xs_total'])
     pred['disp_xs_away'] = _first_pred_float(
@@ -7306,17 +7344,17 @@ def get_upcoming_predictions(sport, days=365):
                 game['v2_expected_away'] = soccer_pred.get('expected_away_score')
                 game['is_v2'] = True
             elif sport == 'SOCCER' and not soccer_pred:
-                # Soccer bundle not ready (e.g. FIFA World Cup, new leagues) —
-                # fall back to Elo so win probability and model bars still render.
-                home_rating = get_elo(game.get('home_team_id') or game.get('home_team_name', ''))
-                away_rating = get_elo(game.get('away_team_id') or game.get('away_team_name', ''))
-                elo_prob    = expected_score(home_rating, away_rating)
-                xgb_prob    = elo_prob
-                ensemble_prob = elo_prob
-                game['glicko2_prob']     = elo_prob
-                game['trueskill_prob']   = elo_prob
-                game['soccer_model_note'] = (soccer_note or
-                    'Prediction based on Elo ratings — limited league history available')
+                # SOCCER COVERAGE FALLBACK: sports/SOCCER.py owns the estimate.
+                # It runs after sportsbook lines are hydrated later in this function.
+                elo_prob = None
+                xgb_prob = None
+                ensemble_prob = None
+                game['glicko2_prob'] = None
+                game['trueskill_prob'] = None
+                game['soccer_market_fallback'] = True
+                game['soccer_model_note'] = (
+                    soccer_note or 'Limited team history; market-informed fallback pending.'
+                )
                 game['is_v2'] = False
             elif v2_pred:
                 # Use actual stored Elo prob from DB; fall back to Elo rating computation
@@ -7895,6 +7933,43 @@ def get_upcoming_predictions(sport, days=365):
     _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
     _attach_market_lines_to_predictions(sport, predictions)
     _hydrate_book_lines_db_only(sport, predictions)
+
+    # SOCCER UNKNOWN-TEAM FALLBACK: now that real book lines are available,
+    # ask sports/SOCCER.py for market-informed estimates and model score lines.
+    if sport == 'SOCCER':
+        for pred in predictions:
+            if pred.get('home_score') is not None or not pred.get('soccer_market_fallback'):
+                continue
+            fallback = _soccer_sport.market_informed_fallback(pred)
+            pred['glicko2_prob'] = round(fallback['poisson_xg_prob'] * 100.0, 1)
+            pred['trueskill_prob'] = round(fallback['markov_prob'] * 100.0, 1)
+            pred['elo_prob'] = round(fallback['elo_prob'] * 100.0, 1)
+            pred['xgb_prob'] = round(fallback['poisson_reg_prob'] * 100.0, 1)
+            pred['ensemble_prob'] = round(fallback['ensemble_prob'] * 100.0, 1)
+            pred['naive_home_score'] = round(fallback['expected_home_score'], 2)
+            pred['naive_away_score'] = round(fallback['expected_away_score'], 2)
+            pred['naive_spread'] = round(
+                fallback['expected_home_score'] - fallback['expected_away_score'], 2
+            )
+            pred['naive_total'] = round(
+                fallback['expected_home_score'] + fallback['expected_away_score'], 2
+            )
+            pred['soccer_model_note'] = fallback['note']
+            pred['model_data_note'] = fallback['note']
+            home_win, draw, away_win = _soccer_threeway_probs(
+                fallback['ensemble_prob'], fallback['draw_prob']
+            )
+            if home_win is not None:
+                pred['home_win_prob'] = round(home_win * 100.0, 1)
+                pred['draw_prob'] = round(draw * 100.0, 1)
+                pred['away_win_prob'] = round(away_win * 100.0, 1)
+                choices = (
+                    (home_win, pred.get('home_team_id')),
+                    (draw, 'Draw'),
+                    (away_win, pred.get('away_team_id')),
+                )
+                pred['predicted_winner'] = max(choices, key=lambda item: item[0])[1]
+
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']:
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
@@ -9773,9 +9848,9 @@ BASE_TEMPLATE = """
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:1;}
         .hamburger:hover{background:#f8fafc;}
         .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
-        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
+        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:2001;backdrop-filter:blur(2px);}
         .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
+        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:2002;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
         .tv-drawer.open{transform:translateX(0);}
         .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
         .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
@@ -13861,9 +13936,9 @@ def landing_page():
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
         .hamburger:hover{background:#f8fafc;}
         .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
-        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
+        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:2001;backdrop-filter:blur(2px);}
         .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
+        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:2002;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
         .tv-drawer.open{transform:translateX(0);}
         .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
         .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}

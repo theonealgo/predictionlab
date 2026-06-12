@@ -250,7 +250,11 @@ body.has-join-premium-bar { padding-bottom: 58px; }
 }
 .acct-menu a:hover { background: #f1f5f9; color: #00529B; }
 .acct-menu-divider { height: 1px; background: #f1f5f9; margin: 4px 0; }
-.tv-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 1998; backdrop-filter: blur(2px); }
+/* Drawer + overlay must sit ABOVE the sticky .pl2-header (z-index:2000 in
+   research-theme.css). At 1998/1999 the header overlapped the drawer's header
+   bar, so the Back and Close buttons were unclickable (clicks hit the header's
+   hamburger) — the menu got stuck in a submenu with no way back. */
+.tv-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 2001; backdrop-filter: blur(2px); }
 .tv-overlay.open { display: block; }
 .tv-drawer {
     position: fixed;
@@ -259,7 +263,7 @@ body.has-join-premium-bar { padding-bottom: 58px; }
     height: 100%;
     width: min(280px, 100vw);
     background: #fff;
-    z-index: 1999;
+    z-index: 2002;
     transform: translateX(-100%);
     transition: transform .28s cubic-bezier(.4,0,.2,1);
     display: flex;
