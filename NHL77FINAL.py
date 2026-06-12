@@ -11758,13 +11758,29 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% set away_score = game.away_score %}
                     {% set home_score = game.home_score %}
                     {% set show_pick_arrow = false %}
+                    {% if home_score is not none and away_score is not none %}
+                        {% set home_won = home_score > away_score %}
+                        {% set glicko2_correct = (game.glicko2_prob|default(none) is not none) and ((game.glicko2_prob >= 50) == home_won) or none %}
+                        {% set trueskill_correct = (game.trueskill_prob|default(none) is not none) and ((game.trueskill_prob >= 50) == home_won) or none %}
+                        {% set elo_correct = (game.elo_prob|default(none) is not none) and ((game.elo_prob >= 50) == home_won) or none %}
+                        {% set xgb_correct = (game.xgb_prob|default(none) is not none) and ((game.xgb_prob >= 50) == home_won) or none %}
+                        {% set efficiency_correct = (game.efficiency_prob|default(none) is not none) and ((game.efficiency_prob >= 50) == home_won) or none %}
+                        {% set ens_correct = (game.ens_prob|default(none) is not none) and ((game.ens_prob >= 50) == home_won) or none %}
+                    {% else %}
+                        {% set glicko2_correct = game.glicko2_correct|default(none) %}
+                        {% set trueskill_correct = game.trueskill_correct|default(none) %}
+                        {% set elo_correct = game.elo_correct|default(none) %}
+                        {% set xgb_correct = game.xgb_correct|default(none) %}
+                        {% set efficiency_correct = game.efficiency_correct|default(none) %}
+                        {% set ens_correct = game.ens_correct|default(none) %}
+                    {% endif %}
                     {% set conf_models = [
-                        {'name': label_glicko2, 'prob': game.glicko2_prob|default(none), 'correct': game.glicko2_correct|default(none), 'key': 'glicko2'},
-                        {'name': label_trueskill, 'prob': game.trueskill_prob|default(none), 'correct': game.trueskill_correct|default(none), 'key': 'trueskill'},
-                        {'name': label_elo, 'prob': game.elo_prob|default(none), 'correct': game.elo_correct|default(none), 'key': 'elo'},
-                        {'name': label_xgb, 'prob': game.xgb_prob|default(none), 'correct': game.xgb_correct|default(none), 'key': 'xgb'},
-                        {'name': label_efficiency, 'prob': game.efficiency_prob|default(none), 'correct': game.efficiency_correct|default(none), 'key': 'efficiency'},
-                        {'name': label_ensemble, 'prob': game.ens_prob|default(none), 'correct': game.ens_correct|default(none), 'key': 'consensus'}
+                        {'name': label_glicko2, 'prob': game.glicko2_prob|default(none), 'correct': glicko2_correct, 'key': 'glicko2'},
+                        {'name': label_trueskill, 'prob': game.trueskill_prob|default(none), 'correct': trueskill_correct, 'key': 'trueskill'},
+                        {'name': label_elo, 'prob': game.elo_prob|default(none), 'correct': elo_correct, 'key': 'elo'},
+                        {'name': label_xgb, 'prob': game.xgb_prob|default(none), 'correct': xgb_correct, 'key': 'xgb'},
+                        {'name': label_efficiency, 'prob': game.efficiency_prob|default(none), 'correct': efficiency_correct, 'key': 'efficiency'},
+                        {'name': label_ensemble, 'prob': game.ens_prob|default(none), 'correct': ens_correct, 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
                     {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;padding:4px 12px 8px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
