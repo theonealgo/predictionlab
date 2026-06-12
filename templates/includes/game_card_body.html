@@ -17,21 +17,10 @@
 {% set _xs_ah = card.xs_proj_away_pts if card.xs_proj_away_pts is defined else none %}
 {% set _xs_hh = card.xs_proj_home_pts if card.xs_proj_home_pts is defined else none %}
 {% set _show_odds_tbl = _disp_bs is not none or _disp_ps is not none or _disp_xs is not none or _disp_bt is not none or _disp_pt is not none or _disp_xt is not none or _pl_ah is not none or _xs_ah is not none %}
-
-{# Paywall: hide premium fields for non-premium users #}
-{% if not is_premium|default(false) %}
-{% set _disp_bs = none %}
-{% set _disp_ps = none %}
-{% set _disp_xs = none %}
-{% set _disp_bt = none %}
-{% set _disp_pt = none %}
-{% set _disp_xt = none %}
-{% set _pl_ah = none %}
-{% set _pl_hh = none %}
-{% set _xs_ah = none %}
-{% set _xs_hh = none %}
-{% set _show_odds_tbl = false %}
-{% endif %}
+{# Paywall flag: premium model lines/scores are locked for logged-out users on PICKS cards.
+   FREE = moneylines, win %, model confidence %, and Books spread/total.
+   Results cards are public proof-of-performance and are never locked. #}
+{% set _locked = (not is_results) and (not is_premium|default(false)) %}
 
 {% if is_results %}
 {# ── Results cards: layout unchanged ── #}
@@ -261,13 +250,13 @@
     </div>
     {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
     {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
-    {% if _edge is not none %}
+    {% if _edge is not none and not _locked %}
     <div class="line-chip edge-chip {% if _edge > 0 %}pos{% elif _edge < 0 %}neg{% endif %}">
         <div class="line-chip-label">Edge</div>
         <div class="line-chip-val">{% if _edge > 0 %}+{% endif %}{{ "%.1f"|format(_edge) }}%</div>
     </div>
     {% endif %}
-    {% if card.ml_ev is defined and card.ml_ev is not none %}
+    {% if card.ml_ev is defined and card.ml_ev is not none and not _locked %}
     <div class="line-chip edge-chip {% if card.ml_ev > 0 %}pos{% elif card.ml_ev < 0 %}neg{% endif %}">
         <div class="line-chip-label">Moneyline EV</div>
         <div class="line-chip-val">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</div>
@@ -313,18 +302,26 @@
                 <tr>
                     <td class="market-k">{{ spread_label }}</td>
                     <td class="val-books">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</td>
-                    <td class="val-pl">{{ fmt_spread_line(_disp_ps, home_id, away_id, force_rl) }}</td>
-                    <td class="val-xs">{{ fmt_spread_line(_disp_xs, home_id, away_id, force_rl) }}</td>
+                    <td class="val-pl">{% if _locked %}🔒{% else %}{{ fmt_spread_line(_disp_ps, home_id, away_id, force_rl) }}{% endif %}</td>
+                    <td class="val-xs">{% if _locked %}🔒{% else %}{{ fmt_spread_line(_disp_xs, home_id, away_id, force_rl) }}{% endif %}</td>
                 </tr>
                 <tr>
                     <td class="market-k">Total</td>
                     <td class="val-books">{% if _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
-                    <td class="val-pl">{% if _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
-                    <td class="val-xs">{% if _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
+                    <td class="val-pl">{% if _locked %}🔒{% elif _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
+                    <td class="val-xs">{% if _locked %}🔒{% elif _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
                 </tr>
             </tbody>
         </table>
-        {% if _pl_ah is not none or _xs_ah is not none %}
+        {% if _locked %}
+        <div class="proj-score-box">
+            <div class="proj-score-title">Projected Score</div>
+            <div class="proj-row">
+                <span class="proj-model pl">🔒 Premium</span>
+                <span class="proj-val"><a href="/plans" style="color:#f59e0b;font-weight:700;text-decoration:none;">Unlock projected scores</a></span>
+            </div>
+        </div>
+        {% elif _pl_ah is not none or _xs_ah is not none %}
         <div class="proj-score-box">
             <div class="proj-score-title">Projected Score</div>
             {% if _pl_ah is not none %}
@@ -362,6 +359,7 @@
         </div>
     </div>
 
+    {% if not _locked %}
     <div class="odds-extras-footer">
         {% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}
         <div class="sf-item">
@@ -397,6 +395,7 @@
         </div>
         {% endif %}
     </div>
+    {% endif %}
 </div>
 {% set _best_ev_market = card.best_ev_market if card.best_ev_market is defined and card.best_ev_market else (card.best_ev_pick if card.best_ev_pick is defined else none) %}
 {% set _recommended_spread = card.spread_pick_label if card.spread_pick_label else (card.spread_pick_reason if card.spread_pick_reason is defined else none) %}

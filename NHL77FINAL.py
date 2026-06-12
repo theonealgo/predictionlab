@@ -18936,7 +18936,17 @@ def sport_predictions(sport, filter_date=None):
     date_pool = {}
     for item in shareable_pool:
         date_pool.setdefault(item['game_date'], []).append(item)
-    target_date = today_date if today_date in date_pool else (sorted(date_pool.keys())[0] if date_pool else '')
+    # Advertise the current/next slate: prefer today, else the soonest UPCOMING date
+    # (>= today). Only fall back to the earliest available date if nothing is upcoming,
+    # so the share card never advertises a stale (e.g. months-old) prediction.
+    if today_date in date_pool:
+        target_date = today_date
+    else:
+        _future_dates = sorted(d for d in date_pool.keys() if d and d >= today_date)
+        if _future_dates:
+            target_date = _future_dates[0]
+        else:
+            target_date = sorted(date_pool.keys())[0] if date_pool else ''
     shareable_cards = date_pool.get(target_date, [])
     shareable_cards.sort(key=lambda x: (-x['confidence'], x['away_team'], x['home_team']))
     shareable_cards = shareable_cards[:3]

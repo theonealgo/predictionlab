@@ -906,20 +906,10 @@ def plans_page():
         ).replace('{% block content %}{% endblock %}', """
             <div class="plans-wrap">
             <div class="plans-hero">
-                <h1 style="font-size:2em;font-weight:900;color:#0f172a;line-height:1.25;margin-bottom:8px;">AI Sports Betting Pricing Plans for Spreads, Totals and Score Predictions</h1>
-                <div class="plans-hero-logo">Built to Beat the Public &mdash; Not Follow It.</div>
-                <div class="plans-hero-sub">Data-driven spreads, totals, and score projections &mdash; tracked, transparent, and built for real edges.</div>
-                <div class="plans-hero-stats">
-                    <div class="stat-pill">Full Spread &amp; Total Coverage</div>
-                    <div class="stat-pill">Projected Scores for Every Game</div>
-                    <div class="stat-pill">Find Value the Public Misses</div>
-                </div>
-                <div class="plans-hero-stats" style="margin-top:10px;">
-                    <div class="stat-pill">Consistently Updated Models</div>
-                    <div class="stat-pill">Transparent Results &mdash; Always</div>
-                </div>
+                <h1 style="font-size:2.4em;font-weight:900;color:#0f172a;line-height:1.12;margin-bottom:12px;">Stop guessing. Start covering.</h1>
+                <div class="plans-hero-sub" style="font-size:1.15em;color:#334155;max-width:620px;margin:0 auto 8px;line-height:1.5;">Free shows you who wins. Premium shows you <strong>where the edge is</strong> &mdash; every spread, total, and projected score, on every game.</div>
                 <div class="competitor-bar">
-                    Every pick is tracked. No deletes. No edits. Full transparency.
+                    Every pick tracked. No deletes. No edits. See the receipts before you pay.
                 </div>
             </div>
             <p style="text-align:center;font-size:1.12em;color:#334155;margin-bottom:26px;font-weight:700;">Free gets you the winners. Premium gets you the edge.</p>
@@ -997,6 +987,7 @@ def plans_page():
                 </ul>
                 <p class="plans-why-foot">Still deciding? Read the <a href="/#faq">homepage FAQ</a>. Ready to try the edge—pick monthly or yearly above. Prefer to look around first? <a href="/signup">Create a free account</a>, then upgrade when you want spreads and totals unlocked.</p>
             </div>
+            <p style="max-width:920px;margin:22px auto 0;text-align:center;font-size:0.72em;line-height:1.6;color:#94a3b8;">AI sports betting pricing plans for spreads, totals and score predictions. Full spread &amp; total coverage, projected scores for every game, and consistently updated models built to find value the public misses — across NBA, NFL, MLB, NHL, NCAAB, NCAAF and WNBA. Transparent results, always tracked.</p>
             </div>
         """)
         return render_template_string(plans_content, page='plans')
