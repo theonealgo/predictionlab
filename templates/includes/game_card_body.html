@@ -65,7 +65,7 @@
     </div>
 </div>
 
-{% if _show_odds_tbl %}
+{% if is_premium|default(false) and _show_odds_tbl %}
 <div class="odds-pricing-section">
     <div class="odds-pricing-title">Odds &amp; Lines</div>
     <table class="odds-pricing-table">
@@ -112,6 +112,7 @@
 </div>
 {% endif %}
 
+{% if is_premium|default(false) %}
 <div class="pick-conf-bar">
     <div class="pick-conf-title">Pick Confidence</div>
     <div class="pick-conf-grid">
@@ -129,7 +130,9 @@
         {% endfor %}
     </div>
 </div>
+{% endif %}
 
+{% if is_premium|default(false) %}
 <div class="odds-extras-footer">
     <div class="sf-item">
         <span class="sf-label">Spread pick</span>
@@ -138,6 +141,11 @@
     <div class="sf-item">
         <span class="sf-label">Total pick</span>
         <span class="sf-val">{% if card.total_pick_label %}{{ card.total_pick_label }}{% elif card.total_pick_reason is defined and card.total_pick_reason %}{{ card.total_pick_reason }}{% else %}—{% endif %}{% if card.total_correct is not none %} <span class="{{ 'pick-ok' if card.total_correct else 'pick-no' }}">{{ '✅' if card.total_correct else '❌' }}</span>{% endif %}</span>
+        {% if card.ou_inverse_mode %}
+        <span class="ou-cold-badge" style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:10px;background:#7f1d1d;color:#fee2e2;font-size:11px;font-weight:700;letter-spacing:.2px;">O/U Cold Streak Adjustment Active</span>
+        {% elif card.totals_caution_mode %}
+        <span class="ou-cold-badge" style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:10px;background:#78350f;color:#fde68a;font-size:11px;font-weight:700;letter-spacing:.2px;">Totals Caution Mode</span>
+        {% endif %}
     </div>
     <div class="sf-item">
         <span class="sf-label">H2H Last 10</span>
@@ -156,6 +164,7 @@
     </div>
     {% endif %}
 </div>
+{% endif %}
 
 {% else %}
 {# ── Picks cards: new face + expandable details ── #}
@@ -279,7 +288,7 @@
 </footer>
 
 <div class="card-details" id="{{ _details_id }}" hidden>
-    {% if is_premium %}
+    {% if is_premium|default(false) %}
     {% if _show_odds_tbl %}
     <div class="odds-pricing-section">
         <div class="odds-pricing-title">Odds &amp; Lines</div>
