@@ -17,3 +17,78 @@
         <a class="pl2-cta" href="/signup">Get Started Free →</a>
     </div>
 </header>
+<div class="pl-july-offer" id="plJulyOffer" role="dialog" aria-modal="true" aria-labelledby="plJulyOfferTitle" hidden>
+    <button class="pl-july-offer__veil" type="button" data-july-offer-close aria-label="Close July offer"></button>
+    <div class="pl-july-offer__card">
+        <button class="pl-july-offer__close" type="button" data-july-offer-close aria-label="Close July offer">&times;</button>
+        <span class="pl-july-offer__eyebrow">July visitor offer</span>
+        <h2 id="plJulyOfferTitle">One month of Premium. Free.</h2>
+        <p>Every visitor gets a full month of Prediction Lab Premium free. Save the code now and use it whenever you are ready.</p>
+        <div class="pl-july-offer__code-row">
+            <code id="plJulyOfferCode">JULYFREE</code>
+            <button type="button" id="plJulyOfferCopy">Copy code</button>
+        </div>
+        <a class="pl-july-offer__cta" href="/plans">See Premium plans <span aria-hidden="true">&rarr;</span></a>
+        <small>No subscription charge for your first monthly billing cycle. New Premium subscribers only.</small>
+    </div>
+</div>
+<script>
+(function () {
+    var offer = document.getElementById('plJulyOffer');
+    if (!offer) return;
+
+    var params = new URLSearchParams(window.location.search);
+    var now = new Date();
+    var isJuly2026 = now.getFullYear() === 2026 && now.getMonth() === 6;
+    var isPreview = params.get('preview_july_offer') === '1';
+    var storageKey = 'predictionlab_july_2026_offer_dismissed';
+
+    function wasDismissed() {
+        try { return window.localStorage.getItem(storageKey) === '1'; }
+        catch (error) { return false; }
+    }
+
+    function closeOffer() {
+        offer.hidden = true;
+        document.body.classList.remove('pl-july-offer-open');
+        try { window.localStorage.setItem(storageKey, '1'); }
+        catch (error) {}
+    }
+
+    if ((isJuly2026 && !wasDismissed()) || isPreview) {
+        offer.hidden = false;
+        document.body.classList.add('pl-july-offer-open');
+    }
+
+    offer.querySelectorAll('[data-july-offer-close]').forEach(function (button) {
+        button.addEventListener('click', closeOffer);
+    });
+
+    var copyButton = document.getElementById('plJulyOfferCopy');
+    if (copyButton) {
+        copyButton.addEventListener('click', function () {
+            var copied = function () {
+                copyButton.textContent = 'Code copied';
+                window.setTimeout(function () { copyButton.textContent = 'Copy code'; }, 1800);
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText('JULYFREE').then(copied);
+                return;
+            }
+            var input = document.createElement('textarea');
+            input.value = 'JULYFREE';
+            input.style.position = 'fixed';
+            input.style.opacity = '0';
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            input.remove();
+            copied();
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !offer.hidden) closeOffer();
+    });
+})();
+</script>

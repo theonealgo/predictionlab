@@ -752,7 +752,8 @@
                     </div>
                     <div class="pl2-intel">
                         <div class="pl2-card">
-                            <span class="pl2-mono">Daily Results Report</span>
+                            <span class="pl2-mono">Daily Betting Results Report</span>
+                            <p>Yesterday's performance across all sports and models</p>
                             {% if latest_graded_game %}
                             <h3>One completed game.</h3>
                             <div class="pl2-result-game">
@@ -769,6 +770,8 @@
                         </div>
                         <div class="pl2-card">
                             {% if latest_blog_post %}
+                            <span class="pl2-mono">Prediction Lab Blog</span>
+                            <p>Latest Daily Article:</p>
                             <time>{{ latest_blog_post.display_date }}</time>
                             <h3>{{ latest_blog_post.title }}</h3>
                             <p>{{ latest_blog_post.excerpt }}</p>
@@ -780,6 +783,7 @@
                                 {% endfor %}
                             </div>
                             {% endif %}
+                            <a class="pl2-sec-link" href="/blog">View All Articles →</a>
                             {% else %}
                             <span class="pl2-mono">Prediction Lab Blog</span>
                             <h3>Daily analysis, every day.</h3>

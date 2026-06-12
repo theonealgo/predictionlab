@@ -11,11 +11,14 @@ The following files define the approved site-wide research design:
 - `templates/base.html`
 - `templates/espn_predictions_template.html`
 - `templates/underdogs_layout.html`
+- `templates/partials/research_header.html`
 - `templates/partials/site_directory_footer.html`
 - `static/css/research-theme.css`
 
 Do not replace, broadly restyle, or revert these files without an explicit user request.
 Do not change the homepage to a different template.
+The protected files are checksum-locked by `frontend-lock.json`. Do not update that
+baseline unless the user has approved the exact UI change in writing.
 
 ## Required Behavior
 
@@ -32,6 +35,7 @@ Run:
 
 ```bash
 python3 -m pytest tests/test_frontend_theme_contract.py -q
+python3 scripts/verify_frontend_lock.py
 ```
 
 For frontend changes, also inspect `/`, `/nba-picks`, `/all-sports-results`, and `/faq`

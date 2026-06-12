@@ -201,6 +201,7 @@ def test_wnba_results_uses_real_model_columns_for_tallies_and_cards(monkeypatch)
 
     monkeypatch.setattr(N, 'update_espn_scores', lambda _sport: None)
     monkeypatch.setattr(N, 'get_db_connection', lambda: _Conn())
+    monkeypatch.setattr(N, '_load_sport_season_snapshot', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, 'get_v2_prediction', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, '_attach_book_odds_to_daily_results', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, '_cache_market_lines_for_results', lambda *_args, **_kwargs: None)
@@ -326,6 +327,7 @@ def test_wnba_results_does_not_fabricate_model_probs_when_absent(monkeypatch):
 
     monkeypatch.setattr(N, 'update_espn_scores', lambda _sport: None)
     monkeypatch.setattr(N, 'get_db_connection', lambda: _Conn())
+    monkeypatch.setattr(N, '_load_sport_season_snapshot', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, 'get_v2_prediction', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, '_attach_book_odds_to_daily_results', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(N, '_cache_market_lines_for_results', lambda *_args, **_kwargs: None)

@@ -65,7 +65,7 @@
     </div>
 </div>
 
-{% if is_premium|default(false) and _show_odds_tbl %}
+{% if _show_odds_tbl %}
 <div class="odds-pricing-section">
     <div class="odds-pricing-title">Odds &amp; Lines</div>
     <table class="odds-pricing-table">
@@ -112,7 +112,6 @@
 </div>
 {% endif %}
 
-{% if is_premium|default(false) %}
 <div class="pick-conf-bar">
     <div class="pick-conf-title">Pick Confidence</div>
     <div class="pick-conf-grid">
@@ -130,9 +129,7 @@
         {% endfor %}
     </div>
 </div>
-{% endif %}
 
-{% if is_premium|default(false) %}
 <div class="odds-extras-footer">
     <div class="sf-item">
         <span class="sf-label">Spread pick</span>
@@ -164,7 +161,6 @@
     </div>
     {% endif %}
 </div>
-{% endif %}
 
 {% else %}
 {# ── Picks cards: new face + expandable details ── #}
@@ -240,7 +236,6 @@
 {% endif %}
 
 <div class="lines-strip">
-    {% if is_premium|default(false) %}
     <div class="line-chip">
         <div class="line-chip-label">{{ _book_spread_lbl }}</div>
         <div class="line-chip-val">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</div>
@@ -249,7 +244,6 @@
         <div class="line-chip-label">Books total</div>
         <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
-    {% endif %}
     {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
     {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
     {% if _edge is not none %}
@@ -288,7 +282,6 @@
 </footer>
 
 <div class="card-details" id="{{ _details_id }}" hidden>
-    {% if is_premium|default(false) %}
     {% if _show_odds_tbl %}
     <div class="odds-pricing-section">
         <div class="odds-pricing-title">Odds &amp; Lines</div>
@@ -389,18 +382,6 @@
         </div>
         {% endif %}
     </div>
-    {% else %}
-    <div class="odds-pricing-locked" style="padding:14px;font-size:0.84em;text-align:center;">
-        🔒 Premium models locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.
-        <div style="margin-top:10px;display:grid;gap:6px;text-align:left;max-width:360px;margin-left:auto;margin-right:auto;color:#475569;">
-            <div>Spread model available</div>
-            <div>Total model available</div>
-            <div>Projected score available</div>
-            <div>Model-by-model confidence available</div>
-            <div>EV market breakdown available</div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 {% set _best_ev_market = card.best_ev_market if card.best_ev_market is defined and card.best_ev_market else (card.best_ev_pick if card.best_ev_pick is defined else none) %}
 {% set _recommended_spread = card.spread_pick_label if card.spread_pick_label else (card.spread_pick_reason if card.spread_pick_reason is defined else none) %}

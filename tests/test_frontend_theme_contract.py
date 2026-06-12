@@ -22,8 +22,8 @@ def test_homepage_inherits_canonical_header_and_protected_research_layout():
 def test_shared_footer_uses_text_wordmark_not_logo_image():
     footer = _read("templates/partials/site_directory_footer.html")
 
-    assert "predictionlabs.io" in footer
-    assert "directory-wordmark" in footer
+    assert '<span class="directory-wordmark">PREDICTIONLABS.IO</span>' in footer
+    assert '<a href="/" class="directory-wordmark"' not in footer
     assert "<img" not in footer
 
 
@@ -68,6 +68,20 @@ def test_shared_header_matches_research_reference_navigation():
     assert 'aria-label="Search"' in header
     assert 'href="/blog">Blog</a>' not in header
     assert "background: var(--pl-neon);" in theme
+
+
+def test_shared_header_contains_july_premium_offer():
+    header = _read("templates/partials/research_header.html")
+    theme = _read("static/css/research-theme.css")
+
+    assert 'id="plJulyOffer"' in header
+    assert "JULYFREE" in header
+    assert "now.getFullYear() === 2026 && now.getMonth() === 6" in header
+    assert "predictionlab_july_2026_offer_dismissed" in header
+    assert "preview_july_offer" in header
+    assert 'href="/plans"' in header
+    assert ".pl-july-offer__card" in theme
+    assert "body.pl-july-offer-open" in theme
 
 
 def test_primary_layouts_load_the_shared_research_theme():

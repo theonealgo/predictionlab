@@ -2761,7 +2761,11 @@ def _finalize_prediction_odds(pred: dict) -> None:
 
 
 def _set_card_edge_pct(pred: dict, sport: str = 'NBA') -> None:
-    """Expose model-vs-book edge % on cards (for all sports)."""
+    """Expose model-vs-book edge % on cards (MLB decision layer uses model_win_pct)."""
+    if sport != 'MLB':
+        pred['face_edge_pct'] = None
+        return
+
     model_wp = _safe_float(pred.get('model_win_pct'))
     if model_wp is None:
         ens = _safe_float(pred.get('ensemble_prob'))

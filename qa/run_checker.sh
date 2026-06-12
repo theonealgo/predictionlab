@@ -15,8 +15,7 @@ export AUDIT_BASE_URL="${AUDIT_BASE_URL:-http://127.0.0.1:${PORT_NUM}}"
 echo "=== Site Checker run: $(date) ===" >> "$LOG"
 cd "$PROJECT_DIR"
 
-# Wake/launch Mail.app first so it's warm before we try to send (avoids the
-# 8am cold-start timeout that silently dropped a scheduled email).
+# Wake/launch Mail.app first so it is ready before the nightly report is sent.
 open -a Mail 2>/dev/null
 sleep 8
 

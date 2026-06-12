@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Audit canonical public navigation links against the running local site."""
 
+import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.request import Request, urlopen
 
 
-BASE_URL = "http://127.0.0.1:5002"
 PATHS = (
     "/",
     "/ai-sports-betting-picks-today",
@@ -40,8 +40,8 @@ PATHS = (
 )
 
 
-def audit(path: str) -> tuple[str, int, int, int, bool]:
-    request = Request(BASE_URL + path, headers={"User-Agent": "PredictionLabLinkAudit/1.0"})
+def audit(base_url: str, path: str) -> tuple[str, int, int, int, bool]:
+    request = Request(base_url + path, headers={"User-Agent": "PredictionLabLinkAudit/1.0"})
     with urlopen(request, timeout=60) as response:
         html = response.read().decode("utf-8", errors="replace")
         return (
@@ -58,9 +58,18 @@ def audit(path: str) -> tuple[str, int, int, int, bool]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:5002",
+        help="Running local site to audit (default: %(default)s)",
+    )
+    args = parser.parse_args()
+    base_url = args.base_url.rstrip("/")
+
     rows = []
     with ThreadPoolExecutor(max_workers=6) as executor:
-        futures = {executor.submit(audit, path): path for path in PATHS}
+        futures = {executor.submit(audit, base_url, path): path for path in PATHS}
         for future in as_completed(futures):
             path = futures[future]
             try:
