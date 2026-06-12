@@ -18219,8 +18219,18 @@ def _sync_daily_report_soccer_scores(yesterday_dt, report_date):
                     _soc_comps = _soc_comp.get('competitors', [])
                     if len(_soc_comps) != 2:
                         continue
-                    _soc_st = _soc_ev.get('status', {}).get('type', {}).get('name', '')
-                    if not _soc_st.startswith('STATUS_FINAL'):
+                    # Soccer finals report as STATUS_FULL_TIME (not STATUS_FINAL like
+                    # other sports); rely on the completed/state flags so finished
+                    # matches are not silently skipped.
+                    _soc_status_type = _soc_ev.get('status', {}).get('type', {}) or {}
+                    _soc_st = _soc_status_type.get('name', '') or ''
+                    _soc_done = (
+                        _soc_status_type.get('completed') is True
+                        or str(_soc_status_type.get('state', '')).lower() == 'post'
+                        or _soc_st.startswith('STATUS_FINAL')
+                        or _soc_st.startswith('STATUS_FULL_TIME')
+                    )
+                    if not _soc_done:
                         continue
                     _soc_home = next((c for c in _soc_comps if c.get('homeAway') == 'home'), None)
                     _soc_away = next((c for c in _soc_comps if c.get('homeAway') == 'away'), None)
@@ -18378,14 +18388,16 @@ def daily_report_page():
                 _start_background_score_sync(_sync)
         except Exception:
             pass
+    _soccer_sync_thread = None
     if SOCCER_ENABLED:
         import threading as _thr_dr
-        _thr_dr.Thread(
+        _soccer_sync_thread = _thr_dr.Thread(
             target=_sync_daily_report_soccer_scores,
             args=(yesterday_dt, report_date),
             daemon=True,
             name='daily-report-soccer-sync',
-        ).start()
+        )
+        _soccer_sync_thread.start()
 
     sport_tallies = []
     total_games = 0
@@ -18403,6 +18415,13 @@ def daily_report_page():
         _status, _is_live = get_season_status(sport_key, today=_daily_today)
         if _is_live:
             _active_sports.append(sport_key)
+
+    # Soccer finals are fetched on-demand for this page (not by a cron), so wait a
+    # bounded time for that sync to land yesterday's games in the DB before grading.
+    # Without this the soccer tally is built before the rows exist and the whole
+    # soccer section is dropped from the report.
+    if _soccer_sync_thread is not None:
+        _soccer_sync_thread.join(timeout=12)
 
     _tally_results = []
     if _active_sports:
