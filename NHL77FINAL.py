@@ -2379,9 +2379,29 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
     for model_field in ('glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob', 'ensemble_prob'):
         if model_field not in g:
             g[model_field] = None
+    # Grade model correctness based on actual outcome
+    home_won = None
+    if g.get('home_score') is not None and g.get('away_score') is not None:
+        home_won = g['home_score'] > g['away_score']
+
     for correct_field in ('glicko2_correct', 'trueskill_correct', 'elo_correct', 'xgb_correct', 'ens_correct'):
         if correct_field not in g:
             g[correct_field] = None
+
+    # Calculate correctness if we have the outcome and model probabilities
+    if home_won is not None:
+        model_map = {
+            'glicko2_correct': 'glicko2_prob',
+            'trueskill_correct': 'trueskill_prob',
+            'elo_correct': 'elo_prob',
+            'xgb_correct': 'xgb_prob',
+            'ens_correct': 'ensemble_prob',
+        }
+        for correct_field, prob_field in model_map.items():
+            prob = _safe_float(g.get(prob_field))
+            if prob is not None and g.get(correct_field) is None:
+                predicted_home = prob >= 50.0
+                g[correct_field] = predicted_home == home_won
 
 
 def _finalize_daily_result_cards(sport, daily_results):
