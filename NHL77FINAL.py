@@ -2375,6 +2375,13 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
     _set_card_projected_scores(g)
     _set_card_edge_pct(g, sport=sport)
     _set_efficiency_prob_on_card(g, sport=sport)
+    # Ensure all model prob/correct fields exist for results card display
+    for model_field in ('glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob', 'ensemble_prob'):
+        if model_field not in g:
+            g[model_field] = None
+    for correct_field in ('glicko2_correct', 'trueskill_correct', 'elo_correct', 'xgb_correct', 'ens_correct'):
+        if correct_field not in g:
+            g[correct_field] = None
 
 
 def _finalize_daily_result_cards(sport, daily_results):
@@ -2869,6 +2876,25 @@ def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
             pred['face_pick_confidence'] = round(_fp if _fp >= 50 else 100.0 - _fp, 1)
         else:
             pred['face_pick_confidence'] = None
+
+    # Safety: ensure face_pick_team is always set
+    if not pred.get('face_pick_team'):
+        fhp = _safe_float(pred.get('face_home_prob'))
+        if fhp is not None and fhp > 50:
+            pred['face_pick_team'] = pred.get('home_team_id')
+        elif fhp is not None:
+            pred['face_pick_team'] = pred.get('away_team_id')
+        else:
+            pred['face_pick_team'] = pred.get('home_team_id') or 'Home'
+
+    # Safety: ensure face_pick_confidence is always set
+    if not pred.get('face_pick_confidence'):
+        fhp = _safe_float(pred.get('face_home_prob'))
+        fap = _safe_float(pred.get('face_away_prob'))
+        if fhp is not None:
+            pred['face_pick_confidence'] = round(fhp if fhp >= 50 else fap, 1) if fap else round(fhp, 1)
+        else:
+            pred['face_pick_confidence'] = 50.0
 
 
 
@@ -3663,6 +3689,21 @@ def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_ke
         game_date_key,
         skip_v2=True,
     )
+    if all(
+        _to_float_safe(_row_field(game_row, key)) is None
+        for key in (
+            'glicko_home_prob',
+            'trueskill_home_prob',
+            'elo_home_prob',
+            'xgboost_home_prob',
+            'logistic_home_prob',
+            'catboost_home_prob',
+            'meta_home_prob',
+            'win_probability',
+        )
+    ):
+        return None, None, None, None, None
+
     stored_ens = _to_float_safe(_row_field(game_row, 'win_probability'))
     had_stored_ens = stored_ens is not None
     if stored_ens is not None:
@@ -8992,6 +9033,13 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                 f"[{sport}] spread/total: 0 graded games "
                 f"(xgb={bool(_xgb)} score_pred={bool(_sp)}); check model imports on server"
             )
+        # MLB O/U cold-streak calibration — adjusts LIVE totals only, after the
+        # projection is set but before display. Never touches graded results.
+        if sport == 'MLB':
+            try:
+                _apply_mlb_ou_calibration(daily_results)
+            except Exception as _ou_cal_e:
+                logger.error(f"[MLB O/U] calibration error: {_ou_cal_e}")
         return stats
     except Exception as e:
         logger.error(f"[{sport}] spread/total integration error: {e}", exc_info=True)
@@ -9005,6 +9053,57 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                 'total_pct': round(tt_cor / tt_gr * 100, 1) if tt_gr > 0 else 0,
             }
         return None
+
+
+def _apply_mlb_ou_calibration(daily_results):
+    """Cold-streak calibration for MLB totals.
+
+    Runs after total projections are set but before display. Adjusts ONLY live
+    (ungraded) O/U picks — graded results, moneyline and spread are never touched.
+    """
+    try:
+        from sports.mlb_ou_calibration import (
+            compute_ou_performance, apply_mlb_ou_calibration,
+        )
+    except Exception as _imp_e:
+        logger.error(f"[MLB O/U] calibration import failed: {_imp_e}")
+        return None
+
+    graded = []   # (date, correct) for graded, non-push MLB totals
+    live = []     # live cards to calibrate
+    for date_key, dd in daily_results.items():
+        for g in dd.get('games', []):
+            pick = g.get('total_pick')
+            if pick not in ('OVER', 'UNDER'):
+                continue
+            correct = g.get('total_correct')
+            game_date = g.get('game_date') or date_key
+            if correct is not None:
+                graded.append((game_date, bool(correct)))
+                continue
+            # Live card: normalise the inputs the calibration layer needs.
+            proj = _safe_float(g.get('xgb_total_adj'))
+            if proj is None:
+                proj = _safe_float(g.get('our_total'))
+            mkt = _safe_float(g.get('market_total'))
+            edge = (proj - mkt) if (proj is not None and mkt is not None) else 0.0
+            g['total_edge'] = round(edge, 2)
+            if g.get('total_confidence') is None:
+                g['total_confidence'] = round(min(72.0, 55.0 + abs(edge) * 6.0), 1)
+            live.append(g)
+
+    if not live:
+        return None
+
+    perf = compute_ou_performance(graded)
+    summary = apply_mlb_ou_calibration(live, perf)
+    logger.info(
+        "[MLB O/U] calibration mode=%s flips=%s cautioned=%s last30=%s/%s season=%s/%s recent7=%s",
+        summary.get('mode'), summary.get('flips'), summary.get('cautioned'),
+        perf.get('last30_rate'), perf.get('last30_n'),
+        perf.get('season_rate'), perf.get('season_n'), perf.get('recent7_rate'),
+    )
+    return summary
 
 
 def _ou_stats(daily_results, sport):
@@ -12923,8 +13022,6 @@ def build_todays_top_picks():
               AND (g.home_score IS NULL OR g.game_id IS NULL)
               AND p.win_probability IS NOT NULL
               AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
-              AND UPPER(TRIM(COALESCE(p.home_team_id, ''))) NOT IN ('TBD', '')
-              AND UPPER(TRIM(COALESCE(p.away_team_id, ''))) NOT IN ('TBD', '')
               AND UPPER(TRIM(COALESCE(g.home_team_id, p.home_team_id, ''))) NOT IN ('TBD', '')
               AND UPPER(TRIM(COALESCE(g.away_team_id, p.away_team_id, ''))) NOT IN ('TBD', '')
             ORDER BY p.game_date ASC
@@ -16494,6 +16591,8 @@ def performance_page():
         team_chart_rows=team_chart_rows,
     )
     # Prevent the browser from serving a stale cached view when filters change.
+    if not isinstance(html, (str, bytes)):
+        return html
     resp = make_response(html)
     resp.headers['Cache-Control'] = 'no-store, must-revalidate'
     return resp
@@ -18902,11 +19001,33 @@ def sport_predictions(sport, filter_date=None):
             pred['_ensemble_prob_pre_enforce'] = _ens_pre
         _enforce_pick_spread_consistency(pred, sport=sport)
         _prepare_pred_card_display(pred, sport=sport)
-        # Safety: ensure efficiency_prob exists (required by templates)
+        # Safety: ensure all required fields exist for template rendering
         if 'efficiency_prob' not in pred:
             pred['efficiency_prob'] = None
         if 'efficiency_correct' not in pred:
             pred['efficiency_correct'] = None
+        # Safety: ensure face probabilities are set (fallback to ensemble if missing)
+        if 'face_home_prob' not in pred or pred.get('face_home_prob') is None:
+            ens = _safe_float(pred.get('ensemble_prob'))
+            if ens is not None:
+                if ens <= 1.0:
+                    ens *= 100.0
+                pred['face_home_prob'] = round(ens, 1)
+                pred['face_away_prob'] = round(100.0 - ens, 1)
+        if 'face_away_prob' not in pred or pred.get('face_away_prob') is None:
+            if 'face_home_prob' in pred and pred.get('face_home_prob') is not None:
+                pred['face_away_prob'] = round(100.0 - float(pred['face_home_prob']), 1)
+        # Safety: ensure face_pick_team and face_pick_confidence are set
+        if not pred.get('face_pick_team'):
+            fhp = _safe_float(pred.get('face_home_prob'))
+            if fhp and fhp >= 50:
+                pred['face_pick_team'] = pred.get('home_team_id')
+            elif fhp:
+                pred['face_pick_team'] = pred.get('away_team_id')
+        if not pred.get('face_pick_confidence'):
+            fhp = _safe_float(pred.get('face_home_prob'))
+            if fhp:
+                pred['face_pick_confidence'] = round(fhp if fhp >= 50 else 100.0 - fhp, 1)
 
     try:
         from flask_login import current_user as _cu
@@ -19467,6 +19588,10 @@ def _render_daily_sport_results_page(sport, season_start_dt=None):
             conn, selected_league, SOCCER_RESULTS_GAMES_PER_LEAGUE,
         )
         completed_games = _sort_game_rows_by_date_desc(completed_games)
+        if snapshot_stats:
+            snapshot_games = int((snapshot_raw or {}).get('games_in_scope') or 0)
+            if snapshot_games and len(completed_games) < snapshot_games:
+                snapshot_stats = None
     else:
         prob_sql = _predictions_prob_select_sql(conn)
         season_start_dt, season_end_dt = _results_season_bounds(sport, datetime.now())
