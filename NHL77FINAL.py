@@ -16606,10 +16606,9 @@ def player_props_api_performance():
 
 @app.route('/performance')
 def performance_page():
-    if not current_user.is_authenticated:
-        return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
+    # Public proof-of-performance: aggregate model accuracy on completed games
+    # (no premium upcoming-pick data). Kept open like /edge-performance so the
+    # Models nav link works for logged-out visitors and showcases the track record.
     sport = (request.args.get('sport') or '').strip().upper()
     if sport not in _PERF_SPORT_OPTIONS:
         sport = ''
