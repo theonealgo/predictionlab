@@ -18,6 +18,21 @@
 {% set _xs_hh = card.xs_proj_home_pts if card.xs_proj_home_pts is defined else none %}
 {% set _show_odds_tbl = _disp_bs is not none or _disp_ps is not none or _disp_xs is not none or _disp_bt is not none or _disp_pt is not none or _disp_xt is not none or _pl_ah is not none or _xs_ah is not none %}
 
+{# Paywall: hide premium fields for non-premium users #}
+{% if not is_premium|default(false) %}
+{% set _disp_bs = none %}
+{% set _disp_ps = none %}
+{% set _disp_xs = none %}
+{% set _disp_bt = none %}
+{% set _disp_pt = none %}
+{% set _disp_xt = none %}
+{% set _pl_ah = none %}
+{% set _pl_hh = none %}
+{% set _xs_ah = none %}
+{% set _xs_hh = none %}
+{% set _show_odds_tbl = false %}
+{% endif %}
+
 {% if is_results %}
 {# ── Results cards: layout unchanged ── #}
 <div class="card-hero">
