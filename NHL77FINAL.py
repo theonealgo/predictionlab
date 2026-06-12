@@ -1963,14 +1963,17 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30, prioritize
             ordered.append(pred)
 
     today = datetime.now().strftime('%Y-%m-%d')
+    # Ascending sort: prioritized games first, then upcoming (date >= today) before
+    # stale past games, then soonest game first. Do NOT use reverse=True — it would
+    # invert the priority/future flags and spend the limited fetch budget on stale
+    # past games before reaching the current slate (book odds would show "—").
     ordered.sort(
         key=lambda p: (
             0 if str(p.get('game_id')) in priority_ids else 1,
             0 if (p.get('game_date') or '') >= today else 1,
-            p.get('game_date') or '0000',
+            p.get('game_date') or '9999',
             str(p.get('game_id') or ''),
         ),
-        reverse=True,
     )
 
     attempts = 0
