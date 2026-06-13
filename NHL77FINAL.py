@@ -3112,6 +3112,32 @@ def _attach_soccer_ev_to_pred(pred: dict) -> None:
     pred['best_ev_pick'] = pred['best_ev_market']
 
 
+def _reorient_soccer_model_probs(pred: dict) -> None:
+    """Make soccer model-% cells agree with the calibrated win prob / pick.
+
+    The base-model probs (glicko2/trueskill/elo/xgb/ensemble) come from the
+    soccer model oriented opposite to the calibrated 3-way result for some
+    matchups, so the Pick Confidence / pro-table cells showed the underdog as
+    the favorite (e.g. Qatar 83.8% when Qatar's win prob is 5.9%). The face uses
+    the calibrated home_win_prob/away_win_prob and is correct; flip the raw model
+    probs to home-centric so they line up. Picks-display only — the results/
+    grading path computes its own probs and is untouched.
+    """
+    hw = _safe_float(pred.get('home_win_prob'))
+    aw = _safe_float(pred.get('away_win_prob'))
+    ens = _safe_float(pred.get('ensemble_prob'))
+    if hw is None or aw is None or ens is None:
+        return
+    # If the raw consensus already agrees with the calibrated favorite, leave it.
+    if (hw > aw) == (ens >= 50.0):
+        return
+    for k in ('glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob',
+              'ensemble_prob', 'efficiency_prob'):
+        v = _safe_float(pred.get(k))
+        if v is not None:
+            pred[k] = round(100.0 - v, 1)
+
+
 def _sync_pick_winner_to_pl_spread(pred: dict, sport: str = 'NBA') -> None:
     """Align predicted_winner with PL spread after disp sign normalization."""
     if pred.get('home_score') is not None:
@@ -19257,6 +19283,7 @@ def sport_predictions(sport, filter_date=None):
         # block, so fill ml/spread/total EV here using calibrated win probs and
         # goal-scale sigma (needs disp_pl_* from the card prep above).
         if sport == 'SOCCER':
+            _reorient_soccer_model_probs(pred)
             _attach_soccer_ev_to_pred(pred)
         # Safety: ensure all required fields exist for template rendering
         if 'efficiency_prob' not in pred:
