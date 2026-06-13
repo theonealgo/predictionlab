@@ -1049,27 +1049,20 @@ class ModelAuditor:
                     message="All expected model labels found",
                     url=f"/{slug}", auditor=self.NAME))
 
-            # Stale model names
+            # Stale model names. Strip benign HTML uses first (the search box's
+            # placeholder="" attribute and ::placeholder CSS) so they don't get
+            # flagged as a stale model reference.
+            _html_for_stale = re.sub(r'placeholder\s*=\s*"[^"]*"', '', html, flags=re.I)
+            _html_for_stale = _html_for_stale.replace('::placeholder', '')
             for stale in cfg.get("stale_model_names", []):
-                if stale.lower() in html.lower():
+                if stale.lower() in _html_for_stale.lower():
                     self.r.add(CheckResult(
                         label=f"Stale model name: {sport}", status=WARN,
                         message=f"Found stale model reference: '{stale}'",
                         url=f"/{slug}", auditor=self.NAME))
 
-            # Check "via" labels (should mention model names)
-            via_labels = re.findall(r'<span class="via">via ([^<]+)</span>', html)
-            if via_labels:
-                self.r.add(CheckResult(
-                    label=f"Pick attribution: {sport}", status=INFO,
-                    message=f"Pick attributed to: "
-                            f"{', '.join(set(via_labels[:5]))}",
-                    url=f"/{slug}", auditor=self.NAME))
-            else:
-                self.r.add(CheckResult(
-                    label=f"Pick attribution: {sport}", status=WARN,
-                    message="No 'via [model]' attribution found on cards",
-                    url=f"/{slug}", auditor=self.NAME))
+            # (The per-card "via [model]" attribution row was intentionally
+            # removed; model attribution now lives in the Pick Confidence cells.)
 
         # Check performance page shows all models
         perf_html = self._fetch("/performance")

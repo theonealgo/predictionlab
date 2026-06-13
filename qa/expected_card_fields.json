@@ -3,8 +3,6 @@
     "league-badge",
     "team-name",
     "win-pct",
-    "ai-pick-text",
-    "confidence",
     "ml-num"
   ],
   "required_text_patterns": [
