@@ -215,17 +215,13 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
     cache_key = f'{sport}_daily_results_html_v8'
     cache_ttl = m._SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
     if not m._results_date_query_active():
-        cached_page = m._SPORT_RESULTS_CACHE.get(cache_key)
-        if isinstance(cached_page, dict):
-            cached_ts = cached_page.get('ts')
-            cached_html = cached_page.get('html')
-            if (
-                cached_ts is not None
-                and cached_html
-                and (_time.time() - cached_ts) < cache_ttl
-                and m._results_page_html_usable(cached_html)
-            ):
-                return cached_html
+        # Serve stale-while-warm (up to 5x TTL) like the picks pages so a visitor
+        # never blocks on the expensive full-season rebuild once it's been warmed.
+        cached_html, _needs_reval = m._stale_page_cache_get(
+            m._SPORT_RESULTS_CACHE, cache_key, cache_ttl,
+        )
+        if cached_html and m._results_page_html_usable(cached_html):
+            return cached_html
     try:
         try:
             update_nba_scores()

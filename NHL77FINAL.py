@@ -20484,6 +20484,41 @@ def api_get_sports():
         } for code, info in SPORTS.items()]
     })
 
+def _prewarm_pages():
+    """Warm the expensive pages in the background after startup so the first real
+    visitor (and crawlers) hit a cached page instead of a cold 10-90s build.
+    Runs once per process via the app's own test client; pages then serve cached
+    /stale-while-warm. Heavy results pages first."""
+    import threading as _thr_pw
+    import time as _t_pw
+
+    def _run():
+        _t_pw.sleep(10)  # let model loading / DB init / score syncs settle
+        paths = ['/all-sports-results', '/nba-results', '/nhl-results', '/mlb-results',
+                 '/daily-report', '/nba-picks', '/nhl-picks', '/mlb-picks']
+        if SOCCER_ENABLED:
+            paths.append('/soccer-picks')
+        try:
+            client = app.test_client()
+        except Exception:
+            logger.exception('pre-warm: could not create test client')
+            return
+        for p in paths:
+            try:
+                client.get(p)
+                logger.info(f'pre-warmed {p}')
+            except Exception:
+                logger.debug(f'pre-warm failed for {p}')
+
+    _thr_pw.Thread(target=_run, daemon=True, name='page-prewarm').start()
+
+
+try:
+    _prewarm_pages()
+except Exception:
+    logger.exception('could not start page pre-warm')
+
+
 if __name__ == '__main__':
     import os, socket
     # Use $PORT from Railway/Render, fall back to auto-finding a local port
