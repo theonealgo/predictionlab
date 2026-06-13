@@ -353,10 +353,6 @@
         .line-chip.edge-chip.pos .line-chip-val { color:#059669; }
         .line-chip.edge-chip.neg { background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.22); }
         .line-chip.edge-chip.neg .line-chip-val { color:#dc2626; }
-        .ai-pick-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:10px 14px; border-top:1px dashed #e2e8f0; background:linear-gradient(180deg,#fff 0%,#fafbfc 100%); }
-        .ai-pick-text { font-size:0.82em; color:#334155; }
-        .ai-pick-text strong { color:#0c1e3a; }
-        .ai-pick-text .via { font-size:0.85em; color:#64748b; font-weight:600; }
         .confidence { font-size:0.82em; color:#64748b; font-weight:600; }
         .confidence strong { color:#0c1e3a; font-weight:900; }
         .card-footer { border-top:1px solid #E2E8F0; padding:10px 14px; text-align:center; }
@@ -1186,7 +1182,6 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
         copyLine(lines, 'Prediction Lab', formatCopyOdds(ml.homePredictionLab));
         lines.push('');
 
-        copyLine(lines, 'AI Pick', ml.aiPick);
         copyLine(lines, 'Confidence', formatCopyPct(ml.confidence));
         copyLine(lines, 'Moneyline EV', formatCopyEv(ml.ev));
         copyLine(lines, 'Edge', formatCopyEv(ml.edge));
