@@ -57,16 +57,50 @@
     letter-spacing: .18em;
 }
 .pl2-nav { display: flex; gap: 26px; margin-left: auto; }
-.pl2-nav a,
-.pl2-login {
+.pl2-nav a {
     color: var(--pl-muted);
     font: 800 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     letter-spacing: .12em;
     text-decoration: none;
     text-transform: uppercase;
 }
-.pl2-nav a:hover,
-.pl2-login:hover { color: var(--pl-ink); }
+.pl2-nav a:hover { color: var(--pl-ink); }
+/* Nav dropdowns: Picks (sports) / Models (tools) / Results — click to open. */
+.pl2-navdrop { position: relative; }
+.pl2-nav-trigger {
+    border: none;
+    background: transparent;
+    color: var(--pl-muted);
+    font: 800 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0;
+}
+.pl2-nav-trigger:hover,
+.pl2-nav-trigger[aria-expanded="true"] { color: var(--pl-ink); }
+.pl2-nav-menu {
+    position: absolute;
+    top: calc(100% + 14px);
+    left: 0;
+    min-width: 184px;
+    padding: 7px;
+    border: 1px solid var(--pl-line);
+    background: var(--pl-paper);
+    box-shadow: 0 14px 34px rgba(11, 11, 10, .14);
+    z-index: 2050;
+}
+.pl2-nav-menu[hidden] { display: none; }
+.pl2-nav-menu a {
+    display: block;
+    padding: 9px 11px;
+    color: var(--pl-ink);
+    font: 800 .66rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+.pl2-nav-menu a:hover { background: var(--pl-neon); }
 .pl2-header-actions { display: flex; align-items: center; gap: 20px; }
 .pl2-search {
     width: 34px;
@@ -78,6 +112,44 @@
     cursor: pointer;
 }
 .pl2-search:hover { background: var(--pl-neon); border-color: var(--pl-neon); }
+/* Account menu: shared login/signup/signout control in the canonical header. */
+.pl2-account { position: relative; }
+.pl2-account-button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--pl-line);
+    background: var(--pl-paper);
+    color: var(--pl-ink);
+    cursor: pointer;
+}
+.pl2-account-button:hover,
+.pl2-account-button[aria-expanded="true"] {
+    background: var(--pl-neon);
+    border-color: var(--pl-neon);
+}
+.pl2-account-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 138px;
+    padding: 7px;
+    border: 1px solid var(--pl-line);
+    background: var(--pl-paper);
+    box-shadow: 0 14px 34px rgba(11, 11, 10, .14);
+}
+.pl2-account-menu[hidden] { display: none; }
+.pl2-account-menu a {
+    display: block;
+    padding: 10px 11px;
+    color: var(--pl-ink);
+    font: 800 .66rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+.pl2-account-menu a:hover { background: var(--pl-neon); }
 .pl2-cta {
     padding: 11px 16px;
     border: 1px solid var(--pl-neon);
@@ -465,7 +537,6 @@ body.research-site .pl-july-offer__card p {
     .pl2-header { padding: 0 16px; gap: 14px; }
     .pl2-nav { display: none; }
     .pl2-header-actions { margin-left: auto; gap: 10px; }
-    .pl2-login { display: none; }
     body.research-site .navbar-content { padding: 0 14px; }
     body.research-site .navbar-content > .logo { min-width: 0; }
     body.research-site .nav-cta-premium { display: none; }
@@ -485,7 +556,7 @@ body.research-site .pl-july-offer__card p {
     .pl-july-offer__code-row button { min-height: 46px; }
     .pl2-header { min-height: 58px; }
     .pl2-brand span, .pl2-search { display: none; }
-    .pl2-cta { padding: 9px 10px; font-size: .58rem; }
+    .pl2-account-button { width: 34px; height: 34px; }
     body.research-site .navbar-content > .logo img { max-width: 128px; }
     body.research-site .nav-cta { padding: 10px; font-size: 9px; }
     .site-directory-footer { padding: 52px 18px 22px; }
