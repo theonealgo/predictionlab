@@ -24,7 +24,7 @@
 .pl2-burger {
     width: 34px;
     height: 34px;
-    display: grid;
+    display: none; /* desktop uses the nav dropdowns; burger is mobile-only */
     place-items: center;
     border: 1px solid var(--pl-line);
     background: transparent;
@@ -536,6 +536,7 @@ body.research-site .pl-july-offer__card p {
 @media (max-width: 900px) {
     .pl2-header { padding: 0 16px; gap: 14px; }
     .pl2-nav { display: none; }
+    .pl2-burger { display: grid; }  /* show the hamburger only on mobile */
     .pl2-header-actions { margin-left: auto; gap: 10px; }
     body.research-site .navbar-content { padding: 0 14px; }
     body.research-site .navbar-content > .logo { min-width: 0; }

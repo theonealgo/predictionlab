@@ -75,6 +75,10 @@ function tvOpen(){
   if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';
   if(h)h.setAttribute('aria-expanded','true');
 }
+function tvToggle(){
+  var d=document.getElementById('tvDrawer');
+  if(d&&d.classList.contains('open')){tvClose();}else{tvOpen();}
+}
 function tvClose(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
   if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';
