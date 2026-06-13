@@ -202,7 +202,7 @@ def _schedule_predictions_db_save(sport: str, predictions) -> None:
                         continue
                     try:
                         cursor_save.execute('''
-                            INSERT INTO predictions (
+                            INSERT OR IGNORE INTO predictions (
                                 game_id, sport, league, game_date, home_team_id, away_team_id,
                                 elo_home_prob, xgboost_home_prob, win_probability, locked
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
@@ -8122,7 +8122,7 @@ def get_upcoming_predictions(sport, days=365):
                         continue
                     try:
                         cursor_save.execute('''
-                            INSERT INTO predictions (
+                            INSERT OR IGNORE INTO predictions (
                                 game_id, sport, league, game_date, home_team_id, away_team_id,
                                 elo_home_prob, xgboost_home_prob, win_probability, locked
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
