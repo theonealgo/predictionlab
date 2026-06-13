@@ -3047,6 +3047,71 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _sync_card_display_to_face_pick(pred, sport=sport)
 
 
+def _attach_soccer_ev_to_pred(pred: dict) -> None:
+    """Goal-scale EV (Moneyline / Spread / Total) for SOCCER pro-table & cards.
+
+    Soccer is excluded from the points-based EV block (that uses basketball-scale
+    sigma, which makes goal handicaps/totals read ~0%). Here:
+      - Moneyline EV uses the CALIBRATED 3-way win prob (ensemble_prob is
+        unreliable for soccer) vs the book price for the model's pick side.
+      - Spread/Total EV use goal-scale sigma (handicap ~1.3, total ~1.4 goals).
+    Call AFTER _prepare_pred_card_display so disp_pl_spread/disp_pl_total exist.
+    """
+    import math as _m
+    if pred.get('home_score') is not None:
+        return
+    hp = _safe_float(pred.get('home_win_prob'))
+    ap = _safe_float(pred.get('away_win_prob'))
+    bh = _safe_float(pred.get('book_home_moneyline'))
+    ba = _safe_float(pred.get('book_away_moneyline'))
+
+    # ── Moneyline EV: calibrated win prob vs book price for the model's side ──
+    ml_ev = None
+    if hp is not None and ap is not None and bh is not None and ba is not None:
+        pick_p, pick_ml = (hp / 100.0, bh) if hp >= ap else (ap / 100.0, ba)
+        if pick_ml is not None:
+            ml_ev = round(calculate_ev(pick_p, pick_ml), 1)
+    pred['ml_ev'] = ml_ev
+
+    # ── Spread (goal handicap) EV: model goal-line vs book goal-line ──
+    _SOC_SPREAD_SIGMA = 1.3
+    model_sp = _safe_float(pred.get('disp_pl_spread'))
+    book_sp = _safe_float(pred.get('book_spread'))
+    if book_sp is None:
+        book_sp = _safe_float(pred.get('market_spread'))
+    sp_ev = None
+    if model_sp is not None and book_sp is not None:
+        edge = abs(model_sp) - abs(book_sp)
+        cover_p = 0.5 * (1.0 + _m.erf(edge / (_SOC_SPREAD_SIGMA * _m.sqrt(2))))
+        sp_ev = round(calculate_ev(cover_p, -110), 1)
+    pred['spread_ev'] = sp_ev
+
+    # ── Total (goals) EV: model total vs book total, edge capped at ±1 goal ──
+    _SOC_TOTAL_SIGMA = 1.4
+    model_tot = _safe_float(pred.get('disp_pl_total'))
+    book_tot = _safe_float(pred.get('book_total'))
+    if book_tot is None:
+        book_tot = _safe_float(pred.get('market_total'))
+    to_ev = None
+    if model_tot is not None and book_tot is not None:
+        edge = max(-1.0, min(1.0, model_tot - book_tot))
+        over_p = 0.5 * (1.0 + _m.erf(edge / (_SOC_TOTAL_SIGMA * _m.sqrt(2))))
+        actual_p = over_p if edge >= 0 else (1.0 - over_p)
+        to_ev = round(calculate_ev(actual_p, -110), 1)
+    pred['total_ev'] = to_ev
+
+    # ── Best EV market (positive only) ──
+    ev_map = {}
+    if ml_ev is not None and ml_ev > 0:
+        ev_map['Moneyline'] = ml_ev
+    if sp_ev is not None and sp_ev > 0:
+        ev_map['Spread'] = sp_ev
+    if to_ev is not None and to_ev > 0:
+        ev_map['Total'] = to_ev
+    pred['best_ev_market'] = max(ev_map, key=ev_map.get) if ev_map else None
+    pred['best_ev_pick'] = pred['best_ev_market']
+
+
 def _sync_pick_winner_to_pl_spread(pred: dict, sport: str = 'NBA') -> None:
     """Align predicted_winner with PL spread after disp sign normalization."""
     if pred.get('home_score') is not None:
@@ -19148,6 +19213,11 @@ def sport_predictions(sport, filter_date=None):
             pred['_ensemble_prob_pre_enforce'] = _ens_pre
         _enforce_pick_spread_consistency(pred, sport=sport)
         _prepare_pred_card_display(pred, sport=sport)
+        # Soccer EV (goal-scale) — soccer is excluded from the points-based EV
+        # block, so fill ml/spread/total EV here using calibrated win probs and
+        # goal-scale sigma (needs disp_pl_* from the card prep above).
+        if sport == 'SOCCER':
+            _attach_soccer_ev_to_pred(pred)
         # Safety: ensure all required fields exist for template rendering
         if 'efficiency_prob' not in pred:
             pred['efficiency_prob'] = None
