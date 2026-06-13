@@ -18,7 +18,7 @@
 {% set _xs_hh = card.xs_proj_home_pts if card.xs_proj_home_pts is defined else none %}
 {% set _show_odds_tbl = _disp_bs is not none or _disp_ps is not none or _disp_xs is not none or _disp_bt is not none or _disp_pt is not none or _disp_xt is not none or _pl_ah is not none or _xs_ah is not none %}
 {# Paywall flag: premium model lines/scores are locked for logged-out users on PICKS cards.
-   FREE = moneylines, win %, model confidence %, and Books spread/total.
+   FREE = sportsbook moneylines, sportsbook spread, and ML model percentages.
    Results cards are public proof-of-performance and are never locked. #}
 {% set _locked = (not is_results) and (not is_premium|default(false)) %}
 
@@ -201,7 +201,7 @@
             </div>
             <div class="ml-line face-pl-ml">
                 <span class="ml-src pl">Prediction Lab</span>
-                <span class="ml-num {% if pl_away is not none and pl_away < 0 %}fav{% elif pl_away is not none %}dog{% endif %}">{% if pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</span>
+                <span class="ml-num">{% if _locked %}<a href="/plans" aria-label="Unlock Prediction Lab odds">Premium</a>{% elif pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</span>
             </div>
         </div>
     </div>
@@ -218,7 +218,7 @@
             </div>
             <div class="ml-line face-pl-ml">
                 <span class="ml-src pl">Prediction Lab</span>
-                <span class="ml-num {% if pl_home is not none and pl_home < 0 %}fav{% elif pl_home is not none %}dog{% endif %}">{% if pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</span>
+                <span class="ml-num">{% if _locked %}<a href="/plans" aria-label="Unlock Prediction Lab odds">Premium</a>{% elif pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</span>
             </div>
         </div>
     </div>
@@ -233,7 +233,7 @@
         <div class="win-pct draw-pct">{{ card.face_draw_prob }}<span class="unit">%</span></div>
         <div class="ml-line face-pl-ml">
             <span class="ml-src pl">Prediction Lab</span>
-            <span class="ml-num">{% if pl_draw is not none %}{% if pl_draw > 0 %}+{% endif %}{{ pl_draw }}{% else %}—{% endif %}</span>
+            <span class="ml-num">{% if _locked %}<a href="/plans" aria-label="Unlock Prediction Lab draw odds">Premium</a>{% elif pl_draw is not none %}{% if pl_draw > 0 %}+{% endif %}{{ pl_draw }}{% else %}—{% endif %}</span>
         </div>
     </div>
 </div>
@@ -246,7 +246,7 @@
     </div>
     <div class="line-chip">
         <div class="line-chip-label">Books total</div>
-        <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
+        <div class="line-chip-val">{% if _locked %}<a href="/plans">Premium</a>{% elif _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
     {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
     {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
@@ -264,17 +264,8 @@
     {% endif %}
 </div>
 
-{% if card.face_pick_team is defined and card.face_pick_team %}
-<div class="ai-pick-row">
-    <div class="ai-pick-text">
-        AI pick · <strong>{{ card.face_pick_team }}</strong>
-        <span class="via">via {{ _face_label }}</span>
-    </div>
-    {% if card.face_pick_confidence is defined and card.face_pick_confidence is not none %}
-    <div class="confidence">Confidence <strong>{{ card.face_pick_confidence }}%</strong></div>
-    {% endif %}
-</div>
-{% endif %}
+{# AI-pick row removed — it duplicated the win % / PL spread / Sharp Consensus
+   already shown on the card. #}
 
 <footer class="card-footer">
     <button type="button" class="copy-pick-btn" onclick="copySinglePick(this)" title="Copy this pick to clipboard">
@@ -307,7 +298,7 @@
                 </tr>
                 <tr>
                     <td class="market-k">Total</td>
-                    <td class="val-books">{% if _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
+                    <td class="val-books">{% if _locked %}Premium{% elif _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
                     <td class="val-pl">{% if _locked %}🔒{% elif _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
                     <td class="val-xs">{% if _locked %}🔒{% elif _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
                 </tr>
@@ -414,16 +405,16 @@
     'moneyline': {
         'awayBooks': bk_away,
         'homeBooks': bk_home,
-        'awayPredictionLab': pl_away,
-        'homePredictionLab': pl_home,
+        'awayPredictionLab': pl_away if is_premium|default(false) else none,
+        'homePredictionLab': pl_home if is_premium|default(false) else none,
         'aiPick': card.face_pick_team if card.face_pick_team is defined else none,
         'confidence': card.face_pick_confidence if card.face_pick_confidence is defined else none,
-        'ev': card.ml_ev if card.ml_ev is defined else none,
-        'edge': _edge
+        'ev': card.ml_ev if is_premium|default(false) and card.ml_ev is defined else none,
+        'edge': _edge if is_premium|default(false) else none
     },
     'analysis': {
-        'totalTrendRecord': card.total_trend_record if card.total_trend_record is defined else none,
-        'spreadTrendRecord': card.spread_trend_record if card.spread_trend_record is defined else none
+        'totalTrendRecord': card.total_trend_record if is_premium|default(false) and card.total_trend_record is defined else none,
+        'spreadTrendRecord': card.spread_trend_record if is_premium|default(false) and card.spread_trend_record is defined else none
     },
     'premium': ({
         'spreadLabel': spread_label,
