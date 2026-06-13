@@ -19274,6 +19274,13 @@ def sport_predictions(sport, filter_date=None):
             if isinstance(_v, dict):
                 pred[_eff_key] = types.SimpleNamespace(**_v)
         _finalize_prediction_odds(pred)
+        # Soccer base-model probs can be oriented opposite to the calibrated
+        # result; fix BEFORE pick/spread/display logic so the PL spread sign and
+        # model-% cells all line up with the calibrated win prob (not just the
+        # display). Must run before _enforce_pick_spread_consistency and
+        # _prepare_pred_card_display, which read ensemble_prob.
+        if sport == 'SOCCER':
+            _reorient_soccer_model_probs(pred)
         _ens_pre = _safe_float(pred.get('ensemble_prob'))
         if _ens_pre is not None:
             pred['_ensemble_prob_pre_enforce'] = _ens_pre
@@ -19283,7 +19290,6 @@ def sport_predictions(sport, filter_date=None):
         # block, so fill ml/spread/total EV here using calibrated win probs and
         # goal-scale sigma (needs disp_pl_* from the card prep above).
         if sport == 'SOCCER':
-            _reorient_soccer_model_probs(pred)
             _attach_soccer_ev_to_pred(pred)
         # Safety: ensure all required fields exist for template rendering
         if 'efficiency_prob' not in pred:
