@@ -16317,6 +16317,12 @@ def player_props_api_props():
             return jsonify({'detail': f'Unsupported league: {league}'}), 400
         data = engine_mod.get_league_data(league)
         rows = engine_mod.filter_props(data.get('props', []), prop_type=prop_type, side=side, min_ev=min_ev)
+        # Drop combined/parlay-style props (Pts+Reb, Reb+Ast, Pts+Reb+Ast, H+R+RBI).
+        # They have no graded history, so calibration floors them to ~52%
+        # confidence with degenerate EV — they render as faded, low-value rows
+        # that duplicate the base stats. Hide them from the slate.
+        _COMBO_PROP_TYPES = {'pts_reb', 'pts_ast', 'reb_ast', 'pts_reb_ast', 'h_r_rbi'}
+        rows = [r for r in rows if str(r.get('prop_type') or '').lower() not in _COMBO_PROP_TYPES]
 
         # ── Per-prop-type calibration & decision layer ──────────────────
         # Gate picks by each category's REAL graded accuracy so rare,
