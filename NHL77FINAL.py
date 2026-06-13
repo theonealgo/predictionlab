@@ -20494,10 +20494,13 @@ def _prewarm_pages():
 
     def _run():
         _t_pw.sleep(10)  # let model loading / DB init / score syncs settle
-        paths = ['/all-sports-results', '/nba-results', '/nhl-results', '/mlb-results',
-                 '/daily-report', '/nba-picks', '/nhl-picks', '/mlb-picks']
+        # Picks pages first (the main user-facing pages), then the heavier
+        # results/daily pages, so the most-visited routes are warm soonest.
+        paths = ['/nba-picks', '/nhl-picks', '/mlb-picks']
         if SOCCER_ENABLED:
             paths.append('/soccer-picks')
+        paths += ['/all-sports-results', '/daily-report',
+                  '/nba-results', '/nhl-results', '/mlb-results']
         try:
             client = app.test_client()
         except Exception:
