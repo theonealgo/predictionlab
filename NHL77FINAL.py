@@ -4806,6 +4806,31 @@ def _soccer_curated_league_game_counts(conn):
     return counts
 
 
+def _soccer_curated_league_recent_counts(conn, days=14):
+    """Completed-game counts per curated league within the last `days` (recency).
+
+    Used to default the soccer results page to a league that actually played
+    recently, instead of the league with the biggest all-time fixture list
+    (e.g. EFL Championship), which can be months stale and show 0 recent games.
+    """
+    counts = {lg: 0 for lg in SOCCER_LEAGUE_ORDER}
+    try:
+        cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        rows = conn.execute('''
+            SELECT league, COUNT(*) AS n
+            FROM games
+            WHERE sport = 'SOCCER' AND home_score IS NOT NULL AND game_date >= ?
+            GROUP BY league
+        ''', (cutoff,)).fetchall()
+        for row in rows:
+            canon = _canonical_soccer_league_name(row['league']) or row['league']
+            if canon in counts:
+                counts[canon] += int(row['n'])
+    except Exception as exc:
+        logger.debug(f"[soccer] recent league counts failed: {exc}")
+    return counts
+
+
 def _fetch_soccer_completed_games(conn, selected_league=None, limit=None):
     """Load completed soccer games for one curated league (or all if league is None)."""
     limit = limit or SOCCER_RESULTS_GAMES_PER_LEAGUE
@@ -5194,20 +5219,35 @@ def _build_soccer_results_leagues_ui(selected_league, soccer_league_counts):
     ]
 
 
-def _resolve_soccer_results_league(selected_slug, soccer_league_counts):
-    """Resolve ?league= slug to a curated league name (auto-pick busiest when omitted)."""
+def _resolve_soccer_results_league(selected_slug, soccer_league_counts, recent_counts=None):
+    """Resolve ?league= slug to a curated league name.
+
+    When no league is requested, default to the league that played most recently
+    (most games in `recent_counts`) so the page shows last night's results — not
+    the league with the biggest all-time fixture list, which may be off-season.
+    Falls back to busiest all-time only if nothing has played recently.
+    """
     selected_league = _soccer_league_from_slug(selected_slug) if selected_slug else None
     if selected_slug and not selected_league:
         return None, None
     if not selected_slug:
-        active_leagues = [
-            lg for lg in SOCCER_LEAGUE_ORDER if soccer_league_counts.get(lg, 0) > 0
+        recent_active = [
+            lg for lg in SOCCER_LEAGUE_ORDER if (recent_counts or {}).get(lg, 0) > 0
         ]
-        if active_leagues:
+        if recent_active:
             selected_league = max(
-                active_leagues,
-                key=lambda lg: soccer_league_counts.get(lg, 0),
+                recent_active,
+                key=lambda lg: recent_counts.get(lg, 0),
             )
+        else:
+            active_leagues = [
+                lg for lg in SOCCER_LEAGUE_ORDER if soccer_league_counts.get(lg, 0) > 0
+            ]
+            if active_leagues:
+                selected_league = max(
+                    active_leagues,
+                    key=lambda lg: soccer_league_counts.get(lg, 0),
+                )
         if not selected_league:
             selected_league = SOCCER_LEAGUE_ORDER[0] if SOCCER_LEAGUE_ORDER else None
     return selected_league, _soccer_league_url_slug(selected_league) if selected_league else None
@@ -19746,8 +19786,9 @@ def _render_daily_sport_results_page(sport, season_start_dt=None):
     soccer_league_counts = {}
     if sport == 'SOCCER':
         soccer_league_counts = _soccer_curated_league_game_counts(conn)
+        soccer_recent_counts = _soccer_curated_league_recent_counts(conn, days=14)
         selected_league, selected_league_slug = _resolve_soccer_results_league(
-            selected_slug, soccer_league_counts,
+            selected_slug, soccer_league_counts, recent_counts=soccer_recent_counts,
         )
         if selected_slug and not selected_league:
             conn.close()
