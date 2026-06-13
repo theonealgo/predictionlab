@@ -131,7 +131,7 @@ def _make_session() -> requests.Session:
 
 HTTP_DEPENDENT_AUDITORS = frozenset({
     "routes", "content", "navigation", "cards", "models", "results", "csv",
-    "screenshots",
+    "gamecounts", "screenshots",
 })
 
 
@@ -1216,6 +1216,162 @@ class ResultsAuditor:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# GAME-COUNT AUDITOR  (DB vs results page)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class GameCountAuditor:
+    """Cross-check the games DB against what each sport's results page reports.
+
+    Catches results pages that show a stale date or far fewer games than we
+    actually have — e.g. a soccer results page that defaulted to an off-season
+    league and showed "Last Night 2026-05-12 (1 game)" while the DB held recent
+    games. Reads the games DB directly (read-only), so it is more than an HTTP
+    check.
+    """
+    NAME = "gamecounts"
+
+    SLUG_TO_SPORT = {
+        'nba-results': 'NBA', 'nhl-results': 'NHL', 'nfl-results': 'NFL',
+        'mlb-results': 'MLB', 'ncaab-results': 'NCAAB', 'ncaaf-results': 'NCAAF',
+        'ncaaw-results': 'NCAAW', 'wnba-results': 'WNBA', 'soccer-results': 'SOCCER',
+    }
+    # Soccer results pages are filtered to one league, so a whole-sport count
+    # comparison would false-positive; for soccer we validate only that the
+    # displayed date is not stale versus the DB's most recent game.
+    PER_LEAGUE = frozenset({'SOCCER'})
+    STALE_DAYS = 3  # the page's "last night" date may legitimately lag this much
+
+    def __init__(self, session: requests.Session, base: str, report: AuditReport,
+                 db_path: str | None = None):
+        self.s = session
+        self.base = base
+        self.r = report
+        self.db_path = db_path or self._find_db()
+
+    @staticmethod
+    def _find_db() -> str | None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for p in ('/data/sports_predictions_original.db',
+                  os.path.join(here, '..', 'sports_predictions_original.db'),
+                  'sports_predictions_original.db'):
+            if os.path.isfile(p):
+                return p
+        return None
+
+    def _fetch(self, path: str) -> str:
+        try:
+            return self.s.get(urljoin(self.base, path),
+                              timeout=REQUEST_TIMEOUT, allow_redirects=True).text
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _parse_date(raw):
+        """Normalize a game_date cell to a datetime. The games table mixes
+        formats (YYYY-MM-DD for most sports, DD/MM/YYYY for some like NFL/WNBA),
+        so string comparison is unreliable — parse explicitly."""
+        s = (raw or '')[:10].strip()
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+            try:
+                return datetime.strptime(s, fmt)
+            except Exception:
+                pass
+        return None
+
+    def _db_stats(self, conn, sport: str):
+        """Return (most_recent_completed YYYY-MM-DD, games_in_last_7_days),
+        with dates normalized in Python to survive mixed DB date formats."""
+        from datetime import timedelta
+        rows = conn.execute(
+            "SELECT game_date FROM games WHERE sport=? AND home_score IS NOT NULL",
+            (sport,)).fetchall()
+        cutoff = datetime.now() - timedelta(days=7)
+        dates = [d for d in (self._parse_date(r[0]) for r in rows) if d is not None]
+        if not dates:
+            return None, 0
+        most_recent = max(dates)
+        c7 = sum(1 for d in dates if d >= cutoff)
+        return most_recent.strftime('%Y-%m-%d'), c7
+
+    def run(self):
+        if not self.db_path:
+            self.r.add(CheckResult(
+                label="Game-count cross-check", status=INFO,
+                message="games DB not found; skipped", auditor=self.NAME))
+            return
+        import sqlite3
+        try:
+            conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, timeout=8)
+            # The live app may hold a write lock; wait it out instead of erroring.
+            conn.execute("PRAGMA busy_timeout=8000")
+        except Exception as exc:
+            self.r.add(CheckResult(
+                label="Game-count cross-check", status=WARN,
+                message=f"could not open games DB: {exc}", auditor=self.NAME))
+            return
+        try:
+            for slug, sport in self.SLUG_TO_SPORT.items():
+                try:
+                    most_recent, c7 = self._db_stats(conn, sport)
+                except sqlite3.OperationalError as exc:
+                    # DB momentarily locked by the live app — report once, don't crash.
+                    self.r.add(CheckResult(
+                        label="Game-count cross-check", status=INFO,
+                        message=f"games DB busy ({exc}); cross-check skipped",
+                        auditor=self.NAME))
+                    return
+                if not most_recent:
+                    continue  # no completed games in DB for this sport — skip
+                html = self._fetch('/' + slug)
+                if not html or len(html) < 2000:
+                    continue
+                m_night = re.search(
+                    r"Last Night[''’]s Tally\s*[—-]\s*"
+                    r"(\d{4}-\d{2}-\d{2})\s*\((\d+)\s*games?\)", html)
+                m_week = re.search(
+                    r"Last 7 Days Tally\s*[—-]\s*[^()]*\((\d+)\s*games?\)", html)
+                page_date = m_night.group(1) if m_night else None
+                page_week_n = int(m_week.group(1)) if m_week else None
+
+                # ── Freshness: page's last-night date vs DB's most recent game ──
+                if page_date:
+                    try:
+                        lag = (datetime.strptime(most_recent, '%Y-%m-%d')
+                               - datetime.strptime(page_date, '%Y-%m-%d')).days
+                    except Exception:
+                        lag = 0
+                    if lag > self.STALE_DAYS:
+                        self.r.add(CheckResult(
+                            label=f"{sport} results freshness", status=FAIL,
+                            message=f"{slug} shows last night {page_date} but DB has "
+                                    f"games through {most_recent} ({lag}d stale)",
+                            detail="Results page is showing an out-of-date slate "
+                                   "(e.g. defaulting to a wrong/off-season league).",
+                            auditor=self.NAME, url='/' + slug))
+                    else:
+                        self.r.add(CheckResult(
+                            label=f"{sport} results freshness", status=PASS,
+                            message=f"{slug} last night {page_date} ~ DB latest {most_recent}",
+                            auditor=self.NAME, url='/' + slug))
+
+                # ── Count: DB 7-day total vs page 7-day total (non-per-league) ──
+                if sport not in self.PER_LEAGUE and page_week_n is not None and c7 > 0:
+                    if page_week_n == 0:
+                        self.r.add(CheckResult(
+                            label=f"{sport} results count", status=FAIL,
+                            message=f"{slug} shows 0 games in last 7 days but DB has {c7}",
+                            auditor=self.NAME, url='/' + slug))
+                    elif page_week_n < c7 * 0.5:
+                        self.r.add(CheckResult(
+                            label=f"{sport} results count", status=WARN,
+                            message=f"{slug} shows {page_week_n} games in last 7 days "
+                                    f"but DB has {c7}",
+                            auditor=self.NAME, url='/' + slug))
+        finally:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CSV EXPORT AUDITOR
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1335,8 +1491,11 @@ class PropsAuditor:
                 message=f"Could not import props engine: {exc}", auditor=self.NAME))
             return
 
-        # In-season sports worth auditing live
-        sports = ["NBA", "WNBA", "NHL", "MLB"]
+        # PROP COVERAGE: audit every league supported by the shared props engine.
+        sports = [
+            "NBA", "WNBA", "NHL", "MLB", "NFL", "NCAAF", "NCAAB", "NCAAW",
+            "SOCCER", "TENNIS", "UFC", "GOLF",
+        ]
         for sport in sports:
             try:
                 engine._CACHE.pop(sport, None)
@@ -1350,7 +1509,33 @@ class PropsAuditor:
             if not props:
                 continue
 
-            # 1. Nonsensical lines OR projections (the 3PT bug was a 6.68
+            # 1. DUPLICATE ROWS: the UI must never show the same player/prop twice.
+            seen_prop_rows = set()
+            duplicate_rows = []
+            for prop in props:
+                player_key = str(prop.get("player_id") or "").strip().lower()
+                if not player_key:
+                    player_key = " ".join(
+                        str(prop.get("player_name") or "").lower().split()
+                    )
+                key = (player_key, str(prop.get("prop_type") or "").strip().lower())
+                if key in seen_prop_rows:
+                    duplicate_rows.append(
+                        f"{prop.get('player_name', '?')} {prop.get('prop_type', '?')}"
+                    )
+                seen_prop_rows.add(key)
+            if duplicate_rows:
+                self.r.add(CheckResult(
+                    label=f"{sport} duplicate prop rows", status=FAIL,
+                    message=f"{len(duplicate_rows)} duplicate player/prop row(s)",
+                    detail=", ".join(duplicate_rows[:8]), auditor=self.NAME))
+            else:
+                self.r.add(CheckResult(
+                    label=f"{sport} duplicate prop rows", status=PASS,
+                    message=f"All {len(props)} player/prop rows are unique",
+                    auditor=self.NAME))
+
+            # 2. Nonsensical lines OR projections (the 3PT bug was a 6.68
             #    *projection* from reading 3PT attempts instead of makes).
             bad_lines = []
             for p in props:
@@ -1375,7 +1560,7 @@ class PropsAuditor:
                     message=f"All {len(props)} lines within realistic bounds",
                     auditor=self.NAME))
 
-            # 2. Missing/blank required fields (values in wrong/empty cells)
+            # 3. Missing/blank required fields (values in wrong/empty cells)
             missing = [p.get("player_name", "?") for p in props
                        if p.get("projection") is None or p.get("picked_side") in (None, "")
                        or p.get("confidence_score") is None]
@@ -1385,7 +1570,7 @@ class PropsAuditor:
                     message=f"{len(missing)} prop(s) missing projection/pick/confidence",
                     detail=", ".join(missing[:5]), auditor=self.NAME))
 
-            # 3. Over-only props must not show UNDER
+            # 4. Over-only props must not show UNDER
             oo = self.OVER_ONLY.get(sport, set())
             bad_under = [f"{p.get('player_name','?')} {p.get('prop_type')}"
                          for p in props if p.get("prop_type") in oo
@@ -1396,7 +1581,7 @@ class PropsAuditor:
                     message=f"{len(bad_under)} over-only prop(s) show UNDER",
                     detail=", ".join(bad_under[:5]), auditor=self.NAME))
 
-            # 4. Diagnostics integrity
+            # 5. Diagnostics integrity
             try:
                 diag = engine.get_diagnostics(sport)
                 self._audit_diagnostics(sport, diag)
@@ -1910,6 +2095,7 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("cards",      lambda: CardAuditor(session, base, report).run())
     run_auditor("models",     lambda: ModelAuditor(session, base, report).run())
     run_auditor("results",    lambda: ResultsAuditor(session, base, report).run())
+    run_auditor("gamecounts", lambda: GameCountAuditor(session, base, report).run())
     run_auditor("csv",        lambda: CsvAuditor(session, base, report).run())
     # Props auditor imports the engine directly (props API is auth-gated) —
     # not HTTP-dependent, so it runs even if the site is unreachable.
