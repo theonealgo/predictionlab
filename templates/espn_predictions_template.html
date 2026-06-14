@@ -604,7 +604,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
 .mlbpt-scrollwrap{position:relative;}
 .mlbpt-scrollwrap::after{content:"";position:absolute;top:0;right:0;width:44px;height:100%;pointer-events:none;border-radius:0 12px 12px 0;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.96));transition:opacity .2s;}
 .mlbpt-scrollwrap.at-end::after{opacity:0;}
-.mlbpt-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #d3dce6;border-radius:12px;background:#fff;scrollbar-color:#94a3b8 #eef2f7;}
+.mlbpt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;max-height:calc(100vh - 130px);border:1px solid #d3dce6;border-radius:12px;background:#fff;scrollbar-color:#94a3b8 #eef2f7;}
 .mlbpt-scroll::-webkit-scrollbar{height:13px;}
 .mlbpt-scroll::-webkit-scrollbar-track{background:#eef2f7;border-radius:0 0 12px 12px;}
 .mlbpt-scroll::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:7px;border:3px solid #eef2f7;}

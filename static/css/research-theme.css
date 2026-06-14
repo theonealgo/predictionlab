@@ -56,7 +56,14 @@
     font: 800 .62rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     letter-spacing: .18em;
 }
-.pl2-nav { display: flex; gap: 26px; margin-left: auto; }
+.pl2-nav { display: flex; align-items: center; gap: 26px; margin-left: auto; }
+/* Keep the plain Pricing link and the button triggers on the same baseline. */
+.pl2-nav > a,
+.pl2-nav-trigger {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
 .pl2-nav a {
     color: var(--pl-muted);
     font: 800 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
