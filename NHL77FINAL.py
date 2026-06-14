@@ -16268,7 +16268,11 @@ def player_props_api_leagues():
         return redirect('/plans')
     try:
         _, config_mod = _load_props_modules()
-        return jsonify({'leagues': list(getattr(config_mod, 'SUPPORTED_LEAGUES', []))})
+        # Golf props lack per-event player game-log data (coin-flip projections),
+        # so don't offer it as a league option on the props page.
+        _hidden = {'GOLF'}
+        leagues = [lg for lg in getattr(config_mod, 'SUPPORTED_LEAGUES', []) if lg not in _hidden]
+        return jsonify({'leagues': leagues})
     except Exception as exc:
         return jsonify({'detail': f'Props API unavailable: {exc}'}), 503
 
