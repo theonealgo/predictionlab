@@ -1064,9 +1064,18 @@ class ModelAuditor:
             # (The per-card "via [model]" attribution row was intentionally
             # removed; model attribution now lives in the Pick Confidence cells.)
 
-        # Check performance page shows all models
+        # Check performance page shows all models. /performance is premium-gated,
+        # so an unauthenticated fetch lands on the login page — we can't verify the
+        # model table there. Report that as INFO (gated), not a model-missing WARN.
         perf_html = self._fetch("/performance")
-        if perf_html and len(perf_html) > 5000:
+        _gated = ('type="password"' in perf_html.lower()
+                  or 'name="password"' in perf_html.lower())
+        if _gated:
+            self.r.add(CheckResult(
+                label="Performance page", status=INFO,
+                message="Login-gated; model table not checkable while unauthenticated",
+                auditor=self.NAME))
+        elif perf_html and len(perf_html) > 5000:
             for model in ["Grinder2", "Takedown", "Edge", "XSharp", "Consensus"]:
                 if model.lower() in perf_html.lower():
                     self.r.add(CheckResult(
