@@ -13603,32 +13603,39 @@ def _build_landing_preview_context():
         predictions_logged = _conn.execute(
             "SELECT COUNT(*) FROM predictions"
         ).fetchone()[0]
+        # Most recent CORRECT model pick. Derive the pick from win_probability
+        # (home-win prob): >=0.5 means the model favored home, else away. Most
+        # stored predictions have predicted_winner = NULL, so relying on that
+        # column made this fall back to a months-old game.
         _graded_row = _conn.execute(
             """
             SELECT p.sport, p.game_date, p.away_team_id, p.home_team_id,
-                   p.predicted_winner, p.win_probability,
-                   g.away_score, g.home_score
+                   p.win_probability, g.away_score, g.home_score
             FROM predictions p
             JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
             WHERE g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-              AND p.win_probability >= 0.5
+              AND g.home_score != g.away_score
+              AND p.win_probability IS NOT NULL
               AND (
-                (p.predicted_winner = p.home_team_id AND g.home_score > g.away_score)
+                (p.win_probability >= 0.5 AND g.home_score > g.away_score)
                 OR
-                (p.predicted_winner = p.away_team_id AND g.away_score > g.home_score)
+                (p.win_probability < 0.5 AND g.away_score > g.home_score)
               )
-            ORDER BY g.updated_at DESC, g.id DESC
+            ORDER BY date(g.game_date) DESC, g.id DESC
             LIMIT 1
             """
         ).fetchone()
         if _graded_row:
+            _wp = float(_graded_row['win_probability'] or 0)
+            _wp_pct = _wp * 100 if _wp <= 1 else _wp
+            _home_pick = _wp_pct >= 50.0
             latest_graded_game = {
                 'sport': _graded_row['sport'],
                 'date': _graded_row['game_date'],
                 'away': _graded_row['away_team_id'],
                 'home': _graded_row['home_team_id'],
-                'pick': _graded_row['predicted_winner'],
-                'probability': round(float(_graded_row['win_probability'] or 0) * (100 if float(_graded_row['win_probability'] or 0) <= 1 else 1), 1),
+                'pick': _graded_row['home_team_id'] if _home_pick else _graded_row['away_team_id'],
+                'probability': round(_wp_pct if _home_pick else (100 - _wp_pct), 1),
                 'away_score': _graded_row['away_score'],
                 'home_score': _graded_row['home_score'],
             }
