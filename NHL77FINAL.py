@@ -13058,6 +13058,15 @@ def _build_all_sports_dashboard_rows(snapshots):
         overall = snap.get('overall_stats') or {}
         st = snap.get('spread_total_stats') or {}
         games_in_scope = int(snap.get('games_in_scope') or 0)
+        # Skip sports we don't actually track yet — no games AND no graded model
+        # results (e.g. Golf, which isn't a head-to-head moneyline sport). Showing
+        # "No games yet" for a sport that will never have head-to-head games here
+        # is misleading, so we omit the row entirely.
+        if games_in_scope <= 0 and not any(
+            int((overall.get(key) or {}).get('total') or 0) > 0
+            for key, _ in _ML_DASHBOARD_MODELS
+        ):
+            continue
         ml_cols = {
             key: _fmt_snapshot_ml_cell(overall, key) for key, _ in _ML_DASHBOARD_MODELS
         }
