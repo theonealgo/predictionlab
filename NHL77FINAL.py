@@ -7511,34 +7511,6 @@ def get_upcoming_predictions(sport, days=365):
                     _sx = _to_float_safe(game.get('stored_xgb_prob'))
                     _se = _to_float_safe(game.get('stored_ensemble_prob'))
                     _selo = _to_float_safe(game.get('stored_elo_prob'))
-                    # Grinder2 (glicko2) and Takedown (trueskill) are never stored
-                    # in the DB — those columns are unset for EVERY prediction — so
-                    # a completed game on the picks page (the page shows the last 10
-                    # days too) would render blank Grinder2/Takedown and a junk 0.5
-                    # Edge. Backfill from the same frozen grading source the results
-                    # page uses, so recent completed picks show real, consistent
-                    # numbers (and the WNBA flip carries over too).
-                    if _sg is None or _st is None:
-                        _gdk = _normalize_game_date_key(game.get('game_date'))
-                        _g2g, _tsg, _elog, _xgg, _eng = _model_probs_for_grading(
-                            sport, game,
-                            game.get('home_team_id') or game.get('home_team_name'),
-                            game.get('away_team_id') or game.get('away_team_name'),
-                            _gdk,
-                        )
-                        if _sg is None:
-                            _sg = _g2g
-                        if _st is None:
-                            _st = _tsg
-                        if _sx is None:
-                            _sx = _xgg
-                        if _se is None:
-                            _se = _eng
-                        # stored elo is often a 0.5 placeholder for these rows;
-                        # prefer the grading elo so Edge isn't a meaningless 50%.
-                        if _elog is not None and (_selo is None or abs(_selo - 0.5) < 1e-9):
-                            _selo = _elog
-                            game['stored_elo_prob'] = _elog
                     if any(p is not None for p in (_sg, _st, _sx, _se, _selo)):
                         v2_pred = {
                             'glicko2_prob': _sg,
