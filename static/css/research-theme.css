@@ -73,7 +73,9 @@
 }
 .pl2-nav a:hover { color: var(--pl-ink); }
 /* Nav dropdowns: Picks (sports) / Models (tools) / Results — click to open. */
-.pl2-navdrop { position: relative; }
+/* inline-flex + center so the trigger button sits on the SAME line as the
+   plain Pricing link (block wrapper put it in a taller line box, ~1.7px low). */
+.pl2-navdrop { position: relative; display: inline-flex; align-items: center; }
 .pl2-nav-trigger {
     border: none;
     background: transparent;
