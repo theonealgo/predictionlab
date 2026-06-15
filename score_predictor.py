@@ -85,7 +85,10 @@ class ScorePredictor:
         """Fetch all team stats for a sport from ESPN API"""
         endpoint = self.ESPN_ENDPOINTS.get(sport)
         if not endpoint:
-            logger.error(f"No ESPN endpoint for sport: {sport}")
+            # Some sports (e.g. SOCCER) don't use ESPN team stats — they have
+            # their own model bundle. Returning {} is handled by callers; this
+            # is expected, so log at debug to avoid false-alarm ERROR noise.
+            logger.debug(f"No ESPN team-stats endpoint for sport: {sport} (uses its own model)")
             return {}
         
         url = f"https://site.api.espn.com/apis/site/v2/sports/{endpoint}/teams"

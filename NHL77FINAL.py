@@ -4624,6 +4624,18 @@ def add_header(response):
 import os as _os
 _DATA_DIR = '/data' if _os.path.isdir('/data') else '.'
 DATABASE = _os.path.join(_DATA_DIR, 'sports_predictions_original.db')
+# Enable WAL up front — BEFORE init_auth or any other code opens a connection,
+# so the journal-mode switch actually takes (it can't switch while another
+# connection holds the DB in rollback-journal mode). WAL lets the request
+# threads and the background score-sync threads read/write concurrently, which
+# is what was causing "database is locked" on visit logging and score inserts.
+try:
+    _wal_conn = sqlite3.connect(DATABASE, timeout=30)
+    _wal_conn.execute("PRAGMA journal_mode=WAL")
+    _wal_conn.execute("PRAGMA synchronous=NORMAL")
+    _wal_conn.close()
+except Exception:
+    pass
 # Absolute path to this file's directory — used for template loading
 _BASE_DIR = _os.path.dirname(_os.path.abspath(__file__))
 ODDS_ENGINE_URL = _os.environ.get('ODDS_ENGINE_URL')
@@ -4640,22 +4652,35 @@ def _traffic_now():
         return datetime.now()
 
 def log_site_visit(endpoint):
-    """Track site visits for analytics"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        visit_date = _traffic_now().strftime('%Y-%m-%d')
-        ip_address = request.remote_addr if request else None
-        user_agent = request.headers.get('User-Agent') if request else None
-        
-        cursor.execute('''
-            INSERT INTO site_visits (visit_date, ip_address, user_agent, endpoint)
-            VALUES (?, ?, ?, ?)
-        ''', (visit_date, ip_address, user_agent, endpoint))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error logging site visit: {e}")
+    """Track site visits for analytics (best-effort).
+
+    Runs on every request, so under a concurrent burst many tiny INSERTs race
+    the background sync writers. A dropped analytics row is harmless, so retry a
+    couple of times and then give up quietly — never raise, never log an ERROR
+    (that was just noise for a non-critical write)."""
+    visit_date = _traffic_now().strftime('%Y-%m-%d')
+    ip_address = request.remote_addr if request else None
+    user_agent = request.headers.get('User-Agent') if request else None
+    for _attempt in range(3):
+        try:
+            conn = get_db_connection()
+            conn.execute('''
+                INSERT INTO site_visits (visit_date, ip_address, user_agent, endpoint)
+                VALUES (?, ?, ?, ?)
+            ''', (visit_date, ip_address, user_agent, endpoint))
+            conn.commit()
+            conn.close()
+            return
+        except Exception as e:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            if 'locked' in str(e).lower() and _attempt < 2:
+                _time.sleep(0.15)
+                continue
+            logger.debug(f"site visit not logged (non-critical): {e}")
+            return
 
 SPORTS = {
     'NHL':    {'name': 'NHL',                       'icon': '🏒', 'color': '#1e3a8a'},
@@ -5979,15 +6004,33 @@ def update_wnba_scores():
     update_espn_scores('WNBA')
 
 def get_db_connection():
-    """Get database connection"""
-    conn = sqlite3.connect(DATABASE)
+    """Get database connection.
+
+    WAL + a generous busy_timeout let the background score-sync threads and the
+    request threads share the DB without raising "database is locked": WAL lets
+    readers run concurrently with a writer, and busy_timeout makes a blocked
+    writer WAIT (up to 30s) for the lock instead of failing immediately.
+    """
+    conn = sqlite3.connect(DATABASE, timeout=30)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA busy_timeout=30000")
+    except Exception:
+        pass
     return conn
 
 
 def init_db():
     """Create all tables if they don't exist (safe to run on every startup)."""
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE, timeout=30)
+    # WAL persists on the DB file, so every later connection (including the
+    # background sync threads) gets concurrent reads + non-blocking readers.
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=30000")
+    except Exception:
+        pass
     conn.executescript('''
         CREATE TABLE IF NOT EXISTS games (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -6002,7 +6045,8 @@ def init_db():
             game_date TEXT, home_team_id TEXT, away_team_id TEXT,
             elo_home_prob REAL, xgboost_home_prob REAL,
             logistic_home_prob REAL, meta_home_prob REAL,
-            win_probability REAL, locked INTEGER DEFAULT 0
+            win_probability REAL, predicted_winner TEXT,
+            predicted_total REAL, locked INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS site_visits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18886,16 +18930,30 @@ def _build_daily_report_sport_tally(sport_key, report_date):
                 'home_win': home_won, 'is_draw': is_draw,
                 'glicko2_prob': round(glicko2_prob * 100, 1) if glicko2_prob is not None else None,
                 'trueskill_prob': round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
-                'elo_prob': round(elo_prob * 100, 1),
-                'xgb_prob': round(xgb_prob * 100, 1),
-                'ens_prob': round(ens_prob * 100, 1),
-                'glicko2_correct': (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None,
-                'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-                'elo_correct': (elo_prob >= 0.5) == home_won if home_won is not None else None,
-                'xgb_correct': (xgb_prob >= 0.5) == home_won if home_won is not None else None,
-                'ens_correct': (ens_prob >= 0.5) == home_won if home_won is not None else None,
-                'skip_grading': True if home_won is None else False,
+                'elo_prob': round(elo_prob * 100, 1) if elo_prob is not None else None,
+                'xgb_prob': round(xgb_prob * 100, 1) if xgb_prob is not None else None,
+                'ens_prob': round(ens_prob * 100, 1) if ens_prob is not None else None,
             }
+            if sport_key == 'SOCCER':
+                # Grade 3-way (home/draw/away) so draws are COUNTED, not skipped
+                # — same fix as the results page. Use real draw prob if a soccer
+                # bundle predicted one, else the league-average fallback.
+                _draw_dec = _SOCCER_DEFAULT_DRAW_RATE if ens_prob is not None else None
+                _apply_soccer_ml_grading(
+                    game_info, draw_dec=_draw_dec,
+                    glicko2_prob=glicko2_prob, trueskill_prob=trueskill_prob,
+                    elo_prob=elo_prob, xgb_prob=xgb_prob, ens_prob=ens_prob,
+                    home_won=home_won, is_draw=is_draw,
+                )
+            else:
+                game_info.update({
+                    'glicko2_correct': (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None,
+                    'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
+                    'elo_correct': (elo_prob >= 0.5) == home_won if elo_prob is not None and home_won is not None else None,
+                    'xgb_correct': (xgb_prob >= 0.5) == home_won if xgb_prob is not None and home_won is not None else None,
+                    'ens_correct': (ens_prob >= 0.5) == home_won if ens_prob is not None and home_won is not None else None,
+                    'skip_grading': True if home_won is None else False,
+                })
             daily_results[game_date]['games'].append(game_info)
         try:
             _compute_spread_total_for_daily(sport_key, daily_results, skip_efficiency=True)

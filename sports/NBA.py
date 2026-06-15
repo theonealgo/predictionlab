@@ -70,10 +70,18 @@ def calculate_nba_weekly_performance():
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         prob_sql = m._predictions_prob_select_sql(conn)
 
+        # predicted_total is absent from freshly-created/older predictions
+        # tables; select NULL in that case so the query never errors with
+        # "no such column: p.predicted_total".
+        _pred_cols = {row[1] for row in conn.execute(
+            "PRAGMA table_info(predictions)").fetchall()}
+        _pt_sql = ("p.predicted_total" if "predicted_total" in _pred_cols
+                   else "NULL AS predicted_total")
+
         games = conn.execute(f'''
             SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
-                   p.predicted_total,
+                   {_pt_sql},
                    {prob_sql}
             FROM games g
             LEFT JOIN predictions p
