@@ -131,7 +131,7 @@ def _make_session() -> requests.Session:
 
 HTTP_DEPENDENT_AUDITORS = frozenset({
     "routes", "content", "navigation", "cards", "models", "results", "csv",
-    "gamecounts", "screenshots",
+    "gamecounts", "screenshots", "seo",
 })
 
 
@@ -1203,6 +1203,34 @@ class ResultsAuditor:
                 message=f"No fabricated/anomalous records over the sample threshold",
                 auditor=self.NAME))
 
+        # Sub-50% model watch: any model whose moneyline win-rate is UNDER 50%
+        # over a meaningful sample is losing money and must be surfaced (a model
+        # that loses >50% should usually be flipped, like the WNBA flip). Uses
+        # the already-parsed pct+record pairs so it reflects exactly what the
+        # page displays. Reported as WARN (advisory, not a hard failure).
+        SUB50_MIN_N = 15
+        under_50 = []
+        for pct_str, w_str, l_str in pairs:
+            w, l = int(w_str), int(l_str)
+            n = w + l
+            if n < SUB50_MIN_N:
+                continue
+            if float(pct_str) < 50.0:
+                under_50.append(f"{w}-{l} ({pct_str}%)")
+        # De-dupe while preserving order (same record can repeat across cells)
+        under_50 = list(dict.fromkeys(under_50))
+        if under_50:
+            self.r.add(CheckResult(
+                label="Models under 50%", status=WARN,
+                message=f"{len(under_50)} model record(s) below 50% over "
+                        f"{SUB50_MIN_N}+ games — losing money, consider flipping",
+                detail=", ".join(under_50[:12]), auditor=self.NAME))
+        else:
+            self.r.add(CheckResult(
+                label="Models under 50%", status=PASS,
+                message=f"No model below 50% over the {SUB50_MIN_N}+ game threshold",
+                auditor=self.NAME))
+
         # Check daily report
         daily_html = self._fetch("/daily-report")
         if daily_html and len(daily_html) > 5000:
@@ -1371,6 +1399,103 @@ class GameCountAuditor:
                             auditor=self.NAME, url='/' + slug))
         finally:
             conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SEO AUDITOR
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SeoAuditor:
+    """Check core on-page SEO on key public pages: <title>, meta description,
+    a single <h1>, canonical link, Open Graph tags, and robots noindex. These
+    are the things that silently tank search ranking if they regress."""
+    NAME = "seo"
+
+    # Public, indexable pages that matter most for organic search.
+    PAGES = [
+        "/", "/nba-picks", "/nhl-picks", "/mlb-picks", "/soccer-picks",
+        "/wnba-picks", "/all-sports-results", "/plans",
+    ]
+
+    def __init__(self, session: requests.Session, base: str, report: AuditReport):
+        self.s = session
+        self.base = base
+        self.r = report
+
+    def _fetch(self, path: str) -> str:
+        try:
+            return self.s.get(urljoin(self.base, path),
+                              timeout=REQUEST_TIMEOUT, allow_redirects=True).text
+        except Exception:
+            return ""
+
+    def run(self):
+        for path in self.PAGES:
+            html = self._fetch(path)
+            if not html or len(html) < 1500:
+                self.r.add(CheckResult(
+                    label=f"SEO: {path}", status=WARN,
+                    message="page did not load for SEO check",
+                    url=path, auditor=self.NAME))
+                continue
+            low = html.lower()
+            problems = []
+
+            # <title> present and non-trivial
+            m_title = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+            title = (m_title.group(1).strip() if m_title else "")
+            if not title:
+                problems.append("missing <title>")
+            elif len(title) < 10:
+                problems.append(f"title too short ({len(title)} chars)")
+            elif len(title) > 70:
+                problems.append(f"title too long ({len(title)} chars)")
+
+            # meta description
+            m_desc = re.search(
+                r'<meta[^>]+name=["\']description["\'][^>]*content=["\']([^"\']*)',
+                html, re.I)
+            desc = (m_desc.group(1).strip() if m_desc else "")
+            if not desc:
+                problems.append("missing meta description")
+            elif len(desc) < 50:
+                problems.append(f"meta description too short ({len(desc)} chars)")
+
+            # exactly one <h1>
+            h1s = re.findall(r"<h1[\s>]", low)
+            if len(h1s) == 0:
+                problems.append("no <h1>")
+            elif len(h1s) > 1:
+                problems.append(f"{len(h1s)} <h1> tags (should be 1)")
+
+            # canonical
+            if 'rel="canonical"' not in low and "rel='canonical'" not in low:
+                problems.append("missing canonical link")
+
+            # Open Graph (social share)
+            if 'property="og:title"' not in low and "property='og:title'" not in low:
+                problems.append("missing og:title")
+
+            # accidental noindex on an indexable page = critical
+            noindex = bool(re.search(
+                r'<meta[^>]+name=["\']robots["\'][^>]*content=["\'][^"\']*noindex',
+                html, re.I))
+
+            if noindex:
+                self.r.add(CheckResult(
+                    label=f"SEO noindex: {path}", status=FAIL,
+                    message="page is marked noindex but should be indexable",
+                    url=path, auditor=self.NAME))
+            if problems:
+                self.r.add(CheckResult(
+                    label=f"SEO: {path}", status=WARN,
+                    message=f"{len(problems)} SEO issue(s)",
+                    detail="; ".join(problems), url=path, auditor=self.NAME))
+            elif not noindex:
+                self.r.add(CheckResult(
+                    label=f"SEO: {path}", status=PASS,
+                    message="title, description, single h1, canonical, og:title OK",
+                    url=path, auditor=self.NAME))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2099,6 +2224,7 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("results",    lambda: ResultsAuditor(session, base, report).run())
     run_auditor("gamecounts", lambda: GameCountAuditor(session, base, report).run())
     run_auditor("csv",        lambda: CsvAuditor(session, base, report).run())
+    run_auditor("seo",        lambda: SeoAuditor(session, base, report).run())
     # Props auditor imports the engine directly (props API is auth-gated) —
     # not HTTP-dependent, so it runs even if the site is unreachable.
     run_auditor("props",      lambda: PropsAuditor(report).run())
