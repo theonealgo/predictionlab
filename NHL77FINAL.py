@@ -1580,9 +1580,15 @@ def _recompute_daily_ml_grading_after_fade(g: dict, sport: str) -> None:
         el = _prob_as_fraction(g.get('elo_prob'))
         xg = _prob_as_fraction(g.get('xgb_prob'))
         ens = _prob_as_fraction(g.get('ens_prob'))
+        # Preserve 3-way draw grading on re-grade: use the card's stored draw
+        # prob, else the league-average fallback, so draws aren't re-skipped
+        # (draw_dec=None would force the 2-way path and drop every draw again).
+        _draw_dec = _prob_as_fraction(g.get('draw_prob'))
+        if _draw_dec is None and ens is not None:
+            _draw_dec = _SOCCER_DEFAULT_DRAW_RATE
         _apply_soccer_ml_grading(
             g,
-            draw_dec=None,
+            draw_dec=_draw_dec,
             glicko2_prob=g2,
             trueskill_prob=ts,
             elo_prob=el,
