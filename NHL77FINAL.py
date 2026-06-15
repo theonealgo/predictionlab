@@ -10753,7 +10753,7 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             {% for key, label in ml_models %}
                             {% set c = row.ml[key] %}
                             <td>
-                                {% if c.pct is not none %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<span class="asr-info" title="Number of Games"> ⓘ</span></div>{% elif c.n %}<div class="asr-rec" style="color:#94a3b8;">{{ c.record }} <span style="font-size:0.72em;" title="Sample too small to report a win rate">(n&lt;20)</span></div>{% elif c.status == 'no_games' %}<span class="asr-status">No games yet</span>{% else %}<span class="asr-status">Not tracked</span>{% endif %}
+                                {% if c.pct is not none %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<button type="button" class="pl-info" aria-label="What does this mean?" data-info-title="Win–loss record" data-info="The number below each percentage is that model's win–loss record — the count of games graded in this view (e.g. 16-12 means 16 correct, 12 wrong over 28 games). The percentage above it is wins ÷ games graded. Only completed games with a final score are counted.">ⓘ</button></div>{% elif c.n %}<div class="asr-rec" style="color:#94a3b8;">{{ c.record }} <span style="font-size:0.72em;" title="Sample too small to report a win rate">(n&lt;20)</span></div>{% elif c.status == 'no_games' %}<span class="asr-status">No games yet</span>{% else %}<span class="asr-status">Not tracked</span>{% endif %}
                             </td>
                             {% endfor %}
                         </tr>
@@ -10774,7 +10774,7 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <td><a class="sport-link" href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
                             {% for col in ('spread_xsharp', 'spread_pl') %}
                             {% set c = row[col] %}
-                            <td>{% if c.pct is not none %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<span class="asr-info" title="Number of Games"> ⓘ</span></div>{% elif c.n %}<div class="asr-rec" style="color:#94a3b8;">{{ c.record }} <span style="font-size:0.72em;" title="Sample too small to report a win rate">(n&lt;20)</span></div>{% elif c.status == 'no_games' %}<span class="asr-status">No games yet</span>{% else %}<span class="asr-status">Not tracked</span>{% endif %}</td>
+                            <td>{% if c.pct is not none %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<button type="button" class="pl-info" aria-label="What does this mean?" data-info-title="Win–loss record" data-info="The number below each percentage is that model's win–loss record — the count of games graded in this view (e.g. 16-12 means 16 correct, 12 wrong over 28 games). The percentage above it is wins ÷ games graded. Only completed games with a final score are counted.">ⓘ</button></div>{% elif c.n %}<div class="asr-rec" style="color:#94a3b8;">{{ c.record }} <span style="font-size:0.72em;" title="Sample too small to report a win rate">(n&lt;20)</span></div>{% elif c.status == 'no_games' %}<span class="asr-status">No games yet</span>{% else %}<span class="asr-status">Not tracked</span>{% endif %}</td>
                             {% endfor %}
                         </tr>
                         {% endfor %}
@@ -10794,7 +10794,7 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                             <td><a class="sport-link" href="{{ row.results_url }}">{{ row.icon }} {{ row.name }}</a></td>
                             {% for col in ('ou_xsharp', 'ou_pl') %}
                             {% set c = row[col] %}
-                            <td>{% if c.pct is not none %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<span class="asr-info" title="Number of Games"> ⓘ</span></div>{% elif c.n %}<div class="asr-rec" style="color:#94a3b8;">{{ c.record }} <span style="font-size:0.72em;" title="Sample too small to report a win rate">(n&lt;20)</span></div>{% elif c.status == 'no_games' %}<span class="asr-status">No games yet</span>{% else %}<span class="asr-status">Not tracked</span>{% endif %}</td>
+                            <td>{% if c.pct is not none %}<div class="asr-pct">{{ c.pct }}%</div><div class="asr-rec">{{ c.record }}<button type="button" class="pl-info" aria-label="What does this mean?" data-info-title="Win–loss record" data-info="The number below each percentage is that model's win–loss record — the count of games graded in this view (e.g. 16-12 means 16 correct, 12 wrong over 28 games). The percentage above it is wins ÷ games graded. Only completed games with a final score are counted.">ⓘ</button></div>{% elif c.n %}<div class="asr-rec" style="color:#94a3b8;">{{ c.record }} <span style="font-size:0.72em;" title="Sample too small to report a win rate">(n&lt;20)</span></div>{% elif c.status == 'no_games' %}<span class="asr-status">No games yet</span>{% else %}<span class="asr-status">Not tracked</span>{% endif %}</td>
                             {% endfor %}
                         </tr>
                         {% endfor %}
@@ -10805,6 +10805,41 @@ ALL_SPORTS_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div style="display:flex;justify-content:center;margin:20px 0 4px;">
             <button type="button" class="asr-copy-btn" onclick="copyAllSportsResults()">📋 Copy All</button>
         </div>
+        <!-- ── Clickable info popover (the ⓘ buttons) ── -->
+        <style>
+          .pl-info{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid #94a3b8;background:#fff;color:#475569;font-size:0.7em;font-weight:800;line-height:1;padding:0;margin-left:3px;cursor:pointer;vertical-align:middle;transition:background .15s,color .15s,border-color .15s;}
+          .pl-info:hover,.pl-info:focus{background:#00529B;color:#fff;border-color:#00529B;outline:none;}
+          #plInfoOverlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99999;align-items:center;justify-content:center;padding:18px;}
+          #plInfoOverlay.open{display:flex;}
+          #plInfoBox{background:#fff;border-radius:16px;max-width:460px;width:100%;padding:22px 22px 18px;box-shadow:0 24px 60px rgba(15,23,42,0.35);}
+          #plInfoBox h3{margin:0 0 10px;font-size:1.12em;color:#0f172a;}
+          #plInfoBox p{margin:0;font-size:0.95em;line-height:1.55;color:#334155;}
+          #plInfoBox .pl-info-close{margin-top:16px;display:inline-flex;align-items:center;justify-content:center;width:100%;padding:10px 14px;border:none;border-radius:10px;background:#00529B;color:#fff;font-weight:700;font-size:0.92em;cursor:pointer;}
+          #plInfoBox .pl-info-close:hover{background:#003d75;}
+        </style>
+        <div id="plInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="plInfoTitle">
+          <div id="plInfoBox">
+            <h3 id="plInfoTitle">Info</h3>
+            <p id="plInfoBody"></p>
+            <button type="button" class="pl-info-close">Got it</button>
+          </div>
+        </div>
+        <script>
+        (function(){
+          var ov=document.getElementById('plInfoOverlay');
+          if(!ov||ov.dataset.wired)return; ov.dataset.wired='1';
+          var titleEl=document.getElementById('plInfoTitle');
+          var bodyEl=document.getElementById('plInfoBody');
+          function open(t,b){titleEl.textContent=t||'Info';bodyEl.textContent=b||'';ov.classList.add('open');}
+          function close(){ov.classList.remove('open');}
+          document.addEventListener('click',function(e){
+            var btn=e.target.closest&&e.target.closest('.pl-info');
+            if(btn){e.preventDefault();e.stopPropagation();open(btn.getAttribute('data-info-title'),btn.getAttribute('data-info'));return;}
+            if(e.target===ov||(e.target.closest&&e.target.closest('.pl-info-close'))){close();}
+          });
+          document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+        })();
+        </script>
         <script>
         function copyAllSportsResults(){
             const sections=[...document.querySelectorAll('.asr-section')];
@@ -11873,7 +11908,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#00C076{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <button type="button" class="pl-info" aria-label="What does this mean?" data-info-title="Moneyline accuracy" data-info="This is how often the highlighted model's outright winner pick was correct across every graded game in this view. The record shown is wins–losses, and the percentage is wins ÷ games graded. Only completed games with a final score are counted. For soccer, the draw is graded as a third possible outcome, so a pick is only correct if it called the actual home win, away win, or draw.">ⓘ</button></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
                     <div style="font-size:0.85em;color:#64748b;">—</div>
@@ -11883,7 +11918,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#00C076{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <button type="button" class="pl-info" aria-label="What does this mean?" data-info-title="Spread accuracy" data-info="This is how often our spread pick covered — the team we backed beat the point spread (or stayed within it for an underdog). The record shown is covers–non-covers over every graded game, and the percentage is covers ÷ games graded. Games that land exactly on the line (pushes) are excluded.">ⓘ</button></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
                     <div style="font-size:0.85em;color:#64748b;">not graded yet</div>
@@ -11893,7 +11928,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#00C076{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <button type="button" class="pl-info" aria-label="What does this mean?" data-info-title="Over/Under accuracy" data-info="This is how often our total (Over/Under) pick was correct — i.e. the combined final score landed on the side of the posted total we picked. The record shown is correct–incorrect over every graded game, and the percentage is correct ÷ games graded. Totals that land exactly on the line (pushes) are excluded.">ⓘ</button></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
                     <div style="font-size:0.85em;color:#64748b;">not graded yet</div>
@@ -11902,6 +11937,43 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             </div>
             <div style="border-top:1px solid rgba(15,23,42,0.12);padding-top:12px;"></div>
         </div>
+
+        <!-- ── Clickable info popover (the ⓘ buttons) ── -->
+        <style>
+          .pl-info{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid #94a3b8;background:#fff;color:#475569;font-size:0.7em;font-weight:800;line-height:1;padding:0;margin-left:3px;cursor:pointer;vertical-align:middle;transition:background .15s,color .15s,border-color .15s;}
+          .pl-info:hover,.pl-info:focus{background:#00529B;color:#fff;border-color:#00529B;outline:none;}
+          #plInfoOverlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99999;align-items:center;justify-content:center;padding:18px;}
+          #plInfoOverlay.open{display:flex;}
+          #plInfoBox{background:#fff;border-radius:16px;max-width:460px;width:100%;padding:22px 22px 18px;box-shadow:0 24px 60px rgba(15,23,42,0.35);}
+          #plInfoBox h3{margin:0 0 10px;font-size:1.12em;color:#0f172a;}
+          #plInfoBox p{margin:0;font-size:0.95em;line-height:1.55;color:#334155;}
+          #plInfoBox .pl-info-close{margin-top:16px;display:inline-flex;align-items:center;justify-content:center;width:100%;padding:10px 14px;border:none;border-radius:10px;background:#00529B;color:#fff;font-weight:700;font-size:0.92em;cursor:pointer;}
+          #plInfoBox .pl-info-close:hover{background:#003d75;}
+        </style>
+        <div id="plInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="plInfoTitle">
+          <div id="plInfoBox">
+            <h3 id="plInfoTitle">Info</h3>
+            <p id="plInfoBody"></p>
+            <button type="button" class="pl-info-close">Got it</button>
+          </div>
+        </div>
+        <script>
+        (function(){
+          var ov=document.getElementById('plInfoOverlay');
+          if(!ov||ov.dataset.wired)return; ov.dataset.wired='1';
+          var titleEl=document.getElementById('plInfoTitle');
+          var bodyEl=document.getElementById('plInfoBody');
+          function open(t,b){titleEl.textContent=t||'Info';bodyEl.textContent=b||'';ov.classList.add('open');}
+          function close(){ov.classList.remove('open');}
+          // Delegated so it covers every .pl-info button on the page.
+          document.addEventListener('click',function(e){
+            var btn=e.target.closest&&e.target.closest('.pl-info');
+            if(btn){e.preventDefault();e.stopPropagation();open(btn.getAttribute('data-info-title'),btn.getAttribute('data-info'));return;}
+            if(e.target===ov||(e.target.closest&&e.target.closest('.pl-info-close'))){close();}
+          });
+          document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+        })();
+        </script>
 
         {% if playoff_perf is defined and playoff_perf %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
