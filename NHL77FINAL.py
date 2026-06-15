@@ -3045,6 +3045,14 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _set_efficiency_prob_on_card(pred, sport=sport)
     _prepare_pred_card_face(pred, sport=sport)
     _sync_card_display_to_face_pick(pred, sport=sport)
+    # WNBA: flip the three underperforming models (Grinder2/Takedown/XSharp) on
+    # the displayed pick cards so Pick Confidence matches the flipped grading.
+    # Probs here are 0-100. Consensus/Edge/Efficiency are left unchanged.
+    if sport == 'WNBA':
+        for _k in ('glicko2_prob', 'trueskill_prob', 'xgb_prob'):
+            _v = _safe_float(pred.get(_k))
+            if _v is not None:
+                pred[_k] = round(100.0 - _v, 1)
 
 
 def _attach_soccer_ev_to_pred(pred: dict) -> None:
@@ -3910,7 +3918,21 @@ def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_ke
         if v2:
             ens_prob = _to_float_safe(v2.get('home_prob'))
 
+    # WNBA: Grinder2 (glicko2), Takedown (trueskill) and XSharp (xgb) grade well
+    # below 50% on moneyline, so flip their pick side for WNBA ONLY. Done after the
+    # ensemble is set so Consensus/Edge/Efficiency are unchanged. Probs are 0-1.
+    if sport == 'WNBA':
+        glicko2_prob = _flip_prob_unit(glicko2_prob)
+        trueskill_prob = _flip_prob_unit(trueskill_prob)
+        xgb_prob = _flip_prob_unit(xgb_prob)
+
     return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
+
+
+def _flip_prob_unit(p):
+    """Flip a 0-1 win probability to the opposite side (None-safe)."""
+    v = _to_float_safe(p)
+    return None if v is None else (1.0 - v)
 
 
 def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, skip_v2=None, skip_weekly=False):
@@ -13583,6 +13605,164 @@ def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
 def _get_latest_blog_post(todays_picks=None) -> dict:
     posts = _get_blog_posts(include_generated=True, todays_picks=todays_picks)
     return posts[0] if posts else _generate_daily_blog_post(todays_picks=todays_picks)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Daily Prediction Reel — vertical 9:16 animated scoreboard videos for TikTok/IG.
+# Reads EXISTING predicted scores (no model changes). Screen-record on iPhone,
+# or use the in-page recorder on Android/desktop.
+# ──────────────────────────────────────────────────────────────────────────
+
+def _predicted_score(p):
+    """Best available predicted (home, away) final score from a prediction dict."""
+    h = p.get('xgb_home_score'); a = p.get('xgb_away_score')
+    if h is not None and a is not None:
+        return float(h), float(a)
+    sp = p.get('our_spread') if p.get('our_spread') is not None else p.get('xgb_spread')
+    tot = p.get('our_total') if p.get('our_total') is not None else p.get('xgb_total')
+    if sp is not None and tot is not None:
+        try:
+            return _scores_from_spread_total(float(sp), float(tot))
+        except Exception:
+            return None, None
+    return None, None
+
+
+def _build_reel_games(limit=4):
+    """Today's upcoming SOCCER + MLB games with predicted final scores (max `limit`)."""
+    from datetime import datetime as _dt
+    today = _dt.now().date()
+    buckets = {}
+    for sport in ('SOCCER', 'MLB'):
+        rows = []
+        try:
+            preds = get_upcoming_predictions(sport) or []
+        except Exception as _e:
+            logger.debug(f"[reel] {sport} predictions failed: {_e}")
+            preds = []
+        for p in preds:
+            if not isinstance(p, dict) or p.get('home_score') is not None:
+                continue
+            gd = p.get('game_date')
+            try:
+                gdd = parse_date(gd).date() if gd else None
+            except Exception:
+                gdd = None
+            if gdd != today:
+                continue
+            hsc, asc = _predicted_score(p)
+            if hsc is None or asc is None:
+                continue
+            rows.append({
+                'sport': sport,
+                'home': str(p.get('home_team_name') or p.get('home_team') or p.get('home_team_id') or 'Home'),
+                'away': str(p.get('away_team_name') or p.get('away_team') or p.get('away_team_id') or 'Away'),
+                'home_score': max(0, int(round(hsc))),
+                'away_score': max(0, int(round(asc))),
+            })
+        buckets[sport] = rows
+    out = []
+    s, m = buckets.get('SOCCER', []), buckets.get('MLB', [])
+    i = 0
+    while len(out) < limit and (i < len(s) or i < len(m)):
+        if i < len(s):
+            out.append(s[i])
+        if len(out) < limit and i < len(m):
+            out.append(m[i])
+        i += 1
+    return out[:limit]
+
+
+_REEL_HTML = r'''<!doctype html><html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PredictionLab — Daily Reel</title>
+<style>
+ html,body{margin:0;background:#0a0e17;color:#fff;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;min-height:100%;}
+ #wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px;box-sizing:border-box;}
+ canvas{background:#0a0e17;width:auto;height:78vh;max-width:100%;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,.55);}
+ .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+ button{font-size:16px;font-weight:800;padding:13px 20px;border:none;border-radius:12px;background:#7c3aed;color:#fff;cursor:pointer;}
+ button.alt{background:#1f2937;}
+ .hint{font-size:13px;color:#9aa4b2;max-width:540px;text-align:center;line-height:1.45;}
+ a#dl{display:none;color:#22c55e;font-weight:800;text-decoration:none;}
+</style></head><body>
+<div id="wrap">
+ <canvas id="c" width="1080" height="1920"></canvas>
+ <div class="row">
+   <button id="play">▶ Play reel</button>
+   <button id="rec" class="alt">⬇ Record &amp; save video</button>
+ </div>
+ <div class="hint"><b>iPhone:</b> open Control Center → start Screen Recording → tap <b>Play reel</b>. The recording saves to Photos for TikTok/Instagram.<br>Android/desktop: tap <b>Record &amp; save video</b>.</div>
+ <a id="dl"></a>
+</div>
+<script>
+var GAMES = __GAMES_JSON__;
+var cv=document.getElementById('c'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height;
+var GAME_MS=5200, GAP_MS=600;
+function buildEvents(g){
+  var order=[], hi=g.home_score||0, ai=g.away_score||0;
+  while(hi>0||ai>0){ if(hi>=ai&&hi>0){order.push('home');hi--;} else if(ai>0){order.push('away');ai--;} else {order.push('home');hi--;} }
+  var ev=[], n=order.length;
+  for(var i=0;i<n;i++){ ev.push({p:0.12+0.80*(i+1)/(n+1), side:order[i]}); }
+  return ev;
+}
+GAMES.forEach(function(g){ g._ev=buildEvents(g); });
+function clockText(g,p){ if(g.sport==='MLB'){return 'INNING '+Math.min(9,1+Math.floor(p*9));} return Math.min(90,Math.floor(p*90))+"'"; }
+function label(g){ return g.sport==='MLB'?'⚾ MLB':'⚽ WORLD CUP'; }
+function trim(s){ s=String(s||''); return s.length>16?s.slice(0,15)+'…':s; }
+function draw(g,p){
+  var grad=ctx.createLinearGradient(0,0,0,H); grad.addColorStop(0,'#141c2e'); grad.addColorStop(1,'#070a12');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+  ctx.textAlign='center';
+  ctx.fillStyle='#a78bfa'; ctx.font='bold 66px sans-serif'; ctx.fillText(label(g),W/2,200);
+  ctx.fillStyle='#f59e0b'; ctx.font='bold 120px sans-serif'; ctx.fillText(clockText(g,p),W/2,400);
+  var hs=0,as=0; g._ev.forEach(function(e){ if(e.p<=p){ if(e.side==='home')hs++; else as++; } });
+  ctx.fillStyle='#e5e7eb'; ctx.font='bold 84px sans-serif'; ctx.fillText(trim(g.away),W/2,760);
+  ctx.fillStyle='#fff'; ctx.font='bold 320px sans-serif'; ctx.fillText(String(as),W/2,1090);
+  ctx.fillStyle='#475569'; ctx.font='bold 60px sans-serif'; ctx.fillText('vs',W/2,1190);
+  ctx.fillStyle='#e5e7eb'; ctx.font='bold 84px sans-serif'; ctx.fillText(trim(g.home),W/2,1320);
+  ctx.fillStyle='#fff'; ctx.font='bold 320px sans-serif'; ctx.fillText(String(hs),W/2,1650);
+  if(p>=0.999){ ctx.fillStyle='#22c55e'; ctx.font='bold 60px sans-serif'; ctx.fillText('PREDICTED FINAL',W/2,1770); }
+  ctx.fillStyle='#9aa4b2'; ctx.font='bold 46px sans-serif'; ctx.fillText('PredictionLab.io',W/2,1870);
+}
+var startTs=null, raf=null;
+function frame(ts){
+  if(startTs===null)startTs=ts;
+  var per=GAME_MS+GAP_MS, t=ts-startTs, idx=Math.floor(t/per);
+  if(idx>=GAMES.length){ draw(GAMES[GAMES.length-1],1); return; }
+  draw(GAMES[idx], Math.max(0,Math.min(1,(t-idx*per)/GAME_MS)));
+  raf=requestAnimationFrame(frame);
+}
+function playReel(){ if(raf)cancelAnimationFrame(raf); startTs=null; raf=requestAnimationFrame(frame); }
+if(GAMES.length){ draw(GAMES[0],0); } else { ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 56px sans-serif'; ctx.fillText('No games scheduled today',W/2,H/2); }
+document.getElementById('play').onclick=playReel;
+document.getElementById('rec').onclick=function(){
+  if(!cv.captureStream||!window.MediaRecorder){ alert('In-page recording is not supported on this browser. On iPhone, use Screen Recording instead.'); return; }
+  var stream=cv.captureStream(30);
+  var mime=MediaRecorder.isTypeSupported('video/mp4')?'video/mp4':(MediaRecorder.isTypeSupported('video/webm')?'video/webm':'');
+  var rec=new MediaRecorder(stream, mime?{mimeType:mime}:undefined), chunks=[];
+  rec.ondataavailable=function(e){ if(e.data&&e.data.size)chunks.push(e.data); };
+  rec.onstop=function(){
+    var blob=new Blob(chunks,{type:mime||'video/webm'}), url=URL.createObjectURL(blob), a=document.getElementById('dl');
+    a.href=url; a.download='predictionlab-reel.'+(String(mime).indexOf('mp4')>=0?'mp4':'webm');
+    a.style.display='inline-block'; a.textContent='⬇ Tap to save your video'; a.click();
+  };
+  rec.start(); playReel();
+  setTimeout(function(){ try{rec.stop();}catch(e){} }, GAMES.length*(GAME_MS+GAP_MS)+400);
+};
+</script></body></html>'''
+
+
+@app.route('/reel')
+def daily_reel():
+    import json as _json
+    try:
+        games = _build_reel_games(limit=4)
+    except Exception as _e:
+        logger.error(f"[reel] build failed: {_e}")
+        games = []
+    return _REEL_HTML.replace('__GAMES_JSON__', _json.dumps(games))
 
 
 @app.route('/healthz')
