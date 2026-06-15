@@ -4475,6 +4475,11 @@ def _fetch_live_market_line(
 
 app = Flask(__name__)
 
+# Anchor slug for team/player cards — matches _team_anchor_slug() so search
+# deep-links (#team-<slug>) scroll to the right card. Lazy lambda: the helper
+# is defined later in this module but resolved at template-render time.
+app.jinja_env.filters['team_anchor'] = lambda s: _team_anchor_slug(s)
+
 
 class _NumpySafeJSONProvider(DefaultJSONProvider):
     """np.float32 / np.int64 leak into card payloads from model outputs;
@@ -15415,6 +15420,68 @@ def _search_site_content(query_text: str):
     matches.sort(key=lambda item: (item[0], item[1]))
     return [m[2] for m in matches[:8]]
 
+def _team_anchor_slug(name: str) -> str:
+    """Stable anchor slug for a team/player name (matches the card `id`)."""
+    s = re.sub(r'[^a-z0-9]+', '-', (name or '').lower()).strip('-')
+    return s
+
+
+def _team_search_route(conn, sport: str, team: str):
+    """Route a searched team to the game they NEXT play (picks page) or, if not
+    playing, the game they LAST played (results page) — instead of always the
+    generic 'today' sport page. Returns a route string (with #team-<slug> anchor
+    so the page scrolls to that team's card), or None to fall back."""
+    sport = (sport or '').upper()
+    if not team or sport not in _SPORT_TO_ROUTE:
+        return None
+    anchor = '#team-' + _team_anchor_slug(team)
+    today = datetime.now().strftime('%Y-%m-%d')
+    try:
+        # Next upcoming game (not yet played) → picks page.
+        nxt = conn.execute(
+            """
+            SELECT league FROM games
+            WHERE sport = ? AND (home_team_id = ? OR away_team_id = ?)
+              AND home_score IS NULL AND date(game_date) >= date(?)
+            ORDER BY date(game_date) ASC LIMIT 1
+            """,
+            (sport, team, team, today),
+        ).fetchone()
+        if nxt is not None:
+            route = _SPORT_TO_ROUTE.get(sport)
+            if sport == 'SOCCER':
+                try:
+                    lg = _canonical_soccer_league_name(nxt['league']) or nxt['league']
+                    if lg:
+                        return f"{route}?league={_soccer_league_url_slug(lg)}{anchor}"
+                except Exception:
+                    pass
+            return f"{route}{anchor}"
+        # Otherwise most recent completed game → results page.
+        last = conn.execute(
+            """
+            SELECT league FROM games
+            WHERE sport = ? AND (home_team_id = ? OR away_team_id = ?)
+              AND home_score IS NOT NULL
+            ORDER BY date(game_date) DESC LIMIT 1
+            """,
+            (sport, team, team),
+        ).fetchone()
+        if last is not None:
+            rslug = _SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results')
+            if sport == 'SOCCER':
+                try:
+                    lg = _canonical_soccer_league_name(last['league']) or last['league']
+                    if lg:
+                        return f"/{rslug}?league={_soccer_league_url_slug(lg)}{anchor}"
+                except Exception:
+                    pass
+            return f"/{rslug}{anchor}"
+    except Exception as exc:
+        logger.debug(f"team route lookup failed for {sport}/{team}: {exc}")
+    return None
+
+
 def _search_database_entities(conn, query_text: str):
     like = f"%{query_text.lower()}%"
     results = []
@@ -15443,7 +15510,10 @@ def _search_database_entities(conn, query_text: str):
         ).fetchall()
         for row in team_rows:
             sport = (row['sport'] or '').upper()
-            route = _SPORT_TO_ROUTE.get(sport, '/player-props')
+            # Prefer the team's next/last actual game; fall back to the generic
+            # sport page only if we can't resolve a game for them.
+            route = (_team_search_route(conn, sport, row['name'])
+                     or _SPORT_TO_ROUTE.get(sport, '/player-props'))
             results.append({'label': row['name'], 'route': route, 'sport': sport or 'TEAM'})
     except Exception as exc:
         logger.debug(f"Team search failed: {exc}")
@@ -15472,8 +15542,12 @@ def _search_database_entities(conn, query_text: str):
         ).fetchall()
         for row in player_rows:
             sport = (row['sport'] or '').upper()
-            route = '/player-props' if sport in {'NBA', 'WNBA', 'NHL', 'MLB', 'NCAAB', 'NCAAW', 'NCAAF'} else _SPORT_TO_ROUTE.get(sport, '/player-props')
             team = row['team']
+            # Route to the player's team's next/last actual game when we can
+            # resolve one; else props page (props sports) or sport page.
+            route = _team_search_route(conn, sport, team) if team else None
+            if not route:
+                route = '/player-props' if sport in {'NBA', 'WNBA', 'NHL', 'MLB', 'NCAAB', 'NCAAW', 'NCAAF'} else _SPORT_TO_ROUTE.get(sport, '/player-props')
             label = row['player_name'] if not team else f"{row['player_name']} ({team})"
             results.append({'label': label, 'route': route, 'sport': sport or 'PLAYER'})
     except Exception as exc:

@@ -22,6 +22,11 @@
    Results cards are public proof-of-performance and are never locked. #}
 {% set _locked = (not is_results) and (not is_premium|default(false)) %}
 
+{# Search deep-link anchors: /sport-page#team-<slug> scrolls to this card.
+   scroll-margin-top keeps the sticky header from covering the card. #}
+<span class="team-anchor" id="team-{{ away_id|team_anchor }}" style="scroll-margin-top:140px"></span>
+<span class="team-anchor" id="team-{{ home_id|team_anchor }}" style="scroll-margin-top:140px"></span>
+
 {% if is_results %}
 {# ── Results cards: layout unchanged ── #}
 <div class="card-hero">
