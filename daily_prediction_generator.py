@@ -82,10 +82,10 @@ def save_predictions_for_sport(sport, days_ahead=7):
                             logistic_home_prob = ?, win_probability = ?
                         WHERE id = ?
                     ''', (
-                        pred['elo_prob'] / 100.0,
-                        pred['xgb_prob'] / 100.0,
-                        pred['cat_prob'] / 100.0,
-                        pred['ensemble_prob'] / 100.0,
+                        float(pred['elo_prob']) / 100.0,
+                        float(pred['xgb_prob']) / 100.0,
+                        float(pred['cat_prob']) / 100.0,
+                        float(pred['ensemble_prob']) / 100.0,
                         existing['id']
                     ))
                     updated_count += 1
@@ -104,10 +104,10 @@ def save_predictions_for_sport(sport, days_ahead=7):
                     ''', (
                         game_id, sport, sport, pred['game_date'],
                         pred['home_team_id'], pred['away_team_id'],
-                        pred['elo_prob'] / 100.0,
-                        pred['xgb_prob'] / 100.0,
-                        pred['cat_prob'] / 100.0,
-                        pred['ensemble_prob'] / 100.0
+                        float(pred['elo_prob']) / 100.0,
+                        float(pred['xgb_prob']) / 100.0,
+                        float(pred['cat_prob']) / 100.0,
+                        float(pred['ensemble_prob']) / 100.0
                     ))
                     saved_count += 1
                     logger.info(f"Saved NEW prediction: {pred['away_team_id']} @ {pred['home_team_id']} on {pred['game_date']}")
@@ -177,10 +177,10 @@ def backfill_missing_predictions():
                         ''', (
                             pred['game_id'], sport, sport, pred['game_date'],
                             pred['home_team_id'], pred['away_team_id'],
-                            pred['elo_prob'] / 100.0,
-                            pred['xgb_prob'] / 100.0,
-                            pred['cat_prob'] / 100.0,
-                            pred['ensemble_prob'] / 100.0
+                            float(pred['elo_prob']) / 100.0,
+                            float(pred['xgb_prob']) / 100.0,
+                            float(pred['cat_prob']) / 100.0,
+                            float(pred['ensemble_prob']) / 100.0
                         ))
                         backfill_count += 1
                         logger.info(f"BACKFILLED {sport}: {pred['away_team_id']} @ {pred['home_team_id']} ({pred['game_date']})")
