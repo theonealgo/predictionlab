@@ -12915,31 +12915,68 @@ def _load_sport_season_snapshot(sport, phase='regular'):
             logger.debug('Season snapshot read failed (%s): %s', path, exc)
             continue
         if isinstance(data, dict) and data.get('sport') == sport:
-            return data
+            return _apply_wnba_snapshot_flip(data) if sport == 'WNBA' else data
     return None
 
 
+def _apply_wnba_snapshot_flip(data):
+    """Flip Grinder2/Takedown/XSharp records in a WNBA season snapshot.
+
+    These three grade <50% on WNBA moneyline, so they are flipped everywhere in
+    live grading (see _model_probs_for_grading). The frozen snapshot was built
+    pre-flip, so flip its records too — otherwise the WNBA results panel (which
+    renders from the snapshot) would still show the old losing records. Operates
+    on the freshly-loaded dict (no cache), so there is no double-flip risk."""
+    try:
+        overall = data.get('overall_stats') or {}
+        for k in ('glicko2', 'trueskill', 'xgboost'):
+            m = overall.get(k)
+            if isinstance(m, dict):
+                tot = int(m.get('total') or 0)
+                if tot > 0:
+                    corr = tot - int(m.get('correct') or 0)
+                    m['correct'] = corr
+                    m['accuracy'] = round(corr / tot * 100, 1)
+    except Exception:
+        pass
+    return data
+
+
 def _merge_snapshot_efficiency_into_overall(overall_stats, sport):
-    """Prefer frozen snapshot Efficiency ML stats when live attach graded fewer games."""
+    """Promote frozen-snapshot model stats when live grading covered fewer games.
+
+    Previously this only promoted Efficiency, which left the OTHER models showing
+    a tiny live-graded sample next to a season-sized Efficiency record — e.g. the
+    soccer results page (league-scoped, ~5 graded games per model) showed
+    Efficiency 1630-436 but Grinder2/Takedown/Edge/XSharp/Consensus at 0-5. Now
+    EVERY model is promoted from the snapshot when the snapshot graded more games,
+    so the whole panel is consistent. For sports that already render from the
+    snapshot, current == snapshot, so this is a no-op."""
     snap = _load_sport_season_snapshot(sport)
     if not snap:
         return overall_stats
-    snap_eff = (snap.get('overall_stats') or {}).get('efficiency')
-    if not isinstance(snap_eff, dict):
-        return overall_stats
-    snap_total = int(snap_eff.get('total') or 0)
-    if snap_total <= 0:
-        return overall_stats
-    cur = (overall_stats or {}).get('efficiency') or {}
-    cur_total = int(cur.get('total') or 0)
-    if snap_total <= cur_total:
+    snap_overall = snap.get('overall_stats') or {}
+    if not isinstance(snap_overall, dict):
         return overall_stats
     stats = dict(overall_stats or {})
-    stats['efficiency'] = {
-        'correct': int(snap_eff.get('correct') or 0),
-        'total': snap_total,
-        'accuracy': float(snap_eff.get('accuracy') or 0.0),
-    }
+    # snap_overall is already WNBA-flipped by _load_sport_season_snapshot, so no
+    # extra flip here (that would double-flip).
+    for model_key, snap_m in snap_overall.items():
+        if not isinstance(snap_m, dict):
+            continue
+        snap_total = int(snap_m.get('total') or 0)
+        if snap_total <= 0:
+            continue
+        cur = (overall_stats or {}).get(model_key) or {}
+        cur_total = int(cur.get('total') or 0)
+        if snap_total <= cur_total:
+            continue
+        snap_correct = int(snap_m.get('correct') or 0)
+        stats[model_key] = {
+            'correct': snap_correct,
+            'total': snap_total,
+            'accuracy': round(snap_correct / snap_total * 100, 1) if snap_total else 0.0,
+        }
     return stats
 
 
