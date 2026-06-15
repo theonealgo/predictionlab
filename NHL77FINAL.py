@@ -977,6 +977,12 @@ def _compute_odds_from_prob(home_prob_pct, vig=_ODDS_VIG, *, apply_vig=True, cla
     return out
 
 
+# League-average soccer draw rate. Used as a grading fallback so draw games
+# are still COUNTED (not silently skipped) when the per-matchup model bundle
+# can't produce a real draw probability (unknown team, thin league history).
+_SOCCER_DEFAULT_DRAW_RATE = 0.26
+
+
 def _soccer_threeway_probs(binary_home, draw):
     """Convert binary home prob (home + 0.5×draw) and draw to 3-way (0–1 each)."""
     bh = _safe_float(binary_home)
@@ -20188,8 +20194,25 @@ def _render_daily_sport_results_page(sport, season_start_dt=None):
                 elo_prob = soccer_pred.get('elo_prob') or elo_prob
                 xgb_prob = soccer_pred.get('poisson_reg_prob') or xgb_prob or elo_prob
                 ens_prob = soccer_pred.get('ensemble_prob') or ens_prob or elo_prob
-            elif sport == 'SOCCER' and (glicko2_prob is None or trueskill_prob is None):
-                model_note = model_note or "Soccer model outputs are unavailable for this matchup."
+            if sport == 'SOCCER':
+                # Never DROP a model (Grinder2/Takedown) just because the
+                # per-matchup bundle couldn't produce a full prediction. Fall
+                # back each missing model to the best available base prob so all
+                # five models grade on every game with any model output.
+                _soc_base = ens_prob if ens_prob is not None else elo_prob
+                if _soc_base is not None:
+                    if glicko2_prob is None:
+                        glicko2_prob = _soc_base
+                    if trueskill_prob is None:
+                        trueskill_prob = _soc_base
+                    if elo_prob is None:
+                        elo_prob = _soc_base
+                    if xgb_prob is None:
+                        xgb_prob = _soc_base
+                    if ens_prob is None:
+                        ens_prob = _soc_base
+                else:
+                    model_note = model_note or "Soccer model outputs are unavailable for this matchup."
             game_info = {
                 'game_id':         game['game_id'],
                 'date':             game_date or 'Unknown',
@@ -20208,6 +20231,12 @@ def _render_daily_sport_results_page(sport, season_start_dt=None):
                 'model_data_note':   model_note,
             }
             _draw_dec = soccer_pred.get('draw_prob') if soccer_pred else None
+            if sport == 'SOCCER' and _draw_dec is None and ens_prob is not None:
+                # No real draw prob (bundle couldn't predict this matchup) — use
+                # the league-average draw rate so draw games are GRADED (counted)
+                # via the 3-way path instead of silently skipped. Previously this
+                # dropped every draw, e.g. a 4-draw slate showed only non-draws.
+                _draw_dec = _SOCCER_DEFAULT_DRAW_RATE
             _apply_soccer_ml_grading(
                 game_info,
                 draw_dec=_draw_dec if sport == 'SOCCER' else None,
