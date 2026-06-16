@@ -2871,6 +2871,16 @@ def _set_efficiency_prob_on_card(pred: dict, sport: str = 'NBA') -> None:
     sp = _safe_float(pred.get('efficiency_spread'))
     if sp is None and pred.get('our_method') in ('efficiency', 'team-avg-fallback'):
         sp = _safe_float(pred.get('our_spread'))
+    # SOCCER: the stored spread sign here is unreliable and was rendering the
+    # Efficiency pick as the underdog — opposite every other model (e.g. Cape
+    # Verde over -1100 Spain). Derive the spread from the projected score margin
+    # instead: home expected goals minus away (unambiguous, home-positive), the
+    # same numbers shown on the card, so Efficiency agrees with the projection.
+    if sport == 'SOCCER':
+        _hh = _safe_float(pred.get('naive_home_score'))
+        _aa = _safe_float(pred.get('naive_away_score'))
+        if _hh is not None and _aa is not None:
+            sp = _hh - _aa
     if sp is None:
         pred['efficiency_prob'] = None
         return
