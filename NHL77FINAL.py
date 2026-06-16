@@ -12143,12 +12143,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% set show_pick_arrow = false %}
                     {% if home_score is not none and away_score is not none %}
                         {% set home_won = home_score > away_score %}
-                        {% set glicko2_correct = (game.glicko2_prob|default(none) is not none) and ((game.glicko2_prob >= 50) == home_won) or none %}
-                        {% set trueskill_correct = (game.trueskill_prob|default(none) is not none) and ((game.trueskill_prob >= 50) == home_won) or none %}
-                        {% set elo_correct = (game.elo_prob|default(none) is not none) and ((game.elo_prob >= 50) == home_won) or none %}
-                        {% set xgb_correct = (game.xgb_prob|default(none) is not none) and ((game.xgb_prob >= 50) == home_won) or none %}
-                        {% set efficiency_correct = (game.efficiency_prob|default(none) is not none) and ((game.efficiency_prob >= 50) == home_won) or none %}
-                        {% set ens_correct = (game.ens_prob|default(none) is not none) and ((game.ens_prob >= 50) == home_won) or none %}
+                        {# Use if/else, NOT `A and B or none`: a WRONG pick makes B False,
+                           and `True and False or none` collapses to none, so ❌ never showed. #}
+                        {% set glicko2_correct = (((game.glicko2_prob >= 50) == home_won) if game.glicko2_prob|default(none) is not none else none) %}
+                        {% set trueskill_correct = (((game.trueskill_prob >= 50) == home_won) if game.trueskill_prob|default(none) is not none else none) %}
+                        {% set elo_correct = (((game.elo_prob >= 50) == home_won) if game.elo_prob|default(none) is not none else none) %}
+                        {% set xgb_correct = (((game.xgb_prob >= 50) == home_won) if game.xgb_prob|default(none) is not none else none) %}
+                        {% set efficiency_correct = (((game.efficiency_prob >= 50) == home_won) if game.efficiency_prob|default(none) is not none else none) %}
+                        {% set ens_correct = (((game.ens_prob >= 50) == home_won) if game.ens_prob|default(none) is not none else none) %}
                     {% else %}
                         {% set glicko2_correct = game.glicko2_correct|default(none) %}
                         {% set trueskill_correct = game.trueskill_correct|default(none) %}
