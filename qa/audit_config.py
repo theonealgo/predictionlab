@@ -126,4 +126,5 @@ CLUSTER_WARN_PCT   = 80        # warn if >80% of probs are in the clustering ran
 # ── Quick mode — only run these auditors ─────────────────────────────────
 QUICK_MODE_AUDITORS = ["routes", "content", "navigation"]
 FULL_MODE_AUDITORS  = ["routes", "content", "navigation", "cards", "models",
-                       "results", "gamecounts", "csv", "props", "seo", "schema"]
+                       "results", "gamecounts", "csv", "props", "seo", "schema",
+                       "consistency"]

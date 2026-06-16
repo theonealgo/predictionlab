@@ -131,7 +131,7 @@ def _make_session() -> requests.Session:
 
 HTTP_DEPENDENT_AUDITORS = frozenset({
     "routes", "content", "navigation", "cards", "models", "results", "csv",
-    "gamecounts", "screenshots", "seo",
+    "gamecounts", "screenshots", "seo", "consistency",
 })
 
 
@@ -1402,6 +1402,86 @@ class GameCountAuditor:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# CARD CONSISTENCY AUDITOR  (per-game model picks make sense)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class CardConsistencyAuditor:
+    """Read the per-game model cells on the prediction tables and flag picks that
+    don't make sense — chiefly a CONFIDENT model picking the opposite team from a
+    confident consensus (e.g. five models say Spain 80%+, one says Cape Verde
+    84%). That's exactly the inverted-Efficiency bug the page-load checks missed,
+    because the page returns HTTP 200 with the wrong number in it."""
+    NAME = "consistency"
+
+    PAGES = [
+        "/nba-picks", "/mlb-picks", "/nhl-picks", "/ncaab-picks",
+        "/soccer-picks?league=fifa.world", "/wnba-picks",
+    ]
+    # A pick counts as "confident" past this win %.
+    CONF = 60.0
+
+    def __init__(self, session: requests.Session, base: str, report: AuditReport):
+        self.s = session
+        self.base = base
+        self.r = report
+
+    def _fetch(self, path: str) -> str:
+        try:
+            return self.s.get(urljoin(self.base, path),
+                              timeout=REQUEST_TIMEOUT, allow_redirects=True).text
+        except Exception:
+            return ""
+
+    def run(self):
+        cell_re = re.compile(
+            r'<td class="mlbpt-model">.*?mlbpt-mteam">\s*([^<]+?)\s*</div>'
+            r'.*?mlbpt-mconf">\s*([\d.]+)\s*%', re.S)
+        total_games = 0
+        contradictions = []
+        for path in self.PAGES:
+            html = self._fetch(path)
+            if not html or 'mlbpt-model' not in html:
+                continue
+            for row in re.findall(r'<tr\b.*?</tr>', html, re.S):
+                cells = cell_re.findall(row)
+                if len(cells) < 4:
+                    continue
+                picks = [(t.strip(), float(p)) for t, p in cells]
+                total_games += 1
+                from collections import Counter
+                teams = [t for t, _ in picks]
+                maj_team, maj_count = Counter(teams).most_common(1)[0]
+                # near-consensus: at most one dissenter
+                if maj_count < len(picks) - 1:
+                    continue
+                maj_conf = [p for t, p in picks if t == maj_team]
+                dissent = [(t, p) for t, p in picks if t != maj_team]
+                if (dissent and min(maj_conf) >= self.CONF
+                        and any(p >= self.CONF for _, p in dissent)):
+                    dt, dp = dissent[0]
+                    contradictions.append(
+                        f"{path.split('?')[0]}: {maj_count} models pick {maj_team} "
+                        f"(≥{min(maj_conf):.0f}%) but one picks {dt} {dp:.0f}%")
+
+        if contradictions:
+            self.r.add(CheckResult(
+                label="Model picks contradict each other", status=FAIL,
+                message=f"{len(contradictions)} game(s) where a confident model "
+                        f"picks the OPPOSITE team from a confident consensus "
+                        f"(likely an inverted/mis-signed model)",
+                detail="; ".join(contradictions[:6]), auditor=self.NAME))
+        elif total_games:
+            self.r.add(CheckResult(
+                label="Model pick consistency", status=PASS,
+                message=f"No contradictory model picks across {total_games} "
+                        f"game rows checked", auditor=self.NAME))
+        else:
+            self.r.add(CheckResult(
+                label="Model pick consistency", status=INFO,
+                message="No prediction tables found to check", auditor=self.NAME))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SCHEMA AUDITOR  (static SQL column validation)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -2315,6 +2395,7 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("gamecounts", lambda: GameCountAuditor(session, base, report).run())
     run_auditor("csv",        lambda: CsvAuditor(session, base, report).run())
     run_auditor("seo",        lambda: SeoAuditor(session, base, report).run())
+    run_auditor("consistency", lambda: CardConsistencyAuditor(session, base, report).run())
     # Schema auditor is static (DB schema + source scan), not HTTP-dependent —
     # it catches SQL column typos in auth-gated routes the HTTP checks can't reach.
     run_auditor("schema",     lambda: SchemaAuditor(report).run())
