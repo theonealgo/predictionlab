@@ -13465,6 +13465,18 @@ def _is_valid_pick_matchup_team(name):
     return bool(s) and s.upper() != 'TBD'
 
 
+def _is_live_game_status(status):
+    """True when a feed/database status means the game is currently in progress."""
+    s = str(status or '').strip().upper()
+    if not s:
+        return False
+    live_markers = ('IN_PROGRESS', 'STATUS_IN_PROGRESS', 'LIVE', 'INPLAY', 'IN_PLAY')
+    final_markers = ('FINAL', 'POST', 'FULL_TIME', 'STATUS_FINAL')
+    return any(marker in s for marker in live_markers) and not any(
+        marker in s for marker in final_markers
+    )
+
+
 def build_todays_top_picks():
     """Up to four ranked value picks for landing + /promo/top-picks-today."""
     todays_picks = []
@@ -13479,6 +13491,7 @@ def build_todays_top_picks():
             SELECT p.game_id, p.sport,
                    COALESCE(NULLIF(TRIM(g.home_team_id), 'TBD'), NULLIF(TRIM(p.home_team_id), 'TBD')) AS home_team_id,
                    COALESCE(NULLIF(TRIM(g.away_team_id), 'TBD'), NULLIF(TRIM(p.away_team_id), 'TBD')) AS away_team_id,
+                   COALESCE(g.status, '') AS game_status,
                    p.win_probability,
                    p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob,
                    b.home_implied_prob, b.away_implied_prob
@@ -13488,7 +13501,12 @@ def build_todays_top_picks():
             WHERE date(p.game_date) = ?
               AND (g.home_score IS NULL OR g.game_id IS NULL)
               AND p.win_probability IS NOT NULL
-              AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
+              -- SOCCER excluded: its stored win_probability is degenerate (~0.500
+              -- every game, biased slightly below 0.5), so it systematically
+              -- "picks" the underdog (Algeria over Argentina, Senegal over France)
+              -- and can't represent the draw. Don't showcase coin-flip soccer as
+              -- a top value pick. Re-add once the 3-way soccer model is reliable.
+              AND p.sport IN ('NHL', 'NBA', 'MLB')
               AND UPPER(TRIM(COALESCE(g.home_team_id, p.home_team_id, ''))) NOT IN ('TBD', '')
               AND UPPER(TRIM(COALESCE(g.away_team_id, p.away_team_id, ''))) NOT IN ('TBD', '')
             ORDER BY p.game_date ASC
@@ -13505,6 +13523,8 @@ def build_todays_top_picks():
             _home_picked = _ens_home >= 0.5
             _pick_prob = _ens_home if _home_picked else (1.0 - _ens_home)
             _pick = _home if _home_picked else _away
+            _home_prob_pct = round(_ens_home * 100, 1)
+            _away_prob_pct = round((1.0 - _ens_home) * 100, 1)
 
             _model_vals = []
             for _k in ('elo_home_prob', 'xgboost_home_prob', 'logistic_home_prob', 'meta_home_prob', 'win_probability'):
@@ -13539,6 +13559,10 @@ def build_todays_top_picks():
                 'home': _home,
                 'pick': _pick,
                 'prob': round(_pick_prob * 100, 1),
+                'home_prob': _home_prob_pct,
+                'away_prob': _away_prob_pct,
+                'pick_side': 'home' if _home_picked else 'away',
+                'is_live': _is_live_game_status(_tp['game_status']),
                 'sport': _tp['sport'],
                 'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
                 'quality_score': _quality_score,
@@ -13555,12 +13579,14 @@ def build_todays_top_picks():
             todays_picks.append({
                 'away': _row['away'], 'home': _row['home'],
                 'pick': _row['pick'], 'prob': _row['prob'],
+                'home_prob': _row['home_prob'], 'away_prob': _row['away_prob'],
+                'pick_side': _row['pick_side'], 'is_live': _row['is_live'],
                 'sport': _row['sport'], 'slug': _row['slug'],
             })
-            if len(todays_picks) >= 4:
+            if len(todays_picks) >= 6:
                 break
 
-        if len(todays_picks) < 4:
+        if len(todays_picks) < 6:
             _picked_keys = {f"{p['sport']}::{p['away']}::{p['home']}" for p in todays_picks}
             _fallback = sorted(_candidates, key=lambda x: x['fallback_score'], reverse=True)
             for _row in _fallback:
@@ -13571,9 +13597,11 @@ def build_todays_top_picks():
                 todays_picks.append({
                     'away': _row['away'], 'home': _row['home'],
                     'pick': _row['pick'], 'prob': _row['prob'],
+                    'home_prob': _row['home_prob'], 'away_prob': _row['away_prob'],
+                    'pick_side': _row['pick_side'], 'is_live': _row['is_live'],
                     'sport': _row['sport'], 'slug': _row['slug'],
                 })
-                if len(todays_picks) >= 4:
+                if len(todays_picks) >= 6:
                     break
     except Exception as _tp_err:
         logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
