@@ -6,7 +6,7 @@
     "templates/base.html": "d7012febcd7f461921e8e74ebd987667217e647d848fe76f8339b7bf54d8b012",
     "templates/espn_predictions_template.html": "b6f013ad3ceb8da05a80aeb3500c2ba000fff350e57694b52b7c138c9c80f710",
     "templates/homepage_preview.html": "c4297bf6501b22dad89b6a6fadc3ef40bffdc24ae8930172af5fbb0aa5cd7ddc",
-    "templates/partials/research_header.html": "84170d918846919a2f5913099e9361b921dfa998fc0dea9b2a3c4a6f8a740d8c",
+    "templates/partials/research_header.html": "759142b97d443d2f7d80d9fcbc4d5e49b0799a620f548aff23909ad52e97a773",
     "templates/partials/site_directory_footer.html": "65be288e30d6ca46afdac221a107ba944273d297f9fc82624fa21eda03030c22",
     "templates/underdogs_layout.html": "46740f5122647bbb563ae386b4ce3a5f8b9aabef9ded64fc6d989e79813ee5f3"
   }

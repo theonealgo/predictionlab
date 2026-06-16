@@ -17639,9 +17639,9 @@ def results_export_csv():
             SELECT g.game_date, g.sport, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
                    p.win_probability, p.elo_home_prob, p.xgboost_home_prob,
-                   p.glicko2_home_prob, p.trueskill_home_prob,
+                   p.glicko_home_prob, p.trueskill_home_prob,
                    bl.spread AS market_spread, bl.total AS market_total,
-                   bl.home_ml, bl.away_ml
+                   bl.home_moneyline AS home_ml, bl.away_moneyline AS away_ml
             FROM games g
             LEFT JOIN predictions p ON (
                 p.sport = g.sport AND (

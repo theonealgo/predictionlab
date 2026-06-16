@@ -1402,6 +1402,96 @@ class GameCountAuditor:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# SCHEMA AUDITOR  (static SQL column validation)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SchemaAuditor:
+    """Validate every `p.<col>` / `g.<col>` used in a SQL block in the app against
+    the real predictions / games table schema.
+
+    This catches column typos like `p.glicko2_home_prob` (the real column is
+    `glicko_home_prob`) that crash a query with "no such column". The HTTP-level
+    CSV check can't catch these: the export routes are auth-gated, so an
+    unauthenticated audit only ever sees the 302 redirect and never runs the
+    query. This static check has no such blind spot.
+    """
+    NAME = "schema"
+
+    # Aliases that conventionally mean these tables in this app, with the regex
+    # that proves the alias is BOUND to that table inside a given SQL block.
+    ALIAS_TABLE = {'p': 'predictions', 'g': 'games', 'bl': 'betting_lines'}
+    ALIAS_BIND = {
+        'p': r'\bpredictions\s+p\b',
+        'g': r'\bgames\s+g\b',
+        'bl': r'\bbetting_lines\s+bl\b',
+    }
+
+    def __init__(self, report: AuditReport, db_path: str | None = None,
+                 app_file: str | None = None):
+        self.r = report
+        self.db_path = db_path or GameCountAuditor._find_db()
+        self.app_file = app_file or str((QA_DIR / '..' / 'NHL77FINAL.py').resolve())
+
+    def run(self):
+        if not self.db_path or not os.path.isfile(self.app_file):
+            self.r.add(CheckResult(
+                label="Schema column check", status=INFO,
+                message="DB or app file not found; skipped", auditor=self.NAME))
+            return
+        import sqlite3
+        try:
+            conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, timeout=8)
+            cols = {}
+            for tbl in set(self.ALIAS_TABLE.values()):
+                cols[tbl] = {row[1] for row in
+                             conn.execute(f"PRAGMA table_info({tbl})").fetchall()}
+            conn.close()
+        except Exception as exc:
+            self.r.add(CheckResult(
+                label="Schema column check", status=INFO,
+                message=f"could not read schema: {exc}", auditor=self.NAME))
+            return
+
+        src = Path(self.app_file).read_text(encoding='utf-8', errors='ignore')
+        blocks = re.findall(r"(?:f?'''|f?\"\"\")(.*?)(?:'''|\"\"\")", src, re.S)
+        bad = {}            # "alias.col" -> count
+        scanned = 0
+        for blk in blocks:
+            if not (re.search(r'\bSELECT\b', blk) and re.search(r'\bFROM\b', blk)):
+                continue
+            # Only trust an alias when the block actually BINDS it to the table
+            # (e.g. "predictions p" / "games g" / "betting_lines bl"). This avoids
+            # JS template blocks where p.label/p.route are object access, not SQL.
+            bound = {a: t for a, t in self.ALIAS_TABLE.items()
+                     if re.search(self.ALIAS_BIND[a], blk)}
+            if not bound:
+                continue
+            scanned += 1
+            all_cols = set().union(*cols.values())
+            _alias_re = r'\b(' + '|'.join(sorted(bound, key=len, reverse=True)) + r')\.([a-zA-Z_][a-zA-Z0-9_]*)'
+            for alias, col in re.findall(_alias_re, blk):
+                # Accept if the column exists in ANY real table (aliases are
+                # occasionally reused), so we only flag genuinely-unknown columns.
+                if col in all_cols:
+                    continue
+                bad[f"{alias}.{col}"] = bad.get(f"{alias}.{col}", 0) + 1
+        sql_blocks = [None] * scanned  # keep count for the PASS message
+
+        if bad:
+            self.r.add(CheckResult(
+                label="SQL references unknown column", status=FAIL,
+                message=f"{len(bad)} column reference(s) not in the DB schema — "
+                        f"these crash queries with 'no such column'",
+                detail=", ".join(sorted(bad)), auditor=self.NAME))
+        else:
+            self.r.add(CheckResult(
+                label="Schema column check", status=PASS,
+                message=f"All p./g. SQL column references exist "
+                        f"({len(sql_blocks)} SQL blocks scanned)",
+                auditor=self.NAME))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SEO AUDITOR
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -2225,6 +2315,9 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("gamecounts", lambda: GameCountAuditor(session, base, report).run())
     run_auditor("csv",        lambda: CsvAuditor(session, base, report).run())
     run_auditor("seo",        lambda: SeoAuditor(session, base, report).run())
+    # Schema auditor is static (DB schema + source scan), not HTTP-dependent —
+    # it catches SQL column typos in auth-gated routes the HTTP checks can't reach.
+    run_auditor("schema",     lambda: SchemaAuditor(report).run())
     # Props auditor imports the engine directly (props API is auth-gated) —
     # not HTTP-dependent, so it runs even if the site is unreachable.
     run_auditor("props",      lambda: PropsAuditor(report).run())
