@@ -259,6 +259,11 @@ _OFFSEASON_SPORTS_HINT = {
     'NCAAF':  'College football picks return when the fall schedule is live on ESPN (typically August–January).',
 }
 
+# Sports with no working prediction model yet (no stored history to train on), so
+# their picks would be meaningless coin flips. The picks page shows an honest
+# "not enough data" message for these instead of the cards.
+_DEAD_PICK_SPORTS = {'UFC', 'GOLF'}
+
 
 def _daily_results_game_count(daily_results) -> int:
     if not daily_results:
@@ -19518,6 +19523,47 @@ def sport_predictions(sport, filter_date=None):
         )
     if not predictions and not prediction_error and sport in _OFFSEASON_SPORTS_HINT:
         prediction_error = _OFFSEASON_SPORTS_HINT[sport]
+
+    # Dead-model guard. A sport gets coin-flip cards (e.g. UFC: no fight history,
+    # so every bout is a 1500-vs-1500 ~50/50 nudged only by the book's vig) when
+    # BOTH are true: (1) we have no completed games stored to model from, AND
+    # (2) not a single upcoming game shows even a 2-point edge. Requiring BOTH
+    # means we never suppress a real sport — team sports have stored games, and
+    # Tennis (0 stored games but a working model) always shows real edges. When
+    # both hold, show an honest message instead of a page of identical coin flips.
+    if predictions and len(predictions) >= 3 and not prediction_error:
+        def _edge(p):
+            wp = _safe_float(p.get('ensemble_prob'))
+            if wp is None:
+                wp = _safe_float(p.get('elo_prob'))
+            if wp is None:
+                wp = _safe_float(p.get('win_probability'))
+            if wp is None:
+                return 0.0
+            if wp <= 1.0:
+                wp *= 100.0
+            return abs(wp - 50.0)
+        _max_edge = max((_edge(p) for p in predictions), default=0.0)
+        try:
+            _gc = get_db_connection()
+            _completed_n = _gc.execute(
+                "SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL",
+                (sport,),
+            ).fetchone()[0]
+            _gc.close()
+        except Exception:
+            _completed_n = 1
+        # UFC/Golf have no model at all (no stored history; any non-50 value comes
+        # only from the book's odds, not a model), so gate them explicitly. The
+        # no-history + no-edge heuristic stays as a safety net for anything else.
+        if sport in _DEAD_PICK_SPORTS or (not _completed_n and _max_edge < 2.0):
+            prediction_error = (
+                f"{SPORTS[sport]['name']} predictions aren't available yet — there "
+                "isn't enough historical data to model these matchups reliably. "
+                "We don't publish coin-flip picks, so check back once results data "
+                "is in."
+            )
+            predictions = []
 
     for pred in predictions:
         for _k in (
