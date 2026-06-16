@@ -13787,6 +13787,133 @@ def _generate_daily_blog_post(today=None, todays_picks=None, news_items=None) ->
     }
 
 
+def _generate_daily_blog_posts(n: int = 3, today=None) -> list[dict]:
+    """Generate up to n distinct, standalone blog posts for today from live ESPN
+    news + Google Trends + today's matchups. The first is the daily roundup; the
+    rest are themed on individual trending news topics, each with betting context."""
+    try:
+        _tz = ZoneInfo('America/New_York')
+        today_dt = today or datetime.now(_tz)
+    except Exception:
+        today_dt = today or datetime.now()
+    date_str = today_dt.strftime('%Y-%m-%d')
+    display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
+    try:
+        picks = build_todays_top_picks()
+    except Exception:
+        picks = []
+    news = _fetch_espn_news_items(limit=8) or []
+    out = [_generate_daily_blog_post(today_dt, picks, news)]
+    seen_slugs = {out[0]['slug']}
+    for item in news:
+        if len(out) >= n:
+            break
+        topic = (item.get('topic') or '').strip()
+        sport = item.get('sport') or 'Sports'
+        if not topic:
+            continue
+        slug = _slugify_blog(f"{topic}-{date_str}")
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+        body = [
+            _news_market_paragraph(item),
+            f"The betting question for {sport} bettors is whether the market has "
+            f"already priced this in. When a story like “{topic}” breaks, sportsbook "
+            "lines often move before the public reacts — so the edge is in comparing a "
+            "model's fair price to the current number, not in the headline itself.",
+            "Prediction Lab approaches this by computing model win probabilities and "
+            "comparing them against sportsbook moneyline, spread, and total prices. "
+            "When the model and the market disagree past the vig, that gap is the only "
+            "thing that matters — everything else is narrative.",
+            "See the live prediction cards on the sport pages for today's model lines, "
+            "and the daily results report for completed-game tracking and verification.",
+        ]
+        out.append({
+            'title': f"{topic}: The AI Betting Angle ({display_date})",
+            'slug': slug,
+            'date': date_str,
+            'sport_tag': sport,
+            'excerpt': _blog_excerpt(' '.join(body), 3),
+            'body': body,
+            'news_items': [item],
+        })
+    return out
+
+
+def _persist_daily_blog_posts(n: int = 3, today=None) -> int:
+    """Generate today's posts and merge them into data/blog_posts.json so the blog
+    archive ACCUMULATES day over day (deduped by slug). Returns count added."""
+    try:
+        new_posts = _generate_daily_blog_posts(n=n, today=today)
+    except Exception as exc:
+        logger.debug(f"[blog] generation failed: {exc}")
+        return 0
+    try:
+        if _os.path.exists(_BLOG_POSTS_FILE):
+            with open(_BLOG_POSTS_FILE, encoding='utf-8') as fh:
+                data = json.load(fh)
+            if isinstance(data, list):
+                data = {'posts': data}
+        else:
+            data = {'posts': []}
+    except Exception:
+        data = {'posts': []}
+    posts = data.get('posts') or []
+    have = {p.get('slug') for p in posts if isinstance(p, dict) and p.get('slug')}
+    added = 0
+    for np in new_posts:
+        if np.get('slug') and np['slug'] not in have:
+            posts.append(np)
+            have.add(np['slug'])
+            added += 1
+    if added:
+        posts.sort(key=lambda p: str(p.get('date', '')), reverse=True)
+        data['posts'] = posts
+        try:
+            with open(_BLOG_POSTS_FILE, 'w', encoding='utf-8') as fh:
+                json.dump(data, fh, indent=2, ensure_ascii=False)
+            _BLOG_CACHE['ts'] = 0  # invalidate so the new posts show immediately
+        except Exception as exc:
+            logger.debug(f"[blog] persist failed: {exc}")
+            return 0
+    return added
+
+
+def _maybe_generate_blog_on_startup():
+    """Once per day, generate + persist today's blog posts in the background so the
+    archive grows automatically (>=3/day). File-flag guarded; never blocks boot."""
+    try:
+        flag = _os.path.join(
+            _os.path.dirname(_BLOG_POSTS_FILE),
+            f".blog_gen_{datetime.now().strftime('%Y%m%d')}",
+        )
+        if _os.path.exists(flag):
+            return
+        import threading as _thr
+
+        def _run():
+            try:
+                added = _persist_daily_blog_posts(n=3)
+                try:
+                    open(flag, 'w').write('1')
+                except Exception:
+                    pass
+                if added:
+                    logger.info(f"[blog] generated {added} new post(s) for today")
+            except Exception:
+                pass
+        _thr.Thread(target=_run, daemon=True, name='blog-gen').start()
+    except Exception:
+        pass
+
+
+try:
+    _maybe_generate_blog_on_startup()
+except Exception as _bge:
+    logger.debug(f"[blog-gen] hook error: {_bge}")
+
+
 def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
     posts = _load_blog_posts_from_json()
     if include_generated:
