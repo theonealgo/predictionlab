@@ -14431,6 +14431,9 @@ def landing_page():
     if request.method == 'HEAD':
         return '', 200
     log_site_visit('/')
+    return render_template('homepage_preview.html', **_build_landing_preview_context())
+
+    # Legacy landing implementation retained below temporarily for rollback/reference.
     nhl_accuracy = get_landing_accuracy('NHL')
     nfl_accuracy = get_landing_accuracy('NFL')
     nba_accuracy = get_landing_accuracy('NBA')
