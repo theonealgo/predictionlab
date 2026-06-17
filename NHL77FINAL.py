@@ -20,6 +20,16 @@ rules before changing this file.
 # 1. IMPORTS, OPTIONAL MODEL LOADING, LOGGING, AND GLOBAL CACHES
 # ============================================================================
 
+# Force single-threaded native math BEFORE numpy/xgboost import. XGBoost's
+# OpenMP thread pool segfaults gunicorn's threaded workers on the production host
+# (site-wide 502 on prediction pages). This MUST live here (not just app.py)
+# because the production start command imports NHL77FINAL:app directly, bypassing
+# app.py. Setting it before the native libraries initialize is what matters.
+import os as _early_os
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "XGBOOST_NTHREAD"):
+    _early_os.environ.setdefault(_v, "1")
+
 from flask.json.provider import DefaultJSONProvider
 from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, make_response, send_from_directory, abort, has_request_context
 from flask_login import current_user
