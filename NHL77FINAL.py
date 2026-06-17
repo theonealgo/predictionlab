@@ -30,6 +30,18 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
            "NUMEXPR_NUM_THREADS", "XGBOOST_NTHREAD"):
     _early_os.environ.setdefault(_v, "1")
 
+
+def _is_render_host() -> bool:
+    """Detect Render even when the dashboard uses a raw gunicorn command."""
+    return bool(
+        _early_os.environ.get('RENDER')
+        or _early_os.environ.get('PL_RENDER_HOST')
+        or _early_os.environ.get('RENDER_SERVICE_ID')
+        or _early_os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+        or (_early_os.environ.get('PORT') and _early_os.path.isdir('/opt/render'))
+        or _early_os.path.isdir('/opt/render/project')
+    )
+
 from flask.json.provider import DefaultJSONProvider
 from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, make_response, send_from_directory, abort, has_request_context
 from flask_login import current_user
@@ -69,7 +81,7 @@ try:
     from prediction_system_v2 import AdvancedPredictor
     V2_PREDICTORS = {}
     HAS_V2_SYSTEM = True
-    _RENDER_HOST = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _RENDER_HOST = _is_render_host()
     _PRELOAD_V2_MODELS = _early_os.environ.get('PL_PRELOAD_V2_MODELS', '').lower() in {'1', 'true', 'yes'}
     if _PRELOAD_V2_MODELS or not _RENDER_HOST:
         # Load trained models for supported sports outside Render startup. On
@@ -4727,7 +4739,7 @@ def log_site_visit(endpoint):
     the background sync writers. A dropped analytics row is harmless, so retry a
     couple of times and then give up quietly — never raise, never log an ERROR
     (that was just noise for a non-critical write)."""
-    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _render_host = _is_render_host()
     _traffic_enabled = _early_os.environ.get('PL_ENABLE_TRAFFIC_LOGGING', '').lower() in {'1', 'true', 'yes'}
     if _render_host and not _traffic_enabled:
         return
@@ -6387,7 +6399,7 @@ def _maybe_backfill_props_on_startup():
 
 
 try:
-    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _render_host = _is_render_host()
     _props_startup_enabled = _early_os.environ.get('PL_ENABLE_PROPS_BACKFILL_ON_STARTUP', '').lower() in {'1', 'true', 'yes'}
     if _props_startup_enabled or not _render_host:
         _maybe_backfill_props_on_startup()
@@ -6421,7 +6433,7 @@ def _prewarm_espn_odds_cache():
         _time.sleep(720)   # re-warm every 12 min — before the 15-min TTL expires
 
 try:
-    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _render_host = _is_render_host()
     _odds_prewarm_enabled = _early_os.environ.get('PL_ENABLE_ODDS_PREWARM', '').lower() in {'1', 'true', 'yes'}
     if _odds_prewarm_enabled or not _render_host:
         threading.Thread(target=_prewarm_espn_odds_cache, daemon=True, name='odds-prewarm').start()
@@ -20117,7 +20129,7 @@ def _prewarm_pages():
 
 
 try:
-    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _render_host = _is_render_host()
     _prewarm_enabled = _early_os.environ.get('PL_ENABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
     if _prewarm_enabled or not _render_host:
         _prewarm_pages()

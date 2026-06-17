@@ -9,6 +9,7 @@ export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export XGBOOST_NTHREAD=1
+export PL_RENDER_HOST=1
 PY_BIN="${PYTHON_BIN:-python}"
 if ! command -v "$PY_BIN" >/dev/null 2>&1; then
     PY_BIN="python3"
