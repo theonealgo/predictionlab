@@ -6662,10 +6662,26 @@ def _ensure_v2_predictor(model_sport: str):
         return None
 
 
+# Serialize native model inference (XGBoost / sklearn / etc.). Under gunicorn's
+# gthread workers, concurrent predict() calls into the same native models from
+# multiple threads SEGFAULT the worker (site-wide 502). A reentrant lock lets one
+# thread run a prediction at a time; results are cached, so this only serializes
+# cold renders. Reentrant so nested calls (get_upcoming_predictions ->
+# get_v2_prediction) don't deadlock.
+import threading as _threading_pred
+_PREDICT_LOCK = _threading_pred.RLock()
+
+
 def get_v2_prediction(sport, home_team, away_team, game_date=None):
+    """Thread-safe wrapper: serialize native inference to avoid worker segfaults."""
+    with _PREDICT_LOCK:
+        return _get_v2_prediction_impl(sport, home_team, away_team, game_date)
+
+
+def _get_v2_prediction_impl(sport, home_team, away_team, game_date=None):
     """
     Get predictions from the v2 system (Glicko-2 + Stacked Ensemble + Calibration)
-    
+
     Returns dict with probabilities or None if v2 not available for this sport
     """
     model_sport = _v2_model_sport(sport)
@@ -6933,10 +6949,17 @@ def _fetch_injuries(sport: str) -> dict:
 
 
 def get_upcoming_predictions(sport, days=365):
+    """Thread-safe wrapper: serialize the native-model prediction build so
+    concurrent gunicorn threads don't crash the worker (segfault → 502)."""
+    with _PREDICT_LOCK:
+        return _get_upcoming_predictions_impl(sport, days)
+
+
+def _get_upcoming_predictions_impl(sport, days=365):
     """Get ALL game predictions from season start - both completed and upcoming
-    
+
     Loads games from database for all sports including NHL
-    
+
     USER REQUIREMENT: Show ALL games from season start (Oct 7 for NHL), not just upcoming!
     """
     sport = (sport or '').upper()
