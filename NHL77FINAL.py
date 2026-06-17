@@ -30,17 +30,30 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 _CANONICAL_HOST = "predictionlab.io"
 _PRIMARY_HOSTS = {"predictionlab.io", "www.predictionlab.io"}
+_full_module = None
 _full_app = None
 _full_lock = threading.Lock()
 
 
-def _full_wsgi_app():
-    global _full_app
-    if _full_app is None:
+def _full_app_module():
+    global _full_module, _full_app
+    if _full_module is None:
         with _full_lock:
-            if _full_app is None:
-                _full_app = importlib.import_module("NHL77FINAL_full").app
+            if _full_module is None:
+                _full_module = importlib.import_module("NHL77FINAL_full")
+                _full_app = _full_module.app
+    return _full_module
+
+
+def _full_wsgi_app():
+    if _full_app is None:
+        _full_app_module()
     return _full_app
+
+
+def __getattr__(name):
+    """Delegate legacy ``import NHL77FINAL as main`` attributes to the full app."""
+    return getattr(_full_app_module(), name)
 
 
 def _canonical_redirect():
