@@ -14430,14 +14430,7 @@ def landing_page():
     """Primary landing page using the approved research design."""
     if request.method == 'HEAD':
         return '', 200
-    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
-    _public_host = (request.host or '').split(':')[0].lower() in _PRIMARY_HOSTS
-    if _render_host or _public_host:
-        return render_template('homepage_preview.html', **_build_fast_landing_preview_context())
     log_site_visit('/')
-    return render_template('homepage_preview.html', **_build_landing_preview_context())
-
-    # Legacy landing implementation retained below temporarily for rollback/reference.
     nhl_accuracy = get_landing_accuracy('NHL')
     nfl_accuracy = get_landing_accuracy('NFL')
     nba_accuracy = get_landing_accuracy('NBA')

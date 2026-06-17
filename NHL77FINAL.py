@@ -8,10 +8,8 @@ that need it.
 """
 
 import importlib
-import json
 import os
 import threading
-from datetime import datetime
 
 for _v in (
     "OMP_NUM_THREADS",
@@ -22,7 +20,7 @@ for _v in (
 ):
     os.environ.setdefault(_v, "1")
 
-from flask import Flask, redirect, render_template, request
+from flask import Flask, redirect, request
 from werkzeug.wrappers import Response as WsgiResponse
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -72,85 +70,6 @@ def _canonical_redirect():
     return None
 
 
-_LANDING_SPORTS = [
-    {"key": "MLB", "seo_slug": "mlb-picks", "icon": "MLB", "name": "MLB", "status": "Live", "is_live": True},
-    {"key": "NHL", "seo_slug": "nhl-picks", "icon": "NHL", "name": "NHL", "status": "Live", "is_live": True},
-    {"key": "NBA", "seo_slug": "nba-picks", "icon": "NBA", "name": "NBA", "status": "Offseason", "is_live": False},
-    {"key": "NFL", "seo_slug": "nfl-picks", "icon": "NFL", "name": "NFL", "status": "Offseason", "is_live": False},
-    {"key": "SOCCER", "seo_slug": "soccer-picks", "icon": "SOC", "name": "Soccer", "status": "Live", "is_live": True},
-    {"key": "NCAAB", "seo_slug": "ncaab-picks", "icon": "CBB", "name": "NCAAB", "status": "Offseason", "is_live": False},
-    {"key": "NCAAF", "seo_slug": "ncaaf-picks", "icon": "CFB", "name": "NCAAF", "status": "Offseason", "is_live": False},
-    {"key": "WNBA", "seo_slug": "wnba-picks", "icon": "WNBA", "name": "WNBA", "status": "Live", "is_live": True},
-    {"key": "TENNIS", "seo_slug": "tennis-picks", "icon": "TEN", "name": "Tennis", "status": "Live", "is_live": True},
-    {"key": "UFC", "seo_slug": "ufc-picks", "icon": "UFC", "name": "UFC", "status": "Live", "is_live": True},
-    {"key": "GOLF", "seo_slug": "golf-picks", "icon": "GOLF", "name": "Golf", "status": "Live", "is_live": True},
-]
-
-_WEEKLY_BANNER_ITEMS = [
-    {"label": "Grinder2 Moneyline", "pct": "61%", "record": "Tracked daily"},
-    {"label": "Consensus Signal", "pct": "58%", "record": "Multi-model board"},
-    {"label": "XSharp Premium", "pct": "64%", "record": "Market edge"},
-]
-
-_UNITS_BANNER_ITEMS = [
-    {"label": "MLB", "units": "+18.4u", "record": "Season"},
-    {"label": "NHL", "units": "+12.1u", "record": "Season"},
-    {"label": "NBA", "units": "+27.8u", "record": "Season"},
-]
-
-
-def _blog_display_date(value):
-    if not value:
-        return ""
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).strftime("%b %-d, %Y")
-    except Exception:
-        return str(value)[:10]
-
-
-def _latest_blog_posts(limit=4):
-    try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "blog_posts.json")
-        with open(path, "r", encoding="utf-8") as fh:
-            posts = json.load(fh)
-        if isinstance(posts, dict):
-            posts = posts.get("posts", [])
-        out = []
-        for post in posts[:limit]:
-            if not isinstance(post, dict):
-                continue
-            out.append({
-                **post,
-                "display_date": _blog_display_date(post.get("published_at") or post.get("date")),
-                "excerpt": post.get("excerpt") or post.get("summary") or "",
-            })
-        return out
-    except Exception:
-        return []
-
-
-def _fast_home_context():
-    posts = _latest_blog_posts()
-    return {
-        "games_graded": 10000,
-        "predictions_logged": 50000,
-        "landing_sports": _LANDING_SPORTS,
-        "active_sport_slug": "mlb-picks",
-        "active_sport_name": "MLB",
-        "sports_covered": len(_LANDING_SPORTS),
-        "weekly_banner_messages": _WEEKLY_BANNER_ITEMS,
-        "units_banner_items": _UNITS_BANNER_ITEMS,
-        "todays_picks": [],
-        "latest_graded_game": None,
-        "latest_blog_post": posts[0] if posts else None,
-        "recent_blog_posts": posts[1:4],
-        "soccer_enabled": True,
-        "ga_tracking_id": os.environ.get("GA_TRACKING_ID", ""),
-        "is_logged_in": False,
-        "is_premium": False,
-    }
-
-
 @app.before_request
 def _fast_canonical():
     return _canonical_redirect()
@@ -165,7 +84,7 @@ def healthz():
 def landing_page():
     if request.method == "HEAD":
         return "", 200
-    return render_template("homepage_preview.html", **_fast_home_context())
+    return WsgiResponse.from_app(_full_wsgi_app().wsgi_app, request.environ)
 
 
 @app.route("/mlb-picks")
