@@ -68,15 +68,22 @@ _V2_BASE = _os_v2.path.dirname(_os_v2.path.abspath(__file__))
 try:
     from prediction_system_v2 import AdvancedPredictor
     V2_PREDICTORS = {}
-    # Load trained models for supported sports
-    for sport in ['NHL', 'NFL', 'NBA', 'MLB', 'NCAAF', 'NCAAB', 'WNBA']:
-        try:
-            _model_path = _os_v2.path.join(_V2_BASE, 'models', f'{sport}_v2')
-            V2_PREDICTORS[sport] = AdvancedPredictor.load(sport, _model_path)
-            print(f"✅ Loaded {sport} v2 predictor (Glicko-2 + Ensemble + Calibration)")
-        except Exception as e:
-            print(f"⚠️ {sport} v2 model not found at {_model_path}: {e}")
-    HAS_V2_SYSTEM = len(V2_PREDICTORS) > 0
+    HAS_V2_SYSTEM = True
+    _RENDER_HOST = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _PRELOAD_V2_MODELS = _early_os.environ.get('PL_PRELOAD_V2_MODELS', '').lower() in {'1', 'true', 'yes'}
+    if _PRELOAD_V2_MODELS or not _RENDER_HOST:
+        # Load trained models for supported sports outside Render startup. On
+        # Render, keep boot/health checks light and let _ensure_v2_predictor()
+        # lazy-load the specific sport on the first picks request.
+        for sport in ['NHL', 'NFL', 'NBA', 'MLB', 'NCAAF', 'NCAAB', 'WNBA']:
+            try:
+                _model_path = _os_v2.path.join(_V2_BASE, 'models', f'{sport}_v2')
+                V2_PREDICTORS[sport] = AdvancedPredictor.load(sport, _model_path)
+                print(f"✅ Loaded {sport} v2 predictor (Glicko-2 + Ensemble + Calibration)")
+            except Exception as e:
+                print(f"⚠️ {sport} v2 model not found at {_model_path}: {e}")
+    elif _RENDER_HOST:
+        print("ℹ️ Render startup: v2 predictors will lazy-load on first use")
 except ImportError as e:
     print(f"⚠️ V2 prediction system not available: {e}")
     V2_PREDICTORS = {}
