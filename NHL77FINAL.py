@@ -6375,7 +6375,12 @@ def _maybe_backfill_props_on_startup():
 
 
 try:
-    _maybe_backfill_props_on_startup()
+    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _props_startup_enabled = _early_os.environ.get('PL_ENABLE_PROPS_BACKFILL_ON_STARTUP', '').lower() in {'1', 'true', 'yes'}
+    if _props_startup_enabled or not _render_host:
+        _maybe_backfill_props_on_startup()
+    else:
+        logger.info("[props-backfill] disabled on Render startup; set PL_ENABLE_PROPS_BACKFILL_ON_STARTUP=1 to enable")
 except Exception as _pbe:
     logger.debug(f"[props-backfill] hook error: {_pbe}")
 
@@ -6404,7 +6409,12 @@ def _prewarm_espn_odds_cache():
         _time.sleep(720)   # re-warm every 12 min — before the 15-min TTL expires
 
 try:
-    threading.Thread(target=_prewarm_espn_odds_cache, daemon=True, name='odds-prewarm').start()
+    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _odds_prewarm_enabled = _early_os.environ.get('PL_ENABLE_ODDS_PREWARM', '').lower() in {'1', 'true', 'yes'}
+    if _odds_prewarm_enabled or not _render_host:
+        threading.Thread(target=_prewarm_espn_odds_cache, daemon=True, name='odds-prewarm').start()
+    else:
+        logger.info("[odds-prewarm] disabled on Render startup; set PL_ENABLE_ODDS_PREWARM=1 to enable")
 except Exception as _owe:
     logger.debug(f"[odds-prewarm] failed to start: {_owe}")
 
@@ -14367,9 +14377,11 @@ def homepage_preview():
     return render_template('homepage_preview.html', **_build_landing_preview_context())
 
 
-@app.route('/')
+@app.route('/', methods=['GET', 'HEAD'])
 def landing_page():
     """Primary landing page using the approved research design."""
+    if request.method == 'HEAD':
+        return '', 200
     log_site_visit('/')
     return render_template('homepage_preview.html', **_build_landing_preview_context())
 
