@@ -4639,16 +4639,17 @@ def add_header(response):
 import os as _os
 _DATA_DIR = '/data' if _os.path.isdir('/data') else '.'
 DATABASE = _os.path.join(_DATA_DIR, 'sports_predictions_original.db')
-# Enable WAL up front — BEFORE init_auth or any other code opens a connection,
-# so the journal-mode switch actually takes (it can't switch while another
-# connection holds the DB in rollback-journal mode). WAL lets the request
-# threads and the background score-sync threads read/write concurrently, which
-# is what was causing "database is locked" on visit logging and score inserts.
+# Force the DB back to the default rollback journal (NOT WAL). A previous build
+# enabled WAL, which persists in the DB header — and WAL's mmap shared memory is
+# not safe across gunicorn's preload fork, so workers SIGSEGV'd on the first
+# DB-touching request (site-wide 502). Converting to DELETE here (once, at import
+# in the master, before any worker forks) undoes the persisted WAL state and
+# removes the -wal/-shm files. DELETE mode has no shared memory, so it is
+# fork-safe; busy_timeout (per-connection) still prevents "database is locked".
 try:
-    _wal_conn = sqlite3.connect(DATABASE, timeout=30)
-    _wal_conn.execute("PRAGMA journal_mode=WAL")
-    _wal_conn.execute("PRAGMA synchronous=NORMAL")
-    _wal_conn.close()
+    _jm_conn = sqlite3.connect(DATABASE, timeout=15)
+    _jm_conn.execute("PRAGMA journal_mode=DELETE")
+    _jm_conn.close()
 except Exception:
     pass
 # Absolute path to this file's directory — used for template loading
@@ -6021,15 +6022,15 @@ def update_wnba_scores():
 def get_db_connection():
     """Get database connection.
 
-    WAL + a generous busy_timeout let the background score-sync threads and the
-    request threads share the DB without raising "database is locked": WAL lets
-    readers run concurrently with a writer, and busy_timeout makes a blocked
-    writer WAIT (up to 30s) for the lock instead of failing immediately.
+    A modest busy_timeout makes a blocked reader/writer WAIT briefly for the lock
+    instead of failing immediately with "database is locked". This is fork-safe
+    (no WAL / shared memory), unlike WAL which SIGSEGV'd gunicorn's preloaded
+    forked workers.
     """
-    conn = sqlite3.connect(DATABASE, timeout=30)
+    conn = sqlite3.connect(DATABASE, timeout=15)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA busy_timeout=5000")
     except Exception:
         pass
     return conn
@@ -6037,13 +6038,12 @@ def get_db_connection():
 
 def init_db():
     """Create all tables if they don't exist (safe to run on every startup)."""
-    conn = sqlite3.connect(DATABASE, timeout=30)
-    # WAL persists on the DB file, so every later connection (including the
-    # background sync threads) gets concurrent reads + non-blocking readers.
+    conn = sqlite3.connect(DATABASE, timeout=15)
+    # Rollback journal (default), NOT WAL: WAL's mmap shared memory is not safe
+    # across gunicorn's preload fork and segfaulted the workers. busy_timeout is
+    # fork-safe and prevents lock errors.
     try:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA busy_timeout=5000")
     except Exception:
         pass
     conn.executescript('''
