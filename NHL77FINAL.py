@@ -14430,10 +14430,11 @@ def landing_page():
     """Primary landing page using the approved research design."""
     if request.method == 'HEAD':
         return '', 200
-    log_site_visit('/')
     _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
-    if _render_host:
+    _public_host = (request.host or '').split(':')[0].lower() in _PRIMARY_HOSTS
+    if _render_host or _public_host:
         return render_template('homepage_preview.html', **_build_fast_landing_preview_context())
+    log_site_visit('/')
     return render_template('homepage_preview.html', **_build_landing_preview_context())
 
     # Legacy landing implementation retained below temporarily for rollback/reference.
