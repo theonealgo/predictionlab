@@ -19883,10 +19883,6 @@ def sport_predictions(sport, filter_date=None):
             and 'upstream data/model dependency failed' not in cached_html.lower()
         ):
             return cached_html
-        _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
-        _live_build_enabled = _early_os.environ.get('PL_ENABLE_PUBLIC_PICKS_LIVE_BUILD', '').lower() in {'1', 'true', 'yes'}
-        if _render_host and not _live_build_enabled:
-            return _predictions_fallback_page(sport, filter_date=filter_date)
     prediction_error = None
     try:
         predictions = get_upcoming_predictions(sport)
