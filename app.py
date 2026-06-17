@@ -7,6 +7,14 @@ remaining sport-specific code is moved into ``sports/``.
 
 import os
 
+# Force single-threaded native math BEFORE numpy/xgboost load. XGBoost's OpenMP
+# thread pool segfaulted gunicorn's threaded workers on the production host
+# (site-wide 502 on prediction pages). Pinning these to 1 must happen before the
+# native libraries initialize their thread pools, i.e. before importing the app.
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "XGBOOST_NTHREAD"):
+    os.environ.setdefault(_v, "1")
+
 from NHL77FINAL import app
 
 

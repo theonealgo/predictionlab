@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
+# Force single-threaded native math (XGBoost/OpenMP/BLAS). XGBoost's OpenMP
+# thread pool segfaulted gunicorn's threaded workers → site-wide 502 on
+# prediction pages. Pinning to 1 thread avoids the crash.
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export XGBOOST_NTHREAD=1
+
 # ── Copy database to persistent disk on first deploy ──────────────────────────
 if [ ! -f /data/sports_predictions_original.db ]; then
     echo "[render_start] Initializing database on persistent disk..."
