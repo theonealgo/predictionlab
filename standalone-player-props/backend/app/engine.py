@@ -603,12 +603,54 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     if league == "NBA":
         players = sorted(players, key=lambda x: (float(x.get("consensus_rank", 999)), -float(x.get("top50_score", 0.0))))[:100]
         projections.sort(key=lambda x: (-(x["projection"]), -x["confidence_score"], -(x["model_agreement"])),)
+    # FINAL PROP-ROW DEDUPLICATION: every API/table consumer receives at most
+    # one row for the same player and prop type, regardless of source overlap.
+    projections = _dedupe_prop_rows(projections)
     payload = {"players": players, "props": projections}
     if DEBUG_PLAYER_VALIDATION and league == "NBA":
         payload["excluded_players"] = excluded
         payload["model_variance"] = debug_variance
         payload["sanity_flags"] = sanity_flags
     return payload
+
+
+def _dedupe_prop_rows(props: List[Dict]) -> List[Dict]:
+    """Keep the strongest row for each normalized player and prop type.
+
+    Some feeds use different IDs for the same player, so the fallback key is a
+    normalized display name. Real market lines, EV, and confidence determine
+    which duplicate survives.
+    """
+    selected: Dict[tuple, Dict] = {}
+    order: List[tuple] = []
+    for row in props:
+        player_key = str(row.get("player_id") or "").strip().lower()
+        if not player_key:
+            player_key = " ".join(str(row.get("player_name") or "").lower().split())
+        prop_key = str(row.get("prop_type") or "").strip().lower()
+        key = (player_key, prop_key)
+        if key not in selected:
+            selected[key] = row
+            order.append(key)
+            continue
+
+        def quality(item: Dict) -> tuple:
+            picked_side = str(item.get("picked_side") or "").upper()
+            selected_ev = (
+                item.get("ev_over_percent")
+                if picked_side == "OVER"
+                else item.get("ev_under_percent")
+            )
+            has_market_line = item.get("line") is not None or item.get("_calc_line") is not None
+            return (
+                int(has_market_line),
+                float(selected_ev or 0.0),
+                float(item.get("confidence_score") or 0.0),
+            )
+
+        if quality(row) > quality(selected[key]):
+            selected[key] = row
+    return [selected[key] for key in order]
 
 
 def get_league_data(league: str) -> Dict:

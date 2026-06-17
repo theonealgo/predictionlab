@@ -12,7 +12,7 @@ Open Terminal, then:
 
 ```bash
 cd "/Users/nimamesghali/Sports Sandbox/Sports Sandbox"
-python3 NHL77FINAL.py
+python3 app.py
 ```
 
 **Quick check (no server):** app loads without crashing:
@@ -77,7 +77,7 @@ You should see `ok` (and some model-load messages). That means Python can import
 
 ### Automated checks (optional — ask a developer or run in Terminal)
 
-**Site audit** (`python3 qa/site_checker.py`) expects Flask running at `AUDIT_BASE_URL` (default `http://127.0.0.1:5001`); start with `PORT=5001 python3 NHL77FINAL.py`.
+**Site audit** (`python3 qa/site_checker.py`) expects Flask running at `AUDIT_BASE_URL` (default `http://127.0.0.1:5001`); start with `PORT=5001 python3 app.py`.
 
 From the sandbox folder:
 

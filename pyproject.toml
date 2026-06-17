@@ -43,4 +43,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["NHL77FINAL", "nhlschedules"]
+py-modules = ["app", "NHL77FINAL", "nhlschedules"]

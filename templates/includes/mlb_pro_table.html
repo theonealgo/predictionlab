@@ -30,15 +30,15 @@
       <th class="mlbpt-sticky mlbpt-c-time">Time (EST)</th>
       <th class="mlbpt-sticky mlbpt-c-away">Away</th>
       <th class="mlbpt-sticky mlbpt-c-home">Home</th>
-      <th>Books {{ _spread_word }} / Total{% if not prem %} 🔒{% endif %}</th>
+      <th>Books {{ _spread_word }} / Total{% if not prem %} (total premium){% endif %}</th>
       <th>Odds &amp; Lines — Prediction Lab{% if not prem %} 🔒{% endif %}</th>
       <th>Odds &amp; Lines — XSharp{% if not prem %} 🔒{% endif %}</th>
-      <th>Grinder2{% if not prem %} 🔒{% endif %}</th>
-      <th>Takedown{% if not prem %} 🔒{% endif %}</th>
-      <th>Edge{% if not prem %} 🔒{% endif %}</th>
-      <th>XSharp{% if not prem %} 🔒{% endif %}</th>
-      <th>Efficiency{% if not prem %} 🔒{% endif %}</th>
-      <th>Sharp Consensus{% if not prem %} 🔒{% endif %}</th>
+      <th>Grinder2</th>
+      <th>Takedown</th>
+      <th>Edge</th>
+      <th>XSharp</th>
+      <th>Efficiency</th>
+      <th>Sharp Consensus</th>
       <th>H2H Avg Total{% if not prem %} 🔒{% endif %}</th>
       <th>EV</th>
     </tr>
@@ -83,7 +83,7 @@
         </div>
         <div class="mlbpt-wp"><span class="mlbpt-wplabel">{% if _away_pick %}{{ _face_label }}{% else %}Win Prob{% endif %}</span><span class="mlbpt-wppct">{% if _fa is not none %}{{ _fa }}%{% else %}—{% endif %}</span></div>
         <div class="mlbpt-odds"><span>Books:</span> {% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% else %}—{% endif %}</div>
-        <div class="mlbpt-odds"><span>PL:</span> {% if pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</div>
+        <div class="mlbpt-odds"><span>PL:</span> {% if not prem %}<span class="mlbpt-lock" title="Premium">Premium</span>{% elif pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</div>
       </td>
 
       {# ── Home ── #}
@@ -94,14 +94,14 @@
         </div>
         <div class="mlbpt-wp"><span class="mlbpt-wplabel">{% if _home_pick %}{{ _face_label }}{% else %}Win Prob{% endif %}</span><span class="mlbpt-wppct">{% if _fh is not none %}{{ _fh }}%{% else %}—{% endif %}</span></div>
         <div class="mlbpt-odds"><span>Books:</span> {% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% else %}—{% endif %}</div>
-        <div class="mlbpt-odds"><span>PL:</span> {% if pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</div>
+        <div class="mlbpt-odds"><span>PL:</span> {% if not prem %}<span class="mlbpt-lock" title="Premium">Premium</span>{% elif pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</div>
       </td>
 
       {# ── Books Run Line / Total (premium), stacked with short team names ── #}
-      <td class="mlbpt-lines">{% if prem %}
+      <td class="mlbpt-lines">
         <div>{% if _disp_bs is not none %}{{ fmt_spread_line(_disp_bs, team_short(home_id, sport), team_short(away_id, sport), _is_rl) }}{% else %}—{% endif %}</div>
-        <div>{% if _disp_bt is not none %}Total {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
-      {% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+        <div>{% if prem %}{% if _disp_bt is not none %}Total {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">Total: Premium</span>{% endif %}</div>
+      </td>
 
       {# ── Odds & Lines — Prediction Lab (premium) ── #}
       <td class="mlbpt-lines">{% if prem %}
@@ -126,20 +126,20 @@
         <div class="mlbpt-scoreline">{{ team_short(home_id, sport) }} {{ fmt_half(_xs_h2) }}</div>{% else %}<div><b>Score:</b> —</div>{% endif %}
       {% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
 
-      {# ── Model columns (premium) ── #}
-      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.glicko2_prob if pred.glicko2_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
-      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.trueskill_prob if pred.trueskill_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
-      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.elo_prob if pred.elo_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
-      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.xgb_prob if pred.xgb_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
-      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.efficiency_prob if pred.efficiency_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
-      <td class="mlbpt-model">{% if prem %}{{ mlbpt_model_cell(pred.ensemble_prob if pred.ensemble_prob is defined else none, home_id, away_id, sport) }}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
+      {# ── ML model percentages are public ── #}
+      <td class="mlbpt-model">{{ mlbpt_model_cell(pred.glicko2_prob if pred.glicko2_prob is defined else none, home_id, away_id, sport) }}</td>
+      <td class="mlbpt-model">{{ mlbpt_model_cell(pred.trueskill_prob if pred.trueskill_prob is defined else none, home_id, away_id, sport) }}</td>
+      <td class="mlbpt-model">{{ mlbpt_model_cell(pred.elo_prob if pred.elo_prob is defined else none, home_id, away_id, sport) }}</td>
+      <td class="mlbpt-model">{{ mlbpt_model_cell(pred.xgb_prob if pred.xgb_prob is defined else none, home_id, away_id, sport) }}</td>
+      <td class="mlbpt-model">{{ mlbpt_model_cell(pred.efficiency_prob if pred.efficiency_prob is defined else none, home_id, away_id, sport) }}</td>
+      <td class="mlbpt-model">{{ mlbpt_model_cell(pred.ensemble_prob if pred.ensemble_prob is defined else none, home_id, away_id, sport) }}</td>
 
       {# ── H2H Last 10 (premium), value stacked over the game count ── #}
       <td class="mlbpt-h2h">{% if prem %}{% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}<div>{{ fmt_half(pred.h2h_last10_total) }}</div>{% if pred.h2h_last10_games is defined and pred.h2h_last10_games %}<div class="mlbpt-sub">({{ pred.h2h_last10_games }} game{% if pred.h2h_last10_games != 1 %}s{% endif %})</div>{% endif %}{% else %}<span class="mlbpt-dash">—</span>{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</td>
 
       {# ── EV: Moneyline (free) + Spread/Total (premium), stacked in one column ── #}
       <td class="mlbpt-ev">
-        <div><span>ML</span> {% if _ml_ev is not none %}<b class="{% if _ml_ev > 0 %}mlbpt-pos{% elif _ml_ev < 0 %}mlbpt-neg{% endif %}">{% if _ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(_ml_ev) }}%</b>{% else %}<span class="mlbpt-dash">—</span>{% endif %}</div>
+        <div><span>ML</span> {% if prem %}{% if _ml_ev is not none %}<b class="{% if _ml_ev > 0 %}mlbpt-pos{% elif _ml_ev < 0 %}mlbpt-neg{% endif %}">{% if _ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(_ml_ev) }}%</b>{% else %}<span class="mlbpt-dash">—</span>{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">Premium</span>{% endif %}</div>
         <div><span>Spread</span> {% if prem %}{% if _sp_ev is not none %}<b class="{% if _sp_ev > 0 %}mlbpt-pos{% elif _sp_ev < 0 %}mlbpt-neg{% endif %}">{% if _sp_ev > 0 %}+{% endif %}{{ "%.1f"|format(_sp_ev) }}%</b>{% else %}<span class="mlbpt-dash">—</span>{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</div>
         <div><span>Total</span> {% if prem %}{% if _to_ev is not none %}<b class="{% if _to_ev > 0 %}mlbpt-pos{% elif _to_ev < 0 %}mlbpt-neg{% endif %}">{% if _to_ev > 0 %}+{% endif %}{{ "%.1f"|format(_to_ev) }}%</b>{% else %}<span class="mlbpt-dash">—</span>{% endif %}{% else %}<span class="mlbpt-lock" title="Premium">🔒</span>{% endif %}</div>
       </td>

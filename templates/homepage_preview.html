@@ -53,8 +53,8 @@
 
     .pl2-scroll { position: relative; z-index: 10; }
     .pl2-shell {
-        width: min(1240px, calc(100% - 280px));
-        margin-left: max(220px, calc((100% - 1250px) / 2));
+        width: min(1180px, calc(100% - 220px));
+        margin-left: max(160px, calc((100% - 1180px) / 2));
         margin-right: auto;
     }
     .pl2-mono { font: 800 .66rem var(--pl-mono); letter-spacing: .16em; text-transform: uppercase; color: hsl(0 0% 34%); }
@@ -164,16 +164,16 @@
     .pl2-eyebrow::before { content: ""; width: 48px; height: 1px; background: var(--pl-accent); }
     .pl2-hero h1 {
         margin: 0 0 30px; font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(4.8rem, 7.5vw, 8.2rem);
+        font-size: clamp(4.1rem, 6.4vw, 7rem);
         line-height: .88; letter-spacing: 0; font-weight: 950; text-transform: uppercase;
     }
-    .pl2-h1-row { display: flex; align-items: flex-end; justify-content: flex-start; gap: clamp(70px, 13vw, 220px); }
+    .pl2-h1-row { display: flex; align-items: flex-end; justify-content: flex-start; gap: clamp(44px, 8vw, 145px); }
     .pl2-h1-side {
-        font: 800 clamp(.72rem, 1.5vw, 1.1rem) var(--pl-mono); letter-spacing: .2em;
+        font: 800 clamp(.62rem, 1vw, .88rem) var(--pl-mono); letter-spacing: .18em;
         text-transform: uppercase; color: hsl(76 92% 42%); padding-bottom: .7rem; white-space: nowrap;
     }
     .pl2-hero-rule { height: 1px; width: 100%; background: var(--pl-line); margin-bottom: 32px; }
-    .pl2-hero-grid { display: grid; grid-template-columns: .95fr 1.05fr; gap: 40px 90px; align-items: start; }
+    .pl2-hero-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px 72px; align-items: start; }
     .pl2-lede { max-width: 560px; margin: 0 0 32px; color: hsl(0 0% 3.9% / 0.7); font-size: 1.125rem; line-height: 1.6; font-weight: 500; }
     .pl2-hero-cta { display: flex; flex-wrap: wrap; gap: 16px; }
     .pl2-btn {
@@ -258,6 +258,39 @@
     .pl2-copy { min-height: 42px; padding: 0 18px; border: 1px solid var(--pl-line-dark); background: var(--pl-panel); color: var(--pl-ink); font: 900 .6rem var(--pl-mono); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
     .pl2-copy:hover, .pl2-copy.copied { background: var(--pl-fill); border-color: var(--pl-ink); }
     .pl2-board-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+    /* Homepage live prediction cards: compact moneyline-only preview of real pick cards. */
+    .pl2-live-board {
+        margin-top: 34px; padding: 14px; border: 1px solid var(--pl-line-dark);
+        background: hsl(0 0% 100% / .84); border-radius: 22px;
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    }
+    .pl2-pick-card {
+        position: relative; min-height: 248px; padding: 22px 18px 18px;
+        border: 1px solid hsl(0 88% 72% / .85); border-radius: 14px;
+        background: var(--pl-panel); color: var(--pl-ink); text-decoration: none;
+        display: flex; flex-direction: column; gap: 16px;
+    }
+    .pl2-pick-card:hover { box-shadow: 6px 6px 0 var(--pl-line); transform: translate(-1px,-1px); }
+    .pl2-pick-card-live {
+        position: absolute; top: 14px; right: 14px; padding: 4px 9px;
+        border: 1px solid hsl(0 84% 70%); border-radius: 999px;
+        color: hsl(0 78% 46%); background: hsl(0 100% 97%);
+        font: 900 .52rem var(--pl-mono); letter-spacing: .12em; text-transform: uppercase;
+    }
+    .pl2-pick-card-live::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: hsl(0 78% 54%); vertical-align: 1px; }
+    .pl2-pick-card-meta { font: 800 .58rem var(--pl-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--pl-faint); }
+    .pl2-pick-teams { display: grid; gap: 8px; margin-top: 8px; }
+    .pl2-pick-team { display: flex; align-items: center; gap: 10px; font-size: .88rem; font-weight: 900; }
+    .pl2-pick-team code { min-width: 32px; padding: 6px 0; text-align: center; background: hsl(194 88% 42%); color: #fff; font: 900 .56rem var(--pl-mono); }
+    .pl2-pick-market { font-size: .72rem; color: var(--pl-muted); font-weight: 700; }
+    .pl2-pick-probs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pl2-pick-prob { padding: 15px 10px; border: 1px solid var(--pl-line); border-radius: 6px; background: hsl(0 0% 97%); text-align: center; }
+    .pl2-pick-prob.is-pick { background: hsl(82 100% 89%); border-color: hsl(86 82% 55%); }
+    .pl2-pick-prob span { display: block; font: 900 .52rem var(--pl-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--pl-faint); }
+    .pl2-pick-prob b { display: block; margin-top: 5px; font-size: 1.6rem; line-height: 1; font-weight: 950; }
+    .pl2-pick-summary { margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--pl-line-dark); display: flex; justify-content: space-between; gap: 10px; color: var(--pl-muted); font: 750 .62rem var(--pl-mono); line-height: 1.45; }
+    .pl2-pick-summary strong { color: var(--pl-ink); }
+    .pl2-pick-details { padding-top: 9px; border-top: 1px solid var(--pl-line); text-align: right; color: hsl(88 70% 26%); font: 900 .58rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; }
     .pl2-result-game { margin: 18px 0 24px; padding: 18px 0; border-top: 1px solid var(--pl-line); border-bottom: 1px solid var(--pl-line); }
     .pl2-result-game-head, .pl2-result-team { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
     .pl2-result-game-head { margin-bottom: 12px; color: var(--pl-faint); font: 800 .6rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; }
@@ -358,7 +391,32 @@
 
     /* How it works */
     .pl2-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 34px; }
-    .pl2-step { border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 22px 20px; }
+    .pl2-step { border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 18px 18px 22px; overflow: hidden; }
+    .pl2-step-art {
+        position: relative; height: 92px; margin: -2px -2px 18px;
+        border: 1px solid hsl(0 0% 88%); background: linear-gradient(135deg, #f8fafc 0%, #fff 46%, #efffd8 100%);
+        overflow: hidden;
+    }
+    .pl2-step-art::before {
+        content: ""; position: absolute; inset: 0;
+        background-image:
+            linear-gradient(hsl(76 100% 45% / .18) 1px, transparent 1px),
+            linear-gradient(90deg, hsl(76 100% 45% / .18) 1px, transparent 1px);
+        background-size: 18px 18px;
+    }
+    .pl2-step-art i { position: absolute; display: block; background: var(--pl-ink); }
+    .pl2-step-art.data i:nth-child(1) { left: 18px; bottom: 18px; width: 18px; height: 24px; }
+    .pl2-step-art.data i:nth-child(2) { left: 46px; bottom: 18px; width: 18px; height: 44px; }
+    .pl2-step-art.data i:nth-child(3) { left: 74px; bottom: 18px; width: 18px; height: 32px; background: var(--pl-accent); }
+    .pl2-step-art.model i:nth-child(1) { width: 58px; height: 58px; border: 1px solid var(--pl-ink); border-radius: 50%; background: transparent; left: 24px; top: 16px; }
+    .pl2-step-art.model i:nth-child(2) { width: 12px; height: 12px; border-radius: 50%; left: 47px; top: 39px; background: var(--pl-accent); }
+    .pl2-step-art.model i:nth-child(3) { width: 86px; height: 1px; left: 86px; top: 45px; background: hsl(0 0% 10% / .35); }
+    .pl2-step-art.project i:nth-child(1) { left: 20px; right: 20px; top: 28px; height: 2px; background: hsl(0 0% 10% / .25); transform: rotate(-8deg); }
+    .pl2-step-art.project i:nth-child(2) { right: 34px; top: 20px; width: 14px; height: 14px; border-radius: 50%; background: var(--pl-accent); }
+    .pl2-step-art.project i:nth-child(3) { left: 28px; bottom: 24px; width: 120px; height: 10px; background: repeating-linear-gradient(90deg, var(--pl-ink) 0 10px, transparent 10px 18px); }
+    .pl2-step-art.consensus i:nth-child(1) { left: 22px; top: 20px; width: 22px; height: 22px; border-radius: 50%; background: var(--pl-ink); box-shadow: 38px 24px 0 var(--pl-accent), 86px 4px 0 hsl(0 0% 75%); }
+    .pl2-step-art.consensus i:nth-child(2) { left: 42px; top: 37px; width: 82px; height: 1px; background: hsl(0 0% 10% / .35); transform: rotate(-8deg); }
+    .pl2-step-art.consensus i:nth-child(3) { right: 18px; bottom: 18px; width: 42px; height: 42px; border: 1px solid var(--pl-ink); background: transparent; }
     .pl2-step b { display: block; margin: 14px 0 7px; font-size: 1.05rem; font-weight: 900; }
     .pl2-step p { margin: 0; color: var(--pl-muted); font-size: .85rem; line-height: 1.65; font-weight: 600; }
 
@@ -373,6 +431,19 @@
     .pl2-plan li { padding: 9px 0 9px 22px; position: relative; border-bottom: 1px solid var(--pl-line); font-size: .92rem; font-weight: 700; }
     .pl2-plan li::before { content: "→"; position: absolute; left: 0; font-weight: 900; }
     .pl2-plan.premium li::before { content: "+"; }
+
+    /* Homepage FAQ accordion: short question rows keep the main page light. */
+    .pl2-faq-heading { max-width: 840px; }
+    .pl2-faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; margin-top: 58px; }
+    .pl2-faq-item { border-bottom: 1px solid var(--pl-line-dark); background: transparent; }
+    .pl2-faq-item summary {
+        min-height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+        list-style: none; cursor: pointer; font-size: 1rem; font-weight: 900; color: var(--pl-ink);
+    }
+    .pl2-faq-item summary::-webkit-details-marker { display: none; }
+    .pl2-faq-item summary::after { content: "+"; color: hsl(86 82% 38%); font: 400 1.35rem/1 var(--pl-mono); }
+    .pl2-faq-item[open] summary::after { content: "−"; }
+    .pl2-faq-item p { margin: -4px 46px 24px 0; color: var(--pl-muted); font-size: .88rem; line-height: 1.7; font-weight: 650; }
 
     /* Footer */
     .pl2-footer {
@@ -460,7 +531,8 @@
             margin-right: 16px;
         }
         .pl2-nav { display: none; }
-        .pl2-hero-grid, .pl2-models, .pl2-intel, .pl2-plans { grid-template-columns: 1fr; }
+        .pl2-hero-grid, .pl2-models, .pl2-intel, .pl2-plans, .pl2-faq-grid { grid-template-columns: 1fr; }
+        .pl2-live-board { grid-template-columns: 1fr 1fr; }
         .pl2-h1-side { display: none; }
         .pl2-hero > .pl2-shell { padding-left: 0; }
         .pl2-hero-scroll { display: none; }
@@ -482,6 +554,7 @@
             font-size: 0; letter-spacing: 0;
         }
         .pl2-sports, .pl2-units, .pl2-steps, .pl2-gloss, .pl2-footer-grid { grid-template-columns: 1fr; }
+        .pl2-live-board { grid-template-columns: 1fr; }
         .pl2-sec { padding: 56px 0 50px; }
         .pl2-login { display: none; }
         .pl2-hero { min-height: auto; padding: 88px 0 64px; background: hsl(45 25% 99% / .64); }
@@ -557,33 +630,46 @@
         <div class="pl2-horizon" aria-hidden="true"></div>
 
         <main>
-            <!-- 01 · Today's board -->
+            <!-- 01 · Live moneyline board -->
             <section class="pl2-sec" id="sec-board" data-bc="02 · Today's Board" data-rail="1">
                 <div class="pl2-shell">
                     <div class="pl2-sec-top">
                         <div>
-                            <span class="pl2-mono">01. Today's Board</span>
-                            <h2>Top Value Picks</h2>
+                            <span class="pl2-mono">Free today · Live data</span>
+                            <h2>Live Predictions, Next Slate.</h2>
                         </div>
-                        <a class="pl2-sec-link" href="/ai-sports-betting-picks-today">Full Board →</a>
                     </div>
-                    <span class="pl2-mono">Ranked by edge quality, model agreement, and confidence — updated daily</span>
-                    <div class="pl2-rows">
-                        {% for tp in todays_picks[:5] %}
-                        <div class="pl2-row">
-                            <span class="pl2-row-num">{{ "%02d"|format(loop.index) }}</span>
-                            <span class="pl2-row-league"><span class="pl2-chip ghost">{{ tp.sport }}</span></span>
-                            <a class="pl2-row-main" href="/{{ tp.slug }}">
-                                <b>{{ tp.away }} vs {{ tp.home }}</b>
-                                <span>Model pick — {{ tp.pick }}</span>
-                            </a>
-                            <span class="pl2-row-val"><span class="pl2-row-score"><b>{{ tp.prob }}%</b><span>Moneyline</span></span></span>
-                        </div>
+                    <span class="pl2-mono">Moneyline-only preview. Green highlights the model's selection.</span>
+                    <div class="pl2-live-board">
+                        {% for tp in todays_picks[:6] %}
+                        <a class="pl2-pick-card" href="/{{ tp.slug }}">
+                            {% if tp.is_live %}<span class="pl2-pick-card-live">Live</span>{% endif %}
+                            <div>
+                                <div class="pl2-pick-card-meta">{{ tp.sport }} · Moneyline</div>
+                                <div class="pl2-pick-teams">
+                                    <div class="pl2-pick-team"><code>{{ tp.away[:2]|upper }}</code><span>{{ tp.away }}</span></div>
+                                    <div class="pl2-pick-team"><code>{{ tp.home[:2]|upper }}</code><span>{{ tp.home }}</span></div>
+                                </div>
+                            </div>
+                            <div class="pl2-pick-market">Match winner</div>
+                            <div class="pl2-pick-probs">
+                                <div class="pl2-pick-prob {% if tp.pick_side == 'away' %}is-pick{% endif %}">
+                                    <span>Away</span><b>{{ tp.away_prob }}%</b>
+                                </div>
+                                <div class="pl2-pick-prob {% if tp.pick_side == 'home' %}is-pick{% endif %}">
+                                    <span>Home</span><b>{{ tp.home_prob }}%</b>
+                                </div>
+                            </div>
+                            <div class="pl2-pick-summary">
+                                <span>AI pick · <strong>{{ tp.pick }}</strong></span>
+                                <span>Confidence <strong>{{ tp.prob }}%</strong></span>
+                            </div>
+                            <div class="pl2-pick-details">View Details →</div>
+                        </a>
                         {% endfor %}
                     </div>
                     <div class="pl2-board-actions">
-                        <button class="pl2-copy" type="button" data-copy="{% for tp in todays_picks[:5] %}{{ tp.sport }}: {{ tp.away }} vs {{ tp.home }} — {{ tp.pick }} ({{ tp.prob }}%){% if not loop.last %}&#10;{% endif %}{% endfor %}">Copy Value Picks</button>
-                        <a class="pl2-btn" href="/ai-sports-betting-picks-today" target="_blank" rel="noopener">Open in Browser →</a>
+                        <a class="pl2-btn primary" href="/{{ active_sport_slug }}">See All Predictions →</a>
                     </div>
                 </div>
             </section>
@@ -805,10 +891,10 @@
                         </div>
                     </div>
                     <div class="pl2-steps">
-                        <div class="pl2-step"><span class="pl2-mono">Step 01</span><b>Live Data</b><p>Real-time stats, matchups, and historical performance across every covered league.</p></div>
-                        <div class="pl2-step"><span class="pl2-mono">Step 02</span><b>AI Models</b><p>Five independent models generate win probabilities for every game — no human overrides.</p></div>
-                        <div class="pl2-step"><span class="pl2-mono">Step 03</span><b>Projections</b><p>Predicted scores, spreads, and totals for each matchup, graded against the book.</p></div>
-                        <div class="pl2-step"><span class="pl2-mono">Step 04</span><b>Consensus</b><p>All models combine into one pick — highlighting real, measurable edges.</p></div>
+                        <div class="pl2-step"><div class="pl2-step-art data" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 01</span><b>Live Data</b><p>Real-time stats, matchups, and historical performance across every covered league.</p></div>
+                        <div class="pl2-step"><div class="pl2-step-art model" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 02</span><b>AI Models</b><p>Five independent models generate win probabilities for every game — no human overrides.</p></div>
+                        <div class="pl2-step"><div class="pl2-step-art project" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 03</span><b>Projections</b><p>Predicted scores, spreads, and totals for each matchup, graded against the book.</p></div>
+                        <div class="pl2-step"><div class="pl2-step-art consensus" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 04</span><b>Consensus</b><p>All models combine into one pick — highlighting real, measurable edges.</p></div>
                     </div>
                 </div>
             </section>
@@ -845,6 +931,53 @@
                             </ul>
                             <a class="pl2-btn primary" href="/plans">Try a Week — $4.99 →</a>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 09 · Homepage FAQ -->
+            <section class="pl2-sec band" id="sec-faq" data-bc="07 · Questions" data-rail="6">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top pl2-faq-heading">
+                        <div>
+                            <span class="pl2-mono">FAQ</span>
+                            <h2>Questions, answered honestly.</h2>
+                        </div>
+                        <a class="pl2-sec-link" href="/faq">Full FAQ →</a>
+                    </div>
+                    <div class="pl2-faq-grid">
+                        <details class="pl2-faq-item">
+                            <summary>How do your AI sports betting picks work?</summary>
+                            <p>Prediction Lab runs each matchup through multiple models that look at team strength, recent form, market odds, matchup data, and historical results. The page shows the model probability and the pick it sees as the strongest current edge.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>What makes your picks different from sportsbooks?</summary>
+                            <p>Sportsbooks set prices to balance risk and protect margin. Our model is trying to estimate the true probability of the game, then compare that number against the book price to find possible mispriced spots.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>How do you find value bets?</summary>
+                            <p>A value bet appears when our model probability is higher than the sportsbook's implied probability. That does not guarantee a win; it means the price may be better than the true risk if the model is right over time.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>What does the probability percentage mean?</summary>
+                            <p>The percentage is the model's estimated chance for that side to win the moneyline market. A 60% pick still loses about 40 times out of 100, so the number should be used for pricing and discipline, not certainty.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>Do your models agree on every pick?</summary>
+                            <p>No. Disagreement is normal. We show consensus and model percentages so users can see when signals are strong, mixed, or thin instead of hiding uncertainty behind one black-box answer.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>What sports do you cover?</summary>
+                            <p>We cover major team sports and selected individual sports, including MLB, NBA, NFL, NHL, soccer, college sports, WNBA, tennis, UFC, and golf when reliable data is available.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>Are your results tracked publicly?</summary>
+                            <p>Yes. Completed picks are graded against final outcomes and shown in the results archive. We keep wins and losses visible because model trust has to be earned over a real sample.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>Are your picks guaranteed to win?</summary>
+                            <p>No. Nobody can guarantee sports betting results. These picks are for people who want data, transparency, and discipline. Bet responsibly, use bankroll limits, and never treat a model as a sure thing.</p>
+                        </details>
                     </div>
                 </div>
             </section>

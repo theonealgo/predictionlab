@@ -337,6 +337,15 @@ class SoccerModelBundle:
     def predict(self, home: str, away: str) -> Optional[dict]:
         if not self.ready or not self.poisson_xg or not self.poisson_reg or not self.markov or not self.elo:
             return None
+        # COVERAGE GUARD: unknown tournament teams otherwise receive identical
+        # league-average inputs and misleading 50% outputs from every model.
+        known_teams = (
+            set(self.poisson_xg.team_stats)
+            | set(self.poisson_reg.attack)
+            | set(self.elo.ratings)
+        )
+        if home not in known_teams or away not in known_teams:
+            return None
         xg = self.poisson_xg.predict(home, away)
         reg = self.poisson_reg.predict(home, away)
         elo_home, elo_draw, elo_away = self.elo.predict(home, away)

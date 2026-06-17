@@ -7,7 +7,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/Library/Frameworks/Python.framework/Versions/3.13/bin/python3</string>
-        <string>/Users/nimamesghali/Sports Sandbox/Sports Sandbox/NHL77FINAL.py</string>
+        <string>/Users/nimamesghali/Sports Sandbox/Sports Sandbox/app.py</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/nimamesghali/Sports Sandbox/Sports Sandbox</string>

@@ -23,7 +23,7 @@ fi
 rm -f "$PID_FILE"
 touch "$LOG_FILE"
 
-PORT="$PORT" nohup python3 NHL77FINAL.py >>"$LOG_FILE" 2>&1 </dev/null &
+PORT="$PORT" nohup python3 app.py >>"$LOG_FILE" 2>&1 </dev/null &
 APP_PID=$!
 echo "$APP_PID" >"$PID_FILE"
 

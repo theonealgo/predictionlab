@@ -1,14 +1,18 @@
-# Sports Sandbox — NBA module pilot
+# Prediction Lab Sports Sandbox
 
-Minimal extraction of NBA logic from `NHL77FINAL.py` into `sports/NBA.py`. Other sports remain in the monolith.
+`app.py` is the canonical application launcher. Sport extraction is in progress:
+NBA and the individual-sport loaders are substantially separated, while several
+sport modules still delegate to the legacy shared core.
+
+Read `ARCHITECTURE_GUIDE.md` before changing application structure.
 
 ## Run locally
 
 ```bash
 cd "/Users/nimamesghali/Sports Sandbox/Sports Sandbox"
 pip install -r requirements.txt
-python3 -c "from NHL77FINAL import app; print('ok', app.name)"
-python3 NHL77FINAL.py   # or: gunicorn -c gunicorn.conf.py NHL77FINAL:app
+python3 -c "from app import app; print('ok', app.name)"
+python3 app.py   # or: gunicorn -c gunicorn.conf.py app:app
 ```
 
 Routes (SEO slugs still registered in main):

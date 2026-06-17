@@ -53,8 +53,8 @@ Modules use lazy `import NHL77FINAL as main` to avoid circular imports.
 ```bash
 cd "/Users/nimamesghali/Sports Sandbox/Sports Sandbox"
 pip install -r requirements.txt
-python3 NHL77FINAL.py
-# or: gunicorn -c gunicorn.conf.py NHL77FINAL:app
+python3 app.py
+# or: gunicorn -c gunicorn.conf.py app:app
 ```
 
 Sample URLs:

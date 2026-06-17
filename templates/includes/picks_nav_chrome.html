@@ -76,8 +76,10 @@ function tvOpen(){
   if(h)h.setAttribute('aria-expanded','true');
 }
 function tvToggle(){
-  var d=document.getElementById('tvDrawer');
-  if(d&&d.classList.contains('open')){tvClose();}else{tvOpen();}
+  var d=document.getElementById('tvDrawer'),s=document.getElementById('tvSub');
+  if(d&&d.classList.contains('open')){
+    if(s&&s.classList.contains('visible')){tvBack();}else{tvClose();}
+  }else{tvOpen();}
 }
 function tvClose(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');

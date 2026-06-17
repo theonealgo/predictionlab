@@ -1,0 +1,222 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260612_145042  |  2026-06-12 14:50:42
+Target: http://127.0.0.1:5002
+
+FAILURES (must fix):
+  - [routes] Homepage: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: / (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6990>: Failed to establish a new co
+    Page: /
+  - [routes] Health Check: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /healthz (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6850>: Failed to establish a
+    Page: /healthz
+  - [routes] Login Page: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5f90>: Failed to establish a n
+    Page: /login
+  - [routes] Signup Page: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /signup (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac60d0>: Failed to establish a 
+    Page: /signup
+  - [routes] Plans & Pricing: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /plans (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac51d0>: Failed to establish a n
+    Page: /plans
+  - [routes] Contact: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /contact (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5090>: Failed to establish a
+    Page: /contact
+  - [routes] Privacy Policy: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /privacy (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac7890>: Failed to establish a
+    Page: /privacy
+  - [routes] Terms of Service: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /terms (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac79d0>: Failed to establish a n
+    Page: /terms
+  - [routes] FAQ: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /faq (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c410>: Failed to establish a new
+    Page: /faq
+  - [routes] Tutorial: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /tutorial (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c2d0>: Failed to establish 
+    Page: /tutorial
+  - [routes] Responsible Gaming: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /responsible-gaming (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2ccd0>: Failed to 
+    Page: /responsible-gaming
+  - [routes] AI Picks Today: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ai-sports-betting-picks-today (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2ce10>:
+    Page: /ai-sports-betting-picks-today
+  - [routes] What Are AI Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /what-are-ai-sports-betting-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4a5
+    Page: /what-are-ai-sports-betting-picks
+  - [routes] Model vs Sportsbooks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /our-model-vs-sportsbooks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4cd0>: Fail
+    Page: /our-model-vs-sportsbooks
+  - [routes] Search: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /search (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5950>: Failed to establish a 
+    Page: /search
+  - [routes] All Sports Results: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /all-sports-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac60d0>: Failed to 
+    Page: /all-sports-results
+  - [routes] Daily Report: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /daily-report (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac65d0>: Failed to establ
+    Page: /daily-report
+  - [routes] Edge Performance: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /edge-performance (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6990>: Failed to es
+    Page: /edge-performance
+  - [routes] Results Downloads: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /results/downloads (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10a813ed0>: Failed to e
+    Page: /results/downloads
+  - [routes] Results Redirect: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c2d0>: Failed to establish a
+    Page: /results
+  - [routes] NBA Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2d090>: Failed to establish
+    Page: /nba-picks
+  - [routes] NHL Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nhl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2d590>: Failed to establish
+    Page: /nhl-picks
+  - [routes] NFL Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nfl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2da90>: Failed to establish
+    Page: /nfl-picks
+  - [routes] MLB Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /mlb-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2df90>: Failed to establish
+    Page: /mlb-picks
+  - [routes] NCAAB Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ncaab-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6c10>: Failed to establi
+    Page: /ncaab-picks
+  - [routes] NCAAF Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ncaaf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6850>: Failed to establi
+    Page: /ncaaf-picks
+  - [routes] NCAAW Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ncaaw-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5d10>: Failed to establi
+    Page: /ncaaw-picks
+  - [routes] WNBA Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /wnba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5a90>: Failed to establis
+    Page: /wnba-picks
+  - [routes] Soccer Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /soccer-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5590>: Failed to establ
+    Page: /soccer-picks
+  - [routes] World Cup Picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /soccer-picks?league=fifa.world (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4190>
+    Page: /soccer-picks?league=fifa.world
+  - [routes] NBA Results: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nba-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac79d0>: Failed to establi
+    Page: /nba-results
+  - [routes] NHL Results: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nhl-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4a50>: Failed to establi
+    Page: /nhl-results
+  - [routes] MLB Results: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /mlb-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2d950>: Failed to establi
+    Page: /mlb-results
+  - [routes] Model Performance (auth redirect ok): Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /performance (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2da90>: Failed to establi
+    Page: /performance
+  - [routes] Robots.txt: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /robots.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2cf50>: Failed to establis
+    Page: /robots.txt
+  - [routes] Sitemap XML: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /sitemap.xml (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c050>: Failed to establi
+    Page: /sitemap.xml
+  - [routes] LLMs.txt: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /llms.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2e490>: Failed to establish 
+    Page: /llms.txt
+  - [routes] AI.txt: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ai.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2e350>: Failed to establish a 
+    Page: /ai.txt
+  - [routes] Sports API: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /api/sports (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4a50>: Failed to establis
+    Page: /api/sports
+  - [routes] Search API: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /api/search?q=nba (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4b90>: Failed to es
+    Page: /api/search?q=nba
+  - [routes] 404 Handler: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /this-page-does-not-exist-xyz123 (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6d50
+    Page: /this-page-does-not-exist-xyz123
+  - [routes] Sport page /tennis-picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /tennis-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6c10>: Failed to establ
+    Page: /tennis-picks
+  - [routes] Sport page /ufc-picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ufc-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c410>: Failed to establish
+    Page: /ufc-picks
+  - [routes] Sport page /golf-picks: Request failed
+    Detail: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /golf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2e210>: Failed to establis
+    Page: /golf-picks
+  - [content] Homepage grid: NHL MISSING: NHL is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: NBA MISSING: NBA is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: MLB MISSING: MLB is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: NFL MISSING: NFL is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: NCAAB MISSING: NCAAB is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: NCAAW MISSING: NCAAW is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: NCAAF MISSING: NCAAF is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: WNBA MISSING: WNBA is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: Soccer MISSING: Soccer is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: Tennis MISSING: Tennis is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: UFC MISSING: UFC is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: Golf MISSING: Golf is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Search API: /api/search request failed: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /api/search?query=Detroit (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c050>: Failed to establish a new connection: [Errno 1] Operation not permitted'))
+  - [navigation] Navigation fetch: Could not load homepage for nav audit
+  - [props] MLB impossible lines: 21 prop(s) have nonsensical lines
+    Detail: MLB Team 1 Player 2 doubles line=12.0, MLB Team 1 Player 4 singles line=12.5, MLB Team 2 Player 1 singles line=14.5, MLB Team 3 Player 2 doubles line=6.5, MLB Team 4 Player 1 stolen_bases line=12.5
+
+WARNINGS (should investigate):
+  - [routes] Player Props (needs login): Expected [302], got -1
+    Page: /player-props
+  - [routes] Picks CSV (needs login): Expected [302], got -1
+    Page: /picks/export.csv
+  - [routes] Results CSV (needs login): Expected [302], got -1
+    Page: /results/export.csv
+  - [routes] Audit CSV (needs login): Expected [302], got -1
+    Page: /performance/audit.csv
+  - [content] Page size: /nba-picks: Page is only 0 bytes — possible error or empty page
+    Page: /nba-picks
+  - [content] Page size: /nhl-picks: Page is only 0 bytes — possible error or empty page
+    Page: /nhl-picks
+  - [cards] Card audit: nba-picks: Page too small or empty — no cards audited
+    Page: /nba-picks
+  - [cards] Card audit: nhl-picks: Page too small or empty — no cards audited
+    Page: /nhl-picks
+  - [cards] Card audit: mlb-picks: Page too small or empty — no cards audited
+    Page: /mlb-picks
+  - [cards] Card audit: wnba-picks: Page too small or empty — no cards audited
+    Page: /wnba-picks
+  - [cards] Card audit: soccer-picks: Page too small or empty — no cards audited
+    Page: /soccer-picks
+  - [results] Results page load: Could not load /all-sports-results
+  - [csv] Picks export CSV: Unexpected HTTP -1
+    Page: /picks/export.csv
+  - [csv] Results export CSV: Unexpected HTTP -1
+    Page: /results/export.csv
+  - [csv] Performance audit CSV: Unexpected HTTP -1
+    Page: /performance/audit.csv
+  - [props] WNBA diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NHL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] MLB diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NFL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NFL diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+  - [props] NCAAF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NCAAB diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NCAAW diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] SOCCER diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] TENNIS diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] UFC diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] UFC diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+  - [props] GOLF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] GOLF diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

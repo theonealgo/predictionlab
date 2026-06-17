@@ -30,7 +30,7 @@ find . -name "*.pyc" -delete 2>/dev/null
 
 # 3. Start server
 echo "🚀 Starting on port 5050..."
-PORT=5050 nohup python3 NHL77FINAL.py > app.log 2>&1 &
+PORT=5050 nohup python3 app.py > app.log 2>&1 &
 SERVER_PID=$!
 echo "   Server PID: $SERVER_PID"
 

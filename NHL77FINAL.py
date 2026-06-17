@@ -10077,10 +10077,10 @@ BASE_TEMPLATE = """
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:1;}
         .hamburger:hover{background:#f8fafc;}
         .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
-        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:2001;backdrop-filter:blur(2px);}
+        .tv-overlay{display:none;position:fixed;inset:64px 0 0;background:rgba(15,23,42,0.34);z-index:1998;backdrop-filter:blur(2px);}
         .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:2002;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
-        .tv-drawer.open{transform:translateX(0);}
+        .tv-drawer{position:fixed;top:72px;left:16px;height:min(640px,calc(100dvh - 96px));width:min(340px,calc(100vw - 32px));background:#fff;z-index:1999;transform:translateY(-10px);opacity:0;pointer-events:none;transition:transform .2s cubic-bezier(.4,0,.2,1),opacity .2s;display:flex;flex-direction:column;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 44px rgba(15,23,42,0.18);}
+        .tv-drawer.open{transform:translateY(0);opacity:1;pointer-events:auto;}
         .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
         .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
         .tv-header-btns{display:flex;gap:8px;align-items:center;}
@@ -10324,6 +10324,7 @@ BASE_TEMPLATE = """
     <script>
 var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'},{l:'World Cup',h:'/soccer-picks?league=fifa.world'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},props:{title:'Props',items:[{l:'Player Props',h:'/player-props'}]},tools:{title:'Tools & Models',items:[{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Edge Performance',h:'/edge-performance'},{l:'Download CSV',h:'/results/downloads'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
+function tvToggle(){var d=document.getElementById('tvDrawer'),s=document.getElementById('tvSub');if(d&&d.classList.contains('open')){if(s&&s.classList.contains('visible')){tvBack();}else{tvClose();}}else{tvOpen();}}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
 function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
@@ -13478,7 +13479,7 @@ def _is_live_game_status(status):
 
 
 def build_todays_top_picks():
-    """Up to four ranked value picks for landing + /promo/top-picks-today."""
+    """Up to six ranked moneyline pick cards for landing + promo surfaces."""
     todays_picks = []
     try:
         _tp_tz = ZoneInfo('America/New_York')
@@ -13766,6 +13767,104 @@ def _news_market_paragraph(item: dict) -> str:
     )
 
 
+_PINNED_SPORTS_TRENDS_20260616 = [
+    {'query': 'emil andrae', 'traffic': '20K+', 'sport': 'NHL'},
+    {'query': 'france vs senegal', 'traffic': '10K+', 'sport': 'SOCCER'},
+    {'query': 'kyle calder', 'traffic': '10K+', 'sport': 'NHL'},
+    {'query': 'staal comments on marner trade', 'traffic': '10K+', 'sport': 'NHL'},
+    {'query': 'iran new zealand', 'traffic': '20K+', 'sport': 'SOCCER'},
+    {'query': 'elijah just', 'traffic': '20K+', 'sport': 'SOCCER'},
+    {'query': 'hockey night in canada', 'traffic': '2K+', 'sport': 'NHL'},
+    {'query': 'argentina vs algeria', 'traffic': '2K+', 'sport': 'SOCCER'},
+    {'query': 'algerie argentine', 'traffic': '2K+', 'sport': 'SOCCER'},
+    {'query': 'senegal', 'traffic': '2K+', 'sport': 'SOCCER'},
+    {'query': 'nhl trades', 'traffic': '1K+', 'sport': 'NHL'},
+    {'query': 'saudi arabia vs uruguay', 'traffic': '20K+', 'sport': 'SOCCER'},
+    {'query': 'iraq vs norway', 'traffic': '1K+', 'sport': 'SOCCER'},
+    {'query': 'new zealand vs sri lanka', 'traffic': '200+', 'sport': 'CRICKET'},
+    {'query': 'oilers interested in montembeault', 'traffic': '100+', 'sport': 'NHL'},
+]
+
+
+def _infer_trend_sport(query: str) -> str:
+    q = f" {str(query or '').lower()} "
+    if any(term in q for term in (' nhl ', ' hockey ', ' andrae ', ' calder ', ' staal ', ' marner ', ' oilers ', ' montembeault ')):
+        return 'NHL'
+    if any(term in q for term in (' sri lanka ', ' cricket ')):
+        return 'CRICKET'
+    if any(term in q for term in (' vs ', ' france ', ' senegal ', ' argentina ', ' algeria ', ' algerie ', ' uruguay ', ' saudi ', ' iraq ', ' norway ', ' iran ', ' zealand ', ' elijah just ')):
+        return 'SOCCER'
+    if any(term in q for term in (' us open ', ' golf ')):
+        return 'GOLF'
+    return 'Sports'
+
+
+def _trend_items_for_blog(limit: int = 15) -> list[dict]:
+    items = []
+    today_key = datetime.now().strftime('%Y-%m-%d')
+    if today_key == '2026-06-16':
+        items.extend(_PINNED_SPORTS_TRENDS_20260616)
+    fetch = globals().get('_fetch_google_trends')
+    if callable(fetch):
+        try:
+            for tr in fetch() or []:
+                query = str(tr.get('query') or '').strip()
+                if query:
+                    items.append({
+                        'query': query,
+                        'traffic': str(tr.get('traffic') or '').strip(),
+                        'sport': _infer_trend_sport(query),
+                    })
+        except Exception as exc:
+            logger.debug(f"Google Trends blog fetch failed: {exc}")
+    out = []
+    seen = set()
+    for item in items:
+        query = str(item.get('query') or '').strip()
+        key = query.lower()
+        if not query or key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            'query': query,
+            'traffic': str(item.get('traffic') or '').strip(),
+            'sport': item.get('sport') or _infer_trend_sport(query),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _generate_trend_blog_post(item: dict, date_str: str, display_date: str) -> dict:
+    query = str(item.get('query') or '').strip()
+    traffic = str(item.get('traffic') or '').strip()
+    sport = item.get('sport') or _infer_trend_sport(query)
+    title_query = query.title()
+    traffic_clause = f" after {traffic} Google searches" if traffic else ""
+    topic = f"{title_query}{traffic_clause}"
+    body = [
+        f"{topic} is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        f"For {sport} bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed.",
+    ]
+    return {
+        'title': f"{title_query}: Google Trends Betting Angle ({display_date})",
+        'slug': _slugify_blog(f"{query}-google-trends-betting-angle-{date_str}"),
+        'date': date_str,
+        'sport_tag': sport,
+        'excerpt': _blog_excerpt(' '.join(body), 3),
+        'body': body,
+        'news_items': [{
+            'sport': sport,
+            'topic': f"Google Trends: {query}",
+            'summary_hint': f"{traffic} searches in the last 24 hours" if traffic else 'Trending sports search in the last 24 hours',
+            'source': 'Google Trends',
+            'url': 'https://trends.google.com/trending?geo=US',
+        }],
+    }
+
+
 def _generate_daily_blog_post(today=None, todays_picks=None, news_items=None) -> dict:
     try:
         _tz = ZoneInfo('America/New_York')
@@ -13815,7 +13914,7 @@ def _generate_daily_blog_post(today=None, todays_picks=None, news_items=None) ->
     }
 
 
-def _generate_daily_blog_posts(n: int = 3, today=None) -> list[dict]:
+def _generate_daily_blog_posts(n: int = 16, today=None) -> list[dict]:
     """Generate up to n distinct, standalone blog posts for today from live ESPN
     news + Google Trends + today's matchups. The first is the daily roundup; the
     rest are themed on individual trending news topics, each with betting context."""
@@ -13833,6 +13932,14 @@ def _generate_daily_blog_posts(n: int = 3, today=None) -> list[dict]:
     news = _fetch_espn_news_items(limit=8) or []
     out = [_generate_daily_blog_post(today_dt, picks, news)]
     seen_slugs = {out[0]['slug']}
+    for trend in _trend_items_for_blog(limit=15):
+        if len(out) >= n:
+            break
+        post = _generate_trend_blog_post(trend, date_str, display_date)
+        if post['slug'] in seen_slugs:
+            continue
+        seen_slugs.add(post['slug'])
+        out.append(post)
     for item in news:
         if len(out) >= n:
             break
@@ -13869,7 +13976,7 @@ def _generate_daily_blog_posts(n: int = 3, today=None) -> list[dict]:
     return out
 
 
-def _persist_daily_blog_posts(n: int = 3, today=None) -> int:
+def _persist_daily_blog_posts(n: int = 16, today=None) -> int:
     """Generate today's posts and merge them into data/blog_posts.json so the blog
     archive ACCUMULATES day over day (deduped by slug). Returns count added."""
     try:
@@ -13922,7 +14029,7 @@ def _maybe_generate_blog_on_startup():
 
         def _run():
             try:
-                added = _persist_daily_blog_posts(n=3)
+                added = _persist_daily_blog_posts(n=16)
                 try:
                     open(flag, 'w').write('1')
                 except Exception:
@@ -13936,18 +14043,21 @@ def _maybe_generate_blog_on_startup():
         pass
 
 
-try:
-    _maybe_generate_blog_on_startup()
-except Exception as _bge:
-    logger.debug(f"[blog-gen] hook error: {_bge}")
-
-
 def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
     posts = _load_blog_posts_from_json()
     if include_generated:
         generated = _generate_daily_blog_post(todays_picks=todays_picks)
         by_slug = {p['slug']: p for p in posts}
-        by_slug.setdefault(generated['slug'], generated)
+        by_slug[generated['slug']] = generated
+        try:
+            today_dt = _blog_date_key(generated)
+            date_str = today_dt.strftime('%Y-%m-%d')
+            display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
+            for trend in _trend_items_for_blog(limit=15):
+                trend_post = _generate_trend_blog_post(trend, date_str, display_date)
+                by_slug.setdefault(trend_post['slug'], trend_post)
+        except Exception as exc:
+            logger.debug(f"Trend blog merge failed: {exc}")
         posts = list(by_slug.values())
     posts.sort(key=_blog_date_key, reverse=True)
     return posts
@@ -14191,6 +14301,7 @@ def _build_landing_preview_context():
             'status': status_text,
             'is_live': is_live,
         })
+    active_sport = next((s for s in landing_sports if s.get('is_live')), landing_sports[0] if landing_sports else None)
 
     todays_picks = build_todays_top_picks()
     blog_posts = [
@@ -14207,6 +14318,8 @@ def _build_landing_preview_context():
         'games_graded': games_graded,
         'predictions_logged': predictions_logged,
         'landing_sports': landing_sports,
+        'active_sport_slug': active_sport.get('seo_slug') if active_sport else 'mlb-picks',
+        'active_sport_name': active_sport.get('name') if active_sport else 'MLB',
         'sports_covered': len(landing_sports),
         'weekly_banner_messages': list(_MANUAL_BANNER_ITEMS),
         'units_banner_items': preview_units,
@@ -14605,10 +14718,10 @@ def landing_page():
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
         .hamburger:hover{background:#f8fafc;}
         .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
-        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:2001;backdrop-filter:blur(2px);}
+        .tv-overlay{display:none;position:fixed;inset:64px 0 0;background:rgba(15,23,42,0.34);z-index:1998;backdrop-filter:blur(2px);}
         .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:2002;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
-        .tv-drawer.open{transform:translateX(0);}
+        .tv-drawer{position:fixed;top:72px;left:16px;height:min(640px,calc(100dvh - 96px));width:min(340px,calc(100vw - 32px));background:#fff;z-index:1999;transform:translateY(-10px);opacity:0;pointer-events:none;transition:transform .2s cubic-bezier(.4,0,.2,1),opacity .2s;display:flex;flex-direction:column;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 44px rgba(15,23,42,0.18);}
+        .tv-drawer.open{transform:translateY(0);opacity:1;pointer-events:auto;}
         .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
         .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
         .tv-header-btns{display:flex;gap:8px;align-items:center;}
@@ -15394,6 +15507,7 @@ def landing_page():
 <script>
     var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'},{l:'World Cup',h:'/soccer-picks?league=fifa.world'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},props:{title:'Props',items:[{l:'Player Props',h:'/player-props'}]},tools:{title:'Tools & Models',items:[{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Edge Performance',h:'/edge-performance'},{l:'Download CSV',h:'/results/downloads'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
     function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
+    function tvToggle(){var d=document.getElementById('tvDrawer'),s=document.getElementById('tvSub');if(d&&d.classList.contains('open')){if(s&&s.classList.contains('visible')){tvBack();}else{tvClose();}}else{tvOpen();}}
     function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
     function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
     function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
@@ -18950,6 +19064,12 @@ def trending_sports_page():
         _TRENDING_PAGE_TEMPLATE, matches=matches,
         canonical=f"{_SITE_DOMAIN}/trending-sports",
     )
+
+
+try:
+    _maybe_generate_blog_on_startup()
+except Exception as _bge:
+    logger.debug(f"[blog-gen] hook error: {_bge}")
 
 
 # Cached matchup URL list for the sitemap (recomputing fans out to every sport).

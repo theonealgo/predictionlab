@@ -193,10 +193,12 @@ def test_both_teams_books_odds_present():
     assert "Books:</span> +113" in out   # home
 
 
-def test_both_teams_prediction_lab_odds_present():
+def test_prediction_lab_odds_are_locked_for_free_users():
+    # ANONYMOUS ACCESS CONTRACT: PL odds are premium even though book ML is free.
     out = _render_table(is_premium=False)
-    assert "PL:</span> -103" in out   # away
-    assert "PL:</span> -114" in out   # home
+    assert "PL:</span> -103" not in out
+    assert "PL:</span> -114" not in out
+    assert out.count('title="Premium">Premium</span>') >= 2
 
 
 # ── EV labels ──────────────────────────────────────────────────────────────
@@ -231,14 +233,17 @@ def test_books_run_line_and_total_share_one_column_with_short_names():
 
 # ── Access rules: free locks premium, paid sees everything ─────────────────
 def test_free_user_cannot_see_premium_columns():
+    # ANONYMOUS ACCESS CONTRACT: model percentages and book spread stay public.
     out = _render_table(is_premium=False)
     assert "mlbpt-lock" in out                  # premium cells locked
-    assert "mlbpt-mteam" not in out             # no model-by-model picks
+    assert "mlbpt-mteam" in out                 # model-by-model ML % is free
     assert "+9.1%" not in out                   # spread EV hidden
     assert "+6.8%" not in out                   # total EV hidden
+    assert "+24.5%" not in out                  # moneyline EV hidden
     assert "Spread:" not in out                 # PL/XSharp lines hidden
     # Free fields still present.
-    assert "+24.5%" in out                      # moneyline EV is free
+    assert "Mariners -1.5" in out               # sportsbook spread is free
+    assert "Total: Premium" in out               # sportsbook total is premium
 
 
 def test_paid_user_sees_full_table():
@@ -269,11 +274,13 @@ def test_paid_copy_includes_both_teams_odds_and_premium_fields():
 
 
 def test_free_copy_only_has_free_moneyline_fields():
+    # COPY CONTRACT: embedded JSON cannot leak values hidden by the paywall.
     copied = _copy_output(_payload(_render_mlb_card(is_premium=False)))
     # Both teams' free moneyline odds present.
     assert "Books: -136" in copied and "Books: +113" in copied
-    assert "Prediction Lab: -103" in copied and "Prediction Lab: -114" in copied
-    assert "Moneyline EV" in copied
+    assert "Prediction Lab: -103" not in copied
+    assert "Prediction Lab: -114" not in copied
+    assert "Moneyline EV" not in copied
     # Premium fields must NOT leak.
     for premium in ["Spread EV", "Total EV", "Projected Score", "Pick Confidence"]:
         assert premium not in copied

@@ -85,3 +85,25 @@ def test_nhl_embedded_tv_menus_match():
     )
     assert len(blocks) == 2, f"Expected 2 TV_MENUS blocks, found {len(blocks)}"
     assert blocks[0] == blocks[1], "NHL77FINAL.py TV_MENUS copies differ"
+
+
+def test_hamburger_submenu_toggle_goes_back_instead_of_closing():
+    """Opening a submenu and pressing the burger again should return to Menu."""
+    for path in NAV_SOURCES:
+        text = _read(path)
+        compact = re.sub(r"\s+", "", text)
+        assert "function tvToggle" in text, f"Missing tvToggle in {path.name}"
+        assert "s&&s.classList.contains('visible')" in compact, f"{path.name} tvToggle must detect submenu state"
+        assert "tvBack();}else{tvClose();" in compact, f"{path.name} burger must go back before closing"
+
+
+def test_hamburger_drawer_is_not_full_height_side_rail():
+    css = _read(ROOT / "static" / "css" / "picks-nav-overrides.css")
+    theme = _read(ROOT / "static" / "css" / "research-theme.css")
+    assert "height: min(640px, calc(100dvh - 96px));" in css
+    assert "height: min(640px, calc(100dvh - 96px));" in theme
+    drawer_css = re.search(r"\.tv-drawer\s*\{([^}]+)\}", css, re.S).group(1)
+    theme_drawer_css = re.search(r"body\.research-site \.tv-drawer\s*\{([^}]+)\}", theme, re.S).group(1)
+    assert "height: 100%;" not in drawer_css
+    assert "height: 100vh" not in theme_drawer_css
+    assert "min-height: 100dvh" not in theme_drawer_css

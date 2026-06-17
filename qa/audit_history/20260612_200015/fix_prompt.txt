@@ -1,0 +1,42 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260612_200015  |  2026-06-12 20:00:15
+Target: http://127.0.0.1:5003
+
+
+WARNINGS (should investigate):
+  - [routes] Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
+    Detail: /nba-results
+  - [models] Stale model name: NBA: Found stale model reference: 'placeholder'
+    Page: /nba-picks
+  - [models] Stale model name: NHL: Found stale model reference: 'placeholder'
+    Page: /nhl-picks
+  - [models] Stale model name: MLB: Found stale model reference: 'placeholder'
+    Page: /mlb-picks
+  - [models] Performance page: Grinder2: Model NOT found on performance page
+  - [models] Performance page: Takedown: Model NOT found on performance page
+  - [models] Performance page: XSharp: Model NOT found on performance page
+  - [models] Performance page: Consensus: Model NOT found on performance page
+  - [props] WNBA diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NFL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NCAAF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NCAAB diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NCAAW diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] SOCCER diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] SOCCER diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+  - [props] TENNIS diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] UFC diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] UFC diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+  - [props] GOLF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] GOLF diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

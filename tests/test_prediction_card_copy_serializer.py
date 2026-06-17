@@ -168,32 +168,29 @@ def test_paid_copy_includes_every_visible_premium_card_field():
 
 
 def test_free_copy_and_payload_do_not_expose_premium_values():
+    # ANONYMOUS ACCESS CONTRACT: free users get book ML/spread and ML percentages.
     rendered = _render_card(is_premium=False)
     payload = _payload(rendered)
     copied = _copy_output(payload)
 
     assert payload["premium"] is None
-    assert "Spread model available" in rendered
-    assert "Total model available" in rendered
-    assert "Projected score available" in rendered
-    assert "Model-by-model confidence available" in rendered
-    assert "EV market breakdown available" in rendered
+    assert "Books · DK" not in rendered
+    assert "+113" in rendered and "-136" in rendered
+    assert "San Antonio Spurs -2.5" in rendered
+    assert "Grinder2" in rendered and "55.4%" in rendered
 
     for premium_value in [
+        "Moneyline EV",
         "Spread EV",
         "Total EV",
-        "Books Spread",
         "Prediction Lab Spread",
         "XSharp Spread",
         "Books Total",
         "Prediction Lab Total",
         "XSharp Total",
         "Projected Score",
-        "Pick Confidence",
-        "Grinder2",
-        "Takedown",
-        "XSharp",
-        "New York Knicks -2.5",
+        "Prediction Lab: -114",
+        "Prediction Lab: -103",
         "Under 216.5",
         "216.5",
         "207",
@@ -201,7 +198,7 @@ def test_free_copy_and_payload_do_not_expose_premium_values():
     ]:
         assert premium_value not in copied, f"free copy leaked premium field/value: {premium_value}"
 
-    assert "Moneyline EV" in copied
+    assert "Books: +113" in copied and "Books: -136" in copied
     assert "AI Pick: San Antonio Spurs" in copied
 
 

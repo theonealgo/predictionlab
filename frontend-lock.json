@@ -2,11 +2,11 @@
   "approved_on": "2026-06-16",
   "policy": "Do not update these checksums without explicit written user approval for the exact UI change.",
   "files": {
-    "static/css/research-theme.css": "2c72c0ee48e3163e7e30430378e4c4dcdca8427136c9979e376cf62e31d1826c",
-    "templates/base.html": "d7012febcd7f461921e8e74ebd987667217e647d848fe76f8339b7bf54d8b012",
+    "static/css/research-theme.css": "842c9726dff95b99992a28f60dad1ff40eb2b2ef8123cbea2e196e70efe7ea3a",
+    "templates/base.html": "d84f82daca94d718ef5859db37a97c0bec5a58693e590ae35d7811f44288cd09",
     "templates/espn_predictions_template.html": "b6f013ad3ceb8da05a80aeb3500c2ba000fff350e57694b52b7c138c9c80f710",
-    "templates/homepage_preview.html": "c3b02b4e6bb4f91c8765638c14dacd729296b36bccc0ccfeab97a376c5b6a051",
-    "templates/partials/research_header.html": "0de889306f8a321a97a7ad252b344cc067ca63fe9b8206f3a101c10d5511dde6",
+    "templates/homepage_preview.html": "3bb1b021328e82c3f37eeb8b041c43a745eab64312b34935cd6d4b31b47a189f",
+    "templates/partials/research_header.html": "2156ee2799a71fbf8e9d9f862399a21e07f31f7ebcfe121f044d388a49ea0d2e",
     "templates/partials/site_directory_footer.html": "65be288e30d6ca46afdac221a107ba944273d297f9fc82624fa21eda03030c22",
     "templates/underdogs_layout.html": "46740f5122647bbb563ae386b4ce3a5f8b9aabef9ded64fc6d989e79813ee5f3"
   }

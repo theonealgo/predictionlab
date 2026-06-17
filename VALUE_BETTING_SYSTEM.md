@@ -130,7 +130,7 @@ To integrate into your web app, you can:
 1. **Run daily sync** before starting app:
 ```bash
 python3 daily_value_analysis.py > today_picks.txt
-python3 NHL77FINAL.py
+python3 app.py
 ```
 
 2. **Add to database** - Store value picks in a new table:

@@ -1,4 +1,4 @@
-"""Gunicorn config — loaded automatically when Render runs `gunicorn NHL77FINAL:app`.
+"""Gunicorn config — loaded automatically when Render runs `gunicorn app:app`.
 
 Dashboard start commands that omit `--worker-class` still pick up gthread here.
 Prefer `bash render_start.sh` on Render so /data DB seeding and 8 threads apply.

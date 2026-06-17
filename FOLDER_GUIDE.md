@@ -8,8 +8,9 @@
 
 | Path | What it is | Edit? |
 |------|------------|-------|
-| **`NHL77FINAL.py`** | The main app — Flask routes, login, database, pick cards, results pages, grading. ~800 KB; most logic still lives here. | Dev only |
-| **`app.py`** | Tiny launcher: `from NHL77FINAL import app`. Used by Render/gunicorn. | Do not edit |
+| **`app.py`** | Canonical Prediction Lab launcher. Run this locally; Render imports `app:app`. | Rarely |
+| **`NHL77FINAL.py`** | Legacy shared core — historical filename, not NHL-only. Flask assembly, database, shared odds/grading, and routes still live here while extraction continues. | Dev only |
+| **`ARCHITECTURE_GUIDE.md`** | Plain-English code map, ownership rules, and explanation of why the core grew again. | Read first |
 | **`render_start.sh`** | Production startup script (copies DB to disk, runs gunicorn). Referenced by Render deploy. | Do not move/rename |
 | **`sports/`** | One Python file per league (NBA, NHL, NFL, …). Sport-specific picks, results, and shortcuts like `/nba` → `/nba-picks`. | Yes — see `sports/README.md` |
 | **`StartSportsApp.command`** | Double-click Mac shortcut to run the app locally. | Optional |
@@ -21,7 +22,7 @@
 ```bash
 cd "/Users/nimamesghali/Sports Sandbox/Sports Sandbox"
 pip install -r requirements.txt
-python3 NHL77FINAL.py
+python3 app.py
 ```
 
 Open http://127.0.0.1:5000 — picks at `/nba-picks`, results at `/nba-results`.
@@ -98,7 +99,7 @@ These do **not** affect the running app if removed. Back up first if unsure.
 | **Log files** | `app.log`, `ats_app.log`, `logs/` — safe to clear. |
 | **`.cache/`**, **`.cache.sqlite`** | Local HTTP/share-image cache — rebuilds automatically. |
 
-**Do NOT delete:** `NHL77FINAL.py`, `app.py`, `render_start.sh`, `sports/`, `templates/`, `static/`, `models/`, `data/season_snapshots/` (if you use frozen seasons), `sports_predictions_original.db`, `requirements.txt`.
+**Do NOT delete:** `app.py`, `NHL77FINAL.py` (legacy shared core), `render_start.sh`, `sports/`, `templates/`, `static/`, `models/`, `data/season_snapshots/` (if you use frozen seasons), `sports_predictions_original.db`, `requirements.txt`.
 
 ---
 
@@ -172,7 +173,7 @@ Keeps efficiency/PL spread behavior from regressing. Dev-only; not deployed to u
 | Change NHL results page | `sports/NHL.py` |
 | Change pick card layout | `templates/includes/game_card_body.html` |
 | Change site logo/colors | `static/css/`, `static/pl-logo.svg` |
-| Change login or premium | `NHL77FINAL.py` (search routes) |
+| Change login or premium | `auth_system.py` and the relevant template |
 | Retrain ML models | `prediction_system_v2/`, then save to `models/` |
 | Fix wrong season banner stats | Re-run `scripts/build_season_snapshot.py`, commit new JSON |
 

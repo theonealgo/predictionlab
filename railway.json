@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "gunicorn NHL77FINAL:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 8 --timeout 120 --preload",
+    "startCommand": "gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 8 --timeout 120 --preload",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

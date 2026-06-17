@@ -13,7 +13,7 @@
 ```bash
 cd "/Users/nimamesghali/Sports Sandbox/Sports Sandbox"
 python3 scripts/seed_local_admin.py nmesghali@gmail.com   # once per machine / after password change
-python3 NHL77FINAL.py
+python3 app.py
 ```
 
 | | |

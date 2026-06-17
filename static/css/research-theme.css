@@ -22,23 +22,31 @@
     backdrop-filter: blur(12px);
 }
 .pl2-burger {
-    width: 34px;
-    height: 34px;
-    display: none; /* desktop uses the nav dropdowns; burger is mobile-only */
-    place-items: center;
-    border: 1px solid var(--pl-line);
-    background: transparent;
+    width: 38px;
+    height: 38px;
+    display: flex; /* Always visible: primary full-site menu access. */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 7px 9px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
     cursor: pointer;
+    flex-shrink: 0;
 }
+.pl2-burger:hover { background: #f8fafc; }
 .pl2-burger i,
 .pl2-burger i::before,
 .pl2-burger i::after {
     content: "";
     display: block;
     position: relative;
-    width: 16px;
-    height: 1px;
+    width: 20px;
+    height: 1.5px;
     background: var(--pl-ink);
+    border-radius: 2px;
 }
 .pl2-burger i::before { position: absolute; top: -5px; }
 .pl2-burger i::after { position: absolute; top: 5px; }
@@ -257,7 +265,20 @@ body.research-site .acct-menu,
 body.research-site .srch-box {
     border-radius: 0;
     border-color: var(--pl-line);
-    box-shadow: 12px 0 40px rgba(11,11,10,.12);
+    box-shadow: 0 18px 44px rgba(11,11,10,.16);
+}
+body.research-site .tv-drawer {
+    top: 72px;
+    left: 16px;
+    width: min(340px, calc(100vw - 32px));
+    height: min(640px, calc(100dvh - 96px));
+    max-height: calc(100dvh - 96px);
+    overflow: hidden;
+}
+body.research-site .tv-overlay {
+    min-height: 100vh;
+    min-height: 100dvh;
+    z-index: 1998;
 }
 body.research-site .tv-drawer-header,
 body.research-site .srch-input-row,
@@ -545,7 +566,7 @@ body.research-site .pl-july-offer__card p {
 @media (max-width: 900px) {
     .pl2-header { padding: 0 16px; gap: 14px; }
     .pl2-nav { display: none; }
-    .pl2-burger { display: grid; }  /* show the hamburger only on mobile */
+    .pl2-burger { display: flex; }
     .pl2-header-actions { margin-left: auto; gap: 10px; }
     body.research-site .navbar-content { padding: 0 14px; }
     body.research-site .navbar-content > .logo { min-width: 0; }

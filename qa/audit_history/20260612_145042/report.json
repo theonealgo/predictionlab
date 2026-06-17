@@ -1,0 +1,903 @@
+{
+  "run_id": "20260612_145042",
+  "timestamp": "2026-06-12 14:50:42",
+  "base_url": "http://127.0.0.1:5002",
+  "duration": 70.84339785575867,
+  "overall": "FAIL",
+  "summary": {
+    "passes": 23,
+    "warnings": 29,
+    "failures": 59,
+    "infos": 0
+  },
+  "checks": [
+    {
+      "label": "Homepage",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: / (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6990>: Failed to establish a new co",
+      "auditor": "routes",
+      "url": "/"
+    },
+    {
+      "label": "Health Check",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /healthz (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6850>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/healthz"
+    },
+    {
+      "label": "Login Page",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5f90>: Failed to establish a n",
+      "auditor": "routes",
+      "url": "/login"
+    },
+    {
+      "label": "Signup Page",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /signup (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac60d0>: Failed to establish a ",
+      "auditor": "routes",
+      "url": "/signup"
+    },
+    {
+      "label": "Plans & Pricing",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /plans (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac51d0>: Failed to establish a n",
+      "auditor": "routes",
+      "url": "/plans"
+    },
+    {
+      "label": "Contact",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /contact (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5090>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/contact"
+    },
+    {
+      "label": "Privacy Policy",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /privacy (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac7890>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/privacy"
+    },
+    {
+      "label": "Terms of Service",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /terms (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac79d0>: Failed to establish a n",
+      "auditor": "routes",
+      "url": "/terms"
+    },
+    {
+      "label": "FAQ",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /faq (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c410>: Failed to establish a new",
+      "auditor": "routes",
+      "url": "/faq"
+    },
+    {
+      "label": "Tutorial",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /tutorial (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c2d0>: Failed to establish ",
+      "auditor": "routes",
+      "url": "/tutorial"
+    },
+    {
+      "label": "Responsible Gaming",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /responsible-gaming (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2ccd0>: Failed to ",
+      "auditor": "routes",
+      "url": "/responsible-gaming"
+    },
+    {
+      "label": "AI Picks Today",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ai-sports-betting-picks-today (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2ce10>:",
+      "auditor": "routes",
+      "url": "/ai-sports-betting-picks-today"
+    },
+    {
+      "label": "What Are AI Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /what-are-ai-sports-betting-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4a5",
+      "auditor": "routes",
+      "url": "/what-are-ai-sports-betting-picks"
+    },
+    {
+      "label": "Model vs Sportsbooks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /our-model-vs-sportsbooks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4cd0>: Fail",
+      "auditor": "routes",
+      "url": "/our-model-vs-sportsbooks"
+    },
+    {
+      "label": "Search",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /search (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5950>: Failed to establish a ",
+      "auditor": "routes",
+      "url": "/search"
+    },
+    {
+      "label": "All Sports Results",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /all-sports-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac60d0>: Failed to ",
+      "auditor": "routes",
+      "url": "/all-sports-results"
+    },
+    {
+      "label": "Daily Report",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /daily-report (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac65d0>: Failed to establ",
+      "auditor": "routes",
+      "url": "/daily-report"
+    },
+    {
+      "label": "Edge Performance",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /edge-performance (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6990>: Failed to es",
+      "auditor": "routes",
+      "url": "/edge-performance"
+    },
+    {
+      "label": "Results Downloads",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /results/downloads (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10a813ed0>: Failed to e",
+      "auditor": "routes",
+      "url": "/results/downloads"
+    },
+    {
+      "label": "Results Redirect",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c2d0>: Failed to establish a",
+      "auditor": "routes",
+      "url": "/results"
+    },
+    {
+      "label": "NBA Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2d090>: Failed to establish",
+      "auditor": "routes",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "NHL Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nhl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2d590>: Failed to establish",
+      "auditor": "routes",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "NFL Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nfl-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2da90>: Failed to establish",
+      "auditor": "routes",
+      "url": "/nfl-picks"
+    },
+    {
+      "label": "MLB Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /mlb-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2df90>: Failed to establish",
+      "auditor": "routes",
+      "url": "/mlb-picks"
+    },
+    {
+      "label": "NCAAB Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ncaab-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6c10>: Failed to establi",
+      "auditor": "routes",
+      "url": "/ncaab-picks"
+    },
+    {
+      "label": "NCAAF Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ncaaf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6850>: Failed to establi",
+      "auditor": "routes",
+      "url": "/ncaaf-picks"
+    },
+    {
+      "label": "NCAAW Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ncaaw-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5d10>: Failed to establi",
+      "auditor": "routes",
+      "url": "/ncaaw-picks"
+    },
+    {
+      "label": "WNBA Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /wnba-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5a90>: Failed to establis",
+      "auditor": "routes",
+      "url": "/wnba-picks"
+    },
+    {
+      "label": "Soccer Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /soccer-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac5590>: Failed to establ",
+      "auditor": "routes",
+      "url": "/soccer-picks"
+    },
+    {
+      "label": "World Cup Picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /soccer-picks?league=fifa.world (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4190>",
+      "auditor": "routes",
+      "url": "/soccer-picks?league=fifa.world"
+    },
+    {
+      "label": "NBA Results",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nba-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac79d0>: Failed to establi",
+      "auditor": "routes",
+      "url": "/nba-results"
+    },
+    {
+      "label": "NHL Results",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /nhl-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4a50>: Failed to establi",
+      "auditor": "routes",
+      "url": "/nhl-results"
+    },
+    {
+      "label": "MLB Results",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /mlb-results (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2d950>: Failed to establi",
+      "auditor": "routes",
+      "url": "/mlb-results"
+    },
+    {
+      "label": "Model Performance (auth redirect ok)",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /performance (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2da90>: Failed to establi",
+      "auditor": "routes",
+      "url": "/performance"
+    },
+    {
+      "label": "Robots.txt",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /robots.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2cf50>: Failed to establis",
+      "auditor": "routes",
+      "url": "/robots.txt"
+    },
+    {
+      "label": "Sitemap XML",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /sitemap.xml (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c050>: Failed to establi",
+      "auditor": "routes",
+      "url": "/sitemap.xml"
+    },
+    {
+      "label": "LLMs.txt",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /llms.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2e490>: Failed to establish ",
+      "auditor": "routes",
+      "url": "/llms.txt"
+    },
+    {
+      "label": "AI.txt",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ai.txt (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2e350>: Failed to establish a ",
+      "auditor": "routes",
+      "url": "/ai.txt"
+    },
+    {
+      "label": "Sports API",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /api/sports (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4a50>: Failed to establis",
+      "auditor": "routes",
+      "url": "/api/sports"
+    },
+    {
+      "label": "Search API",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /api/search?q=nba (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac4b90>: Failed to es",
+      "auditor": "routes",
+      "url": "/api/search?q=nba"
+    },
+    {
+      "label": "Player Props (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/player-props"
+    },
+    {
+      "label": "Picks CSV (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/picks/export.csv"
+    },
+    {
+      "label": "Results CSV (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/results/export.csv"
+    },
+    {
+      "label": "Audit CSV (needs login)",
+      "status": "WARN",
+      "message": "Expected [302], got -1",
+      "detail": "",
+      "auditor": "routes",
+      "url": "/performance/audit.csv"
+    },
+    {
+      "label": "404 Handler",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /this-page-does-not-exist-xyz123 (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6d50",
+      "auditor": "routes",
+      "url": "/this-page-does-not-exist-xyz123"
+    },
+    {
+      "label": "Sport page /tennis-picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /tennis-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10aac6c10>: Failed to establ",
+      "auditor": "routes",
+      "url": "/tennis-picks"
+    },
+    {
+      "label": "Sport page /ufc-picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /ufc-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c410>: Failed to establish",
+      "auditor": "routes",
+      "url": "/ufc-picks"
+    },
+    {
+      "label": "Sport page /golf-picks",
+      "status": "FAIL",
+      "message": "Request failed",
+      "detail": "HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /golf-picks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2e210>: Failed to establis",
+      "auditor": "routes",
+      "url": "/golf-picks"
+    },
+    {
+      "label": "Stale content scan",
+      "status": "PASS",
+      "message": "No stale/forbidden strings found in page content",
+      "detail": "",
+      "auditor": "content",
+      "url": ""
+    },
+    {
+      "label": "Debug mode",
+      "status": "PASS",
+      "message": "No debug mode indicators found",
+      "detail": "",
+      "auditor": "content",
+      "url": ""
+    },
+    {
+      "label": "Page size: /nba-picks",
+      "status": "WARN",
+      "message": "Page is only 0 bytes \u2014 possible error or empty page",
+      "detail": "",
+      "auditor": "content",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "Page size: /nhl-picks",
+      "status": "WARN",
+      "message": "Page is only 0 bytes \u2014 possible error or empty page",
+      "detail": "",
+      "auditor": "content",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "Homepage grid: NHL MISSING",
+      "status": "FAIL",
+      "message": "NHL is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: NBA MISSING",
+      "status": "FAIL",
+      "message": "NBA is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: MLB MISSING",
+      "status": "FAIL",
+      "message": "MLB is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: NFL MISSING",
+      "status": "FAIL",
+      "message": "NFL is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: NCAAB MISSING",
+      "status": "FAIL",
+      "message": "NCAAB is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: NCAAW MISSING",
+      "status": "FAIL",
+      "message": "NCAAW is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: NCAAF MISSING",
+      "status": "FAIL",
+      "message": "NCAAF is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: WNBA MISSING",
+      "status": "FAIL",
+      "message": "WNBA is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: Soccer MISSING",
+      "status": "FAIL",
+      "message": "Soccer is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: Tennis MISSING",
+      "status": "FAIL",
+      "message": "Tennis is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: UFC MISSING",
+      "status": "FAIL",
+      "message": "UFC is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Homepage grid: Golf MISSING",
+      "status": "FAIL",
+      "message": "Golf is not shown in the homepage 'Today's Picks by Sport' grid",
+      "detail": "",
+      "auditor": "content",
+      "url": "/"
+    },
+    {
+      "label": "Search API",
+      "status": "FAIL",
+      "message": "/api/search request failed: HTTPConnectionPool(host='127.0.0.1', port=5002): Max retries exceeded with url: /api/search?query=Detroit (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x10ab2c050>: Failed to establish a new connection: [Errno 1] Operation not permitted'))",
+      "detail": "",
+      "auditor": "content",
+      "url": ""
+    },
+    {
+      "label": "Navigation fetch",
+      "status": "FAIL",
+      "message": "Could not load homepage for nav audit",
+      "detail": "",
+      "auditor": "navigation",
+      "url": ""
+    },
+    {
+      "label": "Card audit: nba-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/nba-picks"
+    },
+    {
+      "label": "Card audit: nhl-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/nhl-picks"
+    },
+    {
+      "label": "Card audit: mlb-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/mlb-picks"
+    },
+    {
+      "label": "Card audit: wnba-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/wnba-picks"
+    },
+    {
+      "label": "Card audit: soccer-picks",
+      "status": "WARN",
+      "message": "Page too small or empty \u2014 no cards audited",
+      "detail": "",
+      "auditor": "cards",
+      "url": "/soccer-picks"
+    },
+    {
+      "label": "Results page load",
+      "status": "WARN",
+      "message": "Could not load /all-sports-results",
+      "detail": "",
+      "auditor": "results",
+      "url": ""
+    },
+    {
+      "label": "Picks export CSV",
+      "status": "WARN",
+      "message": "Unexpected HTTP -1",
+      "detail": "",
+      "auditor": "csv",
+      "url": "/picks/export.csv"
+    },
+    {
+      "label": "Results export CSV",
+      "status": "WARN",
+      "message": "Unexpected HTTP -1",
+      "detail": "",
+      "auditor": "csv",
+      "url": "/results/export.csv"
+    },
+    {
+      "label": "Performance audit CSV",
+      "status": "WARN",
+      "message": "Unexpected HTTP -1",
+      "detail": "",
+      "auditor": "csv",
+      "url": "/performance/audit.csv"
+    },
+    {
+      "label": "WNBA duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "WNBA line sanity",
+      "status": "PASS",
+      "message": "All 50 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "WNBA diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NHL duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NHL line sanity",
+      "status": "PASS",
+      "message": "All 50 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NHL diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "MLB duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "MLB impossible lines",
+      "status": "FAIL",
+      "message": "21 prop(s) have nonsensical lines",
+      "detail": "MLB Team 1 Player 2 doubles line=12.0, MLB Team 1 Player 4 singles line=12.5, MLB Team 2 Player 1 singles line=14.5, MLB Team 3 Player 2 doubles line=6.5, MLB Team 4 Player 1 stolen_bases line=12.5",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "MLB diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NFL duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NFL line sanity",
+      "status": "PASS",
+      "message": "All 50 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NFL diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NFL diagnostics: degenerate distribution",
+      "status": "WARN",
+      "message": "All pick probabilities clustered near 50% \u2014 possible fallback model",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAF duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAF line sanity",
+      "status": "PASS",
+      "message": "All 50 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAF diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAB duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAB line sanity",
+      "status": "PASS",
+      "message": "All 50 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAB diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAW duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAW line sanity",
+      "status": "PASS",
+      "message": "All 50 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "NCAAW diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "SOCCER duplicate prop rows",
+      "status": "PASS",
+      "message": "All 50 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "SOCCER line sanity",
+      "status": "PASS",
+      "message": "All 50 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "SOCCER diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "TENNIS duplicate prop rows",
+      "status": "PASS",
+      "message": "All 24 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "TENNIS line sanity",
+      "status": "PASS",
+      "message": "All 24 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "TENNIS diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "UFC duplicate prop rows",
+      "status": "PASS",
+      "message": "All 24 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "UFC line sanity",
+      "status": "PASS",
+      "message": "All 24 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "UFC diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "UFC diagnostics: degenerate distribution",
+      "status": "WARN",
+      "message": "All pick probabilities clustered near 50% \u2014 possible fallback model",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "GOLF duplicate prop rows",
+      "status": "PASS",
+      "message": "All 24 player/prop rows are unique",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "GOLF line sanity",
+      "status": "PASS",
+      "message": "All 24 lines within realistic bounds",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "GOLF diagnostics: feature collapse",
+      "status": "WARN",
+      "message": "Only 1 feature(s) carry signal (model_agreement) \u2014 feature importance is degenerate",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    },
+    {
+      "label": "GOLF diagnostics: degenerate distribution",
+      "status": "WARN",
+      "message": "All pick probabilities clustered near 50% \u2014 possible fallback model",
+      "detail": "",
+      "auditor": "props",
+      "url": ""
+    }
+  ]
+}
