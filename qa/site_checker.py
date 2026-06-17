@@ -21,7 +21,7 @@ EMAIL SETUP (one-time):
   (Requires Gmail 2FA to be enabled)
 
 Environment variable overrides:
-  AUDIT_BASE_URL       default http://127.0.0.1:5001
+  AUDIT_BASE_URL       default https://predictionlab.io (set to a localhost URL for local dev)
   AUDIT_EMAIL_TO       default nmesghali@gmail.com
   AUDIT_EMAIL_FROM     sender address
   AUDIT_EMAIL_PASSWORD app password for SMTP
@@ -1324,6 +1324,16 @@ class GameCountAuditor:
         return most_recent.strftime('%Y-%m-%d'), c7
 
     def run(self):
+        # The local games DB only matches a LOCAL server. Against a remote target
+        # (production), comparing the local DB to the live pages is meaningless and
+        # would throw false positives, so skip this cross-check for remote bases.
+        _host = (urlparse(self.base).hostname or '').lower()
+        if _host not in ('127.0.0.1', 'localhost', '::1', '0.0.0.0'):
+            self.r.add(CheckResult(
+                label="Game-count cross-check", status=INFO,
+                message=f"skipped for remote target ({_host}); local DB only "
+                        f"matches a local server", auditor=self.NAME))
+            return
         if not self.db_path:
             self.r.add(CheckResult(
                 label="Game-count cross-check", status=INFO,

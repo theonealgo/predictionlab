@@ -18,7 +18,9 @@ HISTORY_DIR.mkdir(exist_ok=True)
 SCREENSHOTS_DIR.mkdir(exist_ok=True)
 
 # ── Target site ────────────────────────────────────────────────────────────
-BASE_URL = os.environ.get("AUDIT_BASE_URL", "http://127.0.0.1:5003")
+# Defaults to the live production site. Override with AUDIT_BASE_URL to point at
+# a local dev server, e.g. AUDIT_BASE_URL=http://127.0.0.1:5003
+BASE_URL = os.environ.get("AUDIT_BASE_URL", "https://predictionlab.io")
 
 # ── Email — load from checker_email.py, then override with env vars ────────
 def _load_email_config():
