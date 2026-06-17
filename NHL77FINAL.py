@@ -14371,6 +14371,42 @@ def _build_landing_preview_context():
     }
 
 
+def _build_fast_landing_preview_context():
+    """Lightweight homepage context for production cold starts."""
+    today = datetime.now()
+    landing_sports = []
+    for sport_key in _LANDING_SPORT_ORDER:
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        info = SPORTS.get(sport_key)
+        if not info:
+            continue
+        status_text, is_live = get_season_status(sport_key, today=today)
+        landing_sports.append({
+            'key': sport_key,
+            'seo_slug': SPORT_SEO_SLUGS.get(sport_key, sport_key.lower() + '-picks'),
+            'icon': info['icon'],
+            'name': _LANDING_SPORT_SHORT.get(sport_key, info['name']),
+            'status': status_text,
+            'is_live': is_live,
+        })
+    active_sport = next((s for s in landing_sports if s.get('is_live')), landing_sports[0] if landing_sports else None)
+    return {
+        'games_graded': 0,
+        'predictions_logged': 0,
+        'landing_sports': landing_sports,
+        'active_sport_slug': active_sport.get('seo_slug') if active_sport else 'mlb-picks',
+        'active_sport_name': active_sport.get('name') if active_sport else 'MLB',
+        'sports_covered': len(landing_sports),
+        'weekly_banner_messages': list(_MANUAL_BANNER_ITEMS),
+        'units_banner_items': [],
+        'todays_picks': [],
+        'latest_graded_game': None,
+        'latest_blog_post': None,
+        'recent_blog_posts': [],
+    }
+
+
 @app.route('/homepage-preview')
 def homepage_preview():
     """Preview-only alternate homepage design. Does not replace '/'."""
@@ -14384,6 +14420,9 @@ def landing_page():
     if request.method == 'HEAD':
         return '', 200
     log_site_visit('/')
+    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    if _render_host:
+        return render_template('homepage_preview.html', **_build_fast_landing_preview_context())
     return render_template('homepage_preview.html', **_build_landing_preview_context())
 
     # Legacy landing implementation retained below temporarily for rollback/reference.
