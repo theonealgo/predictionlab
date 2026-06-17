@@ -234,8 +234,12 @@ class MLBRunsModel:
 
         # ── Load data from DB ─────────────────────────────────────────────────
         try:
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(db_path, timeout=30)
             conn.row_factory = sqlite3.Row
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except Exception:
+                pass
             rows = conn.execute(
                 'SELECT home_team_id, away_team_id, home_score, away_score, game_date '
                 'FROM games WHERE sport=? AND home_score IS NOT NULL ORDER BY game_date',

@@ -166,6 +166,8 @@ _SPORT_PREDICTIONS_PAGE_TTL = {
 }
 _PROPS_GRADE_SCHEDULED: set = set()
 _PROPS_GRADE_LOCK = __import__('threading').Lock()
+_PRED_SAVE_SCHEDULED: set = set()
+_PRED_SAVE_LOCK = __import__('threading').Lock()
 _STALE_PAGE_TTL_MULTIPLIER = 5
 
 
@@ -191,8 +193,14 @@ def _schedule_predictions_db_save(sport: str, predictions) -> None:
     if not predictions:
         return
     import threading as _thr
+    sport = (sport or '').upper()
+    with _PRED_SAVE_LOCK:
+        if sport in _PRED_SAVE_SCHEDULED:
+            return
+        _PRED_SAVE_SCHEDULED.add(sport)
 
     def _run():
+        conn_save = None
         try:
             conn_save = get_db_connection()
             cursor_save = conn_save.cursor()
@@ -224,14 +232,32 @@ def _schedule_predictions_db_save(sport: str, predictions) -> None:
                             float(_ens_save) / 100.0,
                         ))
                         saved_count += 1
+                    except sqlite3.OperationalError as e:
+                        if 'locked' in str(e).lower():
+                            logger.debug(f"[{sport}] prediction save skipped while DB locked")
+                            return
+                        logger.error(f"Error saving prediction for {pred['game_id']}: {e}")
                     except Exception as e:
                         logger.error(f"Error saving prediction for {pred['game_id']}: {e}")
             if saved_count > 0:
-                conn_save.commit()
-                logger.info(f"Saved {saved_count} new {sport} predictions to database")
-            conn_save.close()
+                try:
+                    conn_save.commit()
+                    logger.info(f"Saved {saved_count} new {sport} predictions to database")
+                except sqlite3.OperationalError as e:
+                    if 'locked' in str(e).lower():
+                        logger.debug(f"[{sport}] prediction save commit skipped while DB locked")
+                    else:
+                        raise
         except Exception as exc:
             logger.debug(f"[{sport}] background prediction save failed: {exc}")
+        finally:
+            try:
+                if conn_save:
+                    conn_save.close()
+            except Exception:
+                pass
+            with _PRED_SAVE_LOCK:
+                _PRED_SAVE_SCHEDULED.discard(sport)
 
     _thr.Thread(target=_run, daemon=True, name=f'pred-save-{sport}').start()
 _MANUAL_BANNER_ITEMS = [
@@ -6037,10 +6063,10 @@ def get_db_connection():
     (no WAL / shared memory), unlike WAL which SIGSEGV'd gunicorn's preloaded
     forked workers.
     """
-    conn = sqlite3.connect(DATABASE, timeout=15)
+    conn = sqlite3.connect(DATABASE, timeout=30)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA busy_timeout=30000")
     except Exception:
         pass
     return conn
@@ -6048,12 +6074,12 @@ def get_db_connection():
 
 def init_db():
     """Create all tables if they don't exist (safe to run on every startup)."""
-    conn = sqlite3.connect(DATABASE, timeout=15)
+    conn = sqlite3.connect(DATABASE, timeout=30)
     # Rollback journal (default), NOT WAL: WAL's mmap shared memory is not safe
     # across gunicorn's preload fork and segfaulted the workers. busy_timeout is
     # fork-safe and prevents lock errors.
     try:
-        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA busy_timeout=30000")
     except Exception:
         pass
     conn.executescript('''
@@ -8233,45 +8259,7 @@ def _get_upcoming_predictions_impl(sport, days=365):
                 pred['predicted_winner'] = max(choices, key=lambda item: item[0])[1]
 
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']:
-        conn_save = get_db_connection()
-        cursor_save = conn_save.cursor()
-        saved_count = 0
-        
-        for pred in predictions:
-            # Only save if game has game_id and no scores yet (not played)
-            if pred.get('game_id') and pred.get('home_score') is None:
-                # Check if prediction already exists
-                existing = cursor_save.execute('''
-                    SELECT id FROM predictions WHERE game_id = ? AND sport = ?
-                ''', (pred['game_id'], sport)).fetchone()
-                
-                if not existing:
-                    _elo_save = pred.get('elo_prob')
-                    _xgb_save = pred.get('xgb_prob')
-                    _ens_save = pred.get('ensemble_prob')
-                    if _elo_save is None or _xgb_save is None or _ens_save is None:
-                        continue
-                    try:
-                        cursor_save.execute('''
-                            INSERT OR IGNORE INTO predictions (
-                                game_id, sport, league, game_date, home_team_id, away_team_id,
-                                elo_home_prob, xgboost_home_prob, win_probability, locked
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                        ''', (
-                            pred['game_id'], sport, pred.get('league') or sport, pred['game_date'],
-                            pred['home_team_id'], pred['away_team_id'],
-                            float(_elo_save) / 100.0,
-                            float(_xgb_save) / 100.0,
-                            float(_ens_save) / 100.0,
-                        ))
-                        saved_count += 1
-                    except Exception as e:
-                        logger.error(f"Error saving prediction for {pred['game_id']}: {e}")
-        
-        if saved_count > 0:
-            conn_save.commit()
-            logger.info(f"Saved {saved_count} new {sport} predictions to database")
-        conn_save.close()
+        _schedule_predictions_db_save(sport, predictions)
     
     # H2H last-10 projection for "Our Total" / "Our Spread" (all sports)
     try:
@@ -21359,7 +21347,12 @@ def _prewarm_pages():
 
 
 try:
-    _prewarm_pages()
+    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _prewarm_enabled = _early_os.environ.get('PL_ENABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
+    if _prewarm_enabled or not _render_host:
+        _prewarm_pages()
+    else:
+        logger.info('page pre-warm disabled on Render; set PL_ENABLE_PAGE_PREWARM=1 to enable')
 except Exception:
     logger.exception('could not start page pre-warm')
 
