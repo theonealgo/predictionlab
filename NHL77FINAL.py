@@ -4720,6 +4720,10 @@ def log_site_visit(endpoint):
     the background sync writers. A dropped analytics row is harmless, so retry a
     couple of times and then give up quietly — never raise, never log an ERROR
     (that was just noise for a non-critical write)."""
+    _render_host = bool(_early_os.environ.get('RENDER') or _early_os.environ.get('RENDER_SERVICE_ID'))
+    _traffic_enabled = _early_os.environ.get('PL_ENABLE_TRAFFIC_LOGGING', '').lower() in {'1', 'true', 'yes'}
+    if _render_host and not _traffic_enabled:
+        return
     visit_date = _traffic_now().strftime('%Y-%m-%d')
     ip_address = request.remote_addr if request else None
     user_agent = request.headers.get('User-Agent') if request else None
