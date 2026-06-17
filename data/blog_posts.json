@@ -1,6 +1,411 @@
 {
   "posts": [
     {
+      "title": "Prediction Lab Blog: June 17, 2026",
+      "slug": "prediction-lab-blog-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "MLB",
+      "excerpt": "The sports news side of the board is being shaped by MLB: MLB betting tips for Wednesday: Freddie Freeman ready to roll; MLB: Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena; MLB: Ranking top 2026 MLB trade deadline candidates: Skubal, more. Today's betting board is led by MLB: New York Mets over Cincinnati Reds (53.6%); MLB: Houston Astros over Detroit Tigers (51.8%); MLB: Baltimore Orioles over Seattle Mariners (54.0%). In MLB, the news cycle is centered on MLB betting tips for Wednesday: Freddie Freeman ready to roll.",
+      "body": [
+        "The sports news side of the board is being shaped by MLB: MLB betting tips for Wednesday: Freddie Freeman ready to roll; MLB: Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena; MLB: Ranking top 2026 MLB trade deadline candidates: Skubal, more.",
+        "Today's betting board is led by MLB: New York Mets over Cincinnati Reds (53.6%); MLB: Houston Astros over Detroit Tigers (51.8%); MLB: Baltimore Orioles over Seattle Mariners (54.0%).",
+        "In MLB, the news cycle is centered on MLB betting tips for Wednesday: Freddie Freeman ready to roll. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "In MLB, the news cycle is centered on Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "In MLB, the news cycle is centered on Ranking top 2026 MLB trade deadline candidates: Skubal, more. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "Prediction Lab connects sports news to betting context by comparing model win probabilities against market prices. The daily betting results report remains the verification layer, while this news and market breakdown gives crawlers and readers a concise explanation of what the models and the broader sports calendar are watching today.",
+        "The most important signal is not a single story or pick in isolation. It is the relationship between news, model confidence, sportsbook pricing, recent result tracking, and whether multiple model layers point in the same direction.",
+        "Check the sport prediction pages for the live cards and the daily results report for completed-game tracking. New daily sports news and betting analysis pages are generated server-side so the latest context stays crawlable and internally linked from the homepage."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "MLB betting tips for Wednesday: Freddie Freeman ready to roll",
+          "summary_hint": "All of the odds, recommended prop bets and trends in baseball for Wednesday, June 17.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/espn/betting/story/_/id/49093204/mlb-betting-tips-odds-lines-2026-wednesday-june-17"
+        },
+        {
+          "sport": "MLB",
+          "topic": "Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena",
+          "summary_hint": "All of the important fantasy spin and actionable takeaways resulting from the latest baseball news.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/48297021/espn-fantasy-baseball-buzz-injuries-promotions-demotions-trades-prospects-lineup-changes-mlb-news-analysis-2026"
+        },
+        {
+          "sport": "MLB",
+          "topic": "Ranking top 2026 MLB trade deadline candidates: Skubal, more",
+          "summary_hint": "Skubal to the ...?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/mlb/story/_/id/49082474/ranking-mlb-trade-deadline-candidates-top-100-skubal-chapman-peralta-arraez"
+        },
+        {
+          "sport": "MLB",
+          "topic": "MLB 2026: Why Brewers, Guardians keep defying expectations",
+          "summary_hint": "As these first-place teams battle this week, we look at what makes them perennial overachievers.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/mlb/story/_/id/49082939/mlb-2026-milwaukee-brewers-cleveland-guardians-projections-expectations"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Ranking top of 2025, 2026 NBA drafts: Would Flagg still be No. 1?",
+          "summary_hint": "What if Cooper Flagg never reclassified?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/story/_/id/48979870/ranking-2026-nba-draft-2025-classes-draft-cooper-flagg-dylan-harper-reclass-dybantsa-peterson"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Everything we know about a pivotal Golden State Warriors offseason",
+          "summary_hint": "From a lottery pick to the trade market, here's what we know about the Warriors' offseason plans.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/story/_/id/49084422/everything-know-golden-state-warriors-offseason-draft-free-agency-contracts"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Mikel Brown Jr.'s NBA draft profile",
+          "summary_hint": "Mikel Brown Jr.'s NBA draft profile",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49088662/mikel-brown-jr-nba-draft-profile"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Labaron Philon's NBA draft profile",
+          "summary_hint": "Labaron Philon's NBA draft profile",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49087795/labaron-philon-nba-draft-profile"
+        }
+      ]
+    },
+    {
+      "title": "Peter Thiel: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "peter-thiel-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Peter Thiel after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Peter Thiel after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: peter thiel",
+          "summary_hint": "200+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Culture War: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "culture-war-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Culture War after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Culture War after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: culture war",
+          "summary_hint": "200+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Wheeler School Viral Photo: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "wheeler-school-viral-photo-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Wheeler School Viral Photo after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Wheeler School Viral Photo after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: wheeler school viral photo",
+          "summary_hint": "200+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Fed Meeting: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "fed-meeting-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Fed Meeting after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Fed Meeting after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: fed meeting",
+          "summary_hint": "500+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Aldi: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "aldi-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Aldi after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Aldi after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: aldi",
+          "summary_hint": "2000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Ben Shelton: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "ben-shelton-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Ben Shelton after 1000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Ben Shelton after 1000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: ben shelton",
+          "summary_hint": "1000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Qure Stock: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "qure-stock-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Qure Stock after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Qure Stock after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: qure stock",
+          "summary_hint": "200+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Prime Day 2026: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "prime-day-2026-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Prime Day 2026 after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Prime Day 2026 after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: prime day 2026",
+          "summary_hint": "2000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Maps: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "maps-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Maps after 10000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Maps after 10000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: maps",
+          "summary_hint": "10000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Weather Channel: Google Trends Betting Angle (June 17, 2026)",
+      "slug": "weather-channel-google-trends-betting-angle-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "Sports",
+      "excerpt": "Weather Channel after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Weather Channel after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: weather channel",
+          "summary_hint": "2000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "MLB betting tips for Wednesday: Freddie Freeman ready to roll: The AI Betting Angle (June 17, 2026)",
+      "slug": "mlb-betting-tips-for-wednesday-freddie-freeman-ready-to-roll-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on MLB betting tips for Wednesday: Freddie Freeman ready to roll. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on MLB betting tips for Wednesday: Freddie Freeman ready to roll. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “MLB betting tips for Wednesday: Freddie Freeman ready to roll” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "MLB betting tips for Wednesday: Freddie Freeman ready to roll",
+          "summary_hint": "All of the odds, recommended prop bets and trends in baseball for Wednesday, June 17.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/espn/betting/story/_/id/49093204/mlb-betting-tips-odds-lines-2026-wednesday-june-17"
+        }
+      ]
+    },
+    {
+      "title": "Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena: The AI Betting Angle (June 17, 2026)",
+      "slug": "fantasy-baseball-mariners-get-raleigh-crawford-back-lose-arozarena-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "Fantasy baseball: Mariners get Raleigh, Crawford back, lose Arozarena",
+          "summary_hint": "All of the important fantasy spin and actionable takeaways resulting from the latest baseball news.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/48297021/espn-fantasy-baseball-buzz-injuries-promotions-demotions-trades-prospects-lineup-changes-mlb-news-analysis-2026"
+        }
+      ]
+    },
+    {
+      "title": "Ranking top 2026 MLB trade deadline candidates: Skubal, more: The AI Betting Angle (June 17, 2026)",
+      "slug": "ranking-top-2026-mlb-trade-deadline-candidates-skubal-more-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on Ranking top 2026 MLB trade deadline candidates: Skubal, more. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on Ranking top 2026 MLB trade deadline candidates: Skubal, more. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “Ranking top 2026 MLB trade deadline candidates: Skubal, more” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "Ranking top 2026 MLB trade deadline candidates: Skubal, more",
+          "summary_hint": "Skubal to the ...?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/mlb/story/_/id/49082474/ranking-mlb-trade-deadline-candidates-top-100-skubal-chapman-peralta-arraez"
+        }
+      ]
+    },
+    {
+      "title": "MLB 2026: Why Brewers, Guardians keep defying expectations: The AI Betting Angle (June 17, 2026)",
+      "slug": "mlb-2026-why-brewers-guardians-keep-defying-expectations-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on MLB 2026: Why Brewers, Guardians keep defying expectations. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on MLB 2026: Why Brewers, Guardians keep defying expectations. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “MLB 2026: Why Brewers, Guardians keep defying expectations” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "MLB 2026: Why Brewers, Guardians keep defying expectations",
+          "summary_hint": "As these first-place teams battle this week, we look at what makes them perennial overachievers.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/mlb/story/_/id/49082939/mlb-2026-milwaukee-brewers-cleveland-guardians-projections-expectations"
+        }
+      ]
+    },
+    {
+      "title": "Ranking top of 2025, 2026 NBA drafts: Would Flagg still be No. 1?: The AI Betting Angle (June 17, 2026)",
+      "slug": "ranking-top-of-2025-2026-nba-drafts-would-flagg-still-be-no-1-2026-06-17",
+      "date": "2026-06-17",
+      "sport_tag": "NBA",
+      "excerpt": "In NBA, the news cycle is centered on Ranking top of 2025, 2026 NBA drafts: Would Flagg still be No. 1?. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+      "body": [
+        "In NBA, the news cycle is centered on Ranking top of 2025, 2026 NBA drafts: Would Flagg still be No. 1?. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for NBA bettors is whether the market has already priced this in. When a story like “Ranking top of 2025, 2026 NBA drafts: Would Flagg still be No. 1?” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "NBA",
+          "topic": "Ranking top of 2025, 2026 NBA drafts: Would Flagg still be No. 1?",
+          "summary_hint": "What if Cooper Flagg never reclassified?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/story/_/id/48979870/ranking-2026-nba-draft-2025-classes-draft-cooper-flagg-dylan-harper-reclass-dybantsa-peterson"
+        }
+      ]
+    },
+    {
       "title": "Prediction Lab Blog: June 16, 2026",
       "slug": "prediction-lab-blog-2026-06-16",
       "date": "2026-06-16",
