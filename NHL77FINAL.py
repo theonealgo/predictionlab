@@ -4675,6 +4675,15 @@ def add_header(response):
 import os as _os
 _DATA_DIR = '/data' if _os.path.isdir('/data') else '.'
 DATABASE = _os.path.join(_DATA_DIR, 'sports_predictions_original.db')
+if _DATA_DIR == '/data' and not _os.path.exists(DATABASE):
+    try:
+        import shutil as _shutil
+        _seed_db = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'sports_predictions_original.db')
+        if _os.path.exists(_seed_db):
+            _shutil.copyfile(_seed_db, DATABASE)
+            logging.getLogger(__name__).info("Seeded database on persistent disk.")
+    except Exception as _seed_exc:
+        logging.getLogger(__name__).warning("Could not seed persistent database: %s", _seed_exc)
 # Force the DB back to the default rollback journal (NOT WAL). A previous build
 # enabled WAL, which persists in the DB header — and WAL's mmap shared memory is
 # not safe across gunicorn's preload fork, so workers SIGSEGV'd on the first
