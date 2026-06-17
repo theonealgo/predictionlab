@@ -4608,16 +4608,17 @@ for _mod in (_tennis_sport, _ufc_sport, _golf_sport):
     _OFFSEASON_SPORTS_HINT[_mod.SPORT] = _mod.OFFSEASON_HINT
 
 _CANONICAL_HOST = 'predictionlab.io'
+_PRIMARY_HOSTS = {'predictionlab.io', 'www.predictionlab.io'}
 
 @app.before_request
 def enforce_canonical_domain():
-    """Redirect underdogs.bet/http variants to canonical https://predictionlab.io."""
+    """Redirect legacy domains/http variants while allowing both apex and www."""
     host = (request.host or '').split(':')[0].lower()
     if not host or host in {'localhost', '127.0.0.1'} or host.endswith('.local'):
         return None
     if not (host.endswith('underdogs.bet') or host.endswith('predictionlab.io')):
         return None
-    target_host = _CANONICAL_HOST
+    target_host = host if host in _PRIMARY_HOSTS else _CANONICAL_HOST
     is_https = request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https'
     needs_redirect = (host != target_host) or (not is_https)
     if not needs_redirect:
