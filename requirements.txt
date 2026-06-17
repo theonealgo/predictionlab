@@ -10,15 +10,19 @@ authlib
 stripe
 python-dotenv
 
-# Data
-pandas
-numpy>=2.0.0
+# Data — PINNED to the versions the saved models were trained/pickled with
+# (from uv.lock). Leaving these unpinned let a rebuild pull newer releases
+# (sklearn 1.9, xgboost 3.2, pandas 3.0) that mismatch the pickled models and
+# SEGFAULT the gunicorn workers on prediction pages (site-wide 502). Do not
+# loosen these without re-saving the models against the new versions.
+pandas==2.3.2
+numpy==2.3.3
 requests
-scipy
-scikit-learn
-xgboost
-catboost
-lightgbm
+scipy==1.16.1
+scikit-learn==1.7.2
+xgboost==3.0.5
+catboost==1.2.8
+lightgbm==4.6.0
 
 # Sports data (PyPI packages only — local modules like nhl_api.py are in the repo)
 nfl-data-py
