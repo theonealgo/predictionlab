@@ -4710,16 +4710,17 @@ if _DATA_DIR == '/data' and not _os.path.exists(DATABASE):
             logging.getLogger(__name__).info("Seeded database on persistent disk.")
     except Exception as _seed_exc:
         logging.getLogger(__name__).warning("Could not seed persistent database: %s", _seed_exc)
-# Force the DB back to the default rollback journal (NOT WAL). A previous build
-# enabled WAL, which persists in the DB header — and WAL's mmap shared memory is
-# not safe across gunicorn's preload fork, so workers SIGSEGV'd on the first
-# DB-touching request (site-wide 502). Converting to DELETE here (once, at import
-# in the master, before any worker forks) undoes the persisted WAL state and
-# removes the -wal/-shm files. DELETE mode has no shared memory, so it is
-# fork-safe; busy_timeout (per-connection) still prevents "database is locked".
+# Enable WAL. With the default rollback journal, a single writer blocks ALL
+# readers, so under concurrent gthread traffic the app floods "database is locked"
+# even with a 30s busy_timeout. WAL lets readers run concurrently with one writer
+# and largely eliminates those lock errors. WAL is safe here: the segfault that
+# took the site down was XGBoost/OpenMP across gunicorn's PRELOAD fork (now fixed
+# via pinned deps + OMP_NUM_THREADS=1 + preload_app=False), not WAL. With preload
+# off this runs in the worker (no fork afterward), and threads share WAL fine.
 try:
     _jm_conn = sqlite3.connect(DATABASE, timeout=15)
-    _jm_conn.execute("PRAGMA journal_mode=DELETE")
+    _jm_conn.execute("PRAGMA journal_mode=WAL")
+    _jm_conn.execute("PRAGMA synchronous=NORMAL")
     _jm_conn.close()
 except Exception:
     pass
@@ -6748,9 +6749,9 @@ _PREDICT_LOCK = _threading_pred.RLock()
 
 
 def get_v2_prediction(sport, home_team, away_team, game_date=None):
-    """Thread-safe wrapper: serialize native inference to avoid worker segfaults."""
-    with _PREDICT_LOCK:
-        return _get_v2_prediction_impl(sport, home_team, away_team, game_date)
+    """Native inference is thread-safe with OMP_NUM_THREADS=1 + pinned deps +
+    preload off; no global lock (it serialized cold renders and timed them out)."""
+    return _get_v2_prediction_impl(sport, home_team, away_team, game_date)
 
 
 def _get_v2_prediction_impl(sport, home_team, away_team, game_date=None):
@@ -7037,10 +7038,9 @@ def _picks_display_window():
 
 
 def get_upcoming_predictions(sport, days=365):
-    """Thread-safe wrapper: serialize the native-model prediction build so
-    concurrent gunicorn threads don't crash the worker (segfault → 502)."""
-    with _PREDICT_LOCK:
-        return _get_upcoming_predictions_impl(sport, days)
+    """No global lock — it serialized cold renders and caused timeouts under
+    concurrent (bot) traffic. Concurrency is safe via OMP=1 + pinned deps + WAL."""
+    return _get_upcoming_predictions_impl(sport, days)
 
 
 def _get_upcoming_predictions_impl(sport, days=365):
