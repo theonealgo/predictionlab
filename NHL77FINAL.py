@@ -189,6 +189,8 @@ _PRED_SAVE_SCHEDULED: set = set()
 _PRED_SAVE_LOCK = __import__('threading').Lock()
 _PRED_LOAD_INFLIGHT: set = set()
 _PRED_LOAD_LOCK = __import__('threading').Lock()
+_PICK_PAGE_WARM_INFLIGHT: set = set()
+_PICK_PAGE_WARM_LOCK = __import__('threading').Lock()
 _STALE_PAGE_TTL_MULTIPLIER = 5
 
 
@@ -18621,6 +18623,43 @@ def _results_fallback_page(sport, message):
         message=message
     )
 
+
+def _warm_public_picks_page_async(sport: str, filter_date=None, selected_slug: str = ''):
+    """Build the public picks HTML cache outside the visitor request path."""
+    if not _is_render_host():
+        return
+    import threading as _thr
+
+    sport = (sport or '').upper()
+    key = f"{sport}:{filter_date or 'all'}:{selected_slug or 'default'}"
+    with _PICK_PAGE_WARM_LOCK:
+        if key in _PICK_PAGE_WARM_INFLIGHT:
+            return
+        _PICK_PAGE_WARM_INFLIGHT.add(key)
+
+    def _run():
+        try:
+            slug = SPORT_SEO_SLUGS.get(sport, sport.lower() + '-picks')
+            path = f"/{slug}"
+            if filter_date:
+                path = f"/{slug}/{filter_date}"
+            if selected_slug:
+                path = f"{path}?league={selected_slug}"
+            client = app.test_client()
+            resp = client.get(path, headers={
+                'Host': 'predictionlab.io',
+                'X-PL-Prewarm': '1',
+            }, follow_redirects=True)
+            logger.info("[prewarm] %s picks page status=%s bytes=%s", sport, resp.status_code, len(resp.data or b''))
+        except Exception as _warm_err:
+            logger.debug("[%s] public picks warm failed: %s", sport, _warm_err)
+        finally:
+            with _PICK_PAGE_WARM_LOCK:
+                _PICK_PAGE_WARM_INFLIGHT.discard(key)
+
+    _thr.Thread(target=_run, daemon=True, name=f"public-picks-warm-{sport}").start()
+
+
 def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
     log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
@@ -18631,6 +18670,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     cached_html = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
+    _is_prewarm_request = request.headers.get('X-PL-Prewarm') == '1'
     if not current_user.is_authenticated:
         cache_key = f"pred_page::v19::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -18645,6 +18685,10 @@ def sport_predictions(sport, filter_date=None):
             and 'upstream data/model dependency failed' not in cached_html.lower()
         ):
             return cached_html
+        _live_build_enabled = _early_os.environ.get('PL_ENABLE_PUBLIC_PICKS_LIVE_BUILD', '').lower() in {'1', 'true', 'yes'}
+        if _is_render_host() and not _is_prewarm_request and not _live_build_enabled:
+            _warm_public_picks_page_async(sport, filter_date=filter_date, selected_slug=selected_slug)
+            return _predictions_fallback_page(sport, filter_date=filter_date)
     prediction_error = None
     try:
         if not current_user.is_authenticated:
@@ -20150,7 +20194,7 @@ def _prewarm_pages():
     """Warm the expensive pages in the background after startup so the first real
     visitor (and crawlers) hit a cached page instead of a cold 10-90s build.
     Runs once per process via the app's own test client; pages then serve cached
-    /stale-while-warm. Heavy results pages first."""
+    /stale-while-warm. Render warms only picks by default."""
     import threading as _thr_pw
     import time as _t_pw
 
@@ -20161,8 +20205,9 @@ def _prewarm_pages():
         paths = ['/nba-picks', '/nhl-picks', '/mlb-picks']
         if SOCCER_ENABLED:
             paths.append('/soccer-picks')
-        paths += ['/all-sports-results', '/daily-report',
-                  '/nba-results', '/nhl-results', '/mlb-results']
+        if (not _is_render_host()) or _early_os.environ.get('PL_PREWARM_HEAVY_RESULTS', '').lower() in {'1', 'true', 'yes'}:
+            paths += ['/all-sports-results', '/daily-report',
+                      '/nba-results', '/nhl-results', '/mlb-results']
         try:
             client = app.test_client()
         except Exception:
@@ -20170,7 +20215,10 @@ def _prewarm_pages():
             return
         for p in paths:
             try:
-                client.get(p)
+                client.get(p, headers={
+                    'Host': 'predictionlab.io',
+                    'X-PL-Prewarm': '1',
+                }, follow_redirects=True)
                 logger.info(f'pre-warmed {p}')
             except Exception:
                 logger.debug(f'pre-warm failed for {p}')
@@ -20180,11 +20228,11 @@ def _prewarm_pages():
 
 try:
     _render_host = _is_render_host()
-    _prewarm_enabled = _early_os.environ.get('PL_ENABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
-    if _prewarm_enabled or not _render_host:
+    _prewarm_disabled = _early_os.environ.get('PL_DISABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
+    if not _prewarm_disabled:
         _prewarm_pages()
     else:
-        logger.info('page pre-warm disabled on Render; set PL_ENABLE_PAGE_PREWARM=1 to enable')
+        logger.info('page pre-warm disabled by PL_DISABLE_PAGE_PREWARM=1')
 except Exception:
     logger.exception('could not start page pre-warm')
 
