@@ -251,7 +251,7 @@
     </div>
     <div class="line-chip">
         <div class="line-chip-label">Books total</div>
-        <div class="line-chip-val">{% if _locked %}<a href="/plans">Premium</a>{% elif _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
+        <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
     {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
     {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
@@ -303,7 +303,7 @@
                 </tr>
                 <tr>
                     <td class="market-k">Total</td>
-                    <td class="val-books">{% if _locked %}Premium{% elif _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
+                    <td class="val-books">{% if _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
                     <td class="val-pl">{% if _locked %}🔒{% elif _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
                     <td class="val-xs">{% if _locked %}🔒{% elif _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
                 </tr>
