@@ -171,6 +171,8 @@ _LANDING_BANNER_CACHE = {'ts': 0, 'messages': []}
 _LANDING_BANNER_TTL = 900
 _DAILY_REPORT_CACHE = {'ts': 0, 'date': None, 'html': None}
 _DAILY_REPORT_TTL = 300
+_HOMEPAGE_HTML_CACHE = {'ts': 0, 'html': None}
+_HOMEPAGE_HTML_TTL = 300
 _SPORT_PREDICTIONS_PAGE_CACHE: dict = {}
 _SPORT_PREDICTIONS_PAGE_TTL = {
     'SOCCER': 300,
@@ -14448,6 +14450,14 @@ def landing_page():
     if request.method == 'HEAD':
         return '', 200
     log_site_visit('/')
+    if _is_render_host() and not current_user.is_authenticated:
+        cached_html = _HOMEPAGE_HTML_CACHE.get('html')
+        cached_ts = _HOMEPAGE_HTML_CACHE.get('ts') or 0
+        if cached_html and (_time.time() - cached_ts) < _HOMEPAGE_HTML_TTL:
+            return cached_html
+        rendered = render_template('homepage_preview.html', **_build_fast_landing_preview_context())
+        _HOMEPAGE_HTML_CACHE.update({'ts': _time.time(), 'html': rendered})
+        return rendered
     return render_template('homepage_preview.html', **_build_landing_preview_context())
 
 _SITE_DOMAIN = 'https://predictionlab.io'
