@@ -18836,6 +18836,52 @@ def _get_lightweight_public_predictions(sport: str):
     return predictions
 
 
+def _render_lightweight_picks_html(sport: str, predictions: list, filter_date=None):
+    """Last-resort Render-safe picks HTML when the full template cannot render."""
+    sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
+    by_date = defaultdict(list)
+    for pred in predictions or []:
+        if not isinstance(pred, dict):
+            continue
+        date_key = pred.get('game_date') or 'TBD'
+        if filter_date and date_key != filter_date:
+            continue
+        by_date[date_key].append(pred)
+    dates = sorted(by_date.keys())[:12]
+    return render_template_string("""
+{% extends "base.html" %}
+{% block title %}{{ sport_info.name }} Picks | predictionlab.io{% endblock %}
+{% block head_meta %}
+    <meta name="description" content="Daily {{ sport_info.name }} picks, schedules, and AI prediction snapshots from predictionlab.io.">
+    <link rel="canonical" href="https://predictionlab.io/{{ sport_slug }}">
+{% endblock %}
+{% block content %}
+<section class="pl-page" style="max-width:1100px;margin:24px auto;padding:0 16px;">
+  <h1>{{ sport_info.icon }} {{ sport_info.name }} Picks</h1>
+  {% if dates %}
+    {% for d in dates %}
+      <h2 style="margin-top:24px;">{{ d }}</h2>
+      <div class="game-grid">
+      {% for p in by_date[d] %}
+        <article class="game-card" style="border:1px solid rgba(0,0,0,.12);padding:16px;margin:12px 0;background:#fff;">
+          <strong>{{ p.away_team_id }} at {{ p.home_team_id }}</strong>
+          <div>Pick: {{ p.predicted_winner or p.home_team_id }}</div>
+          <div>Home win: {{ p.ensemble_prob or p.elo_prob or 50 }}%</div>
+          {% if p.home_score is not none and p.away_score is not none %}
+            <div>Final: {{ p.away_score }} - {{ p.home_score }}</div>
+          {% endif %}
+        </article>
+      {% endfor %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p>No {{ sport_info.name }} games are currently listed in the nearby schedule window.</p>
+  {% endif %}
+</section>
+{% endblock %}
+    """, sport=sport, sport_info=sport_info, sport_slug=SPORT_SEO_SLUGS.get(sport, sport.lower() + '-picks'), predictions=predictions or [], by_date=by_date, dates=dates)
+
+
 def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
     log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
@@ -18862,13 +18908,14 @@ def sport_predictions(sport, filter_date=None):
             and 'upstream data/model dependency failed' not in cached_html.lower()
         ):
             return cached_html
-        _live_build_enabled = _early_os.environ.get('PL_ENABLE_PUBLIC_PICKS_LIVE_BUILD', '').lower() in {'1', 'true', 'yes'}
-        if _is_render_host() and not _is_prewarm_request and not _live_build_enabled:
+        if _is_render_host() and not _is_prewarm_request:
             try:
                 predictions = _get_lightweight_public_predictions(sport)
                 _using_lightweight_public = True
+                logger.info("[%s] Render lightweight picks loaded %s rows", sport, len(predictions))
             except Exception as _lite_pred_err:
-                logger.error("[%s] lightweight public picks failed: %s", sport, _lite_pred_err)
+                import traceback as _tb_lite
+                logger.error("[%s] lightweight public picks failed: %s\n%s", sport, _lite_pred_err, _tb_lite.format_exc())
                 predictions = []
                 prediction_error = (
                     f"{SPORTS[sport]['name']} predictions are refreshing. Please check back in a minute."
@@ -19241,6 +19288,9 @@ def sport_predictions(sport, filter_date=None):
         rendered = _render_espn_picks_page(**_render_ctx)
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
+        if _using_lightweight_public:
+            logger.warning("Serving lightweight %s picks HTML after full template render failure", sport)
+            return _render_lightweight_picks_html(sport, predictions, filter_date=filter_date)
         if (
             cached_html
             and 'game-card' in cached_html
