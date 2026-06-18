@@ -1,6 +1,411 @@
 {
   "posts": [
     {
+      "title": "Prediction Lab Blog: June 18, 2026",
+      "slug": "prediction-lab-blog-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "MLB",
+      "excerpt": "The sports news side of the board is being shaped by MLB: Brewers' Priester to have season-ending thoracic outlet surgery; MLB: Fantasy baseball: How to maximize the value of stolen bases; MLB: With the top four locked, who is the fifth best team in baseball?. Today's betting board is led by MLB: New York Mets over Philadelphia Phillies (52.0%); MLB: Los Angeles Angels over Athletics (51.2%); MLB: Baltimore Orioles over Seattle Mariners (54.0%). In MLB, the news cycle is centered on Brewers' Priester to have season-ending thoracic outlet surgery.",
+      "body": [
+        "The sports news side of the board is being shaped by MLB: Brewers' Priester to have season-ending thoracic outlet surgery; MLB: Fantasy baseball: How to maximize the value of stolen bases; MLB: With the top four locked, who is the fifth best team in baseball?.",
+        "Today's betting board is led by MLB: New York Mets over Philadelphia Phillies (52.0%); MLB: Los Angeles Angels over Athletics (51.2%); MLB: Baltimore Orioles over Seattle Mariners (54.0%).",
+        "In MLB, the news cycle is centered on Brewers' Priester to have season-ending thoracic outlet surgery. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "In MLB, the news cycle is centered on Fantasy baseball: How to maximize the value of stolen bases. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "In MLB, the news cycle is centered on With the top four locked, who is the fifth best team in baseball?. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "Prediction Lab connects sports news to betting context by comparing model win probabilities against market prices. The daily betting results report remains the verification layer, while this news and market breakdown gives crawlers and readers a concise explanation of what the models and the broader sports calendar are watching today.",
+        "The most important signal is not a single story or pick in isolation. It is the relationship between news, model confidence, sportsbook pricing, recent result tracking, and whether multiple model layers point in the same direction.",
+        "Check the sport prediction pages for the live cards and the daily results report for completed-game tracking. New daily sports news and betting analysis pages are generated server-side so the latest context stays crawlable and internally linked from the homepage."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "Brewers' Priester to have season-ending thoracic outlet surgery",
+          "summary_hint": "Milwaukee Brewers right-hander Quinn Priester will undergo season-ending surgery for thoracic outlet syndrome and is expected to be sidelined for eight to 10 months.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/mlb/story/_/id/49108082/brewers-priester-season-ending-thoracic-outlet-surgery"
+        },
+        {
+          "sport": "MLB",
+          "topic": "Fantasy baseball: How to maximize the value of stolen bases",
+          "summary_hint": "Have teams finally caught up to the rules changes and figured out how to defend the steal?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/49106164/fantasy-baseball-state-stolen-bases-analysis-stats-2026"
+        },
+        {
+          "sport": "MLB",
+          "topic": "With the top four locked, who is the fifth best team in baseball?",
+          "summary_hint": "With the top four locked, who is the fifth best team in baseball?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49106405/with-top-four-locked-fifth-best-team-baseball"
+        },
+        {
+          "sport": "MLB",
+          "topic": "ESPN fantasy baseball rankings: 2026 points leagues",
+          "summary_hint": "Here are Tristan H.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/35437997/fantasy-baseball-rankings-points-leagues-2026-espn-cockcroft"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Best moments from New York Knicks 2026 NBA championship parade",
+          "summary_hint": "All of the sights and sounds as the New York Knicks celebrate their NBA championship in Manhattan.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/story/_/id/49100686/new-york-knicks-nba-championship-parade-sights-sounds-moments"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Where does Stephen A. think LeBron should play next season?",
+          "summary_hint": "Where does Stephen A.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49107861/where-does-stephen-think-lebron-play-next-season"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Stephen A.: Tatum, Giannis a championship-caliber combo for Celtics",
+          "summary_hint": "Stephen A.: Tatum, Giannis a championship-caliber combo for Celtics",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49107815/tatum-giannis-championship-caliber-combo-celtics"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Jalen Brunson and family show off Finals trophy on parade float",
+          "summary_hint": "Jalen Brunson and family show off Finals trophy on parade float",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49107634/jalen-brunson-family-show-finals-trophy-parade-float"
+        }
+      ]
+    },
+    {
+      "title": "Joan Cusack: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "joan-cusack-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Joan Cusack after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Joan Cusack after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: joan cusack",
+          "summary_hint": "2000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Tori Penso: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "tori-penso-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Tori Penso after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Tori Penso after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: tori penso",
+          "summary_hint": "500+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Ludvig Åberg: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "ludvig-berg-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Ludvig Åberg after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Ludvig Åberg after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: ludvig åberg",
+          "summary_hint": "200+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Jorge Messi: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "jorge-messi-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Jorge Messi after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Jorge Messi after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: jorge messi",
+          "summary_hint": "200+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Andre Gasseau: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "andre-gasseau-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Andre Gasseau after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Andre Gasseau after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: andre gasseau",
+          "summary_hint": "500+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Cyberpunk 2077: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "cyberpunk-2077-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Cyberpunk 2077 after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Cyberpunk 2077 after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: cyberpunk 2077",
+          "summary_hint": "200+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Las Vegas Raiders: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "las-vegas-raiders-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Las Vegas Raiders after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Las Vegas Raiders after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: las vegas raiders",
+          "summary_hint": "500+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "What Time Does Mexico Play Today: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "what-time-does-mexico-play-today-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "What Time Does Mexico Play Today after 5000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "What Time Does Mexico Play Today after 5000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: what time does mexico play today",
+          "summary_hint": "5000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Elena Rybakina: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "elena-rybakina-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Elena Rybakina after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Elena Rybakina after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: elena rybakina",
+          "summary_hint": "2000+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Al Roker Daughter Leila Wedding: Google Trends Betting Angle (June 18, 2026)",
+      "slug": "al-roker-daughter-leila-wedding-google-trends-betting-angle-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "Sports",
+      "excerpt": "Al Roker Daughter Leila Wedding after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "body": [
+        "Al Roker Daughter Leila Wedding after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+      ],
+      "news_items": [
+        {
+          "sport": "Sports",
+          "topic": "Google Trends: al roker daughter leila wedding",
+          "summary_hint": "500+ searches in the last 24 hours",
+          "source": "Google Trends",
+          "url": "https://trends.google.com/trending?geo=US"
+        }
+      ]
+    },
+    {
+      "title": "Brewers' Priester to have season-ending thoracic outlet surgery: The AI Betting Angle (June 18, 2026)",
+      "slug": "brewers-priester-to-have-season-ending-thoracic-outlet-surgery-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on Brewers' Priester to have season-ending thoracic outlet surgery. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on Brewers' Priester to have season-ending thoracic outlet surgery. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “Brewers' Priester to have season-ending thoracic outlet surgery” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "Brewers' Priester to have season-ending thoracic outlet surgery",
+          "summary_hint": "Milwaukee Brewers right-hander Quinn Priester will undergo season-ending surgery for thoracic outlet syndrome and is expected to be sidelined for eight to 10 months.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/mlb/story/_/id/49108082/brewers-priester-season-ending-thoracic-outlet-surgery"
+        }
+      ]
+    },
+    {
+      "title": "Fantasy baseball: How to maximize the value of stolen bases: The AI Betting Angle (June 18, 2026)",
+      "slug": "fantasy-baseball-how-to-maximize-the-value-of-stolen-bases-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on Fantasy baseball: How to maximize the value of stolen bases. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on Fantasy baseball: How to maximize the value of stolen bases. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “Fantasy baseball: How to maximize the value of stolen bases” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "Fantasy baseball: How to maximize the value of stolen bases",
+          "summary_hint": "Have teams finally caught up to the rules changes and figured out how to defend the steal?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/49106164/fantasy-baseball-state-stolen-bases-analysis-stats-2026"
+        }
+      ]
+    },
+    {
+      "title": "With the top four locked, who is the fifth best team in baseball?: The AI Betting Angle (June 18, 2026)",
+      "slug": "with-the-top-four-locked-who-is-the-fifth-best-team-in-baseball-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on With the top four locked, who is the fifth best team in baseball?. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on With the top four locked, who is the fifth best team in baseball?. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “With the top four locked, who is the fifth best team in baseball?” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "With the top four locked, who is the fifth best team in baseball?",
+          "summary_hint": "With the top four locked, who is the fifth best team in baseball?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49106405/with-top-four-locked-fifth-best-team-baseball"
+        }
+      ]
+    },
+    {
+      "title": "ESPN fantasy baseball rankings: 2026 points leagues: The AI Betting Angle (June 18, 2026)",
+      "slug": "espn-fantasy-baseball-rankings-2026-points-leagues-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "MLB",
+      "excerpt": "In MLB, the news cycle is centered on ESPN fantasy baseball rankings: 2026 points leagues. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for MLB bettors is whether the market has already priced this in.",
+      "body": [
+        "In MLB, the news cycle is centered on ESPN fantasy baseball rankings: 2026 points leagues. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for MLB bettors is whether the market has already priced this in. When a story like “ESPN fantasy baseball rankings: 2026 points leagues” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "ESPN fantasy baseball rankings: 2026 points leagues",
+          "summary_hint": "Here are Tristan H.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/35437997/fantasy-baseball-rankings-points-leagues-2026-espn-cockcroft"
+        }
+      ]
+    },
+    {
+      "title": "Best moments from New York Knicks 2026 NBA championship parade: The AI Betting Angle (June 18, 2026)",
+      "slug": "best-moments-from-new-york-knicks-2026-nba-championship-parade-2026-06-18",
+      "date": "2026-06-18",
+      "sport_tag": "NBA",
+      "excerpt": "In NBA, the news cycle is centered on Best moments from New York Knicks 2026 NBA championship parade. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted. The betting question for NBA bettors is whether the market has already priced this in.",
+      "body": [
+        "In NBA, the news cycle is centered on Best moments from New York Knicks 2026 NBA championship parade. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "The betting question for NBA bettors is whether the market has already priced this in. When a story like “Best moments from New York Knicks 2026 NBA championship parade” breaks, sportsbook lines often move before the public reacts — so the edge is in comparing a model's fair price to the current number, not in the headline itself.",
+        "Prediction Lab approaches this by computing model win probabilities and comparing them against sportsbook moneyline, spread, and total prices. When the model and the market disagree past the vig, that gap is the only thing that matters — everything else is narrative.",
+        "See the live prediction cards on the sport pages for today's model lines, and the daily results report for completed-game tracking and verification."
+      ],
+      "news_items": [
+        {
+          "sport": "NBA",
+          "topic": "Best moments from New York Knicks 2026 NBA championship parade",
+          "summary_hint": "All of the sights and sounds as the New York Knicks celebrate their NBA championship in Manhattan.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/story/_/id/49100686/new-york-knicks-nba-championship-parade-sights-sounds-moments"
+        }
+      ]
+    },
+    {
       "title": "Prediction Lab Blog: June 17, 2026",
       "slug": "prediction-lab-blog-2026-06-17",
       "date": "2026-06-17",
