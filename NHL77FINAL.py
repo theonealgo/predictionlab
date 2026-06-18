@@ -187,6 +187,8 @@ _PROPS_GRADE_SCHEDULED: set = set()
 _PROPS_GRADE_LOCK = __import__('threading').Lock()
 _PRED_SAVE_SCHEDULED: set = set()
 _PRED_SAVE_LOCK = __import__('threading').Lock()
+_PRED_LOAD_INFLIGHT: set = set()
+_PRED_LOAD_LOCK = __import__('threading').Lock()
 _STALE_PAGE_TTL_MULTIPLIER = 5
 
 
@@ -18561,6 +18563,48 @@ def _predictions_fallback_page(sport, filter_date=None):
 {% endblock %}
     """, sport_info=sport_info, sport_slug=SPORT_SEO_SLUGS.get(sport, sport.lower() + '-picks'), safe_title=safe_title)
 
+
+def _get_predictions_with_render_timeout(sport: str, timeout_seconds: float = 18.0):
+    """Load predictions, but never let a public Render request hang into a 502.
+
+    The background worker still finishes and populates the underlying prediction
+    cache, so the next request can serve the full page.
+    """
+    if not _is_render_host():
+        return get_upcoming_predictions(sport), False
+
+    import queue as _queue
+    import threading as _thr
+
+    key = f"{sport}:upcoming"
+    with _PRED_LOAD_LOCK:
+        if key in _PRED_LOAD_INFLIGHT:
+            logger.warning("[%s] prediction load already warming; serving fallback", sport)
+            return [], True
+        _PRED_LOAD_INFLIGHT.add(key)
+
+    result_q = _queue.Queue(maxsize=1)
+
+    def _run():
+        try:
+            result_q.put(("ok", get_upcoming_predictions(sport)))
+        except Exception as exc:
+            result_q.put(("err", exc))
+        finally:
+            with _PRED_LOAD_LOCK:
+                _PRED_LOAD_INFLIGHT.discard(key)
+
+    _thr.Thread(target=_run, daemon=True, name=f"pred-load-{sport}").start()
+    try:
+        status, payload = result_q.get(timeout=timeout_seconds)
+    except _queue.Empty:
+        logger.warning("[%s] prediction load exceeded %.1fs; serving fallback while cache warms", sport, timeout_seconds)
+        return [], True
+    if status == "err":
+        raise payload
+    return payload, False
+
+
 def _results_fallback_page(sport, message):
     """Safe fallback HTML for results pages when processing fails."""
     sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
@@ -18607,7 +18651,12 @@ def sport_predictions(sport, filter_date=None):
             return cached_html
     prediction_error = None
     try:
-        predictions = get_upcoming_predictions(sport)
+        if not current_user.is_authenticated:
+            predictions, _timed_out = _get_predictions_with_render_timeout(sport)
+            if _timed_out:
+                return _predictions_fallback_page(sport, filter_date=filter_date)
+        else:
+            predictions = get_upcoming_predictions(sport)
     except Exception as e:
         import traceback as _tb_pred
         logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
