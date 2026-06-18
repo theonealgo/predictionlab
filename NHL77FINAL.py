@@ -7019,6 +7019,19 @@ def _fetch_injuries(sport: str) -> dict:
         return _from_db()
 
 
+def _picks_display_window():
+    """Small public picks window: enough for SEO/content without huge season pages."""
+    try:
+        back = int(_early_os.environ.get('PL_PICKS_DISPLAY_DAYS_BACK', '5') or 5)
+    except Exception:
+        back = 5
+    try:
+        forward = int(_early_os.environ.get('PL_PICKS_DISPLAY_DAYS_FORWARD', '5') or 5)
+    except Exception:
+        forward = 5
+    return max(0, back), max(1, forward)
+
+
 def get_upcoming_predictions(sport, days=365):
     """Thread-safe wrapper: serialize the native-model prediction build so
     concurrent gunicorn threads don't crash the worker (segfault → 502)."""
@@ -7027,16 +7040,21 @@ def get_upcoming_predictions(sport, days=365):
 
 
 def _get_upcoming_predictions_impl(sport, days=365):
-    """Get ALL game predictions from season start - both completed and upcoming
+    """Get nearby game predictions for the public picks pages.
 
-    Loads games from database for all sports including NHL
-
-    USER REQUIREMENT: Show ALL games from season start (Oct 7 for NHL), not just upcoming!
+    Public sport pages stay limited to a small date window so Render does not
+    spend a request building and rendering an entire season of cards.
     """
     sport = (sport or '').upper()
+    today = datetime.now()
+    _display_back, _display_forward = _picks_display_window()
+    display_start = (today - timedelta(days=_display_back)).replace(hour=0, minute=0, second=0, microsecond=0)
+    display_end = (today + timedelta(days=_display_forward)).replace(hour=23, minute=59, second=59, microsecond=999999)
+    display_start_sql = display_start.strftime('%Y-%m-%d')
+    display_end_sql = display_end.strftime('%Y-%m-%d')
     
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
-    cache_key = f"{sport}_upcoming_predictions_v8"
+    cache_key = f"{sport}_upcoming_predictions_v9"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
@@ -7182,15 +7200,15 @@ def _get_upcoming_predictions_impl(sport, days=365):
         # All sports use a single date-range API call (1 request) instead of
         # day-by-day loops (22+ requests) that kill the Render worker.
         if sport in ['NBA', 'NFL', 'NCAAF', 'MLB', 'WNBA', 'NCAAB', 'NCAAW']:
-            # Tight windows: enough for predictions page without overloading Render
+            # Public display window: 5 days back / 5 days forward by default.
             _SPORT_WINDOWS = {
-                'NFL':   (14, 14, 200),   # offseason — small
-                'NCAAF': (14, 14, 200),   # offseason — small
-                'NBA':   (3,  7,  200),   # playoffs — tight
-                'MLB':   (3,  5,  100),   # daily — tight
-                'WNBA':  (3,  7,  100),
-                'NCAAB': (3,  7,  200),
-                'NCAAW': (3,  7,  200),
+                'NFL':   (_display_back, _display_forward, 200),
+                'NCAAF': (_display_back, _display_forward, 200),
+                'NBA':   (_display_back, _display_forward, 200),
+                'MLB':   (_display_back, _display_forward, 100),
+                'WNBA':  (_display_back, _display_forward, 100),
+                'NCAAB': (_display_back, _display_forward, 200),
+                'NCAAW': (_display_back, _display_forward, 200),
             }
             _lookback, _forward, _api_limit = _SPORT_WINDOWS.get(sport, (3, 7, 200))
             start_str = (datetime.now() - timedelta(days=_lookback)).strftime('%Y%m%d')
@@ -7263,7 +7281,9 @@ def _get_upcoming_predictions_impl(sport, days=365):
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ?
-            ''', (sport, sport)).fetchall()
+                  AND date(g.game_date) >= date(?)
+                  AND date(g.game_date) <= date(?)
+            ''', (sport, sport, display_start_sql, display_end_sql)).fetchall()
             conn.close()
             for g in all_games_raw:
                 gd = dict(g)
@@ -7372,7 +7392,9 @@ def _get_upcoming_predictions_impl(sport, days=365):
                 GROUP BY game_id
             ) bo ON g.id = bo.game_id
             WHERE g.sport = ?
-        ''', (sport, sport)).fetchall()
+              AND date(g.game_date) >= date(?)
+              AND date(g.game_date) <= date(?)
+        ''', (sport, sport, display_start_sql, display_end_sql)).fetchall()
         all_games_raw = [dict(g) for g in all_games_raw]
         conn.close()
         
@@ -7450,9 +7472,8 @@ def _get_upcoming_predictions_impl(sport, days=365):
 
     # Elo training sample — full soccer DB history can be 10k+ rows; picks page only
     # needs recent form. Cap at ~120 days so cold-cache builds stay under timeout.
-    # Season history for the date picker (ALL sports): merge the DB's stored
-    # season games — the same rows the results pages grade — deduped by
-    # (date, home, away) against whatever the live feeds already supplied.
+    # Nearby history for the date picker/cards. This used to merge the entire
+    # stored season, which made MLB and other daily sports huge and slow.
     try:
         _hist_conn = get_db_connection()
         _db_rows = _hist_conn.execute(
@@ -7464,8 +7485,10 @@ def _get_upcoming_predictions_impl(sport, days=365):
                       p.trueskill_home_prob as stored_trueskill_prob
                FROM games g
                LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
-               WHERE g.sport = ?''',
-            (sport, sport),
+               WHERE g.sport = ?
+                 AND date(g.game_date) >= date(?)
+                 AND date(g.game_date) <= date(?)''',
+            (sport, sport, display_start_sql, display_end_sql),
         ).fetchall()
         _hist_conn.close()
         _seen_hist = {
@@ -7486,11 +7509,10 @@ def _get_upcoming_predictions_impl(sport, days=365):
             _merged_hist += 1
         if _merged_hist:
             all_games_with_dates.sort(key=lambda x: x[0])
-            logger.info(f"[{sport}] merged {_merged_hist} season-history games for the date picker")
+            logger.info(f"[{sport}] merged {_merged_hist} nearby DB games for the date picker")
     except Exception as _hist_err:
-        logger.debug(f"season-history merge failed for {sport}: {_hist_err}")
+        logger.debug(f"nearby history merge failed for {sport}: {_hist_err}")
 
-    today = datetime.now()
     _elo_cutoff = today - timedelta(days=120)
     _elo_train_games = [
         g for g in completed_games
@@ -7537,32 +7559,6 @@ def _get_upcoming_predictions_impl(sport, days=365):
         else:
             away_stats['away_wins'] += 1
     
-    # Display logic: Show ALL past games + future games for ONE MONTH from today
-    season_starts = {
-        'NHL': datetime(2025, 10, 7),
-        'NFL': datetime(2025, 9, 4),
-        'NBA': datetime(2025, 10, 21),
-        'MLB': datetime(2026, 3, 27),
-        'NCAAF': datetime(2025, 8, 30),
-        'NCAAB': datetime(2025, 11, 4),
-        'NCAAW': datetime(2025, 11, 4),
-        'WNBA': datetime(2026, 5, 8),
-        'SOCCER': datetime(2025, 8, 1),
-        'TENNIS': datetime(2025, 1, 1),
-        'UFC': datetime(2025, 1, 1),
-        'GOLF': datetime(2025, 1, 1),
-    }
-    season_start = season_starts.get(sport, datetime(2025, 1, 1))
-    
-    # Calculate cutoff horizon by sport
-    future_window_days = {
-        'NBA': 30,
-        'UFC': 60,
-        'TENNIS': 21,
-        'GOLF': 60,
-    }
-    future_cutoff = today + timedelta(days=future_window_days.get(sport, 30))
-    
     predictions = []
     # Fetch injuries once for the whole request (15-min cache keeps it fast)
     _injuries = _fetch_injuries(sport)
@@ -7601,8 +7597,8 @@ def _get_upcoming_predictions_impl(sport, days=365):
     _live_v2_used = 0
 
     for game_date, game in all_games_with_dates:
-        # Show games from season start up to one month from today
-        if game_date >= season_start and game_date <= future_cutoff:
+        # Show only the public display window: default 5 days back / 5 forward.
+        if display_start <= game_date <= display_end:
             # ============================================================
             # SOCCER MODELS + V2 PREDICTION SYSTEM
             # ============================================================
