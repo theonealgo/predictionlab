@@ -18939,7 +18939,7 @@ def sport_predictions(sport, filter_date=None):
     ):
         logger.info("[%s] picks cache hit bucket=%s dt=%.3fs", sport, _viewer_bucket, _time.time() - _pred_t0)
         return cached_html
-    if _is_render_host() and not _is_prewarm_request and not current_user.is_authenticated:
+    if _is_render_host() and not _is_prewarm_request:
         try:
             predictions = _get_lightweight_public_predictions(sport)
             _using_lightweight_public = True
