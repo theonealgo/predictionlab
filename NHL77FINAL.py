@@ -18662,6 +18662,105 @@ def _warm_public_picks_page_async(sport: str, filter_date=None, selected_slug: s
     _thr.Thread(target=_run, daemon=True, name=f"public-picks-warm-{sport}").start()
 
 
+def _pct_from_prob(value, default=None):
+    val = _to_float_safe(value)
+    if val is None:
+        return default
+    if val <= 1.0:
+        val *= 100.0
+    return round(max(0.0, min(100.0, val)), 1)
+
+
+def _get_lightweight_public_predictions(sport: str):
+    """Fast Render-safe picks: nearby stored rows only, no live model building."""
+    sport = (sport or '').upper()
+    today = datetime.now()
+    back, forward = _picks_display_window()
+    start_sql = (today - timedelta(days=back)).strftime('%Y-%m-%d')
+    end_sql = (today + timedelta(days=forward)).strftime('%Y-%m-%d')
+    rows = []
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            '''SELECT g.game_id, g.league, g.game_date, g.home_team_id, g.away_team_id,
+                      g.home_score, g.away_score, g.status,
+                      p.elo_home_prob, p.xgboost_home_prob, p.win_probability,
+                      p.glicko_home_prob, p.trueskill_home_prob,
+                      bl.home_moneyline, bl.away_moneyline, bl.spread, bl.total
+               FROM games g
+               LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+               LEFT JOIN (
+                   SELECT game_id, home_moneyline, away_moneyline, spread, total
+                   FROM betting_lines
+                   WHERE sport = ?
+                   GROUP BY game_id
+               ) bl ON bl.game_id = g.game_id
+               WHERE g.sport = ?
+                 AND date(g.game_date) >= date(?)
+                 AND date(g.game_date) <= date(?)
+                 AND g.home_team_id IS NOT NULL
+                 AND g.away_team_id IS NOT NULL
+               ORDER BY date(g.game_date), g.game_id
+               LIMIT 160''',
+            (sport, sport, sport, start_sql, end_sql),
+        ).fetchall()
+        conn.close()
+    except Exception as _lite_err:
+        logger.debug("[%s] lightweight picks DB load failed: %s", sport, _lite_err)
+        rows = []
+
+    predictions = []
+    seen = set()
+    for row in rows:
+        r = dict(row)
+        date_key = str(r.get('game_date') or '')[:10]
+        home = r.get('home_team_id') or ''
+        away = r.get('away_team_id') or ''
+        if not date_key or not home or not away:
+            continue
+        dedupe_key = (date_key, home, away)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        elo_pct = _pct_from_prob(r.get('elo_home_prob'), 50.0)
+        xgb_pct = _pct_from_prob(r.get('xgboost_home_prob'), elo_pct)
+        ens_pct = _pct_from_prob(r.get('win_probability'), xgb_pct if xgb_pct is not None else elo_pct)
+        g2_pct = _pct_from_prob(r.get('glicko_home_prob'), ens_pct)
+        ts_pct = _pct_from_prob(r.get('trueskill_home_prob'), ens_pct)
+        pred = {
+            'game_id': r.get('game_id') or f"{sport}_{date_key}_{home}_{away}",
+            'sport': sport,
+            'league': r.get('league') or sport,
+            'game_date': date_key,
+            'home_team_id': home,
+            'away_team_id': away,
+            'home_score': r.get('home_score'),
+            'away_score': r.get('away_score'),
+            'status': r.get('status'),
+            'elo_prob': elo_pct,
+            'xgb_prob': xgb_pct,
+            'ensemble_prob': ens_pct,
+            'glicko2_prob': g2_pct,
+            'trueskill_prob': ts_pct,
+            'predicted_winner': home if (ens_pct or 50.0) >= 50.0 else away,
+            'is_v2': False,
+            'model_data_note': 'Stored prediction snapshot',
+            'book_home_moneyline': r.get('home_moneyline'),
+            'book_away_moneyline': r.get('away_moneyline'),
+            'home_moneyline': r.get('home_moneyline'),
+            'away_moneyline': r.get('away_moneyline'),
+            'book_spread': r.get('spread'),
+            'book_total': r.get('total'),
+            'market_spread': r.get('spread'),
+            'market_total': r.get('total'),
+            'book_odds_source': 'betting_lines' if r.get('home_moneyline') is not None else None,
+            'render_lightweight': True,
+        }
+        _ensure_book_moneylines(pred)
+        predictions.append(pred)
+    return predictions
+
+
 def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
     log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
@@ -18671,6 +18770,7 @@ def sport_predictions(sport, filter_date=None):
         return "Soccer predictions are temporarily hidden while data loads.", 404
     cache_key = None
     cached_html = None
+    _using_lightweight_public = False
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     _is_prewarm_request = request.headers.get('X-PL-Prewarm') == '1'
     if not current_user.is_authenticated:
@@ -18689,24 +18789,38 @@ def sport_predictions(sport, filter_date=None):
             return cached_html
         _live_build_enabled = _early_os.environ.get('PL_ENABLE_PUBLIC_PICKS_LIVE_BUILD', '').lower() in {'1', 'true', 'yes'}
         if _is_render_host() and not _is_prewarm_request and not _live_build_enabled:
-            _warm_public_picks_page_async(sport, filter_date=filter_date, selected_slug=selected_slug)
-            return _predictions_fallback_page(sport, filter_date=filter_date)
-    prediction_error = None
-    try:
-        if not current_user.is_authenticated:
-            predictions, _timed_out = _get_predictions_with_render_timeout(sport)
-            if _timed_out:
-                return _predictions_fallback_page(sport, filter_date=filter_date)
+            try:
+                predictions = _get_lightweight_public_predictions(sport)
+                _using_lightweight_public = True
+            except Exception as _lite_pred_err:
+                logger.error("[%s] lightweight public picks failed: %s", sport, _lite_pred_err)
+                predictions = []
+                prediction_error = (
+                    f"{SPORTS[sport]['name']} predictions are refreshing. Please check back in a minute."
+                )
+            else:
+                prediction_error = None
         else:
-            predictions = get_upcoming_predictions(sport)
-    except Exception as e:
-        import traceback as _tb_pred
-        logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
-        predictions = []
-        prediction_error = (
-            f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
-            "Please refresh in a minute."
-        )
+            predictions = None
+    else:
+        predictions = None
+    prediction_error = locals().get('prediction_error', None)
+    if predictions is None:
+        try:
+            if not current_user.is_authenticated:
+                predictions, _timed_out = _get_predictions_with_render_timeout(sport)
+                if _timed_out:
+                    return _predictions_fallback_page(sport, filter_date=filter_date)
+            else:
+                predictions = get_upcoming_predictions(sport)
+        except Exception as e:
+            import traceback as _tb_pred
+            logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
+            predictions = []
+            prediction_error = (
+                f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
+                "Please refresh in a minute."
+            )
     if not predictions and not prediction_error and sport in _OFFSEASON_SPORTS_HINT:
         prediction_error = _OFFSEASON_SPORTS_HINT[sport]
 
@@ -18942,20 +19056,22 @@ def sport_predictions(sport, filter_date=None):
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
-    try:
-        _refresh_books_on_predictions(
-            sport, predictions, today_date=today_date, prioritize=_book_priority,
-        )
-    except Exception as _card_bk:
-        logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
+    if not _using_lightweight_public:
+        try:
+            _refresh_books_on_predictions(
+                sport, predictions, today_date=today_date, prioritize=_book_priority,
+            )
+        except Exception as _card_bk:
+            logger.debug(f"PL book odds on picks page for {sport}: {_card_bk}")
 
     _upcoming_for_card_eff = [
         p for p in predictions if isinstance(p, dict) and p.get('home_score') is None
     ]
-    try:
-        _eff_attach.fill_efficiency_spread_on_predictions(sport, _upcoming_for_card_eff)
-    except Exception as _eff_card:
-        logger.debug(f"[eff] picks card fill failed for {sport}: {_eff_card}")
+    if not _using_lightweight_public:
+        try:
+            _eff_attach.fill_efficiency_spread_on_predictions(sport, _upcoming_for_card_eff)
+        except Exception as _eff_card:
+            logger.debug(f"[eff] picks card fill failed for {sport}: {_eff_card}")
 
     for pred in predictions:
         if not isinstance(pred, dict):
