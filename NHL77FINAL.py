@@ -6749,9 +6749,12 @@ _PREDICT_LOCK = _threading_pred.RLock()
 
 
 def get_v2_prediction(sport, home_team, away_team, game_date=None):
-    """Native inference is thread-safe with OMP_NUM_THREADS=1 + pinned deps +
-    preload off; no global lock (it serialized cold renders and timed them out)."""
-    return _get_v2_prediction_impl(sport, home_team, away_team, game_date)
+    """Serialize native inference: concurrent XGBoost predict() from multiple
+    threads SEGFAULTs the worker even with OMP=1. The lock is cheap because
+    pre-warm caches the pages, so real requests are cache hits that never reach
+    here — only the rare cold compute pays the lock."""
+    with _PREDICT_LOCK:
+        return _get_v2_prediction_impl(sport, home_team, away_team, game_date)
 
 
 def _get_v2_prediction_impl(sport, home_team, away_team, game_date=None):
@@ -7038,9 +7041,11 @@ def _picks_display_window():
 
 
 def get_upcoming_predictions(sport, days=365):
-    """No global lock — it serialized cold renders and caused timeouts under
-    concurrent (bot) traffic. Concurrency is safe via OMP=1 + pinned deps + WAL."""
-    return _get_upcoming_predictions_impl(sport, days)
+    """Serialize the native-model build (reentrant lock) so concurrent threads
+    can't run XGBoost predict at once (that segfaults the worker). Pre-warm caches
+    the pages so normal traffic hits the route cache and never takes this lock."""
+    with _PREDICT_LOCK:
+        return _get_upcoming_predictions_impl(sport, days)
 
 
 def _get_upcoming_predictions_impl(sport, days=365):
@@ -20503,12 +20508,17 @@ def _prewarm_pages():
 
 
 try:
-    _render_host = _is_render_host()
+    # Page pre-warm runs in a background DAEMON thread. With gunicorn gthread
+    # workers that thread runs native ML (XGBoost/sklearn) concurrently with
+    # request threads, which segfaults the worker — those libs are not
+    # thread-safe. So on Render it stays OFF by default; run the worker with a
+    # single thread (--threads 1) for safety and only enable pre-warm if you've
+    # moved to process-based concurrency. Opt in with PL_ENABLE_PAGE_PREWARM=1.
     _prewarm_enabled = _early_os.environ.get('PL_ENABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
-    if _prewarm_enabled or not _render_host:
+    if _prewarm_enabled or not _is_render_host():
         _prewarm_pages()
     else:
-        logger.info('page pre-warm disabled on Render; set PL_ENABLE_PAGE_PREWARM=1 to enable')
+        logger.info('page pre-warm disabled on Render (single-thread safety)')
 except Exception:
     logger.exception('could not start page pre-warm')
 
