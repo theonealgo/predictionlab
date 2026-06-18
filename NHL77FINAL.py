@@ -14450,15 +14450,27 @@ def landing_page():
     if request.method == 'HEAD':
         return '', 200
     log_site_visit('/')
-    if _is_render_host() and not current_user.is_authenticated:
+    _landing_t0 = _time.time()
+    if _is_render_host():
         cached_html = _HOMEPAGE_HTML_CACHE.get('html')
         cached_ts = _HOMEPAGE_HTML_CACHE.get('ts') or 0
         if cached_html and (_time.time() - cached_ts) < _HOMEPAGE_HTML_TTL:
+            logger.info("[landing] cache hit render_host=1 auth=%s dt=%.3fs", bool(current_user.is_authenticated), _time.time() - _landing_t0)
             return cached_html
-        rendered = render_template('homepage_preview.html', **_build_fast_landing_preview_context())
+        if current_user.is_authenticated:
+            try:
+                rendered = render_template('homepage_preview.html', **_build_landing_preview_context())
+            except Exception as _landing_err:
+                logger.warning("[landing] full-context render failed on Render (auth=1): %s; using fast context", _landing_err)
+                rendered = render_template('homepage_preview.html', **_build_fast_landing_preview_context())
+        else:
+            rendered = render_template('homepage_preview.html', **_build_fast_landing_preview_context())
         _HOMEPAGE_HTML_CACHE.update({'ts': _time.time(), 'html': rendered})
+        logger.info("[landing] rendered render_host=1 auth=%s dt=%.3fs", bool(current_user.is_authenticated), _time.time() - _landing_t0)
         return rendered
-    return render_template('homepage_preview.html', **_build_landing_preview_context())
+    rendered = render_template('homepage_preview.html', **_build_landing_preview_context())
+    logger.info("[landing] rendered render_host=0 auth=%s dt=%.3fs", bool(current_user.is_authenticated), _time.time() - _landing_t0)
+    return rendered
 
 _SITE_DOMAIN = 'https://predictionlab.io'
 
@@ -18894,6 +18906,7 @@ def _render_lightweight_picks_html(sport: str, predictions: list, filter_date=No
 
 def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
+    _pred_t0 = _time.time()
     log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
     if sport not in SPORTS:
         return "Sport not found", 404
@@ -18902,46 +18915,55 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     cached_html = None
     _using_lightweight_public = False
+    _viewer_bucket = 'public'
+    if current_user.is_authenticated:
+        _viewer_bucket = 'auth_premium' if is_premium_user() else 'auth'
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     _is_prewarm_request = request.headers.get('X-PL-Prewarm') == '1'
-    if not current_user.is_authenticated:
-        cache_key = f"pred_page::v19::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
-        cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_html, _revalidate = _stale_page_cache_get(
-            _SPORT_PREDICTIONS_PAGE_CACHE, cache_key, cache_ttl,
-        )
-        if (
-            cached_html
-            and 'game-card' in cached_html
-            and 'no predictions available' not in cached_html.lower()
-            and 'refreshing this page right now' not in cached_html.lower()
-            and 'upstream data/model dependency failed' not in cached_html.lower()
-        ):
-            return cached_html
-        if _is_render_host() and not _is_prewarm_request:
-            try:
-                predictions = _get_lightweight_public_predictions(sport)
-                _using_lightweight_public = True
-                logger.info("[%s] Render lightweight picks loaded %s rows", sport, len(predictions))
-            except Exception as _lite_pred_err:
-                import traceback as _tb_lite
-                logger.error("[%s] lightweight public picks failed: %s\n%s", sport, _lite_pred_err, _tb_lite.format_exc())
-                predictions = []
-                prediction_error = (
-                    f"{SPORTS[sport]['name']} predictions are refreshing. Please check back in a minute."
-                )
-            else:
-                prediction_error = None
+    cache_key = f"pred_page::v20::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}::{_viewer_bucket}"
+    cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
+    cached_html, _revalidate = _stale_page_cache_get(
+        _SPORT_PREDICTIONS_PAGE_CACHE, cache_key, cache_ttl,
+    )
+    if (
+        cached_html
+        and 'game-card' in cached_html
+        and 'no predictions available' not in cached_html.lower()
+        and 'refreshing this page right now' not in cached_html.lower()
+        and 'upstream data/model dependency failed' not in cached_html.lower()
+    ):
+        logger.info("[%s] picks cache hit bucket=%s dt=%.3fs", sport, _viewer_bucket, _time.time() - _pred_t0)
+        return cached_html
+    if _is_render_host() and not _is_prewarm_request and not current_user.is_authenticated:
+        try:
+            predictions = _get_lightweight_public_predictions(sport)
+            _using_lightweight_public = True
+            logger.info("[%s] Render lightweight picks loaded %s rows", sport, len(predictions))
+        except Exception as _lite_pred_err:
+            import traceback as _tb_lite
+            logger.error("[%s] lightweight public picks failed: %s\n%s", sport, _lite_pred_err, _tb_lite.format_exc())
+            predictions = []
+            prediction_error = (
+                f"{SPORTS[sport]['name']} predictions are refreshing. Please check back in a minute."
+            )
         else:
-            predictions = None
+            prediction_error = None
     else:
         predictions = None
     prediction_error = locals().get('prediction_error', None)
     if predictions is None:
         try:
-            if not current_user.is_authenticated:
+            if _is_render_host():
                 predictions, _timed_out = _get_predictions_with_render_timeout(sport)
                 if _timed_out:
+                    logger.warning("[%s] picks load timed out on Render bucket=%s; serving fallback", sport, _viewer_bucket)
+                    if (
+                        cached_html
+                        and 'game-card' in cached_html
+                        and 'refreshing this page right now' not in cached_html.lower()
+                    ):
+                        logger.warning("[%s] serving stale cached picks page after timeout", sport)
+                        return cached_html
                     return _predictions_fallback_page(sport, filter_date=filter_date)
             else:
                 predictions = get_upcoming_predictions(sport)
@@ -18953,6 +18975,7 @@ def sport_predictions(sport, filter_date=None):
                 f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
                 "Please refresh in a minute."
             )
+    logger.info("[%s] picks load complete bucket=%s preds=%s lightweight=%s dt=%.3fs", sport, _viewer_bucket, len(predictions or []), _using_lightweight_public, _time.time() - _pred_t0)
     if not predictions and not prediction_error and sport in _OFFSEASON_SPORTS_HINT:
         prediction_error = _OFFSEASON_SPORTS_HINT[sport]
 
