@@ -14083,6 +14083,11 @@ def _maybe_generate_blog_on_startup():
     """Once per day, generate + persist today's blog posts in the background so the
     archive grows automatically (>=3/day). File-flag guarded; never blocks boot."""
     try:
+        _render_host = _is_render_host()
+        _blog_startup_enabled = _early_os.environ.get('PL_ENABLE_BLOG_GEN_ON_STARTUP', '').lower() in {'1', 'true', 'yes'}
+        if _render_host and not _blog_startup_enabled:
+            logger.info("[blog] startup generation disabled on Render; set PL_ENABLE_BLOG_GEN_ON_STARTUP=1 to enable")
+            return
         flag = _os.path.join(
             _os.path.dirname(_BLOG_POSTS_FILE),
             f".blog_gen_{datetime.now().strftime('%Y%m%d')}",
