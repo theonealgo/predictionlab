@@ -18628,6 +18628,8 @@ def _warm_public_picks_page_async(sport: str, filter_date=None, selected_slug: s
     """Build the public picks HTML cache outside the visitor request path."""
     if not _is_render_host():
         return
+    if _early_os.environ.get('PL_ENABLE_PUBLIC_PICKS_PREWARM', '').lower() not in {'1', 'true', 'yes'}:
+        return
     import threading as _thr
 
     sport = (sport or '').upper()
@@ -20228,11 +20230,11 @@ def _prewarm_pages():
 
 try:
     _render_host = _is_render_host()
-    _prewarm_disabled = _early_os.environ.get('PL_DISABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
-    if not _prewarm_disabled:
+    _prewarm_enabled = _early_os.environ.get('PL_ENABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
+    if _prewarm_enabled or not _render_host:
         _prewarm_pages()
     else:
-        logger.info('page pre-warm disabled by PL_DISABLE_PAGE_PREWARM=1')
+        logger.info('page pre-warm disabled on Render; set PL_ENABLE_PAGE_PREWARM=1 to enable')
 except Exception:
     logger.exception('could not start page pre-warm')
 
