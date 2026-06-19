@@ -18939,7 +18939,22 @@ def sport_predictions(sport, filter_date=None):
     ):
         logger.info("[%s] picks cache hit bucket=%s dt=%.3fs", sport, _viewer_bucket, _time.time() - _pred_t0)
         return cached_html
-    predictions = None
+    if _is_render_host() and not _is_prewarm_request and _viewer_bucket == 'public':
+        try:
+            predictions = _get_lightweight_public_predictions(sport)
+            _using_lightweight_public = True
+            logger.info("[%s] Render lightweight picks loaded %s rows", sport, len(predictions))
+        except Exception as _lite_pred_err:
+            import traceback as _tb_lite
+            logger.error("[%s] lightweight public picks failed: %s\n%s", sport, _lite_pred_err, _tb_lite.format_exc())
+            predictions = []
+            prediction_error = (
+                f"{SPORTS[sport]['name']} predictions are refreshing. Please check back in a minute."
+            )
+        else:
+            prediction_error = None
+    else:
+        predictions = None
     prediction_error = locals().get('prediction_error', None)
     if predictions is None:
         try:
