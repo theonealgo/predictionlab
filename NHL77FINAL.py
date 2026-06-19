@@ -18720,6 +18720,8 @@ def _get_lightweight_public_predictions(sport: str):
                    SELECT game_id, home_moneyline, away_moneyline, spread, total
                    FROM betting_lines
                    WHERE sport = ?
+                     AND date(game_date) >= date(?)
+                     AND date(game_date) <= date(?)
                    GROUP BY game_id
                ) bl ON bl.game_id = g.game_id
                WHERE g.sport = ?
@@ -18729,7 +18731,7 @@ def _get_lightweight_public_predictions(sport: str):
                  AND g.away_team_id IS NOT NULL
                ORDER BY date(g.game_date), g.game_id
                LIMIT 160''',
-            (sport, sport, sport, start_sql, end_sql),
+            (sport, sport, start_sql, end_sql, sport, start_sql, end_sql),
         ).fetchall()
         conn.close()
     except Exception as _lite_err:
