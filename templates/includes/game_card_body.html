@@ -269,7 +269,6 @@
     {% endif %}
 </div>
 
-{% if not _locked %}
 {% if card.face_pick_team is defined and card.face_pick_team %}
 <div class="ai-pick-row">
     <div class="ai-pick-text">
@@ -277,10 +276,9 @@
         <span class="via">via {{ _face_label }}</span>
     </div>
     {% if card.face_pick_confidence is defined and card.face_pick_confidence is not none %}
-    <div class="confidence">Confidence <strong>{{ card.face_pick_confidence }}%</strong></div>
+    <div class="confidence">Confidence <strong>{% if _locked %}<a href="/plans" style="color:inherit;text-decoration:none;">🔒 Premium</a>{% else %}{{ card.face_pick_confidence }}%{% endif %}</strong></div>
     {% endif %}
 </div>
-{% endif %}
 {% endif %}
 
 <footer class="card-footer">
