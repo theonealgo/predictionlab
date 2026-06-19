@@ -6815,6 +6815,57 @@ def _get_v2_prediction_impl(sport, home_team, away_team, game_date=None):
         logger.warning(f"V2 prediction failed for {away_team} @ {home_team}: {e}")
         return None
 
+def _prewarm_v2_cache_batch(sport, games_list):
+    model_sport = _v2_model_sport(sport)
+    if not HAS_V2_SYSTEM or _ensure_v2_predictor(model_sport) is None:
+        return
+    
+    predictor = V2_PREDICTORS[model_sport]
+    to_predict = []
+    keys = []
+    now_ts = _time.time()
+    
+    for g in games_list:
+        ht = g.get('home_team_id') or g.get('home_team_name')
+        at = g.get('away_team_id') or g.get('away_team_name')
+        dt = g.get('game_date') or datetime.now().strftime('%Y-%m-%d')
+        key = f"{model_sport}|{ht}|{at}|{dt}"
+        cached = _V2_PREDICTION_CACHE.get(key)
+        if not (cached and (now_ts - cached['ts']) < _V2_PREDICTION_TTL_SECONDS):
+            to_predict.append({'home_team': ht, 'away_team': at, 'date': dt})
+            keys.append(key)
+            
+    if not to_predict:
+        return
+        
+    try:
+        with _PREDICT_LOCK:
+            import pandas as pd
+            game_df = pd.DataFrame(to_predict)
+            preds = predictor.predict(game_df)
+            for i, row in preds.iterrows():
+                result = {
+                    'home_prob': row['home_win_prob'],
+                    'away_prob': row['away_win_prob'],
+                    'confidence': row['confidence'],
+                    'model_agreement': row['model_agreement'],
+                    'predicted_winner': row['predicted_winner'],
+                    'expected_home_score': row.get('expected_home_score'),
+                    'expected_away_score': row.get('expected_away_score'),
+                    'glicko2_prob': row.get('glicko2_prob'),
+                    'trueskill_prob': row.get('trueskill_prob'),
+                    'xgboost_prob': row.get('xgboost_prob'),
+                    'catboost_prob': row.get('catboost_prob'),
+                    'home_glicko2': row.get('home_glicko2'),
+                    'away_glicko2': row.get('away_glicko2'),
+                    'home_trueskill_mu': row.get('home_trueskill_mu'),
+                    'away_trueskill_mu': row.get('away_trueskill_mu'),
+                    'is_v2': True,
+                }
+                _V2_PREDICTION_CACHE[keys[i]] = {'ts': _time.time(), 'data': _copy.deepcopy(result)}
+    except Exception as e:
+        logger.warning(f"Batch v2 prewarm failed for {sport}: {e}")
+
 # ============================================================================
 # DATA LOADING FUNCTIONS
 # ============================================================================
@@ -7605,6 +7656,14 @@ def _get_upcoming_predictions_impl(sport, days=365):
     _live_v2_budget = 25 if sport in ('NBA', 'MLB', 'NHL') else 18
     _live_v2_used = 0
 
+    if sport != 'SOCCER':
+        _missing = []
+        for gdate, g in all_games_with_dates:
+            if display_start <= gdate <= display_end and not g.get('home_score'):
+                _missing.append(g)
+        if _missing:
+            _prewarm_v2_cache_batch(sport, _missing[:_live_v2_budget])
+
     for game_date, game in all_games_with_dates:
         # Show only the public display window: default 5 days back / 5 forward.
         if display_start <= game_date <= display_end:
@@ -7635,7 +7694,7 @@ def _get_upcoming_predictions_impl(sport, days=365):
                 _se = _to_float_safe(game.get('stored_ensemble_prob'))
                 _selo = _to_float_safe(game.get('stored_elo_prob'))
                 
-                if any(p is not None for p in (_sg, _st, _sx, _se, _selo)):
+                if is_completed and any(p is not None for p in (_sg, _st, _sx, _se, _selo)):
                     v2_pred = {
                         'glicko2_prob': _sg,
                         'trueskill_prob': _st,
