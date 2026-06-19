@@ -7629,20 +7629,20 @@ def _get_upcoming_predictions_impl(sport, days=365):
             v2_pred = None
             is_completed = game.get('home_score') is not None
             if sport != 'SOCCER':
-                if is_completed:
-                    _sg = _to_float_safe(game.get('stored_glicko_prob'))
-                    _st = _to_float_safe(game.get('stored_trueskill_prob'))
-                    _sx = _to_float_safe(game.get('stored_xgb_prob'))
-                    _se = _to_float_safe(game.get('stored_ensemble_prob'))
-                    _selo = _to_float_safe(game.get('stored_elo_prob'))
-                    if any(p is not None for p in (_sg, _st, _sx, _se, _selo)):
-                        v2_pred = {
-                            'glicko2_prob': _sg,
-                            'trueskill_prob': _st,
-                            'xgboost_prob': _sx,
-                            'home_prob': _se if _se is not None else _selo,
-                        }
-                elif _live_v2_used < _live_v2_budget:
+                _sg = _to_float_safe(game.get('stored_glicko_prob'))
+                _st = _to_float_safe(game.get('stored_trueskill_prob'))
+                _sx = _to_float_safe(game.get('stored_xgb_prob'))
+                _se = _to_float_safe(game.get('stored_ensemble_prob'))
+                _selo = _to_float_safe(game.get('stored_elo_prob'))
+                
+                if any(p is not None for p in (_sg, _st, _sx, _se, _selo)):
+                    v2_pred = {
+                        'glicko2_prob': _sg,
+                        'trueskill_prob': _st,
+                        'xgboost_prob': _sx,
+                        'home_prob': _se if _se is not None else _selo,
+                    }
+                elif not is_completed and _live_v2_used < _live_v2_budget:
                     v2_pred = get_v2_prediction(
                         sport,
                         game.get('home_team_id') or game.get('home_team_name'),
