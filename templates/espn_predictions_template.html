@@ -22,8 +22,6 @@
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap"></noscript>
     <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
@@ -149,7 +147,7 @@
             transition:opacity .2s ease;
             white-space:nowrap;
         }
-        .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
+        .auth-btn.signup { background:#059669; color:#ffffff; border:1px solid #059669; }
         .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
         .auth-btn:hover { opacity:.9; }
         .nav-links {
@@ -190,7 +188,7 @@
         .nav-section-title { display: none; }
         .nav-divider { display: none; }
         .nav-donate-btn {
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            background: linear-gradient(135deg, #d97706, #f59e0b);
             color: #000 !important;
             font-weight: 800 !important;
             padding: 8px 14px;
@@ -268,14 +266,14 @@
         .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 14px; }
         .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
         .league-pill { background:#f8fafc; border:2px solid rgba(15,23,42,0.14); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#334155; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
-        .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
-        .league-pill.live-league { border-color:#00C076; color:#059669; background:rgba(0,192,118,0.07); }
-        .league-pill.live-league.active { background:#00C076; border-color:#00C076; color:#fff; }
-        .league-pill:hover { border-color:#fbbf24; }
-        .league-pill .live-dot { width:7px; height:7px; border-radius:50%; background:#00C076; flex-shrink:0; animation:livepulse 1.4s ease-in-out infinite; }
+        .league-pill.active { background:#d97706; border-color:#d97706; color:#0f172a; }
+        .league-pill.live-league { border-color:#059669; color:#059669; background:rgba(0,192,118,0.07); }
+        .league-pill.live-league.active { background:#059669; border-color:#059669; color:#fff; }
+        .league-pill:hover { border-color:#d97706; }
+        .league-pill .live-dot { width:7px; height:7px; border-radius:50%; background:#059669; flex-shrink:0; animation:livepulse 1.4s ease-in-out infinite; }
         @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.8);} }
-        .date-bubble.today-bubble { border-color:#00C076 !important; color:#059669 !important; font-weight:700; }
-        .date-bubble.today-bubble.active { background:#00C076 !important; color:#fff !important; }
+        .date-bubble.today-bubble { border-color:#059669 !important; color:#059669 !important; font-weight:700; }
+        .date-bubble.today-bubble.active { background:#059669 !important; color:#fff !important; }
         .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; max-width:100%; min-width:0; }
         .nav-arrow { background:rgba(146,64,14,0.12); border:2px solid #92400e; color:#92400e; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
         .nav-arrow:hover { background:rgba(146,64,14,0.22); transform:scale(1.1); }
@@ -283,8 +281,8 @@
         .date-bubble { background:#fff; border:2px solid rgba(15,23,42,0.18); border-radius:22px; padding:9px 16px; min-width:105px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.86em; color:#0f172a; }
         .date-bubble:hover { border-color:#92400e; }
         .date-bubble.active { background:#f59e0b; border-color:#d97706; color:#0f172a; font-weight:700; }
-        .date-bubble.today { border-color:#00C076; color:#00C076; }
-        .date-bubble.active.today { background:#00C076; color:#fff; }
+        .date-bubble.today { border-color:#059669; color:#059669; }
+        .date-bubble.active.today { background:#059669; color:#fff; }
         .date-section { display:none; }
         .date-section.visible { display:block; }
         .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
@@ -333,9 +331,9 @@
         .model-tag { font-size:0.58em; font-weight:700; text-transform:uppercase; letter-spacing:0.35px; color:#64748b; margin-bottom:6px; }
         .win-pct { font-size:1.65em; font-weight:900; color:#94a3b8; line-height:1; margin-bottom:2px; }
         .win-pct span.unit { font-size:0.5em; font-weight:700; vertical-align:super; }
-        .team-slot.favored .win-pct { color:#00C076; }
+        .team-slot.favored .win-pct { color:#059669; }
         .book-ml { font-size:0.8em; font-weight:700; color:#475569; }
-        .book-ml.fav { color:#00C076; }
+        .book-ml.fav { color:#059669; }
         .book-ml.dog { color:#92400e; }
         .matchup-row .face-books-ml { margin-top:2px; }
         .matchup-row .face-ml-stack { margin-top:2px; gap:3px; }
@@ -379,11 +377,11 @@
         .ml-src.books { color:#0f766e; }
         .ml-src.pl { color:#92400e; }
         .ml-num { font-size:0.92em; font-weight:800; }
-        .ml-num.fav { color:#00C076; }
+        .ml-num.fav { color:#059669; }
         .ml-num.dog { color:#92400e; }
-        .pick-arrow { color:#00C076; font-weight:800; font-size:0.85em; margin-top:2px; }
+        .pick-arrow { color:#059669; font-weight:800; font-size:0.85em; margin-top:2px; }
         .final-score { font-size:1.2em; font-weight:800; color:#0f172a; }
-        .final-score.score-winner { color:#00C076; }
+        .final-score.score-winner { color:#059669; }
         .odds-pricing-table th.col-books, .val-books { color:#0f766e; }
         .proj-score-box { margin-top:8px; padding:8px 10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; }
         .proj-score-title { font-size:0.68em; text-transform:uppercase; font-weight:700; color:#0F172A; margin-bottom:6px; }
@@ -404,16 +402,16 @@
         .card-hero-ml-row .team-line-full { display:none; }
         @media(min-width:380px){ .card-hero-ml-row .team-line-full { display:inline; } .card-hero-ml-row .team-line-short { display:none; } }
         .card-hero-meta { font-size:0.7em; color:#64748b; text-transform:uppercase; font-weight:600; letter-spacing:0.4px; margin-bottom:8px; }
-        .card-hero-meta.final { color:#00C076; }
+        .card-hero-meta.final { color:#059669; }
         .card-hero-ml { display:flex; flex-direction:column; gap:5px; }
         .card-hero-ml-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.86em; font-weight:600; color:#0f172a; }
-        .card-hero-ml-row .ml-val.fav { color:#00C076; }
+        .card-hero-ml-row .ml-val.fav { color:#059669; }
         .card-hero-ml-row .ml-val.dog { color:#92400e; }
-        .card-hero-ml-row .pick-arrow { color:#00C076; font-weight:800; flex-shrink:0; }
+        .card-hero-ml-row .pick-arrow { color:#059669; font-weight:800; flex-shrink:0; }
         .card-hero-final-scores { margin-top:0; }
-        .card-hero-ml-row .score-winner { color:#00C076; font-weight:800; }
+        .card-hero-ml-row .score-winner { color:#059669; font-weight:800; }
         .card-final-score { font-size:1.05em; font-weight:800; color:#0f172a; flex-shrink:0; }
-        .card-final-score.score-winner { color:#00C076; }
+        .card-final-score.score-winner { color:#059669; }
         .card-legend { font-size:0.68em; color:#94a3b8; padding:4px 12px 10px; line-height:1.4; border-top:1px solid rgba(15,23,42,0.06); }
         .h2h-info-wrap { position:relative; display:flex; flex-direction:column; gap:1px; }
         .h2h-info-label { display:inline-flex; align-items:center; gap:5px; }
@@ -425,7 +423,7 @@
         .h2h-pop-row { font-size:0.76em; color:#334155; padding:5px 12px; border-top:1px solid #f1f5f9; line-height:1.35; }
         .h2h-pop-row:first-of-type { border-top:none; }
         .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#92400e; background:rgba(146,64,14,0.1); }
-        .game-status.final { color:#00C076; background:rgba(16,185,129,0.12); }
+        .game-status.final { color:#059669; background:rgba(16,185,129,0.12); }
         .game-body { display:flex; padding:10px 12px; gap:10px; }
         .teams-section { flex:1; min-width:0; }
         .team-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(15,23,42,0.06); }
@@ -433,9 +431,9 @@
         .team-name { font-size:0.94em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
         .team-name.winner { font-weight:700; }
         .team-odds { font-size:0.82em; font-weight:700; margin-left:6px; flex-shrink:0; }
-        .team-odds.fav { color:#00C076; }
+        .team-odds.fav { color:#059669; }
         .team-odds.dog { color:#92400e; }
-        .pick-indicator { color:#00C076; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
+        .pick-indicator { color:#059669; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
         .score-box { font-size:1.05em; font-weight:700; color:#92400e; margin-left:8px; flex-shrink:0; }
         .prediction-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:120px; max-width:168px; display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
         @media(max-width:400px){ .game-body{flex-direction:column;} .prediction-panel{max-width:none;min-width:0;border-left:none;border-top:3px solid #8b5cf6;} }
@@ -443,7 +441,7 @@
         .model-row { display:flex; justify-content:space-between; font-size:0.81em; padding:2px 0; }
         .model-lbl { opacity:0.85; }
         .model-val { font-weight:600; }
-        .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #00C076; color:#00C076; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
+        .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #059669; color:#059669; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
 
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
@@ -512,7 +510,7 @@
             word-break:break-word;
             overflow-wrap:anywhere;
         }
-        .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
+        .pc-side.home { color:#059669; background:rgba(16,185,129,0.15); }
         .pc-side.away { color:#92400e; background:rgba(146,64,14,0.1); }
 
         /* MLB premium picks side-panel (replaces Home Win % panel) */
@@ -540,7 +538,7 @@
         .odds-pricing-table .market-k { color:#64748b; font-weight:700; font-size:0.72em; text-transform:uppercase; }
         .odds-pricing-table .val-pl { color:#92400e; }
         .odds-pricing-table .val-xs { color:#1d4ed8; }
-        .odds-pricing-table .val-result { color:#00C076; font-weight:800; font-size:0.78em; line-height:1.35; word-break:break-word; }
+        .odds-pricing-table .val-result { color:#059669; font-weight:800; font-size:0.78em; line-height:1.35; word-break:break-word; }
         .odds-pricing-table .val-result-compact { font-size:0.76em; }
         .odds-pricing-locked { font-size:0.82em; color:#475569; padding:8px 0; }
         .odds-pricing-locked a { color:#00529B; font-weight:700; }
@@ -550,7 +548,7 @@
         .sf-item { display:flex; flex-direction:column; gap:1px; }
         .sf-label { color:#475569; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
         .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
-        .sf-fav { color:#00C076; }
+        .sf-fav { color:#059669; }
         .sf-xgb { color:#f87171; }
         .no-data { text-align:center; padding:60px; opacity:0.7; font-size:1.2em; }
         /* Injury badges */
@@ -594,7 +592,7 @@
 <body class="research-site">
 {% include 'includes/picks_nav_chrome.html' %}
 <style id="mlbpt-styles">
-/* ── MLB Pro Table View (site palette: navy #00529B + green #00C076) ──── */
+/* ── MLB Pro Table View (site palette: navy #00529B + green #059669) ──── */
 .mlbpt-toggle{display:inline-flex;gap:4px;background:#eef2f7;border:1px solid #d3dce6;border-radius:12px;padding:4px;margin:0 0 14px;}
 .mlbpt-toggle-btn{appearance:none;border:none;background:transparent;color:#475569;font-weight:800;font-size:.84rem;padding:8px 16px;border-radius:9px;cursor:pointer;transition:all .15s;}
 .mlbpt-toggle-btn.active{background:#00529B;color:#fff;}
@@ -618,7 +616,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
    width:1px forces the th to shrink-wrap; the body cells drive the real width,
    and the heading stacks onto multiple lines to fit. Sticky columns keep their
    fixed size via their own min-width. */
-.mlbpt-table thead th{position:sticky;top:0;z-index:2;width:1px;background:#00529B;color:#fff;font-weight:700;text-align:left;padding:8px 9px;white-space:normal;line-height:1.18;vertical-align:bottom;border-bottom:3px solid #00C076;font-size:.69rem;}
+.mlbpt-table thead th{position:sticky;top:0;z-index:2;width:1px;background:#00529B;color:#fff;font-weight:700;text-align:left;padding:8px 9px;white-space:normal;line-height:1.18;vertical-align:bottom;border-bottom:3px solid #059669;font-size:.69rem;}
 /* Every cell carries a SOLID background + clips overflow so nothing shows through or spills past the frozen columns while scrolling. */
 .mlbpt-table td{padding:9px 11px;border-bottom:1px solid #eef2f7;vertical-align:top;white-space:nowrap;background:#fff;}
 .mlbpt-table tbody tr:hover td{background:#eef6f1;}
@@ -640,7 +638,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
 .mlbpt-odds{font-size:.66rem;color:#475569;}
 .mlbpt-odds span{color:#94a3b8;}
 /* Picked team: SOLID green tint (opaque) — no bleed-through on the frozen cells. */
-.mlbpt-picked{background:#e7f7ef!important;box-shadow:inset 3px 0 0 #00C076;}
+.mlbpt-picked{background:#e7f7ef!important;box-shadow:inset 3px 0 0 #059669;}
 .mlbpt-table tbody tr:hover .mlbpt-picked{background:#dbf2e6!important;}
 .mlbpt-lines div{font-size:.68rem;line-height:1.5;}
 .mlbpt-lines b{color:#64748b;font-weight:600;}
@@ -675,7 +673,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
 <div class="search-results-wrap">
     <div id="searchResultsPicks" class="search-results" aria-live="polite"></div>
 </div>
-<div class="container">
+<main id="main-content" class="container">
 
     <div class="header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <h1 id="pageHeading" style="margin:0;">{{ sport_info.icon }} {{ sport_info.name }} AI Picks, Predictions and Model Probabilities</h1>
@@ -703,7 +701,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
         <a href="/{{ sport_seo_slug }}{% if sport == 'SOCCER' and selected_league_slug %}?league={{ selected_league_slug }}{% endif %}" class="tab active">📊 Predictions</a>
         <a href="/{{ sport_results_slug }}{% if sport == 'SOCCER' and selected_league_slug %}?league={{ selected_league_slug }}{% endif %}" class="tab">🎯 Results</a>
         {% if not is_premium|default(false) %}
-        <a href="/plans" class="tab" style="margin-left:auto;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;">⭐ Join Premium</a>
+        <a href="/plans" class="tab" style="margin-left:auto;background:linear-gradient(135deg,#d97706,#f59e0b);color:#000;font-weight:800;">⭐ Join Premium</a>
         {% endif %}
     </div>
     {% if not is_premium|default(false) %}
@@ -733,7 +731,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
             {% endfor %}
         </div>
     </div>
-    <div style="font-size:0.75em;color:#475569;text-align:center;margin:-6px 0 10px;"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#00C076;display:inline-block;"></span> Green = active fixtures</span></div>
+    <div style="font-size:0.75em;color:#475569;text-align:center;margin:-6px 0 10px;"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#059669;display:inline-block;"></span> Green = active fixtures</span></div>
     {% endif %}
 
     {% if prediction_error %}
@@ -763,7 +761,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
         <div class="date-section {% if date == (default_pick_date|default(today_date)) %}visible{% else %}seo-hidden{% endif %}" id="date-{{ date }}">
             <div class="date-header">
                 📅 {{ date }}
-                {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
+                {% if date == today_date %}<span style="background:#059669;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
             </div>
             {% if sport == 'SOCCER' %}
             {% set _date_preds = grouped_predictions[date]|sort(attribute='league') %}
@@ -933,7 +931,7 @@ body.picks-view-table .date-section.visible .mlbpt-view{display:block;}
         </ul>
         <p style="margin:0;">This helps provide a clearer understanding of the strategy behind the picks and how they are generated.</p>
     </div>
-</div>
+</main>
 
 {% if share_image_src %}
 <div class="social-export-wrap">

@@ -2594,7 +2594,7 @@ def _soccer_espn_logo_url(team_name):
     key = _normalize_soccer_team_name(team_name)
     espn_id = _SOCCER_TEAM_ESPN_ID.get(key) if key else None
     if espn_id:
-        return f'https://a.espncdn.com/i/teamlogos/soccer/500/{espn_id}.png'
+        return f'https://a.espncdn.com/i/teamlogos/soccer/80/{espn_id}.png'
     return '/static/pl-logo.svg'
 
 
@@ -2678,7 +2678,7 @@ def team_logo_url(sport: str, team_name: str) -> str:
     abbr = (_TEAM_NAME_TO_ABBR.get(sport) or {}).get(team_name)
     if not slug or not abbr:
         return '/static/pl-logo.svg'
-    return f'https://a.espncdn.com/i/teamlogos/{slug}/500/{abbr}.png'
+    return f'https://a.espncdn.com/i/teamlogos/{slug}/80/{abbr}.png'
 
 
 

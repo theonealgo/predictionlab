@@ -188,3 +188,31 @@ def test_picks_page_cache_accepts_real_card_class_names():
 
     assert "and 'class=\"game-card' in rendered" in app_source
     assert "rendered.count('class=\"game-card\"')" not in app_source
+
+
+def test_lighthouse_accessibility_and_perf_rules():
+    app_source = _read("NHL77FINAL.py")
+    base = _read("templates/base.html")
+    espn = _read("templates/espn_predictions_template.html")
+    footer = _read("templates/partials/site_directory_footer.html")
+    
+    # 1. Main landmark must exist
+    assert "<main" in base
+    assert "<main" in espn
+
+    # 2. No unused Google fonts preconnects
+    assert 'href="https://fonts.gstatic.com"' not in base
+    assert 'href="https://fonts.gstatic.com"' not in espn
+
+    # 3. No WCAG contrast violations (using exact string matching for the old hex codes)
+    assert "#00C076" not in base
+    assert "#00C076" not in espn
+    assert "#fbbf24" not in base
+    assert "#fbbf24" not in espn
+
+    # 4. ESPN images use the 80/ directory instead of 500/ to save payload
+    assert "/500/" not in app_source
+
+    # 5. Site footer heading doesn't skip hierarchy (must be H2)
+    assert "<h5>" not in footer
+    assert "<h2>AI Picks by Sport</h2>" in footer
