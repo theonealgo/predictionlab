@@ -251,7 +251,7 @@
     </div>
     <div class="line-chip">
         <div class="line-chip-label">Books total</div>
-        <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
+        <div class="line-chip-val">{% if _locked %}<a href="/plans">Premium</a>{% elif _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
     {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
     {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
@@ -269,17 +269,8 @@
     {% endif %}
 </div>
 
-{% if card.face_pick_team is defined and card.face_pick_team %}
-<div class="ai-pick-row">
-    <div class="ai-pick-text">
-        AI pick · <strong>{{ card.face_pick_team }}</strong>
-        <span class="via">via {{ _face_label }}</span>
-    </div>
-    {% if card.face_pick_confidence is defined and card.face_pick_confidence is not none %}
-    <div class="confidence">Confidence <strong>{% if _locked %}<a href="/plans" style="color:inherit;text-decoration:none;">🔒 Premium</a>{% else %}{{ card.face_pick_confidence }}%{% endif %}</strong></div>
-    {% endif %}
-</div>
-{% endif %}
+{# AI-pick row removed — it duplicated the win % / PL spread / Sharp Consensus
+   already shown on the card. #}
 
 <footer class="card-footer">
     <button type="button" class="copy-pick-btn" onclick="copySinglePick(this)" title="Copy this pick to clipboard">
@@ -312,7 +303,7 @@
                 </tr>
                 <tr>
                     <td class="market-k">Total</td>
-                    <td class="val-books">{% if _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
+                    <td class="val-books">{% if _locked %}Premium{% elif _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</td>
                     <td class="val-pl">{% if _locked %}🔒{% elif _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
                     <td class="val-xs">{% if _locked %}🔒{% elif _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
                 </tr>
@@ -346,7 +337,6 @@
     </div>
     {% endif %}
 
-    {% if not _locked %}
     <div class="pick-conf-bar">
         <div class="pick-conf-title">Pick Confidence</div>
         <div class="pick-conf-grid">
@@ -364,17 +354,6 @@
             {% endfor %}
         </div>
     </div>
-    {% else %}
-    <div class="pick-conf-bar">
-        <div class="pick-conf-title">Pick Confidence</div>
-        <div class="proj-score-box" style="margin-top:12px;">
-            <div class="proj-row">
-                <span class="proj-model pl">🔒 Premium</span>
-                <span class="proj-val"><a href="/plans" style="color:#f59e0b;font-weight:700;text-decoration:none;">Unlock model confidence</a></span>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 
     {% if not _locked %}
     <div class="odds-extras-footer">
