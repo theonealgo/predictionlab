@@ -6442,7 +6442,7 @@ def _prewarm_espn_odds_cache():
 try:
     _render_host = _is_render_host()
     _odds_prewarm_enabled = _early_os.environ.get('PL_ENABLE_ODDS_PREWARM', '').lower() in {'1', 'true', 'yes'}
-    if _odds_prewarm_enabled or not _render_host:
+    if _odds_prewarm_enabled:
         threading.Thread(target=_prewarm_espn_odds_cache, daemon=True, name='odds-prewarm').start()
     else:
         logger.info("[odds-prewarm] disabled on Render startup; set PL_ENABLE_ODDS_PREWARM=1 to enable")
@@ -18939,7 +18939,7 @@ def sport_predictions(sport, filter_date=None):
     ):
         logger.info("[%s] picks cache hit bucket=%s dt=%.3fs", sport, _viewer_bucket, _time.time() - _pred_t0)
         return cached_html
-    if _is_render_host() and not _is_prewarm_request and _viewer_bucket == 'public':
+    if not _is_prewarm_request and _viewer_bucket == 'public':
         try:
             predictions = _get_lightweight_public_predictions(sport)
             _using_lightweight_public = True
@@ -20515,7 +20515,7 @@ try:
     # single thread (--threads 1) for safety and only enable pre-warm if you've
     # moved to process-based concurrency. Opt in with PL_ENABLE_PAGE_PREWARM=1.
     _prewarm_enabled = _early_os.environ.get('PL_ENABLE_PAGE_PREWARM', '').lower() in {'1', 'true', 'yes'}
-    if _prewarm_enabled or not _is_render_host():
+    if _prewarm_enabled:
         _prewarm_pages()
     else:
         logger.info('page pre-warm disabled on Render (single-thread safety)')
