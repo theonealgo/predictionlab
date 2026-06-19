@@ -1968,15 +1968,15 @@ def _refresh_books_on_predictions(sport, predictions, today_date=None, prioritiz
         except Exception:
             today_date = datetime.now().strftime('%Y-%m-%d')
     _hydrate_book_lines_db_only(sport, predictions)
-    _prio = prioritize if prioritize is not None else _upcoming_preds_for_book_fetch(
-        predictions, today_date,
-    )
-    _attach_pl_book_odds_to_predictions(
-        sport,
-        predictions,
-        limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
-        prioritize=_prio,
-    )
+    # _prio = prioritize if prioritize is not None else _upcoming_preds_for_book_fetch(
+    #     predictions, today_date,
+    # )
+    # _attach_pl_book_odds_to_predictions(
+    #     sport,
+    #     predictions,
+    #     limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
+    #     prioritize=_prio,
+    # )
 
 
 def _upcoming_preds_for_book_fetch(predictions, today_date, horizon_days=8):
@@ -18941,22 +18941,7 @@ def sport_predictions(sport, filter_date=None):
     ):
         logger.info("[%s] picks cache hit bucket=%s dt=%.3fs", sport, _viewer_bucket, _time.time() - _pred_t0)
         return cached_html
-    if not _is_prewarm_request and _viewer_bucket == 'public':
-        try:
-            predictions = _get_lightweight_public_predictions(sport)
-            _using_lightweight_public = True
-            logger.info("[%s] Render lightweight picks loaded %s rows", sport, len(predictions))
-        except Exception as _lite_pred_err:
-            import traceback as _tb_lite
-            logger.error("[%s] lightweight public picks failed: %s\n%s", sport, _lite_pred_err, _tb_lite.format_exc())
-            predictions = []
-            prediction_error = (
-                f"{SPORTS[sport]['name']} predictions are refreshing. Please check back in a minute."
-            )
-        else:
-            prediction_error = None
-    else:
-        predictions = None
+    predictions = None
     prediction_error = locals().get('prediction_error', None)
     if predictions is None:
         try:

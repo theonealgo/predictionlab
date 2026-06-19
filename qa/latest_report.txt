@@ -1,11 +1,11 @@
 ======================================================================
-  PredictionLab Site Audit — 2026-06-15 20:00:18
-  Target: http://127.0.0.1:5003
-  Run ID: 20260615_200018
-  Duration: 317.9s
+  PredictionLab Site Audit — 2026-06-18 20:54:10
+  Target: http://127.0.0.1:5005
+  Run ID: 20260618_205410
+  Duration: 80.5s
 ======================================================================
   OVERALL: WARN
-  ✅ 161 passed | ⚠️  15 warnings | ❌ 0 failures | ℹ️  6 info
+  ✅ 108 passed | ⚠️  1 warnings | ❌ 0 failures | ℹ️  0 info
 ======================================================================
 
 ── ROUTES AUDIT ──────────────────────────────
@@ -160,10 +160,10 @@
   ✅ [PASS] Debug mode
        No debug mode indicators found
   ✅ [PASS] Page size: /nba-picks
-       212,552 bytes
+       111,160 bytes
        URL: /nba-picks
   ✅ [PASS] Page size: /nhl-picks
-       213,732 bytes
+       111,181 bytes
        URL: /nhl-picks
   ✅ [PASS] Homepage grid: NHL
        Listed in Today's Picks by Sport
@@ -214,7 +214,7 @@
   ✅ [PASS] Results dashboard: Golf
        Listed on all-sports-results
   ✅ [PASS] All Sports Results cell coverage
-       87 stat cell(s), 23 explicit non-stat status cell(s)
+       87 stat cell(s), 13 explicit non-stat status cell(s)
        URL: /all-sports-results
   ✅ [PASS] Search API
        /api/search?query=Detroit returned 6 result(s)
@@ -283,215 +283,8 @@
   ✅ [PASS] Internal link spot-check
        Checked 10 key links — none returned 404
 
-── CARDS AUDIT ──────────────────────────────
-  ℹ️ [INFO] Card count: NBA
-       10 prediction card(s) found
-       URL: /nba-picks
-  ✅ [PASS] Card fields: NBA
-       All required card field classes present
-       URL: /nba-picks
-  ✅ [PASS] Probability range: NBA
-       All 20 probability values in range [0,100]
-       URL: /nba-picks
-  ℹ️ [INFO] Card count: NHL
-       10 prediction card(s) found
-       URL: /nhl-picks
-  ✅ [PASS] Card fields: NHL
-       All required card field classes present
-       URL: /nhl-picks
-  ✅ [PASS] Probability range: NHL
-       All 20 probability values in range [0,100]
-       URL: /nhl-picks
-  ℹ️ [INFO] Card count: MLB
-       174 prediction card(s) found
-       URL: /mlb-picks
-  ✅ [PASS] Card fields: MLB
-       All required card field classes present
-       URL: /mlb-picks
-  ✅ [PASS] Probability range: MLB
-       All 348 probability values in range [0,100]
-       URL: /mlb-picks
-  ℹ️ [INFO] Card count: WNBA
-       50 prediction card(s) found
-       URL: /wnba-picks
-  ✅ [PASS] Card fields: WNBA
-       All required card field classes present
-       URL: /wnba-picks
-  ✅ [PASS] Probability range: WNBA
-       All 100 probability values in range [0,100]
-       URL: /wnba-picks
-  ℹ️ [INFO] Card count: SOCCER
-       86 prediction card(s) found
-       URL: /soccer-picks
-  ✅ [PASS] Card fields: SOCCER
-       All required card field classes present
-       URL: /soccer-picks
-  ✅ [PASS] Probability range: SOCCER
-       All 172 probability values in range [0,100]
-       URL: /soccer-picks
-
-── MODELS AUDIT ──────────────────────────────
-  ✅ [PASS] Model labels: NBA
-       All expected model labels found
-       URL: /nba-picks
-  ✅ [PASS] Model labels: NHL
-       All expected model labels found
-       URL: /nhl-picks
-  ✅ [PASS] Model labels: MLB
-       All expected model labels found
-       URL: /mlb-picks
-  ℹ️ [INFO] Performance page
-       Login-gated; model table not checkable while unauthenticated
-
-── RESULTS AUDIT ──────────────────────────────
-  ✅ [PASS] Results page load
-       Page loaded (119,413 bytes)
-  ✅ [PASS] Results math validation
-       Validated 87 pct+record cells — displayed percentages match the math
-  ✅ [PASS] Model anomaly check
-       No fabricated/anomalous records over the sample threshold
-  ⚠️ [WARN] Models under 50%
-       3 model record(s) below 50% over 15+ games — losing money, consider flipping
-       Detail: 10-18 (35.7%), 9-19 (32.1%), 11-17 (39.3%)
-  ✅ [PASS] Daily report loads
-       Daily report page: 59,431 bytes
-
-── GAMECOUNTS AUDIT ──────────────────────────────
-  ✅ [PASS] NHL results freshness
-       nhl-results last night 2026-06-11 ~ DB latest 2026-06-11
-       URL: /nhl-results
-  ✅ [PASS] MLB results freshness
-       mlb-results last night 2026-06-14 ~ DB latest 2026-06-14
-       URL: /mlb-results
-
-── CSV AUDIT ──────────────────────────────
-  ✅ [PASS] Picks export CSV
-       Correctly requires auth (302 redirect)
-       URL: /picks/export.csv
-  ✅ [PASS] Results export CSV
-       Correctly requires auth (302 redirect)
-       URL: /results/export.csv
-  ✅ [PASS] Performance audit CSV
-       Correctly requires auth (302 redirect)
-       URL: /performance/audit.csv
-
-── SEO AUDIT ──────────────────────────────
-  ⚠️ [WARN] SEO: /
-       3 SEO issue(s)
-       Detail: missing meta description; missing canonical link; missing og:title
-       URL: /
-  ✅ [PASS] SEO: /nba-picks
-       title, description, single h1, canonical, og:title OK
-       URL: /nba-picks
-  ✅ [PASS] SEO: /nhl-picks
-       title, description, single h1, canonical, og:title OK
-       URL: /nhl-picks
-  ✅ [PASS] SEO: /mlb-picks
-       title, description, single h1, canonical, og:title OK
-       URL: /mlb-picks
-  ✅ [PASS] SEO: /soccer-picks
-       title, description, single h1, canonical, og:title OK
-       URL: /soccer-picks
-  ✅ [PASS] SEO: /wnba-picks
-       title, description, single h1, canonical, og:title OK
-       URL: /wnba-picks
-  ✅ [PASS] SEO: /all-sports-results
-       title, description, single h1, canonical, og:title OK
-       URL: /all-sports-results
-  ✅ [PASS] SEO: /plans
-       title, description, single h1, canonical, og:title OK
-       URL: /plans
-
-── PROPS AUDIT ──────────────────────────────
-  ✅ [PASS] NBA duplicate prop rows
-       All 48 player/prop rows are unique
-  ✅ [PASS] NBA line sanity
-       All 48 lines within realistic bounds
-  ✅ [PASS] WNBA duplicate prop rows
-       All 50 player/prop rows are unique
-  ✅ [PASS] WNBA line sanity
-       All 50 lines within realistic bounds
-  ⚠️ [WARN] WNBA diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ✅ [PASS] NHL duplicate prop rows
-       All 50 player/prop rows are unique
-  ✅ [PASS] NHL line sanity
-       All 50 lines within realistic bounds
-  ✅ [PASS] MLB duplicate prop rows
-       All 364 player/prop rows are unique
-  ✅ [PASS] MLB line sanity
-       All 364 lines within realistic bounds
-  ✅ [PASS] NFL duplicate prop rows
-       All 50 player/prop rows are unique
-  ✅ [PASS] NFL line sanity
-       All 50 lines within realistic bounds
-  ⚠️ [WARN] NFL diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ✅ [PASS] NCAAF duplicate prop rows
-       All 50 player/prop rows are unique
-  ✅ [PASS] NCAAF line sanity
-       All 50 lines within realistic bounds
-  ⚠️ [WARN] NCAAF diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ✅ [PASS] NCAAB duplicate prop rows
-       All 31 player/prop rows are unique
-  ✅ [PASS] NCAAB line sanity
-       All 31 lines within realistic bounds
-  ⚠️ [WARN] NCAAB diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ✅ [PASS] NCAAW duplicate prop rows
-       All 13 player/prop rows are unique
-  ✅ [PASS] NCAAW line sanity
-       All 13 lines within realistic bounds
-  ⚠️ [WARN] NCAAW diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ✅ [PASS] SOCCER duplicate prop rows
-       All 50 player/prop rows are unique
-  ✅ [PASS] SOCCER line sanity
-       All 50 lines within realistic bounds
-  ⚠️ [WARN] SOCCER diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️ [WARN] SOCCER diagnostics: degenerate distribution
-       All pick probabilities clustered near 50% — possible fallback model
-  ✅ [PASS] TENNIS duplicate prop rows
-       All 50 player/prop rows are unique
-  ✅ [PASS] TENNIS line sanity
-       All 50 lines within realistic bounds
-  ⚠️ [WARN] TENNIS diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ✅ [PASS] UFC duplicate prop rows
-       All 24 player/prop rows are unique
-  ✅ [PASS] UFC line sanity
-       All 24 lines within realistic bounds
-  ⚠️ [WARN] UFC diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️ [WARN] UFC diagnostics: degenerate distribution
-       All pick probabilities clustered near 50% — possible fallback model
-  ✅ [PASS] GOLF duplicate prop rows
-       All 50 player/prop rows are unique
-  ✅ [PASS] GOLF line sanity
-       All 50 lines within realistic bounds
-  ⚠️ [WARN] GOLF diagnostics: feature collapse
-       Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️ [WARN] GOLF diagnostics: degenerate distribution
-       All pick probabilities clustered near 50% — possible fallback model
-
 
 ══════════════════════════════════════════════════════════════════════
   WARNINGS SUMMARY
 ══════════════════════════════════════════════════════════════════════
   ⚠️  Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev, will be fast in production
-  ⚠️  Models under 50%: 3 model record(s) below 50% over 15+ games — losing money, consider flipping
-  ⚠️  SEO: /: 3 SEO issue(s)
-  ⚠️  WNBA diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  NFL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  NCAAF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  NCAAB diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  NCAAW diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  SOCCER diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  SOCCER diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
-  ⚠️  TENNIS diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  UFC diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  UFC diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
-  ⚠️  GOLF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  ⚠️  GOLF diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
