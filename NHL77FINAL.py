@@ -16885,8 +16885,8 @@ def llms_txt():
 ## About
 - Brand: predictionlab.io
 - Parent organization: GoodsandMore Inc. (Canada)
-- URL: https://predictionlab.io
-- Contact: support.predictionlab@gmail.com (web form: https://predictionlab.io/contact)
+- URL: [https://predictionlab.io](https://predictionlab.io)
+- Contact: support.predictionlab@gmail.com (web form: [Contact](https://predictionlab.io/contact))
 
 ## What We Offer
 - Free daily moneyline picks
@@ -16894,14 +16894,14 @@ def llms_txt():
 - Multi-model AI consensus and transparent tracking
 
 ## Core Pages
-- Home: https://predictionlab.io/
-- Daily report: https://predictionlab.io/daily-report
-- Plans: https://predictionlab.io/plans
-- AI picks today: https://predictionlab.io/ai-sports-betting-picks-today
-- What are AI picks: https://predictionlab.io/what-are-ai-sports-betting-picks
-- Model vs sportsbooks: https://predictionlab.io/our-model-vs-sportsbooks
-- Privacy: https://predictionlab.io/privacy
-- Terms: https://predictionlab.io/terms
+- Home: [https://predictionlab.io/](https://predictionlab.io/)
+- Daily report: [https://predictionlab.io/daily-report](https://predictionlab.io/daily-report)
+- Plans: [https://predictionlab.io/plans](https://predictionlab.io/plans)
+- AI picks today: [https://predictionlab.io/ai-sports-betting-picks-today](https://predictionlab.io/ai-sports-betting-picks-today)
+- What are AI picks: [https://predictionlab.io/what-are-ai-sports-betting-picks](https://predictionlab.io/what-are-ai-sports-betting-picks)
+- Model vs sportsbooks: [https://predictionlab.io/our-model-vs-sportsbooks](https://predictionlab.io/our-model-vs-sportsbooks)
+- Privacy: [https://predictionlab.io/privacy](https://predictionlab.io/privacy)
+- Terms: [https://predictionlab.io/terms](https://predictionlab.io/terms)
 
 ## Notes
 - Picks are informational and educational, not guaranteed outcomes.
