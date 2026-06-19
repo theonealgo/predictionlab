@@ -20,7 +20,7 @@
 {# Paywall flag: premium model lines/scores are locked for logged-out users on PICKS cards.
    FREE = sportsbook moneylines, sportsbook spread, and ML model percentages.
    Results cards are public proof-of-performance and are never locked. #}
-{% set _locked = false %}
+{% set _locked = (not is_results) and (not is_premium|default(false)) %}
 
 {# Search deep-link anchors: /sport-page#team-<slug> scrolls to this card.
    scroll-margin-top keeps the sticky header from covering the card. #}
