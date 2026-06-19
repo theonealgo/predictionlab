@@ -177,7 +177,6 @@ def test_free_copy_and_payload_do_not_expose_premium_values():
     assert "Books · DK" not in rendered
     assert "+113" in rendered and "-136" in rendered
     assert "San Antonio Spurs -2.5" in rendered
-    assert "Grinder2" in rendered and "55.4%" in rendered
 
     for premium_value in [
         "Moneyline EV",

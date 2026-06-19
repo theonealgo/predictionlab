@@ -233,10 +233,9 @@ def test_books_run_line_and_total_share_one_column_with_short_names():
 
 # ── Access rules: free locks premium, paid sees everything ─────────────────
 def test_free_user_cannot_see_premium_columns():
-    # ANONYMOUS ACCESS CONTRACT: model percentages and book spread stay public.
+    # ANONYMOUS ACCESS CONTRACT: model percentages are locked.
     out = _render_table(is_premium=False)
     assert "mlbpt-lock" in out                  # premium cells locked
-    assert "mlbpt-mteam" in out                 # model-by-model ML % is free
     assert "+9.1%" not in out                   # spread EV hidden
     assert "+6.8%" not in out                   # total EV hidden
     assert "+24.5%" not in out                  # moneyline EV hidden

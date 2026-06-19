@@ -269,8 +269,19 @@
     {% endif %}
 </div>
 
-{# AI-pick row removed — it duplicated the win % / PL spread / Sharp Consensus
-   already shown on the card. #}
+{% if not _locked %}
+{% if card.face_pick_team is defined and card.face_pick_team %}
+<div class="ai-pick-row">
+    <div class="ai-pick-text">
+        AI pick · <strong>{{ card.face_pick_team }}</strong>
+        <span class="via">via {{ _face_label }}</span>
+    </div>
+    {% if card.face_pick_confidence is defined and card.face_pick_confidence is not none %}
+    <div class="confidence">Confidence <strong>{{ card.face_pick_confidence }}%</strong></div>
+    {% endif %}
+</div>
+{% endif %}
+{% endif %}
 
 <footer class="card-footer">
     <button type="button" class="copy-pick-btn" onclick="copySinglePick(this)" title="Copy this pick to clipboard">
@@ -337,6 +348,7 @@
     </div>
     {% endif %}
 
+    {% if not _locked %}
     <div class="pick-conf-bar">
         <div class="pick-conf-title">Pick Confidence</div>
         <div class="pick-conf-grid">
@@ -354,6 +366,17 @@
             {% endfor %}
         </div>
     </div>
+    {% else %}
+    <div class="pick-conf-bar">
+        <div class="pick-conf-title">Pick Confidence</div>
+        <div class="proj-score-box" style="margin-top:12px;">
+            <div class="proj-row">
+                <span class="proj-model pl">🔒 Premium</span>
+                <span class="proj-val"><a href="/plans" style="color:#f59e0b;font-weight:700;text-decoration:none;">Unlock model confidence</a></span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {% if not _locked %}
     <div class="odds-extras-footer">
