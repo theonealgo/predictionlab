@@ -6,7 +6,7 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
 """
 
-from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory, abort
+from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory, abort, has_request_context
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
@@ -4134,6 +4134,9 @@ SPORTS = {
     'NCAAW': {'name': "NCAA Women's Basketball", 'icon': '🏀', 'color': '#db2777'},
     'WNBA': {'name': 'WNBA', 'icon': '🏀', 'color': '#f97316'},
     'SOCCER': {'name': 'Soccer', 'icon': '⚽', 'color': '#22c55e'},
+    'TENNIS': {'name': 'Tennis', 'icon': '🎾', 'color': '#16a34a'},
+    'UFC':    {'name': 'UFC / MMA', 'icon': '🥊', 'color': '#b91c1c'},
+    'GOLF':   {'name': 'Golf', 'icon': '⛳', 'color': '#0369a1'},
 }
 SOCCER_ENABLED = True
 
@@ -4148,10 +4151,14 @@ SPORT_SEO_SLUGS = {
     'NCAAF': 'ncaaf-picks',
     'WNBA': 'wnba-picks',
     'SOCCER': 'soccer-picks',
+    'TENNIS': 'tennis-picks',
+    'UFC':    'ufc-picks',
+    'GOLF':   'golf-picks',
 }
 _SEO_SLUG_TO_SPORT = {v: k for k, v in SPORT_SEO_SLUGS.items()}
 _SPORT_RESULTS_SLUGS = {k: v.replace('-picks', '-results') for k, v in SPORT_SEO_SLUGS.items()}
 _RESULTS_SLUG_TO_SPORT = {v: k for k, v in _SPORT_RESULTS_SLUGS.items()}
+_INDIVIDUAL_SPORT_LOADERS = {}  # populated after sport modules import (new sports)
 
 _MONTH_NAMES = {
     1: 'january', 2: 'february', 3: 'march', 4: 'april',
@@ -5703,8 +5710,15 @@ def _sort_game_rows_by_date_desc(rows):
     )
 
 
-def _compute_results_tally_bundle(daily_results, yesterday_dt, *, season_start_dt=None):
-    """Daily + weekly tallies; when the calendar week is empty, use the latest 7-day window with games."""
+def _compute_results_tally_bundle(
+    daily_results,
+    yesterday_dt,
+    *,
+    season_start_dt=None,
+    sport=None,
+    league_scoped=False,
+):
+    """Daily + weekly tallies; when the calendar week is empty, use the latest window with games."""
     yesterday = yesterday_dt.strftime('%Y-%m-%d')
     weekly_start_dt = yesterday_dt - timedelta(days=6)
     weekly_end_dt = yesterday_dt
@@ -5717,30 +5731,36 @@ def _compute_results_tally_bundle(daily_results, yesterday_dt, *, season_start_d
     weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
 
     if not daily_tally and daily_results:
-        dated = [
-            (parse_date(dk), dk)
-            for dk, bucket in daily_results.items()
-            if dk and bucket.get('games') and parse_date(dk)
-        ]
-        if season_start_dt:
-            dated = [(dt, dk) for dt, dk in dated if dt >= season_start_dt]
+        dated = _dated_games_in_daily_results(daily_results, season_start_dt=season_start_dt)
         if dated:
-            fallback_day = max(dated, key=lambda x: x[0])[1]
-            daily_tally_date = fallback_day
+            daily_tally_date = dated[0][1]
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
 
-    if weekly_tally_games == 0 and daily_results:
-        dated = [
-            (parse_date(dk), dk)
-            for dk, bucket in daily_results.items()
-            if dk and bucket.get('games') and parse_date(dk)
-        ]
-        if season_start_dt:
-            dated = [(dt, dk) for dt, dk in dated if dt >= season_start_dt]
+    use_soccer_matchday_window = (
+        sport == 'SOCCER'
+        and daily_results
+        and not league_scoped
+    )
+    if use_soccer_matchday_window:
+        win = _soccer_weekly_tally_window(
+            daily_results, season_start_dt=season_start_dt, n_matchdays=7,
+        )
+        if win[0] is not None:
+            weekly_start_dt, weekly_end_dt, weekly_tally_date_range = win
+            weekly_tally = compute_model_tally_for_range(
+                daily_results, weekly_start_dt, weekly_end_dt,
+            )
+            weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+    elif weekly_tally_games == 0 and daily_results and not league_scoped:
+        dated = _dated_games_in_daily_results(
+            daily_results, season_start_dt=season_start_dt, before_dt=yesterday_dt,
+        )
         if dated:
-            dated.sort(key=lambda x: x[0], reverse=True)
             latest_dt, _ = dated[0]
-            fallback_start = max(latest_dt - timedelta(days=6), season_start_dt) if season_start_dt else latest_dt - timedelta(days=6)
+            fallback_start = (
+                max(latest_dt - timedelta(days=6), season_start_dt)
+                if season_start_dt else latest_dt - timedelta(days=6)
+            )
             weekly_start_dt = fallback_start
             weekly_end_dt = latest_dt
             weekly_tally = compute_model_tally_for_range(
@@ -6267,6 +6287,8 @@ def get_upcoming_predictions(sport, days=365):
         except Exception as _soc_err:
             logger.debug(f"[SOCCER] game storage failed: {_soc_err}")
 
+    elif sport in _INDIVIDUAL_SPORT_LOADERS:
+        all_games_with_dates = _INDIVIDUAL_SPORT_LOADERS[sport]()
     elif sport in ['NBA', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'MLB', 'WNBA']:
         # Load from ESPN API and database (includes playoffs)
         ESPN_ENDPOINTS = {
@@ -9442,51 +9464,11 @@ BASE_TEMPLATE = """
         .nav-group-items a:hover { opacity: 1; color: #00529B; }
         {% block extra_styles %}{% endblock %}
     </style>
+    <link rel="stylesheet" href="/static/css/research-theme.css">
+    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
 </head>
 <body>
-    <div class="navbar">
-    <div class="navbar-content">
-        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
-        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality">
-            <img class="pl-brand-logo__img" src="/static/pl-logo.svg" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false">
-        </a>
-
-        <div class="nav-search-wrap">
-            <div class="nav-search" onclick="openSrch()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
-            </div>
-        </div>
-
-        <div class="nav-actions">
-            <div class="acct-wrap">
-                <button type="button" class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </button>
-                <div class="acct-menu" id="acctMenu">
-                    {% if not is_premium %}
-                    <a href="/plans">Join Premium</a>
-                    {% endif %}
-                    {% if is_logged_in %}
-                    <a href="/logout">Sign Out</a>
-                    {% else %}
-                    <a href="/login">Sign In</a>
-                    <a href="/signup">Sign Up</a>
-                    {% endif %}
-                    <div class="acct-menu-divider"></div>
-                    <a href="/faq">Help</a>
-                </div>
-                {% if not is_premium %}
-                <a href="/plans" class="nav-cta-premium">Join Premium</a>
-                {% endif %}
-                {% if not is_logged_in %}
-                <a href="/plans" class="nav-cta">Get Started</a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-    
+    {% include "partials/research_header.html" %}
     <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
     <div class="tv-drawer" id="tvDrawer">
       <div class="tv-drawer-header">
@@ -9560,42 +9542,7 @@ BASE_TEMPLATE = """
             <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
         </div>
     </div>
-    <footer class="site-footer">
-        <div class="footer-outer">
-            <div class="footer-brand"><a href="/" class="logo" aria-label="Prediction Lab home">Prediction Lab</a></div>
-            <div class="footer-columns-3">
-                <div class="footer-col-blk">
-                    <div class="footer-heading">Company</div>
-                    <a href="/plans">Plans &amp; pricing</a>
-                    <a href="/tutorial">Tutorial</a>
-                    <a href="/contact">Contact us</a>
-                    <a href="/privacy">Privacy</a>
-                    <a href="/terms">Terms</a>
-                    <a href="/responsible-gaming">Responsible gaming</a>
-                </div>
-                <div class="footer-col-blk">
-                    <div class="footer-heading">Product</div>
-                    <a href="/faq">FAQ</a>
-                    <a href="/daily-report">Daily results report</a>
-                    <a href="/all-sports-results">All sports results</a>
-                    <a href="/search">Search</a>
-                    <a href="/performance">Model performance</a>
-                    <a href="/ai-sports-betting-picks-today">AI picks today</a>
-                    <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
-                    <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
-                </div>
-                <div class="footer-col-blk">
-                    <div class="footer-heading">Social</div>
-                    <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X (Twitter)</a>
-                    <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
-                    <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
-                    <a href="https://predictionlab.io" target="_blank" rel="noopener">TikTok</a>
-                    <a href="https://predictionlab.io" target="_blank" rel="noopener">YouTube</a>
-                </div>
-            </div>
-            <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
-        </div>
-    </footer>
+    {% include "partials/site_directory_footer.html" %}
     
     <script>
 var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
@@ -12283,1315 +12230,16 @@ def healthz():
     return 'ok', 200
 
 
-@app.route('/')
+@app.route('/', methods=['GET', 'HEAD'])
 def landing_page():
-    """Landing page — redesigned with hero, stats, donation, and sport cards"""
-    log_site_visit('/')
-    nhl_accuracy = get_landing_accuracy('NHL')
-    nfl_accuracy = get_landing_accuracy('NFL')
-    nba_accuracy = get_landing_accuracy('NBA')
-    games_graded = 0
-    predictions_logged = 0
+    """Primary landing page — new research design (homepage_preview.html)."""
+    if request.method == 'HEAD':
+        return '', 200
     try:
-        _conn = get_db_connection()
-        games_graded = _conn.execute(
-            "SELECT COUNT(*) FROM games WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
-        ).fetchone()[0]
-        predictions_logged = _conn.execute(
-            "SELECT COUNT(*) FROM predictions"
-        ).fetchone()[0]
-        _conn.close()
-    except Exception as _e:
-        logger.debug(f"Landing stats query failed: {_e}")
-    today = datetime.now()
-    landing_sports = []
-    for sport_key in _LANDING_SPORT_ORDER:
-        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
-            continue
-        info = SPORTS.get(sport_key)
-        if not info:
-            continue
-        status_text, is_live = get_season_status(sport_key, today=today)
-        landing_sports.append({
-            'key': sport_key,
-            'seo_slug': SPORT_SEO_SLUGS.get(sport_key, sport_key.lower() + '-picks'),
-            'icon': info['icon'],
-            'name': _LANDING_SPORT_SHORT.get(sport_key, info['name']),
-            'status': status_text,
-            'is_live': is_live,
-        })
-    sports_covered = len(landing_sports)
-    banner_sports = [s['key'] for s in landing_sports]
-    weekly_banner_messages = list(_MANUAL_BANNER_ITEMS)
-    units_banner_items = _get_sport_ml_units_banner()
-    seo_archive_links = []
-    for _sport_key in ['NHL', 'NBA', 'MLB', 'SOCCER']:
-        if _sport_key == 'SOCCER' and not SOCCER_ENABLED:
-            continue
-        _slug = SPORT_SEO_SLUGS.get(_sport_key)
-        if not _slug:
-            continue
-        for _days_back in range(1, 4):
-            _d = today - timedelta(days=_days_back)
-            _m_name = _MONTH_NAMES.get(_d.month, 'january')
-            seo_archive_links.append({
-                'url': f"/{_slug}-{_m_name}-{_d.day}-{_d.year}",
-                'label': f"{_sport_key} picks {_d.strftime('%b')} {_d.day}, {_d.year}",
-            })
-
-    _landing_share_url = 'https://predictionlab.io/'
-    _landing_share_title = 'predictionlab.io Performance Stats'
-    _landing_share_body = (
-        f"{_landing_share_title}\n\n"
-        "NBA Totals (2025/2026): 704-500 (+204u)\n"
-        "NBA Spreads: 822-395 (+427u)\n"
-        "NHL Spreads: 124-65 (+59u)\n"
-        "NHL Totals (7 days): 8-1 (+7u)\n\n"
-        "Our models are continuously evaluated across seasons to detect market inefficiencies and pricing edges.\n\n"
-        f"{_landing_share_url}"
-    )
-    _landing_share_tweet = (
-        "predictionlab.io Performance Stats — NBA Totals 704-500 (+204u), NBA Spreads +427u, "
-        "NHL Spreads +59u, NHL Totals 8-1 (+7u). Tracked AI picks & results: "
-        + _landing_share_url
-    )
-
-    todays_picks = build_todays_top_picks()
-
-    return render_template_string("""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Sports Predictions & Game Forecasts | predictionlab.io</title>
-    <meta name="description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
-    <meta property="og:title" content="AI Sports Predictions & Game Forecasts | predictionlab.io">
-    <meta property="og:description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://predictionlab.io/">
-    <meta property="og:site_name" content="predictionlab.io">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="AI Sports Predictions & Game Forecasts | predictionlab.io">
-    <meta name="twitter:description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
-    <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Bebas+Neue&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Bebas+Neue&display=swap"></noscript>
-    {% if ga_tracking_id %}
-    <script>
-      (function(){
-        function initGA(){
-          if (window.__gaLoaded) return;
-          window.__gaLoaded = true;
-          var s = document.createElement('script');
-          s.async = true;
-          s.src = 'https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}';
-          document.head.appendChild(s);
-          window.dataLayer = window.dataLayer || [];
-          window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
-          gtag('js', new Date());
-          gtag('config', '{{ ga_tracking_id }}');
-        }
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(initGA, { timeout: 2500 });
-        } else {
-          window.addEventListener('load', function(){ setTimeout(initGA, 800); }, { once: true });
-        }
-      })();
-    </script>
-    {% endif %}
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "predictionlab.io",
-      "url": "https://predictionlab.io",
-      "description": "Daily AI-powered sports predictions, game forecasts, and model projections across major sports.",
-      "email": "support.predictionlab@gmail.com",
-      "telephone": "+1-519-992-8484",
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": "980 Lake Trail Drive",
-        "addressLocality": "Windsor",
-        "addressRegion": "Ontario",
-        "postalCode": "N9G 2R8",
-        "addressCountry": "CA"
-      },
-      "parentOrganization": {
-        "@type": "Corporation",
-        "name": "GoodsandMore Inc."
-      },
-      "sameAs": [
-        "https://x.com/predictionlab_io",
-        "https://instagram.com/predictionlab.io",
-        "https://facebook.com/predictionlab.io",
-        "https://predictionlab.io",
-        "https://predictionlab.io"
-      ]
-    }
-    </script>
-    <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"WebSite","name":"predictionlab.io","url":"https://predictionlab.io","potentialAction":{"@type":"SearchAction","target":"https://predictionlab.io/search?query={search_term_string}","query-input":"required name=search_term_string"}}
-    </script>
-    <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"LocalBusiness","name":"predictionlab.io","url":"https://predictionlab.io","email":"support.predictionlab@gmail.com","telephone":"+1-519-992-8484","parentOrganization":{"@type":"Corporation","name":"GoodsandMore Inc."},"address":{"@type":"PostalAddress","streetAddress":"980 Lake Trail Drive","addressLocality":"Windsor","addressRegion":"Ontario","postalCode":"N9G 2R8","addressCountry":"CA"}}
-    </script>
-    <!-- FAQPage schema lives on /faq now (dedicated page). -->
-
-    <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"Product","name":"Prediction Lab Premium","description":"AI-powered sports predictions with spreads, totals, and score projections across major sports.","brand":{"@type":"Brand","name":"predictionlab.io"},"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.7","bestRating":"5","ratingCount":"48"},"review":{"@type":"Review","author":{"@type":"Person","name":"predictionlab.io user"},"reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"Strong model transparency and useful projections across spreads and totals."},"offers":[{"@type":"Offer","price":"19.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Monthly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}},{"@type":"Offer","price":"149.99","priceCurrency":"USD","availability":"https://schema.org/InStock","priceValidUntil":"2027-12-31","name":"Yearly","url":"https://predictionlab.io/plans","hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"US","returnPolicyCategory":"https://schema.org/MerchantReturnNotPermitted"},"shippingDetails":{"@type":"OfferShippingDetails","shippingRate":{"@type":"MonetaryAmount","value":"0","currency":"USD"},"shippingDestination":{"@type":"DefinedRegion","addressCountry":"US"},"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"},"transitTime":{"@type":"QuantitativeValue","minValue":"0","maxValue":"0","unitCode":"d"}}}}]}
-    </script>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        :root{
-            --gold:#fbbf24;--gold2:#f59e0b;
-            --green:#00C076;--red:#D93025;
-            --bg:#ffffff;--surface:#F4F7F9;
-            --border:#E0E4E8;
-            --text:#1A1D23;
-            --link:#00529B;
-        }
-        body{
-            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-            background:#ffffff;
-            color:var(--text);
-            min-height:100vh;
-            padding-bottom:58px;
-            overflow-x:hidden;
-            position:relative;
-        }
-        body::before{
-            content:'';
-            position:fixed;
-            inset:0;
-            background:transparent;
-            z-index:0;
-        }
-        body > *{position:relative;z-index:1;}
-/* ── Navbar ── */
-.navbar {
-    background: #ffffff !important;
-    padding: 10px 0;
-    border-bottom: 1px solid #E0E3EB;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-}
-
-.navbar-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 20px;
-    gap: 20px;
-}
-
-/* Flex order must stay unique: a later .logo rule set order:2 while this
-   block left search at order:2, which tied and followed DOM order
-   (search before logo) — logo jumped to the right of the search bar. */
-.navbar .hamburger { order: 1; flex-shrink: 0; }
-.navbar .logo { order: 2; flex-shrink: 0; }
-.nav-search-wrap {
-    order: 3;
-    flex: 1;
-    max-width: 600px;
-    min-width: 0;
-    margin: 0 16px;
-    display: flex;
-    justify-content: center;
-}
-.nav-actions {
-    order: 4;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-    margin-left: auto;
-}
-
-.nav-search {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #f0f3fa;
-    border: 1px solid #e0e3eb;
-    border-radius: 999px;
-    padding: 8px 16px;
-    cursor: text;
-}
-
-.nav-search svg {
-    color: #131722;
-}
-
-.nav-search input {
-    border: none;
-    outline: none;
-    background: transparent;
-    color: #131722;
-    width: 100%;
-}
-
-.acct-wrap {
-    position: relative;
-}
-
-.acct-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: 1px solid #e0e3eb;
-    background: #fff;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #131722;
-}
-
-.acct-menu {
-    display: none;
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    width: 160px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(15,23,42,0.12);
-    z-index: 1100;
-    padding: 6px;
-}
-
-.acct-menu.open {
-    display: block;
-}
-
-.acct-menu a {
-    display: block;
-    padding: 9px 12px;
-    font-size: 0.85em;
-    font-weight: 600;
-    color: #1e293b;
-    text-decoration: none;
-    border-radius: 8px;
-}
-
-.acct-menu-divider {
-    height: 1px;
-    background: #f1f5f9;
-    margin: 4px 0;
-}
-        .nav-cta{display:inline-flex;align-items:center;padding:9px 22px;border-radius:999px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);color:#fff;font-size:0.84em;font-weight:700;text-decoration:none;letter-spacing:0.3px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 16px rgba(99,102,241,0.5),inset 0 1px 0 rgba(255,255,255,0.15);}
-        .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.65),inset 0 1px 0 rgba(255,255,255,0.15);}
-        .nav-cta-premium{display:inline-flex;align-items:center;padding:9px 16px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-size:0.84em;font-weight:800;text-decoration:none;letter-spacing:0.2px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(251,191,36,0.35);}
-        .nav-cta-premium:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(251,191,36,0.45);}
-        .tv-premium-cta{display:flex;align-items:center;justify-content:center;margin:10px 12px 6px;padding:12px 14px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;font-size:0.92em;text-decoration:none;letter-spacing:0.2px;}
-        .tv-premium-cta:hover{box-shadow:0 4px 14px rgba(251,191,36,0.4);}
-        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}.nav-cta-premium{padding:8px 12px;font-size:0.78em;}}
-        .srch-overlay{display:none;position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);}
-        .srch-overlay.open{display:block;}
-        .srch-box{position:absolute;top:70px;left:50%;transform:translateX(-50%);width:min(680px,96vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,0.18);overflow:hidden;}
-        .srch-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f1f5f9;}
-        .srch-input-row svg{color:#94a3b8;flex-shrink:0;}
-        .srch-input-row input{flex:1;border:none;outline:none;font-size:1rem;color:#0f172a;}
-        .srch-input-row input::placeholder{color:#94a3b8;}
-        .srch-close{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.1rem;padding:4px 6px;border-radius:6px;}
-        .srch-close:hover{background:#f1f5f9;color:#0f172a;}
-        .srch-filters{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid #f1f5f9;scrollbar-width:none;}
-        .srch-filters::-webkit-scrollbar{display:none;}
-        .srch-filter{flex-shrink:0;padding:5px 12px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:0.78em;font-weight:700;cursor:pointer;color:#475569;}
-        .srch-filter.active,.srch-filter:hover{background:#0f172a;color:#fff;border-color:#0f172a;}
-        .srch-items{max-height:340px;overflow-y:auto;padding:8px 0;}
-        .srch-item{display:flex;align-items:center;gap:10px;padding:10px 16px;text-decoration:none;color:#1e293b;}
-        .srch-item:hover{background:#f8fafc;}
-        .srch-item-label{font-size:0.88em;font-weight:600;flex:1;}
-        .srch-item-sport{font-size:0.72em;font-weight:700;color:#94a3b8;text-transform:uppercase;}
-        .srch-empty{padding:24px 16px;text-align:center;font-size:0.85em;color:#94a3b8;}
-        .search-results-wrap{
-            max-width:1200px;
-            margin:14px auto 0;
-            padding:0 24px;
-        }
-        .search-results{
-            display:none;
-            background:#ffffff;
-            border:1px solid rgba(15,23,42,0.16);
-            border-radius:12px;
-            padding:14px 16px;
-            box-shadow:0 8px 20px rgba(15,23,42,0.08);
-        }
-        .search-results.show{display:block;}
-        .search-results h3{
-            margin:0 0 8px;
-            font-size:0.98em;
-            color:#0f172a;
-        }
-        .search-results p{margin:0 0 8px;color:#334155;font-size:0.9em;}
-        .search-results ul{margin:0;padding-left:18px;color:#0f172a;font-size:0.88em;display:grid;gap:5px;}
-        .search-results a{color:var(--link);text-decoration:underline;}
-        .perf-dashboard{
-            max-width:860px;margin:0 auto;padding:14px 16px;background:#fff;
-            border:1px solid rgba(15,23,42,0.16);border-radius:12px;
-        }
-        .perf-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:10px;}
-        .perf-stat{background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:10px 12px;}
-        .perf-label{font-size:0.72em;color:#475569;text-transform:uppercase;letter-spacing:0.4px;}
-        .perf-value{font-size:1.05em;font-weight:800;color:#0f172a;margin-top:2px;}
-        .perf-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-        .perf-controls select,.perf-controls input{padding:7px 10px;border:1px solid rgba(15,23,42,0.18);border-radius:8px;background:#fff;color:#0f172a;}
-        .perf-apply-btn{padding:8px 14px;border:1px solid #00529B;background:#00529B;color:#fff;border-radius:8px;font-weight:700;cursor:pointer;}
-        .question-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-        .question-buttons button{border:1px solid rgba(15,23,42,0.2);background:#fff;border-radius:999px;padding:6px 10px;font-size:0.78em;cursor:pointer;color:#0f172a;}
-        .perf-answer{margin-top:12px;background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:10px 12px;}
-        .perf-answer-title{font-size:0.82em;color:#334155;font-weight:700;margin-bottom:8px;}
-        .perf-answer-list{display:grid;gap:6px;}
-        .perf-answer-item{display:flex;justify-content:space-between;gap:10px;padding:7px 8px;background:#fff;border:1px solid rgba(15,23,42,0.1);border-radius:8px;font-size:0.8em;color:#0f172a;}
-        .perf-empty{font-size:0.82em;color:#475569;background:#fff;border:1px dashed rgba(15,23,42,0.18);border-radius:8px;padding:10px;}
-        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;border-radius:10px;}
-        .logo img,.logo .pl-brand-logo__img{display:block;height:36px;width:auto;max-height:42px;max-width:min(220px,42vw);object-fit:contain;}
-        a.pl-brand-logo.pl-brand-logo--holding{outline:2px solid rgba(0,82,155,0.35);outline-offset:2px;}
-        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
-        .hamburger:hover{background:#f8fafc;}
-        .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
-        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
-        .tv-overlay.open{display:block;}
-        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
-        .tv-drawer.open{transform:translateX(0);}
-        .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
-        .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
-        .tv-header-btns{display:flex;gap:8px;align-items:center;}
-        .tv-back-btn{background:none;border:none;font-size:1.3rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
-        .tv-back-btn:hover{background:#f1f5f9;}
-        .tv-close-btn{background:none;border:none;font-size:1.1rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
-        .tv-close-btn:hover{background:#f1f5f9;}
-        .tv-panels{flex:1;overflow:hidden;position:relative;}
-        .tv-panel{position:absolute;inset:0;overflow-y:auto;transition:transform .25s cubic-bezier(.4,0,.2,1);}
-        .tv-panel.hidden-left{transform:translateX(-100%);}
-        .tv-panel.hidden-right{transform:translateX(100%);}
-        .tv-panel.visible{transform:translateX(0);}
-        .tv-menu-list{padding:8px;}
-        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;cursor:pointer;border-radius:8px;text-align:left;transition:background .15s;}
-        .tv-menu-btn:hover{background:#f1f5f9;}
-        .tv-menu-label{flex:1;font-size:0.9rem;font-weight:700;color:#0f172a;}
-        .tv-menu-arrow{color:#94a3b8;font-size:1rem;}
-        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:10px 14px;text-decoration:none;color:#1e293b;font-size:0.88rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
-        .tv-sub-link:hover{background:#f1f5f9;color:#00529B;}
-        .tv-sub-link.highlight{color:#00529B;font-weight:800;}
-        .tv-sub-link .ext{font-size:0.7em;color:#94a3b8;margin-left:2px;}
-
-        /* ── Hero ── */
-        .hero{
-            text-align:center;
-            padding:90px 30px 60px;
-            position:relative;
-            overflow:hidden;
-        }
-        .hero::before{
-            content:'';
-            position:absolute;inset:0;
-            background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(99,102,241,.25) 0%,transparent 70%);
-            pointer-events:none;
-        }
-        .hero-badge{
-            display:inline-flex;align-items:center;gap:8px;
-            background:rgba(16,185,129,.15);border:1px solid rgba(255,255,255,.35);
-            color:#fff;font-size:.82em;font-weight:700;
-            padding:6px 16px;border-radius:20px;margin:18px auto 0;
-            letter-spacing:.5px;
-        }
-        .hero h1{
-            font-size:clamp(2.4em,6vw,4.2em);
-            font-weight:900;
-            line-height:1.1;
-            margin-bottom:18px;
-            color:#fff;
-        }
-        .hero-subhead{
-            font-size:clamp(1.05em,2.6vw,1.35em);
-            color:#fff;
-            max-width:600px;
-            margin:0 0 28px;
-            line-height:1.6;
-            font-weight:700;
-        }
-        .hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
-        .btn-primary{
-            background:linear-gradient(135deg,#6366f1,#4f46e5);
-            color:#fff;font-weight:700;font-size:1em;
-            padding:14px 32px;border-radius:10px;
-            text-decoration:none;transition:transform .2s,box-shadow .2s;
-            box-shadow:0 4px 20px rgba(99,102,241,.4);
-        }
-        .btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 28px rgba(99,102,241,.5);}
-        .btn-donate-hero{
-            background:linear-gradient(135deg,var(--gold),var(--gold2));
-            color:#fff;font-weight:700;font-size:1em;
-            padding:14px 32px;border-radius:10px;
-            text-decoration:none;transition:transform .2s,box-shadow .2s;
-            box-shadow:0 4px 20px rgba(251,191,36,.3);
-        }
-        .btn-donate-hero:hover{transform:translateY(-2px);box-shadow:0 6px 28px rgba(251,191,36,.45);}
-
-        /* ── Weekly banner ── */
-        .weekly-banner{
-            margin:-8px auto 18px;
-            max-width:1200px;
-            width:100%;
-            background:#ffffff;
-            border:1px solid rgba(15,23,42,0.18);
-            border-radius:16px;
-            padding:14px 18px;
-            display:flex;
-            flex-direction:column;
-            gap:10px;
-            align-items:center;
-            text-align:center;
-            box-shadow:0 8px 24px rgba(0,0,0,0.25);
-            overflow:hidden;
-        }
-        .weekly-banner-label{
-            font-size:0.7em;
-            text-transform:uppercase;
-            letter-spacing:0.7px;
-            color:#0f172a;
-            font-weight:800;
-        }
-        .weekly-banner-lines{
-            width:100%;
-            overflow:hidden;
-        }
-        .weekly-banner-track{
-            display:inline-flex;
-            align-items:center;
-            gap:12px;
-            width:max-content;
-            white-space:nowrap;
-            will-change:transform;
-            animation:weekly-marquee 26s linear infinite;
-        }
-        .weekly-banner-line{
-            background:#f8fafc;
-            border:1px solid rgba(15,23,42,0.14);
-            border-radius:999px;
-            padding:6px 14px;
-            font-size:0.95em;
-            font-weight:700;
-            color:#0f172a;
-            white-space:nowrap;
-            display:flex;
-            gap:10px;
-            align-items:center;
-            flex:0 0 auto;
-        }
-        @keyframes weekly-marquee{
-            0%{transform:translateX(0);}
-            100%{transform:translateX(-50%);}
-        }
-
-        /* ── Free banner ── */
-        .free-banner{
-            max-width:860px;margin:60px auto 0;
-            background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.1));
-            border:1px solid rgba(16,185,129,.35);
-            border-radius:16px;padding:28px 36px;
-            display:flex;gap:12px;align-items:center;justify-content:center;
-            flex-direction:column;text-align:center;
-        }
-        .free-icon{font-size:2.2em;display:inline-flex;align-items:center;justify-content:center;}
-        .free-title{font-size:1.15em;font-weight:800;color:#0f172a;margin-bottom:6px;}
-        .free-body{font-size:.93em;color:#334155;line-height:1.6;max-width:620px;}
-
-        /* ── Sports grid ── */
-        .section{padding:120px 30px 70px;max-width:1200px;margin:0 auto;}
-        .section-title{
-            text-align:center;font-size:1.9em;font-weight:800;
-            margin-bottom:8px;
-            color:var(--text);
-        }
-        .section-title.secondary{
-            font-size:1.4em;
-            margin-top:22px;
-        }
-        .section-sub{text-align:center;color:#334155;font-size:.93em;margin-bottom:40px;}
-        .sport-slider{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 32px;}
-        .slider-arrow{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.6);color:#fff;font-size:1.3em;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;user-select:none;flex-shrink:0;}
-        .slider-arrow:hover{background:rgba(255,255,255,0.25);transform:scale(1.08);}
-        .sport-badges{display:flex;gap:8px;overflow-x:auto;padding:4px;max-width:860px;scroll-behavior:smooth;}
-        .sport-pill{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;text-decoration:none;background:#ffffff;border:2px solid rgba(15,23,42,0.18);color:#0f172a;font-size:.82em;font-weight:700;white-space:nowrap;transition:all .2s;}
-        .sport-pill:hover{border-color:var(--gold);color:#0f172a;}
-        .sport-pill.live{background:rgba(16,185,129,.18);border-color:rgba(16,185,129,.5);}
-        .sport-pill-status{font-weight:600;opacity:.9;font-size:.7em;text-transform:uppercase;letter-spacing:.4px;color:#334155;}
-        .sports-grid{
-            display:grid;
-            grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
-            gap:16px;
-        }
-        .sport-card{
-            background:#ffffff;border:1px solid var(--border);
-            border-radius:14px;padding:28px 20px;
-            text-align:center;text-decoration:none;color:inherit;
-            transition:border-color .2s,transform .2s,box-shadow .2s;
-            position:relative;overflow:hidden;
-        }
-        .sport-card:hover{border-color:#cdd6dc;transform:translateY(-4px);box-shadow:0 8px 24px rgba(26,29,35,.10);}
-        .sport-card.live{border-color:rgba(16,185,129,.4);}
-        .sport-card.live:hover{border-color:var(--green);box-shadow:0 8px 24px rgba(16,185,129,.2);}
-        .live-dot{
-            position:absolute;top:12px;right:12px;
-            width:8px;height:8px;border-radius:50%;background:var(--green);
-            box-shadow:0 0 0 3px rgba(16,185,129,.25);
-            animation:pulse 1.8s infinite;
-            will-change:transform,opacity;
-        }
-        @keyframes pulse{
-            0%,100%{transform:scale(1);opacity:1;}
-            50%{transform:scale(1.15);opacity:.55;}
-        }
-        .sport-icon{font-size:2.8em;margin-bottom:10px;}
-        .sport-name{font-size:1.15em;font-weight:700;margin-bottom:4px;}
-        .sport-status{font-size:.78em;color:#334155;text-transform:uppercase;letter-spacing:.5px;}
-        .sport-status.live-text{color:#0f172a;font-weight:700;}
-
-        /* ── How it works ── */
-        .how-section{
-            background:rgba(255,255,255,.02);
-            border-top:none;
-            border-bottom:none;
-        }
-        .steps-grid{
-            display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;
-        }
-        .step{
-            background:#ffffff;border:1px solid var(--border);
-            border-radius:14px;padding:28px 24px;text-align:center;
-        }
-        .step-num{
-            width:42px;height:42px;border-radius:50%;
-            background:#93c5fd;
-            display:flex;align-items:center;justify-content:center;
-            font-weight:900;font-size:1.1em;margin:0 auto 14px;
-            color:#1e3a8a !important;
-        }
-        .step-title{font-weight:700;font-size:1em;margin-bottom:8px;}
-        .step-body{font-size:.86em;color:#334155;line-height:1.6;}
-
-        /* ── Moneyline Units Banner ── */
-        .units-marquee-wrap{
-            overflow:hidden;
-            width:100%;
-            margin-top:20px;
-        }
-        .units-marquee-track{
-            display:inline-flex;
-            align-items:center;
-            gap:14px;
-            width:max-content;
-            white-space:nowrap;
-            animation:weekly-marquee 36s linear infinite;
-        }
-        .units-pill{
-            display:inline-flex;
-            align-items:center;
-            gap:10px;
-            padding:10px 22px;
-            border-radius:999px;
-            font-weight:700;
-            font-size:0.93em;
-            white-space:nowrap;
-            flex:0 0 auto;
-            border:1px solid rgba(255,255,255,0.15);
-            background:rgba(255,255,255,0.06);
-        }
-        .units-pill.positive{
-            border-color:rgba(16,185,129,0.45);
-            background:rgba(16,185,129,0.12);
-        }
-        .units-pill.negative{
-            border-color:rgba(239,68,68,0.45);
-            background:rgba(239,68,68,0.12);
-        }
-        .up-label{color:#0f172a;}
-        .up-units{font-size:1.05em;font-weight:900;color:#047857;}
-        .units-pill.negative .up-units{color:#D93025;}
-        .up-rec{color:#475569;font-size:0.82em;}
-
-        /* ── Footer (matches site chrome) ── */
-        .site-footer{
-            background:rgba(255,255,255,0.72);
-            border-top:1px solid rgba(15,23,42,0.12);
-            padding:22px 24px 28px;
-            color:#475569;
-            font-size:0.88em;
-            backdrop-filter:saturate(140%) blur(2px);
-        }
-        .footer-outer{max-width:1200px;margin:0 auto;}
-        .footer-brand{margin-bottom:18px;}
-        .footer-columns-3{
-            display:grid;
-            grid-template-columns:repeat(3,minmax(0,1fr));
-            gap:28px 36px;
-            align-items:start;
-        }
-        .footer-heading{
-            font-size:0.72em;
-            text-transform:uppercase;
-            letter-spacing:0.55px;
-            font-weight:800;
-            color:#0f172a;
-            margin:0 0 12px;
-        }
-        .footer-col-blk a{
-            display:block;
-            font-size:0.88em;
-            line-height:1.85;
-            color:#475569;
-            text-decoration:none;
-            font-weight:500;
-            padding:2px 0;
-        }
-        .footer-col-blk a:hover{color:#00529B;text-decoration:underline;}
-        .footer-bottom{margin-top:22px;padding-top:16px;border-top:1px solid rgba(15,23,42,0.1);font-size:0.82em;color:#475569;opacity:0.78;}
-        .share-strip{max-width:1200px;margin:0 auto 10px;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;background:rgba(244,247,249,0.7);border:1px solid rgba(15,23,42,0.1);border-radius:12px;}
-        .share-strip-label{font-size:0.82em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
-        .share-icons{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-        .share-icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(15,23,42,0.14);background:#fff;}
-                        .share-icon img{width:16px;height:16px;display:block;}
-        .share-icon .txt{display:none;font-size:0.64rem;font-weight:800;line-height:1;color:#0f172a;letter-spacing:0.1px;}
-                .share-icon:hover{border-color:#00529B;background:rgba(0,82,155,0.08);}
-        .join-premium-bar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
-        .join-premium-inner{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
-        .join-premium-copy{color:#e2e8f0;font-size:0.86em;font-weight:600;line-height:1.35;}
-        .join-premium-actions{display:flex;align-items:center;gap:8px;}
-        .join-premium-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.82em;}
-        .join-premium-close{border:1px solid rgba(255,255,255,0.3);background:transparent;color:#fff;border-radius:999px;width:28px;height:28px;line-height:1;cursor:pointer;font-size:18px;}
-        .join-premium-close:hover{background:rgba(255,255,255,0.1);}
-
-        /* ── Responsive ── */
-        @media(max-width:720px){
-            .footer-columns-3{grid-template-columns:1fr;gap:22px;}
-        }
-        @media(max-width:640px){
-            .hero{width:calc(100% - 32px) !important;margin:12px auto 0 !important;}
-            .hero>div{padding:70px 28px 52px !important;}
-            .hero>div>div[style*="gap:40px"]{gap:24px !important;}
-            .free-banner{flex-direction:column;}
-            .donate-card{padding:36px 24px;}
-            .weekly-banner{margin:0 16px;}
-            .join-premium-inner{padding:8px 12px;}
-            .join-premium-copy{font-size:0.8em;}
-        }
-        @media (min-width: 769px) {
-            body{background-attachment:fixed;}
-        }
-        @media (max-width: 1100px) {
-            .navbar-content { flex-wrap: nowrap; align-items: center; }
-            .nav-search-wrap { flex: 1; min-width: 0; max-width: 100%; }
-        }
-        @media (max-width: 768px) {
-            body{
-                background:#ffffff;
-                background-attachment:scroll;
-            }
-            body::before{
-                background:transparent;
-            }
-            .navbar-content {
-                display: grid;
-                grid-template-columns: auto auto 1fr auto;
-                grid-template-areas:
-                    "ham logo search actions";
-                align-items: center;
-                gap: 0 10px;
-            }
-            .navbar .hamburger { grid-area: ham; display: flex; margin-right: 0; }
-            .navbar .logo { grid-area: logo; justify-self: start; }
-            .nav-search-wrap { grid-area: search; width: 100%; max-width: none; }
-            .nav-actions { grid-area: actions; display: flex; justify-content: end; }
-        }
-        .nav-group { position: relative; }
-        .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
-        .nav-group-title:hover { background: rgba(0,82,155,0.08); }
-        .nav-group-items { display: none; padding-left: 12px; }
-        .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
-        .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
-        .nav-group-items a:hover { opacity: 1; color: #00529B; }
-        /* Skip link for accessibility */
-        .skip-link { position:absolute; left:-9999px; top:0; z-index:2000; background:#fbbf24; color:#0f172a; padding:10px 14px; font-weight:800; border-radius:0 0 8px 0; text-decoration:none; }
-        .skip-link:focus { left:0; outline:2px solid #0f172a; }
-        #main-content, .site-footer { color: var(--text); }
-    </style>
-</head>
-<body>
-<a href="#main-content" class="skip-link">Skip to main content</a>
-
-<!-- Navbar -->
-<div class="navbar">
-    <div class="navbar-content">
-        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
-        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/pl-logo.svg" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
-        <div class="nav-search-wrap">
-            <div class="nav-search" onclick="openSrch()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" placeholder="Search teams, leagues, props..." readonly onclick="openSrch()">
-            </div>
-        </div>
-        <div class="nav-actions">
-            <div class="acct-wrap">
-                <button class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </button>
-                <div class="acct-menu" id="acctMenu">
-                    {% if not is_premium %}
-                    <a href="/plans">Join Premium</a>
-                    {% endif %}
-                    {% if is_logged_in %}
-                    <a href="/logout">Sign Out</a>
-                    {% else %}
-                    <a href="/login">Sign In</a>
-                    <a href="/signup">Sign Up</a>
-                    {% endif %}
-                    <div class="acct-menu-divider"></div>
-                    <a href="/faq">Help</a>
-                </div>
-            </div>
-            {% if not is_premium %}
-            <a href="/plans" class="nav-cta-premium">Join Premium</a>
-            {% endif %}
-            {% if not is_logged_in %}
-            <a href="/signup" class="nav-cta">Get Started</a>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
-<div class="tv-drawer" id="tvDrawer">
-  <div class="tv-drawer-header">
-    <div class="tv-header-btns"><button class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
-    <button class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
-  </div>
-  <div class="tv-panels">
-    <div class="tv-panel visible" id="tvMain">
-      {% if not is_premium %}
-      <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
-      {% endif %}
-      <div class="tv-menu-list">
-        <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
-        <button class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
-        <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
-          <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'community\')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
-          <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'company\')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
-        </div>
-      </div>
-    </div>
-    <div class="tv-panel hidden-right" id="tvSub"></div>
-  </div>
-</div>
-
-<div class="srch-overlay" id="srchOverlay" onclick="closeSrchOutside(event)">
-  <div class="srch-box">
-    <div class="srch-input-row">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="srchInput" placeholder="Search teams, leagues, or matchups...">
-      <button class="srch-close" onclick="closeSrch()">&#x2715;</button>
-    </div>
-    <div class="srch-filters">
-      <button class="srch-filter active" data-s="all">All</button>
-      <button class="srch-filter" data-s="nba">NBA</button>
-      <button class="srch-filter" data-s="nfl">NFL</button>
-      <button class="srch-filter" data-s="mlb">MLB</button>
-      <button class="srch-filter" data-s="nhl">NHL</button>
-      <button class="srch-filter" data-s="ncaab">NCAAB</button>
-      <button class="srch-filter" data-s="ncaaf">NCAAF</button>
-      <button class="srch-filter" data-s="wnba">WNBA</button>
-      <button class="srch-filter" data-s="props">Props</button>
-    </div>
-    <div class="srch-items" id="srchItems"></div>
-  </div>
-</div>
-<!-- Hero -->
-<main id="main-content">
-<div class="hero" style="background:#0f172a;border:1px solid rgba(255,255,255,0.07);border-radius:16px;margin:18px auto 0;max-width:1200px;width:calc(100% - 48px);padding:0;">
-    <div style="max-width:1100px;margin:0 auto;padding:calc(130px + 0.5in) 60px calc(90px + 0.5in);text-align:left;">
-        <h1 class="hero-slide" style="animation:slideIn 0.8s ease-out both;">See The Edge First.</h1>
-        <p class="hero-subhead hero-slide" style="text-align:left;max-width:620px;animation:slideIn 0.8s ease-out 0.2s both;">Data-driven picks updated daily across every major sport.</p>
-        <div class="hero-slide" style="display:flex;gap:12px;margin-top:28px;animation:slideIn 0.8s ease-out 0.4s both;">
-            <a href="/plans" style="background:#e2e8f0;color:#0f172a;padding:15px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:1em;box-shadow:0 6px 20px rgba(0,0,0,0.25);">Get Started Free</a>
-        </div>
-        <p class="hero-slide" style="font-size:0.76em;color:rgba(255,255,255,0.38);margin-top:12px;animation:slideIn 0.8s ease-out 0.5s both;">Free Moneyline Plays &nbsp;&bull;&nbsp; No credit card required.</p>
-        <div class="hero-slide" style="display:flex;gap:40px;margin-top:64px;padding-top:40px;border-top:1px solid rgba(255,255,255,0.08);flex-wrap:wrap;animation:slideIn 0.8s ease-out 0.6s both;">
-            <div>
-                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">{{ games_graded }}+</div>
-                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">Games Graded</div>
-            </div>
-            <div>
-                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">{{ sports_covered }}</div>
-                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">Sports Covered</div>
-            </div>
-            <div>
-                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">5</div>
-                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">AI Models</div>
-            </div>
-            <div>
-                <div style="font-size:1.7em;font-weight:900;color:#00C076;line-height:1;">Daily</div>
-                <div style="font-size:0.72em;color:rgba(255,255,255,0.45);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:0.4px;">Updates</div>
-            </div>
-        </div>
-    </div>
-</div>
-<style>
-@keyframes slideIn{from{opacity:0;transform:translateX(-40px);}to{opacity:1;transform:translateX(0);}}
-.hero-slide{opacity:0;}
-</style>
-
-<!-- Today's AI Picks (live product preview) -->
-{% if todays_picks %}
-<div class="section" style="margin-top:1.5in;padding-top:24px;padding-bottom:8px;">
-    <div style="text-align:center;margin-bottom:8px;">
-        <span style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#047857;font-size:0.78em;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;padding:5px 14px;border-radius:999px;">
-            <span style="display:inline-block;width:8px;height:8px;background:#00C076;border-radius:50%;animation:pulseDot 1.6s infinite;"></span>
-            Winning Results Tracked Daily
-        </span>
-    </div>
-    <h2 class="section-title" style="margin-bottom:6px;">Top Value Picks Today</h2>
-    <p class="section-sub" style="color:#334155;">Ranked by edge quality, model agreement, and confidence</p>
-    <div style="display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;">
-        {% for tp in todays_picks %}
-        {% set _disp_pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
-        <a href="/{{ tp.slug }}" style="display:block;background:#ffffff;border:1px solid rgba(15,23,42,0.18);border-radius:14px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 22px rgba(15,23,42,0.12)';" onmouseout="this.style.transform='none';this.style.borderColor='rgba(15,23,42,0.18)';this.style.boxShadow='none';">
-            <div style="display:inline-block;font-size:0.68em;background:#fbbf24;color:#000;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-bottom:8px;padding:1px 6px;border-radius:4px;">{{ tp.sport }}</div>
-            <div style="font-weight:800;font-size:1.02em;color:#0f172a;line-height:1.35;margin-bottom:10px;">{{ tp.away }} <span style="color:#64748b;font-weight:600;">vs</span> {{ tp.home }}</div>
-            <div style="display:flex;align-items:baseline;gap:10px;">
-                <span style="color:#047857;font-size:0.9em;font-weight:800;">▶ {{ tp.pick }}</span>
-                <span style="color:#0f172a;font-weight:800;">{{ _disp_pct }}%</span>
-                <span style="color:#64748b;font-size:0.78em;font-weight:600;">Moneyline</span>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-    <div style="max-width:600px;margin:16px auto 0;text-align:center;">
-        <a href="/promo/top-picks-today" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 22px;border-radius:10px;background:#0f172a;color:#fff;font-weight:800;font-size:0.88em;text-decoration:none;border:1px solid rgba(15,23,42,0.4);box-shadow:0 4px 14px rgba(15,23,42,0.15);">Share Picks &#x2197;</a>
-        <div style="font-size:0.72em;color:#64748b;margin-top:8px;line-height:1.45;">Daily picks in one shareable page.</div>
-    </div>
-</div>
-<style>@keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:0.4;}}</style>
-{% endif %}
-
-<!-- Sports grid -->
-<div class="section">
-    <h2 class="section-title">Today’s Picks by Sport</h2>
-    <p class="section-sub" style="color:#334155;">Live model projections updated daily</p>
-    <div class="sports-grid">
-        {% for s in landing_sports %}
-        <a href="/{{ s.seo_slug }}" class="sport-card {% if s.is_live %}live{% endif %}" style="transition:transform .18s, border-color .18s, box-shadow .18s;" onmouseover="this.style.transform='translateY(-3px)';this.style.borderColor='rgba(251,191,36,0.5)';this.style.boxShadow='0 10px 28px rgba(0,0,0,0.35)';" onmouseout="this.style.transform='none';this.style.borderColor='';this.style.boxShadow='none';">
-            {% if s.is_live %}<div class="live-dot"></div>{% endif %}
-            <div class="sport-icon">{{ s.icon }}</div>
-            <div class="sport-name">{{ s.name }}</div>
-            <div class="sport-status {% if s.is_live %}live-text{% endif %}">{{ s.status }}</div>
-            <div style="margin-top:8px;font-size:0.72em;color:#334155;">Today’s projections available</div>
-            <div style="margin-top:4px;font-size:0.78em;color:#b45309;font-weight:700;">View Picks →</div>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- Model Performance -->
-<div class="section" style="padding-top:10px;padding-bottom:10px;">
-    <div style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:18px 20px;text-align:center;">
-        <h2 style="font-size:1.2rem;font-weight:900;color:#0f172a;margin:0 0 8px;">Model Performance</h2>
-        <p style="color:#334155;font-size:0.9em;line-height:1.7;margin:0 0 12px;">See completed-game performance by model and confidence bucket, with sample sizes and color-coded hit rates.</p>
-        {% if weekly_banner_messages %}
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;justify-content:center;">
-            {% for item in weekly_banner_messages[:3] %}
-            <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(15,23,42,0.14);background:#f8fafc;color:#0f172a;font-size:0.78em;font-weight:700;">
-                <span style="color:#00529B;">Live</span> {{ item.label }} {{ item.pct }} ({{ item.record }})
-            </span>
-            {% endfor %}
-        </div>
-        {% endif %}
-        <a href="/performance" style="display:inline-flex;align-items:center;justify-content:center;background:#00529B;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-size:0.88em;font-weight:800;">Open Model Performance</a>
-    </div>
-</div>
-
-<!-- Weekly banner -->
-{% if weekly_banner_messages %}
-<div class="weekly-banner" style="margin-top:30px;">
-    <div class="weekly-banner-label">Featured AI Model Results</div>
-    <div class="weekly-banner-lines">
-        <div class="weekly-banner-track">
-            {% for item in weekly_banner_messages %}
-            <div class="weekly-banner-line">
-                <span class="wb-title">{{ item.label }}</span>
-                <span class="wb-pct">{{ item.pct }}</span>
-                <span class="wb-rec">{{ item.record }}</span>
-            </div>
-            {% endfor %}
-            {% for item in weekly_banner_messages %}
-            <div class="weekly-banner-line">
-                <span class="wb-title">{{ item.label }}</span>
-                <span class="wb-pct">{{ item.pct }}</span>
-                <span class="wb-rec">{{ item.record }}</span>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Daily Results Box (above How It Works) -->
-<div style="max-width:720px;margin:44px auto 32px;padding:0 24px;">
-    <div style="position:relative;overflow:hidden;border-radius:16px;border:1px solid rgba(15,23,42,0.16);background:#ffffff;">
-        <div style="position:relative;padding:32px 28px;text-align:center;">
-            <h2 style="font-size:1.5em;font-weight:900;color:#92400e;">Daily Betting Results Report</h2>
-            <p style="color:#334155;font-size:0.9em;margin:10px 0 20px;max-width:480px;margin-left:auto;margin-right:auto;">Yesterday's performance across all sports and models &mdash; tracked, transparent, verified.</p>
-            <a href="/results" style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 32px;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.95em;box-shadow:0 4px 20px rgba(251,191,36,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">View Full Results</a>
-        </div>
-    </div>
-</div>
-<!-- How it works -->
-<div class="how-section">
-    <div class="section">
-        <h2 class="section-title">How It Works</h2>
-        <div class="steps-grid">
-            <div class="step">
-                <div class="step-num">1</div>
-                <div class="step-title">Live Data</div>
-                <div class="step-body">Real-time stats, matchups, and historical performance across 9 sports.</div>
-            </div>
-            <div class="step">
-                <div class="step-num">2</div>
-                <div class="step-title">AI Models</div>
-                <div class="step-body">5 independent models generate win probabilities for every game.</div>
-            </div>
-            <div class="step">
-                <div class="step-num">3</div>
-                <div class="step-title">Projections</div>
-                <div class="step-body">Predicted scores, spreads, and totals for each matchup.</div>
-            </div>
-            <div class="step">
-                <div class="step-num">4</div>
-                <div class="step-title">Consensus</div>
-                <div class="step-body">All models combine into one pick—highlighting real edges.</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Season Performance -->
-{% if units_banner_items %}
-<div class="section" style="padding-top:10px;padding-bottom:50px;">
-    <h2 class="section-title" style="margin-bottom:10px;">Season Performance</h2>
-    <p class="section-sub">All results tracked. No edits. Full transparency.</p>
-    <div class="units-marquee-wrap">
-        <div class="units-marquee-track">
-            {% for item in units_banner_items %}
-            <div class="units-pill {% if item.positive %}positive{% else %}negative{% endif %}">
-                <span class="up-label">{{ item.label }}</span>
-                <span class="up-units">{{ item.units }}</span>
-                <span class="up-rec">{{ item.record }}</span>
-            </div>
-            {% endfor %}
-            {% for item in units_banner_items %}
-            <div class="units-pill {% if item.positive %}positive{% else %}negative{% endif %}">
-                <span class="up-label">{{ item.label }}</span>
-                <span class="up-units">{{ item.units }}</span>
-                <span class="up-rec">{{ item.record }}</span>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- See What You’re Missing -->
-<div class="section" style="padding-top:10px;padding-bottom:30px;">
-    <h2 class="section-title">Free Picks vs. Full Access</h2>
-    <p class="section-sub" style="color:#334155;">The public sees picks. Members see the edge &mdash; spreads, totals, and scores.</p>
-    <div class="landing-pricing-row">
-        <div class="landing-price-card" style="background:#ffffff;border:1px solid rgba(15,23,42,0.22);border-radius:14px;padding:24px;">
-            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 4px;color:#0f172a;">Free Picks</h3>
-            <div style="font-size:0.82em;color:#047857;font-weight:800;margin:0 0 10px;">$0 &mdash; no credit card</div>
-            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#0f172a;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Moneyline picks across 9 sports</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model-generated win probability for every game</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Proprietary AI odds engine pricing</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Multi-model consensus signal strength</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#34d399;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Fully tracked historical performance</span></li>
-            </ul>
-            <a href="/nba-picks" class="landing-price-cta landing-price-cta--light" style="text-align:center;background:#fff;color:#0f172a;border:1px solid rgba(15,23,42,0.32);border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 2px 8px rgba(15,23,42,0.08);">View Free Picks</a>
-        </div>
-        <div class="landing-price-card" style="background:#fffdf5;border:2px solid #fbbf24;border-radius:14px;padding:24px;position:relative;">
-            <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:#fbbf24;color:#000;font-size:0.72em;font-weight:900;padding:4px 16px;border-radius:20px;white-space:nowrap;letter-spacing:0.3px;">FULL AI MODEL ACCESS</div>
-            <h3 style="font-size:1.05em;font-weight:800;margin:0 0 4px;color:#92400e;">Premium Edge</h3>
-            <div style="font-size:0.82em;font-weight:800;color:#0f172a;margin:0 0 6px;">
-                <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" style="color:#0f172a;text-decoration:none;">$4.99/week</a>
-                &nbsp;&bull;&nbsp;
-                <a href="/checkout/monthly" style="color:#64748b;text-decoration:none;font-weight:700;">$19.99/mo</a>
-                &nbsp;&bull;&nbsp;
-                <a href="/checkout/yearly" style="color:#64748b;text-decoration:none;font-weight:700;">$149.99/yr</a>
-            </div>
-            <ul class="landing-price-list" style="list-style:none;padding:0;margin:0;font-size:0.9em;color:#0f172a;line-height:1.65;display:flex;flex-direction:column;gap:10px;">
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Everything in Free, plus&hellip;</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Spread betting models (edge-based pricing)</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Over/Under totals with projected game flow</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Predicted final scores (simulation-based)</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Player props picks and projections</span></li>
-                <li style="display:flex;align-items:flex-start;gap:8px;"><span style="color:#fbbf24;flex-shrink:0;margin-top:2px;">&#10003;</span><span>Model performance page access</span></li>
-            </ul>
-            <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="landing-price-cta landing-price-cta--gold" style="text-align:center;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;border-radius:10px;font-weight:800;text-decoration:none;font-size:0.9em;box-shadow:0 4px 18px rgba(251,191,36,0.25);">Try a Week &mdash; $4.99</a>
-            <p style="text-align:center;font-size:0.75em;color:#64748b;margin:8px 0 0;">or <a href="/plans" style="color:#92400e;font-weight:700;text-decoration:none;">see monthly &amp; yearly plans</a></p>
-        </div>
-    </div>
-    <p style="max-width:860px;margin:14px auto 0;text-align:center;font-size:0.8em;color:#64748b;line-height:1.5;">All picks updated daily. Cancel any plan anytime.</p>
-    <style>
-        .landing-pricing-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:860px; margin:0 auto; }
-        .landing-price-card { display:flex; flex-direction:column; min-height:100%; }
-        .landing-price-card .landing-price-list { flex:1 1 auto; }
-        .landing-price-cta { display:flex; align-items:center; justify-content:center; margin-top:auto; min-height:48px; padding:0 22px; box-sizing:border-box; flex-shrink:0; }
-        @media (max-width: 768px) {
-            .landing-pricing-row { grid-template-columns:1fr !important; }
-        }
-    </style>
-</div>
-
-<!-- Why Different (above FAQ) -->
-<div class="section" style="padding-top:10px;padding-bottom:40px;">
-    <div style="max-width:900px;margin:0 auto;">
-        <h2 class="section-title">Why Our Picks Are Different</h2>
-        <div style="max-width:720px;margin:0 auto;color:#1A1D23;line-height:1.75;font-size:0.95em;text-align:left;">
-            <p style="margin-bottom:14px;">Most bettors rely on public trends, hot streaks, and guesswork. That&rsquo;s why they lose.</p>
-            <p style="margin-bottom:14px;">Our AI sports betting picks are built differently.</p>
-            <p style="margin-bottom:14px;">We use a proprietary odds engine powered by four independent AI prediction models to analyze matchups, player performance, advanced team metrics, and real-time market movement. Instead of following sportsbook lines, we generate our own probabilities to uncover +EV betting opportunities the market often misprices.</p>
-            <p style="margin-bottom:14px;">This approach allows us to identify value before it becomes obvious. While most bettors chase line movement, our system is designed to stay ahead of it.</p>
-            <p style="margin-bottom:14px;">Every pick is backed by data &mdash; not opinions, narratives, or social media hype. Our models continuously process new information, adjusting predictions based on injuries, form, and betting market shifts. The result is a smarter, more consistent approach to sports betting predictions.</p>
-            <p style="margin-bottom:14px;">Transparency is a core part of what we do. Every result is tracked publicly, with no cherry-picked wins or hidden losses. You can see exactly how the model performs over time, giving you full confidence in the system behind the picks.</p>
-            <p style="margin-bottom:14px;">If you&rsquo;re looking for the best betting picks today, built on real data and AI-driven analysis, you&rsquo;re in the right place.</p>
-            <p style="margin-bottom:0;">Our goal isn&rsquo;t just to win short-term &mdash; it&rsquo;s to create a long-term edge using disciplined, data-driven betting strategies that outperform the average bettor.</p>
-        </div>
-    </div>
-</div>
-
-<!-- FAQ moved to /faq — link is in the footer only. -->
-
-<!-- SEO Text -->
-<div class="section" style="padding-top:0;padding-bottom:20px;">
-    <p style="max-width:760px;margin:0 auto;font-size:0.92em;color:#334155;line-height:1.8;text-align:center;">Free AI sports picks and predictions for NBA, NFL, MLB, NHL, soccer, and more. Our models generate daily projections for moneyline, spreads, and totals using real-time data and multi-model consensus &mdash; every pick tracked with full transparency so you can evaluate real performance over time.</p>
-</div>
-
-<!-- SEO Internal Links -->
-<div class="section" style="padding-top:10px;padding-bottom:40px;text-align:center;">
-    <h3 style="font-size:1.15em;font-weight:800;margin-bottom:14px;color:#0f172a;">Browse AI Picks by League</h3>
-    <div class="browse-league-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;max-width:1100px;margin:0 auto;">
-        <a href="/mlb-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">MLB AI Picks &amp; Projections</a>
-        <a href="/nba-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NBA AI Picks &amp; Projections</a>
-        <a href="/nhl-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NHL AI Picks &amp; Projections</a>
-        <a href="/nfl-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NFL AI Picks &amp; Projections</a>
-        <a href="/soccer-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">Soccer AI Picks &amp; Projections</a>
-        <a href="/ncaab-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NCAAB AI Picks &amp; Projections</a>
-        <a href="/ncaaf-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NCAAF AI Picks &amp; Projections</a>
-        <a href="/ncaaw-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">NCAAW AI Picks &amp; Projections</a>
-        <a href="/wnba-picks" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">WNBA AI Picks &amp; Projections</a>
-        <a href="/daily-report" style="color:#0f172a;text-decoration:none;font-size:0.9em;font-weight:600;padding:8px 16px;border:1px solid rgba(15,23,42,0.2);border-radius:8px;background:#ffffff;">Daily Betting Results Report</a>
-    </div>
-    <style>
-        @media (max-width: 980px) {
-            .browse-league-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
-        }
-    </style>
-</div>
-
-</main>
-
-<!-- Footer -->
-<div class="share-strip">
-    <span class="share-strip-label">Share on social media</span>
-    <div class="share-icons">
-        <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
-        <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
-        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
-        <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
-        <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
-        <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
-        <a class="share-icon" href="https://api.whatsapp.com/send?text={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
-        <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
-    </div>
-</div>
-<footer class="site-footer">
-    <div class="footer-outer">
-        <div class="footer-brand"><a href="/" aria-label="Prediction Lab home" style="font-weight:900;font-size:1.05em;color:#0f172a;text-decoration:none;letter-spacing:0.2px;">Prediction Lab</a></div>
-        <div class="footer-columns-3">
-            <div class="footer-col-blk">
-                <div class="footer-heading">Company</div>
-                <a href="/plans">Plans &amp; pricing</a>
-                <a href="/tutorial">Tutorial</a>
-                <a href="/contact">Contact us</a>
-                <a href="/privacy">Privacy</a>
-                <a href="/terms">Terms</a>
-                <a href="/responsible-gaming">Responsible gaming</a>
-            </div>
-            <div class="footer-col-blk">
-                <div class="footer-heading">Product</div>
-                <a href="/faq">FAQ</a>
-                <a href="/daily-report">Daily results report</a>
-                <a href="/all-sports-results">All sports results</a>
-                <a href="/search">Search</a>
-                <a href="/performance">Model performance</a>
-                <a href="/ai-sports-betting-picks-today">AI picks today</a>
-                <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
-                <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
-            </div>
-            <div class="footer-col-blk">
-                <div class="footer-heading">Social</div>
-                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X (Twitter)</a>
-                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
-                <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
-                <a href="https://predictionlab.io" target="_blank" rel="noopener">TikTok</a>
-                <a href="https://predictionlab.io" target="_blank" rel="noopener">YouTube</a>
-            </div>
-        </div>
-        <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
-    </div>
-</footer>
-
-{% if not is_premium %}
-<div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
-    <div class="join-premium-inner">
-        <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
-        <div class="join-premium-actions">
-            <a href="/plans" class="join-premium-btn">Join Now</a>
-            <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<script>
-    var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
-    function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
-    function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
-    function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
-    function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
-    function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
-    function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
-    document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
-    var _srchFilter='all';
-    var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
-    function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
-    function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
-    function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
-    function renderSrchItems(q){var items=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&(!q||i.l.toLowerCase().includes(q.toLowerCase()));});var el=document.getElementById('srchItems');if(!items.length){el.innerHTML='<div class="srch-empty">No results found</div>';return;}el.innerHTML=items.map(function(i){return'<a class="srch-item" href="'+i.h+'"><span class="srch-item-label">'+i.l+'</span><span class="srch-item-sport">'+i.s.toUpperCase()+'</span></a>';}).join('');}
-    document.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('srchInput');if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}document.querySelectorAll('.srch-filter').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});this.classList.add('active');_srchFilter=this.dataset.s;renderSrchItems(document.getElementById('srchInput').value);});});});
-    document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
-    document.addEventListener('DOMContentLoaded', function() {
-        const premiumBar = document.getElementById('joinPremiumBar');
-        const searchForm = document.getElementById('navSearchForm');
-        const searchInput = document.getElementById('navSearchInput');
-        const autocompleteEl = document.getElementById('searchAutocomplete');
-        const resultsEl = document.getElementById('searchResults');
-        if (premiumBar) {
-            const showBar = function(){ premiumBar.style.display = 'block'; };
-            if ('requestIdleCallback' in window) requestIdleCallback(showBar, { timeout: 1800 });
-            else setTimeout(showBar, 1200);
-        }
-        const teams = [
-            { name: "Detroit Pistons", sport: "NBA", slug: "detroit-pistons" },
-            { name: "Detroit Red Wings", sport: "NHL", slug: "detroit-red-wings" },
-            { name: "Detroit Tigers", sport: "MLB", slug: "detroit-tigers" },
-            { name: "Boston Celtics", sport: "NBA", slug: "boston-celtics" },
-        ];
-        if (searchForm && resultsEl) {
-            let debounceTimer = null;
-            if (searchInput && autocompleteEl) {
-                searchInput.addEventListener('input', function() {
-                    const q = (searchInput.value || '').trim().toLowerCase();
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(() => {
-                        if (!q) {
-                            autocompleteEl.classList.remove('show');
-                            autocompleteEl.innerHTML = '';
-                            return;
-                        }
-                        const matches = teams.filter(t => t.name.toLowerCase().includes(q)).slice(0, 5);
-                        autocompleteEl.innerHTML = matches.map(t => `<div class="search-item" data-slug="${t.slug}"><span>${t.name}</span><small>${t.sport}</small></div>`).join('') || '<div class="search-item"><span>No team matches</span></div>';
-                        autocompleteEl.classList.add('show');
-                    }, 300);
-                });
-                autocompleteEl.addEventListener('click', function(e) {
-                    const item = e.target.closest('[data-slug]');
-                    if (!item) return;
-                    window.location.href = `/teams/${item.getAttribute('data-slug')}`;
-                });
-            }
-            searchForm.addEventListener('submit', async function(event) {
-                event.preventDefault();
-                const input = searchForm.querySelector('input[name="query"]');
-                const query = (input?.value || '').trim();
-                if (!query) {
-                    resultsEl.classList.remove('show');
-                    resultsEl.innerHTML = '';
-                    return;
-                }
-                resultsEl.classList.add('show');
-                resultsEl.innerHTML = '<p>Searching...</p>';
-                try {
-                    const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`, { headers: { 'Accept': 'application/json' } });
-                    const data = await resp.json();
-                    const modelLine = data.matched_model ? `<p><strong>Model:</strong> ${data.matched_model.public_name} -> ${data.matched_model.internal_name}${data.confidence_threshold ? ` (confidence >= ${data.confidence_threshold}%)` : ''}</p>` : '';
-                    const modelItems = (data.model_results || []).map(r => `<li>${r.sport}: ${r.record} (${r.accuracy}%)${r.filtered_games !== null && r.filtered_games !== undefined ? ` - ${r.filtered_games} games at threshold` : ''}</li>`).join('');
-                    const localTeamItems = (data.team_results || []).map(r => `<li>${r.sport}: ${r.away_team} vs ${r.home_team} (${r.game_date}) - pick: ${r.predicted_winner} (${r.win_probability}%)</li>`).join('');
-                    const espnItems = (data.espn_results || []).map(r => `<li>${r.sport}: ${r.away_team} at ${r.home_team} (${r.status})</li>`).join('');
-                    const routeLine = data.suggested_route ? `<p><strong>Suggested page:</strong> <a href="${data.suggested_route}">${data.suggested_route}</a></p>` : '';
-                    const empty = (!modelItems && !localTeamItems && !espnItems) ? '<p>No matches found yet. Try a team name, league, or model alias.</p>' : '';
-                    resultsEl.innerHTML = `
-                        <h3>Search Results</h3>
-                        ${modelLine}
-                        ${routeLine}
-                        ${modelItems ? `<p><strong>Model Performance</strong></p><ul>${modelItems}</ul>` : ''}
-                        ${localTeamItems ? `<p style="margin-top:10px;"><strong>Our Prediction Matches</strong></p><ul>${localTeamItems}</ul>` : ''}
-                        ${espnItems ? `<p style="margin-top:10px;"><strong>Latest ESPN Matchups</strong></p><ul>${espnItems}</ul>` : ''}
-                        ${empty}
-                    `;
-                } catch (_err) {
-                    resultsEl.innerHTML = '<p>Search temporarily unavailable. Please try again.</p>';
-                }
-            });
-        }
-    });
-    function scrollSports(direction) {
-        const scroller = document.getElementById('sportBubbles');
-        if (!scroller) return;
-        const step = scroller.clientWidth * 0.8;
-        scroller.scrollBy({ left: direction * step, behavior: 'smooth' });
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-        // banner is static list now
-    });
-</script>
-    <script src="/static/js/pl-header-logo.js" defer></script>
-
-</body>
-</html>
-    """, nhl_accuracy=nhl_accuracy, nfl_accuracy=nfl_accuracy, nba_accuracy=nba_accuracy,
-         games_graded=games_graded, predictions_logged=predictions_logged,
-         stripe_url=STRIPE_DONATION_URL, landing_sports=landing_sports,
-         sports_covered=sports_covered, weekly_banner_messages=weekly_banner_messages,
-         units_banner_items=units_banner_items,
-         seo_archive_links=seo_archive_links,
-         todays_picks=todays_picks,
-         landing_share_url=_landing_share_url,
-         landing_share_title=_landing_share_title,
-         landing_share_body=_landing_share_body,
-         landing_share_tweet=_landing_share_tweet)
+        log_site_visit('/')
+    except Exception:
+        pass
+    return render_template('homepage_preview.html', **_build_landing_preview_context())
 
 _SITE_DOMAIN = 'https://predictionlab.io'
 
@@ -16475,7 +15123,16 @@ def sport_results(sport):
             return "Sport not found", 404
         if sport == 'SOCCER' and not SOCCER_ENABLED:
             return "Soccer results are temporarily hidden while data loads.", 404
-        
+
+        # New individual sports (Tennis/UFC/Golf) render via their own module pipeline.
+        if sport in _SPORT_RESULTS_RENDERERS:
+            try:
+                _new_sport_html = _SPORT_RESULTS_RENDERERS[sport](sport)
+                if _new_sport_html:
+                    return _new_sport_html
+            except Exception as _new_res_e:
+                logger.exception(f"new-sport results render failed for {sport}: {_new_res_e}")
+
         if sport == 'NFL':
             weekly_results = None
             try:
@@ -17560,6 +16217,1084 @@ def api_get_sports():
             'icon': info['icon']
         } for code, info in SPORTS.items()]
     })
+
+
+
+
+# ============================================================================
+# NEW SPORTS (Tennis / UFC / Golf) — module wiring + ported results helpers
+# Guarded so an import failure can never stop the app from booting.
+# ============================================================================
+try:
+    from sports import SOCCER as _soccer_sport
+except Exception as _e_soc:
+    _soccer_sport = None
+    print(f"⚠️ soccer module for new-sports grading not loaded: {_e_soc}")
+try:
+    from sports import TENNIS as _tennis_sport
+    from sports import UFC as _ufc_sport
+    from sports import GOLF as _golf_sport
+    _INDIVIDUAL_SPORT_LOADERS = {
+        _tennis_sport.SPORT: _tennis_sport.load_upcoming_games,
+        _ufc_sport.SPORT: _ufc_sport.load_upcoming_games,
+        _golf_sport.SPORT: _golf_sport.load_upcoming_games,
+    }
+    _SPORT_RESULTS_RENDERERS = {
+        'TENNIS': _tennis_sport.render_sport_results_page,
+        'UFC': _ufc_sport.render_sport_results_page,
+        'GOLF': _golf_sport.render_sport_results_page,
+    }
+    print("✅ New sports (Tennis/UFC/Golf) modules loaded")
+except Exception as _e_newsports:
+    _SPORT_RESULTS_RENDERERS = {}
+    print(f"⚠️ New sports modules not loaded: {_e_newsports}")
+# ===== Ported helpers for new sports (Tennis/UFC/Golf) results path =====
+
+
+def _grade_efficiency_for_results(sport, daily_results) -> None:
+    """Per-game Efficiency ML grading on results cards (all grading sports)."""
+    if sport not in _eff_attach.EFFICIENCY_GRADING_SPORTS or not daily_results:
+        return
+    try:
+        _eff_attach.grade_efficiency_for_daily_results(sport, daily_results)
+    except Exception as exc:
+        logger.debug(f"[eff] results grading failed for {sport}: {exc}")
+
+
+def _load_sport_season_snapshot(sport, phase='regular'):
+    """Load newest committed season JSON for a sport (no live regrade)."""
+    snap_dir = _all_sports_snapshot_dir()
+    pattern = _os_v2.path.join(snap_dir, f'{sport}_*_{phase}.json')
+    paths = sorted(glob.glob(pattern), reverse=True)
+    for path in paths:
+        try:
+            with open(path, encoding='utf-8') as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.debug('Season snapshot read failed (%s): %s', path, exc)
+            continue
+        if isinstance(data, dict) and data.get('sport') == sport:
+            return _apply_wnba_snapshot_flip(data) if sport == 'WNBA' else data
+    return None
+
+
+def _merge_snapshot_efficiency_into_overall(overall_stats, sport):
+    """Promote frozen-snapshot model stats when live grading covered fewer games.
+
+    Previously this only promoted Efficiency, which left the OTHER models showing
+    a tiny live-graded sample next to a season-sized Efficiency record — e.g. the
+    soccer results page (league-scoped, ~5 graded games per model) showed
+    Efficiency 1630-436 but Grinder2/Takedown/Edge/XSharp/Consensus at 0-5. Now
+    EVERY model is promoted from the snapshot when the snapshot graded more games,
+    so the whole panel is consistent. For sports that already render from the
+    snapshot, current == snapshot, so this is a no-op."""
+    snap = _load_sport_season_snapshot(sport)
+    if not snap:
+        return overall_stats
+    snap_overall = snap.get('overall_stats') or {}
+    if not isinstance(snap_overall, dict):
+        return overall_stats
+    stats = dict(overall_stats or {})
+    # snap_overall is already WNBA-flipped by _load_sport_season_snapshot, so no
+    # extra flip here (that would double-flip).
+    for model_key, snap_m in snap_overall.items():
+        if not isinstance(snap_m, dict):
+            continue
+        snap_total = int(snap_m.get('total') or 0)
+        if snap_total <= 0:
+            continue
+        cur = (overall_stats or {}).get(model_key) or {}
+        cur_total = int(cur.get('total') or 0)
+        if snap_total <= cur_total:
+            continue
+        snap_correct = int(snap_m.get('correct') or 0)
+        stats[model_key] = {
+            'correct': snap_correct,
+            'total': snap_total,
+            'accuracy': round(snap_correct / snap_total * 100, 1) if snap_total else 0.0,
+        }
+    return stats
+
+
+def _results_date_query_active():
+    if not has_request_context():
+        return False
+    return bool((request.args.get('date') or '').strip())
+
+
+def _results_page_date_kwargs(daily_results, sorted_dates):
+    """Template kwargs for results date picker (?date= filter)."""
+    view_daily, view_dates, selected, available = _apply_results_date_filter(
+        daily_results, sorted_dates,
+    )
+    return {
+        'daily_results': view_daily,
+        'sorted_dates': view_dates,
+        'available_dates': available,
+        'selected_results_date': selected,
+    }
+
+
+def _start_background_score_sync(sport, sync_fn=None):
+    """Fire-and-forget score sync — never block page render on ESPN."""
+    sync_key = f'{sport}_results_score_sync_ts'
+    sync_entry = _SPORT_RESULTS_CACHE.get(sync_key)
+    sync_last_ts = sync_entry.get('ts') if isinstance(sync_entry, dict) else None
+    now_ts = _time.time()
+    if sync_last_ts is not None and (now_ts - sync_last_ts) < 600:
+        return
+    _SPORT_RESULTS_CACHE[sync_key] = {'ts': now_ts}
+    if sync_fn is None:
+        if sport == 'NHL':
+            sync_fn = update_nhl_scores
+        else:
+            sync_fn = lambda s=sport: update_espn_scores(s)
+    import threading as _thr
+    _thr.Thread(
+        target=sync_fn,
+        daemon=True,
+        name=f'score-sync-{sport}',
+    ).start()
+
+
+ALL_SPORTS_DASHBOARD_SPORTS = [
+    'NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'SOCCER',
+    'TENNIS', 'UFC', 'GOLF',
+]
+_ML_DASHBOARD_MODELS = (
+    ('glicko2', 'Grinder2'),
+    ('trueskill', 'Takedown'),
+    ('elo', 'Edge'),
+    ('xgboost', 'XSharp'),
+    ('ensemble', 'Consensus'),
+    ('efficiency', 'Efficiency'),
+)
+
+
+def _stale_page_cache_get(cache_dict: dict, cache_key: str, ttl: float):
+    """Return (html, needs_revalidate). Serves stale HTML up to 5× TTL under load."""
+    entry = cache_dict.get(cache_key)
+    if not isinstance(entry, dict):
+        return None, False
+    html = entry.get('html')
+    ts = entry.get('ts')
+    if not html or ts is None:
+        return None, False
+    age = _time.time() - ts
+    if age < ttl:
+        return html, False
+    if age < ttl * _STALE_PAGE_TTL_MULTIPLIER:
+        return html, True
+    return None, False
+
+
+def _stats_from_season_snapshot(snapshot):
+    if not snapshot:
+        return None
+    ou = snapshot.get('ou_summary') or {}
+    overall_stats = _normalize_overall_stats(snapshot.get('overall_stats') or {})
+    spread_total_stats = snapshot.get('spread_total_stats') or {}
+    old_perf = snapshot.get('season_perf') or {}
+    season_perf = _build_season_performance_summary(
+        overall_stats,
+        spread_total_stats,
+        scope_label=old_perf.get('scope_label'),
+        games_expected=snapshot.get('games_expected'),
+        games_in_scope=snapshot.get('games_in_scope'),
+    )
+    return {
+        'overall_stats': overall_stats,
+        'spread_total_stats': spread_total_stats,
+        'season_perf': season_perf,
+        'total_over': ou.get('total_over', 0),
+        'total_under': ou.get('total_under', 0),
+        'total_games_ou': ou.get('total_games_ou', 0),
+        'avg_total': ou.get('avg_total', 0),
+        'ou_bench': ou.get('ou_bench', 0),
+        'roi_total': snapshot.get('roi_total'),
+    }
+
+
+_stats_from_nhl_snapshot = _stats_from_season_snapshot
+
+
+# ===== Ported results helpers for new sports (transitive deps) =====
+
+
+def _apply_results_date_filter(daily_results, sorted_dates):
+    """Honor ?date= on results pages — single-day view when valid."""
+    available_dates = _all_result_dates_sorted(daily_results)
+    if not has_request_context():
+        return daily_results, sorted_dates, None, available_dates
+    raw = (request.args.get('date') or '').strip()
+    if not raw:
+        return daily_results, sorted_dates, None, available_dates
+    key = _resolve_results_date_key(daily_results, raw)
+    if not key:
+        return daily_results, sorted_dates, None, available_dates
+    games = daily_results.get(key, {}).get('games') or []
+    filtered = {key: {'games': list(games)}}
+    return filtered, [key], key, available_dates
+
+
+def _resolve_results_date_key(daily_results, date_str):
+    """Match ?date=YYYY-MM-DD to a daily_results bucket key."""
+    if not date_str or not daily_results:
+        return None
+    want = _normalize_game_date_key(date_str) or str(date_str).strip()
+    if want in daily_results and daily_results[want].get('games'):
+        return want
+    for dk, bucket in daily_results.items():
+        if not bucket.get('games'):
+            continue
+        if (_normalize_game_date_key(dk) or dk) == want:
+            return dk
+    return None
+
+
+def _all_result_dates_sorted(daily_results):
+    """All calendar buckets with games, newest first (for results date dropdown)."""
+    if not daily_results:
+        return []
+
+    def _date_key_dt(dk):
+        return parse_date(dk) or datetime.min
+
+    keys = []
+    for dk, bucket in daily_results.items():
+        if dk and bucket.get('games'):
+            keys.append(_normalize_game_date_key(dk) or dk)
+    return sorted(set(keys), key=_date_key_dt, reverse=True)
+
+
+def _dated_games_in_daily_results(daily_results, *, season_start_dt=None, before_dt=None):
+    """Sorted (date, date_key) pairs that have at least one graded game."""
+    dated = [
+        (parse_date(dk), dk)
+        for dk, bucket in daily_results.items()
+        if dk and bucket.get('games') and parse_date(dk)
+    ]
+    if season_start_dt:
+        dated = [(dt, dk) for dt, dk in dated if dt >= season_start_dt]
+    if before_dt is not None:
+        dated = [(dt, dk) for dt, dk in dated if dt <= before_dt]
+    dated.sort(key=lambda x: x[0], reverse=True)
+    return dated
+
+
+# ============================================================================
+
+# Ported footer pages: /blog, /edge-performance, /results/downloads
+
+# ============================================================================
+
+
+# --- constants/templates ---
+
+BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
+{% block title %}Prediction Lab Blog | predictionlab.io{% endblock %}
+{% block head_meta %}
+    <meta name="description" content="Daily sports news, AI-generated betting insights, game previews, market breakdowns, and model analysis from predictionlab.io.">
+    <link rel="canonical" href="{{ site_domain }}/blog">
+{% endblock %}
+{% block extra_styles %}
+    <style>
+        .blog-page{line-height:1.65}
+        a{color:#00529B;text-decoration:none;font-weight:800}
+        a:hover{text-decoration:underline}
+        .top{margin-bottom:26px}
+        .eyebrow{display:inline-flex;background:#fbbf24;color:#000;border-radius:999px;padding:4px 10px;font-size:0.74rem;font-weight:900;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:12px}
+        h1{font-size:clamp(2rem,5vw,3rem);line-height:1.08;margin-bottom:12px}
+        .sub{color:#334155;font-size:1rem;max-width:720px}
+        .posts{display:grid;gap:16px;margin-top:24px}
+        article{border:1px solid rgba(15,23,42,0.14);border-radius:14px;background:#fff;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,0.05)}
+        .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;color:#64748b;font-size:0.84rem;font-weight:700}
+        .tag{background:#f8fafc;border:1px solid rgba(15,23,42,0.12);color:#0f172a;border-radius:999px;padding:2px 8px;font-size:0.72rem;font-weight:900;text-transform:uppercase}
+        h2{font-size:1.22rem;line-height:1.35;margin-bottom:8px}
+        p{color:#334155}
+        .back{display:inline-flex;margin-bottom:24px}
+    </style>
+{% endblock %}
+{% block content %}
+<div class="blog-page">
+    <a class="back" href="/">← Back to PredictionLab</a>
+    <header class="top">
+        <span class="eyebrow">Daily articles</span>
+        <h1>Prediction Lab Blog</h1>
+        <p class="sub">Daily sports news, AI-generated betting insights, game previews, and model analysis — updated every day.</p>
+    </header>
+    <section class="posts" aria-label="Latest blog articles">
+        {% for post in posts %}
+        <article>
+            <div class="meta"><span class="tag">{{ post.sport_tag }}</span><time datetime="{{ post.date }}">{{ post.display_date }}</time></div>
+            <h2><a href="/blog/{{ post.slug }}">{{ post.title }}</a></h2>
+            <p>{{ post.excerpt }}</p>
+        </article>
+        {% endfor %}
+    </section>
+</div>
+{% endblock %}"""
+
+DOWNLOADS_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+        .dl-wrap{max-width:920px;margin:0 auto;padding:24px 0 60px;}
+        .dl-head{text-align:center;margin-bottom:24px;}
+        .dl-head h1{font-size:2em;color:#0f172a;margin-bottom:8px;}
+        .dl-head p{color:#334155;line-height:1.6;max-width:640px;margin:0 auto;}
+        .dl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+        .dl-card{background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:18px 18px 16px;box-shadow:0 4px 14px rgba(15,23,42,0.06);}
+        .dl-card-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+        .dl-icon{font-size:1.6em;}
+        .dl-name{font-weight:800;color:#0f172a;font-size:1.05em;}
+        .dl-btns{display:flex;flex-direction:column;gap:8px;}
+        .dl-btn{display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;font-weight:700;font-size:0.86em;border-radius:10px;padding:9px 12px;transition:background .15s,border-color .15s;}
+        .dl-btn.results{background:#00529B;color:#fff;}
+        .dl-btn.results:hover{background:#0466c4;}
+        .dl-btn.picks{background:#fff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);}
+        .dl-btn.picks:hover{border-color:#00529B;color:#00529B;}
+        .dl-allrow{text-align:center;margin-top:22px;}
+        .dl-all{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-weight:700;font-size:0.86em;color:#475569;border:1px solid rgba(15,23,42,0.2);border-radius:10px;padding:9px 16px;}
+        .dl-all:hover{border-color:#00529B;color:#00529B;}
+        .dl-note{text-align:center;color:#64748b;font-size:0.8em;margin-top:14px;}
+    """
+).replace('{% block content %}{% endblock %}', """
+    <div class="dl-wrap">
+        <div class="dl-head">
+            <h1>Download Results &amp; Picks (CSV)</h1>
+            <p>Export season-to-date model results or pick history for any sport as a CSV file — ready for Excel, Google Sheets, or your own analysis.</p>
+        </div>
+        <div class="dl-grid">
+            {% for s in download_sports %}
+            <div class="dl-card">
+                <div class="dl-card-top">
+                    <span class="dl-icon">{{ s.icon }}</span>
+                    <span class="dl-name">{{ s.name }}</span>
+                </div>
+                <div class="dl-btns">
+                    <a class="dl-btn results" href="/results/export.csv?sport={{ s.key }}">⬇ Results CSV</a>
+                    <a class="dl-btn picks" href="/picks/export.csv?sport={{ s.key }}">⬇ Picks CSV</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="dl-allrow">
+            <a class="dl-all" href="/results/export.csv">⬇ Download ALL sports (combined results CSV)</a>
+        </div>
+        <p class="dl-note">CSV downloads require a premium account. Files reflect completed, graded games.</p>
+    </div>
+""")
+
+EDGE_PERFORMANCE_TEMPLATE = BASE_TEMPLATE.replace(
+    '{% block extra_styles %}{% endblock %}',
+    """
+        .edge-wrap{max-width:960px;margin:0 auto;padding:18px 0 60px;}
+        .edge-head h1{font-size:1.7rem;color:#0f172a;margin:0 0 6px;}
+        .edge-head p{color:#475569;font-size:0.92rem;margin:0 0 16px;line-height:1.6;}
+        .edge-filters{display:flex;gap:10px;align-items:end;margin-bottom:18px;flex-wrap:wrap;}
+        .edge-filters select{min-width:160px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-weight:600;}
+        .edge-filters button{padding:10px 16px;border-radius:10px;border:none;background:#00529B;color:#fff;font-weight:800;cursor:pointer;}
+        .edge-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:18px;box-shadow:0 4px 16px rgba(15,23,42,0.06);margin-bottom:16px;}
+        .edge-card h2{font-size:1.05rem;color:#0f172a;margin:0 0 12px;}
+        .edge-table{width:100%;border-collapse:collapse;font-size:0.88rem;}
+        .edge-table th{text-align:left;padding:8px 10px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.5px;color:#64748b;border-bottom:2px solid #E0E4E8;}
+        .edge-table th:not(:first-child),.edge-table td:not(:first-child){text-align:center;}
+        .edge-table td{padding:9px 10px;border-bottom:1px solid #f1f5f9;color:#0f172a;}
+        .edge-table tr.small td{opacity:0.55;}
+        .wr-good{color:#059669;font-weight:800;}.wr-mid{color:#d97706;font-weight:800;}.wr-bad{color:#dc2626;font-weight:800;}
+        .roi-pos{color:#059669;font-weight:800;}.roi-neg{color:#dc2626;font-weight:800;}
+        .small-tag{font-size:0.68rem;color:#b45309;font-weight:700;margin-left:4px;}
+        .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+        .bar-label{width:70px;font-size:0.8rem;font-weight:700;color:#334155;flex-shrink:0;}
+        .bar-track{flex:1;background:#f1f5f9;border-radius:6px;height:22px;overflow:hidden;position:relative;}
+        .bar-fill{height:100%;border-radius:6px;}
+        .bar-val{width:90px;text-align:right;font-size:0.8rem;font-weight:700;flex-shrink:0;}
+        .edge-empty{color:#64748b;font-size:0.9rem;padding:20px;text-align:center;}
+    """
+).replace('{% block content %}{% endblock %}', """
+    <div class="edge-wrap">
+        <div class="edge-head">
+            <h1>Edge Value Performance</h1>
+            <p>How reliable is our Edge % signal? This shows the real win rate and ROI for completed picks at each edge level, per sport — so you can see whether higher edge has actually meant better results.</p>
+        </div>
+        <form method="GET" action="/edge-performance" class="edge-filters">
+            <label>Sport
+                <select name="sport" onchange="this.form.submit()">
+                    {% for s in sports %}<option value="{{ s }}" {% if s == league %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                </select>
+            </label>
+            <button type="submit">Apply</button>
+        </form>
+
+        {% if edge_perf.graded < 1 %}
+        <div class="edge-card"><div class="edge-empty">No completed {{ league }} picks have been graded yet. This page fills in automatically as games finish — no estimated or simulated numbers are shown.</div></div>
+        {% else %}
+        <div class="edge-card">
+            <h2>Edge Performance — {{ league }} ({{ edge_perf.graded }} graded picks)</h2>
+            <table class="edge-table">
+                <thead><tr><th>Edge Range</th><th>Win Rate</th><th>ROI</th><th>Sample Size</th></tr></thead>
+                <tbody>
+                {% for b in edge_perf.edge_table %}
+                    <tr class="{{ 'small' if b.small else '' }}">
+                        <td style="font-weight:700;">{{ b.bucket }}</td>
+                        <td>{% if b.win_rate is not none %}<span class="{{ 'wr-good' if b.win_rate>=55 else 'wr-mid' if b.win_rate>=50 else 'wr-bad' }}">{{ b.win_rate }}%</span>{% else %}—{% endif %}</td>
+                        <td>{% if b.roi is not none %}<span class="{{ 'roi-pos' if b.roi>0 else 'roi-neg' }}">{{ '+' if b.roi>0 else '' }}{{ b.roi }}%</span>{% else %}—{% endif %}</td>
+                        <td>{{ b.sample }}{% if b.small %}<span class="small-tag">⚠ small sample</span>{% endif %}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="edge-card">
+            <h2>Edge vs ROI</h2>
+            {% set maxabs = 1 %}
+            {% for b in edge_perf.edge_table %}{% if b.roi is not none and (b.roi|abs) > maxabs %}{% set maxabs = b.roi|abs %}{% endif %}{% endfor %}
+            {% for b in edge_perf.edge_table %}
+            <div class="bar-row">
+                <div class="bar-label">{{ b.bucket }}</div>
+                <div class="bar-track">
+                    {% if b.roi is not none %}<div class="bar-fill" style="width:{{ ((b.roi|abs) / maxabs * 100)|round(0,'floor') }}%;background:{{ '#059669' if b.roi>0 else '#dc2626' }};"></div>{% endif %}
+                </div>
+                <div class="bar-val">{% if b.roi is not none %}{{ '+' if b.roi>0 else '' }}{{ b.roi }}% ROI{% else %}no data{% endif %}</div>
+            </div>
+            {% endfor %}
+            <p style="color:#64748b;font-size:0.8rem;margin:8px 0 0;">Shows whether ROI scales with edge or breaks down at high edge values. Specific to {{ league }}.</p>
+        </div>
+
+        <div class="edge-card">
+            <h2>Edge Distribution</h2>
+            <p style="color:#64748b;font-size:0.82rem;margin:0 0 12px;">What share of completed {{ league }} picks fell into each edge range.</p>
+            {% for d in edge_perf.edge_distribution %}
+            <div class="bar-row">
+                <div class="bar-label">{{ d.bucket }}</div>
+                <div class="bar-track"><div class="bar-fill" style="width:{{ d.pct or 0 }}%;background:#2563eb;"></div></div>
+                <div class="bar-val">{{ d.pct if d.pct is not none else 0 }}% ({{ d.count }})</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+""")
+
+_BLOG_CACHE_TTL = 300
+
+_BLOG_NEWS_CACHE_TTL = 900
+
+_BLOG_POSTS_FILE = _os.path.join(_BASE_DIR, 'data', 'blog_posts.json')
+
+_CONF_BUCKETS = [
+    ("90-100%", 90, 1000), ("85-89%", 85, 90), ("80-84%", 80, 85),
+    ("75-79%", 75, 80), ("70-74%", 70, 75), ("65-69%", 65, 70),
+    ("Below 65%", -1, 65),
+]
+
+_EDGE_BUCKETS = [
+    ("0–5%", 0, 5), ("5–10%", 5, 10), ("10–20%", 10, 20),
+    ("20–30%", 20, 30), ("30–40%", 30, 40), ("40%+", 40, 1e9),
+]
+
+_EDGE_DIST_BUCKETS = [
+    ("0–10%", 0, 10), ("10–20%", 10, 20),
+    ("20–30%", 20, 30), ("30%+", 30, 1e9),
+]
+
+_ESPN_NEWS_FEEDS = [
+    ('MLB', 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/news'),
+    ('NBA', 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news'),
+    ('NFL', 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news'),
+    ('NHL', 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/news'),
+    ('WNBA', 'https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/news'),
+    ('NCAAB', 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/news'),
+    ('NCAAF', 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/news'),
+]
+
+_EV_BUCKETS = [
+    ("+30% and above", 30, 1e9), ("+20% to +30%", 20, 30),
+    ("+10% to +20%", 10, 20), ("0% to +10%", 0, 10),
+    ("Negative EV", -1e9, 0),
+]
+
+_PINNED_SPORTS_TRENDS_20260616 = [
+    {'query': 'emil andrae', 'traffic': '20K+', 'sport': 'NHL'},
+    {'query': 'france vs senegal', 'traffic': '10K+', 'sport': 'SOCCER'},
+    {'query': 'kyle calder', 'traffic': '10K+', 'sport': 'NHL'},
+    {'query': 'staal comments on marner trade', 'traffic': '10K+', 'sport': 'NHL'},
+    {'query': 'iran new zealand', 'traffic': '20K+', 'sport': 'SOCCER'},
+    {'query': 'elijah just', 'traffic': '20K+', 'sport': 'SOCCER'},
+    {'query': 'hockey night in canada', 'traffic': '2K+', 'sport': 'NHL'},
+    {'query': 'argentina vs algeria', 'traffic': '2K+', 'sport': 'SOCCER'},
+    {'query': 'algerie argentine', 'traffic': '2K+', 'sport': 'SOCCER'},
+    {'query': 'senegal', 'traffic': '2K+', 'sport': 'SOCCER'},
+    {'query': 'nhl trades', 'traffic': '1K+', 'sport': 'NHL'},
+    {'query': 'saudi arabia vs uruguay', 'traffic': '20K+', 'sport': 'SOCCER'},
+    {'query': 'iraq vs norway', 'traffic': '1K+', 'sport': 'SOCCER'},
+    {'query': 'new zealand vs sri lanka', 'traffic': '200+', 'sport': 'CRICKET'},
+    {'query': 'oilers interested in montembeault', 'traffic': '100+', 'sport': 'NHL'},
+]
+
+
+# --- helper functions ---
+
+def _blog_template_posts():
+    posts = _get_blog_posts(include_generated=True)
+    return [{**p, 'display_date': _blog_display_date(p)} for p in posts]
+
+def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
+    posts = _load_blog_posts_from_json()
+    if include_generated:
+        generated = _generate_daily_blog_post(todays_picks=todays_picks)
+        by_slug = {p['slug']: p for p in posts}
+        by_slug[generated['slug']] = generated
+        try:
+            today_dt = _blog_date_key(generated)
+            date_str = today_dt.strftime('%Y-%m-%d')
+            display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
+            for trend in _trend_items_for_blog(limit=15):
+                trend_post = _generate_trend_blog_post(trend, date_str, display_date)
+                by_slug.setdefault(trend_post['slug'], trend_post)
+        except Exception as exc:
+            logger.debug(f"Trend blog merge failed: {exc}")
+        posts = list(by_slug.values())
+    posts.sort(key=_blog_date_key, reverse=True)
+    return posts
+
+def _blog_display_date(post: dict) -> str:
+    dt = _blog_date_key(post)
+    if dt == datetime.min:
+        return str(post.get('date') or '').strip()
+    return dt.strftime('%B %d, %Y').replace(' 0', ' ')
+
+def _blog_date_key(post: dict):
+    raw = post.get('date') or post.get('published_at') or ''
+    raw = str(raw).strip()[:10]
+    try:
+        return datetime.strptime(raw, '%Y-%m-%d')
+    except Exception:
+        return datetime.min
+
+def _generate_daily_blog_post(today=None, todays_picks=None, news_items=None) -> dict:
+    try:
+        _tz = ZoneInfo('America/New_York')
+        today_dt = today or datetime.now(_tz)
+    except Exception:
+        today_dt = today or datetime.now()
+    date_str = today_dt.strftime('%Y-%m-%d')
+    display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
+    picks = todays_picks if todays_picks is not None else build_todays_top_picks()
+    news = news_items if news_items is not None else _fetch_espn_news_items(limit=4)
+    primary_sport = (news[0]['sport'] if news else None) or (picks[0]['sport'] if picks else 'Sports News')
+    slug = f"prediction-lab-blog-{date_str}"
+    title = f"Prediction Lab Blog: {display_date}"
+    if picks:
+        pick_bits = [
+            f"{p['sport']}: {p['pick']} over {p['away'] if p['pick'] == p['home'] else p['home']} ({p['prob']}%)"
+            for p in picks[:3]
+        ]
+        lead = "Today's betting board is led by " + '; '.join(pick_bits) + "."
+    else:
+        lead = "Today's betting board is focused on moneyline model agreement, market pricing, and completed-result transparency across active sports."
+    if news:
+        news_lead = (
+            "The sports news side of the board is being shaped by "
+            + '; '.join(f"{item['sport']}: {item['topic']}" for item in news[:3])
+            + "."
+        )
+    else:
+        news_lead = "The sports news side of the board is monitored through ESPN feeds when available, then connected back to model movement and market context."
+    body = [
+        news_lead,
+        lead,
+        *[_news_market_paragraph(item) for item in news[:3]],
+        "Prediction Lab connects sports news to betting context by comparing model win probabilities against market prices. The daily betting results report remains the verification layer, while this news and market breakdown gives crawlers and readers a concise explanation of what the models and the broader sports calendar are watching today.",
+        "The most important signal is not a single story or pick in isolation. It is the relationship between news, model confidence, sportsbook pricing, recent result tracking, and whether multiple model layers point in the same direction.",
+        "Check the sport prediction pages for the live cards and the daily results report for completed-game tracking. New daily sports news and betting analysis pages are generated server-side so the latest context stays crawlable and internally linked from the homepage.",
+    ]
+    excerpt = _blog_excerpt(' '.join(body), 3)
+    return {
+        'title': title,
+        'slug': slug,
+        'date': date_str,
+        'sport_tag': primary_sport,
+        'excerpt': excerpt,
+        'body': body,
+        'news_items': news,
+    }
+
+def _trend_items_for_blog(limit: int = 15) -> list[dict]:
+    items = []
+    today_key = datetime.now().strftime('%Y-%m-%d')
+    if today_key == '2026-06-16':
+        items.extend(_PINNED_SPORTS_TRENDS_20260616)
+    fetch = globals().get('_fetch_google_trends')
+    if callable(fetch):
+        try:
+            for tr in fetch() or []:
+                query = str(tr.get('query') or '').strip()
+                if query:
+                    items.append({
+                        'query': query,
+                        'traffic': str(tr.get('traffic') or '').strip(),
+                        'sport': _infer_trend_sport(query),
+                    })
+        except Exception as exc:
+            logger.debug(f"Google Trends blog fetch failed: {exc}")
+    out = []
+    seen = set()
+    for item in items:
+        query = str(item.get('query') or '').strip()
+        key = query.lower()
+        if not query or key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            'query': query,
+            'traffic': str(item.get('traffic') or '').strip(),
+            'sport': item.get('sport') or _infer_trend_sport(query),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+def _load_blog_posts_from_json() -> list[dict]:
+    now_ts = _time.time()
+    if _BLOG_CACHE.get('posts') and (now_ts - _BLOG_CACHE.get('ts', 0)) < _BLOG_CACHE_TTL:
+        return list(_BLOG_CACHE.get('posts') or [])
+    posts: list[dict] = []
+    try:
+        if _os.path.exists(_BLOG_POSTS_FILE):
+            with open(_BLOG_POSTS_FILE, encoding='utf-8') as fh:
+                payload = json.load(fh)
+            items = payload.get('posts', payload) if isinstance(payload, dict) else payload
+            if isinstance(items, list):
+                for raw in items:
+                    post = _normalize_blog_post(raw)
+                    if post:
+                        posts.append(post)
+    except Exception as exc:
+        logger.debug(f"Blog JSON load failed: {exc}")
+    posts.sort(key=_blog_date_key, reverse=True)
+    _BLOG_CACHE.update({'ts': now_ts, 'posts': posts})
+    return list(posts)
+
+def _generate_trend_blog_post(item: dict, date_str: str, display_date: str) -> dict:
+    query = str(item.get('query') or '').strip()
+    traffic = str(item.get('traffic') or '').strip()
+    sport = item.get('sport') or _infer_trend_sport(query)
+    title_query = query.title()
+    traffic_clause = f" after {traffic} Google searches" if traffic else ""
+    topic = f"{title_query}{traffic_clause}"
+    body = [
+        f"{topic} is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
+        f"For {sport} bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
+        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
+        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed.",
+    ]
+    return {
+        'title': f"{title_query}: Google Trends Betting Angle ({display_date})",
+        'slug': _slugify_blog(f"{query}-google-trends-betting-angle-{date_str}"),
+        'date': date_str,
+        'sport_tag': sport,
+        'excerpt': _blog_excerpt(' '.join(body), 3),
+        'body': body,
+        'news_items': [{
+            'sport': sport,
+            'topic': f"Google Trends: {query}",
+            'summary_hint': f"{traffic} searches in the last 24 hours" if traffic else 'Trending sports search in the last 24 hours',
+            'source': 'Google Trends',
+            'url': 'https://trends.google.com/trending?geo=US',
+        }],
+    }
+
+def _slugify_blog(value: str) -> str:
+    value = (value or '').strip().lower()
+    value = re.sub(r'[^a-z0-9]+', '-', value)
+    return value.strip('-') or 'prediction-lab-blog'
+
+def _blog_excerpt(text: str, max_sentences: int = 3) -> str:
+    clean = re.sub(r'\s+', ' ', (text or '')).strip()
+    if not clean:
+        return ''
+    parts = re.split(r'(?<=[.!?])\s+', clean)
+    return ' '.join(parts[:max_sentences]).strip()
+
+def _infer_trend_sport(query: str) -> str:
+    q = f" {str(query or '').lower()} "
+    if any(term in q for term in (' nhl ', ' hockey ', ' andrae ', ' calder ', ' staal ', ' marner ', ' oilers ', ' montembeault ')):
+        return 'NHL'
+    if any(term in q for term in (' sri lanka ', ' cricket ')):
+        return 'CRICKET'
+    if any(term in q for term in (' vs ', ' france ', ' senegal ', ' argentina ', ' algeria ', ' algerie ', ' uruguay ', ' saudi ', ' iraq ', ' norway ', ' iran ', ' zealand ', ' elijah just ')):
+        return 'SOCCER'
+    if any(term in q for term in (' us open ', ' golf ')):
+        return 'GOLF'
+    return 'Sports'
+
+def _normalize_blog_post(raw: dict):
+    if not isinstance(raw, dict):
+        return None
+    title = str(raw.get('title') or '').strip()
+    if not title:
+        return None
+    date_str = str(raw.get('date') or raw.get('published_at') or '').strip()[:10]
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+    body = raw.get('body') or raw.get('content') or []
+    if isinstance(body, str):
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', body) if p.strip()]
+    elif isinstance(body, list):
+        paragraphs = [str(p).strip() for p in body if str(p).strip()]
+    else:
+        paragraphs = []
+    excerpt = str(raw.get('excerpt') or '').strip()
+    if not excerpt:
+        excerpt = _blog_excerpt(' '.join(paragraphs), 3)
+    slug = str(raw.get('slug') or '').strip() or _slugify_blog(title)
+    sport_tag = str(raw.get('sport_tag') or raw.get('sport') or 'AI Picks').strip()
+    return {
+        'title': title,
+        'slug': _slugify_blog(slug),
+        'date': date_str,
+        'sport_tag': sport_tag,
+        'excerpt': excerpt,
+        'body': paragraphs,
+        'news_items': raw.get('news_items') if isinstance(raw.get('news_items'), list) else [],
+    }
+
+def _fetch_espn_news_items(limit=5) -> list[dict]:
+    now_ts = _time.time()
+    cached = _BLOG_NEWS_CACHE
+    if cached.get('items') and (now_ts - cached.get('ts', 0)) < _BLOG_NEWS_CACHE_TTL:
+        return list(cached.get('items') or [])[:limit]
+    items = []
+    seen = set()
+    for sport, url in _ESPN_NEWS_FEEDS:
+        try:
+            resp = requests.get(url, timeout=2.0, params={'limit': 4})
+            if resp.status_code != 200:
+                continue
+            payload = resp.json()
+            articles = payload.get('articles') or []
+            for article in articles:
+                headline = str(article.get('headline') or article.get('title') or '').strip()
+                if not headline:
+                    continue
+                key = headline.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                desc = str(article.get('description') or '').strip()
+                links = article.get('links') or {}
+                web_link = links.get('web') if isinstance(links, dict) else {}
+                href = web_link.get('href') if isinstance(web_link, dict) else None
+                items.append({
+                    'sport': sport,
+                    'topic': _blog_news_topic(headline),
+                    'summary_hint': _blog_excerpt(desc, 1),
+                    'source': 'ESPN',
+                    'url': href,
+                })
+                if len(items) >= limit:
+                    _BLOG_NEWS_CACHE.update({'ts': now_ts, 'items': items})
+                    return list(items)
+        except Exception as exc:
+            logger.debug(f"ESPN news feed failed for {sport}: {exc}")
+            continue
+    _BLOG_NEWS_CACHE.update({'ts': now_ts, 'items': items})
+    return list(items)[:limit]
+
+def _news_market_paragraph(item: dict) -> str:
+    sport = item.get('sport') or 'sports'
+    topic = item.get('topic') or 'a developing story'
+    return (
+        f"In {sport}, the news cycle is centered on {topic}. "
+        "From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted."
+    )
+
+def _blog_news_topic(headline: str) -> str:
+    topic = re.sub(r'\s+', ' ', (headline or '')).strip()
+    topic = re.sub(r'^[\'"]|[\'"]$', '', topic)
+    return topic[:140].rstrip()
+
+def _edge_performance(league: str) -> dict:
+    """Edge-bucketed historical performance (win-rate, ROI, sample) + edge
+    distribution. Built ONLY from completed, graded props with a stored edge
+    (the `ev` column). Never fabricated."""
+    conn = get_db_connection()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT result, ev, odds FROM player_prop_results "
+            "WHERE league=? AND result IN ('HIT','MISS') AND ev IS NOT NULL",
+            (league,)
+        ).fetchall()]
+    finally:
+        conn.close()
+
+    # Bucket by the MAGNITUDE of the edge (|ev|). The model's edge can point
+    # either way (especially for flipped sports), so the meaningful signal is
+    # "how strong is the edge", not its sign — this is what calibrates to win %.
+    for r in rows:
+        r["edge_mag"] = abs(float(r["ev"])) if r.get("ev") is not None else None
+
+    edge_table = _bucket_stats(rows, _EDGE_BUCKETS, "edge_mag")
+    total = len(rows)
+
+    # Edge distribution: what % of completed picks fall in each broad bucket.
+    dist = []
+    for label, lo, hi in _EDGE_DIST_BUCKETS:
+        n = sum(1 for r in rows
+                if r.get("edge_mag") is not None and
+                ((r["edge_mag"] >= lo) if hi >= 1e9 else (lo <= r["edge_mag"] < hi)))
+        dist.append({"bucket": label, "count": n,
+                     "pct": round(n / total * 100, 1) if total else None})
+
+    return {
+        "league": league,
+        "graded": total,
+        "edge_table": edge_table,
+        "edge_distribution": dist,
+    }
+
+def _bucket_stats(graded_rows, buckets, value_key):
+    """Win rate + sample + ROI per bucket for a metric (confidence, ev, edge).
+    A bucket whose upper bound is >= 1e9 is treated as open-ended (no max)."""
+    out = []
+    for label, lo, hi in buckets:
+        wins = total = 0
+        profit = 0.0
+        for r in graded_rows:
+            v = r.get(value_key)
+            if v is None:
+                continue
+            v = float(v)
+            in_bucket = (v >= lo) if hi >= 1e9 else (lo <= v < hi)
+            if not in_bucket:
+                continue
+            won = r["result"] == "HIT"
+            total += 1
+            if won:
+                wins += 1
+            profit += _american_profit(r.get("odds"), won)
+        out.append({
+            "bucket": label,
+            "win_rate": round(wins / total * 100, 1) if total else None,
+            "record": f"{wins}-{total - wins}",
+            "sample": total,
+            "roi": round(profit / total * 100, 1) if total else None,
+            "small": 0 < total < 15,
+        })
+    return out
+
+def _american_profit(odds, won: bool) -> float:
+    """Profit on a 1-unit stake at American odds (loss = -1)."""
+    if not won:
+        return -1.0
+    try:
+        o = float(odds)
+    except (TypeError, ValueError):
+        o = -110.0  # assume standard juice if odds missing
+    if o == 0:
+        o = -110.0
+    return (o / 100.0) if o > 0 else (100.0 / abs(o))
+
+
+# --- routes ---
+
+@app.route('/edge-performance')
+def edge_performance_page():
+    """Edge Value Performance — how the Edge % signal calibrates to real
+    completed-pick win rate and ROI, per sport."""
+    _PROP_LEAGUES = ['NBA', 'WNBA', 'NHL', 'MLB', 'NCAAB', 'NCAAW', 'NCAAF',
+                     'NFL', 'SOCCER']
+    league = (request.args.get('sport') or 'NBA').strip().upper()
+    if league not in _PROP_LEAGUES:
+        league = 'NBA'
+    try:
+        edge_perf = _edge_performance(league)
+    except Exception:
+        logger.exception('edge_performance_page failed')
+        edge_perf = {'league': league, 'graded': 0, 'edge_table': [], 'edge_distribution': []}
+    return render_template_string(
+        EDGE_PERFORMANCE_TEMPLATE,
+        page='edge-performance',
+        page_title='Edge Value Performance | predictionlab.io',
+        page_description='See how our Edge % signal has actually performed — real '
+                         'win rate and ROI by edge level for each sport.',
+        league=league,
+        sports=_PROP_LEAGUES,
+        edge_perf=edge_perf,
+    )
+
+@app.route('/downloads')
+@app.route('/results/downloads')
+def downloads_page():
+    """Per-sport CSV download hub (Results menu → Download CSV)."""
+    download_sports = [
+        {'key': k, 'name': SPORTS[k]['name'], 'icon': SPORTS[k].get('icon', '')}
+        for k in ALL_SPORTS_DASHBOARD_SPORTS if k in SPORTS
+    ]
+    return render_template_string(
+        DOWNLOADS_TEMPLATE,
+        page='downloads',
+        page_title='Download Results & Picks CSV by Sport | predictionlab.io',
+        page_description='Download season model results or pick history as a CSV for any '
+                         'sport — NBA, NHL, MLB, NFL, NCAAB, WNBA, Soccer and more.',
+        download_sports=download_sports,
+    )
+
+@app.route('/blog')
+def blog_archive_page():
+    posts = _blog_template_posts()
+    return render_template_string(
+        BLOG_ARCHIVE_TEMPLATE,
+        posts=posts,
+        site_domain=_SITE_DOMAIN,
+        page='blog',
+        page_title='Prediction Lab Blog | predictionlab.io',
+        page_description='Daily sports news, AI-generated betting insights, game previews, market breakdowns, and model analysis from predictionlab.io.',
+    )
+
+
+# Blog caches (annotated assignments missed by the bulk port)
+_BLOG_CACHE: dict = {'ts': 0, 'posts': []}
+_BLOG_NEWS_CACHE: dict = {'ts': 0, 'items': []}
+
+
+
+
+# ===== Homepage (research design) context builders =====
+
+def _build_landing_preview_context():
+    games_graded = 0
+    predictions_logged = 0
+    latest_graded_game = None
+    try:
+        _conn = get_db_connection()
+        games_graded = _conn.execute(
+            "SELECT COUNT(*) FROM games WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
+        ).fetchone()[0]
+        predictions_logged = _conn.execute(
+            "SELECT COUNT(*) FROM predictions"
+        ).fetchone()[0]
+        # Most recent CORRECT model pick. Derive the pick from win_probability
+        # (home-win prob): >=0.5 means the model favored home, else away. Most
+        # stored predictions have predicted_winner = NULL, so relying on that
+        # column made this fall back to a months-old game.
+        _graded_row = _conn.execute(
+            """
+            SELECT p.sport, p.game_date, p.away_team_id, p.home_team_id,
+                   p.win_probability, g.away_score, g.home_score
+            FROM predictions p
+            JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
+            WHERE g.home_score IS NOT NULL AND g.away_score IS NOT NULL
+              AND g.home_score != g.away_score
+              AND p.win_probability IS NOT NULL
+              AND (
+                (p.win_probability >= 0.5 AND g.home_score > g.away_score)
+                OR
+                (p.win_probability < 0.5 AND g.away_score > g.home_score)
+              )
+            ORDER BY date(g.game_date) DESC, g.id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if _graded_row:
+            _wp = float(_graded_row['win_probability'] or 0)
+            _wp_pct = _wp * 100 if _wp <= 1 else _wp
+            _home_pick = _wp_pct >= 50.0
+            latest_graded_game = {
+                'sport': _graded_row['sport'],
+                'date': _graded_row['game_date'],
+                'away': _graded_row['away_team_id'],
+                'home': _graded_row['home_team_id'],
+                'pick': _graded_row['home_team_id'] if _home_pick else _graded_row['away_team_id'],
+                'probability': round(_wp_pct if _home_pick else (100 - _wp_pct), 1),
+                'away_score': _graded_row['away_score'],
+                'home_score': _graded_row['home_score'],
+            }
+        _conn.close()
+    except Exception as _e:
+        logger.debug(f"Landing preview stats query failed: {_e}")
+
+    today = datetime.now()
+    landing_sports = []
+    for sport_key in _LANDING_SPORT_ORDER:
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        info = SPORTS.get(sport_key)
+        if not info:
+            continue
+        status_text, is_live = get_season_status(sport_key, today=today)
+        landing_sports.append({
+            'key': sport_key,
+            'seo_slug': SPORT_SEO_SLUGS.get(sport_key, sport_key.lower() + '-picks'),
+            'icon': info['icon'],
+            'name': _LANDING_SPORT_SHORT.get(sport_key, info['name']),
+            'status': status_text,
+            'is_live': is_live,
+        })
+    active_sport = next((s for s in landing_sports if s.get('is_live')), landing_sports[0] if landing_sports else None)
+
+    todays_picks = build_todays_top_picks()
+    blog_posts = [
+        {**post, 'display_date': _blog_display_date(post)}
+        for post in _get_blog_posts(include_generated=True, todays_picks=todays_picks)
+    ]
+    latest_blog_post = blog_posts[0] if blog_posts else None
+    preview_units = [
+        item for item in _get_sport_ml_units_banner()
+        if 'SOCCER' not in item.get('label', '').upper()
+    ]
+
+    return {
+        'games_graded': games_graded,
+        'predictions_logged': predictions_logged,
+        'landing_sports': landing_sports,
+        'active_sport_slug': active_sport.get('seo_slug') if active_sport else 'mlb-picks',
+        'active_sport_name': active_sport.get('name') if active_sport else 'MLB',
+        'sports_covered': len(landing_sports),
+        'weekly_banner_messages': list(_MANUAL_BANNER_ITEMS),
+        'units_banner_items': preview_units,
+        'todays_picks': todays_picks,
+        'latest_graded_game': latest_graded_game,
+        'latest_blog_post': latest_blog_post,
+        'recent_blog_posts': blog_posts[1:4],
+    }
+
+def _build_fast_landing_preview_context():
+    """Lightweight homepage context for production cold starts."""
+    today = datetime.now()
+    landing_sports = []
+    for sport_key in _LANDING_SPORT_ORDER:
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        info = SPORTS.get(sport_key)
+        if not info:
+            continue
+        status_text, is_live = get_season_status(sport_key, today=today)
+        landing_sports.append({
+            'key': sport_key,
+            'seo_slug': SPORT_SEO_SLUGS.get(sport_key, sport_key.lower() + '-picks'),
+            'icon': info['icon'],
+            'name': _LANDING_SPORT_SHORT.get(sport_key, info['name']),
+            'status': status_text,
+            'is_live': is_live,
+        })
+    active_sport = next((s for s in landing_sports if s.get('is_live')), landing_sports[0] if landing_sports else None)
+    return {
+        'games_graded': 0,
+        'predictions_logged': 0,
+        'landing_sports': landing_sports,
+        'active_sport_slug': active_sport.get('seo_slug') if active_sport else 'mlb-picks',
+        'active_sport_name': active_sport.get('name') if active_sport else 'MLB',
+        'sports_covered': len(landing_sports),
+        'weekly_banner_messages': list(_MANUAL_BANNER_ITEMS),
+        'units_banner_items': [],
+        'todays_picks': [],
+        'latest_graded_game': None,
+        'latest_blog_post': None,
+        'recent_blog_posts': [],
+    }
 
 if __name__ == '__main__':
     import os, socket
