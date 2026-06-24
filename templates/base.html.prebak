@@ -229,11 +229,46 @@
         @media(max-width:720px){.footer-columns-3{grid-template-columns:1fr;gap:22px;}}
     </style>
     {% block extra_styles %}{% endblock %}
-    <link rel="stylesheet" href="/static/css/research-theme.css">
-    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
 </head>
 <body>
-{% include "partials/research_header.html" %}
+<div class="navbar">
+    <div class="navbar-content">
+        <button type="button" class="hamburger" onclick="tvOpen()" aria-label="Open navigation menu" aria-expanded="false" id="navHamburger"><span></span><span></span><span></span></button>
+        <a href="/" class="logo pl-brand-logo" aria-label="Prediction Lab home" title="Home — hold the logo to download full quality"><img class="pl-brand-logo__img" src="/static/pl-logo.svg" alt="Prediction Lab" width="200" height="60" decoding="async" fetchpriority="high" data-pl-logo-hq="/static/PLLOGO.PNG" draggable="false"></a>
+        <div class="nav-search-wrap">
+            <div class="nav-search" onclick="openSrch()" role="search">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" placeholder="Search teams, leagues, or matchups..." readonly onclick="openSrch()" aria-label="Search">
+            </div>
+        </div>
+        <div class="nav-actions">
+            <div class="acct-wrap">
+                <button type="button" class="acct-btn" onclick="toggleAcctMenu(event)" aria-label="Account">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </button>
+                <div class="acct-menu" id="acctMenu">
+                    {% if not is_premium|default(false) %}
+                    <a href="/plans">Join Premium</a>
+                    {% endif %}
+                    {% if is_logged_in %}
+                    <a href="/logout">Sign Out</a>
+                    {% else %}
+                    <a href="/login">Sign In</a>
+                    <a href="/signup">Sign Up</a>
+                    {% endif %}
+                    <div class="acct-menu-divider"></div>
+                    <a href="/faq">Help</a>
+                </div>
+                {% if not is_premium|default(false) %}
+                <a href="/plans" class="nav-cta-premium">Join Premium</a>
+                {% endif %}
+                {% if not is_logged_in %}
+                <a href="/signup" class="nav-cta">Get Started</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
 <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
 <div class="tv-drawer" id="tvDrawer">
   <div class="tv-drawer-header">
@@ -318,7 +353,41 @@
         <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
     </div>
 </div>
-{% include "partials/site_directory_footer.html" %}
+<footer class="site-footer">
+    <div class="footer-outer">
+        <div class="footer-brand"><a href="/" class="logo">predictionlab.io</a></div>
+        <div class="footer-columns-3">
+            <div class="footer-col-blk">
+                <div class="footer-heading">Company</div>
+                <a href="/plans">Plans &amp; pricing</a>
+                <a href="/tutorial">Tutorial</a>
+                <a href="/contact">Contact us</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/responsible-gaming">Responsible gaming</a>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Product</div>
+                <a href="/faq">FAQ</a>
+                <a href="/daily-report">Daily results report</a>
+                <a href="/search">Search</a>
+                <a href="/performance">Model performance</a>
+                <a href="/ai-sports-betting-picks-today">AI picks today</a>
+                <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
+                <a href="/our-model-vs-sportsbooks">Model vs sportsbooks</a>
+            </div>
+            <div class="footer-col-blk">
+                <div class="footer-heading">Social</div>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X (Twitter)</a>
+                <a href="https://www.instagram.com/" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://facebook.com/predictionlab.io" target="_blank" rel="noopener">Facebook</a>
+                <a href="https://predictionlab.io" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://predictionlab.io" target="_blank" rel="noopener">YouTube</a>
+            </div>
+        </div>
+        <div class="footer-bottom">&copy; 2026 predictionlab.io. ALL RIGHTS RESERVED.</div>
+    </div>
+</footer>
 {% if not is_premium|default(false) %}
 <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
     <div class="join-premium-inner">

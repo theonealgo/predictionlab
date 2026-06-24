@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PredictionLab — Card Mockup (NOT LIVE)</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 32px 16px;
+    min-height: 100vh;
+}
+h2 {
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #64748b;
+    font-weight: 700;
+    margin-bottom: 14px;
+    padding-left: 2px;
+}
+.page-label {
+    max-width: 900px;
+    margin: 0 auto 28px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.84em;
+    font-weight: 700;
+    color: #92400e;
+}
+.grid {
+    max-width: 900px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+/* ─────────────────────────────────────────────
+   CARD BASE
+───────────────────────────────────────────── */
+.card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.05);
+    transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: 0 10px 28px rgba(15,23,42,0.12); }
+
+/* ─────────────────────────────────────────────
+   CARD HEADER  (sport badge + time/status)
+───────────────────────────────────────────── */
+.c-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px 0;
+}
+.c-badge {
+    font-size: 0.68em;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: rgba(15,23,42,0.07);
+    color: #334155;
+}
+.c-badge.nhl  { background: rgba(0,82,155,0.1);  color: #00529B; }
+.c-badge.mlb  { background: rgba(220,38,38,0.1);  color: #b91c1c; }
+.c-badge.nba  { background: rgba(234,88,12,0.1);  color: #c2410c; }
+.c-time {
+    font-size: 0.7em;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.c-time.live {
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.c-time.live::before {
+    content: '';
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #dc2626;
+    animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.4; transform:scale(0.8); }
+}
+
+/* ─────────────────────────────────────────────
+   MATCHUP ROW  (teams + probabilities)
+───────────────────────────────────────────── */
+.c-matchup {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 12px 10px 8px;
+    gap: 4px;
+}
+.c-team {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 8px 6px 10px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+}
+/* Highlighted pick side */
+.c-team.pick {
+    border-color: rgba(0,192,118,0.35);
+    background: rgba(0,192,118,0.05);
+}
+.c-logo {
+    width: 48px; height: 48px;
+    object-fit: contain;
+    margin-bottom: 5px;
+}
+/* Placeholder logo circle for mockup */
+.c-logo-ph {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3em;
+    margin-bottom: 5px;
+    font-weight: 900;
+    flex-shrink: 0;
+}
+.c-name {
+    font-size: 0.78em;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 6px;
+    line-height: 1.2;
+}
+/* Win probability */
+.c-prob {
+    font-size: 1.7em;
+    font-weight: 900;
+    color: #94a3b8;
+    line-height: 1;
+    margin-bottom: 3px;
+}
+.c-prob sup { font-size: 0.42em; font-weight: 700; vertical-align: super; }
+.c-team.pick .c-prob { color: #00C076; }
+/* Book moneyline */
+.c-ml {
+    font-size: 0.78em;
+    font-weight: 700;
+    color: #475569;
+}
+.c-ml.fav { color: #00C076; }
+.c-ml.dog { color: #92400e; }
+
+/* VS separator */
+.c-vs {
+    font-size: 0.72em;
+    font-weight: 900;
+    color: #cbd5e1;
+    text-align: center;
+    padding-bottom: 28px;
+    user-select: none;
+}
+
+/* ─────────────────────────────────────────────
+   EDGE + LINES STRIP  (below matchup)
+───────────────────────────────────────────── */
+.c-lines {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px 10px;
+    gap: 10px;
+    border-top: 1px solid #f1f5f9;
+    flex-wrap: wrap;
+}
+.c-line-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    flex: 1;
+    min-width: 70px;
+}
+.c-line-label {
+    font-size: 0.62em;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 700;
+    color: #94a3b8;
+}
+.c-line-val {
+    font-size: 0.84em;
+    font-weight: 800;
+    color: #0f172a;
+}
+.c-edge {
+    font-size: 0.78em;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+.c-edge.pos { background: rgba(0,192,118,0.14); color: #059669; }
+.c-edge.neg { background: rgba(239,68,68,0.1); color: #dc2626; }
+
+/* ─────────────────────────────────────────────
+   FINAL SCORE strip
+───────────────────────────────────────────── */
+.c-final-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 6px 14px 10px;
+    border-top: 1px solid #f1f5f9;
+}
+.c-final-team {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88em;
+    font-weight: 700;
+    color: #334155;
+}
+.c-final-score {
+    font-size: 1.3em;
+    font-weight: 900;
+    color: #0f172a;
+}
+.c-final-team.winner .c-final-score { color: #00C076; }
+.c-final-sep { font-size: 0.72em; color: #cbd5e1; font-weight: 700; }
+
+/* ─────────────────────────────────────────────
+   VIEW DETAILS  (expand / collapse)
+───────────────────────────────────────────── */
+.c-details {
+    border-top: 1px solid #e2e8f0;
+}
+.c-details summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 14px;
+    font-size: 0.74em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+}
+.c-details summary::-webkit-details-marker { display: none; }
+.c-details summary::after { content: '▾'; font-size: 1em; transition: transform 0.2s; }
+.c-details[open] summary { color: #00529B; }
+.c-details[open] summary::after { transform: rotate(-180deg); }
+.c-details-body {
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+/* ── Odds table ── */
+.det-section { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
+.det-title {
+    font-size: 0.64em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+.det-table { width: 100%; border-collapse: collapse; font-size: 0.78em; }
+.det-table th {
+    text-align: left; padding: 5px 6px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.3px;
+    color: #94a3b8; font-weight: 700;
+}
+.det-table td { padding: 6px 6px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: #334155; }
+.det-table tr:last-child td { border-bottom: none; }
+.det-table .col-books { color: #0f766e; }
+.det-table .col-pl    { color: #92400e; }
+.det-table .col-xs    { color: #1d4ed8; }
+.det-table .val-books { color: #0f766e; }
+.det-table .val-pl    { color: #92400e; }
+.det-table .val-xs    { color: #1d4ed8; }
+.det-table .mkt       { color: #94a3b8; font-size:0.72em; text-transform:uppercase; }
+
+/* ── Model confidence grid ── */
+.model-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    padding: 10px 14px 12px;
+}
+@media(max-width:360px){ .model-grid { grid-template-columns: repeat(3,1fr); } }
+.model-box {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 3px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.model-box.consensus { border-color: rgba(251,191,36,0.5); background: rgba(251,191,36,0.08); }
+.model-name { font-size: 0.6em; font-weight: 700; text-transform: uppercase; color: #0f172a; line-height: 1.2; }
+.model-pct  { font-size: 0.92em; font-weight: 900; color: #0f172a; }
+.model-pick { font-size: 0.58em; font-weight: 700; padding: 1px 4px; border-radius: 4px; }
+.model-pick.home { color: #059669; background: rgba(5,150,105,0.12); }
+.model-pick.away { color: #92400e; background: rgba(146,64,14,0.10); }
+.model-det  { font-size: 0.62em; padding: 7px 14px 10px; color: #475569; display: flex; gap: 16px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; }
+.model-det span { display: flex; flex-direction: column; }
+.model-det b { font-size: 1.1em; color: #0f172a; }
+
+/* ─────────────────────────────────────────────
+   LIVE CARD EXTRAS
+───────────────────────────────────────────── */
+.c-live-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(220,38,38,0.06);
+    border-top: 1px solid rgba(220,38,38,0.15);
+    padding: 5px 14px;
+    font-size: 0.72em;
+    font-weight: 700;
+    color: #dc2626;
+}
+.c-live-score { font-size: 1.15em; font-weight: 900; color: #0f172a; }
+</style>
+</head>
+<body>
+
+<div class="page-label">⚠️ MOCKUP ONLY — not live, not part of website. For design approval only.</div>
+
+<div style="max-width:900px;margin:0 auto 24px;">
+    <h2>Upcoming Game Card — NHL</h2>
+</div>
+
+<div class="grid">
+
+<!-- ══════════════════════════════════════════
+     CARD 1 — UPCOMING  (Predictions)
+══════════════════════════════════════════ -->
+<div class="card">
+    <div class="c-header">
+        <span class="c-badge nhl">🏒 NHL</span>
+        <span class="c-time">Tonight · 7:00 PM ET</span>
+    </div>
+
+    <div class="c-matchup">
+        <!-- Away: Canadiens — not the pick -->
+        <div class="c-team">
+            <img class="c-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png" alt="MTL" onerror="this.style.display='none'">
+            <div class="c-name">Canadiens</div>
+            <div class="c-prob">39<sup>%</sup></div>
+            <div class="c-ml dog">+155</div>
+        </div>
+
+        <div class="c-vs">@</div>
+
+        <!-- Home: Hurricanes — the pick (Consensus 60.4%) -->
+        <div class="c-team pick">
+            <img class="c-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/car.png" alt="CAR" onerror="this.style.display='none'">
+            <div class="c-name">Hurricanes</div>
+            <div class="c-prob">60<sup>%</sup></div>
+            <div class="c-ml fav">-190</div>
+        </div>
+    </div>
+
+    <!-- Lines strip -->
+    <div class="c-lines">
+        <div class="c-line-item">
+            <div class="c-line-label">Puck Line</div>
+            <div class="c-line-val">CAR -1.5</div>
+        </div>
+        <div class="c-line-item">
+            <div class="c-line-label">Total</div>
+            <div class="c-line-val">O/U 5.5</div>
+        </div>
+        <div class="c-edge pos">+4.8% Edge</div>
+    </div>
+
+    <!-- View Details -->
+    <details class="c-details">
+        <summary>View Details</summary>
+        <div class="c-details-body">
+
+            <!-- Odds table -->
+            <div class="det-section">
+                <div class="det-title">Odds &amp; Lines</div>
+                <table class="det-table">
+                    <thead>
+                        <tr>
+                            <th>Market</th>
+                            <th class="col-books">Books</th>
+                            <th class="col-pl">PL Model</th>
+                            <th class="col-xs">XSharp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="mkt">Puck Line</td>
+                            <td class="val-books">CAR -1.5</td>
+                            <td class="val-pl">MTL -0.5</td>
+                            <td class="val-xs">MTL -0.5</td>
+                        </tr>
+                        <tr>
+                            <td class="mkt">Total</td>
+                            <td class="val-books">5.5</td>
+                            <td class="val-pl">6.5</td>
+                            <td class="val-xs">6.5</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Model confidence -->
+            <div class="det-title" style="padding:10px 14px 0;">Model Confidence</div>
+            <div class="model-grid">
+                <div class="model-box">
+                    <div class="model-name">Grinder2</div>
+                    <div class="model-pct">55.9%</div>
+                    <div class="model-pick home">CAR</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">Takedown</div>
+                    <div class="model-pct">55.6%</div>
+                    <div class="model-pick home">CAR</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">Edge</div>
+                    <div class="model-pct">50.0%</div>
+                    <div class="model-pick away">MTL</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">XSharp</div>
+                    <div class="model-pct">77.7%</div>
+                    <div class="model-pick home">CAR</div>
+                </div>
+                <div class="model-box consensus">
+                    <div class="model-name">Consensus</div>
+                    <div class="model-pct">60.4%</div>
+                    <div class="model-pick home">CAR ⭐</div>
+                </div>
+            </div>
+
+            <!-- Footer details -->
+            <div class="model-det">
+                <span><div style="color:#94a3b8;font-size:0.68em;text-transform:uppercase;">EV</div><b style="color:#059669;">+4.8%</b></span>
+                <span><div style="color:#94a3b8;font-size:0.68em;text-transform:uppercase;">Total EV</div><b>—</b></span>
+                <span><div style="color:#94a3b8;font-size:0.68em;text-transform:uppercase;">H2H Last 10</div><b>6.5 (7g)</b></span>
+            </div>
+        </div>
+    </details>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     CARD 2 — LIVE GAME
+══════════════════════════════════════════ -->
+<div class="card">
+    <div class="c-header">
+        <span class="c-badge nhl">🏒 NHL</span>
+        <span class="c-time live">LIVE · 2nd · 8:21</span>
+    </div>
+
+    <!-- Live score bar -->
+    <div class="c-live-bar">
+        <span>In-game probability updating</span>
+        <span class="c-live-score" id="live-score">CAR 2 — MTL 0</span>
+    </div>
+
+    <div class="c-matchup">
+        <div class="c-team">
+            <img class="c-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png" alt="MTL" onerror="this.style.display='none'">
+            <div class="c-name">Canadiens</div>
+            <div class="c-prob" id="live-away-pct">18<sup>%</sup></div>
+            <div class="c-ml" style="color:#94a3b8;">Live</div>
+        </div>
+
+        <div class="c-vs">@</div>
+
+        <div class="c-team pick">
+            <img class="c-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/car.png" alt="CAR" onerror="this.style.display='none'">
+            <div class="c-name">Hurricanes</div>
+            <div class="c-prob" id="live-home-pct">82<sup>%</sup></div>
+            <div class="c-ml" style="color:#94a3b8;">Live</div>
+        </div>
+    </div>
+
+    <div class="c-lines">
+        <div class="c-line-item">
+            <div class="c-line-label">Period</div>
+            <div class="c-line-val">2nd</div>
+        </div>
+        <div class="c-line-item">
+            <div class="c-line-label">Time</div>
+            <div class="c-line-val" id="live-clock">8:21</div>
+        </div>
+        <div class="c-edge pos" id="live-edge">+22% Edge</div>
+    </div>
+
+    <details class="c-details">
+        <summary>View Details</summary>
+        <div class="c-details-body">
+            <div class="det-section">
+                <div class="det-title">Pre-game Lines (Books)</div>
+                <table class="det-table">
+                    <tbody>
+                        <tr><td class="mkt">Moneyline</td><td>CAR -190 / MTL +155</td></tr>
+                        <tr><td class="mkt">Puck Line</td><td>CAR -1.5</td></tr>
+                        <tr><td class="mkt">Total</td><td>O/U 5.5</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="model-grid">
+                <div class="model-box">
+                    <div class="model-name">Grinder2</div>
+                    <div class="model-pct">55.9%</div>
+                    <div class="model-pick home">CAR ✅</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">Takedown</div>
+                    <div class="model-pct">55.6%</div>
+                    <div class="model-pick home">CAR ✅</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">Edge</div>
+                    <div class="model-pct">50.0%</div>
+                    <div class="model-pick away">MTL ❌</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">XSharp</div>
+                    <div class="model-pct">77.7%</div>
+                    <div class="model-pick home">CAR ✅</div>
+                </div>
+                <div class="model-box consensus">
+                    <div class="model-name">Consensus</div>
+                    <div class="model-pct">60.4%</div>
+                    <div class="model-pick home">CAR ✅ ⭐</div>
+                </div>
+            </div>
+        </div>
+    </details>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     CARD 3 — FINAL  (Results)
+══════════════════════════════════════════ -->
+<div class="card">
+    <div class="c-header">
+        <span class="c-badge nhl">🏒 NHL</span>
+        <span class="c-time" style="color:#00C076;">FINAL</span>
+    </div>
+
+    <div class="c-matchup">
+        <!-- Away: Canadiens — lost -->
+        <div class="c-team">
+            <img class="c-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png" alt="MTL" onerror="this.style.display='none'">
+            <div class="c-name">Canadiens</div>
+            <div class="c-prob" style="color:#0f172a;font-size:1.4em;">0</div>
+        </div>
+
+        <div class="c-vs" style="padding-bottom:0;">—</div>
+
+        <!-- Home: Hurricanes — won -->
+        <div class="c-team pick">
+            <img class="c-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/car.png" alt="CAR" onerror="this.style.display='none'">
+            <div class="c-name">Hurricanes</div>
+            <div class="c-prob" style="font-size:1.4em;">4</div>
+        </div>
+    </div>
+
+    <div class="c-lines" style="border-top:1px solid #f1f5f9;">
+        <div class="c-line-item">
+            <div class="c-line-label">Pick</div>
+            <div class="c-line-val" style="color:#059669;">CAR ✅</div>
+        </div>
+        <div class="c-line-item">
+            <div class="c-line-label">Total</div>
+            <div class="c-line-val">4 (U 5.5 ✅)</div>
+        </div>
+        <div class="c-edge pos">+4.8% pre-game</div>
+    </div>
+
+    <details class="c-details">
+        <summary>View Details</summary>
+        <div class="c-details-body">
+            <div class="model-grid">
+                <div class="model-box">
+                    <div class="model-name">Grinder2</div>
+                    <div class="model-pct">55.9%</div>
+                    <div class="model-pick home">CAR ✅</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">Takedown</div>
+                    <div class="model-pct">55.6%</div>
+                    <div class="model-pick home">CAR ✅</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">Edge</div>
+                    <div class="model-pct">50.0%</div>
+                    <div class="model-pick away">MTL ❌</div>
+                </div>
+                <div class="model-box">
+                    <div class="model-name">XSharp</div>
+                    <div class="model-pct">77.7%</div>
+                    <div class="model-pick home">CAR ✅</div>
+                </div>
+                <div class="model-box consensus">
+                    <div class="model-name">Consensus</div>
+                    <div class="model-pct">60.4%</div>
+                    <div class="model-pick home">CAR ✅ ⭐</div>
+                </div>
+            </div>
+            <div class="model-det">
+                <span><div style="color:#94a3b8;font-size:0.68em;text-transform:uppercase;">Spread</div><b>MTL +1.5 ❌</b></span>
+                <span><div style="color:#94a3b8;font-size:0.68em;text-transform:uppercase;">Total</div><b>Under 5.5 ✅</b></span>
+                <span><div style="color:#94a3b8;font-size:0.68em;text-transform:uppercase;">H2H Avg</div><b>6.5 (7g)</b></span>
+            </div>
+        </div>
+    </details>
+</div>
+
+</div><!-- /grid -->
+
+<!-- Simulate live probability drift for demo -->
+<script>
+(function() {
+    // Dummy simulation: probabilities drift slightly every 4 seconds
+    let home = 82;
+    function tick() {
+        const delta = (Math.random() - 0.48) * 3;
+        home = Math.min(97, Math.max(55, home + delta));
+        const away = 100 - Math.round(home);
+        const h = Math.round(home);
+        const el_h = document.getElementById('live-home-pct');
+        const el_a = document.getElementById('live-away-pct');
+        const el_e = document.getElementById('live-edge');
+        if (el_h) el_h.innerHTML = h + '<sup>%</sup>';
+        if (el_a) el_a.innerHTML = away + '<sup>%</sup>';
+        if (el_e) el_e.textContent = '+' + (h - 60).toFixed(1) + '% Edge';
+        setTimeout(tick, 4000);
+    }
+    setTimeout(tick, 4000);
+})();
+</script>
+
+</body>
+</html>

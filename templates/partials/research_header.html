@@ -1,0 +1,216 @@
+<header class="pl2-header">
+    <button type="button" class="pl2-burger" id="navHamburger" onclick="if(window.tvToggle){tvToggle();return false;}if(window.tvOpen){tvOpen();return false;}" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+        <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav">
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Picks</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/nba-picks">NBA</a>
+                <a href="/nfl-picks">NFL</a>
+                <a href="/mlb-picks">MLB</a>
+                <a href="/nhl-picks">NHL</a>
+                {% if soccer_enabled|default(false) %}<a href="/soccer-picks">Soccer</a>{% endif %}
+                <a href="/ncaab-picks">NCAAB</a>
+                <a href="/ncaaf-picks">NCAAF</a>
+                <a href="/ncaaw-picks">NCAAW</a>
+                <a href="/wnba-picks">WNBA</a>
+                <a href="/tennis-picks">Tennis</a>
+                <a href="/ufc-picks">UFC</a>
+                <a href="/golf-picks">Golf</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Models</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/performance">Model Performance</a>
+                <a href="/edge-performance">Edge Performance</a>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
+                <a href="/tutorial">Tutorial</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Results</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/nba-results">NBA</a>
+                <a href="/nfl-results">NFL</a>
+                <a href="/mlb-results">MLB</a>
+                <a href="/nhl-results">NHL</a>
+                {% if soccer_enabled|default(false) %}<a href="/soccer-results">Soccer</a>{% endif %}
+                <a href="/ncaab-results">NCAAB</a>
+                <a href="/ncaaf-results">NCAAF</a>
+                <a href="/ncaaw-results">NCAAW</a>
+                <a href="/wnba-results">WNBA</a>
+                <a href="/tennis-results">Tennis</a>
+                <a href="/daily-report">Daily Results</a>
+                <a href="/edge-performance">Edge Performance</a>
+                <a href="/results/downloads">Download CSV</a>
+            </div>
+        </div>
+        <a href="/blog">Blog</a>
+        <a href="/plans">Pricing</a>
+    </nav>
+    <div class="pl2-header-actions">
+        <a class="pl2-search" href="/search" onclick="if(window.openSrch){openSrch();return false;}" aria-label="Search" title="Search teams, leagues, props">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </a>
+        {# ACCOUNT MENU: one compact control for login, signup, and signout. #}
+        <div class="pl2-account">
+            <button class="pl2-account-button" type="button" aria-label="Account menu" aria-expanded="false" aria-controls="pl2AccountMenu">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21a8 8 0 0 1 16 0"></path>
+                </svg>
+            </button>
+            <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
+                {% if is_logged_in|default(false) %}
+                <a href="/logout">Sign Out</a>
+                {% else %}
+                <a href="/login">Login</a>
+                <a href="/signup">Sign Up</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</header>
+<div class="pl-july-offer" id="plJulyOffer" role="dialog" aria-modal="true" aria-labelledby="plJulyOfferTitle" hidden>
+    <button class="pl-july-offer__veil" type="button" data-july-offer-close aria-label="Close July offer"></button>
+    <div class="pl-july-offer__card">
+        <button class="pl-july-offer__close" type="button" data-july-offer-close aria-label="Close July offer">&times;</button>
+        <span class="pl-july-offer__eyebrow">July visitor offer</span>
+        <h2 id="plJulyOfferTitle">One month of Premium. Free.</h2>
+        <p>Every visitor gets a full month of Prediction Lab Premium free. Save the code now and use it whenever you are ready.</p>
+        <div class="pl-july-offer__code-row">
+            <code id="plJulyOfferCode">JULYFREE</code>
+            <button type="button" id="plJulyOfferCopy">Copy code</button>
+        </div>
+        <a class="pl-july-offer__cta" href="/plans">See Premium plans <span aria-hidden="true">&rarr;</span></a>
+        <small>No subscription charge for your first monthly billing cycle. New Premium subscribers only.</small>
+    </div>
+</div>
+<script>
+/* ACCOUNT MENU: opens the person icon menu and closes it on outside click/Escape. */
+(function () {
+    var account = document.querySelector('.pl2-account');
+    if (!account) return;
+    var button = account.querySelector('.pl2-account-button');
+    var menu = account.querySelector('.pl2-account-menu');
+    if (!button || !menu) return;
+
+    function closeAccountMenu() {
+        menu.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+    }
+
+    button.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var opening = menu.hidden;
+        menu.hidden = !opening;
+        button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (event) {
+        if (!account.contains(event.target)) closeAccountMenu();
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeAccountMenu();
+    });
+})();
+
+/* NAV DROPDOWNS: Picks / Models / Results open a menu on click; clicking the
+   trigger again or anywhere outside (or Escape) closes it. Only one open at a time. */
+(function () {
+    var drops = Array.prototype.slice.call(document.querySelectorAll('.pl2-navdrop'));
+    if (!drops.length) return;
+    function closeAll(except) {
+        drops.forEach(function (d) {
+            if (d === except) return;
+            var m = d.querySelector('.pl2-nav-menu');
+            var b = d.querySelector('.pl2-nav-trigger');
+            if (m) m.hidden = true;
+            if (b) b.setAttribute('aria-expanded', 'false');
+        });
+    }
+    drops.forEach(function (d) {
+        var b = d.querySelector('.pl2-nav-trigger');
+        var m = d.querySelector('.pl2-nav-menu');
+        if (!b || !m) return;
+        b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var opening = m.hidden;
+            closeAll(d);
+            m.hidden = !opening;
+            b.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        });
+    });
+    document.addEventListener('click', function (e) {
+        var inside = drops.some(function (d) { return d.contains(e.target); });
+        if (!inside) closeAll(null);
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAll(null);
+    });
+})();
+</script>
+<script>
+(function () {
+    var offer = document.getElementById('plJulyOffer');
+    if (!offer) return;
+
+    var params = new URLSearchParams(window.location.search);
+    var now = new Date();
+    var isJuly2026 = now.getFullYear() === 2026 && now.getMonth() === 6;
+    var isPreview = params.get('preview_july_offer') === '1';
+    var storageKey = 'predictionlab_july_2026_offer_dismissed';
+
+    function wasDismissed() {
+        try { return window.localStorage.getItem(storageKey) === '1'; }
+        catch (error) { return false; }
+    }
+
+    function closeOffer() {
+        offer.hidden = true;
+        document.body.classList.remove('pl-july-offer-open');
+        try { window.localStorage.setItem(storageKey, '1'); }
+        catch (error) {}
+    }
+
+    if ((isJuly2026 && !wasDismissed()) || isPreview) {
+        offer.hidden = false;
+        document.body.classList.add('pl-july-offer-open');
+    }
+
+    offer.querySelectorAll('[data-july-offer-close]').forEach(function (button) {
+        button.addEventListener('click', closeOffer);
+    });
+
+    var copyButton = document.getElementById('plJulyOfferCopy');
+    if (copyButton) {
+        copyButton.addEventListener('click', function () {
+            var copied = function () {
+                copyButton.textContent = 'Code copied';
+                window.setTimeout(function () { copyButton.textContent = 'Copy code'; }, 1800);
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText('JULYFREE').then(copied);
+                return;
+            }
+            var input = document.createElement('textarea');
+            input.value = 'JULYFREE';
+            input.style.position = 'fixed';
+            input.style.opacity = '0';
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            input.remove();
+            copied();
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !offer.hidden) closeOffer();
+    });
+})();
+</script>

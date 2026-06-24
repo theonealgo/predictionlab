@@ -1,0 +1,7 @@
+{
+  "n_fights": 2484,
+  "glicko2_acc": 0.871,
+  "trueskill_acc": 0.873,
+  "elo_acc": 0.819,
+  "xgboost_acc": 0.709
+}
