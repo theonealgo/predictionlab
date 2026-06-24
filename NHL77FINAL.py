@@ -6,7 +6,15 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
 """
 
-from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory, abort
+# Force single-threaded native math BEFORE numpy/xgboost import. XGBoost's
+# OpenMP thread pool segfaults gunicorn's threaded workers on the production
+# host (site-wide 502 on prediction pages). Must be here before any imports.
+import os as _early_os
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "XGBOOST_NTHREAD"):
+    _early_os.environ.setdefault(_v, "1")
+
+from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory, abort, make_response
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
