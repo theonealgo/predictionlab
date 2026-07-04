@@ -1985,7 +1985,11 @@ def _persist_pl_book_row(sport, g: dict, row: dict) -> None:
 
 
 def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
-    """Attach Books ML/spread/total on completed games (DB lines first, then ESPN API)."""
+    """Attach Books ML/spread/total on completed games (DB lines first, then ESPN API).
+
+    Wall-clock budget: bail out of API loop after 25s to prevent gunicorn worker
+    timeout (site-wide 502 on results pages). Cached DB lines are always applied.
+    """
     if not daily_results:
         return
     games = []
@@ -2004,6 +2008,7 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
     by_key = _bulk_load_book_lines_by_matchup(sport)
     games.sort(key=lambda g: (g.get('date') or ''), reverse=True)
     api_attempts = 0
+    api_deadline = _time.time() + 25.0
     try:
         from pl_book_odds_api import build_pl_book_odds
     except ImportError:
@@ -2030,6 +2035,9 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
             continue
         if not build_pl_book_odds or api_attempts >= api_limit:
             continue
+        if _time.time() >= api_deadline:
+            logger.info(f"[{sport}] book_odds attach: 25s budget exhausted after {api_attempts} API calls; remaining games use DB fallback only")
+            break
         raw_eid = gid.split('_')[-1]
         if not raw_eid.isdigit():
             continue
@@ -2410,6 +2418,13 @@ _TEAM_NAME_TO_ABBR = {
         'New York Jets': 'nyj', 'Philadelphia Eagles': 'phi', 'Pittsburgh Steelers': 'pit',
         'San Francisco 49ers': 'sf', 'Seattle Seahawks': 'sea', 'Tampa Bay Buccaneers': 'tb',
         'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh',
+    },
+    'WNBA': {
+        'Atlanta Dream': 'atl', 'Chicago Sky': 'chi', 'Connecticut Sun': 'conn',
+        'Dallas Wings': 'dal', 'Golden State Valkyries': 'gs', 'Indiana Fever': 'ind',
+        'Las Vegas Aces': 'lv', 'Los Angeles Sparks': 'la', 'LA Sparks': 'la',
+        'Minnesota Lynx': 'min', 'New York Liberty': 'ny', 'NY Liberty': 'ny',
+        'Phoenix Mercury': 'phx', 'Seattle Storm': 'sea', 'Washington Mystics': 'wsh',
     },
 }
 
@@ -9545,7 +9560,7 @@ BASE_TEMPLATE = """
     {% include "partials/site_directory_footer.html" %}
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'},{l:'View All →',h:'/daily-report',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -9554,7 +9569,7 @@ function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var ope
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
 document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
 var _srchFilter='all';
-var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'NCAAW Picks',h:'/ncaaw-picks',s:'ncaaw'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Tennis Picks',h:'/tennis-picks',s:'all'},{l:'UFC Picks',h:'/ufc-picks',s:'all'},{l:'Golf Picks',h:'/golf-picks',s:'all'},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
 function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
 function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
 function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
@@ -12177,12 +12192,18 @@ def build_todays_top_picks():
             _heavy_penalty = max(0.0, _pick_prob - 0.77) * 130.0
             _quality_score = _conf_bonus + _edge_bonus + _agreement_bonus - _heavy_penalty
 
+            _home_prob_pct = round(_ens_home * 100, 1)
+            _away_prob_pct = round((1.0 - _ens_home) * 100, 1)
             _candidates.append({
                 'game_id': _tp['game_id'],
                 'away': _away,
                 'home': _home,
                 'pick': _pick,
                 'prob': round(_pick_prob * 100, 1),
+                'home_prob': _home_prob_pct,
+                'away_prob': _away_prob_pct,
+                'pick_side': 'home' if _home_picked else 'away',
+                'is_live': False,
                 'sport': _tp['sport'],
                 'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
                 'quality_score': _quality_score,
@@ -12199,6 +12220,8 @@ def build_todays_top_picks():
             todays_picks.append({
                 'away': _row['away'], 'home': _row['home'],
                 'pick': _row['pick'], 'prob': _row['prob'],
+                'home_prob': _row['home_prob'], 'away_prob': _row['away_prob'],
+                'pick_side': _row['pick_side'], 'is_live': _row['is_live'],
                 'sport': _row['sport'], 'slug': _row['slug'],
             })
             if len(todays_picks) >= 4:
@@ -12215,6 +12238,8 @@ def build_todays_top_picks():
                 todays_picks.append({
                     'away': _row['away'], 'home': _row['home'],
                     'pick': _row['pick'], 'prob': _row['prob'],
+                    'home_prob': _row['home_prob'], 'away_prob': _row['away_prob'],
+                    'pick_side': _row['pick_side'], 'is_live': _row['is_live'],
                     'sport': _row['sport'], 'slug': _row['slug'],
                 })
                 if len(todays_picks) >= 4:
