@@ -313,8 +313,8 @@ def _parse_made(value: str) -> float:
 def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] = None) -> Dict:
     schedule = schedule_override if schedule_override is not None else fetch_schedule_and_teams(league)
     # Only pull real book lines for the LIVE slate. Historical rebuilds (grading)
-    # pass a schedule_override: the Odds API events endpoint has no past lines,
-    # and skipping the call there protects quota.
+    # pass a schedule_override: ESPN's prop feed only covers upcoming/live games,
+    # so there are no past lines to fetch and grading uses snapshotted picks.
     use_real = schedule_override is None
     excluded = []
     if league == "NBA":
@@ -394,7 +394,7 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         line_source = prop.get("line_source", "")
         # Expose the line to the UI for real book lines and internal dev lines
         # (real lines are the whole point of grading; internal keeps dev usable).
-        public_line = _to_half_step(float(prop["line"])) if (line_source in ("internal_odds_api", "the_odds_api") and prop.get("line") is not None) else None
+        public_line = _to_half_step(float(prop["line"])) if (line_source in ("internal_odds_api", "the_odds_api", "espn_props") and prop.get("line") is not None) else None
 
         # Poisson fair-odds overlay (NBA only)
         poisson_fields: Dict = {}
@@ -482,12 +482,19 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         players = sorted(players, key=lambda x: (float(x.get("consensus_rank", 999)), -float(x.get("top50_score", 0.0))))[:100]
         projections.sort(key=lambda x: (-(x["projection"]), -x["confidence_score"], -(x["model_agreement"])),)
     _line_sources = {pl.get("line_source") for pl in prop_lines}
-    lines_real = "the_odds_api" in _line_sources
+    # Real book lines can come from ESPN's free DraftKings feed (default) or the
+    # optional Odds API path; either counts as "real" for grading + UI labeling.
+    _real_src = (
+        "espn_props" if "espn_props" in _line_sources
+        else "the_odds_api" if "the_odds_api" in _line_sources
+        else None
+    )
+    lines_real = _real_src is not None
     payload = {
         "players": players,
         "props": projections,
         "lines_real": lines_real,
-        "line_source": ("the_odds_api" if lines_real else ("synthetic" if "synthetic" in _line_sources else "internal")),
+        "line_source": (_real_src if lines_real else ("synthetic" if "synthetic" in _line_sources else "internal")),
     }
     if DEBUG_PLAYER_VALIDATION and league == "NBA":
         payload["excluded_players"] = excluded

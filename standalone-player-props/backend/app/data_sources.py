@@ -1,6 +1,7 @@
 import math
 import os
 import random
+import re
 import statistics
 import sys
 import time
@@ -13,11 +14,15 @@ import requests
 
 from .config import (
     CACHE_TTL_SECONDS,
+    ESPN_EVENTS_CAP,
+    ESPN_PROP_PROVIDER_ID,
     LEAGUE_CONFIG,
     ODDS_API_BASE,
     ODDS_API_KEY,
     ODDS_ENGINE_URL,
     ODDS_EVENTS_CAP,
+    REAL_LINES_TTL,
+    TOP_PLAYER_POOL,
 )
 
 # Realistic "minutes" (or ice-time for hockey) ranges per sport.
@@ -329,7 +334,7 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
         _fetch_roster(game.get("away_team_id", ""), game["away_team"])
     players.sort(key=lambda x: x["top50_score"], reverse=True)
     if players:
-        return players[:50]
+        return players[:TOP_PLAYER_POOL]
     # Fallback: synthesize a stable top-player pool from scheduled teams so
     # props do not render blank when roster endpoints are temporarily empty.
     teams = []
@@ -368,7 +373,7 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
                 }
             )
             idx += 1
-            if len(synthetic) >= 50:
+            if len(synthetic) >= TOP_PLAYER_POOL:
                 return synthetic
     return synthetic
 
@@ -729,13 +734,29 @@ def _closest_price(entries: List, consensus: float) -> int:
 
 
 def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
-    """Attach real consensus lines to players in our pool (matched by name)."""
+    """Attach real ESPN/DraftKings lines to players in our pool.
+
+    Raw rows carry the ESPN athlete id in `player_id` (the preferred match key,
+    since our pool ids are ESPN athlete ids) and an optional `norm_name`
+    fallback. Emits internal line dicts tagged line_source='espn_props'.
+    """
+    by_id: Dict[str, Dict] = {}
     by_name: Dict[str, Dict] = {}
     for p in players:
+        pid = str(p.get("player_id", "")).strip()
+        if pid:
+            by_id.setdefault(pid, p)
         by_name.setdefault(_norm_name(p.get("name", "")), p)
     out = []
     for row in raw_rows:
-        p = by_name.get(row["norm_name"])
+        p = None
+        rid = str(row.get("player_id", "")).strip()
+        if rid and rid in by_id:
+            p = by_id[rid]
+        if p is None:
+            nm = row.get("norm_name")
+            if nm:
+                p = by_name.get(nm)
         if not p:
             continue
         line = row["line"]
@@ -745,7 +766,7 @@ def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
                 "prop_type": row["prop_type"],
                 "line": line,
                 "line_for_calc": line,
-                "line_source": "the_odds_api",
+                "line_source": "espn_props",
                 "odds_over": row["odds_over"],
                 "odds_under": row["odds_under"],
             }
@@ -753,98 +774,232 @@ def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
     return out
 
 
-def fetch_real_prop_lines(league: str, players: List[Dict]) -> Optional[List[Dict]]:
-    """Real sportsbook player-prop lines from The Odds API for `league`.
+def _american_to_int(v) -> Optional[int]:
+    """Normalize an ESPN american-odds value (number, '+150', 'EVEN') to int."""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        s = v.strip().upper()
+        if s in ("EVEN", "EV", "PK"):
+            return 100
+        try:
+            return int(round(float(s)))
+        except Exception:
+            return None
+    try:
+        return int(round(float(v)))
+    except Exception:
+        return None
 
-    Returns line dicts (line_source='the_odds_api') for players present in our
-    pool, or None when unavailable (no key, no events, no player-prop markets,
-    or any network error) so the caller can fall back cleanly. Consensus line =
-    median point across US books; odds = price at the point nearest consensus.
+
+def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
+    """Map an ESPN propBet type name (e.g. 'Total Strikeouts', 'Points') to our
+    internal prop_type, restricted to the types we grade for `league`.
+
+    Returns None for unrecognized names, combined/alt markets ('+'), pitcher
+    'allowed' variants, or anything not in the league's graded set. Keyword
+    order guards against substring collisions (e.g. 'three point' contains
+    'point'), so more specific types are tested first.
+    """
+    if not name:
+        return None
+    n = name.lower()
+    if "+" in n or "allowed" in n:  # combos / pitcher 'hits allowed' etc.
+        return None
+    allowed = set(_LEAGUE_PROP_TYPES.get(league, []))
+    if not allowed:
+        return None
+    checks = [
+        ("strikeouts", ("strikeout",)),
+        ("home_runs", ("home run",)),
+        ("rbis", ("rbi", "runs batted in")),
+        ("shots_on_goal", ("shots on goal", "shot on goal")),
+        ("threes", ("three point", "3 point", "3-point", "3pt", "threes")),
+        ("rebounds", ("rebound",)),
+        ("assists", ("assist",)),
+        ("hits", ("hits",)),
+        ("runs", ("runs", "run ")),
+        ("goals", ("goal",)),
+        ("points", ("points", "point")),
+    ]
+    for internal, keywords in checks:
+        if internal not in allowed:
+            continue
+        if any(kw in n for kw in keywords):
+            return internal
+    return None
+
+
+def _espn_pick_provider(odds_base_url: str) -> Optional[str]:
+    """Return the odds provider id to page prop bets from at a competition's
+    /odds endpoint. Prefers DraftKings (ESPN_PROP_PROVIDER_ID); otherwise the
+    first provider that exposes a numeric id."""
+    try:
+        r = requests.get(odds_base_url, params={"lang": "en", "region": "us"}, timeout=10)
+        if r.status_code != 200:
+            return None
+        items = (r.json() or {}).get("items") or []
+    except Exception:
+        return None
+    ids = []
+    for it in items:
+        ref = it.get("$ref") or ""
+        m = re.search(r"/odds/(\d+)", ref)
+        if m:
+            ids.append(m.group(1))
+        else:
+            prov = it.get("provider") or {}
+            pid = str(prov.get("id") or "").strip()
+            if pid:
+                ids.append(pid)
+    if not ids:
+        return None
+    if ESPN_PROP_PROVIDER_ID in ids:
+        return ESPN_PROP_PROVIDER_ID
+    return ids[0]
+
+
+def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> List[Dict]:
+    """Fetch real DraftKings player-prop lines from ESPN's free core API.
+
+    Returns raw rows shaped for _match_real_rows: {player_id (ESPN athlete id),
+    norm_name (None), prop_type, line, odds_over, odds_under}. One row per
+    (athlete, prop_type). Each (athlete, prop_type) appears twice in the feed
+    (Over then Under) with the same target; we keep the shared line and pair
+    the two prices in feed order.
+    """
+    sb_url = f"https://site.api.espn.com/apis/site/v2/sports/{espn_sport}/{espn_league}/scoreboard"
+    try:
+        now_et = datetime.now(ZoneInfo("America/New_York"))
+        r = requests.get(sb_url, params={"dates": now_et.strftime("%Y%m%d")}, timeout=12)
+        r.raise_for_status()
+        events = (r.json() or {}).get("events") or []
+    except Exception:
+        return []
+
+    def _not_final(ev) -> bool:
+        st = ((((ev.get("status") or {}).get("type")) or {}).get("state") or "").lower()
+        return st != "post"
+
+    ev_ids = [str(e.get("id")) for e in events if e.get("id") and _not_final(e)]
+    if not ev_ids:
+        ev_ids = [str(e.get("id")) for e in events if e.get("id")]
+    ev_ids = ev_ids[:ESPN_EVENTS_CAP]
+    if not ev_ids:
+        return []
+
+    core = "https://sports.core.api.espn.com/v2/sports"
+    # (athlete_id, prop_type) -> {"line": float, "prices": [int, ...]}
+    agg: Dict = {}
+    for eid in ev_ids:
+        # In these leagues the competition id equals the event id.
+        comp_base = f"{core}/{espn_sport}/leagues/{espn_league}/events/{eid}/competitions/{eid}"
+        pid = _espn_pick_provider(f"{comp_base}/odds")
+        if not pid:
+            continue
+        page = 1
+        page_count = 1
+        while page <= page_count and page <= 12:
+            url = f"{comp_base}/odds/{pid}/propBets"
+            try:
+                r = requests.get(
+                    url,
+                    params={"limit": 100, "page": page, "lang": "en", "region": "us"},
+                    timeout=12,
+                )
+                if r.status_code != 200:
+                    break
+                body = r.json() or {}
+            except Exception:
+                break
+            try:
+                page_count = int(body.get("pageCount") or 1)
+            except Exception:
+                page_count = 1
+            for it in body.get("items") or []:
+                aref = ((it.get("athlete") or {}).get("$ref")) or ""
+                m = re.search(r"/athletes/(\d+)", aref)
+                if not m:
+                    continue
+                athlete_id = m.group(1)
+                type_name = ((it.get("type") or {}).get("name")) or it.get("name") or ""
+                prop_type = _espn_to_internal_prop(league, type_name)
+                if not prop_type:
+                    continue
+                target = ((it.get("current") or {}).get("target") or {}).get("value")
+                if target is None:
+                    continue
+                try:
+                    target_f = float(target)
+                except Exception:
+                    continue
+                price_int = _american_to_int(((it.get("odds") or {}).get("american") or {}).get("value"))
+                key = (athlete_id, prop_type)
+                slot = agg.get(key)
+                if slot is None:
+                    agg[key] = {"line": target_f, "prices": ([price_int] if price_int is not None else [])}
+                elif abs(target_f - slot["line"]) < 1e-6 and price_int is not None and len(slot["prices"]) < 2:
+                    slot["prices"].append(price_int)
+            page += 1
+
+    rows = []
+    for (athlete_id, prop_type), slot in agg.items():
+        prices = slot["prices"]
+        odds_over = prices[0] if len(prices) >= 1 else -110
+        odds_under = prices[1] if len(prices) >= 2 else -110
+        rows.append(
+            {
+                "player_id": athlete_id,
+                "norm_name": None,
+                "prop_type": prop_type,
+                "line": _to_half_step(slot["line"]),
+                "odds_over": odds_over,
+                "odds_under": odds_under,
+            }
+        )
+    return rows
+
+
+def fetch_real_prop_lines(league: str, players: List[Dict]) -> Optional[List[Dict]]:
+    """Real DraftKings player-prop lines for `league` from ESPN's free core API.
+
+    Returns line dicts (line_source='espn_props') for players present in our
+    pool, or None when unavailable (off-season, no scheduled games, no player
+    props for the slate, or any network error) so the caller can fall back to
+    simulated lines cleanly. Uses the same free ESPN feed the rest of the app
+    already relies on — no paid API key and no monthly request cap.
     """
     if not players:
         return None
-    sport_key = _ODDS_API_SPORT_KEYS.get(league)
-    market_map = _ODDS_API_MARKETS.get(league)
-    if not sport_key or not market_map:
-        return None
-    api_key = _resolve_odds_api_key()
-    if not api_key:
+    cfg = LEAGUE_CONFIG.get(league, {})
+    espn_sport = cfg.get("espn_sport", "")
+    espn_league = cfg.get("espn_league", "")
+    if not (espn_sport and espn_league):
         return None
 
     now = time.time()
     cached = _REAL_LINES_CACHE.get(league)
-    if cached and (now - cached["ts"]) < CACHE_TTL_SECONDS:
+    if cached and (now - cached["ts"]) < REAL_LINES_TTL:
         return _match_real_rows(cached["rows"], players) or None
 
-    rev = {v: k for k, v in market_map.items()}
-    markets_param = ",".join(sorted(set(market_map.values())))
     try:
-        er = requests.get(f"{ODDS_API_BASE}/sports/{sport_key}/events", params={"apiKey": api_key}, timeout=12)
-        if er.status_code != 200:
-            return None
-        events = er.json() or []
+        raw_rows = _espn_fetch_prop_rows(league, espn_sport, espn_league)
     except Exception:
-        return None
-    event_ids = [str(e.get("id")) for e in events if e.get("id")][:ODDS_EVENTS_CAP]
-    if not event_ids:
-        return None
-
-    # (norm_name, prop_type) -> {'over': [(point, price)], 'under': [(point, price)]}
-    agg: Dict = {}
-    for eid in event_ids:
-        try:
-            r = requests.get(
-                f"{ODDS_API_BASE}/sports/{sport_key}/events/{eid}/odds",
-                params={"apiKey": api_key, "regions": "us", "markets": markets_param, "oddsFormat": "american"},
-                timeout=12,
-            )
-            if r.status_code != 200:
-                continue
-            body = r.json() or {}
-        except Exception:
-            continue
-        for bm in body.get("bookmakers", []) or []:
-            for mk in bm.get("markets", []) or []:
-                pt = rev.get(mk.get("key"))
-                if not pt:
-                    continue
-                for oc in mk.get("outcomes", []) or []:
-                    nm = _norm_name(oc.get("description") or oc.get("participant") or "")
-                    side = (oc.get("name") or "").strip().lower()
-                    point = oc.get("point")
-                    if not nm or side not in ("over", "under") or point is None:
-                        continue
-                    price = oc.get("price")
-                    slot = agg.setdefault((nm, pt), {"over": [], "under": []})
-                    slot[side].append((float(point), float(price) if price is not None else None))
-    if not agg:
-        return None
-
-    raw_rows = []
-    for (nm, pt), sides in agg.items():
-        pts = [pp for (pp, _pr) in (sides["over"] + sides["under"]) if pp is not None]
-        if not pts:
-            continue
-        cons = _to_half_step(statistics.median(pts))
-        raw_rows.append(
-            {
-                "norm_name": nm,
-                "prop_type": pt,
-                "line": cons,
-                "odds_over": _closest_price(sides["over"], cons),
-                "odds_under": _closest_price(sides["under"], cons),
-            }
-        )
+        raw_rows = []
+    # Cache even an empty result so we don't repeatedly hammer ESPN when a
+    # league currently has no player props (off-season / uncovered slate).
     _REAL_LINES_CACHE[league] = {"ts": now, "rows": raw_rows}
+    if not raw_rows:
+        return None
     return _match_real_rows(raw_rows, players) or None
 
 
 def fetch_prop_lines(league: str, players: List[Dict], use_real: bool = True) -> List[Dict]:
     if not players:
         return []
-    # 1) Real sportsbook lines (The Odds API) — preferred for every league when
-    #    building a live slate. Historical/grading rebuilds pass use_real=False
-    #    (the events endpoint only exposes upcoming games; also protects quota).
+    # 1) Real DraftKings lines (ESPN free core API) — preferred for every league
+    #    when building a live slate. Historical/grading rebuilds pass
+    #    use_real=False (ESPN prop feeds only cover upcoming/live games).
     if use_real:
         real = fetch_real_prop_lines(league, players)
         if real:

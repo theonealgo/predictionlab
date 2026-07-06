@@ -13618,13 +13618,19 @@ def player_props_api_props():
         return jsonify({'detail': str(exc)}), 500
 
 
+# Line sources backed by a REAL sportsbook number (safe to snapshot + grade).
+# ESPN's free DraftKings feed is the default; the Odds API path is optional.
+_REAL_LINE_SOURCES = ('espn_props', 'the_odds_api')
+
+
 def _snapshot_prop_picks(league: str, props: list):
     """Persist today's live picks that carry a REAL sportsbook line so they can
     be graded later against box scores.
-
-    Only rows sourced from the real odds API (line_source='the_odds_api') are
-    stored — never synthetic/internal lines — so we never fabricate graded
-    history. Deduped to one pick per (player, prop). Safe to call on every
+    Only rows sourced from a real book line (line_source in
+    ('espn_props','the_odds_api')) are stored — never synthetic/internal lines —
+    so we never fabricate graded history. Deduped to one pick per (player,
+    prop). Safe to call on every /props view (INSERT OR IGNORE keeps the first
+    snapshot of the day).
     /props view (INSERT OR IGNORE keeps the first snapshot of the day).
     """
     if not props:
@@ -13639,7 +13645,8 @@ def _snapshot_prop_picks(league: str, props: list):
     conn = get_db_connection()
     try:
         for r in deduped:
-            if r.get('line_source') != 'the_odds_api':
+            src = r.get('line_source')
+            if src not in _REAL_LINE_SOURCES:
                 continue
             line = r.get('line')
             if line is None:
@@ -13651,7 +13658,7 @@ def _snapshot_prop_picks(league: str, props: list):
                    (league, pick_date, player_name, team, prop_type, pick, line, projection, odds, line_source, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
                 (league, today, r.get('player_name'), r.get('team'), r.get('prop_type'),
-                 pick, float(line), r.get('projection'), odds, 'the_odds_api', now_iso)
+                 pick, float(line), r.get('projection'), odds, src, now_iso)
             )
         conn.commit()
     finally:

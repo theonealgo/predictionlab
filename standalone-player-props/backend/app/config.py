@@ -22,4 +22,18 @@ CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "600"))
 # Max games per league to pull player-prop odds for per refresh. Each event
 # costs (markets x regions) requests against The Odds API quota, so keep modest.
 ODDS_EVENTS_CAP = int(os.getenv("ODDS_EVENTS_CAP", "10"))
+
+# ── Real player-prop lines via ESPN's free core API (DraftKings) ────────────
+# Player props are sourced from ESPN's free, undocumented core API — no paid
+# key and no monthly request cap (the same free ESPN source used elsewhere).
+# ESPN_PROP_PROVIDER_ID selects the sportsbook (100 = DraftKings).
+ESPN_PROP_PROVIDER_ID = os.getenv("ESPN_PROP_PROVIDER_ID", "100")
+# Max games per league to pull player props for per refresh (ESPN is free, so
+# this can comfortably cover a full daily slate).
+ESPN_EVENTS_CAP = int(os.getenv("ESPN_EVENTS_CAP", "20"))
+# How long to reuse a fetched real-lines snapshot before re-hitting ESPN.
+REAL_LINES_TTL = int(os.getenv("REAL_LINES_TTL", "3600"))
+# Candidate roster-player pool size per league used for prop matching. Larger
+# pool -> more overlap with the players a book actually posts props for.
+TOP_PLAYER_POOL = int(os.getenv("TOP_PLAYER_POOL", "120"))
 DEBUG_PLAYER_VALIDATION = os.getenv("DEBUG_PLAYER_VALIDATION", "").strip().lower() in ("1", "true", "yes", "on")
