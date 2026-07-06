@@ -452,3 +452,23 @@ body.has-join-premium-bar { padding-bottom: 58px; }
 @media (max-width: 768px) {
     .nav-search-wrap { display: none !important; }
 }
+
+/* ── Mobile fit: stop the page from overflowing sideways and cutting off text ── */
+@media (max-width: 768px) {
+    html, body { max-width: 100%; overflow-x: hidden; }
+    .container { padding-left: 14px !important; padding-right: 14px !important; }
+    img { max-width: 100%; height: auto; }
+    /* Wide odds / lines / confidence blocks scroll inside their card instead of
+       forcing the whole page wider than the screen. */
+    .odds-pricing-section,
+    .pick-conf-bar,
+    .card-details,
+    .lines-strip { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .odds-pricing-table { min-width: 320px; }
+    /* Long team / matchup names wrap instead of clipping. */
+    .team-name,
+    .team-slot .team-name,
+    .match,
+    .matchup-row,
+    .card-hero { overflow-wrap: anywhere; word-break: break-word; }
+}

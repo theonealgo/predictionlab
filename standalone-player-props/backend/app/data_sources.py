@@ -1,15 +1,24 @@
 import math
 import os
 import random
+import statistics
+import sys
 import time
 import unicodedata
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import requests
 
-from .config import LEAGUE_CONFIG, ODDS_API_BASE, ODDS_API_KEY, ODDS_ENGINE_URL
+from .config import (
+    CACHE_TTL_SECONDS,
+    LEAGUE_CONFIG,
+    ODDS_API_BASE,
+    ODDS_API_KEY,
+    ODDS_ENGINE_URL,
+    ODDS_EVENTS_CAP,
+)
 
 # Realistic "minutes" (or ice-time for hockey) ranges per sport.
 # NHL skaters average 12-22 min of ice time; using NBA values (24-40) was the
@@ -86,6 +95,34 @@ _NBA_CONSENSUS_RANK = {_norm_name(name): i + 1 for i, name in enumerate(_NBA_CON
 
 _PLAYER_METRICS_CACHE: Dict[str, Dict] = {}
 _PLAYER_METRICS_TTL = 6 * 3600
+
+# ── The Odds API (real sportsbook player props) ───────────────────────────
+# League -> The Odds API sport key.
+_ODDS_API_SPORT_KEYS = {
+    "NBA": "basketball_nba",
+    "WNBA": "basketball_wnba",
+    "NCAAB": "basketball_ncaab",
+    "NCAAW": "basketball_ncaaw",
+    "NHL": "icehockey_nhl",
+    "MLB": "baseball_mlb",
+    "NFL": "americanfootball_nfl",
+    "NCAAF": "americanfootball_ncaaf",
+    "SOCCER": "soccer_epl",
+}
+# League -> {internal prop_type: The Odds API market key}.
+_ODDS_API_MARKETS = {
+    "NBA":    {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
+    "WNBA":   {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
+    "NCAAB":  {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
+    "NCAAW":  {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
+    "NHL":    {"points": "player_points", "assists": "player_assists", "goals": "player_goals", "shots_on_goal": "player_shots_on_goal"},
+    "MLB":    {"hits": "batter_hits", "runs": "batter_runs_scored", "rbis": "batter_rbis", "home_runs": "batter_home_runs", "strikeouts": "pitcher_strikeouts", "walks": "batter_walks"},
+    "NFL":    {"passing_yards": "player_pass_yds", "rushing_yards": "player_rush_yds", "receiving_yards": "player_reception_yds", "receptions": "player_receptions"},
+    "NCAAF":  {"passing_yards": "player_pass_yds", "rushing_yards": "player_rush_yds", "receiving_yards": "player_reception_yds", "receptions": "player_receptions"},
+    "SOCCER": {"goals": "player_goals", "assists": "player_assists", "shots": "player_shots", "shots_on_target": "player_shots_on_target"},
+}
+# league -> {"ts": epoch, "rows": [raw consensus rows]} to protect Odds API quota.
+_REAL_LINES_CACHE: Dict[str, Dict] = {}
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -666,11 +703,154 @@ def _internal_generic_prop_lines(league: str, players: List[Dict]) -> List[Dict]
     return out
 
 
-def fetch_prop_lines(league: str, players: List[Dict]) -> List[Dict]:
+def _resolve_odds_api_key() -> str:
+    """Odds API key from env, falling back to the committed project key so real
+    lines work locally and on Render without extra setup."""
+    if ODDS_API_KEY:
+        return ODDS_API_KEY
+    try:
+        root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from theodds_api import TheOddsAPI
+        return (TheOddsAPI().api_key or "").strip()
+    except Exception:
+        return ""
+
+
+def _closest_price(entries: List, consensus: float) -> int:
+    """Representative American price: the book price whose point is closest to
+    the consensus line (keeps a coherent number instead of averaging odds)."""
+    cand = [(pt, pr) for (pt, pr) in entries if pr is not None]
+    if not cand:
+        return -110
+    cand.sort(key=lambda t: abs((t[0] if t[0] is not None else consensus) - consensus))
+    return int(round(cand[0][1]))
+
+
+def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
+    """Attach real consensus lines to players in our pool (matched by name)."""
+    by_name: Dict[str, Dict] = {}
+    for p in players:
+        by_name.setdefault(_norm_name(p.get("name", "")), p)
+    out = []
+    for row in raw_rows:
+        p = by_name.get(row["norm_name"])
+        if not p:
+            continue
+        line = row["line"]
+        out.append(
+            {
+                "player_id": p["player_id"],
+                "prop_type": row["prop_type"],
+                "line": line,
+                "line_for_calc": line,
+                "line_source": "the_odds_api",
+                "odds_over": row["odds_over"],
+                "odds_under": row["odds_under"],
+            }
+        )
+    return out
+
+
+def fetch_real_prop_lines(league: str, players: List[Dict]) -> Optional[List[Dict]]:
+    """Real sportsbook player-prop lines from The Odds API for `league`.
+
+    Returns line dicts (line_source='the_odds_api') for players present in our
+    pool, or None when unavailable (no key, no events, no player-prop markets,
+    or any network error) so the caller can fall back cleanly. Consensus line =
+    median point across US books; odds = price at the point nearest consensus.
+    """
+    if not players:
+        return None
+    sport_key = _ODDS_API_SPORT_KEYS.get(league)
+    market_map = _ODDS_API_MARKETS.get(league)
+    if not sport_key or not market_map:
+        return None
+    api_key = _resolve_odds_api_key()
+    if not api_key:
+        return None
+
+    now = time.time()
+    cached = _REAL_LINES_CACHE.get(league)
+    if cached and (now - cached["ts"]) < CACHE_TTL_SECONDS:
+        return _match_real_rows(cached["rows"], players) or None
+
+    rev = {v: k for k, v in market_map.items()}
+    markets_param = ",".join(sorted(set(market_map.values())))
+    try:
+        er = requests.get(f"{ODDS_API_BASE}/sports/{sport_key}/events", params={"apiKey": api_key}, timeout=12)
+        if er.status_code != 200:
+            return None
+        events = er.json() or []
+    except Exception:
+        return None
+    event_ids = [str(e.get("id")) for e in events if e.get("id")][:ODDS_EVENTS_CAP]
+    if not event_ids:
+        return None
+
+    # (norm_name, prop_type) -> {'over': [(point, price)], 'under': [(point, price)]}
+    agg: Dict = {}
+    for eid in event_ids:
+        try:
+            r = requests.get(
+                f"{ODDS_API_BASE}/sports/{sport_key}/events/{eid}/odds",
+                params={"apiKey": api_key, "regions": "us", "markets": markets_param, "oddsFormat": "american"},
+                timeout=12,
+            )
+            if r.status_code != 200:
+                continue
+            body = r.json() or {}
+        except Exception:
+            continue
+        for bm in body.get("bookmakers", []) or []:
+            for mk in bm.get("markets", []) or []:
+                pt = rev.get(mk.get("key"))
+                if not pt:
+                    continue
+                for oc in mk.get("outcomes", []) or []:
+                    nm = _norm_name(oc.get("description") or oc.get("participant") or "")
+                    side = (oc.get("name") or "").strip().lower()
+                    point = oc.get("point")
+                    if not nm or side not in ("over", "under") or point is None:
+                        continue
+                    price = oc.get("price")
+                    slot = agg.setdefault((nm, pt), {"over": [], "under": []})
+                    slot[side].append((float(point), float(price) if price is not None else None))
+    if not agg:
+        return None
+
+    raw_rows = []
+    for (nm, pt), sides in agg.items():
+        pts = [pp for (pp, _pr) in (sides["over"] + sides["under"]) if pp is not None]
+        if not pts:
+            continue
+        cons = _to_half_step(statistics.median(pts))
+        raw_rows.append(
+            {
+                "norm_name": nm,
+                "prop_type": pt,
+                "line": cons,
+                "odds_over": _closest_price(sides["over"], cons),
+                "odds_under": _closest_price(sides["under"], cons),
+            }
+        )
+    _REAL_LINES_CACHE[league] = {"ts": now, "rows": raw_rows}
+    return _match_real_rows(raw_rows, players) or None
+
+
+def fetch_prop_lines(league: str, players: List[Dict], use_real: bool = True) -> List[Dict]:
     if not players:
         return []
-    # Fast NBA path: use already-fetched gamelog-based weighted projections
-    # so /props doesn't stall on another full network fan-out.
+    # 1) Real sportsbook lines (The Odds API) — preferred for every league when
+    #    building a live slate. Historical/grading rebuilds pass use_real=False
+    #    (the events endpoint only exposes upcoming games; also protects quota).
+    if use_real:
+        real = fetch_real_prop_lines(league, players)
+        if real:
+            return real
+    # 2) Fast NBA path: already-fetched gamelog-based weighted projections
+    #    (dev / no-odds fallback so /props doesn't stall on another fan-out).
     if league == "NBA":
         fast = _internal_nba_prop_lines(players)
         if fast:
@@ -718,14 +898,6 @@ def fetch_prop_lines(league: str, players: List[Dict]) -> List[Dict]:
     internal = _internal_generic_prop_lines(league, players)
     if internal:
         return internal
-    if not ODDS_API_KEY:
-        return _synthetic_prop_lines(league, players)
-    # Odds key set: probe API once; real market parsing is not wired yet — always fall back to synthetic.
-    try:
-        resp = requests.get(f"{ODDS_API_BASE}/sports", params={"apiKey": ODDS_API_KEY}, timeout=10)
-        resp.raise_for_status()
-    except Exception:
-        pass
     return _synthetic_prop_lines(league, players)
 
 

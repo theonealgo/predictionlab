@@ -448,7 +448,7 @@
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
         .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; align-items:stretch; }
         @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
         .pc-box {
             background:#ffffff;
@@ -663,6 +663,36 @@
         </select>
     </div>
 
+    {# ===== SECTION: Chart View + Copy All controls ===== #}
+    {% if grouped_predictions %}
+    <style>
+        .picks-view-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:1200px;margin:0 auto 12px;padding:0 4px;}
+        .pv-toggle{display:inline-flex;border:1px solid #cbd5e1;border-radius:999px;overflow:hidden;background:#fff;}
+        .pv-btn{border:0;background:transparent;color:#475569;font-size:0.8em;font-weight:700;padding:6px 14px;cursor:pointer;}
+        .pv-btn.active{background:#00529B;color:#fff;}
+        .pv-copy{margin-left:auto;border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 14px;font-size:0.8em;font-weight:800;cursor:pointer;}
+        .pv-copy.copied{background:#00C076;border-color:#00C076;color:#fff;}
+        .chart-table-wrap{display:none;overflow-x:auto;margin-top:4px;}
+        .date-section.chart-mode .games-grid{display:none !important;}
+        .date-section.chart-mode .chart-table-wrap{display:block;}
+        .picks-chart-table{width:100%;border-collapse:collapse;font-size:0.86em;background:#fff;border:1px solid rgba(15,23,42,0.12);border-radius:10px;overflow:hidden;}
+        .picks-chart-table th{text-align:left;font-size:0.72em;text-transform:uppercase;letter-spacing:0.3px;color:#64748b;padding:9px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;white-space:nowrap;}
+        .picks-chart-table td{padding:9px 10px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600;vertical-align:middle;}
+        .picks-chart-table tr:last-child td{border-bottom:none;}
+        .picks-chart-table .pct-pick{color:#00529B;font-weight:800;}
+        .picks-chart-table .pct-won{color:#15803d;font-weight:800;}
+        .picks-chart-table .pct-lost{color:#b91c1c;font-weight:800;}
+        .pct-league-row td{background:#f8fafc;color:#92400e;font-weight:800;font-size:0.78em;text-transform:uppercase;letter-spacing:0.3px;}
+    </style>
+    <div class="picks-view-controls">
+        <div class="pv-toggle" role="tablist" aria-label="Pick view">
+            <button type="button" class="pv-btn active" id="pvCardsBtn" onclick="setPicksView('cards')">📊 Cards</button>
+            <button type="button" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
+        </div>
+        <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
+    </div>
+    {% endif %}
+
     {% if sorted_dates %}
     <ul class="sr-only">
         {% for date in sorted_dates %}
@@ -696,7 +726,21 @@
                 {% set home_picked = pred.predicted_winner == pred.home_team_id %}
                 {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
                 {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
-                <div class="game-card-stack">
+                {# ===== SECTION: Chart View + Copy All (per-pick data for JS) ===== #}
+                {% set _chart_pick = pred.face_pick_team if (pred.face_pick_team is defined and pred.face_pick_team) else team_short(pred.predicted_winner) %}
+                {% set _chart_conf = pred.face_pick_confidence if (pred.face_pick_confidence is defined and pred.face_pick_confidence is not none) else none %}
+                {% set _chart_edge = pred.face_edge_pct if (pred.face_edge_pct is defined and pred.face_edge_pct is not none) else (pred.edge_pct if (pred.edge_pct is defined and pred.edge_pct is not none) else none) %}
+                {% set _chart_result = '' %}
+                {% if is_final %}{% if (pred.predicted_winner == pred.home_team_id and home_wins) or (pred.predicted_winner == pred.away_team_id and away_wins) %}{% set _chart_result = 'WON' %}{% elif home_wins or away_wins %}{% set _chart_result = 'LOST' %}{% endif %}{% endif %}
+                <div class="game-card-stack" data-pick-card
+                    data-away="{{ team_short(pred.away_team_id) }}"
+                    data-home="{{ team_short(pred.home_team_id) }}"
+                    data-league="{{ pred.league if pred.league else '' }}"
+                    data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time is not none %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
+                    data-pick="{{ _chart_pick }}"
+                    data-conf="{% if _chart_conf is not none %}{{ _chart_conf }}{% endif %}"
+                    data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
+                    data-result="{{ _chart_result }}">
                 <div class="game-card pick-card" data-league="{{ pred.league if pred.league else 'Other' }}">
                     {% set _force_rl = (sport == 'MLB') %}
                     {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
@@ -714,6 +758,7 @@
                         {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
                         {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.disp_ml_prob, 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
@@ -776,6 +821,7 @@
                 </div>
                 {% endfor %}
             </div>
+            <div class="chart-table-wrap" id="chart-{{ date }}"></div>
         </div>
         {% endfor %}
     {% else %}
@@ -787,6 +833,14 @@
             Select a <span style="color:#059669;font-weight:700;">green league</span> above to see active picks, or check the results page for completed season data.
         </div>
         <a href="/soccer-results" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">View Season Results →</a>
+    </div>
+    {% elif offseason_notice %}
+    {# ===== SECTION: Off-season notice (season starts <date> + last-season results) ===== #}
+    <div style="text-align:center;padding:48px 20px;max-width:560px;margin:0 auto;">
+        <div style="font-size:2em;margin-bottom:12px;">{{ sport_info.icon }}</div>
+        <div style="font-size:1.1em;font-weight:700;color:#0f172a;margin-bottom:8px;">{{ sport_info.name }} is in the off-season</div>
+        <div style="color:#475569;font-size:0.92em;line-height:1.65;margin-bottom:20px;">{{ offseason_notice.message }}</div>
+        <a href="{{ offseason_notice.results_url }}" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">{{ offseason_notice.results_label }} →</a>
     </div>
     {% else %}
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
@@ -967,6 +1021,7 @@
     const defaultPickDate = '{{ default_pick_date|default(today_date) }}';
     let currentWeekStart = 0, activeDate = defaultPickDate || today;
     const datesPerWeek = 7;
+    let picksViewMode = 'cards';
     function formatDate(ds) {
         const d = new Date(ds+'T12:00:00');
         const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -988,6 +1043,7 @@
             if(date===today){h.textContent=sportIcon+' '+sportName+' AI Picks, Predictions and Model Probabilities';}
             else{h.textContent=sportIcon+' '+sportName+' AI Picks and Predictions for '+formatDate(date);}
         }
+        refreshChartForActive();
     }
     function toggleAnalysis(id, el) {
         const panel = document.getElementById(id);
@@ -1057,6 +1113,84 @@
     }
     function previousWeek(){if(currentWeekStart>0){currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderDateBubbles();}}
     function nextWeek(){if(currentWeekStart+datesPerWeek<allDates.length){currentWeekStart+=datesPerWeek;renderDateBubbles();}}
+    // ===== SECTION: Chart View + Copy All (client logic) =====
+    function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+    function _visibleSection(){ return document.querySelector('.date-section.visible'); }
+    function buildChartTable(section){
+        if(!section) return;
+        const wrap = section.querySelector('.chart-table-wrap');
+        if(!wrap) return;
+        const stacks = section.querySelectorAll('[data-pick-card]');
+        let rows = '', lastLeague = '';
+        stacks.forEach(function(st){
+            const lg = st.getAttribute('data-league') || '';
+            if(lg && lg !== lastLeague){ lastLeague = lg; rows += '<tr class="pct-league-row"><td colspan="6">'+_esc(lg)+'</td></tr>'; }
+            const away = _esc(st.getAttribute('data-away'));
+            const home = _esc(st.getAttribute('data-home'));
+            const time = _esc(st.getAttribute('data-time'));
+            const pick = _esc(st.getAttribute('data-pick') || '—');
+            const conf = st.getAttribute('data-conf') || '';
+            const edge = st.getAttribute('data-edge') || '';
+            const result = st.getAttribute('data-result') || '';
+            const confTxt = conf ? '<span class="pct-pick">'+_esc(conf)+'%</span>' : '—';
+            const edgeTxt = edge ? ((parseFloat(edge) > 0 ? '+' : '')+_esc(edge)+'%') : '—';
+            let resTxt = '—';
+            if(result === 'WON') resTxt = '<span class="pct-won">✅ Won</span>';
+            else if(result === 'LOST') resTxt = '<span class="pct-lost">❌ Lost</span>';
+            rows += '<tr><td>'+away+' @ '+home+'</td><td>'+time+'</td><td><strong>'+pick+'</strong></td><td>'+confTxt+'</td><td>'+edgeTxt+'</td><td>'+resTxt+'</td></tr>';
+        });
+        if(!rows){ wrap.innerHTML = '<div style="padding:16px;color:#64748b;">No picks to chart for this date.</div>'; return; }
+        wrap.innerHTML = '<table class="picks-chart-table"><thead><tr><th>Matchup</th><th>Time</th><th>Pick</th><th>Conf</th><th>Edge</th><th>Result</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    }
+    function refreshChartForActive(){
+        const sec = _visibleSection();
+        document.querySelectorAll('.date-section').forEach(function(s){ if(s !== sec) s.classList.remove('chart-mode'); });
+        if(!sec) return;
+        if(picksViewMode === 'chart'){ buildChartTable(sec); sec.classList.add('chart-mode'); }
+        else { sec.classList.remove('chart-mode'); }
+    }
+    function setPicksView(mode){
+        picksViewMode = (mode === 'chart') ? 'chart' : 'cards';
+        const cb = document.getElementById('pvCardsBtn'), hb = document.getElementById('pvChartBtn');
+        if(cb) cb.classList.toggle('active', picksViewMode === 'cards');
+        if(hb) hb.classList.toggle('active', picksViewMode === 'chart');
+        if(picksViewMode === 'cards'){ document.querySelectorAll('.date-section').forEach(function(s){ s.classList.remove('chart-mode'); }); }
+        else { refreshChartForActive(); }
+    }
+    function _fallbackCopy(text, done){
+        const area = document.createElement('textarea');
+        area.value = text; area.style.position = 'fixed'; area.style.opacity = '0';
+        document.body.appendChild(area); area.select();
+        try { document.execCommand('copy'); } catch(e) {}
+        area.remove(); if(done) done();
+    }
+    function copyVisiblePicks(btn){
+        const sec = _visibleSection();
+        if(!sec) return;
+        const stacks = sec.querySelectorAll('[data-pick-card]');
+        const dateLabel = (sec.id || '').replace('date-','');
+        const lines = [sportIcon+' '+sportName+' AI Picks — '+dateLabel];
+        stacks.forEach(function(st){
+            const away = st.getAttribute('data-away') || '';
+            const home = st.getAttribute('data-home') || '';
+            const time = st.getAttribute('data-time') || '';
+            const pick = st.getAttribute('data-pick') || '';
+            const conf = st.getAttribute('data-conf') || '';
+            const result = st.getAttribute('data-result') || '';
+            let line = away+' @ '+home;
+            if(time) line += ' ('+time+')';
+            line += ' — Pick: '+pick;
+            if(conf) line += ' ('+conf+'%)';
+            if(result === 'WON') line += ' ✅';
+            else if(result === 'LOST') line += ' ❌';
+            lines.push(line);
+        });
+        lines.push('via predictionlab.io');
+        const text = lines.join('\n');
+        const done = function(){ if(btn){ const o = btn.textContent; btn.textContent = '✓ Copied'; btn.classList.add('copied'); setTimeout(function(){ btn.textContent = o; btn.classList.remove('copied'); }, 1500); } };
+        if(navigator.clipboard && window.isSecureContext){ navigator.clipboard.writeText(text).then(done).catch(function(){ _fallbackCopy(text, done); }); }
+        else { _fallbackCopy(text, done); }
+    }
     function firstDateWithCards() {
         for (const d of allDates) {
             const sec = document.getElementById('date-' + d);

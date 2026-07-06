@@ -265,20 +265,7 @@
   <div class="tv-panels">
     <!-- Main panel -->
     <div class="tv-panel visible" id="tvMain">
-      {% if todays_picks is defined and todays_picks %}
-      <div class="tv-today-strip">
-        <div class="tv-today-label">&#9889; Today's Best Picks</div>
-        <div class="tv-today-picks">
-          {% for tp in todays_picks[:3] %}
-          {% set _pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
-          <a class="tv-today-pick" href="/{{ tp.slug }}">
-            <span class="tv-pick-match">{{ tp.sport }} &middot; {{ tp.away }} vs {{ tp.home }}</span>
-            <span class="tv-pick-edge">{{ _pct }}% edge</span>
-          </a>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
+      {# ===== SECTION: Today's Best Picks strip removed from burger menu (per request) ===== #}
       {% if not is_premium|default(false) %}
       <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
       {% endif %}
@@ -372,7 +359,7 @@
 <script>
 /* ── Drawer ── */
 var TV_MENUS={
-  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},
+  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},
   props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
   results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},
   community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://www.instagram.com/',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
@@ -394,7 +381,7 @@ var _srchDefaults=[
   {l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},
   {l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},
   {l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},
-  {l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Player Props',h:'/player-props',s:'props'},
+  {l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Tennis Picks',h:'/tennis-picks',s:'all'},{l:'UFC Picks',h:'/ufc-picks',s:'all'},{l:'Golf Picks',h:'/golf-picks',s:'all'},{l:'Player Props',h:'/player-props',s:'props'},
   {l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}
 ];
 function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}

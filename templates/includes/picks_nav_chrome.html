@@ -8,20 +8,7 @@
   </div>
   <div class="tv-panels">
     <div class="tv-panel visible" id="tvMain">
-      {% if todays_picks is defined and todays_picks %}
-      <div class="tv-today-strip">
-        <div class="tv-today-label">&#9889; Today's Best Picks</div>
-        <div class="tv-today-picks">
-          {% for tp in todays_picks[:3] %}
-          {% set _pct = tp.prob if tp.prob >= 50 else (100 - tp.prob)|round(1) %}
-          <a class="tv-today-pick" href="/{{ tp.slug }}">
-            <span class="tv-pick-match">{{ tp.sport }} &middot; {{ tp.away }} vs {{ tp.home }}</span>
-            <span class="tv-pick-edge">{{ _pct }}% edge</span>
-          </a>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
+      {# ===== SECTION: Today's Best Picks strip removed from burger menu (per request) ===== #}
       {% if not is_premium|default(false) %}
       <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
       {% endif %}

@@ -312,6 +312,10 @@ def _parse_made(value: str) -> float:
 
 def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] = None) -> Dict:
     schedule = schedule_override if schedule_override is not None else fetch_schedule_and_teams(league)
+    # Only pull real book lines for the LIVE slate. Historical rebuilds (grading)
+    # pass a schedule_override: the Odds API events endpoint has no past lines,
+    # and skipping the call there protects quota.
+    use_real = schedule_override is None
     excluded = []
     if league == "NBA":
         validated = build_validated_nba_player_pool(schedule)
@@ -319,7 +323,7 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         excluded = validated["excluded"]
     else:
         players = build_top_players(league, schedule)
-    prop_lines = fetch_prop_lines(league, players)
+    prop_lines = fetch_prop_lines(league, players, use_real=use_real)
     by_id = {p["player_id"]: p for p in players}
     matchups = {}
     for g in schedule:
@@ -379,15 +383,18 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         confidence = min(99.0, max(50.0, (max(p_over, p_under) * 100.0 + agreement * 12.0 - variance * 0.4)))
         picked_side = "OVER" if (p_over >= p_under and agreement >= 0.5) else ("UNDER" if p_under > p_over else ("OVER" if ev_over >= ev_under else "UNDER"))
 
-        # MLB: invert signal for statistically underperforming categories
-        _MLB_INVERT_PROPS = {"hits", "runs", "rbis", "home_runs"}
+        # NOTE: a blanket MLB inversion for hits/runs/rbis/home_runs used to live
+        # here. It was a band-aid over a broken grader (which compared the
+        # projection to the internal line — a circular test that forced those
+        # categories toward 0% once inverted). Real box-score grading now lives
+        # in get_league_results(), so the inversion has been removed and picks
+        # follow the projection-vs-line signal directly for every league.
         inverse_signal = False
-        if league == "MLB" and prop["prop_type"] in _MLB_INVERT_PROPS:
-            picked_side = "UNDER" if picked_side == "OVER" else "OVER"
-            inverse_signal = True
 
         line_source = prop.get("line_source", "")
-        public_line = _to_half_step(float(prop["line"])) if (line_source == "internal_odds_api" and prop.get("line") is not None) else None
+        # Expose the line to the UI for real book lines and internal dev lines
+        # (real lines are the whole point of grading; internal keeps dev usable).
+        public_line = _to_half_step(float(prop["line"])) if (line_source in ("internal_odds_api", "the_odds_api") and prop.get("line") is not None) else None
 
         # Poisson fair-odds overlay (NBA only)
         poisson_fields: Dict = {}
@@ -452,6 +459,7 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             "league": league,
             "prop_type": prop["prop_type"],
             "line": public_line,
+            "line_source": line_source,
             "_calc_line": calc_line,
             "odds_over": prop["odds_over"],
             "odds_under": prop["odds_under"],
@@ -473,7 +481,14 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     if league == "NBA":
         players = sorted(players, key=lambda x: (float(x.get("consensus_rank", 999)), -float(x.get("top50_score", 0.0))))[:100]
         projections.sort(key=lambda x: (-(x["projection"]), -x["confidence_score"], -(x["model_agreement"])),)
-    payload = {"players": players, "props": projections}
+    _line_sources = {pl.get("line_source") for pl in prop_lines}
+    lines_real = "the_odds_api" in _line_sources
+    payload = {
+        "players": players,
+        "props": projections,
+        "lines_real": lines_real,
+        "line_source": ("the_odds_api" if lines_real else ("synthetic" if "synthetic" in _line_sources else "internal")),
+    }
     if DEBUG_PLAYER_VALIDATION and league == "NBA":
         payload["excluded_players"] = excluded
         payload["model_variance"] = debug_variance
@@ -492,52 +507,133 @@ def get_league_data(league: str) -> Dict:
     return payload
 
 
+# ── Real box-score actuals for grading ───────────────────────────────────
+# prop_type -> candidate ESPN box-score column labels, keyed by ESPN "sport".
+# Only sports with a reliable box-score table are listed here; anything else
+# grades to N/A so we never fabricate a result (per the "N/A + reason" rule).
+_ACTUAL_STAT_LABELS: Dict[str, Dict[str, List[str]]] = {
+    "basketball": {  # NBA, WNBA, NCAAB, NCAAW
+        "points":   ["PTS"],
+        "rebounds": ["REB"],
+        "assists":  ["AST"],
+        "threes":   ["3PT"],
+    },
+    "baseball": {    # MLB (batting + pitching tables)
+        "hits":       ["H"],
+        "runs":       ["R"],
+        "rbis":       ["RBI"],
+        "home_runs":  ["HR"],
+        "strikeouts": ["K", "SO"],
+        "walks":      ["BB"],
+    },
+}
+# Props whose ESPN cell is formatted "made-attempted" (e.g. "3-7") — take makes.
+_MADE_VALUE_PROPS = {"threes"}
+
+
+def _stat_from_row(prop_type: str, idx: Dict[str, int], vals: List, sport: str) -> Optional[float]:
+    labels = _ACTUAL_STAT_LABELS.get(sport, {}).get(prop_type)
+    if not labels:
+        return None
+    for lab in labels:
+        i = idx.get(lab)
+        if i is None or i >= len(vals):
+            continue
+        raw = vals[i]
+        if raw in (None, "", "--"):
+            continue
+        if prop_type in _MADE_VALUE_PROPS or (isinstance(raw, str) and "-" in raw):
+            return _parse_made(raw)
+        try:
+            return float(raw)
+        except Exception:
+            continue
+    return None
+
+
+def _fetch_event_actuals(league: str, event_id: str) -> Dict[str, Dict[str, float]]:
+    """Return {player_name_lower: {prop_type: actual}} from an ESPN box score.
+
+    Only basketball + baseball box scores are parsed; other sports return {}
+    so callers grade them as N/A instead of fabricating a result. Stats are
+    merged across statistic groups (e.g. MLB batting + pitching) by player.
+    """
+    cfg = LEAGUE_CONFIG.get(league) or {}
+    sport = cfg.get("espn_sport")
+    lg = cfg.get("espn_league")
+    if not sport or not lg or not event_id or sport not in _ACTUAL_STAT_LABELS:
+        return {}
+    try:
+        s = requests.get(
+            f"https://site.api.espn.com/apis/site/v2/sports/{sport}/{lg}/summary",
+            params={"event": event_id},
+            timeout=8,
+        ).json()
+    except Exception:
+        return {}
+    out: Dict[str, Dict[str, float]] = {}
+    for sec in (s.get("boxscore", {}).get("players") or []):
+        for grp in (sec.get("statistics") or []):
+            labels = grp.get("labels") or grp.get("names") or []
+            idx = {k: i for i, k in enumerate(labels)}
+            for ath in (grp.get("athletes") or []):
+                name = ((ath.get("athlete") or {}).get("displayName") or "").strip()
+                vals = ath.get("stats") or []
+                if not name or not vals:
+                    continue
+                rec = out.setdefault(name.lower(), {})
+                for pt in _ACTUAL_STAT_LABELS.get(sport, {}):
+                    if pt in rec:
+                        continue
+                    v = _stat_from_row(pt, idx, vals, sport)
+                    if v is not None:
+                        rec[pt] = v
+    return out
+
+
+def get_actuals_for_date(league: str, for_date: str) -> Dict[str, Dict[str, float]]:
+    """Real box-score actuals for a date, keyed by player name.
+
+    Returns {player_name_lower: {prop_type: actual_value}} for the date's
+    completed games (basketball + baseball only; other sports -> {}). Used by
+    the host app to grade previously-snapshotted picks against their real book
+    line, so we never fabricate a result when a stat is unavailable.
+    """
+    key = league.upper()
+    try:
+        from datetime import date as _date
+        d = _date.fromisoformat(for_date)
+    except Exception:
+        return {}
+    try:
+        schedule = fetch_schedule_and_teams(key, target_date=d)
+    except Exception:
+        return {}
+    out: Dict[str, Dict[str, float]] = {}
+    for g in schedule or []:
+        eid = str(g.get("event_id") or "")
+        if not eid or eid.startswith(f"{key}-") or "fallback" in eid:
+            continue
+        for nm, rec in _fetch_event_actuals(key, eid).items():
+            out.setdefault(nm, {}).update(rec)
+    return out
+
+
 def get_league_results(league: str, for_date: str | None = None) -> Dict:
+    """Grade a slate's props against REAL box-score actuals for every league.
+
+    A pick HITs/MISSes only when we have the player's actual stat; otherwise it
+    is returned as N/A with a reason (never fabricated). Grading is done against
+    the line the pick was made on (real book line if present, else the internal
+    calc line the pick was derived from).
+    """
     key = league.upper()
     cache_key = f"{key}:{for_date or 'yesterday'}"
     now = time.time()
     cached = _RESULTS_CACHE.get(cache_key)
     if cached and (now - cached["ts"]) < 300:
         return cached["payload"]
-    if key != "NBA":
-        # Non-NBA leagues currently don't have full stat-grade integration here.
-        # Return a non-empty "latest evaluated board" so results view is useful
-        # instead of hardcoded zero rows.
-        data = get_league_data(key)
-        rows = []
-        summary = {"overall": {"wins": 0, "losses": 0}, "by_prop_type": {}}
-        for p in (data.get("props") or [])[:40]:
-            line = float(p.get("_calc_line", p.get("line", 0.0)) or 0.0)
-            projection = float(p.get("projection", 0.0) or 0.0)
-            pick = str(p.get("picked_side", ""))
-            # Proxy grading: compare projection to line directionally.
-            hit = (projection > line and pick == "OVER") or (projection < line and pick == "UNDER")
-            if hit:
-                summary["overall"]["wins"] += 1
-            else:
-                summary["overall"]["losses"] += 1
-            pt = str(p.get("prop_type", "other"))
-            bucket = summary["by_prop_type"].setdefault(pt, {"wins": 0, "losses": 0})
-            if hit:
-                bucket["wins"] += 1
-            else:
-                bucket["losses"] += 1
-            rows.append(
-                {
-                    "player_id": p.get("player_id"),
-                    "player_name": p.get("player_name"),
-                    "team": p.get("team"),
-                    "prop_type": p.get("prop_type"),
-                    "pick": pick,
-                    "line": line,
-                    "actual": round(projection, 2),
-                    "result": "HIT" if hit else "MISS",
-                    "projection": p.get("projection"),
-                }
-            )
-        payload = {"league": key, "count": len(rows), "items": rows, "summary": summary, "result_date": None}
-        _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
-        return payload
+
     if for_date:
         try:
             from datetime import date as _date
@@ -546,76 +642,95 @@ def get_league_results(league: str, for_date: str | None = None) -> Dict:
             ydate = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).date()
     else:
         ydate = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).date()
+
+    def _finish(payload: Dict) -> Dict:
+        _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
+        return payload
+
+    def _empty(note: str) -> Dict:
+        return _finish({
+            "league": key, "count": 0, "items": [],
+            "summary": {"overall": {"wins": 0, "losses": 0}, "by_prop_type": {}},
+            "result_date": str(ydate), "graded": 0, "skipped": 0, "note": note,
+        })
+
     y_schedule = fetch_schedule_and_teams(key, target_date=ydate)
     if not y_schedule:
-        return {"league": key, "count": 0, "items": []}
+        return _empty("No games found for this date.")
     data = _build_league_payload(key, schedule_override=y_schedule)
-    player_stat_map = {}
+
+    # Pull real box-score actuals for every real event on the slate.
+    actuals: Dict[str, Dict[str, float]] = {}
     for g in y_schedule:
-        event_id = g.get("event_id")
-        if not event_id:
+        eid = str(g.get("event_id") or "")
+        # Skip synthetic/dev schedule rows that carry no real ESPN event id.
+        if not eid or eid.startswith(f"{key}-") or "fallback" in eid:
             continue
-        try:
-            s = requests.get(
-                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary",
-                params={"event": event_id},
-                timeout=8,
-            ).json()
-            sections = (s.get("boxscore", {}).get("players") or [])
-            for sec in sections:
-                stats_group = (sec.get("statistics") or [])
-                if not stats_group:
-                    continue
-                labels = stats_group[0].get("labels") or []
-                idx = {k: i for i, k in enumerate(labels)}
-                for ath in stats_group[0].get("athletes") or []:
-                    name = (ath.get("athlete") or {}).get("displayName")
-                    vals = ath.get("stats") or []
-                    if not name:
-                        continue
-                    pts = float(vals[idx["PTS"]]) if "PTS" in idx and idx["PTS"] < len(vals) else None
-                    reb = float(vals[idx["REB"]]) if "REB" in idx and idx["REB"] < len(vals) else None
-                    ast = float(vals[idx["AST"]]) if "AST" in idx and idx["AST"] < len(vals) else None
-                    threes = _parse_made(vals[idx["3PT"]]) if "3PT" in idx and idx["3PT"] < len(vals) else None
-                    player_stat_map[name.lower()] = {"points": pts, "rebounds": reb, "assists": ast, "threes": threes}
-        except Exception:
-            continue
-    rows = []
+        for nm, rec in _fetch_event_actuals(key, eid).items():
+            actuals.setdefault(nm, {}).update(rec)
+
+    rows: List[Dict] = []
     summary = {"overall": {"wins": 0, "losses": 0}, "by_prop_type": {}}
-    for p in (data.get("props") or [])[:40]:
+    graded = 0
+    skipped = 0
+    for p in (data.get("props") or []):
         pname = str(p.get("player_name", "")).lower()
-        actual = (player_stat_map.get(pname) or {}).get(str(p.get("prop_type", "")))
-        if actual is None:
-            continue
-        line = float(p.get("_calc_line", 0.0) or 0.0)
+        pt = str(p.get("prop_type", ""))
         pick = str(p.get("picked_side", ""))
+        line = p.get("line")
+        if line is None:
+            line = p.get("_calc_line")
+        line = float(line or 0.0)
+        actual = (actuals.get(pname) or {}).get(pt)
+        row = {
+            "player_id": p.get("player_id"),
+            "player_name": p.get("player_name"),
+            "team": p.get("team"),
+            "prop_type": pt,
+            "pick": pick,
+            "line": line,
+            "actual": None,
+            "result": "N/A",
+            "projection": p.get("projection"),
+        }
+        if actual is None:
+            row["result_reason"] = "No completed box-score stat for this player/prop."
+            skipped += 1
+            rows.append(row)
+            continue
+        row["actual"] = round(float(actual), 2)
+        if float(actual) == line:
+            row["result"] = "PUSH"
+            rows.append(row)
+            continue
         hit = (actual > line and pick == "OVER") or (actual < line and pick == "UNDER")
-        if hit:
-            summary["overall"]["wins"] += 1
-        else:
-            summary["overall"]["losses"] += 1
-        pt = str(p.get("prop_type", "other"))
+        row["result"] = "HIT" if hit else "MISS"
+        graded += 1
         bucket = summary["by_prop_type"].setdefault(pt, {"wins": 0, "losses": 0})
         if hit:
+            summary["overall"]["wins"] += 1
             bucket["wins"] += 1
         else:
+            summary["overall"]["losses"] += 1
             bucket["losses"] += 1
-        rows.append(
-            {
-                "player_id": p.get("player_id"),
-                "player_name": p.get("player_name"),
-                "team": p.get("team"),
-                "prop_type": p.get("prop_type"),
-                "pick": pick,
-                "line": line,
-                "actual": round(actual, 2),
-                "result": "HIT" if hit else "MISS",
-                "projection": p.get("projection"),
-            }
-        )
-    payload = {"league": key, "count": len(rows), "items": rows, "summary": summary, "result_date": str(ydate)}
-    _RESULTS_CACHE[cache_key] = {"ts": now, "payload": payload}
-    return payload
+        rows.append(row)
+
+    # Keep the payload bounded, prioritising graded rows over N/A filler.
+    graded_rows = [r for r in rows if r["result"] in ("HIT", "MISS", "PUSH")]
+    na_rows = [r for r in rows if r["result"] == "N/A"]
+    items = (graded_rows + na_rows)[:200]
+    payload = {
+        "league": key,
+        "count": len(items),
+        "items": items,
+        "summary": summary,
+        "result_date": str(ydate),
+        "graded": graded,
+        "skipped": skipped,
+    }
+    if graded == 0:
+        payload["note"] = "No completed box-score actuals available yet for this date; picks shown as N/A."
+    return _finish(payload)
 
 
 def filter_props(

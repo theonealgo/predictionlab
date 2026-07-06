@@ -132,6 +132,68 @@
 .rr-result.hit{background:rgba(16,185,129,0.15);color:#059669;}
 .rr-result.miss{background:rgba(239,68,68,0.12);color:#dc2626;}
 @media(max-width:440px){.result-row{grid-template-columns:1fr 50px 58px 58px 54px;padding:8px 12px;gap:3px;font-size:0.77rem;}}
+/* ── Cheat-sheet table + toolbar (Props / Streaks) ── */
+.upgrade-banner{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;font-weight:600;}
+.upgrade-banner a{color:#b45309;font-weight:800;text-decoration:underline;}
+.market-row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;}
+.market-btn{background:#f1f5f9;border:1px solid #E2E8F0;border-radius:18px;padding:5px 13px;font-size:0.78rem;font-weight:700;color:#475569;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.market-btn:hover{border-color:#2563eb;color:#2563eb;}
+.market-btn.active{background:#2563eb;border-color:#2563eb;color:#fff;}
+.market-btn.unavail{opacity:.4;}
+.props-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.prop-search{flex:1;min-width:160px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:8px 12px;font-size:0.85rem;color:#0f172a;}
+.prop-fsel,.prop-fnum{background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:8px 10px;font-size:0.82rem;color:#0f172a;}
+.prop-fnum{width:120px;}
+.cheat-table-wrap{background:#fff;border:1px solid #E2E8F0;border-radius:14px;overflow:auto;box-shadow:0 2px 8px rgba(15,23,42,0.06);}
+.cheat-table{width:100%;border-collapse:collapse;font-size:0.85rem;}
+.cheat-table th{position:sticky;top:0;background:#f8fafc;font-size:0.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#64748b;padding:10px 12px;text-align:center;border-bottom:1px solid #E2E8F0;white-space:nowrap;}
+.cheat-table th.ct-left{text-align:left;}
+.cheat-table td{padding:9px 12px;text-align:center;border-bottom:1px solid #f1f5f9;color:#334155;white-space:nowrap;}
+.cheat-table td.ct-left{text-align:left;}
+.cheat-table tr:hover td{background:#f8fafc;}
+.ct-player{font-weight:700;color:#0f172a;}
+.ct-team{display:block;font-size:0.7rem;color:#94a3b8;font-weight:600;}
+.ct-strong{font-weight:800;color:#0f172a;}
+.ct-pos{color:#059669;font-weight:700;}
+.ct-neg{color:#dc2626;font-weight:700;}
+.ct-rating{display:inline-block;min-width:34px;padding:2px 6px;border-radius:6px;font-weight:800;background:#f1f5f9;}
+.ct-rating.great{background:rgba(16,185,129,0.14);color:#059669;}
+.ct-rating.ok{background:rgba(217,119,6,0.14);color:#d97706;}
+.ct-rating.poor{background:rgba(220,38,38,0.12);color:#dc2626;}
+.ct-hit.great,.ct-hit-great{color:#059669;font-weight:700;}
+.ct-hit.ok{color:#d97706;font-weight:700;}
+.ct-hit.poor{color:#dc2626;font-weight:700;}
+.ct-pick{font-size:0.72rem;font-weight:800;text-transform:uppercase;padding:3px 9px;border-radius:6px;background:#f1f5f9;color:#475569;}
+.ct-pick.over{background:rgba(16,185,129,0.14);color:#059669;}
+.ct-pick.under{background:rgba(239,68,68,0.12);color:#dc2626;}
+.ct-analyze{background:#eef2ff;border:1px solid #e0e7ff;color:#4338ca;border-radius:7px;padding:3px 9px;font-weight:800;cursor:pointer;}
+.ct-analyze:disabled{opacity:.4;cursor:default;}
+.ct-empty{padding:26px;color:#94a3b8;text-align:center;}
+.ct-muted{color:#94a3b8;}
+.ct-analyze-row td{background:#fbfcfe;text-align:left;white-space:normal;}
+.an-wrap{display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
+.an-models{display:flex;gap:14px;flex-wrap:wrap;}
+.an-mc{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.an-lbl{font-size:0.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;}
+.an-val{font-size:0.82rem;font-weight:700;color:#334155;}
+.an-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:0.78rem;color:#64748b;}
+.an-tier.gold{color:#b45309;} .an-tier.green{color:#059669;} .an-tier.red{color:#dc2626;} .an-tier.neutral{color:#94a3b8;}
+.ct-locked td{background:#fcfcfd;}
+.ct-lockcell{position:relative;}
+.ct-blur{filter:blur(5px);user-select:none;color:#475569;font-weight:700;letter-spacing:1px;}
+.ct-lockcta{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#0f172a;color:#fff;font-size:0.72rem;font-weight:800;padding:3px 10px;border-radius:8px;text-decoration:none;white-space:nowrap;}
+.props-msg.upsell{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.upsell-lock{font-size:2rem;}
+.upsell-title{font-size:1.1rem;font-weight:800;color:#0f172a;}
+.upsell-sub{color:#64748b;}
+.upsell-btn{margin-top:8px;background:#2563eb;color:#fff;font-weight:800;padding:9px 20px;border-radius:10px;text-decoration:none;}
+.streak-badge{font-weight:800;font-size:0.8rem;padding:3px 9px;border-radius:8px;}
+.streak-badge.hot{background:rgba(239,68,68,0.12);color:#dc2626;}
+.streak-badge.cold{background:rgba(59,130,246,0.12);color:#2563eb;}
+.pips{white-space:nowrap;}
+.pip{display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:4px;font-size:0.62rem;font-weight:800;margin:0 1px;}
+.pip.hit{background:rgba(16,185,129,0.15);color:#059669;}
+.pip.miss{background:rgba(239,68,68,0.12);color:#dc2626;}
 </style>
 {% endblock %}
 {% block content %}
@@ -140,6 +202,7 @@
     <div class="controls-left">
       <div class="tab-group">
         <button class="tab-btn active" id="tabProps" onclick="switchTab('props')">Props</button>
+        <button class="tab-btn" id="tabStreaks" onclick="switchTab('streaks')">Streaks</button>
         <button class="tab-btn" id="tabResults" onclick="switchTab('results')">Results</button>
         <button class="tab-btn" id="tabDiag" onclick="switchTab('diagnostics')">Diagnostics</button>
       </div>
@@ -164,7 +227,8 @@
 </div>
 <script>
 const MODEL_KEYS   = ['glicko2','trueskill','xgboost','xsharp','sharp_consensus'];
-const MODEL_LABELS = ['Grinder2','Takedown','Edge','XSharp','Consensus'];
+const MODEL_LABELS = ['Grinder2','Takedown','Edge','XSharp','Sharp Consensus'];
+const IS_PREMIUM = {{ 'true' if is_premium else 'false' }};
 const PROP_LABELS  = {
   points:'Points', rebounds:'Rebounds', assists:'Assists', threes:'3PT Made',
   steals:'Steals', shots_on_goal:'SOG', goals:'Goals', hits:'Hits',
@@ -177,6 +241,20 @@ let _view = 'props';
 let _selectedDate = '';      // YYYY-MM-DD, empty = today
 let _weekOffset = 0;         // how many weeks back the bubble window is
 const DATES_PER_PAGE = 7;
+
+/* ── Props cheat-sheet + streaks state ── */
+// Per-sport market button rows (labels from the product spec). A null pt means
+// the market isn't generated by the engine yet — the button is shown but dimmed
+// and clicking it explains it's N/A rather than silently showing nothing.
+const MARKET_ROWS = {
+  MLB: [['All','all'],['HR','home_runs'],['H','hits'],['R','runs'],['RBI','rbis'],['H+R+RBI',null],['1B',null],['2B',null],['3B',null],['TB',null],['SB',null],['K','strikeouts'],['ER',null],['HA',null],['BB',null],['OUTS',null]],
+  BASKETBALL: [['All','all'],['Pts','points'],['Reb','rebounds'],['Ast','assists'],['3pts','threes'],['Most Points',null],['Stl',null],['Blk',null],['First Basket',null],['Double-double',null],['Pts+Ast',null],['Pts+Reb',null],['Reb+Ast',null],['Pts+Ast+Reb',null]],
+  SOCCER: [['Goalscorer','goals'],['Shots','shots'],['Assists','assists'],['Goals+Assists',null],['Cards',null],['Saves',null],['Fouls',null]],
+};
+const BBALL_LEAGUES = ['NBA','WNBA','NCAAB','NCAAW'];
+let _propsData = { league:'', rows:[], present:new Set(), hitByType:{}, isPremium:true };
+let _propsFilters = { market:'all', side:'all', minEv:'', minHit:'', q:'' };
+let _streakData = { items:[], filter:{ market:'all', q:'' } };
 
 /* ── Date bubble helpers ── */
 function _isoToday() {
@@ -269,6 +347,7 @@ function switchTab(v) {
   _view = v;
   _selectedDate = '';
   document.getElementById('tabProps').classList.toggle('active', v === 'props');
+  document.getElementById('tabStreaks').classList.toggle('active', v === 'streaks');
   document.getElementById('tabResults').classList.toggle('active', v === 'results');
   document.getElementById('tabDiag').classList.toggle('active', v === 'diagnostics');
   renderDateBubbles();
@@ -289,6 +368,8 @@ function loadProps() {
     url = `/player-props-api/props?league=${encodeURIComponent(league)}`;
   } else if (_view === 'diagnostics') {
     url = `/player-props-api/diagnostics?league=${encodeURIComponent(league)}`;
+  } else if (_view === 'streaks') {
+    url = `/player-props-api/streaks?league=${encodeURIComponent(league)}`;
   } else {
     url = `/player-props-api/results?league=${encodeURIComponent(league)}&date=${encodeURIComponent(dateParam)}`;
   }
@@ -296,8 +377,10 @@ function loadProps() {
     .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.detail || r.statusText); }))
     .then(data => {
       btn.disabled = false; btn.textContent = 'Load Props';
+      if (data && data.off_season) { setContent(offSeasonPanel(league, data.detail)); return; }
       if (_view === 'props') renderProps(data, league);
       else if (_view === 'diagnostics') renderDiagnostics(data, league);
+      else if (_view === 'streaks') renderStreaks(data, league);
       else renderResults(data, league);
     })
     .catch(err => {
@@ -308,6 +391,7 @@ function loadProps() {
 }
 
 function renderDiagnostics(data, league) {
+  if (data && data.locked && data.is_premium === false) { setContent(upsellPanel('ML diagnostics')); return; }
   if (data.error) { setContent(`<div class="props-msg">${data.detail || data.error}</div>`); return; }
   const stab = data.distribution_stability || {};
   const ov   = data.overall || {};
@@ -403,44 +487,238 @@ function fmt(pt) { return PROP_LABELS[pt] || pt.replace(/_/g,' ').replace(/\b\w/
 
 function rateClass(rate) { return rate >= 60 ? 'great' : rate >= 50 ? 'ok' : 'poor'; }
 
-/* ── Render props ── */
-function renderProps(data, league) {
-  const groups = groupByPlayer(data.items || []);
-  if (!groups.length) { setContent(`<div class="props-msg">No props available for ${league} right now.</div>`); return; }
-  let html = '<div class="player-grid">';
-  for (const p of groups) {
-    const avg = p.props[0]?.model_confidence || {};
-    html += `<div class="player-card">
-      <div class="player-card-hdr">
-        <div class="player-avatar">${initials(p.player_name)}</div>
-        <div><div class="player-name">${p.player_name}</div><div class="player-team">${p.team || ''}</div></div>
-      </div>
-      <div class="prop-row">`;
-    for (const prop of p.props) {
-      const side = (prop.picked_side || '').toLowerCase();
-      const tier = prop.tier || 'neutral';
-      const tierLabel = tier === 'gold' ? '★ Gold' : tier === 'green' ? '+ Edge' : tier === 'red' ? '− Fade' : '';
-      const fairOdds = side === 'over' ? prop.fair_over_odds : prop.fair_under_odds;
-      const fairStr = fairOdds != null ? (fairOdds > 0 ? '+' + fairOdds : fairOdds) : null;
-      const edgeStr = prop.edge_pct != null ? (prop.edge_pct > 0 ? '+' : '') + prop.edge_pct + '% edge' : null;
-      html += `<div class="prop-cell ${side}">
-        <div class="pc-type">${fmt(prop.prop_type)}</div>
-        <div class="pc-proj">${prop.projection ?? '—'}</div>
-        <div class="pc-line">Line: ${prop._calc_line ?? prop.line ?? '—'}${edgeStr ? ' · ' + edgeStr : ''}</div>
-        <div class="pc-pick">${prop.picked_side || '—'}</div>
-        ${fairStr ? `<div class="pc-fair">Fair: ${fairStr}</div>` : ''}
-        ${tierLabel ? `<div class="pc-tier ${tier}">${tierLabel}</div>` : ''}
-      </div>`;
-    }
-    html += `</div><div class="model-row">`;
-    for (let i = 0; i < MODEL_KEYS.length; i++) {
-      const v = avg[MODEL_KEYS[i]];
-      html += `<div class="model-cell"><span class="mc-lbl">${MODEL_LABELS[i]}</span><span class="mc-val">${v != null ? v + '%' : '—'}</span></div>`;
-    }
-    html += `</div></div>`;
+/* ── Shared helpers for the cheat-sheet + streaks views ── */
+function upsellPanel(what) {
+  return `<div class="props-msg upsell">
+    <div class="upsell-lock">🔒</div>
+    <div class="upsell-title">Premium feature</div>
+    <div class="upsell-sub">Upgrade to unlock ${what}, filters, streaks and full results.</div>
+    <a class="upsell-btn" href="/plans">Upgrade</a></div>`;
+}
+function offSeasonPanel(league, msg) {
+  return `<div class="props-msg upsell">
+    <div class="upsell-lock">🏝️</div>
+    <div class="upsell-title">${league} is off-season</div>
+    <div class="upsell-sub">${msg || 'No games or player props are available right now.'}</div></div>`;
+}
+function pickEv(p) {
+  if (p.pick_ev != null) return p.pick_ev;
+  return (String(p.picked_side).toUpperCase() === 'OVER') ? p.ev_over_percent : p.ev_under_percent;
+}
+function marketRowFor(league, present) {
+  let row;
+  if (league === 'MLB') row = MARKET_ROWS.MLB.slice();
+  else if (BBALL_LEAGUES.includes(league)) row = MARKET_ROWS.BASKETBALL.slice();
+  else if (league === 'SOCCER') row = MARKET_ROWS.SOCCER.slice();
+  else row = [['All','all']].concat([...present].map(pt => [fmt(pt), pt]));
+  if (!row.some(r => r[1] === 'all')) row.unshift(['All','all']);
+  const mapped = new Set(row.map(r => r[1]).filter(Boolean));
+  for (const pt of present) if (!mapped.has(pt)) row.push([fmt(pt), pt]);
+  return row;
+}
+function marketRowHtml(row, present, handler) {
+  let html = '<div class="market-row">';
+  for (const [label, pt] of row) {
+    const avail = pt === 'all' || present.has(pt);
+    html += `<button class="market-btn${pt === 'all' ? ' active' : ''}${avail ? '' : ' unavail'}" `
+          + `data-pt="${pt == null ? '' : pt}" data-avail="${avail ? 1 : 0}" onclick="${handler}(this)">${label}</button>`;
   }
-  html += '</div>';
-  setContent(html);
+  return html + '</div>';
+}
+
+/* ── Render props as a cheat-sheet table ── */
+function renderProps(data, league) {
+  const items = data.items || [];
+  _propsData.league = league;
+  _propsData.isPremium = (data.is_premium !== false);
+  _propsData.rows = items.map(r => Object.assign({}, r, { _locked: r.locked === true }));
+  _propsData.present = new Set(items.filter(r => !r.locked).map(r => r.prop_type));
+  _propsData.hitByType = {};
+  _propsFilters = { market:'all', side:'all', minEv:'', minHit:'', q:'' };
+  if (!items.length) { setContent(`<div class="props-msg">No props available for ${league} right now.</div>`); return; }
+
+  const banner = _propsData.isPremium ? '' :
+    `<div class="upgrade-banner">🔒 You're viewing <strong>1 free pick</strong>. `
+    + `<a href="/plans">Upgrade</a> to unlock every prop, filters, streaks &amp; results.</div>`;
+  const simNote = (data.lines_real === false)
+    ? `<div style="margin:8px 0;padding:8px 12px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:0.82em;font-weight:600;">⚠️ Live sportsbook odds are unavailable right now — showing simulated lines. These are not graded into Results or Streaks.</div>`
+    : '';
+  const markets = marketRowHtml(marketRowFor(league, _propsData.present), _propsData.present, 'window._marketClick');
+  const toolbar = `<div class="props-toolbar">
+    <input id="propSearch" class="prop-search" type="text" placeholder="Search player…" oninput="window._propFilter()">
+    <select id="fSide" class="prop-fsel" onchange="window._propFilter()"><option value="all">Side: All</option><option value="OVER">Over</option><option value="UNDER">Under</option></select>
+    <input id="fEv" class="prop-fnum" type="number" step="0.5" placeholder="Min EV%" oninput="window._propFilter()">
+    <input id="fHit" class="prop-fnum" type="number" step="1" placeholder="Min Hit%" oninput="window._propFilter()">
+  </div>`;
+  const table = `<div class="cheat-table-wrap"><table class="cheat-table">
+    <thead><tr>
+      <th class="ct-left">Player</th><th class="ct-left">Prop</th>
+      <th>Proj</th><th>Proj Diff</th><th>Rating</th><th>EV</th><th>Hit%</th><th>Pick</th><th>Analyze</th>
+    </tr></thead><tbody id="cheatBody"></tbody></table></div>`;
+  setContent(banner + simNote + markets + toolbar + table);
+
+  window._marketClick = function(btn) {
+    if (btn.dataset.avail === '0') { setError('This market isn’t generated yet (N/A).'); return; }
+    setError('');
+    document.querySelectorAll('.market-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _propsFilters.market = btn.dataset.pt || 'all';
+    renderCheatBody();
+  };
+  window._propFilter = function() {
+    _propsFilters.q = (document.getElementById('propSearch').value || '').toLowerCase();
+    _propsFilters.side = document.getElementById('fSide').value;
+    _propsFilters.minEv = document.getElementById('fEv').value;
+    _propsFilters.minHit = document.getElementById('fHit').value;
+    renderCheatBody();
+  };
+  window._toggleAnalyze = function(id) {
+    const el = document.getElementById('an-' + id);
+    if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? '' : 'none';
+  };
+  renderCheatBody();
+
+  // Background: pull season hit-rate by market to fill the Hit% column (premium).
+  if (_propsData.isPremium) {
+    fetch(`/player-props-api/results?league=${encodeURIComponent(league)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d || d.locked || !d.season_by_prop) return;
+        const m = {};
+        for (const [pt, rc] of Object.entries(d.season_by_prop)) {
+          const t = (rc.wins || 0) + (rc.losses || 0);
+          m[pt] = t > 0 ? Math.round((rc.wins || 0) / t * 100) : null;
+        }
+        _propsData.hitByType = m;
+        renderCheatBody();
+      }).catch(() => {});
+  }
+}
+
+function analyzeHtml(r) {
+  const mc = r.model_confidence || {};
+  let cells = '';
+  for (let i = 0; i < MODEL_KEYS.length; i++) {
+    const v = mc[MODEL_KEYS[i]];
+    cells += `<div class="an-mc"><span class="an-lbl">${MODEL_LABELS[i]}</span><span class="an-val">${v != null ? v + '%' : '—'}</span></div>`;
+  }
+  const over = String(r.picked_side).toUpperCase() === 'OVER';
+  const fair = over ? r.fair_over_odds : r.fair_under_odds;
+  const fairStr = fair != null ? (fair > 0 ? '+' + fair : fair) : '—';
+  const tier = r.tier || 'neutral';
+  const edge = r.edge_pct != null ? ((r.edge_pct > 0 ? '+' : '') + r.edge_pct + '%') : '—';
+  return `<div class="an-wrap">
+    <div class="an-models">${cells}</div>
+    <div class="an-meta">
+      <span>Line: <b>${r._calc_line ?? r.line ?? '—'}</b></span>
+      <span>Edge: <b>${edge}</b></span>
+      <span>Fair: <b>${fairStr}</b></span>
+      <span>Tier: <b class="an-tier ${tier}">${tier}</b></span>
+      <span>Over ${r.over_probability ?? '—'}% / Under ${r.under_probability ?? '—'}%</span>
+    </div></div>`;
+}
+
+function lockedRowHtml(r) {
+  return `<tr class="ct-locked">
+    <td class="ct-left ct-player">${r.player_name || '—'}<span class="ct-team">${r.team || ''}</span></td>
+    <td class="ct-left">${fmt(r.prop_type)}</td>
+    <td colspan="6" class="ct-lockcell"><span class="ct-blur">88.8 · +7.5% · OVER</span><a class="ct-lockcta" href="/plans">🔒 Upgrade</a></td>
+    <td><button class="ct-analyze" disabled>▾</button></td>
+  </tr>`;
+}
+
+function renderCheatBody() {
+  const body = document.getElementById('cheatBody');
+  if (!body) return;
+  const f = _propsFilters;
+  let rows = _propsData.rows.slice();
+  if (f.market && f.market !== 'all') rows = rows.filter(r => r.prop_type === f.market);
+  if (f.q) rows = rows.filter(r => String(r.player_name || '').toLowerCase().includes(f.q));
+  if (f.side && f.side !== 'all') rows = rows.filter(r => !r._locked && String(r.picked_side || '').toUpperCase() === f.side);
+  const minEv = parseFloat(f.minEv);
+  if (!isNaN(minEv)) rows = rows.filter(r => !r._locked && (pickEv(r) ?? -999) >= minEv);
+  const minHit = parseFloat(f.minHit);
+  if (!isNaN(minHit)) rows = rows.filter(r => { const h = _propsData.hitByType[r.prop_type]; return h != null && h >= minHit; });
+
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="9" class="ct-empty">No props match these filters.</td></tr>`; return; }
+  let html = '';
+  for (const r of rows) {
+    if (r._locked) { html += lockedRowHtml(r); continue; }
+    const id = (String(r.player_id || r.player_name || '').replace(/[^a-z0-9]/gi, '')) + '_' + r.prop_type;
+    const line = (r._calc_line != null ? r._calc_line : r.line);
+    const diff = (r.projection != null && line != null) ? (r.projection - line) : null;
+    const ev = pickEv(r);
+    const hit = _propsData.hitByType[r.prop_type];
+    const side = String(r.picked_side || '').toLowerCase();
+    const rating = r.confidence_score;
+    html += `<tr>
+      <td class="ct-left ct-player">${r.player_name || '—'}<span class="ct-team">${r.team || ''}</span></td>
+      <td class="ct-left">${fmt(r.prop_type)}</td>
+      <td class="ct-strong">${r.projection ?? '—'}</td>
+      <td class="${diff == null ? '' : (diff >= 0 ? 'ct-pos' : 'ct-neg')}">${diff == null ? '—' : (diff > 0 ? '+' : '') + diff.toFixed(1)}</td>
+      <td><span class="ct-rating ${rating != null ? rateClass(rating) : ''}">${rating != null ? Math.round(rating) : '—'}</span></td>
+      <td class="${ev == null ? '' : (ev >= 0 ? 'ct-pos' : 'ct-neg')}">${ev == null ? '—' : (ev > 0 ? '+' : '') + (+ev).toFixed(1) + '%'}</td>
+      <td>${hit != null ? `<span class="ct-hit ${rateClass(hit)}">${hit}%</span>` : '—'}</td>
+      <td><span class="ct-pick ${side}">${r.picked_side || '—'}</span></td>
+      <td><button class="ct-analyze" onclick="window._toggleAnalyze('${id}')">▾</button></td>
+    </tr>
+    <tr id="an-${id}" class="ct-analyze-row" style="display:none;"><td colspan="9">${analyzeHtml(r)}</td></tr>`;
+  }
+  body.innerHTML = html;
+}
+
+/* ── Render player-prop streaks ── */
+function renderStreaks(data, league) {
+  if (data && data.locked && data.is_premium === false) { setContent(upsellPanel('player-prop streaks')); return; }
+  const items = (data && data.items) || [];
+  if (!items.length) { setContent(`<div class="props-msg">No graded streak history yet for ${league}. Streaks build up as nightly results are graded.</div>`); return; }
+  const present = new Set(items.map(r => r.prop_type));
+  _streakData = { items, filter: { market:'all', q:'' } };
+  const markets = marketRowHtml(marketRowFor(league, present), present, 'window._streakMarket');
+  const toolbar = `<div class="props-toolbar"><input id="streakSearch" class="prop-search" type="text" placeholder="Search player…" oninput="window._streakFilter()"></div>`;
+  const table = `<div class="cheat-table-wrap"><table class="cheat-table">
+    <thead><tr><th class="ct-left">Player</th><th class="ct-left">Prop</th><th>Streak</th><th>Last 5</th><th>Hit%</th><th>Record</th><th>Games</th></tr></thead>
+    <tbody id="streakBody"></tbody></table></div>`;
+  setContent(markets + toolbar + table);
+  window._streakMarket = function(btn) {
+    if (btn.dataset.avail === '0') { setError('This market isn’t generated yet (N/A).'); return; }
+    setError('');
+    document.querySelectorAll('.market-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _streakData.filter.market = btn.dataset.pt || 'all';
+    renderStreakBody();
+  };
+  window._streakFilter = function() {
+    _streakData.filter.q = (document.getElementById('streakSearch').value || '').toLowerCase();
+    renderStreakBody();
+  };
+  renderStreakBody();
+}
+
+function renderStreakBody() {
+  const body = document.getElementById('streakBody');
+  if (!body) return;
+  const f = _streakData.filter;
+  let rows = _streakData.items.slice();
+  if (f.market && f.market !== 'all') rows = rows.filter(r => r.prop_type === f.market);
+  if (f.q) rows = rows.filter(r => String(r.player_name || '').toLowerCase().includes(f.q));
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="7" class="ct-empty">No streaks match these filters.</td></tr>`; return; }
+  let html = '';
+  for (const r of rows) {
+    const hot = r.streak_type === 'HIT';
+    const streakStr = `${hot ? '🔥' : '❄️'} ${hot ? 'W' : 'L'}${r.streak_len}`;
+    const last5 = (r.recent || []).map(x => `<span class="pip ${x === 'HIT' ? 'hit' : 'miss'}">${x === 'HIT' ? 'H' : 'M'}</span>`).join('');
+    html += `<tr>
+      <td class="ct-left ct-player">${r.player_name || '—'}<span class="ct-team">${r.team || ''}</span></td>
+      <td class="ct-left">${fmt(r.prop_type)}</td>
+      <td><span class="streak-badge ${hot ? 'hot' : 'cold'}">${streakStr}</span></td>
+      <td class="pips">${last5}</td>
+      <td><span class="ct-hit ${rateClass(r.hit_rate)}">${r.hit_rate}%</span></td>
+      <td>${rec(r.hits, r.misses)}</td>
+      <td class="ct-muted">${r.games}</td>
+    </tr>`;
+  }
+  body.innerHTML = html;
 }
 
 function pct(w, l) { return (w + l) > 0 ? Math.round(w / (w + l) * 100) : 0; }
@@ -448,6 +726,7 @@ function rec(w, l) { return `<span class="rec-w">${w}</span>–<span class="rec-
 
 /* ── Render results ── */
 function renderResults(data, league) {
+  if (data && data.locked && data.is_premium === false) { setContent(upsellPanel('results & performance')); return; }
   const groups = groupResultsByPlayer(data.items || []);
   const summary     = data.summary || {};
   const overall     = summary.overall || {};

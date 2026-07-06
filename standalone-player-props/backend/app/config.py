@@ -19,4 +19,7 @@ ODDS_API_KEY = os.getenv("ODDS_API_KEY", "").strip()
 ODDS_API_BASE = os.getenv("ODDS_API_BASE", "https://api.the-odds-api.com/v4").strip()
 ODDS_ENGINE_URL = os.getenv("ODDS_ENGINE_URL", "").strip().rstrip("/")
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "600"))
+# Max games per league to pull player-prop odds for per refresh. Each event
+# costs (markets x regions) requests against The Odds API quota, so keep modest.
+ODDS_EVENTS_CAP = int(os.getenv("ODDS_EVENTS_CAP", "10"))
 DEBUG_PLAYER_VALIDATION = os.getenv("DEBUG_PLAYER_VALIDATION", "").strip().lower() in ("1", "true", "yes", "on")

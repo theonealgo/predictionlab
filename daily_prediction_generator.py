@@ -205,8 +205,12 @@ if __name__ == '__main__':
     logger.info("Daily Prediction Generator - Starting")
     logger.info("="*60)
     
-    # Active sports
-    active_sports = ['NHL', 'NBA', 'NFL', 'NCAAB', 'NCAAF']
+    # ===== SECTION: Active sports for nightly generation =====
+    # Include MLB + WNBA so the live summer sports get predictions logged
+    # nightly (not only when someone opens the picks page). Their prior absence
+    # left recent slates empty, which made the homepage "last night" card and
+    # results drift to weeks-old games during the summer.
+    active_sports = ['NHL', 'NFL', 'NBA', 'MLB', 'NCAAB', 'NCAAF', 'WNBA']
     
     total_saved = 0
     

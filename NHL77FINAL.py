@@ -138,7 +138,7 @@ _SPORT_PREDICTIONS_PAGE_TTL = {
 _MANUAL_BANNER_ITEMS = [
     {'label': 'NHL ⭐ Grinder2', 'pct': '83.3%', 'record': '40-8'},
     {'label': '🎲 NBA O/U (XSharp)', 'pct': '82.6%', 'record': '247/299'},
-    {'label': 'MLB 🎯 Moneyline (Consensus)', 'pct': '60.0%', 'record': '60-40'},
+    {'label': 'MLB 🎯 Moneyline (Sharp Consensus)', 'pct': '60.0%', 'record': '60-40'},
     {'label': 'NHL 📊 Edge', 'pct': '56.5%', 'record': '113-87'},
 ]
 _SHARE_IMAGE_CACHE_DIR = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'share_images')
@@ -1915,6 +1915,18 @@ def _ensure_book_moneylines(pred: dict) -> None:
     """
     if _valid_book_ml(pred.get('book_home_moneyline')) and _valid_book_ml(pred.get('book_away_moneyline')):
         return
+    # Soccer (and other 3-way markets) must NOT derive moneylines from a 2-way
+    # spread — that produces nonsensical odds where both teams show '+' money.
+    # Only real 3-way sportsbook lines (attached elsewhere) should populate these;
+    # otherwise leave them blank so the card shows '—' instead of fake numbers.
+    _is_threeway = (
+        pred.get('draw_prob') is not None
+        or pred.get('face_draw_prob') is not None
+        or pred.get('pl_model_draw_ml') is not None
+        or str(pred.get('game_id') or '').upper().startswith('SOCCER')
+    )
+    if _is_threeway:
+        return
     bs = _safe_float(pred.get('book_spread'))
     if bs is None:
         ds = _safe_float(pred.get('disp_book_spread'))
@@ -2258,6 +2270,37 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
     _set_card_edge_pct(g, sport=sport)
 
 
+# ===== SECTION: Issue 5 — Efficiency moneyline grading for results tallies =====
+def _grade_efficiency_ml_from_spread(sport, daily_results):
+    """Cheap Team Efficiency moneyline grading from the PL/efficiency spread
+    already attached during spread/total grading (no new ESPN/API calls).
+
+    Sets efficiency_prob / efficiency_pick / efficiency_correct per game so the
+    results tallies can surface Efficiency as a 6th graded model. Games without
+    an efficiency/PL spread keep efficiency_prob=None and render as N/A ("—")."""
+    if not daily_results:
+        return
+    try:
+        from sports import team_efficiency_attach as _eff
+    except Exception as _imp_e:
+        logger.debug(f"[eff-ml] module import failed: {_imp_e}")
+        return
+    if sport not in _eff.EFFICIENCY_GRADING_SPORTS:
+        return
+    # Seed efficiency_spread from the already-computed PL/"Our" spread so the
+    # grader uses a genuine efficiency projection rather than re-fetching ESPN.
+    for dd in daily_results.values():
+        for g in dd.get('games', []):
+            if g.get('skip_grading'):
+                continue
+            if g.get('efficiency_spread') is None and g.get('our_spread') is not None:
+                g['efficiency_spread'] = g['our_spread']
+    try:
+        _eff.apply_efficiency_ml_grading(sport, daily_results)
+    except Exception as _eff_ml_e:
+        logger.debug(f"[eff-ml] moneyline grading failed for {sport}: {_eff_ml_e}")
+
+
 def _finalize_daily_result_cards(sport, daily_results):
     """Book lines + card display keys for every completed game (all sports)."""
     if not daily_results:
@@ -2269,6 +2312,8 @@ def _finalize_daily_result_cards(sport, daily_results):
     for dd in daily_results.values():
         for g in dd.get('games', []):
             _prepare_result_card_display(g, sport)
+    # Derive Efficiency moneyline win% from the spread attached above.
+    _grade_efficiency_ml_from_spread(sport, daily_results)
 
 
 
@@ -2410,6 +2455,13 @@ _TEAM_NAME_TO_ABBR = {
         'New York Jets': 'nyj', 'Philadelphia Eagles': 'phi', 'Pittsburgh Steelers': 'pit',
         'San Francisco 49ers': 'sf', 'Seattle Seahawks': 'sea', 'Tampa Bay Buccaneers': 'tb',
         'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh',
+    },
+    'WNBA': {
+        'Atlanta Dream': 'atl', 'Chicago Sky': 'chi', 'Connecticut Sun': 'conn',
+        'Dallas Wings': 'dal', 'Golden State Valkyries': 'gsv', 'Indiana Fever': 'ind',
+        'Las Vegas Aces': 'lv', 'Los Angeles Sparks': 'la', 'Minnesota Lynx': 'min',
+        'New York Liberty': 'ny', 'Phoenix Mercury': 'phx', 'Seattle Storm': 'sea',
+        'Washington Mystics': 'wsh',
     },
 }
 
@@ -4107,22 +4159,36 @@ def _traffic_now():
         return datetime.now()
 
 def log_site_visit(endpoint):
-    """Track site visits for analytics"""
+    """Track site visits for analytics (non-blocking).
+
+    The DB insert runs in a background thread so the analytics write never adds
+    latency to the response and never competes for SQLite's write lock on the
+    request path (a common cause of site-wide slowness).
+    """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
         visit_date = _traffic_now().strftime('%Y-%m-%d')
         ip_address = request.remote_addr if request else None
         user_agent = request.headers.get('User-Agent') if request else None
-        
-        cursor.execute('''
-            INSERT INTO site_visits (visit_date, ip_address, user_agent, endpoint)
-            VALUES (?, ?, ?, ?)
-        ''', (visit_date, ip_address, user_agent, endpoint))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error logging site visit: {e}")
+    except Exception:
+        return
+
+    def _write():
+        try:
+            conn = get_db_connection()
+            conn.execute('''
+                INSERT INTO site_visits (visit_date, ip_address, user_agent, endpoint)
+                VALUES (?, ?, ?, ?)
+            ''', (visit_date, ip_address, user_agent, endpoint))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error logging site visit: {e}")
+
+    try:
+        import threading as _thr
+        _thr.Thread(target=_write, daemon=True, name='site-visit').start()
+    except Exception:
+        _write()
 
 SPORTS = {
     'NHL': {'name': 'NHL', 'icon': '🏒', 'color': '#1e3a8a'},
@@ -5452,6 +5518,22 @@ def init_db():
             UNIQUE(league, result_date, player_name, prop_type)
         );
         CREATE INDEX IF NOT EXISTS idx_ppr_league_date ON player_prop_results(league, result_date);
+        CREATE TABLE IF NOT EXISTS player_prop_picks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            league TEXT NOT NULL,
+            pick_date TEXT NOT NULL,
+            player_name TEXT NOT NULL,
+            team TEXT,
+            prop_type TEXT NOT NULL,
+            pick TEXT NOT NULL,
+            line REAL NOT NULL,
+            projection REAL,
+            odds REAL,
+            line_source TEXT,
+            created_at TEXT,
+            UNIQUE(league, pick_date, player_name, prop_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ppp_league_date ON player_prop_picks(league, pick_date);
         CREATE INDEX IF NOT EXISTS idx_pred_home_team ON predictions(home_team_id);
         CREATE INDEX IF NOT EXISTS idx_pred_away_team ON predictions(away_team_id);
         CREATE INDEX IF NOT EXISTS idx_pred_sport ON predictions(sport);
@@ -8982,12 +9064,14 @@ def compute_daily_model_tally(daily_results, target_date):
     day_bucket = daily_results.get(target_date)
     if not day_bucket or not day_bucket.get('games'):
         return None
+    # ===== SECTION: Issue 5 — Efficiency as a 6th graded moneyline model =====
     model_configs = [
         ('glicko2',   'glicko2_correct', 'glicko2_prob'),
         ('trueskill', 'trueskill_correct', 'trueskill_prob'),
         ('elo',       'elo_correct', 'elo_prob'),
         ('xgboost',   'xgb_correct', 'xgb_prob'),
         ('ensemble',  'ens_correct', 'ens_prob'),
+        ('efficiency', 'efficiency_correct', 'efficiency_prob'),
     ]
     tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
     for game in day_bucket.get('games', []):
@@ -9037,12 +9121,14 @@ def _date_in_range(date_str, start_date, end_date):
     return True
 
 def compute_model_tally_for_range(daily_results, start_date=None, end_date=None):
+    # ===== SECTION: Issue 5 — Efficiency as a 6th graded moneyline model =====
     model_configs = [
         ('glicko2',   'glicko2_correct', 'glicko2_prob'),
         ('trueskill', 'trueskill_correct', 'trueskill_prob'),
         ('elo',       'elo_correct', 'elo_prob'),
         ('xgboost',   'xgb_correct', 'xgb_prob'),
         ('ensemble',  'ens_correct', 'ens_prob'),
+        ('efficiency', 'efficiency_correct', 'efficiency_prob'),
     ]
     tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
     total_games = 0
@@ -9545,7 +9631,7 @@ BASE_TEMPLATE = """
     {% include "partials/site_directory_footer.html" %}
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'View All →',h:'/',cls:'highlight'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -9554,7 +9640,7 @@ function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var ope
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
 document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
 var _srchFilter='all';
-var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{% if soccer_enabled %},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{% endif %},{l:'Tennis Picks',h:'/tennis-picks',s:'all'},{l:'UFC Picks',h:'/ufc-picks',s:'all'},{l:'Golf Picks',h:'/golf-picks',s:'all'},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
 function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
 function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
 function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
@@ -10739,12 +10825,14 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
     </div>
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Consensus','ensemble')] %}
+        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
+        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
-        {% set label_ensemble = 'Consensus' %}
+        {% set label_ensemble = 'Sharp Consensus' %}
         {% if results_snapshot_notice is defined and results_snapshot_notice %}
         <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#9a3412;text-align:center;">
             {{ results_snapshot_notice }}
@@ -10768,11 +10856,11 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
-                {% for m_label, m_key in model_cards %}
-                {% set m = daily_tally[m_key] %}
+                {% for m_label, m_key in tally_model_cards %}
+                {% set m = daily_tally.get(m_key) %}
                 <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                     <div class="daily-model">{{ m_label }}</div>
-                    {% if m.total > 0 %}
+                    {% if m and m.total > 0 %}
                     <div class="daily-acc">{{ m.accuracy }}%</div>
                     <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                     {% else %}
@@ -10819,11 +10907,11 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
-                {% for m_label, m_key in model_cards %}
-                {% set m = weekly_tally[m_key] %}
+                {% for m_label, m_key in tally_model_cards %}
+                {% set m = weekly_tally.get(m_key) %}
                 <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                     <div class="daily-model">{{ m_label }}</div>
-                    {% if m.total > 0 %}
+                    {% if m and m.total > 0 %}
                     <div class="daily-acc">{{ m.accuracy }}%</div>
                     <div class="daily-rec">{{ m.correct }}-{{ m.total - m.correct }}</div>
                     {% else %}
@@ -11368,17 +11456,40 @@ _LANDING_ACCURACY = {
     'MLB':  58.0,
     'NCAAB': 65.0,
 }
+# ===== SECTION: Season calendar (regular-season + playoff start/end) =====
+# Single source of truth for when each sport's regular season and playoffs run,
+# so off-season messaging and season/phase detection stay accurate without
+# manual date edits scattered across the app. Values are (month, day) windows
+# that recur each year; `notes` records the authoritative 2025 dates provided
+# for reference. Update a sport here when its league shifts its calendar.
+SEASON_CALENDAR = {
+    'NHL':    {'regular': ((10, 1), (4, 17)),  'playoffs': ((4, 17), (6, 30)),
+               'notes': '2025-26 regular season opens Oct 7; Stanley Cup Playoffs mid-Apr through June.'},
+    'NBA':    {'regular': ((10, 1), (4, 14)),  'playoffs': ((4, 15), (6, 30)),
+               'notes': '2025-26 regular season opens Oct 27; Playoffs Apr 15 – Jun 22 (2025).'},
+    'MLB':    {'regular': ((3, 20), (9, 30)),  'playoffs': ((10, 1), (11, 5)),
+               'notes': '2025 season Mar 27 – Nov 2; postseason Oct, World Series ends ~Oct 25 – Nov 2.'},
+    'NFL':    {'regular': ((9, 1), (1, 7)),    'playoffs': ((1, 8), (2, 20)),
+               'notes': '2025 season opens Sep 4; Playoffs begin Jan 8; Super Bowl ~Feb 9.'},
+    'NCAAF':  {'regular': ((8, 15), (12, 13)), 'playoffs': ((12, 14), (1, 20)),
+               'notes': '2025 season Aug 23; conference championships Dec 13; CFP championship ~Jan 20.'},
+    'NCAAB':  {'regular': ((11, 1), (3, 17)),  'playoffs': ((3, 18), (4, 15)),
+               'notes': '2024-25 March Madness Mar 18 – Apr 7; regular season opens early November.'},
+    'NCAAW':  {'regular': ((11, 1), (3, 17)),  'playoffs': ((3, 18), (4, 15)),
+               'notes': "Women's NCAA tournament runs late Mar – early Apr; season opens early November."},
+    'WNBA':   {'regular': ((5, 8), (9, 14)),   'playoffs': ((9, 15), (10, 15)),
+               'notes': 'Regular season typically mid-May; playoffs Sep – Oct.'},
+    'SOCCER': {'regular': ((8, 1), (6, 30)),   'playoffs': None,
+               'notes': 'European league calendar (e.g. EPL / eng.1) runs Aug – May; no single playoff bracket.'},
+}
+
 # Month/day windows for "live" status on landing page.
+# Derived from SEASON_CALENDAR (regular-season start -> playoff end) so the live
+# window and the calendar can never drift apart.
 _SEASON_WINDOWS = {
-    'NHL':   ((10, 1), (6, 30)),
-    'NBA':   ((10, 1), (6, 30)),
-    'MLB':   ((3, 20), (11, 5)),
-    'NFL':   ((9, 1), (2, 20)),
-    'NCAAF': ((8, 15), (1, 20)),
-    'NCAAB': ((11, 1), (4, 15)),
-    'NCAAW': ((11, 1), (4, 15)),
-    'WNBA':  ((5, 8), (10, 15)),
-    'SOCCER':((8, 1), (6, 30)),
+    _cal_sport: (_cal_info['regular'][0],
+                 (_cal_info['playoffs'][1] if _cal_info.get('playoffs') else _cal_info['regular'][1]))
+    for _cal_sport, _cal_info in SEASON_CALENDAR.items()
 }
 
 # Regular-season game counts per team (league totals = teams * games / 2 where applicable).
@@ -11680,7 +11791,7 @@ _ML_DASHBOARD_MODELS = (
     ('trueskill', 'Takedown'),
     ('elo', 'Edge'),
     ('xgboost', 'XSharp'),
-    ('ensemble', 'Consensus'),
+    ('ensemble', 'Sharp Consensus'),
 )
 
 
@@ -11849,6 +11960,83 @@ def get_season_status(sport, today=None):
     days_until = (next_start - today).days
     return ('Starting Soon' if days_until <= 60 else 'Offseason'), False
 
+
+def get_season_phase(sport, today=None):
+    """Classify a sport's current phase using SEASON_CALENDAR.
+
+    Returns (phase, start_dt, end_dt) where phase is one of 'regular',
+    'playoffs', or 'offseason'. start_dt/end_dt bound the current phase (the
+    live season is anchored on `today`, correctly handling wrap-around seasons
+    like the NHL's Oct–Jun span). Returns ('unknown', None, None) for sports
+    with no modeled calendar entry.
+    """
+    today = today or datetime.now()
+    info = SEASON_CALENDAR.get(sport)
+    if not info:
+        return 'unknown', None, None
+    live_start, live_end = _season_window_for_date(sport, today)
+    if not live_start or not live_end or not (live_start <= today <= live_end):
+        return 'offseason', live_start, live_end
+    playoffs = info.get('playoffs')
+    if not playoffs:
+        return 'regular', live_start, live_end
+    (pm, pd), _ = playoffs
+    # The playoff start recurs annually; pick the concrete year that lands
+    # inside the current live window (handles seasons that cross New Year).
+    playoff_start = None
+    for yr in (live_start.year, live_end.year):
+        cand = datetime(yr, pm, pd)
+        if live_start <= cand <= live_end:
+            playoff_start = cand
+            break
+    if playoff_start is None:
+        return 'regular', live_start, live_end
+    if today >= playoff_start:
+        return 'playoffs', playoff_start, live_end
+    return 'regular', live_start, playoff_start
+
+# ===== SECTION: Off-season messaging =====
+def _next_season_start(sport, today=None):
+    """Datetime of the upcoming season start for a sport (or None if the sport
+    is in-season or has no modeled season window)."""
+    today = today or datetime.now()
+    min_live = _SPORT_MIN_LIVE_DATES.get(sport)
+    if min_live and today < min_live:
+        return min_live
+    start, end = _season_window_for_date(sport, today)
+    if not start or not end:
+        return None
+    if today < start:
+        return start
+    if today > end:
+        window = _SEASON_WINDOWS.get(sport)
+        if not window:
+            return None
+        (sm, sd), _ = window
+        return datetime(start.year + 1, sm, sd)
+    return None
+
+def _offseason_message(sport, today=None):
+    """Human 'season starts <date>' message for an off-season sport, or None if
+    the sport is currently live/in-season. Falls back to a static hint for
+    sports without a modeled season window."""
+    today = today or datetime.now()
+    try:
+        _status, _is_live = get_season_status(sport, today=today)
+    except Exception:
+        _status, _is_live = (None, True)
+    if _is_live:
+        return None
+    name = SPORTS.get(sport, {}).get('name', sport)
+    start = _next_season_start(sport, today)
+    if start:
+        _date_label = start.strftime('%B %d, %Y').replace(' 0', ' ')
+        return (f"{name} is in the off-season. The next season starts {_date_label}. "
+                "Until then, you can review last season's results below.")
+    return _OFFSEASON_SPORTS_HINT.get(sport) or (
+        f"{name} is currently in the off-season. Check back when the schedule is "
+        "live, or review last season's results below.")
+
 def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
     sport_info = SPORTS.get(sport, {'name': sport})
     sport_name = sport_info.get('name', sport)
@@ -11863,7 +12051,7 @@ def _weekly_banner_message_for_sport(sport, start_dt, end_dt):
         ('trueskill', 'Takedown'),
         ('elo', 'Edge'),
         ('xgboost', 'XSharp'),
-        ('ensemble', 'Consensus'),
+        ('ensemble', 'Sharp Consensus'),
     ]
     best_key = None
     best_label = None
@@ -12116,6 +12304,24 @@ def _get_sport_ml_units_banner():
     return items
 
 
+# ===== SECTION: Placeholder matchup filtering =====
+_PLACEHOLDER_TEAM_MARKERS = (
+    'winner', 'loser', 'tbd', 'tba', 'round of', 'qualifier',
+    'to be determined', 'to be decided', 'winner of', 'loser of',
+)
+
+def _is_placeholder_team_name(name):
+    """True if a team label is an unresolved bracket/placeholder (e.g. a soccer
+    fixture like "Round of 32 12 Winner" or "TBD") rather than a real team
+    name. Used to keep such rows out of Today's Best Picks and the blog."""
+    if not name:
+        return True
+    _n = str(name).strip().lower()
+    if not _n:
+        return True
+    return any(_m in _n for _m in _PLACEHOLDER_TEAM_MARKERS)
+
+
 def build_todays_top_picks():
     """Up to four ranked value picks for landing + /promo/top-picks-today."""
     todays_picks = []
@@ -12146,6 +12352,9 @@ def build_todays_top_picks():
             _ens_home = float(_tp['win_probability'])
             _home = _tp['home_team_id']
             _away = _tp['away_team_id']
+            # Skip unresolved bracket placeholders (e.g. soccer "Round of 32 12 Winner")
+            if _is_placeholder_team_name(_home) or _is_placeholder_team_name(_away):
+                continue
             _home_picked = _ens_home >= 0.5
             _pick_prob = _ens_home if _home_picked else (1.0 - _ens_home)
             _pick = _home if _home_picked else _away
@@ -12183,6 +12392,10 @@ def build_todays_top_picks():
                 'home': _home,
                 'pick': _pick,
                 'prob': round(_pick_prob * 100, 1),
+                'home_prob': round(_ens_home * 100, 1),
+                'away_prob': round((1.0 - _ens_home) * 100, 1),
+                'pick_side': 'home' if _home_picked else 'away',
+                'is_live': False,
                 'sport': _tp['sport'],
                 'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
                 'quality_score': _quality_score,
@@ -12199,6 +12412,8 @@ def build_todays_top_picks():
             todays_picks.append({
                 'away': _row['away'], 'home': _row['home'],
                 'pick': _row['pick'], 'prob': _row['prob'],
+                'home_prob': _row.get('home_prob'), 'away_prob': _row.get('away_prob'),
+                'pick_side': _row.get('pick_side'), 'is_live': _row.get('is_live', False),
                 'sport': _row['sport'], 'slug': _row['slug'],
             })
             if len(todays_picks) >= 4:
@@ -12215,6 +12430,8 @@ def build_todays_top_picks():
                 todays_picks.append({
                     'away': _row['away'], 'home': _row['home'],
                     'pick': _row['pick'], 'prob': _row['prob'],
+                    'home_prob': _row.get('home_prob'), 'away_prob': _row.get('away_prob'),
+                    'pick_side': _row.get('pick_side'), 'is_live': _row.get('is_live', False),
                     'sport': _row['sport'], 'slug': _row['slug'],
                 })
                 if len(todays_picks) >= 4:
@@ -12230,6 +12447,9 @@ def healthz():
     return 'ok', 200
 
 
+_LANDING_PAGE_CACHE = {'ts': 0, 'html': None}
+_LANDING_PAGE_TTL = 120  # seconds — homepage is identical for all anonymous visitors
+
 @app.route('/', methods=['GET', 'HEAD'])
 def landing_page():
     """Primary landing page — new research design (homepage_preview.html)."""
@@ -12239,7 +12459,21 @@ def landing_page():
         log_site_visit('/')
     except Exception:
         pass
-    return render_template('homepage_preview.html', **_build_landing_preview_context())
+    # Serve a short-lived cached homepage to anonymous visitors so the DB queries
+    # + blog/units aggregation + 68KB render don't run on every hit.
+    try:
+        _anon = not (getattr(current_user, 'is_authenticated', False) and current_user.is_authenticated)
+    except Exception:
+        _anon = True
+    if _anon:
+        _cached = _LANDING_PAGE_CACHE.get('html')
+        if _cached and (_time.time() - _LANDING_PAGE_CACHE.get('ts', 0)) < _LANDING_PAGE_TTL:
+            return _cached
+    rendered = render_template('homepage_preview.html', **_build_landing_preview_context())
+    if _anon and isinstance(rendered, str) and rendered:
+        _LANDING_PAGE_CACHE['ts'] = _time.time()
+        _LANDING_PAGE_CACHE['html'] = rendered
+    return rendered
 
 _SITE_DOMAIN = 'https://predictionlab.io'
 
@@ -12883,14 +13117,14 @@ def api_performance_data():
     })
 
 
-_PERF_MODEL_ORDER = ['Grinder2', 'Takedown', 'Edge', 'XSharp', 'Consensus']
+_PERF_MODEL_ORDER = ['Grinder2', 'Takedown', 'Edge', 'XSharp', 'Sharp Consensus']
 _TEAM_PERF_MODEL_ORDER = _PERF_MODEL_ORDER + ['Efficiency']
 _TEAM_PERF_ML_CONFIG = [
     ('glicko2_prob', 'Grinder2'),
     ('trueskill_prob', 'Takedown'),
     ('elo_prob', 'Edge'),
     ('xgb_prob', 'XSharp'),
-    ('ens_prob', 'Consensus'),
+    ('ens_prob', 'Sharp Consensus'),
 ]
 _PERF_BUCKET_ORDER = [
     '85%+',
@@ -13072,7 +13306,7 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
             'Takedown': trueskill_prob if trueskill_prob is not None else logi_prob,
             'Edge': elo_prob,
             'XSharp': xgb_prob,
-            'Consensus': meta_prob,
+            'Sharp Consensus': meta_prob,
         }
 
         for model in _PERF_MODEL_ORDER:
@@ -13232,11 +13466,14 @@ def _build_team_performance_rows(sport_filter: str = ''):
 
 @app.route('/player-props')
 def player_props_page():
-    """Player props page — wired into the main app via /player-props-api/ routes."""
+    """Player props page — wired into the main app via /player-props-api/ routes.
+
+    Rendered for every logged-in user. Non-premium users get ONE unlocked prop
+    as a teaser (rest locked/blurred); premium users get full access. The
+    per-tab gating is enforced by the /player-props-api/* routes below.
+    """
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
     return render_template('player_props.html')
 
 
@@ -13244,18 +13481,49 @@ def player_props_page():
 def player_props_assets(asset_path):
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
     assets_dir = _os.path.join(_BASE_DIR, 'standalone-player-props', 'frontend', 'dist', 'assets')
     return send_from_directory(assets_dir, asset_path)
+
+
+def _props_locked_payload(extra=None):
+    """Standard 'upgrade to unlock' JSON for non-premium users (no redirect)."""
+    body = {'locked': True, 'is_premium': False,
+            'detail': 'Upgrade to unlock full player props access.'}
+    if extra:
+        body.update(extra)
+    return jsonify(body)
+
+
+def _props_offseason_payload(league):
+    """Off-season notice payload for a league with no live games/props.
+
+    Returns None when the league is in-season (or has no modeled calendar) so
+    callers fall through to normal handling. Prevents the props engine from
+    fabricating a synthetic off-season slate and stops stale prior-season rows
+    from surfacing in the Streaks/Results tabs.
+    """
+    try:
+        _status, is_live = get_season_status(league)
+    except Exception:
+        return None
+    if is_live:
+        return None
+    name = SPORTS.get(league, {}).get('name', league)
+    try:
+        nxt = _next_season_start(league)
+    except Exception:
+        nxt = None
+    when = ''
+    if nxt:
+        when = f" The next {name} season starts {nxt.strftime('%B %d, %Y').replace(' 0', ' ')}."
+    return {'league': league, 'off_season': True, 'count': 0, 'items': [],
+            'detail': f"{name} is in the off-season — no games or props right now.{when}"}
 
 
 @app.route('/player-props-api/leagues')
 def player_props_api_leagues():
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
     try:
         _, config_mod = _load_props_modules()
         return jsonify({'leagues': list(getattr(config_mod, 'SUPPORTED_LEAGUES', []))})
@@ -13268,7 +13536,7 @@ def player_props_api_players():
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
-        return redirect('/plans')
+        return _props_locked_payload()
     league = (request.args.get('league') or '').strip().upper()
     try:
         engine_mod, config_mod = _load_props_modules()
@@ -13288,8 +13556,6 @@ def player_props_api_players():
 def player_props_api_props():
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
     league = (request.args.get('league') or '').strip().upper()
     prop_type = (request.args.get('prop_type') or '').strip() or None
     side = (request.args.get('side') or '').strip() or None
@@ -13305,38 +13571,138 @@ def player_props_api_props():
         supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
         if league not in supported:
             return jsonify({'detail': f'Unsupported league: {league}'}), 400
+        off = _props_offseason_payload(league)
+        if off is not None:
+            return jsonify(off)
         data = engine_mod.get_league_data(league)
+        # Snapshot today's picks (real book lines only) so Results/Streaks can
+        # grade them against box scores later. Never blocks the response.
+        try:
+            _snapshot_prop_picks(league, data.get('props') or [])
+        except Exception:
+            pass
         rows = engine_mod.filter_props(data.get('props', []), prop_type=prop_type, side=side, min_ev=min_ev)
-        resp = {'league': league, 'count': len(rows), 'items': rows}
-        if 'excluded_players' in data:
-            resp['excluded_players'] = data['excluded_players']
-        if 'model_variance' in data:
-            resp['model_variance'] = data['model_variance']
-        if 'sanity_flags' in data:
-            resp['sanity_flags'] = data['sanity_flags']
+        premium = is_premium_user()
+        if not premium:
+            # Teaser: unlock only the single best (first, already EV-sorted) prop.
+            # Every other row is returned as a locked stub with no pick/number
+            # data so the client can blur it without leaking the projection.
+            locked = []
+            for i, r in enumerate(rows):
+                if i == 0:
+                    unlocked = dict(r)
+                    unlocked['locked'] = False
+                    locked.append(unlocked)
+                else:
+                    locked.append({
+                        'player_id': r.get('player_id'),
+                        'player_name': r.get('player_name'),
+                        'team': r.get('team'),
+                        'prop_type': r.get('prop_type'),
+                        'locked': True,
+                    })
+            rows = locked
+        resp = {'league': league, 'count': len(rows), 'items': rows,
+                'is_premium': premium, 'free_unlocked': (0 if premium else 1),
+                'lines_real': data.get('lines_real', False),
+                'line_source': data.get('line_source')}
+        if premium:
+            if 'excluded_players' in data:
+                resp['excluded_players'] = data['excluded_players']
+            if 'model_variance' in data:
+                resp['model_variance'] = data['model_variance']
+            if 'sanity_flags' in data:
+                resp['sanity_flags'] = data['sanity_flags']
         return jsonify(resp)
     except Exception as exc:
         return jsonify({'detail': str(exc)}), 500
 
 
+def _snapshot_prop_picks(league: str, props: list):
+    """Persist today's live picks that carry a REAL sportsbook line so they can
+    be graded later against box scores.
+
+    Only rows sourced from the real odds API (line_source='the_odds_api') are
+    stored — never synthetic/internal lines — so we never fabricate graded
+    history. Deduped to one pick per (player, prop). Safe to call on every
+    /props view (INSERT OR IGNORE keeps the first snapshot of the day).
+    """
+    if not props:
+        return
+    try:
+        engine_mod, _ = _load_props_modules()
+        deduped = engine_mod.filter_props(props)
+    except Exception:
+        deduped = props
+    today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    now_iso = datetime.now(ZoneInfo("America/New_York")).isoformat()
+    conn = get_db_connection()
+    try:
+        for r in deduped:
+            if r.get('line_source') != 'the_odds_api':
+                continue
+            line = r.get('line')
+            if line is None:
+                continue
+            pick = r.get('picked_side')
+            odds = r.get('odds_over') if pick == 'OVER' else r.get('odds_under')
+            conn.execute(
+                '''INSERT OR IGNORE INTO player_prop_picks
+                   (league, pick_date, player_name, team, prop_type, pick, line, projection, odds, line_source, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+                (league, today, r.get('player_name'), r.get('team'), r.get('prop_type'),
+                 pick, float(line), r.get('projection'), odds, 'the_odds_api', now_iso)
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _grade_and_store_props(league: str, for_date_str: str):
-    """Grade props for a given date using the engine and persist to DB."""
-    engine_mod, _ = _load_props_modules()
-    graded = engine_mod.get_league_results(league, for_date=for_date_str)
-    rows = graded.get('items') or []
-    if not rows:
+    """Grade previously-snapshotted picks for a date against real box-score
+    actuals and persist HIT/MISS to player_prop_results.
+
+    Picks are graded against the REAL sportsbook line they were snapshotted with
+    (never a re-derived internal line). N/A (no completed stat) and PUSH
+    (actual == line) are not stored, so hit rate stays truthful.
+    """
+    conn = get_db_connection()
+    try:
+        picks = [dict(r) for r in conn.execute(
+            'SELECT * FROM player_prop_picks WHERE league=? AND pick_date=?',
+            (league, for_date_str)
+        ).fetchall()]
+    finally:
+        conn.close()
+    if not picks:
+        return
+    try:
+        engine_mod, _ = _load_props_modules()
+        actuals = engine_mod.get_actuals_for_date(league, for_date_str)
+    except Exception:
+        actuals = {}
+    if not actuals:
         return
     conn = get_db_connection()
     try:
-        for r in rows:
+        for pk in picks:
+            nm = str(pk.get('player_name') or '').lower()
+            pt = pk.get('prop_type')
+            actual = (actuals.get(nm) or {}).get(pt)
+            if actual is None:
+                continue  # N/A: no completed box-score stat — do not store
+            line = float(pk.get('line') or 0.0)
+            if float(actual) == line:
+                continue  # PUSH: do not count toward hit rate
+            hit = (actual > line and pk.get('pick') == 'OVER') or (actual < line and pk.get('pick') == 'UNDER')
             conn.execute(
                 '''INSERT OR REPLACE INTO player_prop_results
                    (league, result_date, player_name, team, prop_type, pick, line, projection, actual, result)
                    VALUES (?,?,?,?,?,?,?,?,?,?)''',
                 (league, for_date_str,
-                 r.get('player_name'), r.get('team'), r.get('prop_type'),
-                 r.get('pick'), r.get('line'), r.get('projection'),
-                 r.get('actual'), r.get('result'))
+                 pk.get('player_name'), pk.get('team'), pt,
+                 pk.get('pick'), line, pk.get('projection'),
+                 round(float(actual), 2), 'HIT' if hit else 'MISS')
             )
         conn.commit()
     finally:
@@ -13380,7 +13746,7 @@ def _query_prop_results(league: str, for_date: str | None = None):
                 pt = r['prop_type']
                 b = by_pt.setdefault(pt, {'wins': 0, 'losses': 0})
                 if r['result'] == 'HIT': b['wins'] += 1
-                else: b['losses'] += 1
+                elif r['result'] == 'MISS': b['losses'] += 1
             return {'wins': hits, 'losses': misses, 'by_prop_type': by_pt}
 
         night_summary = _tally(items)
@@ -13435,10 +13801,13 @@ def _query_prop_results(league: str, for_date: str | None = None):
 def player_props_api_results():
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
     league = (request.args.get('league') or '').strip().upper()
     for_date = (request.args.get('date') or '').strip() or None
+    off = _props_offseason_payload(league)
+    if off is not None:
+        return jsonify(off)
+    if not is_premium_user():
+        return _props_locked_payload()
     try:
         engine_mod, config_mod = _load_props_modules()
         supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
@@ -13453,15 +13822,97 @@ def player_props_api_results():
 def player_props_api_diagnostics():
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
     league = (request.args.get('league') or 'NBA').strip().upper()
+    off = _props_offseason_payload(league)
+    if off is not None:
+        return jsonify(off)
+    if not is_premium_user():
+        return _props_locked_payload()
     try:
         engine_mod, config_mod = _load_props_modules()
         supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
         if league not in supported:
             return jsonify({'detail': f'Unsupported league: {league}'}), 400
         return jsonify(engine_mod.get_diagnostics(league))
+    except Exception as exc:
+        return jsonify({'detail': str(exc)}), 500
+
+
+def _query_prop_streaks(league: str, limit: int = 200):
+    """Compute per-(player, prop) hit streaks from stored graded results.
+
+    Reads only real HIT/MISS rows from player_prop_results (N/A never stored),
+    then derives each player+market's current streak, recent form, and hit rate.
+    Returns hot streaks (longest active HIT runs) first, then cold streaks.
+    """
+    conn = get_db_connection()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            'SELECT player_name, team, prop_type, result, result_date '
+            'FROM player_prop_results '
+            "WHERE league=? AND result IN ('HIT','MISS') "
+            'ORDER BY result_date ASC',
+            (league,)
+        ).fetchall()]
+    finally:
+        conn.close()
+
+    groups = {}
+    for r in rows:
+        groups.setdefault((r['player_name'], r['prop_type']), []).append(r)
+
+    items = []
+    for (pname, pt), rr in groups.items():
+        results = [x['result'] for x in rr]
+        games = len(results)
+        hits = sum(1 for x in results if x == 'HIT')
+        last = results[-1]
+        streak = 0
+        for x in reversed(results):
+            if x == last:
+                streak += 1
+            else:
+                break
+        items.append({
+            'player_name': pname,
+            'team': rr[-1]['team'],
+            'prop_type': pt,
+            'games': games,
+            'hits': hits,
+            'misses': games - hits,
+            'hit_rate': round(hits / games * 100.0, 1) if games else 0.0,
+            'streak_type': last,
+            'streak_len': streak,
+            'recent': results[-5:],
+            'last_date': rr[-1]['result_date'],
+        })
+
+    # Hot (active HIT) streaks first, longest first; then cold streaks.
+    items.sort(key=lambda x: (
+        0 if x['streak_type'] == 'HIT' else 1,
+        -x['streak_len'],
+        -x['hit_rate'],
+        -x['games'],
+    ))
+    return {'league': league, 'count': len(items), 'items': items[:limit]}
+
+
+@app.route('/player-props-api/streaks')
+def player_props_api_streaks():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+    league = (request.args.get('league') or '').strip().upper()
+    off = _props_offseason_payload(league)
+    if off is not None:
+        return jsonify(off)
+    if not is_premium_user():
+        return _props_locked_payload()
+    try:
+        engine_mod, config_mod = _load_props_modules()
+        supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
+        if league not in supported:
+            return jsonify({'detail': f'Unsupported league: {league}'}), 400
+        return jsonify(_query_prop_streaks(league))
     except Exception as exc:
         return jsonify({'detail': str(exc)}), 500
 
@@ -14476,13 +14927,14 @@ def daily_report_page():
         ('trueskill', '🎯 Takedown'),
         ('elo', '📊 Edge'),
         ('xgboost', '🤖 XSharp'),
-        ('ensemble', '🏆 Consensus'),
+        ('ensemble', '🏆 Sharp Consensus'),
+        ('efficiency', '⚡ Efficiency'),
     ]
 
     share_text = f"predictionlab.io Daily Report — {report_display}%0A"
     ens = agg_models.get('ensemble', {})
     if ens.get('total', 0) > 0:
-        share_text += f"Consensus: {ens['accuracy']}% ({ens['correct']}-{ens['total'] - ens['correct']})%0A"
+        share_text += f"Sharp Consensus: {ens['accuracy']}% ({ens['correct']}-{ens['total'] - ens['correct']})%0A"
     share_text += f"{total_games} games graded%0Ahttps://predictionlab.io/daily-report"
 
     rendered = render_template_string(DAILY_REPORT_TEMPLATE,
@@ -14841,8 +15293,19 @@ def sport_predictions(sport, filter_date=None):
             f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
             "Please refresh in a minute."
         )
-    if not predictions and not prediction_error and sport in _OFFSEASON_SPORTS_HINT:
-        prediction_error = _OFFSEASON_SPORTS_HINT[sport]
+    # ===== SECTION: Off-season messaging =====
+    # When a sport is out of season with no predictions, surface a friendly
+    # "season starts <date>" notice + a link to last season's results instead
+    # of a bare "No predictions available".
+    offseason_notice = None
+    if not predictions and not prediction_error:
+        _off_msg = _offseason_message(sport)
+        if _off_msg:
+            offseason_notice = {
+                'message': _off_msg,
+                'results_url': '/' + _SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+                'results_label': "View last season's results",
+            }
 
     for pred in predictions:
         for _k in (
@@ -14978,18 +15441,25 @@ def sport_predictions(sport, filter_date=None):
     from collections import defaultdict
     from datetime import date as _date_cls
     _cutoff_21 = (datetime.now() - timedelta(days=21)).strftime('%Y-%m-%d')
+    # Keep just-finished games on the slate for a few days so a game does not
+    # vanish from the predictions page the moment it goes final.
+    _cutoff_recent_final = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
 
     grouped_predictions = defaultdict(list)
     for pred in predictions:
         _has_score = pred.get('home_score') is not None
         _is_upcoming = not _has_score
+        _pred_gd = pred.get('game_date') or ''
         # Soccer: also show completed games from last 21 days
         _is_soccer_recent = (
             sport == 'SOCCER' and
             _has_score and
-            (pred.get('game_date') or '') >= _cutoff_21
+            _pred_gd >= _cutoff_21
         )
-        if not _is_upcoming and not _is_soccer_recent:
+        # All sports: keep recently-finished games (last 3 days) on the slate so
+        # a completed game stays visible instead of disappearing.
+        _is_recent_final = _has_score and _pred_gd >= _cutoff_recent_final
+        if not _is_upcoming and not _is_soccer_recent and not _is_recent_final:
             continue
         if not pred.get('home_team_id') or not pred.get('away_team_id'):
             continue
@@ -15045,16 +15515,30 @@ def sport_predictions(sport, filter_date=None):
     for pred in predictions:
         if not isinstance(pred, dict):
             continue
-        for _eff_key in ('our_home_eff', 'our_away_eff'):
-            _v = pred.get(_eff_key)
-            if isinstance(_v, dict):
-                pred[_eff_key] = types.SimpleNamespace(**_v)
-        _finalize_prediction_odds(pred)
-        _ens_pre = _safe_float(pred.get('ensemble_prob'))
-        if _ens_pre is not None:
-            pred['_ensemble_prob_pre_enforce'] = _ens_pre
-        _enforce_pick_spread_consistency(pred, sport=sport)
-        _prepare_pred_card_display(pred, sport=sport)
+        # Prepare each card independently so a single malformed prediction cannot
+        # raise and blank out the entire picks page for the sport.
+        try:
+            for _eff_key in ('our_home_eff', 'our_away_eff'):
+                _v = pred.get(_eff_key)
+                if isinstance(_v, dict):
+                    pred[_eff_key] = types.SimpleNamespace(**_v)
+            _finalize_prediction_odds(pred)
+            _ens_pre = _safe_float(pred.get('ensemble_prob'))
+            if _ens_pre is not None:
+                pred['_ensemble_prob_pre_enforce'] = _ens_pre
+            _enforce_pick_spread_consistency(pred, sport=sport)
+            _prepare_pred_card_display(pred, sport=sport)
+            # Finished games kept on the slate still need a card face so the
+            # pre-game prediction % renders (the odds/display prep above no-ops
+            # once a final score exists).
+            if pred.get('home_score') is not None:
+                _prepare_pred_card_face(pred, sport=sport)
+        except Exception as _card_prep_err:
+            logger.warning(
+                "Card prep failed for one %s prediction (%s @ %s): %s",
+                sport, pred.get('away_team_id'), pred.get('home_team_id'), _card_prep_err,
+            )
+            continue
 
     try:
         from flask_login import current_user as _cu
@@ -15086,6 +15570,7 @@ def sport_predictions(sport, filter_date=None):
         todays_picks=[],
         team_logo_url=team_logo_url,
         is_premium=is_premium_user(),
+        offseason_notice=offseason_notice,
     )
     try:
         rendered = _render_espn_picks_page(**_render_ctx)
@@ -15697,6 +16182,13 @@ def sport_results(sport):
                         LIMIT 3000
                     ''', (sport, sport)).fetchall()
                 completed_games = _sort_game_rows_by_date_desc(completed_games)
+                # Bound per-request work so the results page cannot time out
+                # (fixes WNBA 502 / MLB slow load). Games are already sorted newest
+                # first; the displayed cards and weekly/season tallies use recent
+                # games, and this also caps how many live book-odds API calls
+                # _attach_book_odds_to_daily_results can attempt.
+                if len(completed_games) > 800:
+                    completed_games = completed_games[:800]
             conn.close()
             soccer_bundle = None
             if sport == 'SOCCER':
@@ -16366,7 +16858,7 @@ _ML_DASHBOARD_MODELS = (
     ('trueskill', 'Takedown'),
     ('elo', 'Edge'),
     ('xgboost', 'XSharp'),
-    ('ensemble', 'Consensus'),
+    ('ensemble', 'Sharp Consensus'),
     ('efficiency', 'Efficiency'),
 )
 
@@ -17176,25 +17668,35 @@ def _build_landing_preview_context():
         predictions_logged = _conn.execute(
             "SELECT COUNT(*) FROM predictions"
         ).fetchone()[0]
-        # Most recent CORRECT model pick. Derive the pick from win_probability
-        # (home-win prob): >=0.5 means the model favored home, else away. Most
-        # stored predictions have predicted_winner = NULL, so relying on that
-        # column made this fall back to a months-old game.
+        # ===== SECTION: Homepage last-night correct pick =====
+        # Show the model's best CORRECT pick from the most recent slate we have
+        # graded (i.e. "the game we got right last night"). Derive the pick from
+        # win_probability (home-win prob, 0-1): >=0.5 favored home, else away.
+        # We first find the most recent date that HAS a correct pick, then take
+        # the highest-confidence correct pick on that date. Anchoring to the most
+        # recent graded date (instead of the global most-recent row) stops the
+        # card from silently drifting to a weeks-old game when a slate is sparse.
         _graded_row = _conn.execute(
             """
-            SELECT p.sport, p.game_date, p.away_team_id, p.home_team_id,
-                   p.win_probability, g.away_score, g.home_score
-            FROM predictions p
-            JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
-            WHERE g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-              AND g.home_score != g.away_score
-              AND p.win_probability IS NOT NULL
-              AND (
-                (p.win_probability >= 0.5 AND g.home_score > g.away_score)
-                OR
-                (p.win_probability < 0.5 AND g.away_score > g.home_score)
-              )
-            ORDER BY date(g.game_date) DESC, g.id DESC
+            WITH correct_picks AS (
+                SELECT p.sport, p.game_date, p.away_team_id, p.home_team_id,
+                       p.win_probability, g.away_score, g.home_score, g.id AS gid
+                FROM predictions p
+                JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
+                WHERE g.home_score IS NOT NULL AND g.away_score IS NOT NULL
+                  AND g.home_score != g.away_score
+                  AND p.win_probability IS NOT NULL
+                  AND (
+                    (p.win_probability >= 0.5 AND g.home_score > g.away_score)
+                    OR
+                    (p.win_probability < 0.5 AND g.away_score > g.home_score)
+                  )
+            )
+            SELECT sport, game_date, away_team_id, home_team_id,
+                   win_probability, away_score, home_score
+            FROM correct_picks
+            WHERE date(game_date) = (SELECT MAX(date(game_date)) FROM correct_picks)
+            ORDER BY ABS(win_probability - 0.5) DESC, gid DESC
             LIMIT 1
             """
         ).fetchone()
