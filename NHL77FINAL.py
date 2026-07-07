@@ -6,7 +6,7 @@ Complete platform with Dashboard, Predictions, and Results pages for all sports.
 5-Model System: Glicko-2, TrueSkill, Elo, XGBoost, Ensemble
 """
 
-from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory, abort, has_request_context, g
+from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, Response, send_from_directory, abort, has_request_context
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
@@ -41,20 +41,16 @@ import os as _os_v2
 _V2_BASE = _os_v2.path.dirname(_os_v2.path.abspath(__file__))
 try:
     from prediction_system_v2 import AdvancedPredictor
-    import time as _boot_time
-    _v2_load_start = _boot_time.perf_counter()
     V2_PREDICTORS = {}
     # Load trained models for supported sports
     for sport in ['NHL', 'NFL', 'NBA', 'MLB', 'NCAAF', 'NCAAB']:
-        _sport_load_start = _boot_time.perf_counter()
         try:
             _model_path = _os_v2.path.join(_V2_BASE, 'models', f'{sport}_v2')
             V2_PREDICTORS[sport] = AdvancedPredictor.load(sport, _model_path)
-            print(f"✅ Loaded {sport} v2 predictor in {_boot_time.perf_counter() - _sport_load_start:.2f}s (Glicko-2 + Ensemble + Calibration)")
+            print(f"✅ Loaded {sport} v2 predictor (Glicko-2 + Ensemble + Calibration)")
         except Exception as e:
             print(f"⚠️ {sport} v2 model not found at {_model_path}: {e}")
     HAS_V2_SYSTEM = len(V2_PREDICTORS) > 0
-    print(f"⏱️ [boot] V2 predictors loaded in {_boot_time.perf_counter() - _v2_load_start:.2f}s total ({len(V2_PREDICTORS)}/6 sports)")
 except ImportError as e:
     print(f"⚠️ V2 prediction system not available: {e}")
     V2_PREDICTORS = {}
@@ -1733,7 +1729,6 @@ def _refresh_books_on_predictions(sport, predictions, today_date=None, prioritiz
     """DB hydrate + ESPN Core book lines for every sport on the picks path."""
     if not predictions:
         return
-    _books_t0 = _time.perf_counter()
     if today_date is None:
         try:
             today_date = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
@@ -1749,12 +1744,6 @@ def _refresh_books_on_predictions(sport, predictions, today_date=None, prioritiz
         limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
         prioritize=_prio,
     )
-    try:
-        _books_ms = (_time.perf_counter() - _books_t0) * 1000.0
-        if _books_ms >= 500:
-            logger.info("[timing] book refresh %s took %.0fms (%d preds)", sport, _books_ms, len(predictions))
-    except Exception:
-        pass
 
 
 def _upcoming_preds_for_book_fetch(predictions, today_date, horizon_days=8):
@@ -1890,17 +1879,6 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30, prioritize
                 pred['book_away_moneyline'] = int(live['away_moneyline'])
             pred['book_odds_source'] = live.get('source') or 'ESPN Core API'
             _ensure_book_moneylines(pred)
-            # Persist the live line so later requests hydrate from the DB instead
-            # of re-fetching this game every page load. Without this, sports that
-            # fall to the live-market path (notably MLB) re-hit ESPN for up to
-            # `limit` games on EVERY request — the dominant picks-page slowdown.
-            _persist_pl_book_row(sport, pred, {
-                'spread': live.get('spread'),
-                'total': live.get('total'),
-                'home_moneyline': live.get('home_moneyline'),
-                'away_moneyline': live.get('away_moneyline'),
-                'source': live.get('source') or 'ESPN Core API',
-            })
 
     for pred in upcoming:
         _ensure_book_moneylines(pred)
@@ -4097,35 +4075,6 @@ CORS(app, origins=[
     'http://localhost:3000',
     'http://localhost:5000',
 ])
-
-# ── Request timing instrumentation (diagnostics) ──────────────────────────────
-# Logs per-request server time to pinpoint slow routes/bottlenecks and adds a
-# Server-Timing response header (visible in browser devtools Network tab).
-# Registered before other hooks so the timer captures the full request lifecycle.
-_SLOW_REQUEST_MS = float(_os_v2.environ.get('SLOW_REQUEST_MS', '3000'))
-
-@app.before_request
-def _pl_start_request_timer():
-    try:
-        g._pl_req_start = _time.perf_counter()
-    except Exception:
-        pass
-
-@app.after_request
-def _pl_log_request_timing(response):
-    try:
-        _start = getattr(g, '_pl_req_start', None)
-        if _start is not None and (request.endpoint or '') != 'static':
-            _elapsed_ms = (_time.perf_counter() - _start) * 1000.0
-            response.headers['Server-Timing'] = f'app;dur={_elapsed_ms:.1f}'
-            _msg = f"[timing] {request.method} {request.path} -> {response.status_code} in {_elapsed_ms:.0f}ms"
-            if _elapsed_ms >= _SLOW_REQUEST_MS:
-                logger.warning("SLOW %s", _msg)
-            else:
-                logger.info(_msg)
-    except Exception:
-        pass
-    return response
 
 _CANONICAL_HOST = 'predictionlab.io'
 
@@ -15433,9 +15382,12 @@ def sport_predictions(sport, filter_date=None):
     except Exception:
         today_date = datetime.now().strftime('%Y-%m-%d')
 
-    # NOTE: book odds are refreshed once below (after grouping) with the visible
-    # dates prioritized. The previous duplicate "early" refresh here doubled the
-    # ESPN book-fetch work on every request and has been removed.
+    # Books first (before shareable/EV work) so Render timeouts do not skip ESPN Core fetch.
+    try:
+        _refresh_books_on_predictions(sport, predictions, today_date=today_date)
+    except Exception as _early_bk:
+        logger.debug(f"[{sport}] early book odds on picks page: {_early_bk}")
+
     # Social-share image payload: top 3 unique upcoming predictions from today's slate
     # (fallback to next available date if no games today).
     shareable_by_matchup = {}
