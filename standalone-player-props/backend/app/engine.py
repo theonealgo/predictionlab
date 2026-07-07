@@ -1,5 +1,6 @@
 import math
 import os as _os
+import statistics
 import sys as _sys
 import time
 from typing import Dict, List, Optional
@@ -156,6 +157,53 @@ def _projection_to_prob(league: str, projection: float, line: float, std_dev: fl
     z = (line - projection) / max(std_dev, 0.01)
     under = normal_cdf(z)
     return max(0.0, min(1.0, 1.0 - under))
+
+
+def _novig_over_prob(odds_over, odds_under) -> Optional[float]:
+    """No-vig implied OVER probability from a real book's two-sided price.
+
+    Returns None when odds are missing/unusable. This is the market's honest
+    estimate of P(over) — far better than the old random-minutes proxy, which
+    made every 0.5 line an automatic OVER.
+    """
+    if odds_over is None or odds_under is None:
+        return None
+    try:
+        io = implied_prob(float(odds_over))
+        iu = implied_prob(float(odds_under))
+    except Exception:
+        return None
+    total = io + iu
+    if total <= 0:
+        return None
+    return _clamp(io / total, 0.02, 0.98)
+
+
+def _projection_from_market(league: str, line: float, p_over: float) -> float:
+    """Realistic projection consistent with (line, market P(over)).
+
+    Inverts the league's scoring distribution so the displayed projection and
+    the pick direction match the real book line instead of a fabricated count.
+    """
+    line = float(line)
+    dist = LEAGUE_CONFIG.get(league, {}).get("dist", "normal")
+    if dist == "poisson":
+        k = max(int(math.floor(line)), 0)
+        lo, hi = 0.01, max(line * 4.0, 6.0)
+        for _ in range(40):
+            mid = (lo + hi) / 2.0
+            over = 1.0 - poisson_cdf(k, mid)
+            if over < p_over:
+                lo = mid
+            else:
+                hi = mid
+        return round((lo + hi) / 2.0, 2)
+    try:
+        z = statistics.NormalDist().inv_cdf(_clamp(p_over, 0.02, 0.98))
+    except Exception:
+        z = 0.0
+    sigma = max(1.0, line * 0.6)
+    return round(max(0.0, line + z * sigma), 2)
 
 
 def _ev_percent(p_win: float, american_odds: float) -> float:
@@ -340,6 +388,7 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         p = by_id.get(prop["player_id"])
         if not p:
             continue
+        _mkt_p_over = None
         if league == "NBA":
             opponent_id = matchups.get(p.get("team_id", ""), "")
             proj, opp_factor = _calc_stat_projection(p, prop["prop_type"], opponent_id)
@@ -359,7 +408,15 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         else:
             calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0))
             source_proj = prop.get("projection")
-            if source_proj is not None:
+            # Prefer the real market line + no-vig odds (ESPN/DraftKings) to set
+            # the projection & pick direction. The old random-minutes proxy
+            # produced absurd counts (e.g. 1.5 hits, 11 assists) that forced
+            # every 1+ line to OVER.
+            if prop.get("line_source") == "espn_props" and calc_line > 0:
+                _mkt_p_over = _novig_over_prob(prop.get("odds_over"), prop.get("odds_under"))
+            if _mkt_p_over is not None:
+                proj = _projection_from_market(league, calc_line, _mkt_p_over)
+            elif source_proj is not None:
                 proj = float(source_proj)
             else:
                 xgb_mean = _xgboost_style_projection(p, prop, league)
@@ -377,6 +434,10 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0)) if league != "NBA" else float(calc_line)
         std_dev = max(2.5, abs(proj) * 0.22)
         p_over = _projection_to_prob(league, proj, calc_line, std_dev)
+        # For non-NBA rows with a real book line, trust the market's no-vig
+        # P(over) directly so the pick side matches the real line.
+        if league != "NBA" and _mkt_p_over is not None:
+            p_over = _mkt_p_over
         p_under = 1.0 - p_over
         ev_over = _ev_percent(p_over, prop["odds_over"])
         ev_under = _ev_percent(p_under, prop["odds_under"])

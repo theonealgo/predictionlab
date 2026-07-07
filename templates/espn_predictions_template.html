@@ -448,7 +448,7 @@
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
         .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-        .pick-conf-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; align-items:stretch; }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
         @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
         .pc-box {
             background:#ffffff;
@@ -635,7 +635,7 @@
     {% set label_elo = 'Edge' %}
     {% set label_xgb = 'XSharp' %}
     {% set label_ensemble = 'Sharp Consensus' %}
-    {% from 'includes/score_macros.html' import fmt_half, fmt_labeled_final, fmt_labeled_proj, fmt_final_spread, team_short %}
+    {% from 'includes/score_macros.html' import fmt_half, fmt_labeled_final, fmt_labeled_proj, fmt_final_spread, team_short, fmt_spread_line %}
     {% if soccer_leagues %}
     <div class="league-slider">
         <div class="league-badges" id="leagueBubbles">
@@ -740,6 +740,17 @@
                     data-pick="{{ _chart_pick }}"
                     data-conf="{% if _chart_conf is not none %}{{ _chart_conf }}{% endif %}"
                     data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
+                    data-books-spread="{% if pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
+                    data-books-total="{% if pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
+                    {% if is_premium|default(false) %}
+                    data-m-grinder2="{% if pred.glicko2_prob is not none %}{{ pred.glicko2_prob }}{% endif %}"
+                    data-m-takedown="{% if pred.trueskill_prob is not none %}{{ pred.trueskill_prob }}{% endif %}"
+                    data-m-edge="{% if pred.elo_prob is not none %}{{ pred.elo_prob }}{% endif %}"
+                    data-m-xsharp="{% if pred.xgb_prob is not none %}{{ pred.xgb_prob }}{% endif %}"
+                    data-m-consensus="{% if pred.ensemble_prob is not none %}{{ pred.ensemble_prob }}{% endif %}"
+                    data-pl-proj="{% if pred.pl_proj_away_pts is not none %}{{ fmt_labeled_proj(pred.away_team_id, pred.pl_proj_away_pts, pred.home_team_id, pred.pl_proj_home_pts) }}{% endif %}"
+                    data-xs-proj="{% if pred.xs_proj_away_pts is not none %}{{ fmt_labeled_proj(pred.away_team_id, pred.xs_proj_away_pts, pred.home_team_id, pred.xs_proj_home_pts) }}{% endif %}"
+                    {% endif %}
                     data-result="{{ _chart_result }}">
                 <div class="game-card pick-card" data-league="{{ pred.league if pred.league else 'Other' }}">
                     {% set _force_rl = (sport == 'MLB') %}
@@ -758,7 +769,6 @@
                         {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
                         {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
-                        {'name': 'Efficiency', 'prob': pred.disp_ml_prob, 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
@@ -1121,10 +1131,34 @@
         const wrap = section.querySelector('.chart-table-wrap');
         if(!wrap) return;
         const stacks = section.querySelectorAll('[data-pick-card]');
+        // Premium columns (model win %s + projected scores) are only rendered
+        // server-side for premium users; detect them so free users keep the
+        // compact table.
+        let hasModels = false, hasProj = false;
+        stacks.forEach(function(st){
+            if(st.getAttribute('data-m-consensus')) hasModels = true;
+            if(st.getAttribute('data-xs-proj') || st.getAttribute('data-pl-proj')) hasProj = true;
+        });
+        let head = '<th>Matchup</th><th>Time</th><th>Pick</th><th>Conf</th><th>Edge</th><th>Books Spread</th><th>Books Total</th>';
+        if(hasModels) head += '<th>Grinder2</th><th>Takedown</th><th>Edge</th><th>XSharp</th><th>Sharp Consensus</th>';
+        if(hasProj) head += '<th>PL Proj</th><th>XSharp Proj</th>';
+        head += '<th>Result</th>';
+        const colCount = (head.match(/<th>/g) || []).length;
+        function modelCell(st, attr){
+            const raw = st.getAttribute(attr);
+            if(raw === null || raw === '') return '<span title="Model rating not available for this matchup yet">N/A</span>';
+            const p = parseFloat(raw);
+            if(isNaN(p)) return '<span title="Model rating not available for this matchup yet">N/A</span>';
+            const home = _esc(st.getAttribute('data-home')||''), away = _esc(st.getAttribute('data-away')||'');
+            const side = (p >= 50) ? home : away;
+            const pct = (p >= 50) ? p : (100 - p);
+            return side+' '+(Math.round(pct*10)/10)+'%';
+        }
+        function textCell(st, attr){ const v = _esc(st.getAttribute(attr) || ''); return v || '—'; }
         let rows = '', lastLeague = '';
         stacks.forEach(function(st){
             const lg = st.getAttribute('data-league') || '';
-            if(lg && lg !== lastLeague){ lastLeague = lg; rows += '<tr class="pct-league-row"><td colspan="6">'+_esc(lg)+'</td></tr>'; }
+            if(lg && lg !== lastLeague){ lastLeague = lg; rows += '<tr class="pct-league-row"><td colspan="'+colCount+'">'+_esc(lg)+'</td></tr>'; }
             const away = _esc(st.getAttribute('data-away'));
             const home = _esc(st.getAttribute('data-home'));
             const time = _esc(st.getAttribute('data-time'));
@@ -1137,10 +1171,18 @@
             let resTxt = '—';
             if(result === 'WON') resTxt = '<span class="pct-won">✅ Won</span>';
             else if(result === 'LOST') resTxt = '<span class="pct-lost">❌ Lost</span>';
-            rows += '<tr><td>'+away+' @ '+home+'</td><td>'+time+'</td><td><strong>'+pick+'</strong></td><td>'+confTxt+'</td><td>'+edgeTxt+'</td><td>'+resTxt+'</td></tr>';
+            let r = '<tr><td>'+away+' @ '+home+'</td><td>'+time+'</td><td><strong>'+pick+'</strong></td><td>'+confTxt+'</td><td>'+edgeTxt+'</td><td>'+textCell(st,'data-books-spread')+'</td><td>'+textCell(st,'data-books-total')+'</td>';
+            if(hasModels){
+                r += '<td>'+modelCell(st,'data-m-grinder2')+'</td><td>'+modelCell(st,'data-m-takedown')+'</td><td>'+modelCell(st,'data-m-edge')+'</td><td>'+modelCell(st,'data-m-xsharp')+'</td><td>'+modelCell(st,'data-m-consensus')+'</td>';
+            }
+            if(hasProj){
+                r += '<td>'+textCell(st,'data-pl-proj')+'</td><td>'+textCell(st,'data-xs-proj')+'</td>';
+            }
+            r += '<td>'+resTxt+'</td></tr>';
+            rows += r;
         });
         if(!rows){ wrap.innerHTML = '<div style="padding:16px;color:#64748b;">No picks to chart for this date.</div>'; return; }
-        wrap.innerHTML = '<table class="picks-chart-table"><thead><tr><th>Matchup</th><th>Time</th><th>Pick</th><th>Conf</th><th>Edge</th><th>Result</th></tr></thead><tbody>'+rows+'</tbody></table>';
+        wrap.innerHTML = '<table class="picks-chart-table"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table>';
     }
     function refreshChartForActive(){
         const sec = _visibleSection();

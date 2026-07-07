@@ -17683,13 +17683,27 @@ def _build_landing_preview_context():
         # the highest-confidence correct pick on that date. Anchoring to the most
         # recent graded date (instead of the global most-recent row) stops the
         # card from silently drifting to a weeks-old game when a slate is sparse.
+        # NOTE: predictions and games can disagree on game_id and can be off by
+        # one calendar day (predictions are stored in UTC, so a late US-night game
+        # lands on the next date). A strict game_id join therefore silently drops
+        # every recent slate and the card drifts weeks into the past. Anchor on the
+        # graded GAME (authoritative date + scores) and match the prediction by
+        # sport + both team names within a +/-1 day window, preferring the closest
+        # dated / highest-confidence correct pick.
         _graded_row = _conn.execute(
             """
             WITH correct_picks AS (
-                SELECT p.sport, p.game_date, p.away_team_id, p.home_team_id,
-                       p.win_probability, g.away_score, g.home_score, g.id AS gid
-                FROM predictions p
-                JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
+                SELECT g.sport AS sport, g.game_date AS game_date,
+                       g.away_team_id AS away_team_id, g.home_team_id AS home_team_id,
+                       p.win_probability AS win_probability,
+                       g.away_score AS away_score, g.home_score AS home_score,
+                       g.id AS gid,
+                       ABS(julianday(date(p.game_date)) - julianday(date(g.game_date))) AS date_gap
+                FROM games g
+                JOIN predictions p ON p.sport = g.sport
+                    AND p.home_team_id = g.home_team_id
+                    AND p.away_team_id = g.away_team_id
+                    AND ABS(julianday(date(p.game_date)) - julianday(date(g.game_date))) <= 1
                 WHERE g.home_score IS NOT NULL AND g.away_score IS NOT NULL
                   AND g.home_score != g.away_score
                   AND p.win_probability IS NOT NULL
@@ -17703,7 +17717,7 @@ def _build_landing_preview_context():
                    win_probability, away_score, home_score
             FROM correct_picks
             WHERE date(game_date) = (SELECT MAX(date(game_date)) FROM correct_picks)
-            ORDER BY ABS(win_probability - 0.5) DESC, gid DESC
+            ORDER BY date_gap ASC, ABS(win_probability - 0.5) DESC, gid DESC
             LIMIT 1
             """
         ).fetchone()

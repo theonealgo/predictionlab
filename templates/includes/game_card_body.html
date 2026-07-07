@@ -122,8 +122,9 @@
             <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
             <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ home_id }}{% else %}{{ away_id }}{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
             {% else %}
-            <div class="pc-val" style="color:#64748b;">—</div>
-            <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
+            {% set _na_reason = m.reason if (m.reason is defined and m.reason) else (m.name ~ ' rating is not available for ' ~ (sport_info.name if (sport_info is defined and sport_info) else sport) ~ ' yet') %}
+            <div class="pc-val" style="color:#64748b;" title="{{ _na_reason }}">N/A</div>
+            <div class="pc-side" style="color:#64748b;background:transparent;" title="{{ _na_reason }}">N/A</div>
             {% endif %}
         </div>
         {% endfor %}
@@ -321,8 +322,9 @@
                 <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
                 <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}</div>
                 {% else %}
-                <div class="pc-val" style="color:#64748b;">—</div>
-                <div class="pc-side" style="color:#64748b;background:transparent;">—</div>
+                {% set _na_reason = m.reason if (m.reason is defined and m.reason) else (m.name ~ ' rating is not available for ' ~ (sport_info.name if (sport_info is defined and sport_info) else sport) ~ ' yet') %}
+                <div class="pc-val" style="color:#64748b;" title="{{ _na_reason }}">N/A</div>
+                <div class="pc-side" style="color:#64748b;background:transparent;" title="{{ _na_reason }}">N/A</div>
                 {% endif %}
             </div>
             {% endfor %}

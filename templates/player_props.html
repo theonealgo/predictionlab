@@ -534,6 +534,8 @@ function renderProps(data, league) {
   _propsData.rows = items.map(r => Object.assign({}, r, { _locked: r.locked === true }));
   _propsData.present = new Set(items.filter(r => !r.locked).map(r => r.prop_type));
   _propsData.hitByType = {};
+  _propsData.hitLoaded = false;
+  _propsData.hitGraded = 0;
   _propsFilters = { market:'all', side:'all', minEv:'', minHit:'', q:'' };
   if (!items.length) { setContent(`<div class="props-msg">No props available for ${league} right now.</div>`); return; }
 
@@ -583,15 +585,19 @@ function renderProps(data, league) {
     fetch(`/player-props-api/results?league=${encodeURIComponent(league)}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (!d || d.locked || !d.season_by_prop) return;
+        _propsData.hitLoaded = true;
+        if (!d || d.locked || !d.season_by_prop) { renderCheatBody(); return; }
         const m = {};
+        let graded = 0;
         for (const [pt, rc] of Object.entries(d.season_by_prop)) {
           const t = (rc.wins || 0) + (rc.losses || 0);
+          graded += t;
           m[pt] = t > 0 ? Math.round((rc.wins || 0) / t * 100) : null;
         }
         _propsData.hitByType = m;
+        _propsData.hitGraded = graded;
         renderCheatBody();
-      }).catch(() => {});
+      }).catch(() => { _propsData.hitLoaded = true; renderCheatBody(); });
   }
 }
 
@@ -627,6 +633,18 @@ function lockedRowHtml(r) {
   </tr>`;
 }
 
+/* Hit% cell: show the season hit-rate, or N/A + reason when unavailable
+   (e.g. a league like WNBA with no graded prop results yet). */
+function hitCell(r) {
+  const h = _propsData.hitByType[r.prop_type];
+  if (h != null) return `<span class="ct-hit ${rateClass(h)}">${h}%</span>`;
+  let reason;
+  if (!_propsData.hitLoaded) reason = 'Loading graded results…';
+  else if (!_propsData.hitGraded) reason = `No graded ${_propsData.league} prop results yet — Hit% appears once nightly picks are graded.`;
+  else reason = `Not enough graded ${fmt(r.prop_type)} results yet.`;
+  return `<span class="ct-na" title="${reason}" style="color:#94a3b8;cursor:help;">N/A</span>`;
+}
+
 function renderCheatBody() {
   const body = document.getElementById('cheatBody');
   if (!body) return;
@@ -648,7 +666,6 @@ function renderCheatBody() {
     const line = (r._calc_line != null ? r._calc_line : r.line);
     const diff = (r.projection != null && line != null) ? (r.projection - line) : null;
     const ev = pickEv(r);
-    const hit = _propsData.hitByType[r.prop_type];
     const side = String(r.picked_side || '').toLowerCase();
     const rating = r.confidence_score;
     html += `<tr>
@@ -658,7 +675,7 @@ function renderCheatBody() {
       <td class="${diff == null ? '' : (diff >= 0 ? 'ct-pos' : 'ct-neg')}">${diff == null ? '—' : (diff > 0 ? '+' : '') + diff.toFixed(1)}</td>
       <td><span class="ct-rating ${rating != null ? rateClass(rating) : ''}">${rating != null ? Math.round(rating) : '—'}</span></td>
       <td class="${ev == null ? '' : (ev >= 0 ? 'ct-pos' : 'ct-neg')}">${ev == null ? '—' : (ev > 0 ? '+' : '') + (+ev).toFixed(1) + '%'}</td>
-      <td>${hit != null ? `<span class="ct-hit ${rateClass(hit)}">${hit}%</span>` : '—'}</td>
+      <td>${hitCell(r)}</td>
       <td><span class="ct-pick ${side}">${r.picked_side || '—'}</span></td>
       <td><button class="ct-analyze" onclick="window._toggleAnalyze('${id}')">▾</button></td>
     </tr>
