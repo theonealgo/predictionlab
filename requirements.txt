@@ -11,14 +11,17 @@ stripe
 python-dotenv
 
 # Data
-pandas
-numpy>=2.0.0
+# Pinned to the versions the models were trained/pickled with. Do NOT loosen
+# these: unpinned upgrades (e.g. pandas 3.0, numpy 2.4, sklearn 1.9) break
+# model loading/prediction at runtime.
+pandas==2.3.3
+numpy==2.3.4
 requests
-scipy
-scikit-learn
-xgboost
-catboost
-lightgbm
+scipy==1.16.2
+scikit-learn==1.7.2
+xgboost==3.0.5
+catboost==1.2.8
+lightgbm==4.6.0
 
 # Sports data (PyPI packages only — local modules like nhl_api.py are in the repo)
 nfl-data-py
