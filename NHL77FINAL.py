@@ -4666,8 +4666,17 @@ def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
         if not isinstance(data, dict):
             continue
         for event in data.get('events', []) or []:
-            status_name = (event.get('status') or {}).get('type', {}).get('name', '')
-            is_final = status_name.startswith('STATUS_FINAL')
+            status_type = (event.get('status') or {}).get('type', {}) or {}
+            status_name = status_type.get('name', '') or ''
+            # ESPN marks a finished match with completed==True (state 'post').
+            # Matching status_name alone missed STATUS_FULL_TIME (regulation
+            # finals) while only catching STATUS_FINAL*, so a completed game was
+            # mislabeled "upcoming" and shown with no real score/prediction.
+            is_final = (
+                bool(status_type.get('completed'))
+                or status_name.startswith('STATUS_FINAL')
+                or status_name == 'STATUS_FULL_TIME'
+            )
             competition = (event.get('competitions', [{}])[0] or {})
             competitors = competition.get('competitors', []) or []
             if len(competitors) != 2:
@@ -4690,12 +4699,22 @@ def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
             event_dt = event.get('date', '') or competition.get('date', '')
             game_date = _espn_event_date_to_local(event_dt) or check_date.strftime('%Y-%m-%d')
             home_score = away_score = None
+            shootout_winner = None
             if is_final:
                 try:
                     home_score = int(home.get('score', 0))
                     away_score = int(away.get('score', 0))
                 except Exception:
                     continue
+                # Penalty-shootout finals (STATUS_FINAL_PEN) stay level in
+                # regulation (e.g. 0-0) but ESPN flags the winner via
+                # competitor.winner. Capture it so the match is not treated as a
+                # plain draw.
+                if home_score == away_score:
+                    if home.get('winner') is True:
+                        shootout_winner = home_team
+                    elif away.get('winner') is True:
+                        shootout_winner = away_team
             # Extract book odds directly from the scoreboard response.
             # This covers lower-division leagues (esp.2, eng.2, etc.) that ESPN
             # Core odds API doesn't serve, so the picks page shows real lines.
@@ -4733,6 +4752,7 @@ def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
                 'event_date': event_dt or None,
                 'home_score': home_score,
                 'away_score': away_score,
+                'shootout_winner': shootout_winner,
                 'league': league_name,
             }
             if _sb_home_ml is not None:
@@ -7702,9 +7722,17 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 game_dict.setdefault('book_odds_source', 'betting_odds')
             _ensure_book_moneylines(game_dict)
 
-            # Picks page: skip finals (results page owns completed games).
+            # Picks page: drop OLD finals (the results page owns full history)
+            # but KEEP recently-finished games so a game does not vanish the
+            # instant it goes final. The picks route trims these to its
+            # recent-final (3d) / soccer-recent (21d) windows; mirror those
+            # cutoffs here so nothing older leaks onto the slate.
             if is_completed:
-                continue
+                _recent_days = 21 if sport == 'SOCCER' else 3
+                _keep_from = (today - timedelta(days=_recent_days)).strftime('%Y-%m-%d')
+                _gd = game_dict.get('game_date') or ''
+                if not (_gd and _gd >= _keep_from):
+                    continue
 
             predictions.append(game_dict)
     
