@@ -245,18 +245,6 @@
     {% endif %}
 </div>
 
-{% if card.face_pick_team is defined and card.face_pick_team %}
-<div class="ai-pick-row">
-    <div class="ai-pick-text">
-        AI pick · <strong>{{ card.face_pick_team }}</strong>
-        <span class="via">via {{ _face_label }}</span>
-    </div>
-    {% if card.face_pick_confidence is defined and card.face_pick_confidence is not none %}
-    <div class="confidence">Confidence <strong>{{ card.face_pick_confidence }}%</strong></div>
-    {% endif %}
-</div>
-{% endif %}
-
 <footer class="card-footer">
     <button type="button" class="view-details-btn" aria-expanded="false" aria-controls="{{ _details_id }}" onclick="togglePickDetails(this)">
         View Details <span class="chevron">▾</span>

@@ -448,7 +448,7 @@
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
         .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-        .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
+        .pick-conf-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; align-items:stretch; }
         @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
         .pc-box {
             background:#ffffff;
@@ -672,17 +672,32 @@
         .pv-btn.active{background:#00529B;color:#fff;}
         .pv-copy{margin-left:auto;border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 14px;font-size:0.8em;font-weight:800;cursor:pointer;}
         .pv-copy.copied{background:#00C076;border-color:#00C076;color:#fff;}
-        .chart-table-wrap{display:none;overflow-x:auto;margin-top:4px;}
+        .chart-table-wrap{display:none;margin-top:4px;-webkit-overflow-scrolling:touch;}
         .date-section.chart-mode .games-grid{display:none !important;}
-        .date-section.chart-mode .chart-table-wrap{display:block;}
-        .picks-chart-table{width:100%;border-collapse:collapse;font-size:0.86em;background:#fff;border:1px solid rgba(15,23,42,0.12);border-radius:10px;overflow:hidden;}
-        .picks-chart-table th{text-align:left;font-size:0.72em;text-transform:uppercase;letter-spacing:0.3px;color:#64748b;padding:9px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;white-space:nowrap;}
-        .picks-chart-table td{padding:9px 10px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600;vertical-align:middle;}
+        .date-section.chart-mode .chart-table-wrap{display:block;max-height:78vh;overflow:auto;border:1px solid rgba(15,23,42,0.12);border-radius:10px;}
+        .picks-chart-table{width:100%;border-collapse:separate;border-spacing:0;font-size:0.8em;background:#fff;table-layout:auto;}
+        .picks-chart-table th{position:sticky;top:0;z-index:3;text-align:center;font-size:0.66em;text-transform:uppercase;letter-spacing:0.2px;color:#475569;padding:7px 8px;border-bottom:1px solid #dbe2ea;background:#eef2f7;white-space:nowrap;}
+        .picks-chart-table th.mu-col{text-align:left;}
+        .picks-chart-table th.num{text-align:right;}
+        .picks-chart-table td{padding:5px 8px;border-bottom:1px solid #eef2f7;color:#0f172a;font-weight:600;vertical-align:middle;white-space:nowrap;}
+        .picks-chart-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
+        .picks-chart-table td.ctr{text-align:center;}
+        .picks-chart-table tbody tr:nth-child(even) td{background:#f8fafc;}
+        .picks-chart-table tbody tr:hover td{background:#eff6ff;}
         .picks-chart-table tr:last-child td{border-bottom:none;}
+        .picks-chart-table td.mu-col{white-space:normal;min-width:92px;max-width:150px;line-height:1.15;}
+        .picks-chart-table .mu-away{display:block;font-weight:600;color:#334155;}
+        .picks-chart-table .mu-home{display:block;font-weight:800;color:#0f172a;}
+        .picks-chart-table .t-time{color:#64748b;font-weight:600;font-size:0.94em;}
+        .picks-chart-table .pick-cell strong{color:#0c1e3a;}
+        .picks-chart-table .h2h-cell{color:#334155;font-weight:700;}
+        .picks-chart-table td.mdl .na{color:#94a3b8;font-weight:600;}
+        .picks-chart-table .conf-strong{color:#15803d;font-weight:800;}
+        .picks-chart-table .conf-mod{color:#b45309;font-weight:800;}
+        .picks-chart-table .conf-weak{color:#b91c1c;font-weight:700;}
+        .picks-chart-table .best-model{background:rgba(0,192,118,0.16);border-radius:5px;padding:1px 6px;box-shadow:inset 0 0 0 1px rgba(0,192,118,0.35);}
+        .picks-chart-table .pct-league-row td{background:#eef2f7 !important;color:#92400e;font-weight:800;font-size:0.74em;text-transform:uppercase;letter-spacing:0.3px;text-align:left;}
         .picks-chart-table .pct-pick{color:#00529B;font-weight:800;}
-        .picks-chart-table .pct-won{color:#15803d;font-weight:800;}
-        .picks-chart-table .pct-lost{color:#b91c1c;font-weight:800;}
-        .pct-league-row td{background:#f8fafc;color:#92400e;font-weight:800;font-size:0.78em;text-transform:uppercase;letter-spacing:0.3px;}
     </style>
     <div class="picks-view-controls">
         <div class="pv-toggle" role="tablist" aria-label="Pick view">
@@ -727,9 +742,27 @@
                 {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
                 {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
                 {# ===== SECTION: Chart View + Copy All (per-pick data for JS) ===== #}
-                {% set _chart_pick = pred.face_pick_team if (pred.face_pick_team is defined and pred.face_pick_team) else team_short(pred.predicted_winner) %}
-                {% set _chart_conf = pred.face_pick_confidence if (pred.face_pick_confidence is defined and pred.face_pick_confidence is not none) else none %}
+                {# Chart Pick follows Sharp Consensus (ensemble) so it never contradicts the model columns. #}
+                {% set _cons = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
+                {% if _cons is not none %}
+                {% set _chart_pick = team_short(pred.home_team_id) if _cons >= 50 else team_short(pred.away_team_id) %}
+                {% set _chart_conf = _cons if _cons >= 50 else 100 - _cons %}
+                {% else %}
+                {% set _chart_pick = team_short(pred.predicted_winner) %}
+                {% set _chart_conf = none %}
+                {% endif %}
                 {% set _chart_edge = pred.face_edge_pct if (pred.face_edge_pct is defined and pred.face_edge_pct is not none) else (pred.edge_pct if (pred.edge_pct is defined and pred.edge_pct is not none) else none) %}
+                {# H2H last-10 record, leader-labeled (e.g. "DET 7-3", "Even 5-5", soccer adds "· 2D"). #}
+                {% set _h2h_txt = '' %}
+                {% if pred.h2h_last10_games is defined and pred.h2h_last10_games %}
+                {% set _hw = pred.h2h_last10_home_wins or 0 %}
+                {% set _aw = pred.h2h_last10_away_wins or 0 %}
+                {% set _dr = pred.h2h_last10_draws or 0 %}
+                {% if _hw > _aw %}{% set _h2h_txt = team_short(pred.home_team_id) ~ ' ' ~ _hw ~ '-' ~ _aw %}
+                {% elif _aw > _hw %}{% set _h2h_txt = team_short(pred.away_team_id) ~ ' ' ~ _aw ~ '-' ~ _hw %}
+                {% else %}{% set _h2h_txt = 'Even ' ~ _hw ~ '-' ~ _aw %}{% endif %}
+                {% if _dr > 0 %}{% set _h2h_txt = _h2h_txt ~ ' · ' ~ _dr ~ 'D' %}{% endif %}
+                {% endif %}
                 {% set _chart_result = '' %}
                 {% if is_final %}{% if (pred.predicted_winner == pred.home_team_id and home_wins) or (pred.predicted_winner == pred.away_team_id and away_wins) %}{% set _chart_result = 'WON' %}{% elif home_wins or away_wins %}{% set _chart_result = 'LOST' %}{% endif %}{% endif %}
                 <div class="game-card-stack" data-pick-card
@@ -738,7 +771,8 @@
                     data-league="{{ pred.league if pred.league else '' }}"
                     data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time is not none %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
-                    data-conf="{% if _chart_conf is not none %}{{ _chart_conf }}{% endif %}"
+                    data-conf="{% if _chart_conf is not none %}{{ '%.1f'|format(_chart_conf) }}{% endif %}"
+                    data-h2h="{{ _h2h_txt }}"
                     data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
                     data-books-spread="{% if pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-books-total="{% if pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
@@ -747,9 +781,10 @@
                     data-m-takedown="{% if pred.trueskill_prob is not none %}{{ pred.trueskill_prob }}{% endif %}"
                     data-m-edge="{% if pred.elo_prob is not none %}{{ pred.elo_prob }}{% endif %}"
                     data-m-xsharp="{% if pred.xgb_prob is not none %}{{ pred.xgb_prob }}{% endif %}"
+                    data-m-efficiency="{% if pred.disp_ml_prob is not none %}{{ pred.disp_ml_prob }}{% endif %}"
                     data-m-consensus="{% if pred.ensemble_prob is not none %}{{ pred.ensemble_prob }}{% endif %}"
-                    data-pl-proj="{% if pred.pl_proj_away_pts is not none %}{{ fmt_labeled_proj(pred.away_team_id, pred.pl_proj_away_pts, pred.home_team_id, pred.pl_proj_home_pts) }}{% endif %}"
-                    data-xs-proj="{% if pred.xs_proj_away_pts is not none %}{{ fmt_labeled_proj(pred.away_team_id, pred.xs_proj_away_pts, pred.home_team_id, pred.xs_proj_home_pts) }}{% endif %}"
+                    data-pl-proj="{% if pred.pl_proj_away_pts is not none and pred.pl_proj_home_pts is not none %}{{ fmt_half(pred.pl_proj_away_pts) }}–{{ fmt_half(pred.pl_proj_home_pts) }}{% endif %}"
+                    data-xs-proj="{% if pred.xs_proj_away_pts is not none and pred.xs_proj_home_pts is not none %}{{ fmt_half(pred.xs_proj_away_pts) }}–{{ fmt_half(pred.xs_proj_home_pts) }}{% endif %}"
                     {% endif %}
                     data-result="{{ _chart_result }}">
                 <div class="game-card pick-card" data-league="{{ pred.league if pred.league else 'Other' }}">
@@ -769,6 +804,7 @@
                         {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
                         {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.disp_ml_prob, 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
@@ -1139,22 +1175,21 @@
             if(st.getAttribute('data-m-consensus')) hasModels = true;
             if(st.getAttribute('data-xs-proj') || st.getAttribute('data-pl-proj')) hasProj = true;
         });
-        let head = '<th>Matchup</th><th>Time</th><th>Pick</th><th>Conf</th><th>Edge</th><th>Books Spread</th><th>Books Total</th>';
-        if(hasModels) head += '<th>Grinder2</th><th>Takedown</th><th>Edge</th><th>XSharp</th><th>Sharp Consensus</th>';
-        if(hasProj) head += '<th>PL Proj</th><th>XSharp Proj</th>';
-        head += '<th>Result</th>';
-        const colCount = (head.match(/<th>/g) || []).length;
-        function modelCell(st, attr){
+        let head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="ctr">Pick</th><th class="ctr">H2H L10</th><th class="num">Edge</th><th class="num">Books Spr</th><th class="num">Books Tot</th>';
+        if(hasModels) head += '<th class="ctr">Grinder2</th><th class="ctr">Takedown</th><th class="ctr">Edge</th><th class="ctr">XSharp</th><th class="ctr">Efficiency</th><th class="ctr">Sharp Cons.</th>';
+        if(hasProj) head += '<th class="num">PL Proj</th><th class="num">XSharp Proj</th>';
+        const colCount = (head.match(/<th/g) || []).length;
+        function modelInfo(st, attr){
             const raw = st.getAttribute(attr);
-            if(raw === null || raw === '') return '<span title="Model rating not available for this matchup yet">N/A</span>';
+            if(raw === null || raw === '') return {valid:false};
             const p = parseFloat(raw);
-            if(isNaN(p)) return '<span title="Model rating not available for this matchup yet">N/A</span>';
+            if(isNaN(p)) return {valid:false};
             const home = _esc(st.getAttribute('data-home')||''), away = _esc(st.getAttribute('data-away')||'');
-            const side = (p >= 50) ? home : away;
-            const pct = (p >= 50) ? p : (100 - p);
-            return side+' '+(Math.round(pct*10)/10)+'%';
+            return {valid:true, side:(p >= 50) ? home : away, pct:Math.round(((p >= 50) ? p : (100 - p))*10)/10};
         }
+        function confClass(pct){ return pct >= 65 ? 'conf-strong' : (pct >= 55 ? 'conf-mod' : 'conf-weak'); }
         function textCell(st, attr){ const v = _esc(st.getAttribute(attr) || ''); return v || '—'; }
+        const MODEL_ATTRS = ['data-m-grinder2','data-m-takedown','data-m-edge','data-m-xsharp','data-m-efficiency','data-m-consensus'];
         let rows = '', lastLeague = '';
         stacks.forEach(function(st){
             const lg = st.getAttribute('data-league') || '';
@@ -1163,22 +1198,30 @@
             const home = _esc(st.getAttribute('data-home'));
             const time = _esc(st.getAttribute('data-time'));
             const pick = _esc(st.getAttribute('data-pick') || '—');
-            const conf = st.getAttribute('data-conf') || '';
             const edge = st.getAttribute('data-edge') || '';
-            const result = st.getAttribute('data-result') || '';
-            const confTxt = conf ? '<span class="pct-pick">'+_esc(conf)+'%</span>' : '—';
             const edgeTxt = edge ? ((parseFloat(edge) > 0 ? '+' : '')+_esc(edge)+'%') : '—';
-            let resTxt = '—';
-            if(result === 'WON') resTxt = '<span class="pct-won">✅ Won</span>';
-            else if(result === 'LOST') resTxt = '<span class="pct-lost">❌ Lost</span>';
-            let r = '<tr><td>'+away+' @ '+home+'</td><td>'+time+'</td><td><strong>'+pick+'</strong></td><td>'+confTxt+'</td><td>'+edgeTxt+'</td><td>'+textCell(st,'data-books-spread')+'</td><td>'+textCell(st,'data-books-total')+'</td>';
+            let r = '<tr>'
+                + '<td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td>'
+                + '<td class="ctr t-time">'+time+'</td>'
+                + '<td class="ctr pick-cell"><strong>'+pick+'</strong></td>'
+                + '<td class="ctr h2h-cell">'+textCell(st,'data-h2h')+'</td>'
+                + '<td class="num">'+edgeTxt+'</td>'
+                + '<td class="num">'+textCell(st,'data-books-spread')+'</td>'
+                + '<td class="num">'+textCell(st,'data-books-total')+'</td>';
             if(hasModels){
-                r += '<td>'+modelCell(st,'data-m-grinder2')+'</td><td>'+modelCell(st,'data-m-takedown')+'</td><td>'+modelCell(st,'data-m-edge')+'</td><td>'+modelCell(st,'data-m-xsharp')+'</td><td>'+modelCell(st,'data-m-consensus')+'</td>';
+                const infos = MODEL_ATTRS.map(function(a){ return modelInfo(st, a); });
+                let maxPct = -1;
+                infos.forEach(function(i){ if(i.valid && i.pct > maxPct) maxPct = i.pct; });
+                infos.forEach(function(i){
+                    if(!i.valid){ r += '<td class="mdl ctr"><span class="na" title="Model rating not available for this matchup yet">N/A</span></td>'; return; }
+                    const best = (i.pct === maxPct) ? ' best-model' : '';
+                    r += '<td class="mdl ctr"><span class="'+confClass(i.pct)+best+'">'+i.side+' '+i.pct+'%</span></td>';
+                });
             }
             if(hasProj){
-                r += '<td>'+textCell(st,'data-pl-proj')+'</td><td>'+textCell(st,'data-xs-proj')+'</td>';
+                r += '<td class="num">'+textCell(st,'data-pl-proj')+'</td><td class="num">'+textCell(st,'data-xs-proj')+'</td>';
             }
-            r += '<td>'+resTxt+'</td></tr>';
+            r += '</tr>';
             rows += r;
         });
         if(!rows){ wrap.innerHTML = '<div style="padding:16px;color:#64748b;">No picks to chart for this date.</div>'; return; }

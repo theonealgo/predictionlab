@@ -197,29 +197,104 @@ def _load_user_by_email(email):
     return None
 
 
-def _set_session_token(user_id):
-    """Generate a new session token, store in DB and session cookie.
-    This invalidates any previous session for this user."""
-    token = secrets.token_hex(32)
-    try:
-        conn = _get_db()
-        conn.execute('UPDATE users SET session_token = ? WHERE id = ?', (token, user_id))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Failed to set session token for user {user_id}: {e}")
-    session['_session_token'] = token
-
-
 # ─── Init ─────────────────────────────────────────────────────────────────────────────
+
+def _running_on_render():
+    """Best-effort detection of the Render (production HTTPS) environment.
+
+    Used to choose cookie flags: on Render we serve HTTPS behind a proxy, so we
+    set Secure + SameSite=None (required for the underdogs.bet iframe). In local
+    dev we serve plain http on localhost, where Secure / SameSite=None would make
+    browsers drop the cookie and break login.
+    """
+    return bool(
+        os.environ.get('RENDER')
+        or os.environ.get('RENDER_EXTERNAL_URL')
+        or os.path.isdir('/data')
+    )
+
+
+def _resolve_secret_key():
+    """Return a STABLE Flask session secret.
+
+    A changing secret invalidates every session + 'remember me' cookie, which
+    forces all users to log in again on the next worker restart/deploy. Order:
+      1. SECRET_KEY env var (preferred — set this in Render).
+      2. A key persisted on the writable disk so it survives restarts.
+      3. Last resort: a process-local random key (logs a warning; users will be
+         logged out on the next restart).
+    """
+    env_key = (os.environ.get('SECRET_KEY') or '').strip()
+    if env_key:
+        return env_key
+
+    data_dir = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
+    key_path = os.path.join(data_dir, '.flask_secret_key')
+    try:
+        if os.path.exists(key_path):
+            with open(key_path, 'r') as fh:
+                disk_key = fh.read().strip()
+            if disk_key:
+                logger.warning(
+                    "[auth] SECRET_KEY env var not set — using persisted key at %s. "
+                    "Set SECRET_KEY in Render to silence this.", key_path)
+                return disk_key
+        new_key = secrets.token_hex(32)
+        tmp_path = key_path + '.tmp'
+        with open(tmp_path, 'w') as fh:
+            fh.write(new_key)
+        os.replace(tmp_path, key_path)
+        try:
+            os.chmod(key_path, 0o600)
+        except Exception:
+            pass
+        logger.warning(
+            "[auth] SECRET_KEY env var not set — generated and persisted a new key at %s. "
+            "Set SECRET_KEY in Render to control this.", key_path)
+        return new_key
+    except Exception as e:
+        logger.error(
+            "[auth] Could not persist a session key (%s) — using a process-local "
+            "random key; users may be logged out on restart.", e)
+        return secrets.token_hex(32)
+
 
 def init_auth(app, db_path=None):
     """Initialize auth system on the Flask app."""
     global _DB_PATH
     _DB_PATH = db_path or app.config.get('DATABASE', 'sports_predictions_original.db')
 
-    # Secret key for sessions
-    app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+    # Secret key for sessions — MUST stay stable across restarts, otherwise
+    # every restart invalidates all session + remember-me cookies (forcing
+    # users to log in again). See _resolve_secret_key.
+    app.secret_key = _resolve_secret_key()
+
+    # ── Cookie / session hardening so logins actually persist ────────────────
+    # Long-lived, permanent session cookie (not a browser-close cookie) plus a
+    # matching 90-day remember cookie.
+    app.config.setdefault('PERMANENT_SESSION_LIFETIME', timedelta(days=90))
+    app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
+    app.config.setdefault('REMEMBER_COOKIE_HTTPONLY', True)
+    app.config.setdefault('REMEMBER_COOKIE_DURATION', timedelta(days=90))
+    if _running_on_render():
+        # Production HTTPS (behind ProxyFix): allow the cookie inside the
+        # underdogs.bet iframe (cross-site) on Chrome. SameSite=None requires Secure.
+        app.config.setdefault('SESSION_COOKIE_SAMESITE', 'None')
+        app.config.setdefault('SESSION_COOKIE_SECURE', True)
+        app.config.setdefault('REMEMBER_COOKIE_SAMESITE', 'None')
+        app.config.setdefault('REMEMBER_COOKIE_SECURE', True)
+    else:
+        # Local dev over http://localhost — Secure / SameSite=None would make the
+        # browser drop the cookie and break login, so use Lax + non-secure.
+        app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
+        app.config.setdefault('SESSION_COOKIE_SECURE', False)
+        app.config.setdefault('REMEMBER_COOKIE_SAMESITE', 'Lax')
+        app.config.setdefault('REMEMBER_COOKIE_SECURE', False)
+
+    @app.before_request
+    def _make_session_permanent():
+        # Use PERMANENT_SESSION_LIFETIME instead of expiring when the browser closes.
+        session.permanent = True
 
     # Flask-Login setup
     _login_manager.init_app(app)
@@ -228,35 +303,6 @@ def init_auth(app, db_path=None):
     @_login_manager.user_loader
     def load_user(user_id):
         return _load_user_by_id(user_id)
-
-    # Concurrent session limiter — only one active session per premium user
-    @app.before_request
-    def _check_session_token():
-        try:
-            if not current_user.is_authenticated:
-                return None
-            if not current_user.premium_active:
-                return None
-            if current_user.is_admin:
-                return None
-            local_token = session.get('_session_token')
-            if not local_token:
-                return None
-            conn = _get_db()
-            try:
-                row = conn.execute('SELECT session_token FROM users WHERE id = ?', (current_user.id,)).fetchone()
-                db_token = row['session_token'] if row else None
-            except Exception:
-                db_token = None
-            finally:
-                conn.close()
-            if db_token and db_token != local_token:
-                logout_user()
-                session.clear()
-                return redirect('/login?error=session_expired')
-        except Exception:
-            pass
-        return None
 
     # Create users table
     _ensure_users_table()
@@ -395,7 +441,6 @@ def google_callback():
             user = _load_user_by_id(user.id)
 
         login_user(user, remember=True)
-        _set_session_token(user.id)
         return redirect(request.args.get('next', '/'))
 
     except Exception:
@@ -414,7 +459,6 @@ def login_page():
         'no_email': 'Could not get email from Google.',
         'oauth_failed': 'Google login failed. Please try again.',
         'mismatch': 'Passwords do not match.',
-        'session_expired': 'Your session was ended because your account was logged in on another device.',
     }.get(error, '')
 
     return render_template(
@@ -449,7 +493,6 @@ def login_submit():
         return redirect(url_for('auth.login_page', error='invalid'))
 
     login_user(user, remember=True)
-    _set_session_token(user.id)
     return redirect(request.args.get('next', '/'))
 
 
@@ -498,7 +541,6 @@ def signup_submit():
     user = _load_user_by_email(email)
     if user:
         login_user(user, remember=True)
-        _set_session_token(user.id)
 
     return redirect('/')
 
@@ -613,7 +655,6 @@ def checkout_success():
                     if user:
                         _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
                         login_user(user, remember=True)
-                        _set_session_token(user.id)
                         logger.info(f"[checkout/success] Activated premium for {email}")
         except Exception as e:
             logger.warning(f"[checkout/success] Stripe verification failed: {e}")

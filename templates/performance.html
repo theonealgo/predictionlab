@@ -96,7 +96,7 @@
                         {% if not cell %}
                         <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
                         {% elif cell.n < 10 %}
-                        <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                        <td><div class="perf-stat perf-gray" title="Small sample ({{ cell.n }} games) — interpret with caution"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
                         {% else %}
                             {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
                         <td><div class="perf-stat {{ cls }}"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
@@ -138,7 +138,7 @@
                             {% if not cell %}
                             <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
                             {% elif cell.n < 10 %}
-                            <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                            <td><div class="perf-stat perf-gray" title="Small sample ({{ cell.n }} games) — interpret with caution"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
                             {% else %}
                                 {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
                             <td><div class="perf-stat {{ cls }}"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>

@@ -1146,6 +1146,9 @@ def _compute_h2h_projection(
     home_pts = []
     away_pts = []
     totals = []
+    # Win-loss(-draw) record from the perspective of the UPCOMING home/away teams
+    # (hp = upcoming home team's score in that meeting, regardless of venue).
+    home_wins = away_wins = draws = 0
     for r in rows:
         try:
             hs = float(r['home_score'])
@@ -1153,12 +1156,18 @@ def _compute_h2h_projection(
         except Exception:
             continue
         if r['home_team_id'] == home_team:
-            home_pts.append(hs)
-            away_pts.append(as_)
+            hp, ap = hs, as_
         else:
-            home_pts.append(as_)
-            away_pts.append(hs)
+            hp, ap = as_, hs
+        home_pts.append(hp)
+        away_pts.append(ap)
         totals.append(hs + as_)
+        if hp > ap:
+            home_wins += 1
+        elif ap > hp:
+            away_wins += 1
+        else:
+            draws += 1
     if len(home_pts) < min_games:
         _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
         _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': None}
@@ -1171,6 +1180,9 @@ def _compute_h2h_projection(
         'avg_away': round(avg_away, 2),
         'our_total': round(avg_home + avg_away, 1),
         'totals': totals,
+        'home_wins': home_wins,
+        'away_wins': away_wins,
+        'draws': draws,
     }
     _trim_cache(_H2H_PROJECTION_CACHE, 3600, max_entries=500)
     _H2H_PROJECTION_CACHE[cache_key] = {'ts': now_ts, 'data': data}
@@ -1200,11 +1212,17 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
                 # NBA may later replace our_total with an efficiency projection).
                 pred['h2h_last10_total'] = proj['our_total']
                 pred['h2h_last10_games'] = proj['games_used']
+                pred['h2h_last10_home_wins'] = proj.get('home_wins')
+                pred['h2h_last10_away_wins'] = proj.get('away_wins')
+                pred['h2h_last10_draws'] = proj.get('draws')
             else:
                 pred.setdefault('our_total', None)
                 pred.setdefault('our_total_games', 0)
                 pred.setdefault('h2h_last10_total', None)
                 pred.setdefault('h2h_last10_games', 0)
+                pred.setdefault('h2h_last10_home_wins', None)
+                pred.setdefault('h2h_last10_away_wins', None)
+                pred.setdefault('h2h_last10_draws', None)
     finally:
         try:
             conn.close()
@@ -1744,6 +1762,110 @@ def _refresh_books_on_predictions(sport, predictions, today_date=None, prioritiz
         limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
         prioritize=_prio,
     )
+
+
+# Throttle state for off-request-path live book-odds refresh (see
+# _start_background_book_refresh). Keyed by sport -> last-start epoch seconds.
+_BOOK_REFRESH_TS: dict = {}
+_BOOK_REFRESH_MIN_INTERVAL = 120  # seconds between background refreshes per sport
+
+
+def _start_background_book_refresh(sport, predictions, today_date=None, prioritize=None):
+    """Refresh live sportsbook odds OFF the request path.
+
+    The picks page hydrates book_* from the betting_lines DB synchronously (fast)
+    and calls this to pull fresh ESPN Core / DraftKings lines in a throttled
+    daemon thread. Previously the live fetch (up to ~60-80 HTTP calls, up to 3x
+    per page load) ran on the request path and made cold loads take ~45s. Fresh
+    lines are persisted back to betting_lines so the next request renders them
+    from the DB -- mirroring the results page's background score-sync pattern.
+    """
+    if not predictions:
+        return
+    # Only bother if a visible upcoming card is still missing complete book odds
+    # after the synchronous DB hydrate.
+    try:
+        needs = [
+            p for p in predictions
+            if isinstance(p, dict) and p.get('home_score') is None
+            and p.get('game_id') and _pred_needs_book_fetch(p)
+        ]
+    except Exception:
+        needs = []
+    if not needs:
+        return
+    now_ts = _time.time()
+    last = _BOOK_REFRESH_TS.get(sport)
+    if last is not None and (now_ts - last) < _BOOK_REFRESH_MIN_INTERVAL:
+        return
+    _BOOK_REFRESH_TS[sport] = now_ts
+    # Deep-copy so the worker never mutates request-owned dicts mid-render.
+    try:
+        snapshot = _copy.deepcopy(needs)
+        prio_snapshot = _copy.deepcopy([
+            p for p in prioritize
+            if isinstance(p, dict) and p.get('home_score') is None and p.get('game_id')
+        ]) if prioritize else None
+    except Exception:
+        return
+
+    def _run():
+        try:
+            _attach_pl_book_odds_to_predictions(
+                sport,
+                snapshot,
+                limit=_PL_BOOK_ODDS_LIMIT_BY_SPORT.get(sport, 60),
+                prioritize=prio_snapshot,
+            )
+        except Exception as _bg_bk:
+            logger.debug(f"[{sport}] background book refresh failed: {_bg_bk}")
+
+    try:
+        import threading as _thr
+        _thr.Thread(target=_run, daemon=True, name=f'book-refresh-{sport}').start()
+    except Exception as _bt:
+        logger.debug(f"[{sport}] could not start background book refresh: {_bt}")
+
+
+# Single-flight guard for stale-while-revalidate prediction rebuilds. A normal
+# request serves the (possibly stale) cache instantly and, when it is past TTL,
+# kicks the heavy model build here onto a daemon thread so no request blocks on
+# it. Only one rebuild runs per sport at a time.
+import threading as _preds_thr
+_PREDICTIONS_REFRESH_INFLIGHT: set = set()
+_PREDICTIONS_REFRESH_LOCK = _preds_thr.Lock()
+
+
+def _start_background_predictions_refresh(sport, days=365):
+    """Recompute a sport's prediction slate OFF the request path.
+
+    Spawns a daemon thread that calls get_upcoming_predictions(..., _force_rebuild=True),
+    which rebuilds the cards, refreshes book odds and repopulates _PREDICTIONS_CACHE.
+    Single-flighted per sport so overlapping stale requests don't stack rebuilds.
+    """
+    with _PREDICTIONS_REFRESH_LOCK:
+        if sport in _PREDICTIONS_REFRESH_INFLIGHT:
+            return
+        _PREDICTIONS_REFRESH_INFLIGHT.add(sport)
+
+    def _run():
+        try:
+            get_upcoming_predictions(sport, days=days, _force_rebuild=True)
+        except Exception as _bg_pred:
+            logger.debug(f"[{sport}] background predictions refresh failed: {_bg_pred}")
+        finally:
+            with _PREDICTIONS_REFRESH_LOCK:
+                _PREDICTIONS_REFRESH_INFLIGHT.discard(sport)
+
+    try:
+        _preds_thr.Thread(
+            target=_run, daemon=True, name=f'preds-refresh-{sport}',
+        ).start()
+    except Exception as _pt:
+        # If the thread can't start, clear the flag so a later request retries.
+        with _PREDICTIONS_REFRESH_LOCK:
+            _PREDICTIONS_REFRESH_INFLIGHT.discard(sport)
+        logger.debug(f"[{sport}] could not start background predictions refresh: {_pt}")
 
 
 def _upcoming_preds_for_book_fetch(predictions, today_date, horizon_days=8):
@@ -5758,6 +5880,124 @@ except Exception as _owe:
     logger.debug(f"[odds-prewarm] failed to start: {_owe}")
 
 
+# ── Predictions cache disk persistence ─────────────────────────────────
+# _PREDICTIONS_CACHE is in-memory, so every (frequent, on Render) worker restart
+# starts cold and the first request per sport pays the full synchronous build
+# (soccer ≈ 10s: ESPN slate + live odds HTTP + model compute) — bad for SEO /
+# uptime tests. We mirror each built slate to disk and seed the in-memory cache
+# from it at startup, so the first post-restart request serves a warm slate
+# instantly and stale-while-revalidate refreshes it in the background.
+_PREDICTIONS_DISK_CACHE_DIR = _os_v2.path.join(
+    _os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'predictions',
+)
+# Don't seed slates older than this on boot (dates would be too stale to show
+# even for the brief window before the background refresh completes).
+_PREDICTIONS_DISK_MAX_AGE = 2 * 24 * 3600  # 2 days
+
+
+def _persist_predictions_to_disk(cache_key, entry):
+    """Atomically mirror one cached prediction slate to disk (best-effort)."""
+    try:
+        import pickle
+        _os_v2.makedirs(_PREDICTIONS_DISK_CACHE_DIR, exist_ok=True)
+        path = _os_v2.path.join(_PREDICTIONS_DISK_CACHE_DIR, f'{cache_key}.pkl')
+        tmp = f'{path}.{_os_v2.getpid()}.{threading.get_ident()}.tmp'
+        with open(tmp, 'wb') as _f:
+            pickle.dump(
+                {'key': cache_key, 'ts': entry.get('ts'), 'data': entry.get('data')},
+                _f, protocol=pickle.HIGHEST_PROTOCOL,
+            )
+        _os_v2.replace(tmp, path)  # atomic on POSIX
+    except Exception as _pe:
+        logger.debug(f"[preds-disk] persist failed for {cache_key}: {_pe}")
+
+
+def _load_predictions_disk_cache():
+    """Seed _PREDICTIONS_CACHE from disk at startup so cold starts serve warm."""
+    try:
+        if not _os_v2.path.isdir(_PREDICTIONS_DISK_CACHE_DIR):
+            return
+        import pickle
+        now_ts = _time.time()
+        loaded = 0
+        for _fn in _os_v2.listdir(_PREDICTIONS_DISK_CACHE_DIR):
+            if not _fn.endswith('.pkl'):
+                continue
+            path = _os_v2.path.join(_PREDICTIONS_DISK_CACHE_DIR, _fn)
+            try:
+                with open(path, 'rb') as _f:
+                    d = pickle.load(_f)
+            except Exception:
+                continue
+            key = d.get('key') or _fn[:-4]
+            ts = d.get('ts') or 0
+            data = d.get('data')
+            if not data or (now_ts - ts) > _PREDICTIONS_DISK_MAX_AGE:
+                continue
+            existing = _PREDICTIONS_CACHE.get(key)
+            if existing and existing.get('ts', 0) >= ts:
+                continue  # keep the fresher in-memory entry
+            _PREDICTIONS_CACHE[key] = {'ts': ts, 'data': data}
+            loaded += 1
+        if loaded:
+            logger.info(f"[preds-disk] seeded {loaded} prediction slate(s) from disk")
+    except Exception as _le:
+        logger.debug(f"[preds-disk] load failed: {_le}")
+
+
+# ── Predictions cache pre-warmer ─────────────────────────────────────────────
+# get_upcoming_predictions serves stale-while-revalidate: after the first build
+# per sport, requests are instant and rebuilds happen off the request path. This
+# one-shot warmer builds every sport's slate once at startup so the FIRST
+# request after a (frequent, on Render) worker restart is also instant instead
+# of paying the multi-second cold model build synchronously.
+# SOCCER is warmed FIRST: it is the slowest cold build (multi-league ESPN slate
+# + live odds) and the most SEO-sensitive, so it should be ready before the
+# lighter sports.
+_PREDICTIONS_PREWARM_SPORTS = ['SOCCER', 'MLB', 'NBA', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']
+
+def _prewarm_predictions_cache():
+    import time as _t
+    # get_upcoming_predictions is defined further down this module; wait for it.
+    _fn = None
+    for _ in range(120):
+        _fn = globals().get('get_upcoming_predictions')
+        if _fn is not None:
+            break
+        _t.sleep(1)
+    if _fn is None:
+        return
+    for _sport in _PREDICTIONS_PREWARM_SPORTS:
+        # Respect the same single-flight guard so an on-demand background refresh
+        # and this warmer never rebuild the same sport at the same time.
+        with _PREDICTIONS_REFRESH_LOCK:
+            if _sport in _PREDICTIONS_REFRESH_INFLIGHT:
+                continue
+            _PREDICTIONS_REFRESH_INFLIGHT.add(_sport)
+        try:
+            _fn(_sport, _force_rebuild=True)
+            logger.info(f"[preds-prewarm] {_sport} warmed")
+        except Exception as _we:
+            logger.debug(f"[preds-prewarm] {_sport} failed: {_we}")
+        finally:
+            with _PREDICTIONS_REFRESH_LOCK:
+                _PREDICTIONS_REFRESH_INFLIGHT.discard(_sport)
+
+# Seed the in-memory cache from disk BEFORE the prewarmer runs so the very first
+# request after a restart serves a warm (stale) slate instantly instead of
+# blocking on the cold build while the prewarmer is still working through its
+# list. Stale-while-revalidate refreshes each slate in the background.
+try:
+    _load_predictions_disk_cache()
+except Exception as _lde:
+    logger.debug(f"[preds-disk] startup seed failed: {_lde}")
+
+try:
+    threading.Thread(target=_prewarm_predictions_cache, daemon=True, name='preds-prewarm').start()
+except Exception as _ppe:
+    logger.debug(f"[preds-prewarm] failed to start: {_ppe}")
+
+
 def parse_date(date_str):
     """Parse date string from multiple formats (DD/MM/YYYY or YYYY-MM-DD)"""
     try:
@@ -6237,30 +6477,77 @@ def _fetch_injuries(sport: str) -> dict:
         return _from_db()
 
 
-def get_upcoming_predictions(sport, days=365):
-    """Get ALL game predictions from season start - both completed and upcoming
+# Picks page display window (per sport). The picks page only renders the
+# near-term slate; the results page serves full history. Sports mapped here
+# build prediction cards only within [today - past, today + future] days, which
+# avoids running model inference over the whole season on every rebuild — e.g.
+# without this, NBA/NFL/etc. rebuild a card for every game since season start
+# (a full season can be ~1,300 games) on each stale-while-revalidate refresh.
+# 'past' matches the picks route's recent-finals cutoff; 'future' is sized per
+# cadence: daily sports a few days, weekly sports (NFL/NCAAF) enough to reach
+# next week's slate. Sports NOT listed keep the legacy season-start..+30d
+# behavior — NHL and SOCCER are intentionally omitted because their loaders are
+# already API-bounded to a small recent+upcoming window, and TENNIS/UFC/GOLF
+# render through separate individual-sport loaders, not this build path.
+_PICKS_DISPLAY_WINDOW = {
+    # Daily-cadence sports: recent finals + a few days of upcoming games.
+    'MLB':   {'past': 3, 'future': 3},
+    'NBA':   {'past': 3, 'future': 5},
+    'WNBA':  {'past': 3, 'future': 5},
+    'NCAAB': {'past': 3, 'future': 5},
+    'NCAAW': {'past': 3, 'future': 5},
+    # Weekly-cadence sports: widen 'future' so next week's slate still shows.
+    'NFL':   {'past': 3, 'future': 10},
+    'NCAAF': {'past': 3, 'future': 10},
+}
+
+
+def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
+    """Get a sport's near-term prediction slate (recent finals + upcoming games).
     
     Loads games from database for all sports including NHL
     
-    USER REQUIREMENT: Show ALL games from season start (Oct 7 for NHL), not just upcoming!
+    Only games inside the per-sport picks display window are built into cards
+    (Elo still trains on all completed games); full history is on the results page.
+    
+    Serving is stale-while-revalidate: any cached slate is returned immediately
+    (with book odds re-hydrated from the DB), and when it is past its TTL the
+    heavy rebuild is kicked onto a daemon thread instead of blocking the request.
+    Background rebuilds call this with _force_rebuild=True to bypass the cache.
     """
     
+    # Only off-request-path builds (prewarm / background refresh, invoked with
+    # _force_rebuild=True) may perform slow synchronous live-odds HTTP. A
+    # request-path COLD miss (_force_rebuild=False, empty cache) stays fast: it
+    # hydrates odds from the DB only and defers the live fetch to a background
+    # rebuild so no user/crawler request blocks ~10s on synchronous odds HTTP.
+    _live_odds_ok = bool(_force_rebuild)
+
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
     cache_key = f"{sport}_upcoming_predictions_v6"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
-    if cached and (now_ts - cached['ts']) < cache_ttl:
+    if not _force_rebuild and cached:
         _cached_preds = cached.get('data')
         if _cached_preds:
+            # Stale-while-revalidate: if the cache is past its TTL, rebuild in the
+            # background but still serve the stale slate now so no request blocks
+            # on the multi-second model build.
+            if (now_ts - cached['ts']) >= cache_ttl:
+                _start_background_predictions_refresh(sport, days)
             out = _copy.deepcopy(_cached_preds)
             try:
-                _refresh_books_on_predictions(sport, out)
+                # Fast path: hydrate book_* from the betting_lines DB synchronously
+                # and refresh live ESPN/DK odds OFF the request path (throttled
+                # daemon) so cache hits never block on synchronous odds HTTP.
+                _hydrate_book_lines_db_only(sport, out)
                 for _bp in out:
                     if isinstance(_bp, dict):
                         _ensure_book_moneylines(_bp)
+                _start_background_book_refresh(sport, out)
             except Exception as _bk_cache:
-                logger.debug(f"[{sport}] book refresh on predictions cache hit: {_bk_cache}")
+                logger.debug(f"[{sport}] book hydrate on predictions cache hit: {_bk_cache}")
             _apply_mlb_spread_fade_batch(sport, out)
             return out
 
@@ -6684,7 +6971,8 @@ def get_upcoming_predictions(sport, days=365):
         else:
             away_stats['away_wins'] += 1
     
-    # Display logic: Show ALL past games + future games for ONE MONTH from today
+    # Display logic: build cards only inside the per-sport picks window
+    # (recent finals + near-term upcoming); full history lives on the results page.
     season_starts = {
         'NHL': datetime(2025, 10, 7),
         'NFL': datetime(2025, 9, 4),
@@ -6698,13 +6986,25 @@ def get_upcoming_predictions(sport, days=365):
     }
     season_start = season_starts.get(sport, datetime(2025, 1, 1))
     
-    # Calculate cutoff horizon by sport
     # Use module-level datetime/timedelta imports to avoid local shadowing
     today = datetime.now()
     future_window_days = {
         'NBA': 30,
     }
     future_cutoff = today + timedelta(days=future_window_days.get(sport, 30))
+
+    # ── Picks display window ───────────────────────────────────────
+    # Only build prediction cards for the near-term slate; the results page
+    # serves full history. Sports listed in _PICKS_DISPLAY_WINDOW build cards
+    # only within [today - past, today + future]; unlisted sports keep the
+    # legacy season-start..+30d behavior.
+    _picks_window = _PICKS_DISPLAY_WINDOW.get(sport)
+    if _picks_window:
+        _display_floor = today - timedelta(days=_picks_window['past'])
+        _display_ceiling = today + timedelta(days=_picks_window['future'])
+    else:
+        _display_floor = season_start
+        _display_ceiling = future_cutoff
     
     predictions = []
     # Fetch injuries once for the whole request (15-min cache keeps it fast)
@@ -6741,8 +7041,9 @@ def get_upcoming_predictions(sport, days=365):
         pass
 
     for game_date, game in all_games_with_dates:
-        # Show games from season start up to one month from today
-        if game_date >= season_start and game_date <= future_cutoff:
+        # Only build cards inside the picks display window (see _PICKS_DISPLAY_WINDOW);
+        # full history is served by the results page.
+        if game_date >= _display_floor and game_date <= _display_ceiling:
             # ============================================================
             # SOCCER MODELS + V2 PREDICTION SYSTEM
             # ============================================================
@@ -7384,7 +7685,9 @@ def get_upcoming_predictions(sport, days=365):
     # Cache market lines and hydrate book_* from DB (ESPN fetch runs on picks page).
     _upcoming_n = sum(1 for p in predictions if p.get('home_score') is None)
     _ml_limit = min(80, max(20, _upcoming_n)) if sport == 'MLB' else min(40, max(20, _upcoming_n))
-    _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
+    if _live_odds_ok:
+        # Off-request-path build (prewarm/background): fetch live market lines.
+        _cache_market_lines_for_predictions(sport, predictions, limit=_ml_limit)
     _attach_market_lines_to_predictions(sport, predictions)
     _hydrate_book_lines_db_only(sport, predictions)
     if sport in ['NBA', 'MLB', 'NCAAW', 'SOCCER', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']:
@@ -7436,6 +7739,34 @@ def get_upcoming_predictions(sport, days=365):
 
     # Model-level fades (spread / ML / O-U) once per prediction dict
     _apply_model_fades_batch(sport, predictions)
+
+    # SOCCER: the ML fade above inverts the two-way model probs (ensemble/xgb/…)
+    # so the Pick Confidence boxes point at the correct side. But the 3-way
+    # home_win_prob/away_win_prob/predicted_winner were derived from the
+    # PRE-fade ensemble far above, so the card face (win % + green "favored"
+    # highlight) would still point at the stale/wrong team. Recompute the
+    # 3-way split (and predicted_winner) from the FADED ensemble so the face
+    # can never contradict the models below it.
+    if sport == 'SOCCER':
+        for _sp in predictions:
+            if _sp.get('home_score') is not None:
+                continue  # completed game — face favored box not shown
+            _dp = _safe_float(_sp.get('draw_prob'))
+            _ep = _safe_float(_sp.get('ensemble_prob'))
+            if _dp is None or _ep is None:
+                continue  # no 3-way path (face falls back to faded xgb_prob)
+            _hw, _dw, _aw = _soccer_threeway_probs(_ep, _dp)
+            if _hw is None:
+                continue
+            _sp['home_win_prob'] = round(_hw * 100, 1)
+            _sp['away_win_prob'] = round(_aw * 100, 1)
+            _sp['draw_prob'] = round(_dw * 100, 1)
+            _sp['predicted_winner'] = max(
+                [('home', _hw, _sp.get('home_team_id')),
+                 ('draw', _dw, 'Draw'),
+                 ('away', _aw, _sp.get('away_team_id'))],
+                key=lambda x: x[1],
+            )[2]
 
     # NBA-only: replace H2H "Our Total"/"Our Spread" with an efficiency-based
     # projection (per-team ORtg/DRtg/Pace from ESPN box scores — the same math
@@ -7632,13 +7963,31 @@ def get_upcoming_predictions(sport, days=365):
             _pred['best_ev_pick'] = max(_ev_map, key=_ev_map.get) if _ev_map else None
 
     try:
-        _refresh_books_on_predictions(sport, predictions)
+        if _live_odds_ok:
+            # Off-request-path build: pull fresh live sportsbook odds now.
+            _refresh_books_on_predictions(sport, predictions)
+        else:
+            # Request-path cold miss: keep TTFB low — hydrate book_* from the DB
+            # only (no live HTTP) and refresh live odds OFF the request path.
+            _hydrate_book_lines_db_only(sport, predictions)
+            for _bp in predictions:
+                if isinstance(_bp, dict):
+                    _ensure_book_moneylines(_bp)
+            _start_background_book_refresh(sport, predictions)
     except Exception as _bk_build:
         logger.debug(f"[{sport}] book refresh before predictions cache store: {_bk_build}")
 
     _trim_cache(_PREDICTIONS_CACHE, cache_ttl, max_entries=50)
     if predictions:
-        _PREDICTIONS_CACHE[cache_key] = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
+        _entry = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
+        _PREDICTIONS_CACHE[cache_key] = _entry
+        # Mirror to disk so a worker restart can serve this slate warm.
+        _persist_predictions_to_disk(cache_key, _entry)
+    # A request-path cold miss skipped live odds above; kick a full off-path
+    # rebuild so the cache (and disk) repopulate with live odds within seconds.
+    # Single-flighted, so this can't stack duplicate rebuilds.
+    if not _live_odds_ok and predictions:
+        _start_background_predictions_refresh(sport, days)
     return predictions
 
 def _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=None):
@@ -15382,11 +15731,16 @@ def sport_predictions(sport, filter_date=None):
     except Exception:
         today_date = datetime.now().strftime('%Y-%m-%d')
 
-    # Books first (before shareable/EV work) so Render timeouts do not skip ESPN Core fetch.
+    # Hydrate book_* from the betting_lines DB synchronously (fast, no HTTP). The
+    # live ESPN/DK odds refresh runs OFF the request path below so the page never
+    # blocks on dozens of synchronous odds calls (previously ~45s cold loads).
     try:
-        _refresh_books_on_predictions(sport, predictions, today_date=today_date)
+        _hydrate_book_lines_db_only(sport, predictions)
+        for _bp in predictions:
+            if isinstance(_bp, dict):
+                _ensure_book_moneylines(_bp)
     except Exception as _early_bk:
-        logger.debug(f"[{sport}] early book odds on picks page: {_early_bk}")
+        logger.debug(f"[{sport}] early book hydrate on picks page: {_early_bk}")
 
     # Social-share image payload: top 3 unique upcoming predictions from today's slate
     # (fallback to next available date if no games today).
@@ -15513,7 +15867,13 @@ def sport_predictions(sport, filter_date=None):
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
     try:
-        _refresh_books_on_predictions(
+        # Re-hydrate from DB (covers rows written since the early hydrate) and kick
+        # off the throttled background live-odds refresh for the visible slate.
+        _hydrate_book_lines_db_only(sport, predictions)
+        for _bp in predictions:
+            if isinstance(_bp, dict):
+                _ensure_book_moneylines(_bp)
+        _start_background_book_refresh(
             sport, predictions, today_date=today_date, prioritize=_book_priority,
         )
     except Exception as _card_bk:
