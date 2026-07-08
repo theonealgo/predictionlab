@@ -5872,6 +5872,10 @@ def _prewarm_espn_odds_cache():
         from odds_engine_espn import get_all_team_stats as _warm
     except Exception:
         return
+    # Defer so the app serves real requests (login page, picks) immediately after
+    # boot instead of competing with a burst of ESPN HTTP calls on the single
+    # Render worker. Yield briefly between sports for the same reason.
+    _time.sleep(20)
     while True:
         for _sport in _PREWARM_SPORTS:
             try:
@@ -5879,6 +5883,7 @@ def _prewarm_espn_odds_cache():
                 logger.debug(f"[odds-prewarm] {_sport} warmed")
             except Exception as _we:
                 logger.debug(f"[odds-prewarm] {_sport} failed: {_we}")
+            _time.sleep(2)   # keep the worker responsive between sports
         _time.sleep(720)   # re-warm every 12 min — before the 15-min TTL expires
 
 try:
@@ -6003,6 +6008,11 @@ def _prewarm_predictions_cache():
         _t.sleep(1)
     if _fn is None:
         return
+    # Defer the heavy model builds so the first requests after a deploy are served
+    # from the disk-seeded cache instead of competing with 8 synchronous rebuilds
+    # on Render's single worker — that contention made every page (including the
+    # login page + Google OAuth round-trip) slow or time out.
+    _t.sleep(30)
     for _sport in _PREDICTIONS_PREWARM_SPORTS:
         # Respect the same single-flight guard so an on-demand background refresh
         # and this warmer never rebuild the same sport at the same time.
@@ -6018,6 +6028,8 @@ def _prewarm_predictions_cache():
         finally:
             with _PREDICTIONS_REFRESH_LOCK:
                 _PREDICTIONS_REFRESH_INFLIGHT.discard(_sport)
+        # Give the worker room to serve requests between heavy builds.
+        _t.sleep(8)
 
 # Seed the in-memory cache from disk BEFORE the prewarmer runs so the very first
 # request after a restart serves a warm (stale) slate instantly instead of
