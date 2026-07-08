@@ -81,6 +81,13 @@ _init_datadog_tracing()
 
 import time as _time
 import copy as _copy
+# NOTE: several MODULE-LEVEL blocks reference the bare global name `threading`
+# (the odds/predictions prewarm thread starts and _persist_predictions_to_disk's
+# threading.get_ident()). Those are NOT covered by the function-local `import
+# threading` statements elsewhere, nor by the aliased `import threading as
+# _preds_thr`. Without this top-level import they raised a swallowed NameError,
+# silently disabling the prewarmers AND the predictions disk cache on every boot.
+import threading
 try:
     from PIL import Image, ImageDraw, ImageFont
     _HAS_PIL = True
@@ -5887,9 +5894,11 @@ except Exception as _owe:
 # uptime tests. We mirror each built slate to disk and seed the in-memory cache
 # from it at startup, so the first post-restart request serves a warm slate
 # instantly and stale-while-revalidate refreshes it in the background.
-_PREDICTIONS_DISK_CACHE_DIR = _os_v2.path.join(
-    _os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'predictions',
-)
+# Stored on the persistent disk (_DATA_DIR is '/data' on Render, '.' locally) so
+# cached slates survive not just worker restarts but full REDEPLOYS — the app
+# directory is wiped on every deploy, which would otherwise leave the first
+# post-deploy request with no warm slate to fall back on if the live build fails.
+_PREDICTIONS_DISK_CACHE_DIR = _os_v2.path.join(_DATA_DIR, '.cache', 'predictions')
 # Don't seed slates older than this on boot (dates would be too stale to show
 # even for the brief window before the background refresh completes).
 _PREDICTIONS_DISK_MAX_AGE = 2 * 24 * 3600  # 2 days
@@ -5943,6 +5952,33 @@ def _load_predictions_disk_cache():
             logger.info(f"[preds-disk] seeded {loaded} prediction slate(s) from disk")
     except Exception as _le:
         logger.debug(f"[preds-disk] load failed: {_le}")
+
+
+def _recover_cached_predictions(sport):
+    """Best-effort fallback slate when a live rebuild raises.
+
+    Returns a deep copy of the most recent cached prediction slate for `sport`
+    (in-memory first, then disk-seeded), ignoring the normal TTL — a stale slate
+    is far better than the 'could not be loaded' error banner when an upstream
+    data/model dependency hiccups. Returns None when nothing is cached at all.
+    """
+    cache_key = f"{sport}_upcoming_predictions_v6"  # must match get_upcoming_predictions
+    entry = _PREDICTIONS_CACHE.get(cache_key)
+    data = entry.get('data') if isinstance(entry, dict) else None
+    if not data:
+        # Nothing in memory (e.g. right after a restart/redeploy) — try the disk mirror.
+        try:
+            _load_predictions_disk_cache()
+        except Exception:
+            pass
+        entry = _PREDICTIONS_CACHE.get(cache_key)
+        data = entry.get('data') if isinstance(entry, dict) else None
+    if not data:
+        return None
+    try:
+        return _copy.deepcopy(data)
+    except Exception:
+        return data
 
 
 # ── Predictions cache pre-warmer ─────────────────────────────────────────────
@@ -15644,11 +15680,21 @@ def sport_predictions(sport, filter_date=None):
     except Exception as e:
         import traceback as _tb_pred
         logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
-        predictions = []
-        prediction_error = (
-            f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
-            "Please refresh in a minute."
-        )
+        # Graceful degradation: a live build failure (transient upstream data/
+        # model hiccup, cold-start resource spike, ESPN timeout, etc.) must NOT
+        # blank the page. Serve the last good slate (memory or persistent disk)
+        # if we have one; only show the error banner when nothing is cached.
+        predictions = _recover_cached_predictions(sport) or []
+        if predictions:
+            logger.warning(
+                "%s predictions: build failed, serving last cached slate (%d games) instead of error banner.",
+                sport, len(predictions),
+            )
+        else:
+            prediction_error = (
+                f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
+                "Please refresh in a minute."
+            )
     # ===== SECTION: Off-season messaging =====
     # When a sport is out of season with no predictions, surface a friendly
     # "season starts <date>" notice + a link to last season's results instead
