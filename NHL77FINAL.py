@@ -6063,6 +6063,11 @@ def init_db():
             win_probability REAL, predicted_winner TEXT,
             predicted_total REAL, locked INTEGER DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS v2_predictions_cache (
+            sport TEXT, home_team TEXT, away_team TEXT, game_date TEXT,
+            glicko2_prob REAL, trueskill_prob REAL, xgboost_prob REAL, home_prob REAL,
+            PRIMARY KEY (sport, home_team, away_team, game_date)
+        );
         CREATE TABLE IF NOT EXISTS site_visits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             visit_date TEXT, ip_address TEXT,
@@ -16567,6 +16572,105 @@ def _frozen_get_v2_prediction(sport, home_team, away_team, game_date=None):
         return None
 
 
+def _frozen_batch_v2_predictions(games_list, bypass_limit=False):
+    """Batch compute predictions to avoid calling predict() per row, heavily utilizing DB cache."""
+    if not HAS_V2_SYSTEM: return {}
+    results = {}
+    missing_games = []
+    
+    conn = get_db_connection()
+    try:
+        for g in games_list:
+            sport = (g['sport'] or '').upper()
+            _ms = 'NCAAB' if sport == 'NCAAW' else sport
+            home_team = g['home_team_id']
+            away_team = g['away_team_id']
+            date_str = g['game_date'] or datetime.now().strftime('%Y-%m-%d')
+            _ck = f"{_ms}|{home_team}|{away_team}|{date_str}"
+            
+            row = conn.execute(
+                "SELECT * FROM v2_predictions_cache WHERE sport=? AND home_team=? AND away_team=? AND game_date=?",
+                (_ms, home_team, away_team, date_str)
+            ).fetchone()
+            
+            if row:
+                results[_ck] = dict(row)
+                results[_ck]['is_v2'] = True
+            else:
+                missing_games.append({
+                    'original_sport': _ms,
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'date': date_str
+                })
+    finally:
+        conn.close()
+
+    if not missing_games or (not bypass_limit and len(missing_games) > 3):
+        if len(missing_games) > 3 and not bypass_limit:
+            logger.info(f"[frozen_v2_batch] Skipping on-the-fly calculation for {len(missing_games)} missing games to prevent server timeout.")
+        return results
+
+    by_model_sport = {}
+    for g in missing_games:
+        model_sport = _v2_model_sport(g['original_sport'])
+        if model_sport not in by_model_sport:
+            by_model_sport[model_sport] = []
+        by_model_sport[model_sport].append(g)
+        
+    import pandas as pd
+    predictions_to_save = []
+    
+    for model_sport, gs in by_model_sport.items():
+        if _ensure_v2_predictor(model_sport) is None:
+            continue
+        try:
+            predictor = V2_PREDICTORS[model_sport]
+            df = pd.DataFrame(gs)
+            pred = predictor.predict(df)
+            for i in range(len(gs)):
+                row = pred.iloc[i]
+                _ck = f"{gs[i]['original_sport']}|{gs[i]['home_team']}|{gs[i]['away_team']}|{gs[i]['date']}"
+                
+                glicko2_prob = float(row.get('glicko2_prob')) if pd.notna(row.get('glicko2_prob')) else None
+                trueskill_prob = float(row.get('trueskill_prob')) if pd.notna(row.get('trueskill_prob')) else None
+                xgboost_prob = float(row.get('xgboost_prob')) if pd.notna(row.get('xgboost_prob')) else None
+                home_prob = float(row.get('home_prob')) if pd.notna(row.get('home_prob')) else None
+
+                val_dict = {
+                    'glicko2_prob': glicko2_prob,
+                    'trueskill_prob': trueskill_prob,
+                    'xgboost_prob': xgboost_prob,
+                    'home_prob': home_prob,
+                    'is_v2': True,
+                }
+                results[_ck] = val_dict
+                
+                predictions_to_save.append((
+                    gs[i]['original_sport'], gs[i]['home_team'], gs[i]['away_team'], gs[i]['date'],
+                    glicko2_prob, trueskill_prob, xgboost_prob, home_prob
+                ))
+        except Exception as _fe:
+            logger.warning(f"[frozen_v2_batch] {model_sport}: {_fe}")
+            
+    if predictions_to_save:
+        conn = get_db_connection()
+        try:
+            conn.executemany(
+                """INSERT OR REPLACE INTO v2_predictions_cache 
+                   (sport, home_team, away_team, game_date, glicko2_prob, trueskill_prob, xgboost_prob, home_prob) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                predictions_to_save
+            )
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"[frozen_v2_batch] DB save error: {e}")
+        finally:
+            conn.close()
+        
+    return results
+
+
 def _build_performance_page_data(sport_filter: str = '', last_n: int | None = None):
     """
     Build performance using Excel-style logic:
@@ -16640,6 +16744,8 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
         LIMIT 1
     """
 
+    batch_v2_preds = _frozen_batch_v2_predictions(games)
+
     for g in games:
         sport = (g['sport'] or '').upper()
         game_id = g['game_id']
@@ -16662,7 +16768,8 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
 
         # Always use frozen reference prediction output (March 8 model, unconditional)
         _ms = 'NCAAB' if sport == 'NCAAW' else sport
-        v2 = _frozen_get_v2_prediction(_ms, home, away, date_key)
+        _ck = f"{_ms}|{home}|{away}|{date_key}"
+        v2 = batch_v2_preds.get(_ck)
         glicko2_prob = _flt(v2.get('glicko2_prob')) if v2 else None
         trueskill_prob = _flt(v2.get('trueskill_prob')) if v2 else None
         if v2:
@@ -17433,6 +17540,11 @@ def performance_page():
         return redirect(url_for('auth.login_page', next=request.path))
     if not is_premium_user():
         return redirect('/plans')
+        
+    # Default to MLB / 100 on fresh load to prevent massive DB overhead
+    if not request.args:
+        return redirect(url_for('performance_page', sport='MLB', last_n=100))
+
     sport = (request.args.get('sport') or '').strip().upper()
     if sport not in _PERF_SPORT_OPTIONS:
         sport = ''

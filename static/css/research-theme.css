@@ -24,7 +24,7 @@
 .pl2-burger {
     width: 34px;
     height: 34px;
-    display: none; /* desktop uses the nav dropdowns; burger is mobile-only */
+    display: grid; /* restored burger visibility across all pages */
     place-items: center;
     border: 1px solid var(--pl-line);
     background: transparent;
