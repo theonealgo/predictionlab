@@ -2586,29 +2586,88 @@ _TEAM_NAME_TO_ABBR = {
         'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh',
     },
     'WNBA': {
-        'Atlanta Dream': 'atl', 'Chicago Sky': 'chi', 'Connecticut Sun': 'conn',
-        'Dallas Wings': 'dal', 'Golden State Valkyries': 'gsv', 'Indiana Fever': 'ind',
-        'Las Vegas Aces': 'lv', 'Los Angeles Sparks': 'la', 'Minnesota Lynx': 'min',
-        'New York Liberty': 'ny', 'Phoenix Mercury': 'phx', 'Seattle Storm': 'sea',
-        'Washington Mystics': 'wsh',
-    },
+    'Atlanta Dream': 'atl','Chicago Sky': 'chi','Connecticut Sun': 'conn',
+    'Dallas Wings': 'dal','Golden State Valkyries': 'gsv', 'Indiana Fever': 'ind',
+    'Las Vegas Aces': 'lv','Los Angeles Sparks': 'la', 'Minnesota Lynx': 'min','New York Liberty': 'ny',
+    'Phoenix Mercury': 'phx','Seattle Storm': 'sea','Washington Mystics': 'wsh',
+    'Toronto Tempo': 'tor','Portland Fire': 'por',
+},
 }
+# ── Individual athlete images (Tennis/UFC/Golf) ─────────────────────────────
 
+_ATHLETE_IMAGE_IDS = {}
+
+def _register_individual_athlete_logo(sport: str, name: str, athlete_id: str):
+
+    if not sport or not name or not athlete_id:
+
+        return
+
+    _ATHLETE_IMAGE_IDS[
+
+        (sport.upper(), str(name).strip())
+
+    ] = str(athlete_id)
+
+def athlete_image_url(sport: str, name: str) -> str:
+
+    if not sport or not name:
+
+        return '/static/pl-logo.svg'
+
+    athlete_id = _ATHLETE_IMAGE_IDS.get(
+
+        (sport.upper(), str(name).strip())
+
+    )
+
+    if not athlete_id:
+
+        return '/static/pl-logo.svg'
+
+    # ESPN headshot CDN sport paths
+
+    espn_sport = {
+
+        'TENNIS': 'tennis',
+
+        'UFC': 'mma',
+
+        'GOLF': 'golf'
+
+    }.get(sport.upper(), sport.lower())
+
+    return (
+
+        f"https://a.espncdn.com/i/headshots/"
+
+        f"{espn_sport}/players/full/{athlete_id}.png"
+
+    )
 
 def team_logo_url(sport: str, team_name: str) -> str:
-    """ESPN team logo for prediction card header."""
+    """ESPN logo/image URL for prediction card header."""
     if not (sport and team_name):
         return '/static/pl-logo.svg'
+
+    sport = sport.upper()
+    team_name = str(team_name).strip()
+
+    # Soccer uses ESPN IDs instead of abbreviation mapping
     if sport == 'SOCCER':
         return _soccer_espn_logo_url(team_name)
+
+    # Individual sports use athlete headshots
+    if sport in ('TENNIS', 'UFC', 'GOLF'):
+        return athlete_image_url(sport, team_name)
+
     slug = _TEAM_LOGO_SLUG.get(sport)
     abbr = (_TEAM_NAME_TO_ABBR.get(sport) or {}).get(team_name)
+
     if not slug or not abbr:
         return '/static/pl-logo.svg'
+
     return f'https://a.espncdn.com/i/teamlogos/{slug}/500/{abbr}.png'
-
-
-
 
 def _first_pred_float(pred: dict, keys):
     for key in keys:
@@ -6362,14 +6421,14 @@ def _score_predictor_instance(sport):
     """
     Return a ScorePredictor whose team_stats are cached for the day.
 
-    Strategy:
-      1. Build a baseline from completed DB games (covers ALL teams that have played).
-      2. Try ESPN API (covers major-conference teams with richer season-level stats).
-      3. Merge: DB is the base layer; ESPN overrides where available.
-
-    This ensures small-conference NCAAB teams (and any sport with a large team pool)
-    still get spread/total predictions even when ESPN's /teams endpoint omits them.
+    Team-based sports only. Individual sports (Golf/Tennis/UFC)
+    use their own athlete matchup pipelines.
     """
+
+    # Individual sports do not use team stats
+    if sport.upper() in {'GOLF', 'TENNIS', 'UFC'}:
+        return None
+
     try:
         from score_predictor import ScorePredictor
     except ImportError:
@@ -7452,7 +7511,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                             _away_mkt = _american_to_implied_prob(_away_ml)
 
                         # 1. ML correction: runs model spread → probability
-                        _ml_prob = 0.5
+                        _ml_prob = None
                         _mlbm = _get_mlb_model(DATABASE)
                         if _mlbm:
                             _mlb_result = _mlbm.predict(_ht, _at)
@@ -7461,25 +7520,25 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                                 game_dict['xgb_away_score'] = round(_mlb_result[1])
                                 game_dict['xgb_spread']     = _round_to_half(_mlb_result[2]) if _mlb_result[2] is not None else None
                                 game_dict['xgb_total']      = _round_to_half(_mlb_result[3]) if _mlb_result[3] is not None else None
-                                _mlb_spread = float(_mlb_result[2])
-                                _ml_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2))))
+                            _mlb_spread = float(_mlb_result[2])
+                            _ml_prob = 0.5 * (1.0 + _math.erf(_mlb_spread / (3.0 * _math.sqrt(2)))) if _mlb_spread is not None else None
                         # 2. Pitching adjustment (cached, single ESPN API call)
-                        _pitch_prob = 0.5
+                        _pitch_prob = None
                         _pitch = {}
                         try:
                             from mlb_pitching import get_mlb_pitching_adjustment as _get_pitching
                             _pitch = _get_pitching(_ht, _at)
-                            _pitch_prob = _pitch.get('pitching_prob', 0.5)
+                            _pitch_prob = _pitch.get('pitching_prob')
                         except Exception:
                             pass
 
                         # 3. Elo / v2 baselines (dynamic weighting for MLB)
                         _elo_base = elo_prob
 
-                        _g2_prob = _to_float_safe(game.get('glicko2_prob'), _elo_base)
-                        _ts_prob = _to_float_safe(game.get('trueskill_prob'), _elo_base)
-                        _xgb_prob = _to_float_safe(_ml_prob, _elo_base)
-                        _ens_prob = _to_float_safe(ensemble_prob, _elo_base)
+                        _g2_prob = _to_float_safe(game.get('glicko2_prob'))
+                        _ts_prob = _to_float_safe(game.get('trueskill_prob'))
+                        _xgb_prob = _to_float_safe(_ml_prob)
+                        _ens_prob = _to_float_safe(ensemble_prob)
 
                         # Rule #5: MLB dynamic model weighting.
                         # Increase XGB + TrueSkill, reduce Elo + Glicko-2 influence.
@@ -8113,9 +8172,9 @@ def calculate_nfl_weekly_performance():
                     _ar = get_elo(away_team_full)
                     elo_prob = expected_score(_hr, _ar) if _hr and _ar else 0.5
                 except Exception:
-                    elo_prob = 0.5
-                xgb_prob = elo_prob
-                ens_prob = elo_prob
+                    elo_prob = None
+                    xgb_prob = None
+                    ens_prob = None
             else:
                 # Stored DB predictions
                 elo_prob = float(pred[0]) if pred[0] else None
@@ -11222,7 +11281,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
         <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
     </div>
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble'),('⚡ Efficiency','efficiency')] %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
         {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
@@ -12739,10 +12798,18 @@ def build_todays_top_picks():
             WHERE date(p.game_date) = ?
               AND (g.home_score IS NULL OR g.game_id IS NULL)
               AND p.win_probability IS NOT NULL
-              AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
+              AND p.sport IN (
+
+    SELECT DISTINCT sport
+
+    FROM predictions
+
+    WHERE date(game_date) = ?
+
+)
             ORDER BY p.game_date ASC
             LIMIT 80
-        ''', (_tp_today,)).fetchall()
+        ''', (_tp_today, _tp_today)).fetchall()
         _tp_conn.close()
         _candidates = []
         for _tp in _tp_rows:
@@ -13442,7 +13509,7 @@ def api_performance_data():
                     catboost_prob = glicko2_prob or elo_prob
                 meta_prob = _f(g['meta_home_prob'])
                 if meta_prob is None:
-                    meta_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob or 0.5)
+                    meta_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob)
 
                 model_prob_map = {
                     'Grinder2': glicko2_prob if glicko2_prob is not None else catboost_prob,
@@ -13695,7 +13762,7 @@ def _build_performance_page_data(sport_filter: str = '', last_n: int | None = No
                 trueskill_prob,
                 xgb_prob,
                 elo_prob,
-                fallback=elo_prob or 0.5
+                fallback=elo_prob
             )
 
         model_prob = {
@@ -14492,7 +14559,7 @@ def performance_audit_csv():
         if logi_prob is None:
             logi_prob = trueskill_prob
         if meta_prob is None:
-            meta_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob or 0.5)
+            meta_prob = _compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=elo_prob)
 
         model_prob = {
             'grinder2': glicko2_prob if glicko2_prob is not None else cat_prob,
@@ -17142,31 +17209,71 @@ def api_get_sports():
 # NEW SPORTS (Tennis / UFC / Golf) — module wiring + ported results helpers
 # Guarded so an import failure can never stop the app from booting.
 # ============================================================================
+
 try:
     from sports import SOCCER as _soccer_sport
 except Exception as _e_soc:
     _soccer_sport = None
     print(f"⚠️ soccer module for new-sports grading not loaded: {_e_soc}")
+
+
 try:
     from sports import TENNIS as _tennis_sport
-    from sports import UFC as _ufc_sport
-    from sports import GOLF as _golf_sport
-    _INDIVIDUAL_SPORT_LOADERS = {
-        _tennis_sport.SPORT: _tennis_sport.load_upcoming_games,
-        _ufc_sport.SPORT: _ufc_sport.load_upcoming_games,
-        _golf_sport.SPORT: _golf_sport.load_upcoming_games,
-    }
-    _SPORT_RESULTS_RENDERERS = {
-        'TENNIS': _tennis_sport.render_sport_results_page,
-        'UFC': _ufc_sport.render_sport_results_page,
-        'GOLF': _golf_sport.render_sport_results_page,
-    }
-    print("✅ New sports (Tennis/UFC/Golf) modules loaded")
-except Exception as _e_newsports:
-    _SPORT_RESULTS_RENDERERS = {}
-    print(f"⚠️ New sports modules not loaded: {_e_newsports}")
-# ===== Ported helpers for new sports (Tennis/UFC/Golf) results path =====
+    print("✅ TENNIS import OK")
+except Exception as e:
+    print(f"❌ TENNIS import failed: {e}")
+    _tennis_sport = None
 
+
+try:
+    from sports import UFC as _ufc_sport
+    print("✅ UFC import OK")
+except Exception as e:
+    print(f"❌ UFC import failed: {e}")
+    _ufc_sport = None
+
+
+try:
+    from sports import GOLF as _golf_sport
+    print("✅ GOLF import OK")
+except Exception as e:
+    print(f"❌ GOLF import failed: {e}")
+    _golf_sport = None
+
+
+# Register individual sports after imports complete
+_INDIVIDUAL_SPORT_LOADERS = {}
+
+if _tennis_sport:
+    _INDIVIDUAL_SPORT_LOADERS[_tennis_sport.SPORT] = _tennis_sport.load_upcoming_games
+
+if _ufc_sport:
+    _INDIVIDUAL_SPORT_LOADERS[_ufc_sport.SPORT] = _ufc_sport.load_upcoming_games
+
+if _golf_sport:
+    _INDIVIDUAL_SPORT_LOADERS[_golf_sport.SPORT] = _golf_sport.load_upcoming_games
+
+
+print("INDIVIDUAL LOADERS:", _INDIVIDUAL_SPORT_LOADERS.keys())
+
+
+# Register results renderers
+_SPORT_RESULTS_RENDERERS = {}
+
+if _tennis_sport:
+    _SPORT_RESULTS_RENDERERS['TENNIS'] = _tennis_sport.render_sport_results_page
+
+if _ufc_sport:
+    _SPORT_RESULTS_RENDERERS['UFC'] = _ufc_sport.render_sport_results_page
+
+if _golf_sport:
+    _SPORT_RESULTS_RENDERERS['GOLF'] = _golf_sport.render_sport_results_page
+
+
+print("✅ New sports (Tennis/UFC/Golf) modules loaded")
+
+
+# ===== Ported helpers for new sports (Tennis/UFC/Golf) results path =====
 
 def _grade_efficiency_for_results(sport, daily_results) -> None:
     """Per-game Efficiency ML grading on results cards (all grading sports)."""
@@ -17934,44 +18041,94 @@ def _blog_news_topic(headline: str) -> str:
     return topic[:140].rstrip()
 
 def _edge_performance(league: str) -> dict:
-    """Edge-bucketed historical performance (win-rate, ROI, sample) + edge
-    distribution. Built ONLY from completed, graded props with a stored edge
-    (the `ev` column). Never fabricated."""
+    """Game pick edge performance by sport.
+
+    Uses completed game predictions only.
+    Does NOT use player props.
+    """
+
     conn = get_db_connection()
+
     try:
-        rows = [dict(r) for r in conn.execute(
-            "SELECT result, ev, odds FROM player_prop_results "
-            "WHERE league=? AND result IN ('HIT','MISS') AND ev IS NOT NULL",
-            (league,)
-        ).fetchall()]
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                """
+                SELECT
+                    win_prediction_correct,
+                    win_probability,
+                    model_version
+                FROM predictions
+                WHERE league=?
+                AND win_prediction_correct IS NOT NULL
+                """,
+                (league,)
+            ).fetchall()
+        ]
+
     finally:
         conn.close()
 
-    # Bucket by the MAGNITUDE of the edge (|ev|). The model's edge can point
-    # either way (especially for flipped sports), so the meaningful signal is
-    # "how strong is the edge", not its sign — this is what calibrates to win %.
+
+    graded = []
+
     for r in rows:
-        r["edge_mag"] = abs(float(r["ev"])) if r.get("ev") is not None else None
 
-    edge_table = _bucket_stats(rows, _EDGE_BUCKETS, "edge_mag")
-    total = len(rows)
+        if r.get("win_probability") is None:
+            continue
 
-    # Edge distribution: what % of completed picks fall in each broad bucket.
+        graded.append({
+            "edge_mag": abs(
+                float(r["win_probability"]) - 50
+            ),
+            "result": (
+                "HIT"
+                if r["win_prediction_correct"] == 1
+                else "MISS"
+            ),
+            "odds": -110
+        })
+
+
+    edge_table = _bucket_stats(
+        graded,
+        _EDGE_BUCKETS,
+        "edge_mag"
+    )
+
+    total = len(graded)
+
+
     dist = []
+
     for label, lo, hi in _EDGE_DIST_BUCKETS:
-        n = sum(1 for r in rows
-                if r.get("edge_mag") is not None and
-                ((r["edge_mag"] >= lo) if hi >= 1e9 else (lo <= r["edge_mag"] < hi)))
-        dist.append({"bucket": label, "count": n,
-                     "pct": round(n / total * 100, 1) if total else None})
+
+        count = sum(
+            1
+            for r in graded
+            if r["edge_mag"] >= lo
+            and (
+                hi >= 1e9
+                or r["edge_mag"] < hi
+            )
+        )
+
+        dist.append({
+            "bucket": label,
+            "count": count,
+            "pct": round(
+                count / total * 100,
+                1
+            ) if total else None
+        })
+
 
     return {
         "league": league,
         "graded": total,
         "edge_table": edge_table,
         "edge_distribution": dist,
-    }
-
+}
 def _bucket_stats(graded_rows, buckets, value_key):
     """Win rate + sample + ROI per bucket for a metric (confidence, ev, edge).
     A bucket whose upper bound is >= 1e9 is treated as open-ended (no max)."""
@@ -17987,7 +18144,7 @@ def _bucket_stats(graded_rows, buckets, value_key):
             in_bucket = (v >= lo) if hi >= 1e9 else (lo <= v < hi)
             if not in_bucket:
                 continue
-            won = r["result"] == "HIT"
+            won = r["win_prediction_correct"] == 1
             total += 1
             if won:
                 wins += 1
