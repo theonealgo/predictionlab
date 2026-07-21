@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Golf Picks | Prediction Lab{% endblock %}
+
+{% block content %}
+
+<div class="container" style="max-width:1400px;margin:30px auto;padding:20px;">
+
+    <h1 style="margin-bottom:8px;">
+        ⛳ Golf Tournament Predictions
+    </h1>
+
+    <p style="color:#666;margin-bottom:30px;">
+        Prediction Lab Win Probability vs Sportsbook Odds
+    </p>
+
+    <table class="table table-striped" style="width:100%;">
+        <thead>
+            <tr>
+                <th>Raw Prediction Data</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for pred in predictions %}
+            <tr>
+                <td>
+                    <pre style="white-space:pre-wrap;">{{ pred }}</pre>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td>
+                    No Golf predictions available.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}
