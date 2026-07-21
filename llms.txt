@@ -1,37 +1,42 @@
 # Prediction Lab
 
-> AI-powered sports betting picks and probability-based projections.
+> Prediction Lab provides AI-powered sports betting picks, probability projections, model analysis, and transparent results tracking across major sports.
 
 ## About
+
+Prediction Lab is a sports analytics platform using multi-model AI consensus, statistical projections, and sportsbook comparison tools.
 
 - Brand: Prediction Lab
 - Parent organization: GoodsandMore Inc. (Canada)
 - Website: https://predictionlab.io
 
-## What We Offer
+## Core Features
 
-- Free daily moneyline picks
-- Premium spread, totals, and score projections
-- Multi-model AI consensus and transparent tracking
+- Daily AI sports betting picks
+- Moneyline probability models
+- Premium picks and projections
+- Sportsbook comparison tools
+- Model performance tracking
+- Historical betting results
 
-## Core Pages
+## Main Pages
 
-- [Home](https://predictionlab.io/)
-- [Daily Betting Results Report](https://predictionlab.io/daily-report)
-- [Plans & Pricing](https://predictionlab.io/plans)
-- [AI Sports Betting Picks Today](https://predictionlab.io/ai-sports-betting-picks-today)
-- [What Are AI Picks](https://predictionlab.io/what-are-ai-sports-betting-picks)
-- [Model vs Sportsbooks](https://predictionlab.io/our-model-vs-sportsbooks)
-- [Model Performance](https://predictionlab.io/performance)
-- [NBA Picks](https://predictionlab.io/nba-picks)
-- [MLB Picks](https://predictionlab.io/mlb-picks)
-- [NHL Picks](https://predictionlab.io/nhl-picks)
-- [NFL Picks](https://predictionlab.io/nfl-picks)
-- [Soccer Picks](https://predictionlab.io/soccer-picks)
+- [Home](https://predictionlab.io/): Main Prediction Lab homepage
+- [Daily Betting Results Report](https://predictionlab.io/daily-report): Historical model tracking and results
+- [Plans & Pricing](https://predictionlab.io/plans): Premium membership options
+- [AI Sports Betting Picks Today](https://predictionlab.io/ai-sports-betting-picks-today): Daily AI-generated picks
+- [Model Performance](https://predictionlab.io/performance): Model tracking and analytics
+- [NBA Picks](https://predictionlab.io/nba-picks): NBA predictions
+- [MLB Picks](https://predictionlab.io/mlb-picks): MLB predictions
+- [NHL Picks](https://predictionlab.io/nhl-picks): NHL predictions
+- [NFL Picks](https://predictionlab.io/nfl-picks): NFL predictions
+- [Soccer Picks](https://predictionlab.io/soccer-picks): Soccer predictions
+- [Player Props](https://predictionlab.io/player-props): Player prop analysis
 - [Privacy Policy](https://predictionlab.io/privacy)
 - [Terms of Service](https://predictionlab.io/terms)
 
 ## Notes
 
-- Picks are informational and educational, not guaranteed outcomes.
+- Predictions are informational and educational.
+- No outcome is guaranteed.
 - Sports betting involves risk and variance.
