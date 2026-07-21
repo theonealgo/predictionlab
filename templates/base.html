@@ -318,14 +318,13 @@
 </div>
 {% endif %}
 <script>
-  var TV_MENUS = {
-    picks: {title: 'Picks & Predictions', items: [{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},
-    props: {title: 'Props & Models', items: [{l:'Player Props',h:'/player-props'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'}]},
-    results: {title: 'Results & Tracking', items: [{l:'Daily Results',h:'/daily-report'},{l:'All Sports Results',h:'/all-sports-results'},{l:'Model Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'}]},
-    community: {title: 'Community', items: [{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://www.instagram.com/',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
-    company: {title: 'Company', items: [{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
-  };
-
+var TV_MENUS={
+  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-picks'}{%- endif -%},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},
+  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'}]},
+  results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'All Sports Results',h:'/all-sports-results'},{l:'Model Performance',h:'/performance'},{l:'Edge Performance',h:'/edge-performance'},{l:'Download CSV',h:'/results/downloads'}]},
+  community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://www.instagram.com/',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
+  company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
+};
 function tvOpen(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
   if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';
@@ -340,39 +339,46 @@ function tvClose(){
     if(m)m.className='tv-panel visible';if(s)s.className='tv-panel hidden-right';if(b)b.style.display='none';if(t)t.textContent='Menu';
   },280);
 }
-function tvSub(key){
-  var menu=TV_MENUS[key];if(!menu)return;var html='';
-  menu.items.forEach(function(item){
-    var ext=item.ext?' target="_blank" rel="noopener"':'';
-    var cls='tv-sub-link'+(item.cls?' '+item.cls:'');
-    var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';
-    html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
+function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
+
+function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
+document.addEventListener('click',function(){var a=document.getElementById('acctMenu');if(a)a.classList.remove('open');});
+
+var _srchFilter='all';
+var _srchDefaults=[
+  {l:'Join Premium',h:'/plans',s:'all'},
+  {l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},
+  {l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},
+  {l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},
+  {l:'WNBA Picks',h:'/wnba-picks',s:'wnba'}{%- if soccer_enabled -%},{l:'Soccer Picks',h:'/soccer-picks',s:'all'}{%- endif -%},
+  {l:'Player Props',h:'/player-props',s:'props'},
+  {l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}
+];
+function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){var i=document.getElementById('srchInput');if(i){i.focus();i.removeAttribute('readonly');}},60);renderSrchItems('');}
+function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';var i=document.getElementById('srchInput');if(i)i.value='';}
+function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
+function renderSrchItems(q){
+  var items=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&(!q||i.l.toLowerCase().includes(q.toLowerCase()));});
+  var el=document.getElementById('srchItems');
+  if(!items.length){el.innerHTML='<div class="srch-empty">No results found</div>';return;}
+  el.innerHTML=items.map(function(i){return'<a class="srch-item" href="'+i.h+'"><span class="srch-item-label">'+i.l+'</span><span class="srch-item-sport">'+i.s.toUpperCase()+'</span></a>';}).join('');
+}
+document.addEventListener('DOMContentLoaded',function(){
+  var inp=document.getElementById('srchInput');
+  if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}
+  document.querySelectorAll('.srch-filter').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});
+      this.classList.add('active');_srchFilter=this.dataset.s;
+      renderSrchItems(document.getElementById('srchInput').value);
+    });
   });
-  document.getElementById('tvSub').innerHTML=html;
-  document.getElementById('tvDrawerTitle').textContent=menu.title;
-  document.getElementById('tvBackBtn').style.display='';
-  document.getElementById('tvMain').className='tv-panel hidden-left';
-  document.getElementById('tvSub').className='tv-panel visible';
-}
-function tvBack(){
-  document.getElementById('tvMain').className='tv-panel visible';
-  document.getElementById('tvSub').className='tv-panel hidden-right';
-  document.getElementById('tvBackBtn').style.display='none';
-  document.getElementById('tvDrawerTitle').textContent='Menu';
-}
-function tvToggleMore(btn){
-  var el=document.getElementById('tvMoreItems');
-  var open=el.style.display==='block';
-  el.style.display=open?'none':'block';
-  var arrow=btn.querySelector('.tv-more-arrow');
-  if(arrow)arrow.style.transform=open?'':'rotate(90deg)';
-}
-function toggleAcctMenu(e){
-  e.stopPropagation();
-  document.getElementById('acctMenu').classList.toggle('open');
-}
-document.addEventListener('click',function(){
-  var a=document.getElementById('acctMenu');if(a)a.classList.remove('open');
 });
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
 </script>
+<script src="/static/js/pl-header-logo.js" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
