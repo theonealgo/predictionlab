@@ -1,28 +1,37 @@
-# underdogs.bet
+# Prediction Lab
 
 > AI-powered sports betting picks and probability-based projections.
 
 ## About
-- Brand: underdogs.bet
+
+- Brand: Prediction Lab
 - Parent organization: GoodsandMore Inc. (Canada)
-- URL: https://www.underdogs.bet
-- Contact: underdogsbetemail@gmail.com
+- Website: https://predictionlab.io
 
 ## What We Offer
+
 - Free daily moneyline picks
 - Premium spread, totals, and score projections
 - Multi-model AI consensus and transparent tracking
 
 ## Core Pages
-- Home: https://www.underdogs.bet/
-- Daily report: https://www.underdogs.bet/daily-report
-- Plans: https://www.underdogs.bet/plans
-- AI picks today: https://www.underdogs.bet/ai-sports-betting-picks-today
-- What are AI picks: https://www.underdogs.bet/what-are-ai-sports-betting-picks
-- Model vs sportsbooks: https://www.underdogs.bet/our-model-vs-sportsbooks
-- Privacy: https://www.underdogs.bet/privacy
-- Terms: https://www.underdogs.bet/terms
+
+- [Home](https://predictionlab.io/)
+- [Daily Betting Results Report](https://predictionlab.io/daily-report)
+- [Plans & Pricing](https://predictionlab.io/plans)
+- [AI Sports Betting Picks Today](https://predictionlab.io/ai-sports-betting-picks-today)
+- [What Are AI Picks](https://predictionlab.io/what-are-ai-sports-betting-picks)
+- [Model vs Sportsbooks](https://predictionlab.io/our-model-vs-sportsbooks)
+- [Model Performance](https://predictionlab.io/performance)
+- [NBA Picks](https://predictionlab.io/nba-picks)
+- [MLB Picks](https://predictionlab.io/mlb-picks)
+- [NHL Picks](https://predictionlab.io/nhl-picks)
+- [NFL Picks](https://predictionlab.io/nfl-picks)
+- [Soccer Picks](https://predictionlab.io/soccer-picks)
+- [Privacy Policy](https://predictionlab.io/privacy)
+- [Terms of Service](https://predictionlab.io/terms)
 
 ## Notes
+
 - Picks are informational and educational, not guaranteed outcomes.
 - Sports betting involves risk and variance.
