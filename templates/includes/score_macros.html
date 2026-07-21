@@ -1,6 +1,6 @@
 {# Shared score / line display helpers — used by predictions + results cards #}
 {% macro team_short(name) -%}
-{{ (name|string).split()[-1] }}
+{{ name|string }}
 {%- endmacro %}
 {% macro fmt_half(v) -%}
 {%- if v is not none -%}

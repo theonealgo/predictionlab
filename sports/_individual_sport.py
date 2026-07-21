@@ -87,7 +87,32 @@ def _event_datetime(event: dict, comp: dict | None = None) -> str:
 
 
 def _is_final_status(status_name: str) -> bool:
-    return status_name in ('STATUS_FINAL', 'STATUS_FINAL_OT', 'STATUS_FULL_TIME')
+
+    if not status_name:
+
+        return False
+
+    status = str(status_name).upper()
+
+    return (
+
+        status in (
+
+            'STATUS_FINAL',
+
+            'STATUS_FINAL_OT',
+
+            'STATUS_FULL_TIME',
+
+            'STATUS_FINAL_PEN',
+
+        )
+
+        or 'FINAL' in status
+
+        or 'COMPLETE' in status
+
+    )
 
 
 def _sets_won(comp: dict) -> int | None:
@@ -223,8 +248,13 @@ def fetch_espn_api_games(
                         if key in seen_keys:
                             continue
                         seen_keys.add(key)
+                        if sport in ("TENNIS", "UFC", "GOLF"):
+                            game_id = str(event.get("id", ""))
+                        else:
+                            game_id = f"{sport}_{event.get('id', '')}_pair{i}"
+
                         api_games.append({
-                            'game_id': f"{sport}_{event.get('id', '')}_pair{i}",
+                            'game_id': game_id,
                             'home_team_id': home_name,
                             'away_team_id': away_name,
                             'home_athlete_id': _athlete_id(p1),
@@ -234,7 +264,7 @@ def fetch_espn_api_games(
                             'home_score': home_score,
                             'away_score': away_score,
                             'league': tournament,
-                        })
+                        })   
                     continue
                 for comp in competitions:
                     competitors = comp.get('competitors') or []
@@ -262,6 +292,7 @@ def fetch_espn_api_games(
                     seen_keys.add(key)
                     api_games.append({
                         'game_id': f"{sport}_{comp.get('id', event.get('id', ''))}",
+                        'parent_event_id': str(event.get("id", "")),
                         'home_team_id': home_name,
                         'away_team_id': away_name,
                         'home_athlete_id': _athlete_id(p1),

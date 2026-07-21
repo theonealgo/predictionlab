@@ -752,16 +752,13 @@
                 {% set _chart_conf = none %}
                 {% endif %}
                 {% set _chart_edge = pred.face_edge_pct if (pred.face_edge_pct is defined and pred.face_edge_pct is not none) else (pred.edge_pct if (pred.edge_pct is defined and pred.edge_pct is not none) else none) %}
-                {# H2H last-10 record, leader-labeled (e.g. "DET 7-3", "Even 5-5", soccer adds "· 2D"). #}
+                {# H2H last-10 average total - matches card display #}
                 {% set _h2h_txt = '' %}
+                {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
+                {% set _h2h_txt = fmt_half(pred.h2h_last10_total) %}
                 {% if pred.h2h_last10_games is defined and pred.h2h_last10_games %}
-                {% set _hw = pred.h2h_last10_home_wins or 0 %}
-                {% set _aw = pred.h2h_last10_away_wins or 0 %}
-                {% set _dr = pred.h2h_last10_draws or 0 %}
-                {% if _hw > _aw %}{% set _h2h_txt = team_short(pred.home_team_id) ~ ' ' ~ _hw ~ '-' ~ _aw %}
-                {% elif _aw > _hw %}{% set _h2h_txt = team_short(pred.away_team_id) ~ ' ' ~ _aw ~ '-' ~ _hw %}
-                {% else %}{% set _h2h_txt = 'Even ' ~ _hw ~ '-' ~ _aw %}{% endif %}
-                {% if _dr > 0 %}{% set _h2h_txt = _h2h_txt ~ ' · ' ~ _dr ~ 'D' %}{% endif %}
+                {% set _h2h_txt = _h2h_txt ~ ' (' ~ pred.h2h_last10_games ~ ' games)' %}
+                {% endif %}
                 {% endif %}
                 {% set _chart_result = '' %}
                 {% if is_final %}{% if (pred.predicted_winner == pred.home_team_id and home_wins) or (pred.predicted_winner == pred.away_team_id and away_wins) %}{% set _chart_result = 'WON' %}{% elif home_wins or away_wins %}{% set _chart_result = 'LOST' %}{% endif %}{% endif %}

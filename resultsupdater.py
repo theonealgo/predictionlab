@@ -27,7 +27,57 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def grade_predictions():
 
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE predictions
+        SET
+            actual_home_score = (
+                SELECT home_score 
+                FROM games 
+                WHERE games.game_id = predictions.game_id
+            ),
+            actual_away_score = (
+                SELECT away_score 
+                FROM games 
+                WHERE games.game_id = predictions.game_id
+            ),
+            actual_winner = (
+                SELECT 
+                    CASE 
+                    WHEN home_score > away_score THEN home_team_id
+                    ELSE away_team_id
+                    END
+                FROM games
+                WHERE games.game_id = predictions.game_id
+            )
+        WHERE EXISTS (
+            SELECT 1
+            FROM games
+            WHERE games.game_id = predictions.game_id
+            AND games.status='final'
+        )
+    """)
+
+
+    cursor.execute("""
+        UPDATE predictions
+        SET win_prediction_correct =
+            CASE
+                WHEN predicted_winner = actual_winner THEN 1
+                ELSE 0
+            END,
+            result_updated_at=CURRENT_TIMESTAMP
+        WHERE actual_winner IS NOT NULL
+    """)
+
+    conn.commit()
+    print(f"✓ Graded {cursor.rowcount} predictions")
+
+    conn.close()
 # ============================================================
 # NHL
 # ============================================================

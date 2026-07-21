@@ -32,6 +32,11 @@ CORE_API_SPORT_PATHS = {
     'NCAAF': ('football', 'college-football'),
     'NCAAW': ('basketball', 'womens-college-basketball'),
     'SOCCER': ('soccer', None),
+
+    # Individual sports use scoreboard embedded odds
+    'TENNIS': ('tennis', None),
+    'UFC': ('mma', None),
+    'GOLF': ('golf', None),
 }
 
 # Display / DB league name → ESPN core league slug (soccer only).
@@ -94,6 +99,17 @@ SOCCER_PROBE_SLUGS = [
     'usa.open', 'mex.2',
 ]
 
+def build_pl_book_odds():
+
+    if sport == "TENNIS":
+        from sports.odds.tennis_odds import build_tennis_odds
+
+        return build_tennis_odds(
+            game_id,
+            home,
+            away,
+            game_date,
+        )
 
 def _normalize_team_key(team_name: str) -> str:
     if not team_name:
@@ -163,39 +179,6 @@ def _soccer_league_slugs_to_try(game_id: str, league_name: Optional[str] = None)
     return slugs[:5]
 
 
-def _fetch_core_odds_payload(
-    sport: str,
-    event_id: str,
-    *,
-    game_id: Optional[str] = None,
-    league_name: Optional[str] = None,
-) -> Optional[list]:
-    path = CORE_API_SPORT_PATHS.get(sport)
-    if not path:
-        return None
-    sport_slug, league_slug = path
-
-    league_slugs = [league_slug] if league_slug else []
-    if sport == 'SOCCER':
-        league_slugs = _soccer_league_slugs_to_try(game_id or '', league_name)
-
-    for _league_slug in league_slugs:
-        if not _league_slug:
-            continue
-        url = (
-            f"https://sports.core.api.espn.com/v2/sports/{sport_slug}/leagues/{_league_slug}/"
-            f"events/{event_id}/competitions/{event_id}/odds"
-        )
-        try:
-            data = requests.get(url, timeout=5).json()
-        except Exception as exc:
-            logger.debug('PL book odds fetch failed %s/%s: %s', _league_slug, event_id, exc)
-            continue
-        items = data.get('items') if isinstance(data, dict) else []
-        if items:
-            return items
-    return None
-
 
 def _parse_core_item(item: dict) -> Optional[dict[str, Any]]:
     spread = _to_float(item.get('spread'))
@@ -212,8 +195,148 @@ def _parse_core_item(item: dict) -> Optional[dict[str, Any]]:
         'away_moneyline': _to_int_american((item.get('awayTeamOdds') or {}).get('moneyLine')),
         'is_live': 'live' in (prov.get('name') or '').lower(),
     }
+def _fetch_scoreboard_competition_odds(
+    sport: str,
+    event_id: str,
+) -> list:
+    """
+    Fetch embedded ESPN odds for individual sports.
+    Tennis/UFC/Golf use different scoreboard paths.
+    """
+
+    urls = []
+
+    if sport == "TENNIS":
+        urls.extend([
+            f"https://site.api.espn.com/apis/site/v2/sports/tennis/atp/summary?event={event_id}",
+            f"https://site.api.espn.com/apis/site/v2/sports/tennis/wta/summary?event={event_id}",
+        ])
+
+    elif sport == "UFC":
+        urls.append(
+            f"https://site.api.espn.com/apis/site/v2/sports/mma/ufc/summary?event={event_id}"
+        )
+
+    elif sport == "GOLF":
+        urls.append(
+            f"https://site.api.espn.com/apis/site/v2/sports/golf/summary?event={event_id}"
+        )
+
+    for url in urls:
+        try:
+            r = requests.get(url, timeout=5)
+
+            if r.status_code != 200:
+                continue
+
+            data = r.json()
+
+            competitions = data.get("competitions") or []
+
+            for comp in competitions:
+                odds = comp.get("odds")
+
+                if odds:
+                    return odds
+
+        except Exception as exc:
+            logger.debug(
+                "Individual sport odds fetch failed %s: %s",
+                url,
+                exc,
+            )
+
+    return []
+def _fetch_core_odds_payload(
+    sport: str,
+    event_id: str,
+    *,
+    game_id: Optional[str] = None,
+    league_name: Optional[str] = None,
+) -> Optional[list]:
+    """
+    Fetch sportsbook odds.
+
+    ESPN Core API:
+        MLB/NBA/NHL/NFL/NCAA/SOCCER
+        -> DraftKings provider odds
+
+    ESPN scoreboard competition odds:
+        Tennis/UFC/Golf
+        -> competition embedded odds
+    """
+
+    path = CORE_API_SPORT_PATHS.get(sport)
+
+    if not path:
+        return None
+
+    sport_slug, league_slug = path
+
+    # Individual sports do not expose Core odds endpoints.
+    # Pull embedded competition odds instead.
+    if sport in ("TENNIS", "UFC", "GOLF"):
+        return _fetch_scoreboard_competition_odds(
+            sport,
+            event_id,
+        )
+
+    league_slugs = [league_slug] if league_slug else []
+
+    if sport == "SOCCER":
+        league_slugs = _soccer_league_slugs_to_try(
+            game_id or "",
+            league_name,
+        )
+
+    for _league_slug in league_slugs:
+
+        if not _league_slug:
+            continue
+
+        url = (
+            f"https://sports.core.api.espn.com/v2/sports/"
+            f"{sport_slug}/leagues/{_league_slug}/"
+            f"events/{event_id}/competitions/{event_id}/odds"
+        )
+
+        try:
+            response = requests.get(
+                url,
+                timeout=5,
+            )
+
+            data = response.json()
+
+        except Exception as exc:
+            logger.debug(
+                "PL book odds fetch failed %s/%s: %s",
+                _league_slug,
+                event_id,
+                exc,
+            )
+            continue
 
 
+        items = (
+            data.get("items")
+            if isinstance(data, dict)
+            else []
+        )
+
+        if sport == "NCAAW":
+            logger.warning(
+                "NCAAW ODDS DEBUG league=%s event=%s items=%s",
+                _league_slug,
+                event_id,
+                len(items) if items else 0,
+            )
+
+        if items:
+            return items
+
+
+    return None
 def fetch_all_core_providers(
     sport: str,
     event_id: str,

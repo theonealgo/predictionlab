@@ -113,6 +113,9 @@ _ODDS_API_SPORT_KEYS = {
     "NFL": "americanfootball_nfl",
     "NCAAF": "americanfootball_ncaaf",
     "SOCCER": "soccer_epl",
+    'TENNIS': 'tennis_atp',
+    'UFC': 'mma_mixed_martial_arts',
+    'GOLF': 'golf_pga',
 }
 # League -> {internal prop_type: The Odds API market key}.
 _ODDS_API_MARKETS = {
