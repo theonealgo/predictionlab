@@ -72,7 +72,6 @@
 </header>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
 /* ACCOUNT MENU: opens the person icon menu and closes it on outside click/Escape. */
 (function () {
     var account = document.querySelector('.pl2-account');
@@ -100,8 +99,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 })();
 
-/* NAV DROPDOWNS: Picks / Models / Results open a menu on click; clicking the
-   trigger again or anywhere outside (or Escape) closes it. Only one open at a time. */
+/* NAV DROPDOWNS: Picks / Models / Results open a menu on click. */
 (function () {
     var drops = Array.prototype.slice.call(document.querySelectorAll('.pl2-navdrop'));
     if (!drops.length) return;
