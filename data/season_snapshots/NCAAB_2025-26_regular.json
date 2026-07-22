@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T17:41:49Z",
+  "built_at": "2026-07-22T00:40:58Z",
   "games_expected": 5430,
   "games_in_scope": 1926,
   "ou_summary": {
@@ -10,6 +10,11 @@
     "total_under": 814
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 91.2,
+      "correct": 93,
+      "total": 102
+    },
     "elo": {
       "accuracy": 82.3,
       "correct": 1586,
@@ -17,7 +22,7 @@
     },
     "ensemble": {
       "accuracy": 82.6,
-      "correct": 1590,
+      "correct": 1591,
       "total": 1926
     },
     "glicko2": {
@@ -40,14 +45,14 @@
   "roi_total": {
     "moneyline": {
       "graded": 1926,
-      "losses": 336,
+      "losses": 335,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 65.11,
+      "roi_pct": 65.21,
       "units_risked": 1926,
-      "units_won": 1254.0,
-      "wins": 1590
+      "units_won": 1256.0,
+      "wins": 1591
     },
     "spread": {
       "graded": 1712,

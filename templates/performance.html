@@ -69,10 +69,10 @@
             </label>
             <label>Last Number of Games
                 <select name="last_n">
-                    <option value="" {% if not selected_last_n %}selected{% endif %}>All</option>
-                    <option value="50" {% if selected_last_n == '50' %}selected{% endif %}>Last 50</option>
+                    <option value="200" {% if selected_last_n == '200' %}selected{% endif %}>Last 200 (default)</option>
                     <option value="100" {% if selected_last_n == '100' %}selected{% endif %}>Last 100</option>
-                    <option value="200" {% if selected_last_n == '200' %}selected{% endif %}>Last 200</option>
+                    <option value="50" {% if selected_last_n == '50' %}selected{% endif %}>Last 50</option>
+                    <option value="all" {% if selected_last_n == 'all' %}selected{% endif %}>All (slow)</option>
                 </select>
             </label>
             <button type="submit">Apply</button>
@@ -106,7 +106,7 @@
                 {% endfor %}
             </tbody>
         </table>
-        <div class="perf-note">52.4% is the break-even win rate for standard -110 lines.</div>
+        <div class="perf-note">52.4% is the break-even win rate for standard -110 lines. Default view uses the last 200 completed games for faster loading.</div>
         <div class="perf-tools">
             <a href="/performance/audit.csv?sport={{ selected_sport }}&last_n={{ selected_last_n or '50' }}">Download audit CSV (Excel)</a>
             &nbsp;&nbsp;
@@ -199,7 +199,11 @@
             {% endfor %}
         </div>
         {% else %}
+        {% if selected_sport %}
         <p style="color:#64748b;">No team-specific rows for current filters.</p>
+        {% else %}
+        <p style="color:#64748b;">Select a sport above to load team model performance (full-season grading is slow for all sports at once).</p>
+        {% endif %}
         {% endif %}
     </div>
 </div>

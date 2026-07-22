@@ -1,74 +1,79 @@
 {
-  "built_at": "2026-06-03T17:40:12Z",
+  "built_at": "2026-07-22T00:39:20Z",
   "games_expected": 1230,
-  "games_in_scope": 1293,
+  "games_in_scope": 1294,
   "ou_summary": {
-    "avg_total": 229.6,
+    "avg_total": 229.5,
     "ou_bench": 226.0,
-    "total_games_ou": 1271,
+    "total_games_ou": 1272,
     "total_over": 702,
-    "total_under": 569
+    "total_under": 570
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 75.2,
+      "correct": 923,
+      "total": 1227
+    },
     "elo": {
-      "accuracy": 63.0,
+      "accuracy": 62.9,
       "correct": 814,
-      "total": 1293
+      "total": 1294
     },
     "ensemble": {
-      "accuracy": 62.6,
-      "correct": 810,
-      "total": 1293
+      "accuracy": 62.8,
+      "correct": 812,
+      "total": 1294
     },
     "glicko2": {
-      "accuracy": 69.1,
+      "accuracy": 69.0,
       "correct": 893,
-      "total": 1293
+      "total": 1294
     },
     "trueskill": {
-      "accuracy": 63.6,
+      "accuracy": 63.5,
       "correct": 822,
-      "total": 1293
+      "total": 1294
     },
     "xgboost": {
-      "accuracy": 63.5,
+      "accuracy": 63.4,
       "correct": 821,
-      "total": 1293
+      "total": 1294
     }
   },
   "phase": "regular",
   "roi_total": {
     "moneyline": {
-      "graded": 1271,
-      "losses": 471,
+      "graded": 1272,
+      "losses": 470,
       "missing_odds": 0,
       "pushes": 22,
       "reason": null,
-      "roi_pct": 25.89,
-      "units_risked": 1271,
-      "units_won": 329.0,
-      "wins": 800
+      "roi_pct": 26.1,
+      "units_risked": 1272,
+      "units_won": 332.0,
+      "wins": 802
     },
     "spread": {
-      "graded": 1258,
-      "losses": 477,
+      "graded": 1267,
+      "losses": 463,
       "missing_odds": 0,
-      "pushes": 14,
+      "pushes": 7,
       "reason": null,
-      "roi_pct": 24.17,
-      "units_risked": 1258,
-      "units_won": 304.0,
-      "wins": 781
+      "roi_pct": 26.91,
+      "units_risked": 1267,
+      "units_won": 341.0,
+      "wins": 804
     },
     "total": {
-      "graded": 1285,
-      "losses": 494,
+      "graded": 1286,
+      "losses": 495,
       "missing_odds": 0,
       "pushes": 6,
       "reason": null,
-      "roi_pct": 23.11,
-      "units_risked": 1285,
-      "units_won": 297.0,
+      "roi_pct": 23.02,
+      "units_risked": 1286,
+      "units_won": 296.0,
       "wins": 791
     }
   },
@@ -76,45 +81,45 @@
   "season": "2025-26",
   "season_perf": {
     "games_expected": 1230,
-    "games_in_scope": 1293,
-    "ml_accuracy": 69.1,
+    "games_in_scope": 1294,
+    "ml_accuracy": 69.0,
     "ml_correct": 893,
     "ml_model_key": "glicko2",
     "ml_model_label": "Grinder2",
-    "ml_total": 1293,
+    "ml_total": 1294,
     "ou_correct": 878,
-    "ou_graded": 1226,
+    "ou_graded": 1227,
     "ou_model_label": "Prediction Lab",
     "ou_note": null,
-    "ou_pct": 72.0,
+    "ou_pct": 71.9,
     "scope_label": "NBA season",
-    "spread_covered": 833,
-    "spread_graded": 1220,
+    "spread_covered": 834,
+    "spread_graded": 1221,
     "spread_model_label": "Prediction Lab",
     "spread_note": null,
     "spread_pct": 69.8
   },
   "sport": "NBA",
   "spread_total_stats": {
-    "pl_spread_covered": 833,
-    "pl_spread_graded": 1220,
+    "pl_spread_covered": 834,
+    "pl_spread_graded": 1221,
     "pl_spread_pct": 69.8,
     "pl_spread_pushes": 27,
     "pl_total_correct": 878,
-    "pl_total_graded": 1226,
-    "pl_total_pct": 72.0,
+    "pl_total_graded": 1227,
+    "pl_total_pct": 71.9,
     "pl_total_pushes": 6,
-    "spread_covered": 781,
-    "spread_graded": 1272,
-    "spread_pct": 62.1,
-    "spread_pushes": 14,
+    "spread_covered": 804,
+    "spread_graded": 1274,
+    "spread_pct": 63.5,
+    "spread_pushes": 7,
     "total_correct": 791,
-    "total_graded": 1291,
-    "total_pct": 61.6,
+    "total_graded": 1292,
+    "total_pct": 61.5,
     "total_pushes": 6
   },
   "window": {
-    "end": "2026-06-02",
+    "end": "2026-06-30",
     "start": "2025-10-01"
   }
 }

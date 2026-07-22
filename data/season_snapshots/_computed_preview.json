@@ -34,25 +34,30 @@
         "correct": 765,
         "total": 1309,
         "accuracy": 58.4
+      },
+      "efficiency": {
+        "correct": 913,
+        "total": 1292,
+        "accuracy": 70.7
       }
     },
     "spread_total_stats": {
-      "spread_covered": 838,
+      "spread_covered": 841,
       "spread_graded": 1308,
-      "spread_pushes": 14,
+      "spread_pushes": 11,
       "spread_pct": 64.8,
-      "total_correct": 626,
+      "total_correct": 623,
       "total_graded": 1308,
-      "total_pushes": 110,
-      "total_pct": 52.3,
-      "pl_spread_covered": 878,
+      "total_pushes": 104,
+      "total_pct": 51.7,
+      "pl_spread_covered": 880,
       "pl_spread_graded": 1292,
-      "pl_spread_pushes": 131,
-      "pl_spread_pct": 75.6,
-      "pl_total_correct": 655,
+      "pl_spread_pushes": 130,
+      "pl_spread_pct": 75.7,
+      "pl_total_correct": 675,
       "pl_total_graded": 1292,
-      "pl_total_pushes": 110,
-      "pl_total_pct": 55.4
+      "pl_total_pushes": 104,
+      "pl_total_pct": 56.8
     },
     "season_perf": {
       "ml_total": 1309,
@@ -61,13 +66,13 @@
       "ml_model_label": "Edge",
       "ml_model_key": "elo",
       "spread_graded": 1292,
-      "spread_covered": 878,
-      "spread_pct": 75.6,
+      "spread_covered": 880,
+      "spread_pct": 75.7,
       "spread_model_label": "Prediction Lab",
       "spread_note": null,
       "ou_graded": 1292,
-      "ou_correct": 655,
-      "ou_pct": 55.4,
+      "ou_correct": 675,
+      "ou_pct": 56.8,
       "ou_model_label": "Prediction Lab",
       "ou_note": null,
       "scope_label": "NHL season",
@@ -94,25 +99,1009 @@
         "reason": null
       },
       "spread": {
-        "wins": 838,
+        "wins": 841,
         "losses": 456,
-        "pushes": 14,
-        "units_won": 382.0,
-        "units_risked": 1294,
-        "graded": 1294,
+        "pushes": 11,
+        "units_won": 385.0,
+        "units_risked": 1297,
+        "graded": 1297,
         "missing_odds": 0,
-        "roi_pct": 29.52,
+        "roi_pct": 29.68,
         "reason": null
       },
       "total": {
-        "wins": 626,
-        "losses": 572,
-        "pushes": 110,
-        "units_won": 54.0,
-        "units_risked": 1198,
-        "graded": 1198,
+        "wins": 623,
+        "losses": 581,
+        "pushes": 104,
+        "units_won": 42.0,
+        "units_risked": 1204,
+        "graded": 1204,
         "missing_odds": 0,
-        "roi_pct": 4.51,
+        "roi_pct": 3.49,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "NBA",
+    "season": "2025-26",
+    "phase": "regular",
+    "window": {
+      "start": "2025-10-01",
+      "end": "2026-06-30"
+    },
+    "games_in_scope": 1294,
+    "games_expected": 1230,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 893,
+        "total": 1294,
+        "accuracy": 69.0
+      },
+      "trueskill": {
+        "correct": 822,
+        "total": 1294,
+        "accuracy": 63.5
+      },
+      "elo": {
+        "correct": 814,
+        "total": 1294,
+        "accuracy": 62.9
+      },
+      "xgboost": {
+        "correct": 821,
+        "total": 1294,
+        "accuracy": 63.4
+      },
+      "ensemble": {
+        "correct": 812,
+        "total": 1294,
+        "accuracy": 62.8
+      },
+      "efficiency": {
+        "correct": 923,
+        "total": 1227,
+        "accuracy": 75.2
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 804,
+      "spread_graded": 1274,
+      "spread_pushes": 7,
+      "spread_pct": 63.5,
+      "total_correct": 791,
+      "total_graded": 1292,
+      "total_pushes": 6,
+      "total_pct": 61.5,
+      "pl_spread_covered": 834,
+      "pl_spread_graded": 1221,
+      "pl_spread_pushes": 27,
+      "pl_spread_pct": 69.8,
+      "pl_total_correct": 878,
+      "pl_total_graded": 1227,
+      "pl_total_pushes": 6,
+      "pl_total_pct": 71.9
+    },
+    "season_perf": {
+      "ml_total": 1294,
+      "ml_correct": 893,
+      "ml_accuracy": 69.0,
+      "ml_model_label": "Grinder2",
+      "ml_model_key": "glicko2",
+      "spread_graded": 1221,
+      "spread_covered": 834,
+      "spread_pct": 69.8,
+      "spread_model_label": "Prediction Lab",
+      "spread_note": null,
+      "ou_graded": 1227,
+      "ou_correct": 878,
+      "ou_pct": 71.9,
+      "ou_model_label": "Prediction Lab",
+      "ou_note": null,
+      "scope_label": "NBA season",
+      "games_expected": 1230,
+      "games_in_scope": 1294
+    },
+    "ou_summary": {
+      "total_over": 702,
+      "total_under": 570,
+      "total_games_ou": 1272,
+      "avg_total": 229.5,
+      "ou_bench": 226.0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 802,
+        "losses": 470,
+        "pushes": 22,
+        "units_won": 332.0,
+        "units_risked": 1272,
+        "graded": 1272,
+        "missing_odds": 0,
+        "roi_pct": 26.1,
+        "reason": null
+      },
+      "spread": {
+        "wins": 804,
+        "losses": 463,
+        "pushes": 7,
+        "units_won": 341.0,
+        "units_risked": 1267,
+        "graded": 1267,
+        "missing_odds": 0,
+        "roi_pct": 26.91,
+        "reason": null
+      },
+      "total": {
+        "wins": 791,
+        "losses": 495,
+        "pushes": 6,
+        "units_won": 296.0,
+        "units_risked": 1286,
+        "graded": 1286,
+        "missing_odds": 0,
+        "roi_pct": 23.02,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "MLB",
+    "season": "2026-27",
+    "phase": "regular",
+    "window": {
+      "start": "2026-03-20",
+      "end": "2026-07-20"
+    },
+    "games_in_scope": 1039,
+    "games_expected": 2430,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 548,
+        "total": 1039,
+        "accuracy": 52.7
+      },
+      "trueskill": {
+        "correct": 547,
+        "total": 1039,
+        "accuracy": 52.6
+      },
+      "elo": {
+        "correct": 531,
+        "total": 1039,
+        "accuracy": 51.1
+      },
+      "xgboost": {
+        "correct": 543,
+        "total": 1039,
+        "accuracy": 52.3
+      },
+      "ensemble": {
+        "correct": 542,
+        "total": 1039,
+        "accuracy": 52.2
+      },
+      "efficiency": {
+        "correct": 650,
+        "total": 1036,
+        "accuracy": 62.7
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 607,
+      "spread_graded": 1039,
+      "spread_pushes": 0,
+      "spread_pct": 58.4,
+      "total_correct": 538,
+      "total_graded": 1039,
+      "total_pushes": 46,
+      "total_pct": 54.2,
+      "pl_spread_covered": 602,
+      "pl_spread_graded": 1036,
+      "pl_spread_pushes": 0,
+      "pl_spread_pct": 58.1,
+      "pl_total_correct": 620,
+      "pl_total_graded": 1036,
+      "pl_total_pushes": 46,
+      "pl_total_pct": 62.6
+    },
+    "season_perf": {
+      "ml_total": 1039,
+      "ml_correct": 548,
+      "ml_accuracy": 52.7,
+      "ml_model_label": "Grinder2",
+      "ml_model_key": "glicko2",
+      "spread_graded": 1039,
+      "spread_covered": 607,
+      "spread_pct": 58.4,
+      "spread_model_label": "XSharp",
+      "spread_note": null,
+      "ou_graded": 1036,
+      "ou_correct": 620,
+      "ou_pct": 62.6,
+      "ou_model_label": "Prediction Lab",
+      "ou_note": null,
+      "scope_label": "MLB season",
+      "games_expected": 2430,
+      "games_in_scope": 1039
+    },
+    "ou_summary": {
+      "total_over": 431,
+      "total_under": 608,
+      "total_games_ou": 1039,
+      "avg_total": 9.1,
+      "ou_bench": 9.0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 542,
+        "losses": 497,
+        "pushes": 0,
+        "units_won": 45.0,
+        "units_risked": 1039,
+        "graded": 1039,
+        "missing_odds": 0,
+        "roi_pct": 4.33,
+        "reason": null
+      },
+      "spread": {
+        "wins": 607,
+        "losses": 432,
+        "pushes": 0,
+        "units_won": 175.0,
+        "units_risked": 1039,
+        "graded": 1039,
+        "missing_odds": 0,
+        "roi_pct": 16.84,
+        "reason": null
+      },
+      "total": {
+        "wins": 538,
+        "losses": 455,
+        "pushes": 46,
+        "units_won": 83.0,
+        "units_risked": 993,
+        "graded": 993,
+        "missing_odds": 0,
+        "roi_pct": 8.36,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "NFL",
+    "season": "2025-26",
+    "phase": "regular",
+    "window": {
+      "start": "2025-09-01",
+      "end": "2026-02-20"
+    },
+    "games_in_scope": 285,
+    "games_expected": 272,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 204,
+        "total": 285,
+        "accuracy": 71.6
+      },
+      "trueskill": {
+        "correct": 201,
+        "total": 285,
+        "accuracy": 70.5
+      },
+      "elo": {
+        "correct": 194,
+        "total": 285,
+        "accuracy": 68.1
+      },
+      "xgboost": {
+        "correct": 206,
+        "total": 285,
+        "accuracy": 72.3
+      },
+      "ensemble": {
+        "correct": 206,
+        "total": 285,
+        "accuracy": 72.3
+      },
+      "efficiency": {
+        "correct": 186,
+        "total": 209,
+        "accuracy": 89.0
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 213,
+      "spread_graded": 283,
+      "spread_pushes": 1,
+      "spread_pct": 75.5,
+      "total_correct": 102,
+      "total_graded": 285,
+      "total_pushes": 110,
+      "total_pct": 58.3,
+      "pl_spread_covered": 180,
+      "pl_spread_graded": 209,
+      "pl_spread_pushes": 7,
+      "pl_spread_pct": 89.1,
+      "pl_total_correct": 58,
+      "pl_total_graded": 209,
+      "pl_total_pushes": 110,
+      "pl_total_pct": 58.6
+    },
+    "season_perf": {
+      "ml_total": 285,
+      "ml_correct": 206,
+      "ml_accuracy": 72.3,
+      "ml_model_label": "XSharp",
+      "ml_model_key": "xgboost",
+      "spread_graded": 209,
+      "spread_covered": 180,
+      "spread_pct": 89.1,
+      "spread_model_label": "Prediction Lab",
+      "spread_note": null,
+      "ou_graded": 209,
+      "ou_correct": 58,
+      "ou_pct": 58.6,
+      "ou_model_label": "Prediction Lab",
+      "ou_note": null,
+      "scope_label": "NFL season",
+      "games_expected": 272,
+      "games_in_scope": 285
+    },
+    "ou_summary": {
+      "total_over": 121,
+      "total_under": 164,
+      "total_games_ou": 285,
+      "avg_total": 46.0,
+      "ou_bench": 47.0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 205,
+        "losses": 79,
+        "pushes": 1,
+        "units_won": 126.0,
+        "units_risked": 284,
+        "graded": 284,
+        "missing_odds": 0,
+        "roi_pct": 44.37,
+        "reason": null
+      },
+      "spread": {
+        "wins": 213,
+        "losses": 69,
+        "pushes": 1,
+        "units_won": 144.0,
+        "units_risked": 282,
+        "graded": 282,
+        "missing_odds": 0,
+        "roi_pct": 51.06,
+        "reason": null
+      },
+      "total": {
+        "wins": 102,
+        "losses": 73,
+        "pushes": 110,
+        "units_won": 29.0,
+        "units_risked": 175,
+        "graded": 175,
+        "missing_odds": 0,
+        "roi_pct": 16.57,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "NCAAB",
+    "season": "2025-26",
+    "phase": "regular",
+    "window": {
+      "start": "2025-11-01",
+      "end": "2026-04-15"
+    },
+    "games_in_scope": 1926,
+    "games_expected": 5430,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 1620,
+        "total": 1926,
+        "accuracy": 84.1
+      },
+      "trueskill": {
+        "correct": 1543,
+        "total": 1926,
+        "accuracy": 80.1
+      },
+      "elo": {
+        "correct": 1586,
+        "total": 1926,
+        "accuracy": 82.3
+      },
+      "xgboost": {
+        "correct": 1588,
+        "total": 1926,
+        "accuracy": 82.5
+      },
+      "ensemble": {
+        "correct": 1591,
+        "total": 1926,
+        "accuracy": 82.6
+      },
+      "efficiency": {
+        "correct": 93,
+        "total": 102,
+        "accuracy": 91.2
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 1109,
+      "spread_graded": 1725,
+      "spread_pushes": 13,
+      "spread_pct": 64.8,
+      "total_correct": 1127,
+      "total_graded": 1725,
+      "total_pushes": 3,
+      "total_pct": 65.4,
+      "pl_spread_covered": 89,
+      "pl_spread_graded": 102,
+      "pl_spread_pushes": 3,
+      "pl_spread_pct": 89.9,
+      "pl_total_correct": 89,
+      "pl_total_graded": 102,
+      "pl_total_pushes": 0,
+      "pl_total_pct": 87.3
+    },
+    "season_perf": {
+      "ml_total": 1926,
+      "ml_correct": 1620,
+      "ml_accuracy": 84.1,
+      "ml_model_label": "Grinder2",
+      "ml_model_key": "glicko2",
+      "spread_graded": 102,
+      "spread_covered": 89,
+      "spread_pct": 89.9,
+      "spread_model_label": "Prediction Lab",
+      "spread_note": null,
+      "ou_graded": 102,
+      "ou_correct": 89,
+      "ou_pct": 87.3,
+      "ou_model_label": "Prediction Lab",
+      "ou_note": null,
+      "scope_label": "NCAA Basketball season",
+      "games_expected": 5430,
+      "games_in_scope": 1926
+    },
+    "ou_summary": {
+      "total_over": 1112,
+      "total_under": 814,
+      "total_games_ou": 1926,
+      "avg_total": 150.7,
+      "ou_bench": 145.0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 1591,
+        "losses": 335,
+        "pushes": 0,
+        "units_won": 1256.0,
+        "units_risked": 1926,
+        "graded": 1926,
+        "missing_odds": 0,
+        "roi_pct": 65.21,
+        "reason": null
+      },
+      "spread": {
+        "wins": 1109,
+        "losses": 603,
+        "pushes": 13,
+        "units_won": 506.0,
+        "units_risked": 1712,
+        "graded": 1712,
+        "missing_odds": 0,
+        "roi_pct": 29.56,
+        "reason": null
+      },
+      "total": {
+        "wins": 1127,
+        "losses": 595,
+        "pushes": 3,
+        "units_won": 532.0,
+        "units_risked": 1722,
+        "graded": 1722,
+        "missing_odds": 0,
+        "roi_pct": 30.89,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "NCAAW",
+    "season": "2025-26",
+    "phase": "regular",
+    "window": {
+      "start": "2025-11-01",
+      "end": "2026-04-15"
+    },
+    "games_in_scope": 8,
+    "games_expected": 5430,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 8,
+        "total": 8,
+        "accuracy": 100.0
+      },
+      "trueskill": {
+        "correct": 8,
+        "total": 8,
+        "accuracy": 100.0
+      },
+      "elo": {
+        "correct": 8,
+        "total": 8,
+        "accuracy": 100.0
+      },
+      "xgboost": {
+        "correct": 8,
+        "total": 8,
+        "accuracy": 100.0
+      },
+      "ensemble": {
+        "correct": 8,
+        "total": 8,
+        "accuracy": 100.0
+      },
+      "efficiency": {
+        "correct": 0,
+        "total": 0,
+        "accuracy": 0.0
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 4,
+      "spread_graded": 5,
+      "spread_pushes": 0,
+      "spread_pct": 80.0,
+      "total_correct": 3,
+      "total_graded": 5,
+      "total_pushes": 0,
+      "total_pct": 60.0,
+      "pl_spread_covered": 0,
+      "pl_spread_graded": 0,
+      "pl_spread_pushes": 0,
+      "pl_spread_pct": null,
+      "pl_total_correct": 0,
+      "pl_total_graded": 0,
+      "pl_total_pushes": 0,
+      "pl_total_pct": null
+    },
+    "season_perf": {
+      "ml_total": 8,
+      "ml_correct": 8,
+      "ml_accuracy": 100.0,
+      "ml_model_label": "Grinder2",
+      "ml_model_key": "glicko2",
+      "spread_graded": 5,
+      "spread_covered": 4,
+      "spread_pct": 80.0,
+      "spread_model_label": "XSharp",
+      "spread_note": null,
+      "ou_graded": 5,
+      "ou_correct": 3,
+      "ou_pct": 60.0,
+      "ou_model_label": "XSharp",
+      "ou_note": null,
+      "scope_label": "NCAA Women's Basketball season",
+      "games_expected": 5430,
+      "games_in_scope": 8
+    },
+    "ou_summary": {
+      "total_over": 3,
+      "total_under": 5,
+      "total_games_ou": 8,
+      "avg_total": 135.9,
+      "ou_bench": 140.0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 8,
+        "losses": 0,
+        "pushes": 0,
+        "units_won": 8.0,
+        "units_risked": 8,
+        "graded": 8,
+        "missing_odds": 0,
+        "roi_pct": 100.0,
+        "reason": null
+      },
+      "spread": {
+        "wins": 4,
+        "losses": 1,
+        "pushes": 0,
+        "units_won": 3.0,
+        "units_risked": 5,
+        "graded": 5,
+        "missing_odds": 0,
+        "roi_pct": 60.0,
+        "reason": null
+      },
+      "total": {
+        "wins": 3,
+        "losses": 2,
+        "pushes": 0,
+        "units_won": 1.0,
+        "units_risked": 5,
+        "graded": 5,
+        "missing_odds": 0,
+        "roi_pct": 20.0,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "NCAAF",
+    "season": "2025-26",
+    "phase": "regular",
+    "window": {
+      "start": "2025-08-15",
+      "end": "2026-01-20"
+    },
+    "games_in_scope": 755,
+    "games_expected": 816,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 647,
+        "total": 755,
+        "accuracy": 85.7
+      },
+      "trueskill": {
+        "correct": 632,
+        "total": 755,
+        "accuracy": 83.7
+      },
+      "elo": {
+        "correct": 643,
+        "total": 755,
+        "accuracy": 85.2
+      },
+      "xgboost": {
+        "correct": 643,
+        "total": 755,
+        "accuracy": 85.2
+      },
+      "ensemble": {
+        "correct": 643,
+        "total": 755,
+        "accuracy": 85.2
+      },
+      "efficiency": {
+        "correct": 5,
+        "total": 8,
+        "accuracy": 62.5
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 503,
+      "spread_graded": 636,
+      "spread_pushes": 2,
+      "spread_pct": 79.3,
+      "total_correct": 470,
+      "total_graded": 636,
+      "total_pushes": 7,
+      "total_pct": 74.7,
+      "pl_spread_covered": 5,
+      "pl_spread_graded": 8,
+      "pl_spread_pushes": 0,
+      "pl_spread_pct": 62.5,
+      "pl_total_correct": 6,
+      "pl_total_graded": 8,
+      "pl_total_pushes": 0,
+      "pl_total_pct": 75.0
+    },
+    "season_perf": {
+      "ml_total": 755,
+      "ml_correct": 647,
+      "ml_accuracy": 85.7,
+      "ml_model_label": "Grinder2",
+      "ml_model_key": "glicko2",
+      "spread_graded": 636,
+      "spread_covered": 503,
+      "spread_pct": 79.3,
+      "spread_model_label": "XSharp",
+      "spread_note": null,
+      "ou_graded": 8,
+      "ou_correct": 6,
+      "ou_pct": 75.0,
+      "ou_model_label": "Prediction Lab",
+      "ou_note": null,
+      "scope_label": "NCAA Football season",
+      "games_expected": 816,
+      "games_in_scope": 755
+    },
+    "ou_summary": {
+      "total_over": 306,
+      "total_under": 449,
+      "total_games_ou": 755,
+      "avg_total": 52.9,
+      "ou_bench": 56.0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 643,
+        "losses": 112,
+        "pushes": 0,
+        "units_won": 531.0,
+        "units_risked": 755,
+        "graded": 755,
+        "missing_odds": 0,
+        "roi_pct": 70.33,
+        "reason": null
+      },
+      "spread": {
+        "wins": 503,
+        "losses": 131,
+        "pushes": 2,
+        "units_won": 372.0,
+        "units_risked": 634,
+        "graded": 634,
+        "missing_odds": 0,
+        "roi_pct": 58.68,
+        "reason": null
+      },
+      "total": {
+        "wins": 470,
+        "losses": 159,
+        "pushes": 7,
+        "units_won": 311.0,
+        "units_risked": 629,
+        "graded": 629,
+        "missing_odds": 0,
+        "roi_pct": 49.44,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "WNBA",
+    "season": "2026-27",
+    "phase": "regular",
+    "window": {
+      "start": "2026-05-08",
+      "end": "2026-07-20"
+    },
+    "games_in_scope": 78,
+    "games_expected": 264,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 25,
+        "total": 54,
+        "accuracy": 46.3
+      },
+      "trueskill": {
+        "correct": 23,
+        "total": 54,
+        "accuracy": 42.6
+      },
+      "elo": {
+        "correct": 25,
+        "total": 54,
+        "accuracy": 46.3
+      },
+      "xgboost": {
+        "correct": 23,
+        "total": 54,
+        "accuracy": 42.6
+      },
+      "ensemble": {
+        "correct": 30,
+        "total": 54,
+        "accuracy": 55.6
+      },
+      "efficiency": {
+        "correct": 43,
+        "total": 67,
+        "accuracy": 64.2
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 43,
+      "spread_graded": 78,
+      "spread_pushes": 1,
+      "spread_pct": 55.8,
+      "total_correct": 39,
+      "total_graded": 78,
+      "total_pushes": 0,
+      "total_pct": 50.0,
+      "pl_spread_covered": 45,
+      "pl_spread_graded": 67,
+      "pl_spread_pushes": 0,
+      "pl_spread_pct": 67.2,
+      "pl_total_correct": 40,
+      "pl_total_graded": 67,
+      "pl_total_pushes": 0,
+      "pl_total_pct": 59.7
+    },
+    "season_perf": {
+      "ml_total": 54,
+      "ml_correct": 30,
+      "ml_accuracy": 55.6,
+      "ml_model_label": "Sharp Consensus",
+      "ml_model_key": "ensemble",
+      "spread_graded": 67,
+      "spread_covered": 45,
+      "spread_pct": 67.2,
+      "spread_model_label": "Prediction Lab",
+      "spread_note": null,
+      "ou_graded": 67,
+      "ou_correct": 40,
+      "ou_pct": 59.7,
+      "ou_model_label": "Prediction Lab",
+      "ou_note": null,
+      "scope_label": "WNBA season",
+      "games_expected": 264,
+      "games_in_scope": 78
+    },
+    "ou_summary": {
+      "total_over": 58,
+      "total_under": 20,
+      "total_games_ou": 78,
+      "avg_total": 171.6,
+      "ou_bench": 158.0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 30,
+        "losses": 24,
+        "pushes": 0,
+        "units_won": 6.0,
+        "units_risked": 54,
+        "graded": 54,
+        "missing_odds": 0,
+        "roi_pct": 11.11,
+        "reason": null
+      },
+      "spread": {
+        "wins": 43,
+        "losses": 34,
+        "pushes": 1,
+        "units_won": 9.0,
+        "units_risked": 77,
+        "graded": 77,
+        "missing_odds": 0,
+        "roi_pct": 11.69,
+        "reason": null
+      },
+      "total": {
+        "wins": 39,
+        "losses": 39,
+        "pushes": 0,
+        "units_won": 0.0,
+        "units_risked": 78,
+        "graded": 78,
+        "missing_odds": 0,
+        "roi_pct": 0.0,
+        "reason": null
+      }
+    }
+  },
+  {
+    "sport": "SOCCER",
+    "season": "2025-26",
+    "phase": "regular",
+    "window": {
+      "start": "2025-08-01",
+      "end": "2026-06-30"
+    },
+    "games_in_scope": 3582,
+    "games_expected": null,
+    "overall_stats": {
+      "glicko2": {
+        "correct": 1953,
+        "total": 2714,
+        "accuracy": 72.0
+      },
+      "trueskill": {
+        "correct": 2052,
+        "total": 2714,
+        "accuracy": 75.6
+      },
+      "elo": {
+        "correct": 2036,
+        "total": 2714,
+        "accuracy": 75.0
+      },
+      "xgboost": {
+        "correct": 2053,
+        "total": 2714,
+        "accuracy": 75.6
+      },
+      "ensemble": {
+        "correct": 2071,
+        "total": 2714,
+        "accuracy": 76.3
+      },
+      "efficiency": {
+        "correct": 1174,
+        "total": 1373,
+        "accuracy": 85.5
+      }
+    },
+    "spread_total_stats": {
+      "spread_covered": 2010,
+      "spread_graded": 3429,
+      "spread_pushes": 189,
+      "spread_pct": 62.0,
+      "total_correct": 2030,
+      "total_graded": 3540,
+      "total_pushes": 37,
+      "total_pct": 58.0,
+      "pl_spread_covered": 1199,
+      "pl_spread_graded": 1803,
+      "pl_spread_pushes": 313,
+      "pl_spread_pct": 80.5,
+      "pl_total_correct": 1365,
+      "pl_total_graded": 1827,
+      "pl_total_pushes": 22,
+      "pl_total_pct": 75.6
+    },
+    "season_perf": {
+      "ml_total": 2714,
+      "ml_correct": 2071,
+      "ml_accuracy": 76.3,
+      "ml_model_label": "Sharp Consensus",
+      "ml_model_key": "ensemble",
+      "spread_graded": 1803,
+      "spread_covered": 1199,
+      "spread_pct": 80.5,
+      "spread_model_label": "Prediction Lab",
+      "spread_note": null,
+      "ou_graded": 1827,
+      "ou_correct": 1365,
+      "ou_pct": 75.6,
+      "ou_model_label": "Prediction Lab",
+      "ou_note": null,
+      "scope_label": "Soccer season",
+      "games_expected": null,
+      "games_in_scope": 3582
+    },
+    "ou_summary": {
+      "total_over": 3351,
+      "total_under": 0,
+      "total_games_ou": 3351,
+      "avg_total": 3.0,
+      "ou_bench": 0
+    },
+    "roi_total": {
+      "moneyline": {
+        "wins": 2071,
+        "losses": 643,
+        "pushes": 0,
+        "units_won": 1428.0,
+        "units_risked": 2714,
+        "graded": 2714,
+        "missing_odds": 0,
+        "roi_pct": 52.62,
+        "reason": null
+      },
+      "spread": {
+        "wins": 1536,
+        "losses": 1015,
+        "pushes": 132,
+        "units_won": 521.0,
+        "units_risked": 2551,
+        "graded": 2551,
+        "missing_odds": 0,
+        "roi_pct": 20.42,
+        "reason": null
+      },
+      "total": {
+        "wins": 1617,
+        "losses": 1036,
+        "pushes": 30,
+        "units_won": 581.0,
+        "units_risked": 2653,
+        "graded": 2653,
+        "missing_odds": 0,
+        "roi_pct": 21.9,
         "reason": null
       }
     }

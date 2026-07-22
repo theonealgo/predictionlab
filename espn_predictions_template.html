@@ -12,11 +12,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ _meta_desc }}">
-    {% if grouped_predictions is defined and not grouped_predictions %}<meta name="robots" content="noindex, follow">{% endif %}
+    <meta name="robots" content="{{ robots_meta | default('index,follow,max-image-preview:large,max-snippet:-1') }}">
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://predictionlab.io{{ request.path }}">
+    <meta property="og:url" content="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
         <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _meta_title }}">
@@ -26,7 +26,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap"></noscript>
-    <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
+    <link rel="canonical" href="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
     {% if ga_tracking_id %}
     <script>
       (function(){
@@ -766,10 +766,10 @@
         <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
         <div class="social-export-actions">
             <a class="social-export-btn" href="{{ share_image_src }}" download="predictionlab-picks.jpg">Download image</a>
-            <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="noopener">Open fullscreen</a>
+            <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">Open fullscreen</a>
         </div>
     </div>
-    <a class="social-image-link" href="{{ share_image_view_url }}" target="_blank" rel="noopener">
+    <a class="social-image-link" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">
         <img src="{{ share_image_src }}" alt="">
     </a>
 </div>

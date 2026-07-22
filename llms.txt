@@ -1,42 +1,67 @@
 # Prediction Lab
 
-> Prediction Lab provides AI-powered sports betting picks, probability projections, model analysis, and transparent results tracking across major sports.
+> AI-powered sports betting picks and probability-based projections. Four independent models compare projected win probabilities to sportsbook lines to surface potential value on moneyline, spread, and totals markets. Operated by GoodsandMore Inc. (Canada).
 
-## About
+Prediction Lab is a multi-sport analytics site for bettors who want transparent, data-driven picks—not guaranteed outcomes. Picks are informational and educational. Sports betting involves risk and variance.
 
-Prediction Lab is a sports analytics platform using multi-model AI consensus, statistical projections, and sportsbook comparison tools.
+Important notes:
 
-- Brand: Prediction Lab
-- Parent organization: GoodsandMore Inc. (Canada)
-- Website: https://predictionlab.io
+- Four separate AI models (ensemble + individual views) produce win probabilities for each game; consensus and disagreement are shown openly.
+- Model projections are compared to sportsbook implied probabilities to highlight potential positive expected value (+EV), not to promise wins.
+- Graded results are tracked publicly on sport-specific and all-sports results pages.
+- Free daily moneyline picks are available; premium plans add spread, totals, score projections, and deeper tools.
+- Canonical site URL: https://predictionlab.io
+- Contact: support.predictionlab@gmail.com (web form: https://predictionlab.io/contact)
 
-## Core Features
+## Core pages
 
-- Daily AI sports betting picks
-- Moneyline probability models
-- Premium picks and projections
-- Sportsbook comparison tools
-- Model performance tracking
-- Historical betting results
+- [Home](https://predictionlab.io/): Sport selector, today's top picks, and entry to all leagues
+- [AI picks today](https://predictionlab.io/ai-sports-betting-picks-today): Free daily AI sports betting picks
+- [Daily report](https://predictionlab.io/daily-report): Daily graded results summary
+- [All sports results](https://predictionlab.io/all-sports-results): Cross-sport season performance dashboard
+- [Model performance](https://predictionlab.io/performance): Historical model accuracy and audit data
+- [FAQ](https://predictionlab.io/faq): How picks work, value methodology, refunds, and expectations
 
-## Main Pages
+## AI picks by sport
 
-- [Home](https://predictionlab.io/): Main Prediction Lab homepage
-- [Daily Betting Results Report](https://predictionlab.io/daily-report): Historical model tracking and results
-- [Plans & Pricing](https://predictionlab.io/plans): Premium membership options
-- [AI Sports Betting Picks Today](https://predictionlab.io/ai-sports-betting-picks-today): Daily AI-generated picks
-- [Model Performance](https://predictionlab.io/performance): Model tracking and analytics
-- [NBA Picks](https://predictionlab.io/nba-picks): NBA predictions
-- [MLB Picks](https://predictionlab.io/mlb-picks): MLB predictions
-- [NHL Picks](https://predictionlab.io/nhl-picks): NHL predictions
-- [NFL Picks](https://predictionlab.io/nfl-picks): NFL predictions
-- [Soccer Picks](https://predictionlab.io/soccer-picks): Soccer predictions
-- [Player Props](https://predictionlab.io/player-props): Player prop analysis
-- [Privacy Policy](https://predictionlab.io/privacy)
-- [Terms of Service](https://predictionlab.io/terms)
+- [MLB AI picks](https://predictionlab.io/mlb-picks): Major League Baseball moneyline, spread, and totals projections
+- [NBA AI picks](https://predictionlab.io/nba-picks): NBA game predictions and model probabilities
+- [NHL AI picks](https://predictionlab.io/nhl-picks): NHL game predictions with ensemble models
+- [NFL AI picks](https://predictionlab.io/nfl-picks): NFL weekly game picks and probabilities
+- [Soccer AI picks](https://predictionlab.io/soccer-picks): Curated league soccer picks (moneyline and related markets)
+- [NCAAB AI picks](https://predictionlab.io/ncaab-picks): NCAA men's basketball picks
+- [NCAAF AI picks](https://predictionlab.io/ncaaf-picks): NCAA football picks
+- [NCAAW AI picks](https://predictionlab.io/ncaaw-picks): NCAA women's basketball picks
+- [WNBA AI picks](https://predictionlab.io/wnba-picks): WNBA game predictions
 
-## Notes
+## Results and research
 
-- Predictions are informational and educational.
-- No outcome is guaranteed.
-- Sports betting involves risk and variance.
+- [MLB results](https://predictionlab.io/mlb-results): Graded MLB pick history
+- [NBA results](https://predictionlab.io/nba-results): Graded NBA pick history
+- [NHL results](https://predictionlab.io/nhl-results): Graded NHL pick history
+- [NFL results](https://predictionlab.io/nfl-results): Graded NFL pick history
+- [Our model vs sportsbooks](https://predictionlab.io/our-model-vs-sportsbooks): How model odds differ from book lines
+- [What are AI sports betting picks](https://predictionlab.io/what-are-ai-sports-betting-picks): Explainer on methodology and terminology
+- [Player props](https://predictionlab.io/player-props): Player prop research tool
+- [Tutorial](https://predictionlab.io/tutorial): How to read picks, probabilities, and pages on the site
+
+## Discovery and policies
+
+- [Sitemap](https://predictionlab.io/sitemap.xml): Full list of indexable URLs
+- [AI discovery file](https://predictionlab.io/ai.txt): Pointers for AI crawlers (`llms.txt`, sitemap, contact)
+- [Robots](https://predictionlab.io/robots.txt): Crawler allow/disallow rules
+- [Privacy policy](https://predictionlab.io/privacy): Data handling and privacy terms
+- [Terms of service](https://predictionlab.io/terms): Site usage terms
+- [Responsible gaming](https://predictionlab.io/responsible-gaming): Risk awareness and responsible betting guidance
+
+## Optional
+
+- [Premium plans](https://predictionlab.io/plans): Weekly, monthly, and yearly subscription options
+- [Blog](https://predictionlab.io/blog): Daily articles and site updates
+- [Contact](https://predictionlab.io/contact): Support, billing, and feedback form
+- [Sign up](https://predictionlab.io/signup): Create a free account
+- [Sign in](https://predictionlab.io/login): Existing account login
+- [Data downloads](https://predictionlab.io/results/downloads): Exportable results and performance data
+- [Tennis picks](https://predictionlab.io/tennis-picks): Tennis predictions when in season
+- [UFC picks](https://predictionlab.io/ufc-picks): UFC/MMA predictions when available
+- [Golf picks](https://predictionlab.io/golf-picks): Golf predictions when available

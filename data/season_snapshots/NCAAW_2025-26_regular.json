@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-03T17:41:49Z",
+  "built_at": "2026-07-22T00:40:58Z",
   "games_expected": 5430,
   "games_in_scope": 8,
   "ou_summary": {
@@ -10,6 +10,11 @@
     "total_under": 5
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 0
+    },
     "elo": {
       "accuracy": 100.0,
       "correct": 8,

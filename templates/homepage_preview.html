@@ -5,6 +5,7 @@
 {% if request.path == "/homepage-preview" %}<meta name="robots" content="noindex,nofollow">{% endif %}
 <meta name="description" content="AI-powered sports predictions with transparent model tracking. Free moneyline picks, win probabilities, and model performance for NBA, MLB, NHL, WNBA, NFL, and soccer.">
 <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ request.path }}">
+<link rel="preload" as="image" href="/static/img/hero-canvas.webp" fetchpriority="high">
 <meta property="og:title" content="Prediction Labs | AI Sports Predictions and Betting Research">
 <meta property="og:description" content="AI-powered sports predictions with transparent model tracking. Free moneyline picks and win probabilities for NBA, MLB, NHL, WNBA, NFL, and soccer.">
 <meta property="og:type" content="website">
@@ -182,7 +183,7 @@
     }
     .pl2-hero-rule { height: 1px; width: 100%; background: var(--pl-line); margin-bottom: 32px; }
     .pl2-hero-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px 72px; align-items: start; }
-    .pl2-lede { max-width: 560px; margin: 0 0 32px; color: hsl(0 0% 3.9% / 0.7); font-size: 1.125rem; line-height: 1.6; font-weight: 500; }
+    .pl2-lede { max-width: 560px; margin: 0 0 32px; color: hsl(0 0% 18%); font-size: 1.125rem; line-height: 1.6; font-weight: 500; }
     .pl2-hero-cta { display: flex; flex-wrap: wrap; gap: 16px; }
     .pl2-btn {
         min-height: 48px; display: inline-flex; align-items: center; justify-content: center;
@@ -288,7 +289,7 @@
     .pl2-pick-card-meta { font: 800 .58rem var(--pl-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--pl-faint); }
     .pl2-pick-teams { display: grid; gap: 8px; margin-top: 8px; }
     .pl2-pick-team { display: flex; align-items: center; gap: 10px; font-size: .88rem; font-weight: 900; }
-    .pl2-pick-team code { min-width: 32px; padding: 6px 0; text-align: center; background: hsl(194 88% 42%); color: #fff; font: 900 .56rem var(--pl-mono); }
+    .pl2-pick-team code { min-width: 32px; padding: 6px 0; text-align: center; background: hsl(200 100% 24%); color: #fff; font: 900 .56rem var(--pl-mono); }
     .pl2-pick-market { font-size: .72rem; color: var(--pl-muted); font-weight: 700; }
     .pl2-pick-probs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .pl2-pick-prob { padding: 15px 10px; border: 1px solid var(--pl-line); border-radius: 6px; background: hsl(0 0% 97%); text-align: center; }
@@ -1003,6 +1004,15 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') pl2Drawer(false);
 });
 
+function pl2RunDeferred(fn) {
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(fn, { timeout: 1500 });
+    } else {
+        window.setTimeout(fn, 1);
+    }
+}
+
+pl2RunDeferred(function () {
 /* CountUp — port of CountUp.jsx */
 (function () {
     var started = new WeakSet();
@@ -1040,13 +1050,15 @@ document.addEventListener('keydown', function (e) {
     var hero = document.getElementById('picks');
     var lens = document.getElementById('pl2Lens');
     if (!hero || !lens) return;
+    var rect = null;
+    function refreshRect() { rect = hero.getBoundingClientRect(); }
+    refreshRect();
+    window.addEventListener('resize', refreshRect, { passive: true });
     hero.addEventListener('mousemove', function (e) {
-        var rect = hero.getBoundingClientRect();
-        var x = e.clientX - rect.left;
-        var y = e.clientY - rect.top;
-        lens.style.left = x + 'px';
-        lens.style.top = y + 'px';
-    });
+        if (!rect) refreshRect();
+        lens.style.left = (e.clientX - rect.left) + 'px';
+        lens.style.top = (e.clientY - rect.top) + 'px';
+    }, { passive: true });
 })();
 
 /* Fixed data canvas — the page scrolls over the research layer. */
@@ -1099,31 +1111,38 @@ document.addEventListener('keydown', function (e) {
         });
     });
 })();
+});
 
-/* ActiveBreadcrumb — scroll spy */
+/* ActiveBreadcrumb — scroll spy (batched reads to avoid forced reflow) */
 (function () {
     var crumb = document.getElementById('pl2Breadcrumb');
     var crumbText = document.getElementById('pl2BreadcrumbText');
     if (!crumb || !crumbText) return;
     var sections = Array.prototype.slice.call(document.querySelectorAll('[data-bc]'));
+    var ticking = false;
     function update() {
+        ticking = false;
         var mid = window.innerHeight * 0.35;
         var current = sections[0];
-        sections.forEach(function (sec) {
-            var top = sec.getBoundingClientRect().top;
-            if (top <= mid) current = sec;
+        var tops = sections.map(function (sec) { return sec.getBoundingClientRect().top; });
+        tops.forEach(function (top, index) {
+            if (top <= mid) current = sections[index];
         });
-        if (current) {
-            crumbText.textContent = current.getAttribute('data-bc');
-            crumb.classList.add('is-active');
-            var railIndex = parseInt(current.getAttribute('data-rail') || '0', 10);
-            crumb.querySelectorAll('.pl2-rail i').forEach(function (line, index) {
-                line.classList.toggle('active', index === railIndex);
-            });
-        }
+        if (!current) return;
+        crumbText.textContent = current.getAttribute('data-bc');
+        crumb.classList.add('is-active');
+        var railIndex = parseInt(current.getAttribute('data-rail') || '0', 10);
+        crumb.querySelectorAll('.pl2-rail i').forEach(function (line, index) {
+            line.classList.toggle('active', index === railIndex);
+        });
     }
-    window.addEventListener('scroll', update, { passive: true });
-    update();
+    function scheduleUpdate() {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(update);
+    }
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.requestAnimationFrame(update);
 })();
 </script>
 {% endblock %}

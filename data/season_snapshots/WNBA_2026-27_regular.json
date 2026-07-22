@@ -1,120 +1,125 @@
 {
-  "built_at": "2026-06-03T17:43:14Z",
+  "built_at": "2026-07-22T00:42:28Z",
   "games_expected": 264,
-  "games_in_scope": 21,
+  "games_in_scope": 78,
   "ou_summary": {
-    "avg_total": 164.4,
+    "avg_total": 171.6,
     "ou_bench": 158.0,
-    "total_games_ou": 21,
-    "total_over": 13,
-    "total_under": 8
+    "total_games_ou": 78,
+    "total_over": 58,
+    "total_under": 20
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 64.2,
+      "correct": 43,
+      "total": 67
+    },
     "elo": {
-      "accuracy": 54.5,
-      "correct": 6,
-      "total": 11
+      "accuracy": 46.3,
+      "correct": 25,
+      "total": 54
     },
     "ensemble": {
-      "accuracy": 54.5,
-      "correct": 6,
-      "total": 11
+      "accuracy": 55.6,
+      "correct": 30,
+      "total": 54
     },
     "glicko2": {
-      "accuracy": 54.5,
-      "correct": 6,
-      "total": 11
+      "accuracy": 46.3,
+      "correct": 25,
+      "total": 54
     },
     "trueskill": {
-      "accuracy": 45.5,
-      "correct": 5,
-      "total": 11
+      "accuracy": 42.6,
+      "correct": 23,
+      "total": 54
     },
     "xgboost": {
-      "accuracy": 45.5,
-      "correct": 5,
-      "total": 11
+      "accuracy": 42.6,
+      "correct": 23,
+      "total": 54
     }
   },
   "phase": "regular",
   "roi_total": {
     "moneyline": {
-      "graded": 11,
-      "losses": 5,
+      "graded": 54,
+      "losses": 24,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 9.09,
-      "units_risked": 11,
-      "units_won": 1.0,
-      "wins": 6
+      "roi_pct": 11.11,
+      "units_risked": 54,
+      "units_won": 6.0,
+      "wins": 30
     },
     "spread": {
-      "graded": 21,
-      "losses": 12,
+      "graded": 77,
+      "losses": 34,
       "missing_odds": 0,
-      "pushes": 0,
+      "pushes": 1,
       "reason": null,
-      "roi_pct": -14.29,
-      "units_risked": 21,
-      "units_won": -3.0,
-      "wins": 9
+      "roi_pct": 11.69,
+      "units_risked": 77,
+      "units_won": 9.0,
+      "wins": 43
     },
     "total": {
-      "graded": 21,
-      "losses": 10,
+      "graded": 78,
+      "losses": 39,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 4.76,
-      "units_risked": 21,
-      "units_won": 1.0,
-      "wins": 11
+      "roi_pct": 0.0,
+      "units_risked": 78,
+      "units_won": 0.0,
+      "wins": 39
     }
   },
   "schema_version": 1,
   "season": "2026-27",
   "season_perf": {
     "games_expected": 264,
-    "games_in_scope": 21,
-    "ml_accuracy": 54.5,
-    "ml_correct": 6,
-    "ml_model_key": "glicko2",
-    "ml_model_label": "Grinder2",
-    "ml_total": 11,
-    "ou_correct": 11,
-    "ou_graded": 15,
+    "games_in_scope": 78,
+    "ml_accuracy": 55.6,
+    "ml_correct": 30,
+    "ml_model_key": "ensemble",
+    "ml_model_label": "Sharp Consensus",
+    "ml_total": 54,
+    "ou_correct": 40,
+    "ou_graded": 67,
     "ou_model_label": "Prediction Lab",
     "ou_note": null,
-    "ou_pct": 73.3,
+    "ou_pct": 59.7,
     "scope_label": "WNBA season",
-    "spread_covered": 8,
-    "spread_graded": 15,
+    "spread_covered": 45,
+    "spread_graded": 67,
     "spread_model_label": "Prediction Lab",
     "spread_note": null,
-    "spread_pct": 53.3
+    "spread_pct": 67.2
   },
   "sport": "WNBA",
   "spread_total_stats": {
-    "pl_spread_covered": 8,
-    "pl_spread_graded": 15,
-    "pl_spread_pct": 53.3,
+    "pl_spread_covered": 45,
+    "pl_spread_graded": 67,
+    "pl_spread_pct": 67.2,
     "pl_spread_pushes": 0,
-    "pl_total_correct": 11,
-    "pl_total_graded": 15,
-    "pl_total_pct": 73.3,
+    "pl_total_correct": 40,
+    "pl_total_graded": 67,
+    "pl_total_pct": 59.7,
     "pl_total_pushes": 0,
-    "spread_covered": 9,
-    "spread_graded": 21,
-    "spread_pct": 42.9,
-    "spread_pushes": 0,
-    "total_correct": 11,
-    "total_graded": 21,
-    "total_pct": 52.4,
+    "spread_covered": 43,
+    "spread_graded": 78,
+    "spread_pct": 55.8,
+    "spread_pushes": 1,
+    "total_correct": 39,
+    "total_graded": 78,
+    "total_pct": 50.0,
     "total_pushes": 0
   },
   "window": {
-    "end": "2026-06-02",
+    "end": "2026-07-20",
     "start": "2026-05-08"
   }
 }

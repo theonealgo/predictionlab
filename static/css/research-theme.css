@@ -402,7 +402,7 @@ body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-
     line-height: .95;
     letter-spacing: 0;
 }
-.site-directory-footer .directory-sub { color: #858780; font-size: 12px; }
+.site-directory-footer .directory-sub { color: #a8aba4; font-size: 12px; }
 .site-directory-footer .directory-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0,1fr));
@@ -414,7 +414,7 @@ body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-
 }
 .site-directory-footer h5 {
     margin: 0 0 18px;
-    color: #777a74;
+    color: #b7b9b3;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 2px;
@@ -430,14 +430,26 @@ body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-
 .site-directory-footer .directory-bottom {
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 24px;
     padding-top: 22px;
-    color: #666862;
+    color: #a8aba4;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: .8px;
 }
-.site-directory-footer .directory-bottom a { margin-left: 16px; color: #777a74; text-decoration: none; }
+.site-directory-footer .directory-bottom a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px 14px;
+    margin-left: 4px;
+    color: #c5c7c1;
+    text-decoration: none;
+}
 .site-directory-footer .directory-bottom a:hover { color: var(--pl-neon); }
 
 /* July 2026 Premium visitor offer */

@@ -467,6 +467,17 @@ class BaseModelTrainer:
         
         return model
     
+    def _scaled_feature_frame(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Return scaled features with column names for sklearn tree models."""
+        X_scaled = self.scaler.transform(X)
+        columns = self.feature_names
+        if not columns:
+            lgb_model = self.models.get('lightgbm')
+            columns = list(getattr(lgb_model, 'feature_names_in_', None) or [])
+        if not columns or len(columns) != X_scaled.shape[1]:
+            columns = [f'f{i}' for i in range(X_scaled.shape[1])]
+        return pd.DataFrame(X_scaled, columns=columns)
+
     def predict_proba(self, X: pd.DataFrame, 
                       home_team: Optional[str] = None,
                       away_team: Optional[str] = None) -> Dict[str, np.ndarray]:
@@ -478,17 +489,17 @@ class BaseModelTrainer:
         if not self.trained:
             raise ValueError("Models not trained yet")
         
-        X_scaled = self.scaler.transform(X)
+        X_frame = self._scaled_feature_frame(X)
         predictions = {}
         
         if 'xgboost' in self.models:
-            predictions['xgboost'] = self.models['xgboost'].predict_proba(X_scaled)[:, 1]
+            predictions['xgboost'] = self.models['xgboost'].predict_proba(X_frame)[:, 1]
         
         if 'catboost' in self.models:
-            predictions['catboost'] = self.models['catboost'].predict_proba(X_scaled)[:, 1]
+            predictions['catboost'] = self.models['catboost'].predict_proba(X_frame)[:, 1]
         
         if 'lightgbm' in self.models:
-            predictions['lightgbm'] = self.models['lightgbm'].predict_proba(X_scaled)[:, 1]
+            predictions['lightgbm'] = self.models['lightgbm'].predict_proba(X_frame)[:, 1]
         
         if 'poisson' in self.models and home_team and away_team:
             predictions['poisson'] = np.array([

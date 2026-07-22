@@ -247,6 +247,62 @@ def _picks_display_dates(grouped_predictions, today_date):
     return window, default
 
 
+_PICKS_ROBOTS_INDEX = 'index,follow,max-image-preview:large,max-snippet:-1'
+
+
+def _picks_robots_meta(*, filter_date=None, grouped_predictions=None):
+    """Picks hubs and dated SEO pages should stay indexable for Google."""
+    return _PICKS_ROBOTS_INDEX
+
+
+def _picks_for_filter_date(predictions, filter_date):
+    """Games for a daily SEO URL — include finished games for that calendar day."""
+    dated_preds = []
+    for pred in predictions or []:
+        if not isinstance(pred, dict):
+            continue
+        if (pred.get('game_date') or '') != filter_date:
+            continue
+        away = pred.get('away_team_id')
+        home = pred.get('home_team_id')
+        if not away or not home or away == 'TBD' or home == 'TBD':
+            continue
+        dated_preds.append(pred)
+    return dated_preds
+
+
+def _fetch_db_games_for_picks_date(sport, filter_date):
+    """Load stored games for a daily SEO URL when the live slate window omits that day."""
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            '''
+            SELECT g.*,
+                   p.elo_home_prob AS stored_elo_prob,
+                   p.xgboost_home_prob AS stored_xgb_prob,
+                   p.win_probability AS stored_ensemble_prob
+            FROM games g
+            LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+            WHERE g.sport = ? AND date(g.game_date) = date(?)
+            ''',
+            (sport, sport, filter_date),
+        ).fetchall()
+        conn.close()
+    except Exception as exc:
+        logger.debug('DB picks date load failed for %s %s: %s', sport, filter_date, exc)
+        return []
+    games = []
+    for row in rows:
+        gd = dict(row)
+        away = gd.get('away_team_id') or ''
+        home = gd.get('home_team_id') or ''
+        if not away or not home or away == 'TBD' or home == 'TBD':
+            continue
+        gd['game_date'] = filter_date
+        games.append(gd)
+    return games
+
+
 def _results_page_html_usable(html: str) -> bool:
     if not html:
         return False
@@ -352,6 +408,34 @@ def _get_share_cache_entry(token: str):
             pass
         return None
     return data
+
+
+def _share_gone_response(message='This share link has expired.'):
+    """Ephemeral share URLs should not be indexed; 410 removes them from Google faster than 404."""
+    html = (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="robots" content="noindex,nofollow">'
+        f'<title>{message}</title></head>'
+        f'<body><p>{message}</p></body></html>'
+    )
+    return Response(
+        html,
+        status=410,
+        mimetype='text/html; charset=utf-8',
+        headers={
+            'X-Robots-Tag': 'noindex, nofollow',
+            'Cache-Control': 'private, no-store',
+        },
+    )
+
+
+def _share_gone_plain(message='Not found'):
+    return Response(
+        message,
+        status=410,
+        mimetype='text/plain',
+        headers={'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'private, no-store'},
+    )
 
 
 def _load_props_modules():
@@ -4832,11 +4916,40 @@ def _soccer_league_slug(name: str) -> str:
     return slug.strip('-')
 
 SOCCER_LEAGUE_SLUGS = {_soccer_league_slug(n): n for n in SOCCER_LEAGUE_ORDER}
+_SOCCER_ENDPOINT_SLUGS = {
+    (code or '').strip().lower(): name
+    for name, code in SOCCER_LEAGUE_ENDPOINTS.items()
+    if code
+}
 
 def _soccer_league_from_slug(slug: str):
     if not slug:
         return None
-    return SOCCER_LEAGUE_SLUGS.get(slug.strip().lower())
+    key = slug.strip().lower()
+    league = SOCCER_LEAGUE_SLUGS.get(key)
+    if league:
+        return league
+    return _SOCCER_ENDPOINT_SLUGS.get(key)
+
+
+def _resolve_soccer_league_slug(raw_slug):
+    """Normalize ?league= values (hyphen slugs or ESPN codes) to the site slug."""
+    league = _soccer_league_from_slug(raw_slug or '')
+    if not league:
+        return None
+    return _soccer_league_slug(league)
+
+
+def _seo_canonical_url(path=None):
+    """Build canonical URL; soccer league filters keep ?league= so each league page is indexable."""
+    path = path or getattr(request, 'path', '/') or '/'
+    base = f"https://predictionlab.io{path}"
+    if path not in ('/soccer-picks', '/soccer-results'):
+        return base
+    league_slug = _resolve_soccer_league_slug(request.args.get('league'))
+    if league_slug:
+        return f"{base}?league={league_slug}"
+    return base
 
 
 def _filter_soccer_picks(predictions, selected_slug=None):
@@ -9256,6 +9369,7 @@ def compute_overall_stats_from_daily(daily_results):
         ('elo',       'elo_correct', 'elo_prob'),
         ('xgboost',   'xgb_correct', 'xgb_prob'),
         ('ensemble',  'ens_correct', 'ens_prob'),
+        ('efficiency', 'efficiency_correct', 'efficiency_prob'),
     ]
     overall = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
     
@@ -9421,6 +9535,7 @@ def _results_page_meta(sport):
             f'{name} season model accuracy and verified betting results — '
             'moneyline, spread, and over/under performance.'
         ),
+        'canonical_url': _seo_canonical_url(),
     }
 
 
@@ -9721,12 +9836,12 @@ BASE_TEMPLATE = """
     <meta property="og:title" content="{{ _meta_title }}">
     <meta property="og:description" content="{{ _meta_desc }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://predictionlab.io{{ request.path }}">
+    <meta property="og:url" content="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
     <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="{{ _meta_title }}">
     <meta name="twitter:description" content="{{ _meta_desc }}">
-    <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
+    <link rel="canonical" href="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
     <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
     <meta name="author" content="predictionlab.io">
     <meta name="publisher" content="GoodsandMore Inc.">
@@ -10512,7 +10627,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
             {% for st in sport_tallies %}
             <span class="rpt-btn-group">
                 <a class="rpt-btn rpt-btn-copy" href="{{ st.share_image_src }}" download="daily-results.jpg">Download {{ st.info.name }}</a>
-                <a class="rpt-btn rpt-btn-copy" href="{{ st.share_image_view_url }}" target="_blank" rel="noopener">Fullscreen {{ st.info.name }}</a>
+                <a class="rpt-btn rpt-btn-copy" href="{{ st.share_image_view_url }}" target="_blank" rel="nofollow noopener">Fullscreen {{ st.info.name }}</a>
             </span>
             {% endfor %}
         </div>
@@ -11187,7 +11302,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     /* Pick confidence grid (results cards) */
     .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
     .pick-conf-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
-    .pick-conf-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; align-items:stretch; }
+    .pick-conf-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; align-items:stretch; }
     @media(max-width:520px){ .pick-conf-grid{ grid-template-columns:repeat(3,1fr); } }
     .pc-box { background:#ffffff; border:1px solid #E2E8F0; border-radius:8px; padding:6px 4px; text-align:center; display:flex; flex-direction:column; justify-content:space-between; align-items:center; gap:3px; min-width:0; min-height:86px; box-shadow:0 1px 4px rgba(15,23,42,0.05); }
     .pc-box.consensus { border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.1); }
@@ -11199,7 +11314,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
     .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
     .section-ml, .section-spread, .section-total { display:block; }
-    .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+    .model-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:16px; }
     @media(max-width:900px){ .model-grid { grid-template-columns:repeat(3,1fr); } }
     .model-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:12px; text-align:center; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
     .model-card.highlight { border:2px solid #fbbf24; }
@@ -11219,8 +11334,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/sport/{{ sport }}/predictions" class="tab">📊 Predictions</a>
-        <a href="/sport/{{ sport }}/results" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
     </div>
         {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
@@ -11230,6 +11345,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set label_elo = 'Edge' %}
         {% set label_xgb = 'XSharp' %}
         {% set label_ensemble = 'Sharp Consensus' %}
+        {% set label_efficiency = 'Efficiency' %}
         {% if results_snapshot_notice is defined and results_snapshot_notice %}
         <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:12px 16px;margin:0 0 14px;font-size:0.85em;color:#9a3412;text-align:center;">
             {{ results_snapshot_notice }}
@@ -11449,7 +11565,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Model Records ── -->
         <h3 style="text-align:center;font-size:1.15em;margin:0 0 12px;color:#0f172a;">Moneyline Accuracy by Model</h3>
         <div class="model-grid">
-            {% for m_label, m_key in model_cards %}
+            {% for m_label, m_key in tally_model_cards %}
             {% set m = overall_stats[m_key] %}
             <div class="model-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                 <div class="model-label">{{ m_label }}</div>
@@ -11510,7 +11626,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                         {'name': label_trueskill, 'prob': game.trueskill_prob, 'correct': game.trueskill_correct, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': game.elo_prob, 'correct': game.elo_correct, 'key': 'elo'},
                         {'name': label_xgb, 'prob': game.xgb_prob, 'correct': game.xgb_correct, 'key': 'xgb'},
-                        {'name': label_ensemble, 'prob': game.ens_prob, 'correct': game.ens_correct, 'key': 'consensus'}
+                        {'name': label_ensemble, 'prob': game.ens_prob, 'correct': game.ens_correct, 'key': 'consensus'},
+                        {'name': label_efficiency, 'prob': game.efficiency_prob, 'correct': game.efficiency_correct, 'key': 'efficiency'}
                     ] %}
                     {% include 'includes/game_card_body.html' %}
                     {% if game.model_data_note %}<div style="font-size:0.7em;color:#94a3b8;padding:4px 12px 8px;text-align:center;">{{ game.model_data_note }}</div>{% endif %}
@@ -12189,6 +12306,7 @@ _ML_DASHBOARD_MODELS = (
     ('elo', 'Edge'),
     ('xgboost', 'XSharp'),
     ('ensemble', 'Sharp Consensus'),
+    ('efficiency', 'Efficiency'),
 )
 
 
@@ -12303,7 +12421,7 @@ def _build_all_sports_dashboard_rows(snapshots):
                 pct_key='pl_total_pct',
                 push_key='pl_total_pushes',
             ),
-            'results_url': f"/sport/{sport}/results",
+            'results_url': f"/{_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results')}",
         })
     return rows
 
@@ -13077,9 +13195,9 @@ def api_search():
 def api_performance_data():
     """Per-model, per-game performance rows for client-side filtering UI."""
     if not current_user.is_authenticated:
-        return redirect(url_for('auth.login_page', next=request.path))
+        return jsonify({'detail': 'Authentication required.'}), 401
     if not is_premium_user():
-        return redirect('/plans')
+        return jsonify({'detail': 'Premium subscription required.'}), 403
     rows_out = []
     filtered_rows = []
     meta = {'predictions_count': 0, 'matched_results_count': 0, 'rows_out_count': 0}
@@ -13899,6 +14017,11 @@ def _props_offseason_payload(league):
     fabricating a synthetic off-season slate and stops stale prior-season rows
     from surfacing in the Streaks/Results tabs.
     """
+    # Soccer props are multi-league and year-round; the modeled EPL window
+    # (Aug 1–Jun 30) leaves a false July gap that blocks props while games
+    # and lines are still available.
+    if league == 'SOCCER':
+        return None
     try:
         _status, is_live = get_season_status(league)
     except Exception:
@@ -14331,17 +14454,21 @@ def performance_page():
     if sport not in _PERF_SPORT_OPTIONS:
         sport = ''
     last_n_raw = (request.args.get('last_n') or '').strip().lower()
-    last_n = None
-    if last_n_raw in ('50', '100', '200'):
+    last_n = 200  # Default: full-season scan is ~50s+ and looks like a hang.
+    if last_n_raw == 'all':
+        last_n = None
+    elif last_n_raw in ('50', '100', '200'):
         last_n = int(last_n_raw)
 
     main_table, sport_tables = _build_performance_page_data(sport_filter=sport, last_n=last_n)
-    team_chart_rows = _build_team_performance_rows(sport_filter=sport)
+    # Team cards regrade a full season per sport (~30s for all sports); load only
+    # when a single sport is selected so /performance responds in a few seconds.
+    team_chart_rows = _build_team_performance_rows(sport_filter=sport) if sport else []
     return render_template(
         'performance.html',
         page='performance',
         selected_sport=sport,
-        selected_last_n=(str(last_n) if last_n else ''),
+        selected_last_n=(str(last_n) if last_n else 'all'),
         sport_options=_PERF_SPORT_OPTIONS,
         model_order=_PERF_MODEL_ORDER,
         team_model_order=_TEAM_PERF_MODEL_ORDER,
@@ -14552,7 +14679,7 @@ def performance_audit_csv():
 @app.route('/picks/export.csv')
 def picks_export_csv():
     if not current_user.is_authenticated:
-        return redirect(url_for('auth.login_page', next=request.path))
+        return Response('Authentication required.', status=401, mimetype='text/plain')
     if not is_premium_user():
         return redirect('/plans')
     sport = (request.args.get('sport') or '').strip().upper() or None
@@ -14765,6 +14892,10 @@ Disallow: /admin/
 Disallow: /checkout/
 Disallow: /stripe/
 Disallow: /auth/
+Disallow: /share/
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
 
 Sitemap: {_SITE_DOMAIN}/sitemap.xml
 """
@@ -14932,8 +15063,6 @@ def sitemap_xml():
     urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/terms', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/responsible-gaming', 'monthly', '0.4'))
-    urls.append((_SITE_DOMAIN + '/login', 'monthly', '0.4'))
-    urls.append((_SITE_DOMAIN + '/signup', 'monthly', '0.4'))
 
     urlset = "\n".join(
         f'<url><loc>{loc}</loc><lastmod>{today}</lastmod><changefreq>{freq}</changefreq><priority>{prio}</priority></url>'
@@ -15364,12 +15493,14 @@ def share_predictions_image(token, fmt):
     fmt = (fmt or '').lower()
     if fmt not in ('jpg', 'jpeg', 'png'):
         return "Unsupported format", 400
+    if not _SHARE_TOKEN_RE.match(token or ''):
+        return _share_gone_plain('Image not found')
     entry = _get_share_cache_entry(token)
     if not entry:
-        return "Image not found", 404
+        return _share_gone_plain('Image not found')
     payload = entry.get('payload') or {}
     if payload.get('type') != 'predictions':
-        return "Image not found", 404
+        return _share_gone_plain('Image not found')
     img_bytes, mimetype = _render_predictions_share_image(payload, fmt)
     if not img_bytes:
         return "Image engine unavailable", 503
@@ -15387,10 +15518,10 @@ def share_predictions_image(token, fmt):
 def share_predictions_view(token: str):
     """Minimal full-view page: image only (no site chrome in the document). For TikTok, still prefer Download and upload from Photos to avoid the browser address bar in recordings."""
     if not _SHARE_TOKEN_RE.match(token or ''):
-        abort(404)
+        return _share_gone_response()
     entry = _get_share_cache_entry(token)
     if not entry or (entry.get('payload') or {}).get('type') != 'predictions':
-        abort(404)
+        return _share_gone_response()
     img_href = url_for('share_predictions_image', token=token, fmt='jpg')
     html = (
         '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
@@ -15402,7 +15533,11 @@ def share_predictions_view(token: str):
         'img{display:block;width:100vmin;max-width:100%;height:auto;max-height:100vh;object-fit:contain}</style></head>'
         f'<body><div class="w"><img src="{img_href}" alt="" decoding="async" fetchpriority="high"></div></body></html>'
     )
-    return Response(html, mimetype='text/html; charset=utf-8', headers={'Cache-Control': 'private, max-age=120'})
+    return Response(
+        html,
+        mimetype='text/html; charset=utf-8',
+        headers={'Cache-Control': 'private, max-age=120', 'X-Robots-Tag': 'noindex, nofollow'},
+    )
 
 
 @app.route('/share/daily-report/<token>.<fmt>')
@@ -15410,12 +15545,14 @@ def share_daily_report_image(token, fmt):
     fmt = (fmt or '').lower()
     if fmt not in ('jpg', 'jpeg', 'png'):
         return "Unsupported format", 400
+    if not _SHARE_TOKEN_RE.match(token or ''):
+        return _share_gone_plain('Image not found')
     entry = _get_share_cache_entry(token)
     if not entry:
-        return "Image not found", 404
+        return _share_gone_plain('Image not found')
     payload = entry.get('payload') or {}
     if payload.get('type') != 'daily-report':
-        return "Image not found", 404
+        return _share_gone_plain('Image not found')
     img_bytes, mimetype = _render_daily_report_share_image(payload, fmt)
     if not img_bytes:
         return "Image engine unavailable", 503
@@ -15432,10 +15569,10 @@ def share_daily_report_image(token, fmt):
 @app.route('/share/daily-report/view/<token>')
 def share_daily_report_view(token: str):
     if not _SHARE_TOKEN_RE.match(token or ''):
-        abort(404)
+        return _share_gone_response()
     entry = _get_share_cache_entry(token)
     if not entry or (entry.get('payload') or {}).get('type') != 'daily-report':
-        abort(404)
+        return _share_gone_response()
     img_href = url_for('share_daily_report_image', token=token, fmt='jpg')
     html = (
         '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
@@ -15447,7 +15584,11 @@ def share_daily_report_view(token: str):
         'img{display:block;width:100vmin;max-width:100%;height:auto;max-height:100vh;object-fit:contain}</style></head>'
         f'<body><div class="w"><img src="{img_href}" alt="" decoding="async" fetchpriority="high"></div></body></html>'
     )
-    return Response(html, mimetype='text/html; charset=utf-8', headers={'Cache-Control': 'private, max-age=120'})
+    return Response(
+        html,
+        mimetype='text/html; charset=utf-8',
+        headers={'Cache-Control': 'private, max-age=120', 'X-Robots-Tag': 'noindex, nofollow'},
+    )
 
 
 @app.route('/tutorial')
@@ -15623,7 +15764,7 @@ def _predictions_fallback_page(sport, filter_date=None):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ safe_title }}</title>
     <meta name="description" content="Daily AI-powered {{ sport_info.name }} predictions, game forecasts, and model projections on predictionlab.io.">
-    <meta name="robots" content="noindex, follow">
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
     <link rel="canonical" href="https://predictionlab.io/{{ sport_slug }}">
     <style>
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;}
@@ -15671,7 +15812,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v17::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v18::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -15707,6 +15848,17 @@ def sport_predictions(sport, filter_date=None):
                 f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
                 "Please refresh in a minute."
             )
+    if filter_date:
+        _seen = {
+            (p.get('game_date'), p.get('home_team_id'), p.get('away_team_id'))
+            for p in predictions
+            if isinstance(p, dict)
+        }
+        for _dg in _fetch_db_games_for_picks_date(sport, filter_date):
+            _key = (_dg.get('game_date'), _dg.get('home_team_id'), _dg.get('away_team_id'))
+            if _key not in _seen:
+                predictions.append(_dg)
+                _seen.add(_key)
     # ===== SECTION: Off-season messaging =====
     # When a sport is out of season with no predictions, surface a friendly
     # "season starts <date>" notice + a link to last season's results instead
@@ -15917,9 +16069,15 @@ def sport_predictions(sport, filter_date=None):
             sorted_dates = [filter_date]
             default_pick_date = filter_date
         else:
-            grouped_predictions = {}
-            sorted_dates = []
-            default_pick_date = filter_date
+            dated_preds = _picks_for_filter_date(predictions, filter_date)
+            if dated_preds:
+                grouped_predictions = {filter_date: dated_preds}
+                sorted_dates = [filter_date]
+                default_pick_date = filter_date
+            else:
+                grouped_predictions = {}
+                sorted_dates = []
+                default_pick_date = filter_date
 
     _book_priority = []
     for _dk in sorted_dates:
@@ -15996,6 +16154,11 @@ def sport_predictions(sport, filter_date=None):
         team_logo_url=team_logo_url,
         is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
+        robots_meta=_picks_robots_meta(
+            filter_date=filter_date,
+            grouped_predictions=grouped_predictions,
+        ),
+        canonical_url=_seo_canonical_url(),
     )
     try:
         if sport == 'GOLF':
@@ -17477,6 +17640,9 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
         h2{font-size:1.22rem;line-height:1.35;margin-bottom:8px}
         p{color:#334155}
         .back{display:inline-flex;margin-bottom:24px}
+        #soro-blog{min-height:480px;margin-top:8px}
+        .blog-section{margin-top:40px}
+        .blog-section-title{font-size:1.35rem;color:#0f172a;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid rgba(15,23,42,0.08)}
     </style>
 {% endblock %}
 {% block content %}
@@ -17487,7 +17653,14 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
         <h1>Prediction Lab Blog</h1>
         <p class="sub">Daily sports news, AI-generated betting insights, game previews, and model analysis — updated every day.</p>
     </header>
-    <section class="posts" aria-label="Latest blog articles">
+    <section class="blog-section" aria-label="Soro blog feed">
+        <h2 class="blog-section-title">Trending in Sports</h2>
+        <div id="soro-blog"></div>
+        <script src="https://app.trysoro.com/api/embed/7713f25e-b95b-4eb2-a414-ec63a136d16f" defer></script>
+    </section>
+    <section class="blog-section" aria-label="Prediction Lab articles">
+        <h2 class="blog-section-title">Latest from Prediction Lab</h2>
+        <div class="posts">
         {% for post in posts %}
         <article>
             <div class="meta"><span class="tag">{{ post.sport_tag }}</span><time datetime="{{ post.date }}">{{ post.display_date }}</time></div>
@@ -17495,6 +17668,7 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
             <p>{{ post.excerpt }}</p>
         </article>
         {% endfor %}
+        </div>
     </section>
 </div>
 {% endblock %}"""
@@ -17710,18 +17884,81 @@ def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
         generated = _generate_daily_blog_post(todays_picks=todays_picks)
         by_slug = {p['slug']: p for p in posts}
         by_slug[generated['slug']] = generated
+        today_str = str(generated.get('date') or '').strip()[:10]
+        trend_merged = 0
         try:
             today_dt = _blog_date_key(generated)
             date_str = today_dt.strftime('%Y-%m-%d')
             display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
             for trend in _trend_items_for_blog(limit=15):
                 trend_post = _generate_trend_blog_post(trend, date_str, display_date)
-                by_slug.setdefault(trend_post['slug'], trend_post)
+                by_slug[trend_post['slug']] = trend_post
+                trend_merged += 1
         except Exception as exc:
             logger.debug(f"Trend blog merge failed: {exc}")
+        by_slug = _prune_stale_auto_blog_posts(by_slug, keep_date=today_str)
         posts = list(by_slug.values())
+        if trend_merged > 0:
+            _persist_blog_posts_to_json(posts)
     posts.sort(key=_blog_date_key, reverse=True)
     return posts
+
+def _is_auto_generated_blog_slug(slug: str) -> bool:
+    s = str(slug or '').strip().lower()
+    if re.match(r'^prediction-lab-blog-\d{4}-\d{2}-\d{2}$', s):
+        return True
+    return '-google-trends-betting-angle-' in s
+
+def _auto_blog_slug_date(slug: str):
+    s = str(slug or '').strip().lower()
+    m = re.search(r'(\d{4}-\d{2}-\d{2})$', s)
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1), '%Y-%m-%d').strftime('%Y-%m-%d')
+    except Exception:
+        return None
+
+def _prune_stale_auto_blog_posts(by_slug: dict, *, keep_date: str) -> dict:
+    """Drop yesterday's server-generated daily/trend posts; keep manual archive entries."""
+    keep_date = str(keep_date or '').strip()[:10]
+    if not keep_date:
+        return by_slug
+    out = {}
+    for slug, post in (by_slug or {}).items():
+        if not _is_auto_generated_blog_slug(slug):
+            out[slug] = post
+            continue
+        slug_date = _auto_blog_slug_date(slug)
+        if slug_date == keep_date:
+            out[slug] = post
+    return out
+
+def _persist_blog_posts_to_json(posts: list[dict]) -> None:
+    """Cache today's generated archive so /blog stays populated when Trends RSS is unreachable."""
+    if not posts:
+        return
+    try:
+        _os.makedirs(_os.path.dirname(_BLOG_POSTS_FILE), exist_ok=True)
+        serializable = []
+        for post in posts:
+            if not isinstance(post, dict):
+                continue
+            serializable.append({
+                'title': post.get('title'),
+                'slug': post.get('slug'),
+                'date': post.get('date'),
+                'sport_tag': post.get('sport_tag'),
+                'excerpt': post.get('excerpt'),
+                'body': post.get('body') or [],
+                'news_items': post.get('news_items') if isinstance(post.get('news_items'), list) else [],
+            })
+        with open(_BLOG_POSTS_FILE, 'w', encoding='utf-8') as fh:
+            json.dump({'posts': serializable}, fh, indent=2, ensure_ascii=False)
+            fh.write('\n')
+        _BLOG_CACHE.update({'ts': _time.time(), 'posts': list(posts)})
+    except Exception as exc:
+        logger.debug(f"Blog JSON persist failed: {exc}")
 
 def _blog_display_date(post: dict) -> str:
     dt = _blog_date_key(post)

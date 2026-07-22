@@ -52,6 +52,7 @@ class StackedEnsemble:
         self.meta_model = None
         self.trained = False
         self.base_model_names: List[str] = []
+        self.meta_feature_names: List[str] = []
         
     def _create_meta_features(self, base_predictions: Dict[str, np.ndarray],
                               context_features: Optional[pd.DataFrame] = None) -> np.ndarray:
@@ -105,6 +106,31 @@ class StackedEnsemble:
                     meta_features.append(context_features[feat].values.reshape(-1, 1))
         
         return np.hstack(meta_features)
+
+    def _meta_feature_names(self, context_features: Optional[pd.DataFrame] = None) -> List[str]:
+        """Stable column names for the stacked meta-model."""
+        names = [f'pred_{model_name}' for model_name in self.base_model_names]
+        names.extend(['pred_mean', 'pred_std', 'pred_spread', 'pred_agreement'])
+        if self.use_context_features and context_features is not None:
+            key_features = [
+                'glicko2_rating_diff', 'glicko2_confidence',
+                'form_L5_win_pct_diff', 'rest_diff',
+                'home_advantage', 'h2h_home_win_pct'
+            ]
+            for feat in key_features:
+                if feat in context_features.columns:
+                    names.append(f'ctx_{feat}')
+        return names
+
+    def _meta_input(self, X_meta: np.ndarray,
+                    context_features: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        """Wrap meta features with names expected by the fitted meta model."""
+        names = getattr(self.meta_model, 'feature_names_in_', None)
+        if names is None or len(names) != X_meta.shape[1]:
+            names = self.meta_feature_names or self._meta_feature_names(context_features)
+        if len(names) != X_meta.shape[1]:
+            names = [f'meta_{i}' for i in range(X_meta.shape[1])]
+        return pd.DataFrame(X_meta, columns=list(names))
     
     def train(self, base_predictions: Dict[str, np.ndarray], 
               y: np.ndarray,
@@ -116,6 +142,7 @@ class StackedEnsemble:
         to avoid overfitting.
         """
         X_meta = self._create_meta_features(base_predictions, context_features)
+        self.meta_feature_names = self._meta_feature_names(context_features)
         
         logger.info(f"Training stacked ensemble with {X_meta.shape[1]} meta features "
                    f"on {len(y)} samples")
@@ -126,6 +153,8 @@ class StackedEnsemble:
         
         X_train, X_test = X_meta[train_idx], X_meta[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
+        X_train_df = pd.DataFrame(X_train, columns=self.meta_feature_names)
+        X_test_df = pd.DataFrame(X_test, columns=self.meta_feature_names)
         
         # Train meta model
         if HAS_LGB:
@@ -142,8 +171,8 @@ class StackedEnsemble:
                 verbose=-1,
             )
             self.meta_model.fit(
-                X_train, y_train,
-                eval_set=[(X_test, y_test)],
+                X_train_df, y_train,
+                eval_set=[(X_test_df, y_test)],
                 eval_metric='logloss',
                 callbacks=[lgb.early_stopping(20, verbose=False)]
             )
@@ -157,10 +186,10 @@ class StackedEnsemble:
                 max_iter=1000,
                 random_state=42,
             )
-            self.meta_model.fit(X_train, y_train)
+            self.meta_model.fit(X_train_df, y_train)
         
         # Evaluate
-        meta_probs = self.meta_model.predict_proba(X_test)[:, 1]
+        meta_probs = self.meta_model.predict_proba(X_test_df)[:, 1]
         
         performances = {
             'ensemble_logloss': log_loss(y_test, meta_probs),
@@ -190,7 +219,9 @@ class StackedEnsemble:
             raise ValueError("Ensemble not trained yet")
         
         X_meta = self._create_meta_features(base_predictions, context_features)
-        return self.meta_model.predict_proba(X_meta)[:, 1]
+        return self.meta_model.predict_proba(
+            self._meta_input(X_meta, context_features)
+        )[:, 1]
     
     def get_model_weights(self) -> Dict[str, float]:
         """
@@ -244,6 +275,7 @@ class StackedEnsemble:
             'meta_model': self.meta_model,
             'trained': self.trained,
             'base_model_names': self.base_model_names,
+            'meta_feature_names': self.meta_feature_names,
             'use_context_features': self.use_context_features,
         }
         
@@ -262,6 +294,7 @@ class StackedEnsemble:
         ensemble.meta_model = save_dict['meta_model']
         ensemble.trained = save_dict['trained']
         ensemble.base_model_names = save_dict['base_model_names']
+        ensemble.meta_feature_names = save_dict.get('meta_feature_names', [])
         
         logger.info(f"Loaded stacked ensemble from {filepath}")
         return ensemble

@@ -20,6 +20,7 @@ def test_all_sports_dashboard_builds_rows():
                 'elo': {'correct': 53, 'total': 100, 'accuracy': 53.0},
                 'xgboost': {'correct': 52, 'total': 100, 'accuracy': 52.0},
                 'ensemble': {'correct': 56, 'total': 100, 'accuracy': 56.0},
+                'efficiency': {'correct': 54, 'total': 95, 'accuracy': 56.8},
             },
             'spread_total_stats': {
                 'spread_graded': 90,
@@ -45,6 +46,8 @@ def test_all_sports_dashboard_builds_rows():
     assert len(rows) == 1
     assert rows[0]['sport'] == 'NHL'
     assert rows[0]['ml']['ensemble']['pct'] == 56.0
+    assert rows[0]['ml']['efficiency']['pct'] == 56.8
+    assert rows[0]['ml']['efficiency']['n'] == 95
     assert rows[0]['spread_xsharp']['n'] == 90
     assert rows[0]['spread_pl']['n'] == 88
     assert rows[0]['ou_pl']['n'] == 80

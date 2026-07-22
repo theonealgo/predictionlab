@@ -1,120 +1,125 @@
 {
-  "built_at": "2026-06-03T17:40:17Z",
+  "built_at": "2026-07-22T00:39:26Z",
   "games_expected": 2430,
-  "games_in_scope": 665,
+  "games_in_scope": 1039,
   "ou_summary": {
-    "avg_total": 9.0,
+    "avg_total": 9.1,
     "ou_bench": 9.0,
-    "total_games_ou": 665,
-    "total_over": 273,
-    "total_under": 392
+    "total_games_ou": 1039,
+    "total_over": 431,
+    "total_under": 608
   },
   "overall_stats": {
+    "efficiency": {
+      "accuracy": 62.7,
+      "correct": 650,
+      "total": 1036
+    },
     "elo": {
-      "accuracy": 51.3,
-      "correct": 341,
-      "total": 665
+      "accuracy": 51.1,
+      "correct": 531,
+      "total": 1039
     },
     "ensemble": {
-      "accuracy": 50.8,
-      "correct": 338,
-      "total": 665
+      "accuracy": 52.2,
+      "correct": 542,
+      "total": 1039
     },
     "glicko2": {
-      "accuracy": 54.1,
-      "correct": 360,
-      "total": 665
+      "accuracy": 52.7,
+      "correct": 548,
+      "total": 1039
     },
     "trueskill": {
-      "accuracy": 54.6,
-      "correct": 363,
-      "total": 665
+      "accuracy": 52.6,
+      "correct": 547,
+      "total": 1039
     },
     "xgboost": {
       "accuracy": 52.3,
-      "correct": 348,
-      "total": 665
+      "correct": 543,
+      "total": 1039
     }
   },
   "phase": "regular",
   "roi_total": {
     "moneyline": {
-      "graded": 665,
-      "losses": 327,
+      "graded": 1039,
+      "losses": 497,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 1.65,
-      "units_risked": 665,
-      "units_won": 11.0,
-      "wins": 338
+      "roi_pct": 4.33,
+      "units_risked": 1039,
+      "units_won": 45.0,
+      "wins": 542
     },
     "spread": {
-      "graded": 665,
-      "losses": 282,
+      "graded": 1039,
+      "losses": 432,
       "missing_odds": 0,
       "pushes": 0,
       "reason": null,
-      "roi_pct": 15.19,
-      "units_risked": 665,
-      "units_won": 101.0,
-      "wins": 383
+      "roi_pct": 16.84,
+      "units_risked": 1039,
+      "units_won": 175.0,
+      "wins": 607
     },
     "total": {
-      "graded": 635,
-      "losses": 282,
+      "graded": 993,
+      "losses": 455,
       "missing_odds": 0,
-      "pushes": 30,
+      "pushes": 46,
       "reason": null,
-      "roi_pct": 11.18,
-      "units_risked": 635,
-      "units_won": 71.0,
-      "wins": 353
+      "roi_pct": 8.36,
+      "units_risked": 993,
+      "units_won": 83.0,
+      "wins": 538
     }
   },
   "schema_version": 1,
   "season": "2026-27",
   "season_perf": {
     "games_expected": 2430,
-    "games_in_scope": 665,
-    "ml_accuracy": 54.6,
-    "ml_correct": 363,
-    "ml_model_key": "trueskill",
-    "ml_model_label": "Takedown",
-    "ml_total": 665,
-    "ou_correct": 392,
-    "ou_graded": 664,
+    "games_in_scope": 1039,
+    "ml_accuracy": 52.7,
+    "ml_correct": 548,
+    "ml_model_key": "glicko2",
+    "ml_model_label": "Grinder2",
+    "ml_total": 1039,
+    "ou_correct": 620,
+    "ou_graded": 1036,
     "ou_model_label": "Prediction Lab",
     "ou_note": null,
-    "ou_pct": 61.8,
+    "ou_pct": 62.6,
     "scope_label": "MLB season",
-    "spread_covered": 386,
-    "spread_graded": 664,
-    "spread_model_label": "Prediction Lab",
+    "spread_covered": 607,
+    "spread_graded": 1039,
+    "spread_model_label": "XSharp",
     "spread_note": null,
-    "spread_pct": 58.1
+    "spread_pct": 58.4
   },
   "sport": "MLB",
   "spread_total_stats": {
-    "pl_spread_covered": 386,
-    "pl_spread_graded": 664,
+    "pl_spread_covered": 602,
+    "pl_spread_graded": 1036,
     "pl_spread_pct": 58.1,
     "pl_spread_pushes": 0,
-    "pl_total_correct": 392,
-    "pl_total_graded": 664,
-    "pl_total_pct": 61.8,
-    "pl_total_pushes": 30,
-    "spread_covered": 383,
-    "spread_graded": 665,
-    "spread_pct": 57.6,
+    "pl_total_correct": 620,
+    "pl_total_graded": 1036,
+    "pl_total_pct": 62.6,
+    "pl_total_pushes": 46,
+    "spread_covered": 607,
+    "spread_graded": 1039,
+    "spread_pct": 58.4,
     "spread_pushes": 0,
-    "total_correct": 353,
-    "total_graded": 665,
-    "total_pct": 55.6,
-    "total_pushes": 30
+    "total_correct": 538,
+    "total_graded": 1039,
+    "total_pct": 54.2,
+    "total_pushes": 46
   },
   "window": {
-    "end": "2026-06-02",
+    "end": "2026-07-20",
     "start": "2026-03-20"
   }
 }
