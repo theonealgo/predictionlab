@@ -17680,11 +17680,23 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
         .blog-page h1{font-size:clamp(2rem,5vw,3rem);line-height:1.08;margin-bottom:12px}
         .blog-page .sub{color:#334155;font-size:1rem;max-width:720px}
         .blog-page .posts{display:grid;gap:16px;margin-top:24px}
-        .blog-page .posts article{border:1px solid rgba(15,23,42,0.14);border-radius:14px;background:#fff;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,0.05)}
+        .blog-page .posts details.blog-post-item{border:1px solid rgba(15,23,42,0.14);border-radius:14px;background:#fff;padding:0;box-shadow:0 8px 24px rgba(15,23,42,0.05);overflow:hidden}
+        .blog-page .posts details.blog-post-item[open]{border-color:rgba(0,82,155,0.35)}
+        .blog-page .posts summary{list-style:none;cursor:pointer;padding:20px}
+        .blog-page .posts summary::-webkit-details-marker{display:none}
+        .blog-page .posts summary::after{content:'+';float:right;font-size:1.4rem;line-height:1;color:#64748b;font-weight:400}
+        .blog-page .posts details[open] summary::after{content:'−'}
+        .blog-page .posts .blog-post-body{padding:0 20px 20px;border-top:1px solid rgba(15,23,42,0.08)}
+        .blog-page .posts .blog-post-body p{color:#334155;margin-bottom:14px}
+        .blog-page .posts .blog-post-body p:last-child{margin-bottom:0}
+        .blog-page .posts .blog-post-title{display:block;font-size:1.22rem;line-height:1.35;margin:0 0 8px;color:#0f172a;font-weight:800}
+        .blog-page .posts .news-list{margin-top:16px;padding-top:14px;border-top:1px solid rgba(15,23,42,0.08)}
+        .blog-page .posts .news-list h3{font-size:0.95rem;margin:0 0 10px;color:#0f172a}
+        .blog-page .posts .news-list a{display:block;margin-bottom:8px;color:#00529B;font-weight:700;text-decoration:none}
+        .blog-page .posts .news-list a:hover{text-decoration:underline}
         .blog-page .posts .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;color:#64748b;font-size:0.84rem;font-weight:700}
         .blog-page .posts .tag{background:#f8fafc;border:1px solid rgba(15,23,42,0.12);color:#0f172a;border-radius:999px;padding:2px 8px;font-size:0.72rem;font-weight:900;text-transform:uppercase}
-        .blog-page .posts h2{font-size:1.22rem;line-height:1.35;margin-bottom:8px}
-        .blog-page .posts p{color:#334155}
+        .blog-page .posts .blog-excerpt{color:#334155;margin:0}
         .blog-page .back{display:inline-flex;margin-bottom:24px}
         #soro-blog{min-height:480px;margin-top:8px}
         .blog-section{margin-top:40px}
@@ -17708,15 +17720,43 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
         <h2 class="blog-section-title">Latest from Prediction Lab</h2>
         <div class="posts">
         {% for post in posts %}
-        <article>
-            <div class="meta"><span class="tag">{{ post.sport_tag }}</span><time datetime="{{ post.date }}">{{ post.display_date }}</time></div>
-            <h2><a href="/blog/{{ post.slug }}">{{ post.title }}</a></h2>
-            <p>{{ post.excerpt }}</p>
-        </article>
+        <details class="blog-post-item" id="{{ post.slug }}">
+            <summary>
+                <div class="meta"><span class="tag">{{ post.sport_tag }}</span><time datetime="{{ post.date }}">{{ post.display_date }}</time></div>
+                <span class="blog-post-title">{{ post.title }}</span>
+                <p class="blog-excerpt">{{ post.excerpt }}</p>
+            </summary>
+            <div class="blog-post-body">
+                {% for paragraph in post.body %}
+                <p>{{ paragraph }}</p>
+                {% endfor %}
+                {% if post.news_items %}
+                <div class="news-list">
+                    <h3>Related coverage</h3>
+                    {% for item in post.news_items %}
+                    {% if item.url %}
+                    <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.sport }}: {{ item.topic }}</a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </details>
         {% endfor %}
         </div>
     </section>
 </div>
+<script>
+(function () {
+    var hash = (window.location.hash || '').replace(/^#/, '');
+    if (!hash) return;
+    var target = document.getElementById(hash);
+    if (target && target.tagName === 'DETAILS') {
+        target.open = true;
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+})();
+</script>
 {% endblock %}"""
 
 DOWNLOADS_TEMPLATE = BASE_TEMPLATE.replace(
@@ -18429,6 +18469,10 @@ def blog_archive_page():
         page_title='Prediction Lab Blog | predictionlab.io',
         page_description='Daily sports news, AI-generated betting insights, game previews, market breakdowns, and model analysis from predictionlab.io.',
     )
+
+@app.route('/blog/<slug>')
+def blog_post_redirect(slug):
+    return redirect(f'/blog#{_slugify_blog(slug)}', code=302)
 
 
 # Blog caches (annotated assignments missed by the bulk port)

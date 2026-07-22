@@ -868,11 +868,11 @@
                             <time>{{ latest_blog_post.display_date }}</time>
                             <h3>{{ latest_blog_post.title }}</h3>
                             <p>{{ latest_blog_post.excerpt }}</p>
-                            <a class="pl2-btn" href="/blog/{{ latest_blog_post.slug }}">Read Full Analysis →</a>
+                            <a class="pl2-btn" href="/blog#{{ latest_blog_post.slug }}">Read Full Analysis →</a>
                             {% if recent_blog_posts %}
                             <div class="pl2-minilinks">
                                 {% for post in recent_blog_posts %}
-                                <a href="/blog/{{ post.slug }}">→ {{ post.title }}</a>
+                                <a href="/blog#{{ post.slug }}">→ {{ post.title }}</a>
                                 {% endfor %}
                             </div>
                             {% endif %}
