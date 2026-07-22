@@ -17627,19 +17627,19 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
 {% block extra_styles %}
     <style>
         .blog-page{line-height:1.65}
-        a{color:#00529B;text-decoration:none;font-weight:800}
-        a:hover{text-decoration:underline}
-        .top{margin-bottom:26px}
-        .eyebrow{display:inline-flex;background:#fbbf24;color:#000;border-radius:999px;padding:4px 10px;font-size:0.74rem;font-weight:900;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:12px}
-        h1{font-size:clamp(2rem,5vw,3rem);line-height:1.08;margin-bottom:12px}
-        .sub{color:#334155;font-size:1rem;max-width:720px}
-        .posts{display:grid;gap:16px;margin-top:24px}
-        article{border:1px solid rgba(15,23,42,0.14);border-radius:14px;background:#fff;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,0.05)}
-        .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;color:#64748b;font-size:0.84rem;font-weight:700}
-        .tag{background:#f8fafc;border:1px solid rgba(15,23,42,0.12);color:#0f172a;border-radius:999px;padding:2px 8px;font-size:0.72rem;font-weight:900;text-transform:uppercase}
-        h2{font-size:1.22rem;line-height:1.35;margin-bottom:8px}
-        p{color:#334155}
-        .back{display:inline-flex;margin-bottom:24px}
+        .blog-page .posts a{color:#00529B;text-decoration:none;font-weight:800}
+        .blog-page .posts a:hover{text-decoration:underline}
+        .blog-page .top{margin-bottom:26px}
+        .blog-page .eyebrow{display:inline-flex;background:#fbbf24;color:#000;border-radius:999px;padding:4px 10px;font-size:0.74rem;font-weight:900;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:12px}
+        .blog-page h1{font-size:clamp(2rem,5vw,3rem);line-height:1.08;margin-bottom:12px}
+        .blog-page .sub{color:#334155;font-size:1rem;max-width:720px}
+        .blog-page .posts{display:grid;gap:16px;margin-top:24px}
+        .blog-page .posts article{border:1px solid rgba(15,23,42,0.14);border-radius:14px;background:#fff;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,0.05)}
+        .blog-page .posts .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;color:#64748b;font-size:0.84rem;font-weight:700}
+        .blog-page .posts .tag{background:#f8fafc;border:1px solid rgba(15,23,42,0.12);color:#0f172a;border-radius:999px;padding:2px 8px;font-size:0.72rem;font-weight:900;text-transform:uppercase}
+        .blog-page .posts h2{font-size:1.22rem;line-height:1.35;margin-bottom:8px}
+        .blog-page .posts p{color:#334155}
+        .blog-page .back{display:inline-flex;margin-bottom:24px}
         #soro-blog{min-height:480px;margin-top:8px}
         .blog-section{margin-top:40px}
         .blog-section-title{font-size:1.35rem;color:#0f172a;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid rgba(15,23,42,0.08)}
