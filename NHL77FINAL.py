@@ -142,6 +142,18 @@ _SPORT_PREDICTIONS_PAGE_TTL = {
     'NCAAF': 240,
     'WNBA': 240,
 }
+# Stale-while-revalidate: serve cached HTML up to this age while refreshing off-path.
+_SPORT_PREDICTIONS_PAGE_STALE_MAX = {
+    'MLB': 3600,
+    'SOCCER': 1800,
+    'NBA': 1200,
+    'NHL': 1200,
+    'NFL': 1800,
+    'NCAAB': 1200,
+    'NCAAW': 1200,
+    'NCAAF': 1800,
+    'WNBA': 1200,
+}
 _MANUAL_BANNER_ITEMS = [
     {'label': 'NHL ⭐ Grinder2', 'pct': '83.3%', 'record': '40-8'},
     {'label': '🎲 NBA O/U (XSharp)', 'pct': '82.6%', 'record': '247/299'},
@@ -6108,7 +6120,7 @@ def _recover_cached_predictions(sport):
 # SOCCER is warmed FIRST: it is the slowest cold build (multi-league ESPN slate
 # + live odds) and the most SEO-sensitive, so it should be ready before the
 # lighter sports.
-_PREDICTIONS_PREWARM_SPORTS = ['SOCCER', 'MLB', 'NBA', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']
+_PREDICTIONS_PREWARM_SPORTS = ['MLB', 'SOCCER', 'NBA', 'NHL', 'NFL', 'NCAAB', 'NCAAF', 'WNBA']
 
 def _prewarm_predictions_cache():
     import time as _t
@@ -6121,11 +6133,9 @@ def _prewarm_predictions_cache():
         _t.sleep(1)
     if _fn is None:
         return
-    # Defer the heavy model builds so the first requests after a deploy are served
-    # from the disk-seeded cache instead of competing with 8 synchronous rebuilds
-    # on Render's single worker — that contention made every page (including the
-    # login page + Google OAuth round-trip) slow or time out.
-    _t.sleep(30)
+    # Brief defer so boot-time HTTP (health checks, login) wins the single worker
+    # before prewarm starts; keep this short so MLB is warm within seconds.
+    _t.sleep(5)
     for _sport in _PREDICTIONS_PREWARM_SPORTS:
         # Respect the same single-flight guard so an on-demand background refresh
         # and this warmer never rebuild the same sport at the same time.
@@ -6712,6 +6722,33 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             _apply_mlb_spread_fade_batch(sport, out)
             return out
 
+    # Request-path cold miss: never block ~60–90s on a full v2/XGB rebuild.
+    # Serve disk/recovered slate or a fast DB+ESPN skeleton; full rebuild off-path.
+    _fast_cold_build = False
+    _cold_refresh_started = False
+    if not _force_rebuild:
+        _recovered = _recover_cached_predictions(sport)
+        if _recovered:
+            _start_background_predictions_refresh(sport, days)
+            _cold_refresh_started = True
+            out = _recovered
+            try:
+                _hydrate_book_lines_db_only(sport, out)
+                for _bp in out:
+                    if isinstance(_bp, dict):
+                        _ensure_book_moneylines(_bp)
+                _start_background_book_refresh(sport, out)
+            except Exception as _bk_cold:
+                logger.debug(f"[{sport}] book hydrate on cold-recovered slate: {_bk_cold}")
+            _apply_mlb_spread_fade_batch(sport, out)
+            return out
+        with _PREDICTIONS_REFRESH_LOCK:
+            _already_refreshing = sport in _PREDICTIONS_REFRESH_INFLIGHT
+        if not _already_refreshing:
+            _start_background_predictions_refresh(sport, days)
+            _cold_refresh_started = True
+        _fast_cold_build = True
+
     # Load game data based on sport
     if sport == 'NHL':
         # NHL: Pull from ESPN API (to get correct schedule)
@@ -7169,13 +7206,14 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     
     predictions = []
     # Fetch injuries once for the whole request (15-min cache keeps it fast)
-    _injuries = _fetch_injuries(sport)
+    _injuries = {} if _fast_cold_build else _fetch_injuries(sport)
     # Build heavy model objects once per page render (not once per game row).
     _xgb_model_page = None
-    try:
-        _xgb_model_page = _get_xgb_spread_model(sport)
-    except Exception:
-        _xgb_model_page = None
+    if not _fast_cold_build:
+        try:
+            _xgb_model_page = _get_xgb_spread_model(sport)
+        except Exception:
+            _xgb_model_page = None
 
     # Pre-fetch book moneylines from betting_lines for edge calculation.
     # The betting_odds join in the SQL above reads from an older table that is
@@ -7228,7 +7266,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             # Always run V2 for non-soccer sports (including finished games) so
             # Grinder2 / Takedown probabilities stay on the card; see frozen DB
             # snapshot block below so moneyline stack does not drift after scores.
-            if sport != 'SOCCER':
+            if sport != 'SOCCER' and not _fast_cold_build:
                 v2_pred = get_v2_prediction(
                         sport, 
                         game.get('home_team_id') or game.get('home_team_name'),
@@ -7485,7 +7523,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     game_dict['spread_total_note'] = soccer_note or (
                         "Soccer spread/total requires team scoring rates; data not ready yet."
                     )
-            elif game_dict.get('home_score') is None:
+            elif game_dict.get('home_score') is None and not _fast_cold_build:
                 try:
                     from score_predictor import ScorePredictor
                     _sp = _score_predictor_instance(sport)
@@ -7521,7 +7559,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     except Exception as _ve:
                         logger.debug(f"VegasScorePredictor error: {_ve}")
 
-            if game_dict.get('home_score') is None:
+            if game_dict.get('home_score') is None and not _fast_cold_build:
                 try:
                     if _xgb_model_page:
                         result = _xgb_model_page.predict(
@@ -7536,7 +7574,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 except Exception as _e:
                     logger.debug(f"XGBSpread error: {_e}")
 
-            if game_dict.get('home_score') is None:
+            if game_dict.get('home_score') is None and not _fast_cold_build:
                 # ── MLB: pitching-enhanced prediction (upcoming games only
                 #    so we do not retroactively rewrite picks for completed games) ─
                 if sport == 'MLB':
@@ -8147,7 +8185,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     # A request-path cold miss skipped live odds above; kick a full off-path
     # rebuild so the cache (and disk) repopulate with live odds within seconds.
     # Single-flighted, so this can't stack duplicate rebuilds.
-    if not _live_odds_ok and predictions:
+    if not _live_odds_ok and predictions and not _cold_refresh_started:
         _start_background_predictions_refresh(sport, days)
     return predictions
 
@@ -12838,14 +12876,127 @@ def _is_placeholder_team_name(name):
     return any(_m in _n for _m in _PLACEHOLDER_TEAM_MARKERS)
 
 
-def build_todays_top_picks():
-    """Up to four ranked value picks for landing + /promo/top-picks-today."""
-    todays_picks = []
+def _homepage_pick_today_str():
     try:
-        _tp_tz = ZoneInfo('America/New_York')
-        _tp_today = datetime.now(_tp_tz).strftime('%Y-%m-%d')
+        return datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
     except Exception:
-        _tp_today = datetime.now().strftime('%Y-%m-%d')
+        return datetime.now().strftime('%Y-%m-%d')
+
+
+def _home_win_prob_from_pred(pred) -> float | None:
+    for _k in ('ensemble_prob', 'elo_prob', 'xgb_prob'):
+        _v = pred.get(_k)
+        if _v is None:
+            continue
+        try:
+            _f = float(_v)
+            return _f / 100.0 if _f > 1.0 else _f
+        except Exception:
+            continue
+    return None
+
+
+def _cached_slate_for_homepage(sport):
+    """Read a sport slate from memory/disk only — avoid cold rebuild on homepage."""
+    _ck = f"{sport}_upcoming_predictions_v6"
+    _entry = _PREDICTIONS_CACHE.get(_ck)
+    _data = _entry.get('data') if isinstance(_entry, dict) else None
+    if _data:
+        return _data
+    return _recover_cached_predictions(sport) or []
+
+
+def _fill_homepage_picks_from_live_slates(todays_picks, target=6):
+    """When the predictions DB is empty/stale, hydrate the board from live slates."""
+    if len(todays_picks) >= target:
+        return
+    _today = _homepage_pick_today_str()
+    _existing = {
+        f"{p.get('sport')}::{p.get('away')}::{p.get('home')}" for p in todays_picks
+    }
+    _pool = []
+    for _sport in ('MLB', 'NBA', 'NHL', 'WNBA', 'NFL', 'NCAAB', 'SOCCER'):
+        if _sport == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        _slate = _cached_slate_for_homepage(_sport)
+        for _pred in _slate:
+            if not isinstance(_pred, dict) or _pred.get('home_score') is not None:
+                continue
+            _gd = (_pred.get('game_date') or '')[:10]
+            if _gd != _today:
+                continue
+            _home = _pred.get('home_team_id') or ''
+            _away = _pred.get('away_team_id') or ''
+            if _is_placeholder_team_name(_home) or _is_placeholder_team_name(_away):
+                continue
+            _ens = _home_win_prob_from_pred(_pred)
+            if _ens is None:
+                continue
+            _home_picked = _ens >= 0.5
+            _pick_prob = _ens if _home_picked else (1.0 - _ens)
+            _pool.append({
+                'away': _away,
+                'home': _home,
+                'pick': _home if _home_picked else _away,
+                'prob': round(_pick_prob * 100, 1),
+                'home_prob': round(_ens * 100, 1),
+                'away_prob': round((1.0 - _ens) * 100, 1),
+                'pick_side': 'home' if _home_picked else 'away',
+                'is_live': False,
+                'sport': _sport,
+                'slug': SPORT_SEO_SLUGS.get(_sport, ''),
+                'fallback_score': abs(_ens - 0.5),
+            })
+    if not _pool:
+        for _sport in ('MLB', 'NBA', 'NHL'):
+            try:
+                _slate = get_upcoming_predictions(_sport) or []
+            except Exception:
+                continue
+            for _pred in _slate:
+                if not isinstance(_pred, dict) or _pred.get('home_score') is not None:
+                    continue
+                _gd = (_pred.get('game_date') or '')[:10]
+                if _gd != _today:
+                    continue
+                _home = _pred.get('home_team_id') or ''
+                _away = _pred.get('away_team_id') or ''
+                if _is_placeholder_team_name(_home) or _is_placeholder_team_name(_away):
+                    continue
+                _ens = _home_win_prob_from_pred(_pred)
+                if _ens is None:
+                    continue
+                _home_picked = _ens >= 0.5
+                _pick_prob = _ens if _home_picked else (1.0 - _ens)
+                _pool.append({
+                    'away': _away,
+                    'home': _home,
+                    'pick': _home if _home_picked else _away,
+                    'prob': round(_pick_prob * 100, 1),
+                    'home_prob': round(_ens * 100, 1),
+                    'away_prob': round((1.0 - _ens) * 100, 1),
+                    'pick_side': 'home' if _home_picked else 'away',
+                    'is_live': False,
+                    'sport': _sport,
+                    'slug': SPORT_SEO_SLUGS.get(_sport, ''),
+                    'fallback_score': abs(_ens - 0.5),
+                })
+    _pool.sort(key=lambda x: x['fallback_score'], reverse=True)
+    for _row in _pool:
+        _key = f"{_row['sport']}::{_row['away']}::{_row['home']}"
+        if _key in _existing:
+            continue
+        _existing.add(_key)
+        todays_picks.append(_row)
+        if len(todays_picks) >= target:
+            break
+
+
+def build_todays_top_picks():
+    """Up to six ranked value picks for landing + /promo/top-picks-today."""
+    todays_picks = []
+    _tp_today = _homepage_pick_today_str()
+    _target = 6
     try:
         _tp_conn = get_db_connection()
         _tp_rows = _tp_conn.execute('''
@@ -12855,13 +13006,13 @@ def build_todays_top_picks():
             FROM predictions p
             LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport
             LEFT JOIN betting_odds b ON p.game_id = b.game_id
-            WHERE date(p.game_date) = ?
+            WHERE date(p.game_date) BETWEEN date(?, '-1 day') AND date(?, '+1 day')
               AND (g.home_score IS NULL OR g.game_id IS NULL)
               AND p.win_probability IS NOT NULL
-              AND p.sport IN ('NHL', 'NBA', 'MLB', 'SOCCER')
+              AND p.sport IN ('NHL', 'NBA', 'MLB', 'WNBA', 'NFL', 'NCAAB', 'SOCCER')
             ORDER BY p.game_date ASC
             LIMIT 80
-        ''', (_tp_today,)).fetchall()
+        ''', (_tp_today, _tp_today)).fetchall()
         _tp_conn.close()
         _candidates = []
         for _tp in _tp_rows:
@@ -12932,10 +13083,10 @@ def build_todays_top_picks():
                 'pick_side': _row.get('pick_side'), 'is_live': _row.get('is_live', False),
                 'sport': _row['sport'], 'slug': _row['slug'],
             })
-            if len(todays_picks) >= 4:
+            if len(todays_picks) >= _target:
                 break
 
-        if len(todays_picks) < 4:
+        if len(todays_picks) < _target:
             _picked_keys = {f"{p['sport']}::{p['away']}::{p['home']}" for p in todays_picks}
             _fallback = sorted(_candidates, key=lambda x: x['fallback_score'], reverse=True)
             for _row in _fallback:
@@ -12950,10 +13101,11 @@ def build_todays_top_picks():
                     'pick_side': _row.get('pick_side'), 'is_live': _row.get('is_live', False),
                     'sport': _row['sport'], 'slug': _row['slug'],
                 })
-                if len(todays_picks) >= 4:
+                if len(todays_picks) >= _target:
                     break
     except Exception as _tp_err:
         logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
+    _fill_homepage_picks_from_live_slates(todays_picks, target=_target)
     return todays_picks
 
 
@@ -12987,8 +13139,10 @@ def landing_page():
             return _cached
     rendered = render_template('homepage_preview.html', **_build_landing_preview_context())
     if _anon and isinstance(rendered, str) and rendered:
-        _LANDING_PAGE_CACHE['ts'] = _time.time()
-        _LANDING_PAGE_CACHE['html'] = rendered
+        # Never cache an empty live board — stale empty homepage confuses visitors.
+        if rendered.count('class="pl2-pick-card"') >= 1:
+            _LANDING_PAGE_CACHE['ts'] = _time.time()
+            _LANDING_PAGE_CACHE['html'] = rendered
     return rendered
 
 _SITE_DOMAIN = 'https://predictionlab.io'
@@ -15797,14 +15951,21 @@ def sport_predictions(sport, filter_date=None):
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
-            if (
+            _page_age = (_time.time() - cached_ts) if cached_ts is not None else None
+            _page_usable = (
                 cached_ts is not None
                 and cached_html
-                and (_time.time() - cached_ts) < cache_ttl
                 and 'game-card' in cached_html
                 and 'no predictions available' not in cached_html.lower()
                 and 'refreshing this page right now' not in cached_html.lower()
-            ):
+            )
+            if _page_usable and _page_age is not None and _page_age < cache_ttl:
+                return cached_html
+            # Stale-while-revalidate: serve last good HTML while models refresh.
+            _stale_max = _SPORT_PREDICTIONS_PAGE_STALE_MAX.get(sport, 900)
+            if _page_usable and _page_age is not None and _page_age < _stale_max:
+                if _page_age >= cache_ttl:
+                    _start_background_predictions_refresh(sport)
                 return cached_html
     prediction_error = None
     try:
