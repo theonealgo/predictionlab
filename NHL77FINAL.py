@@ -14905,36 +14905,14 @@ Sitemap: {_SITE_DOMAIN}/sitemap.xml
 
 @app.route('/llms.txt')
 def llms_txt():
-    body = """# predictionlab.io
-
-> AI-powered sports betting picks and probability-based projections.
-
-## About
-- Brand: predictionlab.io
-- Parent organization: GoodsandMore Inc. (Canada)
-- URL: https://predictionlab.io
-- Contact: support.predictionlab@gmail.com (web form: https://predictionlab.io/contact)
-
-## What We Offer
-- Free daily moneyline picks
-- Premium spread, totals, and score projections
-- Multi-model AI consensus and transparent tracking
-
-## Core Pages
-- Home: https://predictionlab.io/
-- Daily report: https://predictionlab.io/daily-report
-- Plans: https://predictionlab.io/plans
-- AI picks today: https://predictionlab.io/ai-sports-betting-picks-today
-- What are AI picks: https://predictionlab.io/what-are-ai-sports-betting-picks
-- Model vs sportsbooks: https://predictionlab.io/our-model-vs-sportsbooks
-- Privacy: https://predictionlab.io/privacy
-- Terms: https://predictionlab.io/terms
-
-## Notes
-- Picks are informational and educational, not guaranteed outcomes.
-- Sports betting involves risk and variance.
-"""
-    return Response(body, mimetype='text/plain')
+    path = _os.path.join(_BASE_DIR, 'llms.txt')
+    try:
+        with open(path, encoding='utf-8') as fh:
+            body = fh.read()
+    except OSError as exc:
+        logger.warning('[llms.txt] read failed (%s): %s', path, exc)
+        body = '# Prediction Lab\n\n> https://predictionlab.io\n'
+    return Response(body, mimetype='text/plain; charset=utf-8')
 
 
 @app.route('/ai.txt')
