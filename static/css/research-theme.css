@@ -185,12 +185,9 @@ body.research-site {
     background-color: var(--pl-paper);
     background-image:
         linear-gradient(rgba(11,11,10,.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(11,11,10,.035) 1px, transparent 1px),
-        linear-gradient(rgba(251,251,248,.88), rgba(251,251,248,.88)),
-        url("https://media.base44.com/images/public/6a2895f26139dd0ef1b47004/69cd97832_generated_image.png");
-    background-size: 72px 72px, 72px 72px, cover, cover;
+        linear-gradient(90deg, rgba(11,11,10,.035) 1px, transparent 1px);
+    background-size: 72px 72px, 72px 72px;
     background-position: center top;
-    background-attachment: fixed;
     font-family: Arial, Helvetica, sans-serif;
 }
 

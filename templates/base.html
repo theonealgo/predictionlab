@@ -227,12 +227,8 @@
         @media(max-width:720px){.footer-columns-3{grid-template-columns:1fr;gap:22px;}}
     </style>
     {% block extra_styles %}{% endblock %}
-    <link rel="preload" href="/static/css/research-theme.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <link rel="preload" href="/static/css/picks-nav-overrides.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript>
-        <link rel="stylesheet" href="/static/css/research-theme.css">
-        <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
-    </noscript>
+    <link rel="stylesheet" href="/static/css/research-theme.css">
+    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
 </head>
 <body class="research-site">
 {% include "partials/research_header.html" %}
