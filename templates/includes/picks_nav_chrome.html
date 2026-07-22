@@ -1,5 +1,17 @@
 {# Shared with espn_predictions_template.html — keep in sync with templates/base.html chrome #}
 {% include "partials/research_header.html" %}
+{% if not is_premium|default(false) %}
+<div class="pl-week-free-bar">
+    <a href="/plans#weekly" class="pl-week-free-cta">
+        <svg class="pl-week-free-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2l1.4 4.3H18l-3.6 2.6 1.4 4.3L12 10.6 8.2 13.2l1.4-4.3L6 6.3h4.6L12 2z" fill="currentColor" opacity="0.95"/>
+            <path d="M19 8l.8 2.4H22l-2 1.5.8 2.4L19 12.8 17.2 14.3l.8-2.4-2-1.5h2.2L19 8z" fill="currentColor" opacity="0.75"/>
+            <path d="M5 14l.7 2.1H8L6.3 17l.7 2.1L5 17.6 3.3 19.1l.7-2.1-1.7-1.3h2.1L5 14z" fill="currentColor" opacity="0.75"/>
+        </svg>
+        Try a Week Free
+    </a>
+</div>
+{% endif %}
 <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
 <div class="tv-drawer" id="tvDrawer">
   <div class="tv-drawer-header">

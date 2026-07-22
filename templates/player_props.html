@@ -166,6 +166,7 @@
 .ct-pick{font-size:0.72rem;font-weight:800;text-transform:uppercase;padding:3px 9px;border-radius:6px;background:#f1f5f9;color:#475569;}
 .ct-pick.over{background:rgba(16,185,129,0.14);color:#059669;}
 .ct-pick.under{background:rgba(239,68,68,0.12);color:#dc2626;}
+.ct-pick.proj{background:rgba(0,82,155,0.12);color:#00529B;text-transform:none;}
 .ct-analyze{background:#eef2ff;border:1px solid #e0e7ff;color:#4338ca;border-radius:7px;padding:3px 9px;font-weight:800;cursor:pointer;}
 .ct-analyze:disabled{opacity:.4;cursor:default;}
 .ct-empty{padding:26px;color:#94a3b8;text-align:center;}
@@ -613,6 +614,10 @@ function analyzeHtml(r) {
   const fairStr = fair != null ? (fair > 0 ? '+' + fair : fair) : '—';
   const tier = r.tier || 'neutral';
   const edge = r.edge_pct != null ? ((r.edge_pct > 0 ? '+' : '') + r.edge_pct + '%') : '—';
+  const underProb = (r.under_probability == null) ? '—' : (r.under_probability + '%');
+  const pickNote = r.display_mode === 'projection'
+    ? `<span>Pick: <b>Proj ${r.pick_display != null ? r.pick_display : r.projection}</b> (posted only when over book line)</span>`
+    : `<span>Over ${r.over_probability ?? '—'}% / Under ${underProb}</span>`;
   return `<div class="an-wrap">
     <div class="an-models">${cells}</div>
     <div class="an-meta">
@@ -620,7 +625,7 @@ function analyzeHtml(r) {
       <span>Edge: <b>${edge}</b></span>
       <span>Fair: <b>${fairStr}</b></span>
       <span>Tier: <b class="an-tier ${tier}">${tier}</b></span>
-      <span>Over ${r.over_probability ?? '—'}% / Under ${r.under_probability ?? '—'}%</span>
+      ${pickNote}
     </div></div>`;
 }
 
@@ -666,7 +671,11 @@ function renderCheatBody() {
     const line = (r._calc_line != null ? r._calc_line : r.line);
     const diff = (r.projection != null && line != null) ? (r.projection - line) : null;
     const ev = pickEv(r);
-    const side = String(r.picked_side || '').toLowerCase();
+    const isProj = r.display_mode === 'projection';
+    const side = isProj ? 'proj' : String(r.picked_side || '').toLowerCase();
+    const pickLabel = isProj
+      ? (`Proj ${r.pick_display != null ? r.pick_display : (r.projection ?? '—')}`)
+      : (r.picked_side || '—');
     const rating = r.confidence_score;
     html += `<tr>
       <td class="ct-left ct-player">${r.player_name || '—'}<span class="ct-team">${r.team || ''}</span></td>
@@ -676,7 +685,7 @@ function renderCheatBody() {
       <td><span class="ct-rating ${rating != null ? rateClass(rating) : ''}">${rating != null ? Math.round(rating) : '—'}</span></td>
       <td class="${ev == null ? '' : (ev >= 0 ? 'ct-pos' : 'ct-neg')}">${ev == null ? '—' : (ev > 0 ? '+' : '') + (+ev).toFixed(1) + '%'}</td>
       <td>${hitCell(r)}</td>
-      <td><span class="ct-pick ${side}">${r.picked_side || '—'}</span></td>
+      <td><span class="ct-pick ${side}">${pickLabel}</span></td>
       <td><button class="ct-analyze" onclick="window._toggleAnalyze('${id}')">▾</button></td>
     </tr>
     <tr id="an-${id}" class="ct-analyze-row" style="display:none;"><td colspan="9">${analyzeHtml(r)}</td></tr>`;

@@ -866,6 +866,7 @@ def plans_page():
             .plan-card{background:#ffffff;color:#1e293b;border-radius:18px;padding:34px 26px;text-align:center;transition:all 0.25s;box-shadow:0 4px 18px rgba(15,23,42,0.08);border:1px solid #E0E4E8;position:relative;}
             .plan-card:hover{transform:translateY(-4px);box-shadow:0 10px 28px rgba(15,23,42,0.12);}
             .plan-card.popular{border:2px solid #00529B;}
+            #weekly{scroll-margin-top:88px;}
             .plan-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#00529B;color:#fff;padding:5px 20px;border-radius:20px;font-size:0.78em;font-weight:800;}
             .plan-name{font-size:1.35em;font-weight:800;margin-bottom:6px;color:#0f172a;}
             .plan-old-price{font-size:1.05em;color:#475569;text-decoration:line-through;margin-bottom:2px;}
@@ -918,7 +919,7 @@ def plans_page():
             </div>
             <p style="text-align:center;font-size:1.12em;color:#334155;margin-bottom:26px;font-weight:700;">Free gets you the winners. Premium gets you the edge.</p>
             <div class="plans-grid">
-                <div class="plan-card">
+                <div class="plan-card" id="weekly">
                     <div class="plan-name">Weekly</div>
                     <div class="plan-price">$4.99<span>/week</span></div>
                     <div class="plan-save">Try the edge. No commitment.</div>

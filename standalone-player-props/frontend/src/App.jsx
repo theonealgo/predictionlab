@@ -262,7 +262,7 @@ export default function App() {
                       <th>Player</th>
                       <th>Team</th>
                       <th>Prop</th>
-                      <th>Line</th>
+                      <th>{appliedFilters.league === "MLB" ? "Book" : "Line"}</th>
                       <th>Projection</th>
                       <th>Pick</th>
                       {MODEL_LABELS.map(([, label]) => (
@@ -276,9 +276,17 @@ export default function App() {
                         <td>{r.player_name}</td>
                         <td>{r.team}</td>
                         <td>{formatPropType(r.prop_type)}</td>
-                        <td>{r.line ?? "-"}</td>
+                        <td>{r.display_mode === "projection" ? (r.line != null ? `O/U ${r.line}` : "-") : (r.line ?? "-")}</td>
                         <td>{r.projection}</td>
-                        <td className={r.picked_side === 'OVER' ? 'pick-over' : r.picked_side === 'UNDER' ? 'pick-under' : ''}>{r.picked_side}</td>
+                        <td className={
+                          r.display_mode === "projection" ? "pick-over"
+                            : r.picked_side === "OVER" ? "pick-over"
+                            : r.picked_side === "UNDER" ? "pick-under" : ""
+                        }>
+                          {r.display_mode === "projection"
+                            ? `Proj ${r.pick_display ?? r.projection}`
+                            : r.picked_side}
+                        </td>
                         {MODEL_LABELS.map(([key]) => (
                           <td key={`${r.player_id}-${r.prop_type}-${key}`}>
                             {r.model_confidence?.[key] != null ? `${r.model_confidence[key]}%` : "-"}
@@ -339,7 +347,11 @@ export default function App() {
                 <div className="props-share-row" key={`${r.player_id}-${r.prop_type}-${idx}`}>
                   <div className="ps-player">{r.player_name}</div>
                   <div className="ps-prop">{formatPropType(r.prop_type)}</div>
-                  <div className="ps-pick">{r.picked_side} {r.line ?? "-"}</div>
+                  <div className="ps-pick">
+                    {r.display_mode === "projection"
+                      ? `Proj ${r.pick_display ?? r.projection}`
+                      : `${r.picked_side} ${r.line ?? "-"}`}
+                  </div>
                 </div>
               ))
             )}

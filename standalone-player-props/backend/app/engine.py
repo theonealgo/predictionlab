@@ -24,6 +24,7 @@ except Exception:
 from .data_sources import (
     build_validated_nba_player_pool,
     build_top_players,
+    enrich_mlb_players_with_metrics,
     fetch_prop_lines,
     fetch_schedule_and_teams,
     implied_prob,
@@ -372,6 +373,11 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     else:
         players = build_top_players(league, schedule)
     prop_lines = fetch_prop_lines(league, players, use_real=use_real)
+    if league == "MLB" and prop_lines:
+        enrich_mlb_players_with_metrics(
+            players,
+            player_ids=[pl.get("player_id") for pl in prop_lines],
+        )
     by_id = {p["player_id"]: p for p in players}
     matchups = {}
     for g in schedule:
@@ -408,21 +414,41 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         else:
             calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0))
             source_proj = prop.get("projection")
-            # Prefer the real market line + no-vig odds (ESPN/DraftKings) to set
-            # the projection & pick direction. The old random-minutes proxy
-            # produced absurd counts (e.g. 1.5 hits, 11 assists) that forced
-            # every 1+ line to OVER.
-            if prop.get("line_source") == "espn_props" and calc_line > 0:
-                _mkt_p_over = _novig_over_prob(prop.get("odds_over"), prop.get("odds_under"))
-            if _mkt_p_over is not None:
-                proj = _projection_from_market(league, calc_line, _mkt_p_over)
-            elif source_proj is not None:
-                proj = float(source_proj)
+            # MLB: projection from recent gamelog averages when available.
+            # Board shows that count (e.g. Hits 3) and only posts when OVER the line.
+            if league == "MLB":
+                weighted = p.get("stats_weighted") or {}
+                last5 = p.get("stats_last5") or {}
+                last10 = p.get("stats_last10") or {}
+                pt = prop["prop_type"]
+                # Pitchers: only project strikeouts from pitching logs.
+                if p.get("mlb_is_pitcher") and pt != "strikeouts":
+                    continue
+                if (not p.get("mlb_is_pitcher")) and pt == "strikeouts":
+                    continue
+                base = float(weighted.get(pt) or 0.0)
+                if base <= 0:
+                    a5 = float(last5.get(pt) or 0.0)
+                    a10 = float(last10.get(pt) or 0.0)
+                    if a5 > 0 or a10 > 0:
+                        base = (a5 * 0.7) + (a10 * 0.3)
+                if base <= 0:
+                    # No gamelog — skip rather than invent a fake 1.
+                    continue
+                proj = base
             else:
-                xgb_mean = _xgboost_style_projection(p, prop, league)
-                xsharp_mean = _xsharp_adjustment(league, xgb_mean)
-                rating = _form_rating(p)
-                proj = (xgb_mean * 0.55) + (xsharp_mean * 0.35) + ((rating / 100.0) * 0.10 * xgb_mean)
+                # Prefer real market line + no-vig odds for other leagues.
+                if prop.get("line_source") == "espn_props" and calc_line > 0:
+                    _mkt_p_over = _novig_over_prob(prop.get("odds_over"), prop.get("odds_under"))
+                if _mkt_p_over is not None:
+                    proj = _projection_from_market(league, calc_line, _mkt_p_over)
+                elif source_proj is not None:
+                    proj = float(source_proj)
+                else:
+                    xgb_mean = _xgboost_style_projection(p, prop, league)
+                    xsharp_mean = _xsharp_adjustment(league, xgb_mean)
+                    rating = _form_rating(p)
+                    proj = (xgb_mean * 0.55) + (xsharp_mean * 0.35) + ((rating / 100.0) * 0.10 * xgb_mean)
             # Hard sanity cap — catches any path (including external source_proj)
             _proj_cap = _SPORT_PROJ_CAPS.get(league, {}).get(prop["prop_type"])
             if _proj_cap is not None:
@@ -434,15 +460,30 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0)) if league != "NBA" else float(calc_line)
         std_dev = max(2.5, abs(proj) * 0.22)
         p_over = _projection_to_prob(league, proj, calc_line, std_dev)
-        # For non-NBA rows with a real book line, trust the market's no-vig
-        # P(over) directly so the pick side matches the real line.
-        if league != "NBA" and _mkt_p_over is not None:
+        # For non-NBA/non-MLB rows with a real book line, trust market no-vig P(over).
+        if league not in ("NBA", "MLB") and _mkt_p_over is not None:
             p_over = _mkt_p_over
         p_under = 1.0 - p_over
-        ev_over = _ev_percent(p_over, prop["odds_over"])
-        ev_under = _ev_percent(p_under, prop["odds_under"])
+        ev_over = _ev_percent(p_over, prop["odds_over"]) if prop.get("odds_over") is not None else 0.0
+        _ou = prop.get("odds_under")
+        ev_under = _ev_percent(p_under, _ou) if _ou is not None else -999.0
         confidence = min(99.0, max(50.0, (max(p_over, p_under) * 100.0 + agreement * 12.0 - variance * 0.4)))
         picked_side = "OVER" if (p_over >= p_under and agreement >= 0.5) else ("UNDER" if p_under > p_over else ("OVER" if ev_over >= ev_under else "UNDER"))
+
+        # MLB: if the model is not OVER the book line, do not post. When posted,
+        # UI shows the projected count (Hits 3) instead of Over/Under.
+        _mlb_over_only = False
+        _mlb_proj_display = None
+        if league == "MLB":
+            if not ((float(proj) > float(calc_line)) and (p_over > 0.50)):
+                continue
+            picked_side = "OVER"  # grading still keys off the book line
+            _mlb_over_only = bool(prop.get("mlb_over_only")) or float(calc_line) <= 1.0
+            _rp = float(proj)
+            if prop["prop_type"] in ("hits", "runs", "rbis", "home_runs", "walks", "strikeouts", "stolen_bases"):
+                _mlb_proj_display = max(1, int(round(_rp)))
+            else:
+                _mlb_proj_display = _to_half_step(_rp)
 
         # NOTE: a blanket MLB inversion for hits/runs/rbis/home_runs used to live
         # here. It was a band-aid over a broken grader (which compared the
@@ -523,12 +564,14 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             "line_source": line_source,
             "_calc_line": calc_line,
             "odds_over": prop["odds_over"],
-            "odds_under": prop["odds_under"],
+            "odds_under": prop.get("odds_under"),
             "projection": _to_half_step(proj),
             "over_probability": round(p_over * 100.0, 1),
-            "under_probability": round(p_under * 100.0, 1),
+            "under_probability": (
+                None if (league == "MLB" or _mlb_over_only) else round(p_under * 100.0, 1)
+            ),
             "ev_over_percent": round(ev_over, 2),
-            "ev_under_percent": round(ev_under, 2),
+            "ev_under_percent": round(ev_under, 2) if prop.get("odds_under") is not None else None,
             "confidence_score": round(confidence, 1),
             "picked_side": picked_side,
             "model_confidence": {m: model_confidence.get(m) for m in _MODEL_ORDER},
@@ -537,6 +580,13 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             "inverse_signal": inverse_signal,
             "inverse_signal_label": "Inverse Signal Mode (Experimental)" if inverse_signal else None,
         }
+        if league == "MLB" and _mlb_proj_display is not None:
+            row["display_mode"] = "projection"
+            row["pick_display"] = str(_mlb_proj_display)
+            row["projection"] = float(_mlb_proj_display)
+            row["mlb_over_only"] = True
+        elif _mlb_over_only:
+            row["mlb_over_only"] = True
         row.update(poisson_fields)
         projections.append(row)
     if league == "NBA":

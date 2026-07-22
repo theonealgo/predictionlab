@@ -493,6 +493,126 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
     return payload
 
 
+def fetch_mlb_player_metrics(player_id: str) -> Dict:
+    """Recent-game MLB averages from ESPN gamelog (batting or pitching).
+
+    Returns stats_last5 / stats_last10 / stats_weighted for hits, runs, rbis,
+    home_runs, strikeouts, walks — used as the projection for MLB props.
+    """
+    pid = str(player_id or "").strip()
+    empty = {
+        "stats_last5": {},
+        "stats_last10": {},
+        "stats_weighted": {},
+        "insufficient_data": True,
+    }
+    if not pid:
+        return empty
+    cache_key = f"mlb:{pid}"
+    now = time.time()
+    cached = _PLAYER_METRICS_CACHE.get(cache_key)
+    if cached and (now - cached["ts"]) < _PLAYER_METRICS_TTL:
+        return cached["payload"]
+
+    payload = dict(empty)
+    try:
+        url = f"https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{pid}/gamelog"
+        body = requests.get(url, timeout=8).json() or {}
+        labels = [str(x) for x in (body.get("labels") or [])]
+        # Batting: AB R H ...  Pitching: IP H R ER ... K
+        is_pitcher = "IP" in labels and "K" in labels and "AB" not in labels
+        idx = {lab: i for i, lab in enumerate(labels)}
+
+        def _col(vals, lab):
+            i = idx.get(lab)
+            if i is None or i >= len(vals):
+                return None
+            try:
+                return float(str(vals[i]).replace(",", "") or 0)
+            except Exception:
+                return None
+
+        rows = []
+        for st in body.get("seasonTypes") or []:
+            for cat in st.get("categories") or []:
+                for ev in cat.get("events") or []:
+                    stats = ev.get("stats") or []
+                    if not stats:
+                        continue
+                    if is_pitcher:
+                        k = _col(stats, "K")
+                        # Skip empty / non-start rows
+                        ip = _col(stats, "IP")
+                        if k is None or ip is None or ip <= 0:
+                            continue
+                        rows.append({"strikeouts": k, "hits": 0.0, "runs": 0.0, "rbis": 0.0, "home_runs": 0.0, "walks": _col(stats, "BB") or 0.0})
+                    else:
+                        ab = _col(stats, "AB")
+                        if ab is None or ab <= 0:
+                            continue
+                        rows.append({
+                            "hits": _col(stats, "H") or 0.0,
+                            "runs": _col(stats, "R") or 0.0,
+                            "rbis": _col(stats, "RBI") or 0.0,
+                            "home_runs": _col(stats, "HR") or 0.0,
+                            "strikeouts": _col(stats, "SO") or 0.0,
+                            "walks": _col(stats, "BB") or 0.0,
+                        })
+        if len(rows) >= 3:
+            def _avg(key, n):
+                chunk = rows[:n]
+                return round(sum(r[key] for r in chunk) / len(chunk), 2)
+
+            def _weighted(key):
+                return round((_avg(key, 5) * 0.7) + (_avg(key, 10) * 0.3), 2)
+
+            keys = ("hits", "runs", "rbis", "home_runs", "strikeouts", "walks")
+            payload = {
+                "stats_last5": {k: _avg(k, 5) for k in keys},
+                "stats_last10": {k: _avg(k, 10) for k in keys},
+                "stats_weighted": {k: _weighted(k) for k in keys},
+                "insufficient_data": False,
+                "is_pitcher": is_pitcher,
+            }
+    except Exception:
+        payload = dict(empty)
+
+    _PLAYER_METRICS_CACHE[cache_key] = {"ts": now, "payload": payload}
+    return payload
+
+
+def enrich_mlb_players_with_metrics(players: List[Dict], player_ids: Optional[List[str]] = None) -> None:
+    """Attach MLB gamelog stats onto player dicts (in place). Caps HTTP fan-out."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    wanted = set(str(x) for x in (player_ids or []) if x)
+    targets = [p for p in players if str(p.get("player_id") or "") in wanted] if wanted else list(players)
+    targets = targets[:80]
+
+    def _one(p: Dict):
+        pid = str(p.get("player_id") or "")
+        if not pid:
+            return
+        metrics = fetch_mlb_player_metrics(pid)
+        if metrics.get("insufficient_data"):
+            return
+        p["stats_last5"] = metrics.get("stats_last5") or {}
+        p["stats_last10"] = metrics.get("stats_last10") or {}
+        p["stats_weighted"] = metrics.get("stats_weighted") or {}
+        p["mlb_is_pitcher"] = bool(metrics.get("is_pitcher"))
+
+    if not targets:
+        return
+    workers = min(12, len(targets))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = [pool.submit(_one, p) for p in targets]
+        for fut in as_completed(futs):
+            try:
+                fut.result()
+            except Exception:
+                pass
+
+
 def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
     players: List[Dict] = []
     excluded: List[Dict] = []
@@ -763,17 +883,18 @@ def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
         if not p:
             continue
         line = row["line"]
-        out.append(
-            {
-                "player_id": p["player_id"],
-                "prop_type": row["prop_type"],
-                "line": line,
-                "line_for_calc": line,
-                "line_source": "espn_props",
-                "odds_over": row["odds_over"],
-                "odds_under": row["odds_under"],
-            }
-        )
+        item = {
+            "player_id": p["player_id"],
+            "prop_type": row["prop_type"],
+            "line": line,
+            "line_for_calc": line,
+            "line_source": "espn_props",
+            "odds_over": row["odds_over"],
+            "odds_under": row["odds_under"],
+        }
+        if row.get("mlb_over_only"):
+            item["mlb_over_only"] = True
+        out.append(item)
     return out
 
 
@@ -800,17 +921,62 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
     internal prop_type, restricted to the types we grade for `league`.
 
     Returns None for unrecognized names, combined/alt markets ('+'), pitcher
-    'allowed' variants, or anything not in the league's graded set. Keyword
-    order guards against substring collisions (e.g. 'three point' contains
-    'point'), so more specific types are tested first.
+    'allowed' variants, milestone yes-markets, or anything not in the league's
+    graded set. Keyword order guards against substring collisions (e.g.
+    'three point' contains 'point'), so more specific types are tested first.
+
+    MLB note: ESPN's DraftKings feed mixes real two-way Totals (0.5 / 1.5 O/U)
+    with "Milestones" (integer 1.0 / 2.0 yes-to-reach). Milestones are not
+    overs/unders — ingesting them made every MLB prop look like "starts at 1"
+    with a fake Under side. We only map real Total markets; pitcher Ks must be
+    "Total Strikeouts" (not batter strikeout milestones).
     """
     if not name:
         return None
     n = name.lower()
     if "+" in n or "allowed" in n:  # combos / pitcher 'hits allowed' etc.
         return None
+    # Milestone markets are yes/no "to reach N" (usually N=1), not two-way O/U.
+    # Exception: MLB home runs — DraftKings often only posts "Home Runs Milestones"
+    # (no Total HR). Those are true 1+ markets; we map them and force OVER-only.
+    _mlb_hr_milestone = (
+        league == "MLB"
+        and "milestone" in n
+        and "home run" in n
+    )
+    if "milestone" in n and not _mlb_hr_milestone:
+        return None
+    if _mlb_hr_milestone:
+        return "home_runs" if "home_runs" in set(_LEAGUE_PROP_TYPES.get(league, [])) else None
     allowed = set(_LEAGUE_PROP_TYPES.get(league, []))
     if not allowed:
+        return None
+    # MLB strikeouts: only starting-pitcher Total Strikeouts (e.g. 4.5 / 6.5).
+    # "Strikeouts (Batter) …" would otherwise collapse every batter to line 1.
+    if league == "MLB" and "strikeout" in n:
+        if "batter" in n or "total strikeouts" not in n:
+            return None
+        return "strikeouts" if "strikeouts" in allowed else None
+    # MLB batting: require the Total * market name so singles/doubles/walks
+    # don't steal the hits/runs/rbis slots.
+    if league == "MLB":
+        mlb_totals = [
+            ("home_runs", ("total home runs",)),
+            ("rbis", ("total rbis", "total rbi")),
+            ("hits", ("total hits",)),
+            ("runs", ("total runs scored", "total runs")),
+            ("walks", ("total walks (batter)", "total walks")),
+        ]
+        for internal, keywords in mlb_totals:
+            if internal not in allowed:
+                continue
+            if any(kw in n for kw in keywords):
+                # Reject singles/doubles/triples/stolen posing as hits/runs.
+                if internal == "hits" and any(x in n for x in ("single", "double", "triple", "bases")):
+                    continue
+                if internal == "runs" and "rbi" in n:
+                    continue
+                return internal
         return None
     checks = [
         ("strikeouts", ("strikeout",)),
@@ -937,29 +1103,64 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
                 except Exception:
                     continue
                 price_int = _american_to_int(((it.get("odds") or {}).get("american") or {}).get("value"))
+                # MLB HR milestones post integer 1.0 (yes to hit 1 HR). Convert
+                # to a 0.5 O/U-style line so the UI shows 1+ with no Under.
+                over_only = False
+                if (
+                    league == "MLB"
+                    and prop_type == "home_runs"
+                    and "milestone" in type_name.lower()
+                    and float(target_f).is_integer()
+                ):
+                    target_f = max(0.5, float(target_f) - 0.5)
+                    over_only = True
                 key = (athlete_id, prop_type)
                 slot = agg.get(key)
+
+                def _line_pref(line: float) -> tuple:
+                    # Prefer half-point book lines (0.5, 1.5, 4.5) over integers.
+                    half = abs((line * 2) - round(line * 2)) < 1e-9 and int(round(line * 2)) % 2 == 1
+                    return (0 if half else 1, float(line))
+
                 if slot is None:
-                    agg[key] = {"line": target_f, "prices": ([price_int] if price_int is not None else [])}
+                    agg[key] = {
+                        "line": target_f,
+                        "prices": ([price_int] if price_int is not None else []),
+                        "over_only": over_only,
+                    }
                 elif abs(target_f - slot["line"]) < 1e-6 and price_int is not None and len(slot["prices"]) < 2:
-                    slot["prices"].append(price_int)
+                    if not slot.get("over_only"):
+                        slot["prices"].append(price_int)
+                elif _line_pref(target_f) < _line_pref(slot["line"]):
+                    # Replace a worse (usually integer milestone) line with a
+                    # real half-point Total line for the same athlete/prop.
+                    agg[key] = {
+                        "line": target_f,
+                        "prices": ([price_int] if price_int is not None else []),
+                        "over_only": over_only,
+                    }
             page += 1
 
     rows = []
     for (athlete_id, prop_type), slot in agg.items():
         prices = slot["prices"]
         odds_over = prices[0] if len(prices) >= 1 else -110
-        odds_under = prices[1] if len(prices) >= 2 else -110
-        rows.append(
-            {
-                "player_id": athlete_id,
-                "norm_name": None,
-                "prop_type": prop_type,
-                "line": _to_half_step(slot["line"]),
-                "odds_over": odds_over,
-                "odds_under": odds_under,
-            }
-        )
+        # Milestone / over-only markets have no Under side.
+        if slot.get("over_only"):
+            odds_under = None
+        else:
+            odds_under = prices[1] if len(prices) >= 2 else -110
+        row = {
+            "player_id": athlete_id,
+            "norm_name": None,
+            "prop_type": prop_type,
+            "line": _to_half_step(slot["line"]),
+            "odds_over": odds_over,
+            "odds_under": odds_under,
+        }
+        if slot.get("over_only"):
+            row["mlb_over_only"] = True
+        rows.append(row)
     return rows
 
 
