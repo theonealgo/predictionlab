@@ -25,11 +25,73 @@
         --pl-fill: hsl(0, 0%, 96.1%);
         --pl-accent: hsl(76, 100%, 55%);
         --pl-accent-soft: hsl(76, 100%, 92%);
+        --pl-neon: #c7ff2e;
         --pl-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
 
     body { background: var(--pl-paper); color: var(--pl-ink); }
     .navbar, .share-strip, .site-footer, .join-premium-bar { display: none !important; }
+
+    /* Directory footer (normally in research-theme.css) — inlined so that
+       stylesheet is not render-blocking on the homepage. */
+    .site-directory-footer {
+        position: relative; z-index: 2; padding: 72px 24px 24px;
+        background: #0b0b0a; color: #f6f6f2;
+        border-top: 1px solid rgba(199,255,46,.35);
+    }
+    .site-directory-footer .directory-shell { width: min(100%, 1280px); margin: 0 auto; }
+    .site-directory-footer .directory-label,
+    .site-directory-footer h5,
+    .site-directory-footer .directory-sub,
+    .site-directory-footer .directory-bottom {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .site-directory-footer .directory-label {
+        color: var(--pl-neon); font-size: 10px; font-weight: 800;
+        text-transform: uppercase; letter-spacing: 2.5px;
+    }
+    .site-directory-footer .directory-wordmark {
+        display: block; margin: 8px 0 4px; color: var(--pl-neon);
+        font: 800 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: .12em;
+    }
+    .site-directory-footer .directory-sub { color: #a8aba4; font-size: 12px; }
+    .site-directory-footer .directory-grid {
+        display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+        gap: 38px; margin-top: 52px; padding: 38px 0 46px;
+        border-top: 1px solid rgba(255,255,255,.11);
+        border-bottom: 1px solid rgba(255,255,255,.11);
+    }
+    .site-directory-footer h5,
+    .site-directory-footer .footer-heading {
+        margin: 0 0 18px; color: #b7b9b3; font-size: 10px;
+        text-transform: uppercase; letter-spacing: 2px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .site-directory-footer .directory-grid a {
+        display: block; padding: 6px 0; color: #b7b9b3; text-decoration: none;
+        font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .site-directory-footer .directory-grid a:hover { color: var(--pl-neon); }
+    .site-directory-footer .directory-bottom {
+        display: flex; justify-content: space-between; align-items: center;
+        flex-wrap: wrap; gap: 24px; padding-top: 22px; color: #a8aba4;
+        font-size: 10px; text-transform: uppercase; letter-spacing: .8px;
+    }
+    .site-directory-footer .directory-bottom a {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 44px; min-height: 44px; padding: 10px 14px; margin-left: 4px;
+        color: #c5c7c1; text-decoration: none;
+    }
+    .site-directory-footer .directory-bottom a:hover { color: var(--pl-neon); }
+    @media (max-width: 900px) {
+        .site-directory-footer .directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .site-directory-footer .directory-bottom { flex-direction: column; align-items: flex-start; }
+    }
+    @media (max-width: 560px) {
+        .site-directory-footer { padding: 52px 18px 22px; }
+        .site-directory-footer .directory-grid { grid-template-columns: 1fr; gap: 28px; }
+    }
     /* Homepage renders full-bleed: neutralize base.html's centered .layout-main
        (max-width:1200px) so the hero/sections fill the viewport. Otherwise the
        fixed canvas (grid + image) shows through as grey side gutters. */
@@ -132,6 +194,42 @@
         font: 950 .64rem var(--pl-mono); letter-spacing: .13em; text-transform: uppercase; white-space: nowrap;
     }
     .pl2-cta:hover { border-color: var(--pl-ink); }
+    /* Critical header dropdowns (also in research-theme; inlined so theme can load async) */
+    .pl2-nav > a, .pl2-nav-trigger {
+        display: inline-flex; align-items: center; line-height: 1;
+        border: none; background: transparent; cursor: pointer; padding: 0;
+        color: var(--pl-muted); font: 850 .64rem var(--pl-mono);
+        letter-spacing: .15em; text-transform: uppercase;
+    }
+    .pl2-nav-trigger:hover, .pl2-nav-trigger[aria-expanded="true"] { color: var(--pl-ink); }
+    .pl2-navdrop { position: relative; display: inline-flex; align-items: center; }
+    .pl2-nav-menu {
+        position: absolute; top: calc(100% + 14px); left: 0; min-width: 184px;
+        padding: 7px; border: 1px solid var(--pl-line); background: var(--pl-panel);
+        box-shadow: 0 14px 34px rgba(11, 11, 10, .14); z-index: 2050;
+    }
+    .pl2-nav-menu[hidden] { display: none; }
+    .pl2-nav-menu a {
+        display: block; padding: 9px 11px; color: var(--pl-ink); text-decoration: none;
+        font: 800 .66rem/1 var(--pl-mono); letter-spacing: .08em; text-transform: uppercase;
+    }
+    .pl2-nav-menu a:hover { background: var(--pl-accent); }
+    .pl2-header-actions { display: flex; align-items: center; gap: 20px; margin-left: 8px; }
+    .pl2-account { position: relative; }
+    .pl2-account-button {
+        width: 36px; height: 36px; display: grid; place-items: center;
+        border: 1px solid var(--pl-line); background: var(--pl-panel); color: var(--pl-ink); cursor: pointer;
+    }
+    .pl2-account-menu {
+        position: absolute; top: calc(100% + 10px); right: 0; min-width: 138px; padding: 7px;
+        border: 1px solid var(--pl-line); background: var(--pl-panel);
+        box-shadow: 0 14px 34px rgba(11, 11, 10, .14);
+    }
+    .pl2-account-menu[hidden] { display: none; }
+    .pl2-account-menu a {
+        display: block; padding: 10px 11px; color: var(--pl-ink); text-decoration: none;
+        font: 800 .66rem/1 var(--pl-mono); letter-spacing: .08em; text-transform: uppercase;
+    }
 
     /* ── Burger drawer ──────────────────────────────────────── */
     .pl2-drawer-veil { position: fixed; inset: 0; z-index: 70; background: hsl(0 0% 0% / 0.18); opacity: 0; pointer-events: none; transition: opacity .2s; }
@@ -164,9 +262,10 @@
     .pl2-hero-lens {
         position: absolute; z-index: 0; pointer-events: none; border-radius: 50%;
         width: 600px; height: 600px;
+        left: var(--lx, -9999px); top: var(--ly, -9999px);
         background: radial-gradient(circle, hsl(0 0% 0% / 0.03) 0%, transparent 70%);
-        transition: left .3s ease-out, top .3s ease-out;
         transform: translate(-50%, -50%);
+        will-change: left, top;
     }
     .pl2-hero > .pl2-shell { position: relative; z-index: 1; }
     .pl2-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 48px; }
@@ -569,6 +668,12 @@
     }
 
 </style>
+{% endblock %}
+
+{% block site_css %}
+{# Homepage inlines header + directory-footer CSS in extra_styles above.
+   Skip research-theme.css and picks-nav-overrides.css so they are not on
+   the critical path (render-blocking / network dependency tree). #}
 {% endblock %}
 
 {% block content %}
@@ -1045,19 +1150,28 @@ pl2RunDeferred(function () {
     document.querySelectorAll('.pl2-countup').forEach(function (el) { observer.observe(el); });
 })();
 
-/* Hero lens — port of HeroSection mouse effect */
+/* Hero lens — cached rect; no layout reads on mousemove */
 (function () {
     var hero = document.getElementById('picks');
     var lens = document.getElementById('pl2Lens');
     if (!hero || !lens) return;
-    var rect = null;
-    function refreshRect() { rect = hero.getBoundingClientRect(); }
-    refreshRect();
-    window.addEventListener('resize', refreshRect, { passive: true });
-    hero.addEventListener('mousemove', function (e) {
-        if (!rect) refreshRect();
-        lens.style.left = (e.clientX - rect.left) + 'px';
-        lens.style.top = (e.clientY - rect.top) + 'px';
+    var left = 0;
+    var top = 0;
+    function syncRect() {
+        var r = hero.getBoundingClientRect();
+        left = r.left;
+        top = r.top;
+    }
+    syncRect();
+    window.addEventListener('resize', syncRect, { passive: true });
+    window.addEventListener('scroll', syncRect, { passive: true });
+    hero.addEventListener('pointermove', function (e) {
+        lens.style.setProperty('--lx', (e.clientX - left) + 'px');
+        lens.style.setProperty('--ly', (e.clientY - top) + 'px');
+    }, { passive: true });
+    hero.addEventListener('pointerleave', function () {
+        lens.style.setProperty('--lx', '-9999px');
+        lens.style.setProperty('--ly', '-9999px');
     }, { passive: true });
 })();
 
@@ -1113,22 +1227,17 @@ pl2RunDeferred(function () {
 })();
 });
 
-/* ActiveBreadcrumb — scroll spy (batched reads to avoid forced reflow) */
+/* ActiveBreadcrumb — IntersectionObserver (no getBoundingClientRect on scroll) */
 (function () {
     var crumb = document.getElementById('pl2Breadcrumb');
     var crumbText = document.getElementById('pl2BreadcrumbText');
     if (!crumb || !crumbText) return;
     var sections = Array.prototype.slice.call(document.querySelectorAll('[data-bc]'));
-    var ticking = false;
-    function update() {
-        ticking = false;
-        var mid = window.innerHeight * 0.35;
-        var current = sections[0];
-        var tops = sections.map(function (sec) { return sec.getBoundingClientRect().top; });
-        tops.forEach(function (top, index) {
-            if (top <= mid) current = sections[index];
-        });
-        if (!current) return;
+    if (!sections.length) return;
+    var current = sections[0];
+    function apply(sec) {
+        if (!sec) return;
+        current = sec;
         crumbText.textContent = current.getAttribute('data-bc');
         crumb.classList.add('is-active');
         var railIndex = parseInt(current.getAttribute('data-rail') || '0', 10);
@@ -1136,13 +1245,28 @@ pl2RunDeferred(function () {
             line.classList.toggle('active', index === railIndex);
         });
     }
-    function scheduleUpdate() {
-        if (ticking) return;
-        ticking = true;
-        window.requestAnimationFrame(update);
+    if (!('IntersectionObserver' in window)) {
+        apply(sections[0]);
+        return;
     }
-    window.addEventListener('scroll', scheduleUpdate, { passive: true });
-    window.requestAnimationFrame(update);
+    var visible = new Map();
+    var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting) visible.set(entry.target, entry.intersectionRatio);
+            else visible.delete(entry.target);
+        });
+        var best = null;
+        var bestRatio = -1;
+        visible.forEach(function (ratio, sec) {
+            if (ratio > bestRatio) {
+                bestRatio = ratio;
+                best = sec;
+            }
+        });
+        if (best) apply(best);
+    }, { root: null, rootMargin: '-28% 0px -45% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+    sections.forEach(function (sec) { io.observe(sec); });
+    apply(sections[0]);
 })();
 </script>
 {% endblock %}
