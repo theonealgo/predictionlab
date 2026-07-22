@@ -8718,7 +8718,7 @@ def calculate_model_performance(sport):
 _OU_BENCH = {'NBA': 226.0, 'NHL': 6.1, 'NCAAB': 145.0, 'NCAAW': 140.0, 'NCAAF': 56.0, 'MLB': 9.0, 'NFL': 47.0, 'WNBA': 158.0}
 
 
-def _compute_spread_total_for_daily(sport, daily_results):
+def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=False):
     """Compute XSharp spread/total grading for games already in daily_results (in-place).
     Returns aggregate stats dict (may be None for spread/total if model unavailable,
     but market lines and H2H are always attached)."""
@@ -8731,10 +8731,11 @@ def _compute_spread_total_for_daily(sport, daily_results):
             _attach_h2h_projection_to_daily_results(sport, daily_results, n=10)
         except Exception as _h2he:
             logger.debug(f"[h2h] daily attach failed for {sport}: {_h2he}")
-        try:
-            _attach_nba_efficiency_to_daily_results(sport, daily_results)
-        except Exception as _ne:
-            logger.debug(f"[nba-eff] pre-compute failed for {sport}: {_ne}")
+        if not skip_efficiency:
+            try:
+                _attach_nba_efficiency_to_daily_results(sport, daily_results)
+            except Exception as _ne:
+                logger.debug(f"[nba-eff] pre-compute failed for {sport}: {_ne}")
         _game_count = sum(len(dd.get('games', [])) for dd in daily_results.values())
         _snapshot_build = _os.environ.get('PL_SNAPSHOT_BUILD') == '1'
         _skip_heavy_predict = _game_count > 500 and not _snapshot_build
@@ -17344,6 +17345,18 @@ except Exception as e:
     _golf_sport = None
 
 
+try:
+    from sports import WNBA as _wnba_sport
+    from sports.WNBA import _apply_wnba_snapshot_flip
+    print("✅ WNBA import OK")
+except Exception as e:
+    print(f"❌ WNBA import failed: {e}")
+    _wnba_sport = None
+
+    def _apply_wnba_snapshot_flip(data):
+        return data
+
+
 # Register individual sports after imports complete
 _INDIVIDUAL_SPORT_LOADERS = {}
 
@@ -17372,15 +17385,29 @@ if _ufc_sport:
 if _golf_sport:
     _SPORT_RESULTS_RENDERERS['GOLF'] = _golf_sport.render_sport_results_page
 
+if _wnba_sport:
+    _SPORT_RESULTS_RENDERERS['WNBA'] = _wnba_sport.render_sport_results_page
 
-print("✅ New sports (Tennis/UFC/Golf) modules loaded")
+
+print("✅ New sports (Tennis/UFC/Golf/WNBA) modules loaded")
+
+
+try:
+    from sports import team_efficiency_attach as _eff_attach
+except Exception as _eff_imp:
+    _eff_attach = None
+    print(f"⚠️ team_efficiency_attach not loaded: {_eff_imp}")
 
 
 # ===== Ported helpers for new sports (Tennis/UFC/Golf) results path =====
 
 def _grade_efficiency_for_results(sport, daily_results) -> None:
     """Per-game Efficiency ML grading on results cards (all grading sports)."""
-    if sport not in _eff_attach.EFFICIENCY_GRADING_SPORTS or not daily_results:
+    if (
+        not _eff_attach
+        or sport not in _eff_attach.EFFICIENCY_GRADING_SPORTS
+        or not daily_results
+    ):
         return
     try:
         _eff_attach.grade_efficiency_for_daily_results(sport, daily_results)
@@ -17513,6 +17540,25 @@ def _stale_page_cache_get(cache_dict: dict, cache_key: str, ttl: float):
     if age < ttl * _STALE_PAGE_TTL_MULTIPLIER:
         return html, True
     return None, False
+
+
+def _normalize_overall_stats(raw):
+    """Ensure committed snapshot overall_stats matches live grading shape."""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for key, m in raw.items():
+        if not isinstance(m, dict):
+            continue
+        total = int(m.get('total') or 0)
+        correct = int(m.get('correct') or 0)
+        acc = m.get('accuracy')
+        if acc is None:
+            acc = round(correct / total * 100, 1) if total > 0 else 0.0
+        else:
+            acc = round(float(acc), 1)
+        out[key] = {'correct': correct, 'total': total, 'accuracy': acc}
+    return out
 
 
 def _stats_from_season_snapshot(snapshot):
