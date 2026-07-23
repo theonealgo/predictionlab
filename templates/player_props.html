@@ -549,7 +549,7 @@ function renderProps(data, league) {
   const markets = marketRowHtml(marketRowFor(league, _propsData.present), _propsData.present, 'window._marketClick');
   const toolbar = `<div class="props-toolbar">
     <input id="propSearch" class="prop-search" type="text" placeholder="Search player…" oninput="window._propFilter()">
-    <select id="fSide" class="prop-fsel" onchange="window._propFilter()"><option value="all">Side: All</option><option value="OVER">Over</option><option value="UNDER">Under</option></select>
+    <select id="fSide" class="prop-fsel" onchange="window._propFilter()"><option value="all">Side: All</option><option value="OVER">Over</option>${league === 'MLB' ? '' : '<option value="UNDER">Under</option>'}</select>
     <input id="fEv" class="prop-fnum" type="number" step="0.5" placeholder="Min EV%" oninput="window._propFilter()">
     <input id="fHit" class="prop-fnum" type="number" step="1" placeholder="Min Hit%" oninput="window._propFilter()">
   </div>`;

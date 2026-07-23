@@ -851,6 +851,21 @@ def get_league_results(league: str, for_date: str | None = None) -> Dict:
     return _finish(payload)
 
 
+def _prop_side_ev(row: Dict) -> float:
+    """EV for the posted side. MLB projection rows are over-only (under may be None)."""
+    if row.get("picked_side") == "OVER":
+        return float(row.get("ev_over_percent") or 0.0)
+    under = row.get("ev_under_percent")
+    return float(under) if under is not None else float(row.get("ev_over_percent") or 0.0)
+
+
+def _prop_pick_prob(row: Dict) -> float:
+    over = row.get("over_probability")
+    under = row.get("under_probability")
+    vals = [float(v) for v in (over, under) if v is not None]
+    return max(vals) if vals else 0.0
+
+
 def filter_props(
     props: List[Dict],
     prop_type: Optional[str] = None,
@@ -863,7 +878,10 @@ def filter_props(
             continue
         if side and r["picked_side"].lower() != side.lower():
             continue
-        sel_ev = r["ev_over_percent"] if r["picked_side"] == "OVER" else r["ev_under_percent"]
+        # MLB posts projection overs only — never surface Under rows.
+        if (r.get("league") or "").upper() == "MLB" and r.get("picked_side") == "UNDER":
+            continue
+        sel_ev = _prop_side_ev(r)
         if min_ev is not None and sel_ev < min_ev:
             continue
         # Keep one row per player+prop to avoid duplicate cards/rows.
@@ -872,15 +890,15 @@ def filter_props(
         if cur is None:
             deduped[key] = r
             continue
-        cur_ev = cur["ev_over_percent"] if cur["picked_side"] == "OVER" else cur["ev_under_percent"]
+        cur_ev = _prop_side_ev(cur)
         if (sel_ev, r.get("confidence_score", 0.0)) > (cur_ev, cur.get("confidence_score", 0.0)):
             deduped[key] = r
     out = list(deduped.values())
     out.sort(
         key=lambda x: (
-            -(x["ev_over_percent"] if x["picked_side"] == "OVER" else x["ev_under_percent"]),
-            -x["confidence_score"],
-            -max(x["over_probability"], x["under_probability"]),
+            -_prop_side_ev(x),
+            -float(x.get("confidence_score") or 0.0),
+            -_prop_pick_prob(x),
         )
     )
     return out
@@ -917,9 +935,11 @@ def get_diagnostics(league: str = "NBA") -> Dict:
     for r in props_list:
         conf = float(r.get("confidence_score", 0.0) or 0.0)
         confidence_vals.append(conf)
-        ev = float((r["ev_over_percent"] if r["picked_side"] == "OVER" else r["ev_under_percent"]) or 0.0)
+        ev = _prop_side_ev(r)
         ev_vals.append(ev)
-        pick_prob = float(r.get("over_probability" if r["picked_side"] == "OVER" else "under_probability", 50.0) or 50.0)
+        pick_prob = _prop_pick_prob(r)
+        if pick_prob <= 0:
+            pick_prob = float(r.get("over_probability") or 50.0)
         prob_vals.append(pick_prob)
 
         pt = r.get("prop_type", "other")
