@@ -285,6 +285,7 @@ _PLACEHOLDER_TEAM_NAMES = frozenset({
 
 
 def _is_placeholder_team_name(name):
+    """True for All-Star / exhibition sides (TEAM COOP) or unresolved brackets (TBD)."""
     n = (name or '').strip()
     if not n:
         return True
@@ -294,6 +295,12 @@ def _is_placeholder_team_name(name):
     if _PLACEHOLDER_TEAM_RE.match(n):
         return True
     if _ALLSTAR_EVENT_RE.search(n):
+        return True
+    _n = n.lower()
+    if any(_m in _n for _m in (
+        'winner', 'loser', 'tbd', 'tba', 'round of', 'qualifier',
+        'to be determined', 'to be decided', 'winner of', 'loser of',
+    )):
         return True
     return False
 
@@ -6165,7 +6172,7 @@ def _recover_cached_predictions(sport):
     is far better than the 'could not be loaded' error banner when an upstream
     data/model dependency hiccups. Returns None when nothing is cached at all.
     """
-    cache_key = f"{sport}_upcoming_predictions_v7"  # must match get_upcoming_predictions
+    cache_key = f"{sport}_upcoming_predictions_v8"  # must match get_upcoming_predictions
     entry = _PREDICTIONS_CACHE.get(cache_key)
     data = entry.get('data') if isinstance(entry, dict) else None
     if not data:
@@ -6770,7 +6777,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
 
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
     # v7: drop All-Star / placeholder matchups (WNBA COOP/SPOON, MLB ASG, etc.).
-    cache_key = f"{sport}_upcoming_predictions_v7"
+    cache_key = f"{sport}_upcoming_predictions_v8"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
@@ -12943,15 +12950,16 @@ def _get_sport_ml_units_banner():
 
 
 # ===== SECTION: Placeholder matchup filtering =====
+# Bracket/TBD markers (soccer cups, etc.). All-Star / TEAM COOP names are handled
+# by the earlier _is_placeholder_team_name definition — do NOT redefine it here.
 _PLACEHOLDER_TEAM_MARKERS = (
     'winner', 'loser', 'tbd', 'tba', 'round of', 'qualifier',
     'to be determined', 'to be decided', 'winner of', 'loser of',
 )
 
-def _is_placeholder_team_name(name):
-    """True if a team label is an unresolved bracket/placeholder (e.g. a soccer
-    fixture like "Round of 32 12 Winner" or "TBD") rather than a real team
-    name. Used to keep such rows out of Today's Best Picks and the blog."""
+
+def _is_bracket_placeholder_team_name(name):
+    """True for unresolved bracket labels (e.g. soccer "Round of 32 Winner")."""
     if not name:
         return True
     _n = str(name).strip().lower()
@@ -16029,7 +16037,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v19::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v20::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
