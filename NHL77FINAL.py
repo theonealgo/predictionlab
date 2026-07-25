@@ -12990,7 +12990,7 @@ def _home_win_prob_from_pred(pred) -> float | None:
 
 def _cached_slate_for_homepage(sport):
     """Read a sport slate from memory/disk only — avoid cold rebuild on homepage."""
-    _ck = f"{sport}_upcoming_predictions_v6"
+    _ck = f"{sport}_upcoming_predictions_v8"
     _entry = _PREDICTIONS_CACHE.get(_ck)
     _data = _entry.get('data') if isinstance(_entry, dict) else None
     if _data:
