@@ -267,6 +267,75 @@ def _picks_robots_meta(*, filter_date=None, grouped_predictions=None):
     return _PICKS_ROBOTS_INDEX
 
 
+# All-Star / skills / exhibition sides (e.g. WNBA TEAM COOP vs TEAM SPOON) have
+# no real book odds or logos — showing them as picks collapses to 50% / — / PK.
+_PLACEHOLDER_TEAM_RE = re.compile(r'^TEAM\s+[A-Z0-9]+$', re.I)
+_ALLSTAR_EVENT_RE = re.compile(
+    r'all[\s-]?stars?|rising\s+stars?|team\s+coop|team\s+spoon|'
+    r'american\s+league|national\s+league|'
+    r'^american\s+all|^national\s+all',
+    re.I,
+)
+_PLACEHOLDER_TEAM_NAMES = frozenset({
+    'TEAM COOP', 'TEAM SPOON', 'TEAM USA', 'WORLD', 'EAST', 'WEST',
+    'AMERICAN ALL-STARS', 'NATIONAL ALL-STARS',
+    'AMERICAN ALL STARS', 'NATIONAL ALL STARS',
+    'AL ALL-STARS', 'NL ALL-STARS',
+})
+
+
+def _is_placeholder_team_name(name):
+    n = (name or '').strip()
+    if not n:
+        return True
+    up = n.upper()
+    if up in _PLACEHOLDER_TEAM_NAMES:
+        return True
+    if _PLACEHOLDER_TEAM_RE.match(n):
+        return True
+    if _ALLSTAR_EVENT_RE.search(n):
+        return True
+    return False
+
+
+def _is_exhibition_espn_competition(competition, event=None):
+    """True for ESPN All-Star / exhibition competitions (not regular-season games)."""
+    comp = competition or {}
+    typ = ((comp.get('type') or {}).get('abbreviation') or '').upper()
+    if typ in ('ALLSTAR', 'ALL-STAR', 'EXHIBITION'):
+        return True
+    notes = comp.get('notes') or []
+    headlines = ' '.join(
+        str(n.get('headline') or '') for n in notes if isinstance(n, dict)
+    )
+    event_name = ''
+    if isinstance(event, dict):
+        event_name = str(event.get('name') or event.get('shortName') or '')
+    blob = f'{event_name} {headlines}'.strip()
+    return bool(blob and _ALLSTAR_EVENT_RE.search(blob))
+
+
+def _is_exhibition_matchup(home, away, *, event_name=''):
+    if _is_placeholder_team_name(home) or _is_placeholder_team_name(away):
+        return True
+    blob = f'{event_name or ""} {home or ""} {away or ""}'
+    return bool(_ALLSTAR_EVENT_RE.search(blob))
+
+
+def _filter_exhibition_predictions(predictions):
+    """Drop All-Star / placeholder matchups from a picks slate."""
+    out = []
+    for pred in predictions or []:
+        if not isinstance(pred, dict):
+            continue
+        home = pred.get('home_team_id') or pred.get('home') or ''
+        away = pred.get('away_team_id') or pred.get('away') or ''
+        if _is_exhibition_matchup(home, away, event_name=pred.get('event_name') or ''):
+            continue
+        out.append(pred)
+    return out
+
+
 def _picks_for_filter_date(predictions, filter_date):
     """Games for a daily SEO URL — include finished games for that calendar day."""
     dated_preds = []
@@ -278,6 +347,8 @@ def _picks_for_filter_date(predictions, filter_date):
         away = pred.get('away_team_id')
         home = pred.get('home_team_id')
         if not away or not home or away == 'TBD' or home == 'TBD':
+            continue
+        if _is_exhibition_matchup(home, away):
             continue
         dated_preds.append(pred)
     return dated_preds
@@ -311,6 +382,8 @@ def _fetch_db_games_for_picks_date(sport, filter_date):
         if not away or not home or away == 'TBD' or home == 'TBD':
             continue
         gd['game_date'] = filter_date
+        if _is_exhibition_matchup(home, away):
+            continue
         games.append(gd)
     return games
 
@@ -6092,7 +6165,7 @@ def _recover_cached_predictions(sport):
     is far better than the 'could not be loaded' error banner when an upstream
     data/model dependency hiccups. Returns None when nothing is cached at all.
     """
-    cache_key = f"{sport}_upcoming_predictions_v6"  # must match get_upcoming_predictions
+    cache_key = f"{sport}_upcoming_predictions_v7"  # must match get_upcoming_predictions
     entry = _PREDICTIONS_CACHE.get(cache_key)
     data = entry.get('data') if isinstance(entry, dict) else None
     if not data:
@@ -6664,7 +6737,8 @@ _PICKS_DISPLAY_WINDOW = {
     # Daily-cadence sports: recent finals + a few days of upcoming games.
     'MLB':   {'past': 3, 'future': 3},
     'NBA':   {'past': 3, 'future': 5},
-    'WNBA':  {'past': 3, 'future': 5},
+    # future=7 so real games still show during All-Star week gaps
+    'WNBA':  {'past': 3, 'future': 7},
     'NCAAB': {'past': 3, 'future': 5},
     'NCAAW': {'past': 3, 'future': 5},
     # Weekly-cadence sports: widen 'future' so next week's slate still shows.
@@ -6695,7 +6769,8 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     _live_odds_ok = bool(_force_rebuild)
 
     # Fast in-process cache to avoid repeated heavy prediction recomputation.
-    cache_key = f"{sport}_upcoming_predictions_v6"
+    # v7: drop All-Star / placeholder matchups (WNBA COOP/SPOON, MLB ASG, etc.).
+    cache_key = f"{sport}_upcoming_predictions_v7"
     now_ts = _time.time()
     cache_ttl = _PREDICTIONS_TTL_BY_SPORT.get(sport, 180)
     cached = _PREDICTIONS_CACHE.get(cache_key)
@@ -6707,7 +6782,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             # on the multi-second model build.
             if (now_ts - cached['ts']) >= cache_ttl:
                 _start_background_predictions_refresh(sport, days)
-            out = _copy.deepcopy(_cached_preds)
+            out = _filter_exhibition_predictions(_copy.deepcopy(_cached_preds))
             try:
                 # Fast path: hydrate book_* from the betting_lines DB synchronously
                 # and refresh live ESPN/DK odds OFF the request path (throttled
@@ -6731,7 +6806,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
         if _recovered:
             _start_background_predictions_refresh(sport, days)
             _cold_refresh_started = True
-            out = _recovered
+            out = _filter_exhibition_predictions(_recovered)
             try:
                 _hydrate_book_lines_db_only(sport, out)
                 for _bp in out:
@@ -6904,6 +6979,10 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
 
                     home_team = home.get('team', {}).get('displayName', '')
                     away_team = away.get('team', {}).get('displayName', '')
+                    if _is_exhibition_espn_competition(competition, event) or _is_exhibition_matchup(
+                        home_team, away_team, event_name=event.get('name') or ''
+                    ):
+                        continue
                     event_id = event.get('id', '')
                     league_name = None
                     try:
@@ -7243,6 +7322,10 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
         # Only build cards inside the picks display window (see _PICKS_DISPLAY_WINDOW);
         # full history is served by the results page.
         if game_date >= _display_floor and game_date <= _display_ceiling:
+            _home_nm = game.get('home_team_id') or game.get('home_team_name') or ''
+            _away_nm = game.get('away_team_id') or game.get('away_team_name') or ''
+            if _is_exhibition_matchup(_home_nm, _away_nm, event_name=game.get('event_name') or ''):
+                continue
             # ============================================================
             # SOCCER MODELS + V2 PREDICTION SYSTEM
             # ============================================================
@@ -8176,6 +8259,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     except Exception as _bk_build:
         logger.debug(f"[{sport}] book refresh before predictions cache store: {_bk_build}")
 
+    predictions = _filter_exhibition_predictions(predictions)
     _trim_cache(_PREDICTIONS_CACHE, cache_ttl, max_entries=50)
     if predictions:
         _entry = {'ts': _time.time(), 'data': _copy.deepcopy(predictions)}
@@ -15945,7 +16029,7 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
-        cache_key = f"pred_page::v18::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
+        cache_key = f"pred_page::v19::{sport}::{filter_date or 'all'}::{selected_slug or 'default'}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -15988,6 +16072,7 @@ def sport_predictions(sport, filter_date=None):
                 f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
                 "Please refresh in a minute."
             )
+    predictions = _filter_exhibition_predictions(predictions)
     if filter_date:
         _seen = {
             (p.get('game_date'), p.get('home_team_id'), p.get('away_team_id'))
