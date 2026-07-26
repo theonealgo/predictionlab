@@ -3,11 +3,12 @@
 {% block title %}Prediction Labs | AI Sports Predictions and Betting Research{% endblock %}
 {% block head_meta %}
 {% if request.path == "/homepage-preview" %}<meta name="robots" content="noindex,nofollow">{% endif %}
-<meta name="description" content="AI-powered sports predictions with transparent model tracking. Free moneyline picks, win probabilities, and model performance for NBA, MLB, NHL, WNBA, NFL, and soccer.">
+<meta name="description" content="AI sports predictions with transparent tracking. Free moneyline picks and win probabilities for NBA, MLB, NHL, NFL, WNBA, and soccer.">
 <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ request.path }}">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
 <link rel="preload" as="image" href="/static/img/hero-canvas.webp" fetchpriority="high">
 <meta property="og:title" content="Prediction Labs | AI Sports Predictions and Betting Research">
-<meta property="og:description" content="AI-powered sports predictions with transparent model tracking. Free moneyline picks and win probabilities for NBA, MLB, NHL, WNBA, NFL, and soccer.">
+<meta property="og:description" content="AI sports predictions with transparent tracking. Free moneyline picks for NBA, MLB, NHL, NFL, WNBA, and soccer.">
 <meta property="og:type" content="website">
 {% endblock %}
 
@@ -278,7 +279,8 @@
     .pl2-h1-row { display: flex; align-items: flex-end; justify-content: flex-start; flex-wrap: wrap; gap: clamp(44px, 8vw, 145px); }
     .pl2-h1-side {
         font: 800 clamp(.62rem, 1vw, .88rem) var(--pl-mono); letter-spacing: .18em;
-        text-transform: uppercase; color: hsl(76 92% 42%); padding-bottom: .7rem; white-space: normal; min-width: 0;
+        /* Darker lime for WCAG AA on light hero (~4.5:1+); was hsl(76 92% 42%). */
+        text-transform: uppercase; color: hsl(78 72% 28%); padding-bottom: .7rem; white-space: normal; min-width: 0;
     }
     .pl2-hero-rule { height: 1px; width: 100%; background: var(--pl-line); margin-bottom: 32px; }
     .pl2-hero-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px 72px; align-items: start; }
@@ -292,7 +294,7 @@
     }
     .pl2-btn.primary { background: var(--pl-accent); border-color: var(--pl-accent); }
     .pl2-btn:hover { border-color: var(--pl-ink); background: var(--pl-fill); }
-    .pl2-hero-note { margin-top: 16px; color: hsl(0 0% 3.9% / 0.3); }
+    .pl2-hero-note { margin-top: 16px; color: hsl(0 0% 38%); }
     .pl2-stats {
         display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
         width: 100%; max-width: 580px; justify-self: end;
@@ -312,7 +314,8 @@
     .pl2-hero-scroll {
         position: absolute; bottom: 32px; right: 32px; z-index: 1;
         font: 800 .56rem var(--pl-mono); letter-spacing: .25em; text-transform: uppercase;
-        color: hsl(0 0% 3.9% / 0.25);
+        /* Solid gray — opacity wash failed PSI contrast (~2:1). ~4.6:1 on white. */
+        color: hsl(0 0% 38%);
     }
 
     /* ── Data horizon line ──────────────────────────────────── */
@@ -1150,26 +1153,29 @@ pl2RunDeferred(function () {
     document.querySelectorAll('.pl2-countup').forEach(function (el) { observer.observe(el); });
 })();
 
-/* Hero lens — cached rect; no layout reads on mousemove */
+/* Hero lens — layout read only on pointerenter/resize (never scroll/mousemove). */
 (function () {
     var hero = document.getElementById('picks');
     var lens = document.getElementById('pl2Lens');
     if (!hero || !lens) return;
     var left = 0;
     var top = 0;
+    var hasRect = false;
     function syncRect() {
         var r = hero.getBoundingClientRect();
         left = r.left;
         top = r.top;
+        hasRect = true;
     }
-    syncRect();
-    window.addEventListener('resize', syncRect, { passive: true });
-    window.addEventListener('scroll', syncRect, { passive: true });
+    hero.addEventListener('pointerenter', syncRect, { passive: true });
+    window.addEventListener('resize', function () { hasRect = false; }, { passive: true });
     hero.addEventListener('pointermove', function (e) {
+        if (!hasRect) syncRect();
         lens.style.setProperty('--lx', (e.clientX - left) + 'px');
         lens.style.setProperty('--ly', (e.clientY - top) + 'px');
     }, { passive: true });
     hero.addEventListener('pointerleave', function () {
+        hasRect = false;
         lens.style.setProperty('--lx', '-9999px');
         lens.style.setProperty('--ly', '-9999px');
     }, { passive: true });
