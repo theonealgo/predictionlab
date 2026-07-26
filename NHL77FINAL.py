@@ -6131,6 +6131,37 @@ def _persist_predictions_to_disk(cache_key, entry):
         logger.debug(f"[preds-disk] persist failed for {cache_key}: {_pe}")
 
 
+def _predictions_cache_key_aliases(sport):
+    """Current + prior slate keys so a version bump does not cold-start the site."""
+    return (
+        f"{sport}_upcoming_predictions_v8",
+        f"{sport}_upcoming_predictions_v7",
+        f"{sport}_upcoming_predictions_v6",
+    )
+
+
+def _promote_predictions_cache_aliases():
+    """Copy older versioned slate keys onto the current v8 key when v8 is missing."""
+    try:
+        sports = set()
+        for key in list(_PREDICTIONS_CACHE.keys()):
+            if not isinstance(key, str) or '_upcoming_predictions_v' not in key:
+                continue
+            sports.add(key.split('_upcoming_predictions_v', 1)[0])
+        for sport in sports:
+            keys = _predictions_cache_key_aliases(sport)
+            current = keys[0]
+            if _PREDICTIONS_CACHE.get(current, {}).get('data'):
+                continue
+            for alias in keys[1:]:
+                entry = _PREDICTIONS_CACHE.get(alias)
+                if isinstance(entry, dict) and entry.get('data'):
+                    _PREDICTIONS_CACHE[current] = entry
+                    break
+    except Exception:
+        pass
+
+
 def _load_predictions_disk_cache():
     """Seed _PREDICTIONS_CACHE from disk at startup so cold starts serve warm."""
     try:
@@ -6158,6 +6189,7 @@ def _load_predictions_disk_cache():
                 continue  # keep the fresher in-memory entry
             _PREDICTIONS_CACHE[key] = {'ts': ts, 'data': data}
             loaded += 1
+        _promote_predictions_cache_aliases()
         if loaded:
             logger.info(f"[preds-disk] seeded {loaded} prediction slate(s) from disk")
     except Exception as _le:
@@ -6172,17 +6204,23 @@ def _recover_cached_predictions(sport):
     is far better than the 'could not be loaded' error banner when an upstream
     data/model dependency hiccups. Returns None when nothing is cached at all.
     """
-    cache_key = f"{sport}_upcoming_predictions_v8"  # must match get_upcoming_predictions
-    entry = _PREDICTIONS_CACHE.get(cache_key)
-    data = entry.get('data') if isinstance(entry, dict) else None
+    data = None
+    for cache_key in _predictions_cache_key_aliases(sport):
+        entry = _PREDICTIONS_CACHE.get(cache_key)
+        data = entry.get('data') if isinstance(entry, dict) else None
+        if data:
+            break
     if not data:
         # Nothing in memory (e.g. right after a restart/redeploy) — try the disk mirror.
         try:
             _load_predictions_disk_cache()
         except Exception:
             pass
-        entry = _PREDICTIONS_CACHE.get(cache_key)
-        data = entry.get('data') if isinstance(entry, dict) else None
+        for cache_key in _predictions_cache_key_aliases(sport):
+            entry = _PREDICTIONS_CACHE.get(cache_key)
+            data = entry.get('data') if isinstance(entry, dict) else None
+            if data:
+                break
     if not data:
         return None
     try:
@@ -12990,11 +13028,11 @@ def _home_win_prob_from_pred(pred) -> float | None:
 
 def _cached_slate_for_homepage(sport):
     """Read a sport slate from memory/disk only — avoid cold rebuild on homepage."""
-    _ck = f"{sport}_upcoming_predictions_v8"
-    _entry = _PREDICTIONS_CACHE.get(_ck)
-    _data = _entry.get('data') if isinstance(_entry, dict) else None
-    if _data:
-        return _data
+    for _ck in _predictions_cache_key_aliases(sport):
+        _entry = _PREDICTIONS_CACHE.get(_ck)
+        _data = _entry.get('data') if isinstance(_entry, dict) else None
+        if _data:
+            return _data
     return _recover_cached_predictions(sport) or []
 
 
@@ -13039,40 +13077,9 @@ def _fill_homepage_picks_from_live_slates(todays_picks, target=6):
                 'slug': SPORT_SEO_SLUGS.get(_sport, ''),
                 'fallback_score': abs(_ens - 0.5),
             })
-    if not _pool:
-        for _sport in ('MLB', 'NBA', 'NHL'):
-            try:
-                _slate = get_upcoming_predictions(_sport) or []
-            except Exception:
-                continue
-            for _pred in _slate:
-                if not isinstance(_pred, dict) or _pred.get('home_score') is not None:
-                    continue
-                _gd = (_pred.get('game_date') or '')[:10]
-                if _gd != _today:
-                    continue
-                _home = _pred.get('home_team_id') or ''
-                _away = _pred.get('away_team_id') or ''
-                if _is_placeholder_team_name(_home) or _is_placeholder_team_name(_away):
-                    continue
-                _ens = _home_win_prob_from_pred(_pred)
-                if _ens is None:
-                    continue
-                _home_picked = _ens >= 0.5
-                _pick_prob = _ens if _home_picked else (1.0 - _ens)
-                _pool.append({
-                    'away': _away,
-                    'home': _home,
-                    'pick': _home if _home_picked else _away,
-                    'prob': round(_pick_prob * 100, 1),
-                    'home_prob': round(_ens * 100, 1),
-                    'away_prob': round((1.0 - _ens) * 100, 1),
-                    'pick_side': 'home' if _home_picked else 'away',
-                    'is_live': False,
-                    'sport': _sport,
-                    'slug': SPORT_SEO_SLUGS.get(_sport, ''),
-                    'fallback_score': abs(_ens - 0.5),
-                })
+    # Never call get_upcoming_predictions() here. Render runs workers=1; a cold
+    # MLB/NBA/NHL rebuild on the homepage request path wedges every thread and
+    # the whole site (including /static) times out with 0 bytes.
     _pool.sort(key=lambda x: x['fallback_score'], reverse=True)
     for _row in _pool:
         _key = f"{_row['sport']}::{_row['away']}::{_row['home']}"
