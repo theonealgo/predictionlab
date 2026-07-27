@@ -28,6 +28,9 @@
         <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
         <button type="button" class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
         <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+        {# Desktop header shows Blog + Pricing in .pl2-nav; on mobile that nav is hidden — keep them here #}
+        <a href="/blog" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Blog</span></a>
+        <a href="/plans" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Pricing</span></a>
         <button type="button" class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
         <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
           <button type="button" class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('community')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
@@ -62,10 +65,10 @@
 <script>
 var TV_MENUS={
   picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-picks'}{%- endif -%},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},
-  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'}]},
-  results:{title:'Results & Tracking',items:[{l:'Daily Results',h:'/daily-report'},{l:'All Sports Results',h:'/all-sports-results'},{l:'Model Performance',h:'/performance'},{l:'Edge Performance',h:'/edge-performance'},{l:'Download CSV',h:'/results/downloads'}]},
+  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Tutorial',h:'/tutorial'}]},
+  results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-results'}{%- endif -%},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'Daily Results',h:'/daily-report'},{l:'Download CSV',h:'/results/downloads'},{l:'Model Performance',h:'/performance'},{l:'Edge Performance',h:'/edge-performance'}]},
   community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://www.instagram.com/',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
-  company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
+  company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
 };
 function tvOpen(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
