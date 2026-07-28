@@ -185,6 +185,10 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
                 home_won=home_won,
                 is_draw=False,
             )
+            # All-Star / TEAM COOP–SPOON etc. — keep on page but exclude from tallies
+            if m._is_exhibition_matchup(home_team, away_team):
+                game_info['skip_grading'] = True
+                game_info['exhibition'] = True
 
             daily_results[game_info['date']]['games'].append(game_info)
         except Exception as _row_err:

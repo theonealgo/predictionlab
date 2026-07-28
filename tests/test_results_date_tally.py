@@ -47,11 +47,51 @@ def test_compute_results_tally_bundle_falls_back_to_latest_week():
     yesterday_dt = datetime(2026, 5, 30)
     bundle = N._compute_results_tally_bundle(daily, yesterday_dt)
 
-    assert bundle['results_stale_notice'] is False
+    # Calendar yesterday empty → fall back to latest gradable slate (stale notice on)
+    assert bundle['results_stale_notice'] is True
     assert bundle['weekly_tally_games'] == 1
     assert bundle['weekly_tally_date_range'] == '2026-05-06 to 2026-05-12'
     assert bundle['daily_tally_date'] == '2026-05-12'
     assert bundle['daily_tally']['ensemble']['total'] == 1
+
+
+def test_compute_results_tally_bundle_skips_exhibition_only_day():
+    """WNBA All-Star (TEAM SPOON @ TEAM COOP) must not become Last Night."""
+    import NHL77FINAL as N
+
+    daily = defaultdict(lambda: {'games': []})
+    daily['2026-07-25']['games'].append({
+        'home': 'TEAM COOP',
+        'away': 'TEAM SPOON',
+        'ens_prob': 50.0,
+        'ens_correct': False,
+        'elo_prob': 50.0,
+        'elo_correct': False,
+        'xgb_prob': 50.0,
+        'xgb_correct': False,
+        'skip_grading': False,
+    })
+    daily['2026-07-22']['games'].append({
+        'home': 'Indiana Fever',
+        'away': 'Connecticut Sun',
+        'ens_prob': 55.0,
+        'ens_correct': True,
+        'elo_prob': 52.0,
+        'elo_correct': True,
+        'xgb_prob': 48.0,
+        'xgb_correct': False,
+        'skip_grading': False,
+    })
+    yesterday_dt = datetime(2026, 7, 27)
+    bundle = N._compute_results_tally_bundle(daily, yesterday_dt, sport='WNBA')
+
+    assert bundle['daily_tally_date'] == '2026-07-22'
+    assert bundle['daily_tally_games'] == 1
+    assert bundle['daily_tally']['ensemble']['total'] == 1
+    assert bundle['weekly_tally_games'] == 1
+    # Exhibition day must not appear in dated fallback
+    dated = N._dated_games_in_daily_results(daily)
+    assert [dk for _, dk in dated] == ['2026-07-22']
 
 
 def test_sort_game_rows_by_date_desc_mixed_formats():
@@ -112,7 +152,8 @@ def test_nfl_sport_results_offseason_fallback_context(monkeypatch):
     out = N.sport_results('NFL')
 
     assert out == "ok"
-    assert captured['results_stale_notice'] is False
+    # Offseason / empty yesterday → fallback slate (stale notice on)
+    assert captured['results_stale_notice'] is True
     assert captured['daily_tally_date'] == stale_date
     assert captured['daily_tally_games'] == 1
     assert captured['weekly_tally_games'] == 1
@@ -239,7 +280,7 @@ def test_nba_results_uses_stale_tally_bundle(monkeypatch):
     out = N.sport_results('NBA')
 
     assert out == "ok"
-    assert captured['results_stale_notice'] is False
+    assert captured['results_stale_notice'] is True
     assert captured['daily_tally_date'] == stale_date
     assert captured['daily_tally_games'] == 1
     assert captured['weekly_tally_games'] == 1

@@ -2606,10 +2606,45 @@ def _grade_efficiency_ml_from_spread(sport, daily_results):
         logger.debug(f"[eff-ml] moneyline grading failed for {sport}: {_eff_ml_e}")
 
 
+def _mark_exhibition_skip_grading(daily_results):
+    """All-Star / placeholder sides must not pollute Last Night or Last-7 tallies.
+
+    Picks already filter these; results historically graded TEAM COOP/SPOON etc.
+    as real moneylines (0-1, no books) and the tally fallback treated that day as
+    the latest slate.
+    """
+    if not daily_results:
+        return
+    for dd in daily_results.values():
+        for g in dd.get('games') or []:
+            if not isinstance(g, dict):
+                continue
+            if _is_exhibition_matchup(
+                g.get('home') or g.get('home_team_id') or '',
+                g.get('away') or g.get('away_team_id') or '',
+                event_name=g.get('event_name') or '',
+            ):
+                g['skip_grading'] = True
+                g['exhibition'] = True
+
+
+def _gradable_result_games(games):
+    """Games that count toward model / ATS tallies (excludes exhibitions & draws)."""
+    out = []
+    for g in games or []:
+        if not isinstance(g, dict):
+            continue
+        if g.get('skip_grading'):
+            continue
+        out.append(g)
+    return out
+
+
 def _finalize_daily_result_cards(sport, daily_results):
     """Book lines + card display keys for every completed game (all sports)."""
     if not daily_results:
         return
+    _mark_exhibition_skip_grading(daily_results)
     try:
         _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25)
     except Exception as _bk:
@@ -6330,6 +6365,8 @@ def _compute_results_tally_bundle(
     league_scoped=False,
 ):
     """Daily + weekly tallies; when the calendar week is empty, use the latest window with games."""
+    # Safety net: exhibition sides (WNBA All-Star TEAM COOP/SPOON, etc.) never count.
+    _mark_exhibition_skip_grading(daily_results)
     yesterday = yesterday_dt.strftime('%Y-%m-%d')
     weekly_start_dt = yesterday_dt - timedelta(days=6)
     weekly_end_dt = yesterday_dt
@@ -6346,6 +6383,8 @@ def _compute_results_tally_bundle(
         if dated:
             daily_tally_date = dated[0][1]
             daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
+            if daily_tally_date != yesterday:
+                results_stale_notice = True
 
     use_soccer_matchday_window = (
         sport == 'SOCCER'
@@ -9744,6 +9783,10 @@ def compute_daily_model_tally(daily_results, target_date):
     day_bucket = daily_results.get(target_date)
     if not day_bucket or not day_bucket.get('games'):
         return None
+    games = _gradable_result_games(day_bucket.get('games', []))
+    if not games:
+        # Exhibition-only day (e.g. WNBA All-Star) — treat as empty for Last Night.
+        return None
     # ===== SECTION: Issue 5 — Efficiency as a 6th graded moneyline model =====
     model_configs = [
         ('glicko2',   'glicko2_correct', 'glicko2_prob'),
@@ -9754,9 +9797,7 @@ def compute_daily_model_tally(daily_results, target_date):
         ('efficiency', 'efficiency_correct', 'efficiency_prob'),
     ]
     tally = {m: {'correct': 0, 'total': 0} for m, _, _ in model_configs}
-    for game in day_bucket.get('games', []):
-        if game.get('skip_grading'):
-            continue
+    for game in games:
         for model_name, correct_key, prob_key in model_configs:
             if game.get(prob_key) is None:
                 continue
@@ -9767,9 +9808,9 @@ def compute_daily_model_tally(daily_results, target_date):
         t = tally[model_name]['total']
         c = tally[model_name]['correct']
         tally[model_name]['accuracy'] = round(c / t * 100, 1) if t > 0 else 0.0
-    tally['games'] = len(day_bucket.get('games', []))
+    tally['games'] = len(games)
     # Add spread + O/U tally
-    sp, ou = _tally_spread_total(day_bucket.get('games', []))
+    sp, ou = _tally_spread_total(games)
     tally['spread'] = sp
     tally['total_ou'] = ou
     return tally
@@ -9816,12 +9857,10 @@ def compute_model_tally_for_range(daily_results, start_date=None, end_date=None)
     for date_key, day_data in daily_results.items():
         if not _date_in_range(date_key, start_date, end_date):
             continue
-        games = day_data.get('games', [])
+        games = _gradable_result_games(day_data.get('games', []))
         total_games += len(games)
         all_games.extend(games)
         for game in games:
-            if game.get('skip_grading'):
-                continue
             for model_name, correct_key, prob_key in model_configs:
                 if game.get(prob_key) is None:
                     continue
@@ -11490,14 +11529,23 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .model-acc { font-size:1.4em; font-weight:700; color:#00C076; }
     .model-rec { font-size:0.82em; opacity:0.85; }
     .daily-tally { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
-    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.15em; color:#0F172A; font-weight:700; }
+    .daily-tally-head { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; margin:0 0 12px 0; }
+    .daily-tally-head h2 { text-align:center; margin:0; font-size:1.15em; color:#0F172A; font-weight:700; }
+    .tally-share-wrap { position:relative; display:inline-flex; align-items:center; }
+    .tally-share-btn { appearance:none; cursor:pointer; padding:5px 12px; border-radius:8px; border:1px solid rgba(15,23,42,0.2); background:#fff; color:#0f172a; font-size:0.72em; font-weight:800; letter-spacing:0.2px; display:inline-flex; align-items:center; gap:5px; line-height:1.2; }
+    .tally-share-btn:hover { border-color:#00529B; background:rgba(0,82,155,0.08); color:#00529B; }
+    .tally-share-btn.copied { background:#00C076; border-color:#00C076; color:#fff; }
+    .tally-share-menu { position:absolute; top:calc(100% + 6px); right:0; z-index:30; min-width:148px; padding:6px; background:#fff; border:1px solid rgba(15,23,42,0.14); border-radius:10px; box-shadow:0 8px 24px rgba(15,23,42,0.12); display:flex; flex-direction:column; gap:4px; }
+    .tally-share-menu[hidden] { display:none !important; }
+    .tally-share-menu button { appearance:none; border:none; background:transparent; text-align:left; padding:8px 10px; border-radius:8px; font-size:0.78em; font-weight:700; color:#0f172a; cursor:pointer; }
+    .tally-share-menu button:hover { background:#f1f5f9; color:#00529B; }
     .daily-tally-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
     .daily-tally-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:10px; padding:10px; text-align:center; box-shadow:0 2px 12px rgba(15,23,42,0.06); }
     .daily-tally-card.highlight { border:2px solid #fbbf24; }
     .daily-model { font-size:0.78em; opacity:0.85; margin-bottom:4px; }
     .daily-acc { font-size:1.35em; font-weight:700; }
     .daily-rec { font-size:0.8em; opacity:0.8; }
-    @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} }
+    @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
@@ -11534,7 +11582,26 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Daily Tally ── -->
         {% if daily_tally %}
         <div class="daily-tally">
-            <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+            {% set _ens = daily_tally.get('ensemble') if daily_tally else none %}
+            <div class="daily-tally-head">
+                <h2>Last Night's {{ sport_info.name }} Results — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+                <div class="tally-share-wrap">
+                    <button type="button" class="tally-share-btn" id="dailyTallyShareBtn" aria-haspopup="true" aria-expanded="false" aria-label="Share Last Night's {{ sport_info.name }} Results"
+                        data-sport="{{ sport_info.name }}"
+                        data-icon="{{ sport_info.icon }}"
+                        data-date="{{ daily_tally_date }}"
+                        data-games="{{ daily_tally_games }}"
+                        data-ens-acc="{% if _ens and _ens.total %}{{ _ens.accuracy }}{% endif %}"
+                        data-ens-rec="{% if _ens and _ens.total %}{{ _ens.correct }}-{{ _ens.total - _ens.correct }}{% endif %}"
+                        data-spread-acc="{% if daily_tally.spread is defined and daily_tally.spread.total %}{{ daily_tally.spread.accuracy }}{% endif %}"
+                        data-ou-acc="{% if daily_tally.total_ou is defined and daily_tally.total_ou.total %}{{ daily_tally.total_ou.accuracy }}{% endif %}"
+                        data-share-url="https://predictionlab.io/{{ sport_results_slug }}">Share</button>
+                    <div class="tally-share-menu" id="dailyTallyShareMenu" hidden role="menu">
+                        <button type="button" data-share-action="copy" role="menuitem">Copy text</button>
+                        <button type="button" data-share-action="twitter" role="menuitem">Post on X</button>
+                    </div>
+                </div>
+            </div>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in tally_model_cards %}
@@ -11585,7 +11652,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Last 7 Days Tally ── -->
         {% if weekly_tally %}
         <div class="daily-tally">
-            <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+            <h2>Last 7 Days {{ sport_info.name }} Results — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
             <div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>
             <div class="daily-tally-grid">
                 {% for m_label, m_key in tally_model_cards %}
@@ -11817,6 +11884,71 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             el.style.display = (mode === 'all' || el.classList.contains('section-' + mode)) ? '' : 'none';
         });
     }
+    /* ── Share Last Night's Results ── */
+    function buildTallySharePayload(btn) {
+        const sport = btn.dataset.sport || '';
+        const icon = btn.dataset.icon || '';
+        const date = btn.dataset.date || '';
+        const games = btn.dataset.games || '0';
+        const ensAcc = btn.dataset.ensAcc || '';
+        const ensRec = btn.dataset.ensRec || '';
+        const spread = btn.dataset.spreadAcc || '';
+        const ou = btn.dataset.ouAcc || '';
+        const url = btn.dataset.shareUrl || window.location.href;
+        const lines = [(icon + " Last Night's " + sport + " Results (" + date + ') — ' + games + ' games').replace(/^\\s+/, '')];
+        if (ensAcc) lines.push('Sharp Consensus: ' + ensAcc + '% (' + ensRec + ')');
+        const extras = [];
+        if (spread) extras.push('Spread ' + spread + '%');
+        if (ou) extras.push('O/U ' + ou + '%');
+        if (extras.length) lines.push(extras.join(' · '));
+        const body = lines.join('\\n');
+        const fullText = body + '\\n' + url + '\\nvia PredictionLab';
+        return { title: "Last Night's " + sport + " Results", body: body, fullText: fullText, url: url };
+    }
+    function setTallyShareMenuOpen(open) {
+        const btn = document.getElementById('dailyTallyShareBtn');
+        const menu = document.getElementById('dailyTallyShareMenu');
+        if (!btn || !menu) return;
+        menu.hidden = !open;
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    async function copyTallyShareText(btn) {
+        const payload = buildTallySharePayload(btn);
+        try {
+            await navigator.clipboard.writeText(payload.fullText);
+        } catch (_) {
+            const ta = document.createElement('textarea');
+            ta.value = payload.fullText;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+        }
+        const prev = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(function(){ btn.textContent = prev; btn.classList.remove('copied'); }, 1600);
+    }
+    function tweetTallyShare(btn) {
+        const payload = buildTallySharePayload(btn);
+        window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(payload.fullText), '_blank', 'noopener');
+    }
+    async function shareDailyTally(btn) {
+        const payload = buildTallySharePayload(btn);
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: payload.title, text: payload.body + '\\nvia PredictionLab', url: payload.url });
+                setTallyShareMenuOpen(false);
+                return;
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;
+            }
+        }
+        setTallyShareMenuOpen(true);
+    }
     /* ── Date slider ── */
     const allDates = {{ sorted_dates|reverse|list|tojson }};
     const today = '{{ today_date }}';
@@ -11856,6 +11988,29 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             activeDate=allDates[lastIdx];
         }
         showDate(activeDate);renderBubbles();
+        const shareBtn = document.getElementById('dailyTallyShareBtn');
+        const shareMenu = document.getElementById('dailyTallyShareMenu');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', function(e){
+                e.preventDefault();
+                e.stopPropagation();
+                shareDailyTally(shareBtn);
+            });
+        }
+        if (shareMenu) {
+            shareMenu.addEventListener('click', function(e){
+                const actionBtn = e.target.closest('[data-share-action]');
+                if (!actionBtn || !shareBtn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const action = actionBtn.getAttribute('data-share-action');
+                if (action === 'copy') copyTallyShareText(shareBtn);
+                if (action === 'twitter') tweetTallyShare(shareBtn);
+                setTallyShareMenuOpen(false);
+            });
+        }
+        document.addEventListener('click', function(){ setTallyShareMenuOpen(false); });
+        document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
 """ + _SEO_RESULTS_PAGE_FOOTER + """
@@ -11936,7 +12091,16 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         background: rgba(16, 185, 129, 0.1);
     }
     .daily-tally { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:20px; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
-    .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.2em; color:#0F172A; font-weight:700; }
+    .daily-tally-head { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; margin:0 0 12px 0; }
+    .daily-tally-head h2 { text-align:center; margin:0; font-size:1.2em; color:#0F172A; font-weight:700; }
+    .tally-share-wrap { position:relative; display:inline-flex; align-items:center; }
+    .tally-share-btn { appearance:none; cursor:pointer; padding:5px 12px; border-radius:8px; border:1px solid rgba(15,23,42,0.2); background:#fff; color:#0f172a; font-size:0.72em; font-weight:800; letter-spacing:0.2px; display:inline-flex; align-items:center; gap:5px; line-height:1.2; }
+    .tally-share-btn:hover { border-color:#00529B; background:rgba(0,82,155,0.08); color:#00529B; }
+    .tally-share-btn.copied { background:#00C076; border-color:#00C076; color:#fff; }
+    .tally-share-menu { position:absolute; top:calc(100% + 6px); right:0; z-index:30; min-width:148px; padding:6px; background:#fff; border:1px solid rgba(15,23,42,0.14); border-radius:10px; box-shadow:0 8px 24px rgba(15,23,42,0.12); display:flex; flex-direction:column; gap:4px; }
+    .tally-share-menu[hidden] { display:none !important; }
+    .tally-share-menu button { appearance:none; border:none; background:transparent; text-align:left; padding:8px 10px; border-radius:8px; font-size:0.78em; font-weight:700; color:#0f172a; cursor:pointer; }
+    .tally-share-menu button:hover { background:#f1f5f9; color:#00529B; }
     .daily-tally-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
     .daily-tally-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:10px; padding:10px; text-align:center; box-shadow:0 2px 12px rgba(15,23,42,0.06); }
     .daily-tally-card.highlight { border:2px solid #fbbf24; }
@@ -12012,7 +12176,26 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     
     {% if daily_tally %}
     <div class="daily-tally">
-        <h2>Last Night's Tally — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+        {% set _ens = daily_tally.get('ensemble') if daily_tally else none %}
+        <div class="daily-tally-head">
+            <h2>Last Night's {{ sport_info.name }} Results — {{ daily_tally_date }} ({{ daily_tally_games }} games)</h2>
+            <div class="tally-share-wrap">
+                <button type="button" class="tally-share-btn" id="dailyTallyShareBtn" aria-haspopup="true" aria-expanded="false" aria-label="Share Last Night's {{ sport_info.name }} Results"
+                    data-sport="{{ sport_info.name }}"
+                    data-icon="{{ sport_info.icon }}"
+                    data-date="{{ daily_tally_date }}"
+                    data-games="{{ daily_tally_games }}"
+                    data-ens-acc="{% if _ens and _ens.total %}{{ _ens.accuracy }}{% endif %}"
+                    data-ens-rec="{% if _ens and _ens.total %}{{ _ens.correct }}-{{ _ens.total - _ens.correct }}{% endif %}"
+                    data-spread-acc=""
+                    data-ou-acc=""
+                    data-share-url="https://predictionlab.io/{{ sport_results_slug }}">Share</button>
+                <div class="tally-share-menu" id="dailyTallyShareMenu" hidden role="menu">
+                    <button type="button" data-share-action="copy" role="menuitem">Copy text</button>
+                    <button type="button" data-share-action="twitter" role="menuitem">Post on X</button>
+                </div>
+            </div>
+        </div>
         <div class="daily-tally-grid">
             {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
             {% set m = daily_tally[m_key] %}
@@ -12036,7 +12219,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     {% endif %}
     {% if weekly_tally %}
     <div class="daily-tally">
-        <h2>Last 7 Days Tally — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
+        <h2>Last 7 Days {{ sport_info.name }} Results — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
         <div class="daily-tally-grid">
             {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
             {% set m = weekly_tally[m_key] %}
@@ -12122,6 +12305,97 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     {% else %}
         <div class="no-data">No completed NFL games available yet.</div>
     {% endif %}
+<script>
+    function buildTallySharePayload(btn) {
+        const sport = btn.dataset.sport || '';
+        const icon = btn.dataset.icon || '';
+        const date = btn.dataset.date || '';
+        const games = btn.dataset.games || '0';
+        const ensAcc = btn.dataset.ensAcc || '';
+        const ensRec = btn.dataset.ensRec || '';
+        const spread = btn.dataset.spreadAcc || '';
+        const ou = btn.dataset.ouAcc || '';
+        const url = btn.dataset.shareUrl || window.location.href;
+        const lines = [(icon + " Last Night's " + sport + " Results (" + date + ') — ' + games + ' games').replace(/^\\s+/, '')];
+        if (ensAcc) lines.push('Sharp Consensus: ' + ensAcc + '% (' + ensRec + ')');
+        const extras = [];
+        if (spread) extras.push('Spread ' + spread + '%');
+        if (ou) extras.push('O/U ' + ou + '%');
+        if (extras.length) lines.push(extras.join(' · '));
+        const body = lines.join('\\n');
+        const fullText = body + '\\n' + url + '\\nvia PredictionLab';
+        return { title: "Last Night's " + sport + " Results", body: body, fullText: fullText, url: url };
+    }
+    function setTallyShareMenuOpen(open) {
+        const btn = document.getElementById('dailyTallyShareBtn');
+        const menu = document.getElementById('dailyTallyShareMenu');
+        if (!btn || !menu) return;
+        menu.hidden = !open;
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    async function copyTallyShareText(btn) {
+        const payload = buildTallySharePayload(btn);
+        try {
+            await navigator.clipboard.writeText(payload.fullText);
+        } catch (_) {
+            const ta = document.createElement('textarea');
+            ta.value = payload.fullText;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+        }
+        const prev = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(function(){ btn.textContent = prev; btn.classList.remove('copied'); }, 1600);
+    }
+    function tweetTallyShare(btn) {
+        const payload = buildTallySharePayload(btn);
+        window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(payload.fullText), '_blank', 'noopener');
+    }
+    async function shareDailyTally(btn) {
+        const payload = buildTallySharePayload(btn);
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: payload.title, text: payload.body + '\\nvia PredictionLab', url: payload.url });
+                setTallyShareMenuOpen(false);
+                return;
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;
+            }
+        }
+        setTallyShareMenuOpen(true);
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+        const shareBtn = document.getElementById('dailyTallyShareBtn');
+        const shareMenu = document.getElementById('dailyTallyShareMenu');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', function(e){
+                e.preventDefault();
+                e.stopPropagation();
+                shareDailyTally(shareBtn);
+            });
+        }
+        if (shareMenu) {
+            shareMenu.addEventListener('click', function(e){
+                const actionBtn = e.target.closest('[data-share-action]');
+                if (!actionBtn || !shareBtn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const action = actionBtn.getAttribute('data-share-action');
+                if (action === 'copy') copyTallyShareText(shareBtn);
+                if (action === 'twitter') tweetTallyShare(shareBtn);
+                setTallyShareMenuOpen(false);
+            });
+        }
+        document.addEventListener('click', function(){ setTallyShareMenuOpen(false); });
+        document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
+    });
+</script>
 """ + _SEO_RESULTS_PAGE_FOOTER + """
 """)
 
@@ -16615,7 +16889,7 @@ def sport_results(sport):
             )
         
         if sport == 'NHL':
-            cache_key = f'{sport}_moneyline_results_html_v3'
+            cache_key = f'{sport}_moneyline_results_html_v4'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
@@ -16821,7 +17095,7 @@ def sport_results(sport):
                 return f"<h1>NHL results page failed to render because of a processing error: {str(e)}</h1>"
         
         if sport == 'NBA':
-            cache_key = f'{sport}_daily_results_html_v7'
+            cache_key = f'{sport}_daily_results_html_v8'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
             if isinstance(cached_page, dict):
@@ -16933,7 +17207,7 @@ def sport_results(sport):
                 selected_league = _soccer_league_from_slug(selected_slug)
                 if not selected_league and selected_slug:
                     selected_league = None
-            cache_key = f'{sport}_daily_results_html_v2'
+            cache_key = f'{sport}_daily_results_html_v3'
             skip_cache = False
             if sport == 'SOCCER':
                 if selected_league:
@@ -17880,12 +18154,17 @@ def _all_result_dates_sorted(daily_results):
 
 
 def _dated_games_in_daily_results(daily_results, *, season_start_dt=None, before_dt=None):
-    """Sorted (date, date_key) pairs that have at least one graded game."""
-    dated = [
-        (parse_date(dk), dk)
-        for dk, bucket in daily_results.items()
-        if dk and bucket.get('games') and parse_date(dk)
-    ]
+    """Sorted (date, date_key) pairs that have at least one gradable (non-exhibition) game."""
+    dated = []
+    for dk, bucket in (daily_results or {}).items():
+        if not dk or not bucket:
+            continue
+        dt = parse_date(dk)
+        if not dt:
+            continue
+        if not _gradable_result_games(bucket.get('games')):
+            continue
+        dated.append((dt, dk))
     if season_start_dt:
         dated = [(dt, dk) for dt, dk in dated if dt >= season_start_dt]
     if before_dt is not None:
