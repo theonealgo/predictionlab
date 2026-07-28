@@ -5,12 +5,17 @@
 {% if request.path == "/homepage-preview" %}<meta name="robots" content="noindex,nofollow">{% endif %}
 <meta name="description" content="AI sports predictions with transparent tracking. Free moneyline picks and win probabilities for NBA, MLB, NHL, NFL, WNBA, and soccer.">
 <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ request.path }}">
-<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-<link rel="preload" as="image" href="/static/img/hero-canvas.webp" fetchpriority="high">
+{# Decorative canvas only — do not contend with LCP text for Slow-4G bandwidth. #}
+<link rel="preload" as="image" href="/static/img/hero-canvas.webp" fetchpriority="low">
 <meta property="og:title" content="Prediction Labs | AI Sports Predictions and Betting Research">
 <meta property="og:description" content="AI sports predictions with transparent tracking. Free moneyline picks for NBA, MLB, NHL, NFL, WNBA, and soccer.">
 <meta property="og:type" content="website">
 {% endblock %}
+
+{# Homepage already hides these; omit from DOM to cut element count. #}
+{% block share_strip %}{% endblock %}
+{% block join_premium_bar %}{% endblock %}
+{% block header_logo_js %}{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -254,11 +259,19 @@
         font: 900 .68rem var(--pl-mono); letter-spacing: .12em; text-transform: uppercase;
     }
 
+    /* Below-fold sections: skip layout/paint until near viewport (LCP / long-task relief). */
+    .pl2-sec,
+    .site-directory-footer {
+        content-visibility: auto;
+        contain-intrinsic-size: 800px;
+    }
+
     /* ── Hero ───────────────────────────────────────────────── */
     .pl2-hero {
         position: relative; min-height: calc(100vh - 64px); display: flex; flex-direction: column; justify-content: flex-start;
         overflow: hidden; padding: clamp(280px, 19vw, 360px) 0 180px;
         background: hsl(45 35% 99.5% / .78);
+        content-visibility: visible;
     }
     .pl2-hero-lens {
         position: absolute; z-index: 0; pointer-events: none; border-radius: 50%;
@@ -284,7 +297,11 @@
     }
     .pl2-hero-rule { height: 1px; width: 100%; background: var(--pl-line); margin-bottom: 32px; }
     .pl2-hero-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px 72px; align-items: start; }
-    .pl2-lede { max-width: 560px; margin: 0 0 32px; color: hsl(0 0% 18%); font-size: 1.125rem; line-height: 1.6; font-weight: 500; }
+    .pl2-lede {
+        max-width: 560px; margin: 0 0 32px; color: hsl(0 0% 18%);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 1.125rem; line-height: 1.6; font-weight: 500;
+    }
     .pl2-hero-cta { display: flex; flex-wrap: wrap; gap: 16px; }
     .pl2-btn {
         min-height: 48px; display: inline-flex; align-items: center; justify-content: center;
@@ -1231,7 +1248,6 @@ pl2RunDeferred(function () {
         });
     });
 })();
-});
 
 /* ActiveBreadcrumb — IntersectionObserver (no getBoundingClientRect on scroll) */
 (function () {
@@ -1274,5 +1290,6 @@ pl2RunDeferred(function () {
     sections.forEach(function (sec) { io.observe(sec); });
     apply(sections[0]);
 })();
+});
 </script>
 {% endblock %}

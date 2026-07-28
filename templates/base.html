@@ -7,8 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% block head_meta %}{% endblock %}
     <title>{% block title %}AI Sports Predictions & Game Forecasts | predictionlab.io{% endblock %}</title>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap"></noscript>
+    {# Research chrome uses system/Arial/mono stacks — skip Google Fonts on the critical path.
+       Pages that need webfonts can override {% block fonts %}. #}
+    {% block fonts %}{% endblock %}
     <style>
         *{margin:0;padding:0;box-sizing:border-box;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:#0f172a;min-height:100vh;}
@@ -209,7 +210,7 @@
         .site-footer{background:rgba(255,255,255,0.72);border-top:1px solid rgba(15,23,42,0.12);padding:22px 24px 28px;color:#475569;font-size:0.88em;backdrop-filter:saturate(140%) blur(2px);}
         .footer-outer{max-width:1200px;margin:0 auto;}
         .footer-brand{margin-bottom:18px;}
-        .footer-brand .logo{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.15rem;color:#0f172a;text-decoration:none;letter-spacing:0.3px;}
+        .footer-brand .logo{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:700;font-size:1.15rem;color:#0f172a;text-decoration:none;letter-spacing:0.3px;}
         .footer-columns-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 36px;align-items:start;}
         .footer-heading{font-size:0.72em;text-transform:uppercase;letter-spacing:0.55px;font-weight:800;color:#0f172a;margin:0 0 12px;}
         .footer-col-blk a{display:block;font-size:0.88em;line-height:1.85;color:#475569;text-decoration:none;font-weight:500;padding:2px 0;}
@@ -295,6 +296,7 @@
     {% endwith %}
     {% block content %}{% endblock %}
 </main>
+{% block share_strip %}
 <div class="share-strip">
     <span class="share-strip-label">Share on social media</span>
     <div class="share-icons">
@@ -309,7 +311,9 @@
         <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
     </div>
 </div>
+{% endblock %}
 {% include "partials/site_directory_footer.html" %}
+{% block join_premium_bar %}
 {% if not is_premium|default(false) %}
 <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
     <div class="join-premium-inner">
@@ -321,6 +325,7 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
 <script>
 var TV_MENUS={
   picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{%- if soccer_enabled -%},{l:'Soccer',h:'/soccer-picks'}{%- endif -%},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},
@@ -382,7 +387,9 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
 </script>
+{% block header_logo_js %}
 <script src="/static/js/pl-header-logo.js" defer></script>
+{% endblock %}
 {% block scripts %}{% endblock %}
 </body>
 </html>
