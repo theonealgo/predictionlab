@@ -260,11 +260,42 @@ def _picks_display_dates(grouped_predictions, today_date):
 
 
 _PICKS_ROBOTS_INDEX = 'index,follow,max-image-preview:large,max-snippet:-1'
+_PICKS_ROBOTS_NOINDEX = 'noindex,follow'
 
 
-def _picks_robots_meta(*, filter_date=None, grouped_predictions=None):
-    """Picks hubs and dated SEO pages should stay indexable for Google."""
+def _picks_grouped_has_games(grouped_predictions):
+    """True when a picks slate has at least one real game card to show."""
+    if not grouped_predictions:
+        return False
+    for games in grouped_predictions.values():
+        if games:
+            return True
+    return False
+
+
+def _picks_robots_meta(*, sport=None, filter_date=None, grouped_predictions=None):
+    """Index hubs + dated pages with real picks; noindex thin/empty dated URLs.
+
+    Dated GOLF pages are always noindex (ephemeral / often empty) so they do not
+    burn crawl budget ("Crawled - currently not indexed").
+    """
+    sport_key = (sport or '').upper()
+    if filter_date and sport_key == 'GOLF':
+        return _PICKS_ROBOTS_NOINDEX
+    if filter_date and not _picks_grouped_has_games(grouped_predictions):
+        return _PICKS_ROBOTS_NOINDEX
     return _PICKS_ROBOTS_INDEX
+
+
+def _picks_page_canonical_url(*, sport=None, filter_date=None, grouped_predictions=None):
+    """Self-canonical when the dated slate has games; otherwise point at the sport hub."""
+    sport_key = (sport or '').upper()
+    if filter_date and sport_key and (
+        sport_key == 'GOLF' or not _picks_grouped_has_games(grouped_predictions)
+    ):
+        slug = SPORT_SEO_SLUGS.get(sport_key) or f'{sport_key.lower()}-picks'
+        return f'{_SITE_DOMAIN}/{slug}'
+    return _seo_canonical_url()
 
 
 # All-Star / skills / exhibition sides (e.g. WNBA TEAM COOP vs TEAM SPOON) have
@@ -4417,10 +4448,49 @@ CORS(app, origins=[
 ])
 
 _CANONICAL_HOST = 'predictionlab.io'
+_SITE_DOMAIN = f'https://{_CANONICAL_HOST}'
+
+
+def _resolve_legacy_seo_target(path):
+    """Map legacy paths to final SEO path (+query if needed). None if already final.
+
+    Defined early so host redirects can collapse www/http + old paths into one 301.
+    Looks up SPORT_SEO_SLUGS at call time (populated below).
+    """
+    path = (path or '/').rstrip('/') or '/'
+    m = re.match(r'^/sport/SOCCER/predictions/([^/]+)$', path, re.I)
+    if m:
+        return f'/soccer-picks?league={m.group(1)}'
+    m = re.match(r'^/sport/SOCCER/results/([^/]+)$', path, re.I)
+    if m:
+        return f'/soccer-results?league={m.group(1)}'
+    m = re.match(r'^/sport/([^/]+)/(predictions|results)$', path, re.I)
+    if m:
+        sport = m.group(1).upper()
+        kind = m.group(2).lower()
+        slug_map = SPORT_SEO_SLUGS if kind == 'predictions' else _SPORT_RESULTS_SLUGS
+        slug = slug_map.get(sport)
+        if slug:
+            return f'/{slug}'
+    m = re.match(r'^/sport/([^/]+)$', path, re.I)
+    if m:
+        slug = SPORT_SEO_SLUGS.get(m.group(1).upper())
+        if slug:
+            return f'/{slug}'
+    if path.endswith('-predictions'):
+        return path[: -len('-predictions')] + '-picks'
+    if path.endswith('-prediction'):
+        return path[: -len('-prediction')] + '-picks'
+    return None
+
 
 @app.before_request
 def enforce_canonical_domain():
-    """Redirect underdogs.bet/http variants to canonical https://predictionlab.io."""
+    """Redirect underdogs.bet / www / http variants to canonical https://predictionlab.io.
+
+    When rewriting host/scheme, also collapse legacy /sport/*/predictions paths into
+    the final SEO URL so crawlers get a single 301 (not www→apex then path→slug).
+    """
     host = (request.host or '').split(':')[0].lower()
     if not host or host in {'localhost', '127.0.0.1'} or host.endswith('.local'):
         return None
@@ -4429,13 +4499,15 @@ def enforce_canonical_domain():
     target_host = _CANONICAL_HOST
     is_https = request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https'
     needs_redirect = (host != target_host) or (not is_https)
+    legacy = _resolve_legacy_seo_target(request.path)
     if not needs_redirect:
-        # Canonicalize noisy homepage query URLs seen by crawlers (/?q=...).
         if request.path == '/' and request.args.get('q'):
             return redirect(f"https://{target_host}/", code=301)
         return None
-    # request.full_path includes trailing '?' when no query string; strip it.
-    full_path = request.full_path[:-1] if request.full_path.endswith('?') else request.full_path
+    if legacy:
+        full_path = legacy
+    else:
+        full_path = request.full_path[:-1] if request.full_path.endswith('?') else request.full_path
     return redirect(f"https://{target_host}{full_path}", code=301)
 
 @app.context_processor
@@ -13518,8 +13590,6 @@ def landing_page():
             _LANDING_PAGE_CACHE['html'] = rendered
     return rendered
 
-_SITE_DOMAIN = 'https://predictionlab.io'
-
 _PUBLIC_TO_INTERNAL_MODEL = {
     'grinder2': 'Glicko-2',
     'takedown': 'TrueSkill',
@@ -15528,13 +15598,22 @@ def _validate_contact_submission():
     return True, None, {'name': name, 'email': reply_to, 'topic': topic, 'message': message}
 
 
+def _sitemap_loc_is_canonical(loc):
+    """Only allow final https://predictionlab.io/... URLs (no www/http/legacy /sport/)."""
+    if not loc or not loc.startswith(_SITE_DOMAIN):
+        return False
+    if 'www.' in loc or loc.startswith('http://') or '/sport/' in loc:
+        return False
+    return True
+
+
 @app.route('/sitemap.xml')
 def sitemap_xml():
     today = datetime.now().strftime('%Y-%m-%d')
     now = datetime.now()
     urls = []
 
-    # Homepage
+    # Homepage — apex HTTPS only (never www / http / redirecting URLs)
     urls.append((_SITE_DOMAIN + '/', 'daily', '1.0'))
 
     # Sport picks + results pages (only in-season sports get dated pages)
@@ -15548,15 +15627,19 @@ def sitemap_xml():
             urls.append((f"{_SITE_DOMAIN}/{picks_slug}", 'daily', '0.9'))
         if results_slug and _is_live:
             urls.append((f"{_SITE_DOMAIN}/{results_slug}", 'daily', '0.8'))
-        # Daily SEO pages only for in-season sports
-        if picks_slug and _is_live:
-            for days_back in range(8):
+        # Dated SEO URLs only for calendar team sports that are in-season.
+        # Skip GOLF/TENNIS/UFC (no season window → always "live") — those dated
+        # pages are often empty and waste crawl budget ("Crawled - not indexed").
+        # Keep today + yesterday only; older empty dated URLs stay 200 + noindex.
+        if picks_slug and _is_live and sport_key in SEASON_CALENDAR:
+            for days_back in range(2):
                 d = now - timedelta(days=days_back)
                 month_name = _MONTH_NAMES.get(d.month, 'january')
                 daily_url = f"{_SITE_DOMAIN}/{picks_slug}-{month_name}-{d.day}-{d.year}"
                 urls.append((daily_url, 'daily', '0.7'))
 
-    # Static pages
+    # Static / evergreen pages. Thin auto Trends blog is noindex — omit from sitemap.
+    # Do not list /auth/*, /share/*, or legacy /sport/*/predictions (robots or 301s).
     urls.append((_SITE_DOMAIN + '/all-sports-results', 'weekly', '0.75'))
     urls.append((_SITE_DOMAIN + '/daily-report', 'daily', '0.8'))
     urls.append((_SITE_DOMAIN + '/plans', 'weekly', '0.8'))
@@ -15569,6 +15652,9 @@ def sitemap_xml():
     urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/terms', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/responsible-gaming', 'monthly', '0.4'))
+
+    # Defense: never advertise redirecting URLs (www, http, /sport/*/predictions)
+    urls = [(loc, freq, prio) for loc, freq, prio in urls if _sitemap_loc_is_canonical(loc)]
 
     urlset = "\n".join(
         f'<url><loc>{loc}</loc><lastmod>{today}</lastmod><changefreq>{freq}</changefreq><priority>{prio}</priority></url>'
@@ -15668,9 +15754,9 @@ def all_sports_results_page():
 def seo_picks_page(slug):
     """Handle SEO-friendly URLs like /nhl-picks, /nba-picks, /nhl-results, etc."""
     if slug.endswith('-predictions'):
-        return redirect(f"/{slug.replace('-predictions', '-picks')}", code=301)
+        return redirect(f"{_SITE_DOMAIN}/{slug.replace('-predictions', '-picks')}", code=301)
     if slug.endswith('-prediction'):
-        return redirect(f"/{slug.replace('-prediction', '-picks')}", code=301)
+        return redirect(f"{_SITE_DOMAIN}/{slug.replace('-prediction', '-picks')}", code=301)
     # Check picks slugs
     sport = _SEO_SLUG_TO_SPORT.get(slug)
     if sport:
@@ -15710,28 +15796,28 @@ def seo_daily_picks(slug, month, day, year):
 
 @app.route('/sport/<sport>/predictions')
 def old_sport_predictions_redirect(sport):
-    """301 redirect old /sport/X/predictions to new SEO URL."""
-    slug = SPORT_SEO_SLUGS.get(sport)
+    """301 redirect old /sport/X/predictions to new SEO URL (absolute canonical)."""
+    slug = SPORT_SEO_SLUGS.get((sport or '').upper())
     if slug:
-        return redirect(f'/{slug}', code=301)
+        return redirect(f'{_SITE_DOMAIN}/{slug}', code=301)
     return "Sport not found", 404
 
 
 @app.route('/sport/<sport>/results')
 def old_sport_results_redirect(sport):
-    """301 redirect old /sport/X/results to new SEO URL."""
-    slug = _SPORT_RESULTS_SLUGS.get(sport)
+    """301 redirect old /sport/X/results to new SEO URL (absolute canonical)."""
+    slug = _SPORT_RESULTS_SLUGS.get((sport or '').upper())
     if slug:
-        return redirect(f'/{slug}', code=301)
+        return redirect(f'{_SITE_DOMAIN}/{slug}', code=301)
     return "Sport not found", 404
 
 
 @app.route('/sport/<sport>')
 def sport_home(sport):
-    """Redirect to new SEO URL"""
-    slug = SPORT_SEO_SLUGS.get(sport)
+    """Redirect to new SEO URL (absolute canonical)."""
+    slug = SPORT_SEO_SLUGS.get((sport or '').upper())
     if slug:
-        return redirect(f'/{slug}', code=301)
+        return redirect(f'{_SITE_DOMAIN}/{slug}', code=301)
     return "Sport not found", 404
 
 
@@ -16225,11 +16311,11 @@ def faq_page():
 
 @app.route('/sport/SOCCER/predictions/<league_slug>')
 def soccer_predictions_league(league_slug):
-    return redirect(f'/soccer-picks?league={league_slug}', code=301)
+    return redirect(f'{_SITE_DOMAIN}/soccer-picks?league={league_slug}', code=301)
 
 @app.route('/sport/SOCCER/results/<league_slug>')
 def soccer_results_league(league_slug):
-    return redirect(f'/soccer-results?league={league_slug}', code=301)
+    return redirect(f'{_SITE_DOMAIN}/soccer-results?league={league_slug}', code=301)
 
 
 def _render_espn_picks_page(**ctx):
@@ -16262,6 +16348,8 @@ def _predictions_fallback_page(sport, filter_date=None):
     safe_title = f"{sport_info['name']} Predictions | predictionlab.io"
     if filter_date:
         safe_title = f"{sport_info['name']} Predictions for {filter_date} | predictionlab.io"
+    # Thin fallback / empty dated pages should not compete for indexing.
+    robots = _PICKS_ROBOTS_NOINDEX if filter_date else _PICKS_ROBOTS_INDEX
     return render_template_string("""
 <!DOCTYPE html>
 <html lang="en">
@@ -16270,7 +16358,7 @@ def _predictions_fallback_page(sport, filter_date=None):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ safe_title }}</title>
     <meta name="description" content="Daily AI-powered {{ sport_info.name }} predictions, game forecasts, and model projections on predictionlab.io.">
-    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+    <meta name="robots" content="{{ robots }}">
     <link rel="canonical" href="https://predictionlab.io/{{ sport_slug }}">
     <style>
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;}
@@ -16286,7 +16374,7 @@ def _predictions_fallback_page(sport, filter_date=None):
     </div>
 </body>
 </html>
-    """, sport_info=sport_info, sport_slug=SPORT_SEO_SLUGS.get(sport, sport.lower() + '-picks'), safe_title=safe_title)
+    """, sport_info=sport_info, sport_slug=SPORT_SEO_SLUGS.get(sport, sport.lower() + '-picks'), safe_title=safe_title, robots=robots)
 
 def _results_fallback_page(sport, message):
     """Safe fallback HTML for results pages when processing fails."""
@@ -16669,10 +16757,15 @@ def sport_predictions(sport, filter_date=None):
         is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
+            sport=sport,
             filter_date=filter_date,
             grouped_predictions=grouped_predictions,
         ),
-        canonical_url=_seo_canonical_url(),
+        canonical_url=_picks_page_canonical_url(
+            sport=sport,
+            filter_date=filter_date,
+            grouped_predictions=grouped_predictions,
+        ),
     )
     try:
         if sport == 'GOLF':
@@ -18186,6 +18279,7 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
 {% block title %}Prediction Lab Blog | predictionlab.io{% endblock %}
 {% block head_meta %}
     <meta name="description" content="Daily sports news, AI-generated betting insights, game previews, market breakdowns, and model analysis from predictionlab.io.">
+    <meta name="robots" content="noindex,follow">
     <link rel="canonical" href="{{ site_domain }}/blog">
 {% endblock %}
 {% block extra_styles %}
@@ -18990,7 +19084,16 @@ def blog_archive_page():
 
 @app.route('/blog/<slug>')
 def blog_post_redirect(slug):
-    return redirect(f'/blog#{_slugify_blog(slug)}', code=302)
+    """Per-slug blog URLs are ephemeral (auto trend posts prune daily).
+
+    301 to the archive so Google consolidates on /blog instead of crawling
+    soft hash redirects ("Crawled - currently not indexed"). Archive itself is
+    noindex while Trends filler stays thin.
+    """
+    _ = _slugify_blog(slug)
+    resp = redirect(f'{_SITE_DOMAIN}/blog', code=301)
+    resp.headers['X-Robots-Tag'] = 'noindex, follow'
+    return resp
 
 
 # Blog caches (annotated assignments missed by the bulk port)

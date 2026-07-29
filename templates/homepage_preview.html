@@ -4,7 +4,7 @@
 {% block head_meta %}
 {% if request.path == "/homepage-preview" %}<meta name="robots" content="noindex,nofollow">{% endif %}
 <meta name="description" content="AI sports predictions with transparent tracking. Free moneyline picks and win probabilities for NBA, MLB, NHL, NFL, WNBA, and soccer.">
-<link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ request.path }}">
+<link rel="canonical" href="https://predictionlab.io{{ request.path }}">
 {# Decorative canvas only — do not contend with LCP text for Slow-4G bandwidth. #}
 <link rel="preload" as="image" href="/static/img/hero-canvas.webp" fetchpriority="low">
 <meta property="og:title" content="Prediction Labs | AI Sports Predictions and Betting Research">

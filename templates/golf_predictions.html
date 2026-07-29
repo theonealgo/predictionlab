@@ -2,6 +2,12 @@
 
 {% block title %}Golf Picks | Prediction Lab{% endblock %}
 
+{% block head_meta %}
+    <meta name="description" content="Golf tournament predictions and win probabilities from predictionlab.io.">
+    <meta name="robots" content="{{ robots_meta | default('index,follow,max-image-preview:large,max-snippet:-1') }}">
+    <link rel="canonical" href="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
+{% endblock %}
+
 {% block content %}
 
 <div class="container" style="max-width:1400px;margin:30px auto;padding:20px;">

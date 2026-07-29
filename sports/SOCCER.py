@@ -117,12 +117,12 @@ def register_routes(app) -> None:
     @app.route('/sport/SOCCER/predictions/<league_slug>')
     def soccer_predictions_league(league_slug):
         from flask import redirect
-        return redirect(f'/soccer-picks?league={league_slug}', code=301)
+        return redirect(f'https://predictionlab.io/soccer-picks?league={league_slug}', code=301)
 
     @app.route('/sport/SOCCER/results/<league_slug>')
     def soccer_results_league(league_slug):
         from flask import redirect
-        return redirect(f'/soccer-results?league={league_slug}', code=301)
+        return redirect(f'https://predictionlab.io/soccer-results?league={league_slug}', code=301)
 
 def render_sport_results_page(sport: str, *, season_start_dt=None):
     """Delegate the shared results shell only when the requested sport is soccer."""
