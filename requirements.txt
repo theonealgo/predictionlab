@@ -7,7 +7,7 @@ ddtrace>=2.14.0
 
 # Auth & payments
 authlib
-stripe
+stripe==15.0.1
 python-dotenv
 
 # Data

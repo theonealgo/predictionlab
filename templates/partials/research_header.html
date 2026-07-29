@@ -61,6 +61,7 @@
             </button>
             <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
                 {% if is_logged_in|default(false) %}
+                <a href="/billing/portal">Manage Billing</a>
                 <a href="/logout">Sign Out</a>
                 {% else %}
                 <a href="/login">Login</a>

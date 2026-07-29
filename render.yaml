@@ -25,6 +25,12 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      - key: STRIPE_PRICE_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_YEARLY
+        sync: false
+      - key: STRIPE_PRICE_WEEKLY
+        sync: false
       # ── Optional ──────────────────────────────────────────────────────
       - key: GA_TRACKING_ID
         sync: false
