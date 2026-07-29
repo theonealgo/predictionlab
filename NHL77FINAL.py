@@ -6101,6 +6101,10 @@ def _maybe_backfill_soccer_on_startup():
     import threading
     def _run():
         try:
+            # Defer past Render boot/health window — workers=1; sync HTTP+DB
+            # here wedges /healthz and the homepage on every redeploy.
+            import time as _t
+            _t.sleep(120)
             logger.info(f"[soccer-backfill] starting (recent_n={recent_n})...")
             from backfill_soccer import backfill as _bf
             _bf()
@@ -6151,6 +6155,10 @@ def _maybe_backfill_props_on_startup():
     import threading
     def _run():
         try:
+            # Defer past boot — loading the props engine (~30s) on workers=1
+            # right after import wedges every request including /healthz.
+            import time as _t
+            _t.sleep(120)
             logger.info("[props-backfill] starting…")
             from backfill_props import run as _bf_run
             _bf_run(dry_run=False)
@@ -6184,10 +6192,9 @@ def _prewarm_espn_odds_cache():
         from odds_engine_espn import get_all_team_stats as _warm
     except Exception:
         return
-    # Defer so the app serves real requests (login page, picks) immediately after
-    # boot instead of competing with a burst of ESPN HTTP calls on the single
-    # Render worker. Yield briefly between sports for the same reason.
-    _time.sleep(20)
+    # Defer past Render's post-deploy health window. workers=1: a burst of ESPN
+    # HTTP on boot wedges /healthz + homepage. Yield between sports for the same.
+    _time.sleep(60)
     while True:
         for _sport in _PREWARM_SPORTS:
             try:
@@ -6195,7 +6202,7 @@ def _prewarm_espn_odds_cache():
                 logger.debug(f"[odds-prewarm] {_sport} warmed")
             except Exception as _we:
                 logger.debug(f"[odds-prewarm] {_sport} failed: {_we}")
-            _time.sleep(2)   # keep the worker responsive between sports
+            _time.sleep(3)   # keep the worker responsive between sports
         _time.sleep(720)   # re-warm every 12 min — before the 15-min TTL expires
 
 try:
@@ -6358,10 +6365,19 @@ def _prewarm_predictions_cache():
         _t.sleep(1)
     if _fn is None:
         return
-    # Brief defer so boot-time HTTP (health checks, login) wins the single worker
-    # before prewarm starts; keep this short so MLB is warm within seconds.
-    _t.sleep(5)
+    # Long defer so /healthz + homepage win the single Render worker after every
+    # redeploy. Force-rebuilding all sports ~5s after boot (old behavior) held
+    # the GIL / SQLite write lock and made even /healthz hang with 0 bytes.
+    _t.sleep(60)
     for _sport in _PREDICTIONS_PREWARM_SPORTS:
+        # Disk seed already put a usable slate in memory — do NOT force-rebuild
+        # on the boot path. Stale-while-revalidate refreshes on the first sport
+        # page hit. Only cold-build sports that have nothing cached.
+        _ck = f"{_sport}_upcoming_predictions_v8"
+        _entry = _PREDICTIONS_CACHE.get(_ck)
+        if isinstance(_entry, dict) and _entry.get('data'):
+            logger.info(f"[preds-prewarm] {_sport} already seeded — skip force rebuild")
+            continue
         # Respect the same single-flight guard so an on-demand background refresh
         # and this warmer never rebuild the same sport at the same time.
         with _PREDICTIONS_REFRESH_LOCK:
@@ -6377,7 +6393,7 @@ def _prewarm_predictions_cache():
             with _PREDICTIONS_REFRESH_LOCK:
                 _PREDICTIONS_REFRESH_INFLIGHT.discard(_sport)
         # Give the worker room to serve requests between heavy builds.
-        _t.sleep(8)
+        _t.sleep(15)
 
 # Seed the in-memory cache from disk BEFORE the prewarmer runs so the very first
 # request after a restart serves a warm (stale) slate instantly instead of

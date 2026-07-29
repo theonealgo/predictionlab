@@ -20,6 +20,10 @@ timeout = 120
 # so the worker's caches stay cold and the first request fires ~31 synchronous
 # ESPN calls and times out. With preload_app=False the master binds $PORT first,
 # then the worker imports the app and runs those threads where they belong.
+#
+# Boot contract (NHL77FINAL): disk-seed prediction slates at import; defer
+# preds/odds/props/soccer heavy work ≥60–120s so /healthz + homepage stay
+# responsive on this single worker. Never force-rebuild seeded slates on boot.
 preload_app = False
 accesslog = "-"
 errorlog = "-"
