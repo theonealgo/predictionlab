@@ -132,14 +132,17 @@ def test_wnba_ml_selective_fade_below_55(nhl):
     assert card['trueskill_prob'] == pytest.approx(49.0)
 
 
-def test_soccer_ml_all_models_faded(nhl):
+def test_soccer_ml_not_faded_uses_raw(nhl):
+    """Soccer ML fade disabled — picks/results keep RAW model probabilities."""
     card = {
         'glicko2_prob': 62.0, 'trueskill_prob': 58.0, 'elo_prob': 55.0,
         'xgb_prob': 60.0, 'ens_prob': 57.0,
     }
     nhl._apply_model_fades_batch('SOCCER', [card])
-    assert card['glicko2_prob'] == pytest.approx(38.0)
-    assert card['ens_prob'] == pytest.approx(43.0)
+    assert card['glicko2_prob'] == pytest.approx(62.0)
+    assert card['ens_prob'] == pytest.approx(57.0)
+    assert not card.get('_soccer_ml_faded')
+    assert not card.get('_ml_faded')
 
 
 def test_mlb_spread_not_faded_via_batch(nhl):
@@ -211,6 +214,47 @@ def test_season_perf_uses_best_ml_model(nhl):
     assert perf["spread_pct"] == 66.7
     assert perf["spread_note"] is None
     assert perf["ou_note"] is None
+
+
+def test_season_perf_pct_matches_wl_record(nhl):
+    """Displayed % must equal wins/(wins+losses) for the same sample as the W-L."""
+    overall = {"ensemble": {"total": 10, "correct": 5, "accuracy": 50.0}}
+    # No pushes: 104-46 → 69.3%
+    st = {
+        "pl_spread_covered": 104,
+        "pl_spread_graded": 150,
+        "pl_spread_pushes": 0,
+        "pl_spread_pct": 84.6,  # stale/wrong stored pct must be ignored
+        "spread_covered": 0,
+        "spread_graded": 0,
+    }
+    perf = nhl._build_season_performance_summary(overall, st)
+    assert perf["spread_covered"] == 104
+    assert perf["spread_graded"] == 150
+    assert perf["spread_graded"] - perf["spread_covered"] == 46
+    assert perf["spread_pct"] == 69.3
+
+
+def test_season_perf_excludes_pushes_from_wl_and_pct(nhl):
+    """Pushes inflate graded but must not count as losses or shrink the hit rate."""
+    overall = {"ensemble": {"total": 10, "correct": 5, "accuracy": 50.0}}
+    # 104 covers, 19 fails, 27 pushes stored in graded (104+19+27=150)
+    st = {
+        "pl_spread_covered": 104,
+        "pl_spread_graded": 150,
+        "pl_spread_pushes": 27,
+        "pl_spread_pct": 84.6,
+        "spread_covered": 50,
+        "spread_graded": 100,
+        "spread_pushes": 0,
+        "spread_pct": 50.0,
+    }
+    perf = nhl._build_season_performance_summary(overall, st)
+    assert perf["spread_model_label"] == "Prediction Lab"
+    assert perf["spread_covered"] == 104
+    assert perf["spread_graded"] == 123  # decided only
+    assert perf["spread_graded"] - perf["spread_covered"] == 19
+    assert perf["spread_pct"] == 84.6
 
 
 def test_pred_card_pl_spread_ignores_pre_enforce_prob(nhl):

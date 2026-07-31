@@ -1485,7 +1485,9 @@ def _round_to_half(value):
 # Book odds layer is never modified.
 SPREAD_FADE_SPORTS = frozenset({'NCAAB', 'SOCCER'})
 XSHARP_SPREAD_FADE_SPORTS = frozenset({'WNBA'})
-SOCCER_ML_FADE_SPORTS = frozenset({'SOCCER'})
+# Disabled: live ML was already on the faded/inverted side (~17%). Isolation showed
+# RAW orientation is better; keep spread fade (SPREAD_FADE_SPORTS) unchanged.
+SOCCER_ML_FADE_SPORTS = frozenset()
 # WNBA season ML models below 55% (Consensus/ensemble kept as-is at ~60%).
 WNBA_ML_FADE_PROB_KEYS = (
     'glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob',
@@ -9724,29 +9726,38 @@ def _best_ml_model_stats(overall_stats):
 
 
 def _best_market_side(st, *, xsharp_prefix, pl_prefix, xsharp_label, pl_label):
-    """Pick better-performing spread or O/U layer (XSharp vs PL) when both exist."""
+    """Pick better-performing spread or O/U layer (XSharp vs PL) when both exist.
+
+    Returns decided W-L sample only (pushes excluded from graded). Percent is always
+    wins / (wins + losses) so Season Performance cards never disagree with the record.
+    """
     st = st or {}
 
     def _side(prefix):
         if prefix == 'spread':
             graded = int(st.get('spread_graded') or 0)
             wins = int(st.get('spread_covered') or 0)
-            pct = st.get('spread_pct')
+            pushes = int(st.get('spread_pushes') or 0)
         elif prefix == 'total':
             graded = int(st.get('total_graded') or 0)
             wins = int(st.get('total_correct') or 0)
-            pct = st.get('total_pct')
+            pushes = int(st.get('total_pushes') or 0)
         elif prefix == 'pl_spread':
             graded = int(st.get('pl_spread_graded') or 0)
             wins = int(st.get('pl_spread_covered') or 0)
-            pct = st.get('pl_spread_pct')
+            pushes = int(st.get('pl_spread_pushes') or 0)
         else:
             graded = int(st.get('pl_total_graded') or 0)
             wins = int(st.get('pl_total_correct') or 0)
-            pct = st.get('pl_total_pct')
-        if graded <= 0 or pct is None:
+            pushes = int(st.get('pl_total_pushes') or 0)
+        # spread_graded / pl_spread_graded include pushes; total_* graded also counts them.
+        # Season cards render W-L as wins-(graded-wins), so use decided games only.
+        decided = max(0, graded - max(0, pushes))
+        if decided <= 0:
             return None
-        return {'graded': graded, 'wins': wins, 'pct': pct}
+        wins = min(max(0, wins), decided)
+        pct = round(wins / decided * 100, 1)
+        return {'graded': decided, 'wins': wins, 'pct': pct, 'pushes': max(0, pushes)}
 
     xs = _side(xsharp_prefix)
     pl = _side(pl_prefix)
@@ -11633,6 +11644,13 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .daily-model { font-size:0.78em; opacity:0.85; margin-bottom:4px; }
     .daily-acc { font-size:1.35em; font-weight:700; }
     .daily-rec { font-size:0.8em; opacity:0.8; }
+    /* Season Performance ⓘ tips — visible on hover + keyboard focus */
+    .sp-tip { position:relative; display:inline-flex; align-items:center; justify-content:center; margin-left:2px; padding:0 2px; border:none; background:transparent; color:#64748b; cursor:help; opacity:0.85; font-size:0.95em; line-height:1; vertical-align:middle; }
+    .sp-tip:hover, .sp-tip:focus { opacity:1; color:#00529B; outline:none; }
+    .sp-tip:focus-visible { outline:2px solid #93c5fd; outline-offset:2px; border-radius:4px; }
+    .sp-tip-bubble { position:absolute; z-index:50; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%); width:min(248px,72vw); padding:8px 10px; border-radius:8px; background:#0f172a; color:#f8fafc; font-size:0.72em; font-weight:500; line-height:1.4; text-align:left; white-space:normal; box-shadow:0 8px 24px rgba(15,23,42,0.2); opacity:0; visibility:hidden; pointer-events:none; transition:opacity 0.12s ease; }
+    .sp-tip-bubble::after { content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#0f172a; }
+    .sp-tip:hover .sp-tip-bubble, .sp-tip:focus .sp-tip-bubble, .sp-tip:focus-within .sp-tip-bubble { opacity:1; visibility:visible; }
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
@@ -11809,39 +11827,45 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% endif %}
 
         <!-- ── Combined Stats Banner ── -->
-        <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
+        <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:visible;">
             <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% set sp = season_perf if season_perf is defined and season_perf else none %}
             {% if not sp and overall_stats and overall_stats.ensemble %}
             {% set _ens = overall_stats.ensemble %}
             {% set sp = {'ml_total': _ens.total, 'ml_correct': _ens.correct, 'ml_accuracy': _ens.accuracy, 'ml_model_label': 'Sharp Consensus', 'spread_graded': 0, 'spread_covered': 0, 'spread_pct': none, 'spread_model_label': 'XSharp', 'ou_graded': 0, 'ou_correct': 0, 'ou_pct': none, 'ou_model_label': 'XSharp'} %}
             {% endif %}
+            {% set _ml_lbl = (sp.ml_model_label if sp and sp.ml_model_label else 'best model') %}
+            {% set _sp_lbl = (sp.spread_model_label if sp and sp.spread_model_label else 'model') %}
+            {% set _ou_lbl = (sp.ou_model_label if sp and sp.ou_model_label else 'model') %}
+            {% set _ml_tip = 'Season moneyline win rate for the best-performing model shown (' ~ _ml_lbl ~ '). Record is correct–incorrect among graded games.' %}
+            {% set _sp_tip = 'Season against-the-spread hit rate for ' ~ _sp_lbl ~ (' — PL = Prediction Lab projected lines vs the market' if _sp_lbl == 'Prediction Lab' else '') ~ '. Record is covers–fails among decided games (pushes excluded); percent matches that W–L.' %}
+            {% set _ou_tip = 'Season over/under hit rate for ' ~ _ou_lbl ~ (' — PL = Prediction Lab projected totals vs the market' if _ou_lbl == 'Prediction Lab' else '') ~ '. Record is correct–incorrect among decided games (pushes excluded); percent matches that W–L.' %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
-                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;overflow:visible;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#00C076{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <button type="button" class="sp-tip" aria-label="{{ _ml_tip }}"><span aria-hidden="true">ⓘ</span><span class="sp-tip-bubble" role="tooltip">{{ _ml_tip }}</span></button></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
                     <div style="font-size:0.85em;color:#64748b;">—</div>
                     {% endif %}
                 </div>
-                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;overflow:visible;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#00C076{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <button type="button" class="sp-tip" aria-label="{{ _sp_tip }}"><span aria-hidden="true">ⓘ</span><span class="sp-tip-bubble" role="tooltip">{{ _sp_tip }}</span></button></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
                     <div style="font-size:0.85em;color:#64748b;">not graded yet</div>
                     {% endif %}
                 </div>
-                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
+                <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;overflow:visible;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#00C076{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
-                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
+                    <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <button type="button" class="sp-tip" aria-label="{{ _ou_tip }}"><span aria-hidden="true">ⓘ</span><span class="sp-tip-bubble" role="tooltip">{{ _ou_tip }}</span></button></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
                     <div style="font-size:0.85em;color:#64748b;">not graded yet</div>
