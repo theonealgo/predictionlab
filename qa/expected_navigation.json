@@ -1,0 +1,101 @@
+{
+  "menu_sections": {
+    "picks": {
+      "title": "Picks & Predictions",
+      "required": [
+        "/nba-picks",
+        "/nhl-picks",
+        "/nfl-picks",
+        "/mlb-picks",
+        "/ncaab-picks",
+        "/ncaaf-picks",
+        "/ncaaw-picks",
+        "/wnba-picks"
+      ],
+      "forbidden": [
+        "/performance",
+        "/daily-report",
+        "/player-props"
+      ]
+    },
+    "props": {
+      "title": "Props",
+      "required": [
+        "/player-props"
+      ],
+      "forbidden": [
+        "/performance",
+        "/daily-report",
+        "/all-sports-results",
+        "/ai-sports-betting-picks-today",
+        "/our-model-vs-sportsbooks",
+        "/tutorial"
+      ]
+    },
+    "tools": {
+      "title": "Tools & Models",
+      "required": [
+        "/performance",
+        "/ai-sports-betting-picks-today",
+        "/our-model-vs-sportsbooks",
+        "/tutorial"
+      ],
+      "forbidden": [
+        "/player-props",
+        "/daily-report",
+        "/all-sports-results"
+      ]
+    },
+    "results": {
+      "title": "Results & Tracking",
+      "required": [
+        "/all-sports-results",
+        "/daily-report",
+        "/results/downloads",
+        "/edge-performance"
+      ],
+      "forbidden": []
+    },
+    "company": {
+      "title": "Company",
+      "required": [
+        "/plans",
+        "/blog",
+        "/faq",
+        "/tutorial",
+        "/contact",
+        "/privacy",
+        "/terms",
+        "/refund-policy",
+        "/responsible-gaming"
+      ],
+      "forbidden": []
+    }
+  },
+  "footer_required": [
+    "/plans",
+    "/privacy",
+    "/terms",
+    "/refund-policy",
+    "/contact",
+    "/faq",
+    "/responsible-gaming",
+    "/daily-report",
+    "/performance",
+    "/ai-sports-betting-picks-today",
+    "/what-are-ai-sports-betting-picks",
+    "/our-model-vs-sportsbooks"
+  ],
+  "forbidden_in_nav": [
+    "underdogs.bet",
+    "underdogs_bet",
+    "TODO",
+    "FIXME",
+    "localhost"
+  ],
+  "comment_cross_section": "Any internal href appearing in more than one menu SECTION is flagged \u2014 a page should live in exactly one section. Add exceptions to cross_section_allowed.",
+  "cross_section_allowed": [
+    "/tutorial",
+    "/plans"
+  ]
+}

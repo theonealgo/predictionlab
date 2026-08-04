@@ -238,13 +238,15 @@ body.research-site .nav-search input {
 }
 body.research-site .acct-btn,
 body.research-site .nav-cta,
-body.research-site .nav-cta-premium {
+body.research-site .nav-cta-premium,
+body.research-site .nav-cta-weekly {
     border-radius: 2px;
     box-shadow: none;
 }
 body.research-site .acct-btn { border-color: var(--pl-line); }
 body.research-site .nav-cta,
-body.research-site .nav-cta-premium {
+body.research-site .nav-cta-premium,
+body.research-site .nav-cta-weekly {
     padding: 11px 15px;
     background: var(--pl-neon);
     color: var(--pl-ink);
@@ -254,8 +256,13 @@ body.research-site .nav-cta-premium {
     text-transform: uppercase;
     letter-spacing: 1.3px;
 }
+body.research-site .nav-cta-weekly {
+    background: linear-gradient(90deg, #312e81 0%, #6d28d9 48%, #db2777 100%);
+    color: #fff;
+}
 body.research-site .nav-cta:hover,
 body.research-site .nav-cta-premium:hover { transform: none; background: #b7ef1d; }
+body.research-site .nav-cta-weekly:hover { transform: none; color: #fff; filter: brightness(1.06); }
 
 body.research-site .tv-drawer,
 body.research-site .acct-menu,
@@ -362,6 +369,14 @@ body.research-site .share-strip {
 body.research-site .share-icon { border-radius: 2px; }
 body.research-site .join-premium-bar { background: var(--pl-ink); }
 body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-neon); }
+body.research-site .join-premium-btn-weekly {
+    border-radius: 2px;
+    background: linear-gradient(90deg, #312e81 0%, #6d28d9 48%, #db2777 100%);
+    color: #fff;
+}
+body.research-site .tv-premium-cta-row { gap: 8px; }
+body.research-site .tv-premium-cta,
+body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
 
 .site-directory-footer {
     position: relative;
@@ -458,7 +473,8 @@ body.research-site .join-premium-btn { border-radius: 2px; background: var(--pl-
     .pl2-header-actions { margin-left: auto; gap: 10px; }
     body.research-site .navbar-content { padding: 0 14px; }
     body.research-site .navbar-content > .logo { min-width: 0; }
-    body.research-site .nav-cta-premium { display: none; }
+    body.research-site .nav-cta-premium,
+    body.research-site .nav-cta-weekly { display: none; }
     body.research-site .layout-main,
     body.research-site > .container,
     body.research-site .share-strip { width: min(100% - 24px, 1280px); }

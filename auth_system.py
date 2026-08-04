@@ -26,8 +26,9 @@ Env vars needed:
       in Google Console (or remove the env var and rely on auto-generated URLs).
     STRIPE_SECRET_KEY       - from dashboard.stripe.com/apikeys
     STRIPE_WEBHOOK_SECRET   - from Stripe webhook settings
-    STRIPE_PRICE_MONTHLY    - Stripe Price ID for $9.99/mo
-    STRIPE_PRICE_YEARLY     - Stripe Price ID for $99/yr
+    STRIPE_PRICE_MONTHLY    - Stripe Price ID for monthly plan
+    STRIPE_PRICE_YEARLY     - Stripe Price ID for yearly plan
+    STRIPE_PRICE_WEEKLY     - Stripe Price ID for weekly plan (falls back to Payment Link)
     SECRET_KEY              - Flask session secret (auto-generated if missing)
 """
 
@@ -35,6 +36,7 @@ import os
 import sqlite3
 import logging
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -80,7 +82,10 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '').strip()
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
 STRIPE_PRICE_MONTHLY = os.environ.get('STRIPE_PRICE_MONTHLY', '').strip()
 STRIPE_PRICE_YEARLY = os.environ.get('STRIPE_PRICE_YEARLY', '').strip()
-STRIPE_WEEKLY_URL = 'https://buy.stripe.com/14A6oI4Ra66ReWLczTao802'
+STRIPE_PRICE_WEEKLY = os.environ.get('STRIPE_PRICE_WEEKLY', '').strip()
+STRIPE_WEEKLY_URL = 'https://buy.stripe.com/14A6oI4Ra66ReWLczTao802'  # legacy Payment Link fallback
+VALID_CHECKOUT_PLANS = frozenset({'monthly', 'yearly', 'weekly'})
+SET_PASSWORD_TOKEN_HOURS = 48
 
 # Admin emails get automatic premium — no payment needed
 ADMIN_EMAILS = {
@@ -157,6 +162,17 @@ def _ensure_users_table():
         conn.execute('ALTER TABLE users ADD COLUMN session_token TEXT')
     except Exception:
         pass
+    # One-time set-password / claim-account tokens (post-checkout for guests)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -533,7 +549,322 @@ def admin_reset():
         return f'Error: {e}', 500
 
 
+# ─── Set-password / claim-account (post-pay for guest checkouts) ──────────────
+
+def _hash_reset_token(raw_token):
+    return hashlib.sha256((raw_token or '').encode('utf-8')).hexdigest()
+
+
+def _user_has_password(user_id):
+    """True if the user has a non-empty password_hash."""
+    if not user_id:
+        return False
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            'SELECT password_hash FROM users WHERE id = ?', (user_id,)
+        ).fetchone()
+        conn.close()
+        return bool(row and row['password_hash'])
+    except Exception as e:
+        logger.error(f"_user_has_password failed: {e}")
+        return False
+
+
+def _issue_set_password_token(user_id, ttl_hours=None):
+    """Create a one-time set-password token. Returns raw token (show once)."""
+    if not user_id:
+        return None
+    ttl_hours = SET_PASSWORD_TOKEN_HOURS if ttl_hours is None else ttl_hours
+    raw = secrets.token_urlsafe(32)
+    token_hash = _hash_reset_token(raw)
+    expires_at = (datetime.now() + timedelta(hours=ttl_hours)).isoformat()
+    try:
+        conn = _get_db()
+        # Invalidate unused prior tokens for this user
+        conn.execute(
+            'UPDATE password_reset_tokens SET used_at = datetime(\'now\') '
+            'WHERE user_id = ? AND used_at IS NULL',
+            (user_id,)
+        )
+        conn.execute(
+            'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) '
+            'VALUES (?, ?, ?)',
+            (user_id, token_hash, expires_at)
+        )
+        conn.commit()
+        conn.close()
+        return raw
+    except Exception as e:
+        logger.error(f"_issue_set_password_token failed: {e}")
+        return None
+
+
+def _lookup_set_password_token(raw_token):
+    """Return (user_id, email) for a valid unused token, else (None, None)."""
+    if not raw_token:
+        return None, None
+    token_hash = _hash_reset_token(raw_token)
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            '''SELECT t.user_id, t.expires_at, t.used_at, u.email
+               FROM password_reset_tokens t
+               JOIN users u ON u.id = t.user_id
+               WHERE t.token_hash = ?''',
+            (token_hash,)
+        ).fetchone()
+        conn.close()
+        if not row or row['used_at']:
+            return None, None
+        try:
+            if datetime.fromisoformat(row['expires_at']) < datetime.now():
+                return None, None
+        except Exception:
+            return None, None
+        return row['user_id'], row['email']
+    except Exception as e:
+        logger.error(f"_lookup_set_password_token failed: {e}")
+        return None, None
+
+
+def _consume_set_password_token(raw_token, new_password):
+    """Set password for the token's user and mark token used. Returns User or None."""
+    user_id, email = _lookup_set_password_token(raw_token)
+    if not user_id or not new_password or len(new_password) < 6:
+        return None
+    pw_hash = generate_password_hash(new_password)
+    token_hash = _hash_reset_token(raw_token)
+    try:
+        conn = _get_db()
+        conn.execute(
+            'UPDATE users SET password_hash = ? WHERE id = ?',
+            (pw_hash, user_id)
+        )
+        conn.execute(
+            'UPDATE password_reset_tokens SET used_at = datetime(\'now\') '
+            'WHERE token_hash = ?',
+            (token_hash,)
+        )
+        conn.commit()
+        conn.close()
+        return _load_user_by_id(user_id)
+    except Exception as e:
+        logger.error(f"_consume_set_password_token failed: {e}")
+        return None
+
+
+def _has_unused_set_password_token(user_id):
+    """True if user already has an unused, unexpired claim token."""
+    if not user_id:
+        return False
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            '''SELECT expires_at FROM password_reset_tokens
+               WHERE user_id = ? AND used_at IS NULL
+               ORDER BY id DESC LIMIT 1''',
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return False
+        return datetime.fromisoformat(row['expires_at']) >= datetime.now()
+    except Exception:
+        return False
+
+
+def _ensure_claim_token_for_user(user_id, force_new=False):
+    """If user has no password, issue a claim token; else return None.
+
+    When force_new is False and an unused token already exists, return None
+    (raw token cannot be recovered — used by webhook to avoid clobbering).
+    """
+    if _user_has_password(user_id):
+        return None
+    if not force_new and _has_unused_set_password_token(user_id):
+        return None
+    return _issue_set_password_token(user_id)
+
+
+def _maybe_send_claim_email(email, raw_token, base_url=None):
+    """Best-effort claim email via SMTP. Never raises; success page works without it."""
+    if not email or not raw_token:
+        return False
+    smtp_password = (
+        os.environ.get('SMTP_PASSWORD')
+        or os.environ.get('CONTACT_SMTP_PASSWORD')
+        or ''
+    ).strip()
+    if not smtp_password:
+        return False
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        smtp_host = (os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
+        smtp_port = int(os.environ.get('SMTP_PORT') or '587')
+        support = (os.environ.get('SUPPORT_EMAIL') or 'underdogsbetemail@gmail.com').strip()
+        smtp_user = (os.environ.get('SMTP_USER') or support).strip()
+        root = (base_url or '').rstrip('/') or 'https://predictionlab.io'
+        link = f'{root}/set-password?token={raw_token}'
+        body = (
+            f'Your Prediction Lab Premium access is active for {email}.\n\n'
+            f'Set your password so you can log in anytime:\n{link}\n\n'
+            f'This link expires in {SET_PASSWORD_TOKEN_HOURS} hours.\n'
+        )
+        msg = MIMEText(body)
+        msg['Subject'] = 'Set your Prediction Lab password'
+        msg['From'] = smtp_user
+        msg['To'] = email
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.sendmail(smtp_user, [email], msg.as_string())
+        logger.info(f"[claim] Sent set-password email to {email}")
+        return True
+    except Exception as e:
+        logger.warning(f"[claim] Email send failed (non-fatal): {e}")
+        return False
+
+
 # ─── Stripe Payments ──────────────────────────────────────────────────────────
+
+def _stripe_price_for_plan(plan):
+    """Return Stripe Price ID for a validated plan name."""
+    return {
+        'monthly': STRIPE_PRICE_MONTHLY,
+        'yearly': STRIPE_PRICE_YEARLY,
+        'weekly': STRIPE_PRICE_WEEKLY,
+    }.get(plan, '')
+
+
+def _plan_from_price_id(price_id):
+    """Map a Stripe Price ID back to monthly|yearly|weekly when metadata is missing."""
+    if not price_id:
+        return None
+    if price_id == STRIPE_PRICE_WEEKLY:
+        return 'weekly'
+    if price_id == STRIPE_PRICE_MONTHLY:
+        return 'monthly'
+    if price_id == STRIPE_PRICE_YEARLY:
+        return 'yearly'
+    return None
+
+
+def _iso_from_unix(ts):
+    """Convert a Stripe unix timestamp to ISO datetime string."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromtimestamp(int(ts)).isoformat()
+    except Exception:
+        return None
+
+
+def _subscription_id_from_invoice(invoice):
+    """Extract subscription id from invoice across classic and newer Stripe shapes."""
+    if not invoice:
+        return None
+    sub_id = invoice.get('subscription')
+    if sub_id:
+        return sub_id
+    parent = invoice.get('parent') or {}
+    details = parent.get('subscription_details') or {}
+    return details.get('subscription')
+
+
+def _plan_from_checkout_or_subscription(session_data, subscription=None):
+    """Resolve plan from checkout metadata, else from subscription price id."""
+    plan = (session_data.get('metadata') or {}).get('plan') if session_data else None
+    if plan in VALID_CHECKOUT_PLANS:
+        return plan
+    if subscription:
+        try:
+            items = (subscription.get('items') or {}).get('data') or []
+            if items:
+                price_id = ((items[0].get('price') or {}) or {}).get('id')
+                inferred = _plan_from_price_id(price_id)
+                if inferred:
+                    return inferred
+        except Exception:
+            pass
+    return plan if plan in VALID_CHECKOUT_PLANS else 'monthly'
+
+
+def _find_user_id_by_customer(stripe_customer_id):
+    """Return users.id for a Stripe customer id, or None."""
+    if not stripe_customer_id:
+        return None
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            'SELECT id FROM users WHERE stripe_customer_id = ?',
+            (stripe_customer_id,)
+        ).fetchone()
+        conn.close()
+        return row['id'] if row else None
+    except Exception as e:
+        logger.error(f"Lookup by stripe_customer_id failed: {e}")
+        return None
+
+
+def _sync_premium_from_subscription(subscription, plan=None):
+    """
+    Sync local premium access from a Stripe Subscription (renewals).
+    ONLY updates is_premium / premium_expires / stripe_customer_id.
+    """
+    if not subscription:
+        return
+
+    def _get(k, default=None):
+        if isinstance(subscription, dict):
+            return subscription.get(k, default)
+        return getattr(subscription, k, default)
+
+    customer_id = _get('customer')
+    status = (_get('status') or '').strip()
+    period_end_iso = _iso_from_unix(_get('current_period_end'))
+
+    user_id = _find_user_id_by_customer(customer_id)
+    if not user_id:
+        logger.warning(f"[stripe] No user for customer {customer_id} on renewal sync")
+        return
+
+    now = datetime.now()
+    expires_dt = None
+    if period_end_iso:
+        try:
+            expires_dt = datetime.fromisoformat(period_end_iso)
+        except Exception:
+            expires_dt = None
+
+    if status in ('active', 'trialing', 'past_due'):
+        is_premium = 1
+    elif status == 'canceled' and expires_dt and expires_dt > now:
+        is_premium = 1
+    else:
+        is_premium = 0
+
+    if not period_end_iso and is_premium:
+        _activate_premium(user_id, plan=plan or 'monthly', stripe_customer_id=customer_id)
+        return
+
+    conn = _get_db()
+    conn.execute(
+        '''UPDATE users SET
+               is_premium = ?,
+               premium_expires = COALESCE(?, premium_expires),
+               stripe_customer_id = COALESCE(?, stripe_customer_id)
+           WHERE id = ?''',
+        (is_premium, period_end_iso, customer_id, user_id)
+    )
+    conn.commit()
+    conn.close()
+    logger.info(
+        f"[stripe] Synced user {user_id}: premium={is_premium} "
+        f"expires={period_end_iso} status={status}"
+    )
+
 
 @auth_bp.route('/checkout/<plan>')
 def checkout(plan):
@@ -542,16 +873,25 @@ def checkout(plan):
     No login required. Stripe collects the email during checkout.
     The webhook auto-creates the user account and activates premium.
     If the user is already logged in, we pre-fill their email.
+    Weekly uses the same path as monthly/yearly when STRIPE_PRICE_WEEKLY is set;
+    otherwise falls back to the legacy Payment Link.
     """
+    plan = (plan or '').strip().lower()
+    if plan not in VALID_CHECKOUT_PLANS:
+        return "Invalid plan. Use monthly, yearly, or weekly.", 400
+
     if not STRIPE_SECRET_KEY:
         return "Stripe not configured. Set STRIPE_SECRET_KEY.", 500
 
     import stripe
     stripe.api_key = STRIPE_SECRET_KEY
 
-    price_id = STRIPE_PRICE_MONTHLY if plan == 'monthly' else STRIPE_PRICE_YEARLY
+    price_id = _stripe_price_for_plan(plan)
     if not price_id:
-        return "Stripe price not configured.", 500
+        if plan == 'weekly' and STRIPE_WEEKLY_URL:
+            logger.warning("[checkout] STRIPE_PRICE_WEEKLY unset; falling back to Payment Link")
+            return redirect(STRIPE_WEEKLY_URL)
+        return f"Stripe price not configured for {plan}.", 500
 
     try:
         session_kwargs = {
@@ -561,6 +901,7 @@ def checkout(plan):
             'success_url': request.url_root.rstrip('/') + '/checkout/success?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url': request.url_root.rstrip('/') + '/plans',
             'metadata': {'plan': plan},
+            'subscription_data': {'metadata': {'plan': plan}},
         }
         # Pre-fill email if logged in
         if current_user.is_authenticated:
@@ -571,6 +912,9 @@ def checkout(plan):
         return redirect(checkout_session.url)
     except Exception as e:
         logger.error(f"Stripe checkout error: {e}")
+        if plan == 'weekly' and STRIPE_WEEKLY_URL:
+            logger.warning("[checkout] Weekly Checkout Session failed; falling back to Payment Link")
+            return redirect(STRIPE_WEEKLY_URL)
         return f"Payment error: {e}", 500
 
 
@@ -580,10 +924,14 @@ def checkout_success():
     
     Verifies the Stripe session, auto-creates account if needed,
     logs the user in, and activates premium.
+    Guests without a password are sent to /set-password with a one-time token.
     """
     session_id = request.args.get('session_id')
     if not session_id:
         return redirect('/plans')
+
+    claim_token = None
+    claim_email = None
 
     if STRIPE_SECRET_KEY and session_id:
         try:
@@ -594,6 +942,8 @@ def checkout_success():
                 email = (cs.customer_details or {}).get('email') or cs.get('customer_email', '')
                 email = email.strip().lower() if email else ''
                 plan = (cs.metadata or {}).get('plan', 'monthly')
+                if plan not in VALID_CHECKOUT_PLANS:
+                    plan = 'monthly'
                 customer_id = cs.get('customer')
 
                 if email:
@@ -614,11 +964,109 @@ def checkout_success():
                         _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
                         login_user(user, remember=True)
                         _set_session_token(user.id)
+                        claim_email = email
+                        if not _user_has_password(user.id):
+                            claim_token = _ensure_claim_token_for_user(user.id, force_new=True)
+                            if claim_token:
+                                _maybe_send_claim_email(
+                                    email, claim_token,
+                                    base_url=request.url_root.rstrip('/'),
+                                )
+                            # Dedicated set-password page (token + session) — not cookie-only
+                            if claim_token:
+                                return redirect(
+                                    url_for('auth.set_password_page', token=claim_token)
+                                )
+                            return redirect(url_for('auth.set_password_page'))
                         logger.info(f"[checkout/success] Activated premium for {email}")
         except Exception as e:
             logger.warning(f"[checkout/success] Stripe verification failed: {e}")
 
-    return render_template_string(SUCCESS_TEMPLATE, page='success')
+    return render_template_string(
+        SUCCESS_TEMPLATE,
+        page='success',
+        claim_token=claim_token,
+        claim_email=claim_email,
+    )
+
+
+@auth_bp.route('/set-password', methods=['GET', 'POST'])
+@auth_bp.route('/claim-account', methods=['GET', 'POST'])
+def set_password_page():
+    """One-time set-password / claim-account after guest checkout.
+
+    Accepts a token query/form param, or a logged-in user with no password_hash.
+    """
+    token = (request.values.get('token') or '').strip()
+    error_msg = ''
+    email = ''
+    user_id = None
+
+    if token:
+        user_id, email = _lookup_set_password_token(token)
+    elif current_user.is_authenticated and not _user_has_password(current_user.id):
+        user_id = current_user.id
+        email = current_user.email
+
+    can_set = bool(user_id)
+
+    if request.method == 'GET':
+        if not can_set:
+            error_msg = (
+                'This set-password link is invalid or has expired. '
+                'If you just paid, open the link from checkout success or contact support.'
+            )
+        return render_template_string(
+            SET_PASSWORD_TEMPLATE,
+            page='set_password',
+            token=token,
+            email=email or '',
+            error_msg=error_msg,
+            premium_active=can_set,
+        )
+
+    # POST
+    password = request.form.get('password', '')
+    confirm = request.form.get('confirm', '')
+    if not can_set:
+        error_msg = 'This set-password link is invalid or has expired.'
+    elif not password or len(password) < 6:
+        error_msg = 'Password must be at least 6 characters.'
+    elif password != confirm:
+        error_msg = 'Passwords do not match.'
+    else:
+        user = None
+        if token:
+            user = _consume_set_password_token(token, password)
+        elif user_id:
+            # Session-authenticated claim (no token): set password directly
+            try:
+                pw_hash = generate_password_hash(password)
+                conn = _get_db()
+                conn.execute(
+                    'UPDATE users SET password_hash = ? WHERE id = ?',
+                    (pw_hash, user_id)
+                )
+                conn.commit()
+                conn.close()
+                user = _load_user_by_id(user_id)
+            except Exception as e:
+                logger.error(f"Session claim set-password failed: {e}")
+                user = None
+        if user:
+            login_user(user, remember=True)
+            _set_session_token(user.id)
+            return redirect('/')
+        error_msg = 'Could not set password. The link may have already been used.'
+
+    return render_template_string(
+        SET_PASSWORD_TEMPLATE,
+        page='set_password',
+        token=token,
+        email=email or '',
+        error_msg=error_msg,
+        premium_active=can_set,
+    )
 
 
 @auth_bp.route('/stripe/webhook', methods=['POST'])
@@ -639,9 +1087,13 @@ def stripe_webhook():
         logger.error(f"Stripe webhook error: {e}")
         return '', 400
 
-    if event['type'] == 'checkout.session.completed':
+    etype = event['type']
+
+    if etype == 'checkout.session.completed':
         session_data = event['data']['object']
         plan = session_data.get('metadata', {}).get('plan', 'monthly')
+        if plan not in VALID_CHECKOUT_PLANS:
+            plan = _plan_from_checkout_or_subscription(session_data) or 'monthly'
         customer_id = session_data.get('customer')
         # Get email from Stripe session (works for both logged-in and guest checkouts)
         email = (session_data.get('customer_details') or {}).get('email') or session_data.get('customer_email', '')
@@ -662,6 +1114,11 @@ def stripe_webhook():
                 logger.info(f"[stripe webhook] Auto-created account for {email}")
             if user:
                 _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
+                # Issue claim token + optional email only if none pending
+                # (success page may force_new for redirect — that's the primary path)
+                claim_token = _ensure_claim_token_for_user(user.id, force_new=False)
+                if claim_token:
+                    _maybe_send_claim_email(email, claim_token)
                 logger.info(f"[stripe webhook] Activated premium for {email} ({plan})")
         else:
             # Fallback: try user_id from metadata (legacy)
@@ -670,7 +1127,32 @@ def stripe_webhook():
                 _activate_premium(int(user_id), plan=plan, stripe_customer_id=customer_id)
                 logger.info(f"[stripe webhook] Activated premium for user_id {user_id} ({plan})")
 
-    elif event['type'] == 'customer.subscription.deleted':
+    elif etype == 'invoice.payment_succeeded':
+        # Renewal: extend premium from Stripe subscription period_end only
+        invoice = event['data']['object']
+        customer_id = invoice.get('customer')
+        subscription_id = _subscription_id_from_invoice(invoice)
+        if subscription_id:
+            try:
+                sub_obj = stripe.Subscription.retrieve(subscription_id)
+                _sync_premium_from_subscription(sub_obj)
+            except Exception as e:
+                logger.error(f"[stripe] invoice.payment_succeeded sync failed: {e}")
+                period_end = _iso_from_unix(invoice.get('period_end'))
+                user_id = _find_user_id_by_customer(customer_id)
+                if user_id and period_end:
+                    _activate_premium(
+                        user_id,
+                        stripe_customer_id=customer_id,
+                        premium_expires=period_end,
+                    )
+        elif customer_id:
+            logger.info(f"[stripe] invoice.payment_succeeded without subscription for {customer_id}")
+
+    elif etype == 'customer.subscription.updated':
+        _sync_premium_from_subscription(event['data']['object'])
+
+    elif etype == 'customer.subscription.deleted':
         customer_id = event['data']['object'].get('customer')
         if customer_id:
             _deactivate_premium_by_customer(customer_id)
@@ -679,23 +1161,34 @@ def stripe_webhook():
     return '', 200
 
 
-def _activate_premium(user_id, plan='monthly', stripe_customer_id=None):
-    """Activate premium for a user."""
-    if plan == 'yearly':
-        expires = (datetime.now() + timedelta(days=365)).isoformat()
-    else:
-        expires = (datetime.now() + timedelta(days=31)).isoformat()
+def _activate_premium(user_id, plan='monthly', stripe_customer_id=None, premium_expires=None):
+    """Activate premium for a user.
+
+    Prefer explicit ``premium_expires`` (e.g. Stripe current_period_end).
+    Otherwise: weekly +7, yearly +365, monthly +31.
+    """
+    plan = (plan or 'monthly').strip().lower()
+    if plan not in VALID_CHECKOUT_PLANS:
+        plan = 'monthly'
+
+    if not premium_expires:
+        if plan == 'yearly':
+            premium_expires = (datetime.now() + timedelta(days=365)).isoformat()
+        elif plan == 'weekly':
+            premium_expires = (datetime.now() + timedelta(days=7)).isoformat()
+        else:
+            premium_expires = (datetime.now() + timedelta(days=31)).isoformat()
 
     conn = _get_db()
     if stripe_customer_id:
         conn.execute(
             'UPDATE users SET is_premium = 1, premium_expires = ?, stripe_customer_id = ? WHERE id = ?',
-            (expires, stripe_customer_id, user_id)
+            (premium_expires, stripe_customer_id, user_id)
         )
     else:
         conn.execute(
             'UPDATE users SET is_premium = 1, premium_expires = ? WHERE id = ?',
-            (expires, user_id)
+            (premium_expires, user_id)
         )
     conn.commit()
     conn.close()
@@ -829,12 +1322,53 @@ SUCCESS_TEMPLATE = """
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="robots" content="noindex, nofollow">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;}</style>
+""" + _AUTH_STYLES + """
 </head><body>
-<div style="text-align:center;padding:40px;">
+<div style="text-align:center;padding:40px;max-width:480px;">
     <div style="font-size:4em;margin-bottom:20px;">🎉</div>
     <h1 style="color:#fbbf24;margin-bottom:12px;">Welcome to Premium!</h1>
-    <p style="opacity:0.8;margin-bottom:30px;">You now have full access to Spreads, Totals, and Score Predictions.</p>
+    <p style="opacity:0.8;margin-bottom:20px;">You now have full access to Spreads, Totals, and Score Predictions.</p>
+    {% if claim_token %}
+    <div style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.45);border-radius:12px;padding:18px 16px;margin-bottom:22px;text-align:left;">
+        <p style="font-weight:700;color:#fbbf24;margin-bottom:8px;">Set a password for {{ claim_email or 'your account' }}</p>
+        <p style="opacity:0.85;font-size:0.92em;margin-bottom:14px;line-height:1.5;">Premium is active. Set a password so you can log back in later — do not rely only on this browser session.</p>
+        <a href="/set-password?token={{ claim_token }}" class="auth-btn auth-btn-primary" style="display:inline-block;width:auto;padding:12px 22px;text-decoration:none;">Set password →</a>
+    </div>
+    {% endif %}
     <a href="/" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;">View Today's Picks →</a>
+</div>
+</body></html>
+"""
+
+SET_PASSWORD_TEMPLATE = """
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Set Password — predictionlab.io</title>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
+<meta name="robots" content="noindex, nofollow">
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
+""" + _AUTH_STYLES + """
+</head><body>
+<div class="auth-container">
+    <div class="auth-title">Set your password</div>
+    {% if premium_active %}
+    <p style="text-align:center;color:#86efac;font-size:0.9em;margin-bottom:14px;font-weight:600;">✓ Premium is active{% if email %} for {{ email }}{% endif %}</p>
+    {% endif %}
+    <p style="text-align:center;color:#cbd5e1;font-size:0.88em;margin-bottom:18px;line-height:1.5;">Choose a password so you can log in anytime. This link works once.</p>
+    {% if error_msg %}<div class="auth-error">{{ error_msg }}</div>{% endif %}
+    {% if premium_active %}
+    <form class="auth-form" method="POST" action="/set-password">
+        {% if token %}<input type="hidden" name="token" value="{{ token }}">{% endif %}
+        {% if email %}<input type="email" value="{{ email }}" disabled style="opacity:0.7;">{% endif %}
+        <input type="password" name="password" placeholder="New password (min 6 characters)" required minlength="6" autocomplete="new-password">
+        <input type="password" name="confirm" placeholder="Confirm password" required minlength="6" autocomplete="new-password">
+        <button type="submit" class="auth-btn auth-btn-primary">Save password &amp; continue</button>
+    </form>
+    {% else %}
+    <div class="auth-link" style="margin-top:8px;"><a href="/login">Go to login</a> · <a href="/plans">Plans</a></div>
+    {% endif %}
+    <div class="auth-link" style="margin-top:14px;"><a href="/">← Back to Home</a></div>
 </div>
 </body></html>
 """
@@ -933,7 +1467,7 @@ def plans_page():
                         <li>All Sports Covered</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="plan-btn plan-btn-secondary">Try This Week</a>
+                    <a href="/checkout/weekly" class="plan-btn plan-btn-secondary">Try This Week</a>
                 </div>
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>
@@ -971,7 +1505,7 @@ def plans_page():
                     <a href="/checkout/yearly" class="plan-btn plan-btn-primary">Get Yearly Access</a>
                 </div>
             </div>
-            <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily. Cancel any plan anytime.</p>
+            <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily. Cancel any plan anytime. <a href="/refund-policy" style="color:#00529B;font-weight:600;text-decoration:none;">Refund policy</a></p>
             <div class="free-section">
                 <p class="free-head">Start Free</p>
                 <p class="free-copy">Start free. Upgrade when you're ready for the full edge.</p>

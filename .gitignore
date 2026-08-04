@@ -86,3 +86,10 @@ debug_*.html
 # Generated book-odds comparison samples (run src/odds/sample_today_book_odds.py)
 src/odds/samples/*.json
 .aider*
+
+# Site checker secrets / local reports
+qa/checker_email.py
+qa/checker_cron.log
+qa/latest_report.*
+qa/audit_history/
+qa/screenshots/

@@ -1,511 +1,369 @@
 {
   "posts": [
     {
-      "title": "Prediction Lab Blog: July 21, 2026",
-      "slug": "prediction-lab-blog-2026-07-21",
-      "date": "2026-07-21",
+      "title": "Los Angeles Angels at Baltimore Orioles — August 4, 2026 preview",
+      "slug": "mlb-los-angeles-angels-at-baltimore-orioles-preview-2026-08-04",
+      "date": "2026-08-04",
       "sport_tag": "MLB",
-      "excerpt": "The sports news side of the board is being shaped by MLB: Nick Fortes, Yandy Díaz hit 3-run homers as Rays use season-high 21 hits to rout Blue Jays 12-2; MLB: San Diego Padres vs. Atlanta Braves: Game Highlights; MLB: Hedges and Halpin hit sac flies in the 6th, Guardians beat Twins 5-2 for third straight victory. Today's betting board is led by MLB: Colorado Rockies over Washington Nationals (50.7%); MLB: Tampa Bay Rays over Toronto Blue Jays (56.1%); MLB: Los Angeles Dodgers over Philadelphia Phillies (60.8%).",
+      "excerpt": "Los Angeles Angels at Baltimore Orioles is on the MLB board for August 4, 2026, scheduled for 6:35 PM ET at Oriole Park at Camden Yards (Baltimore). Los Angeles Angels enter at 43-69 and Baltimore Orioles sit at 54-58 on the season standings board heading into tip/first pitch.",
       "body": [
-        "The sports news side of the board is being shaped by MLB: Nick Fortes, Yandy Díaz hit 3-run homers as Rays use season-high 21 hits to rout Blue Jays 12-2; MLB: San Diego Padres vs. Atlanta Braves: Game Highlights; MLB: Hedges and Halpin hit sac flies in the 6th, Guardians beat Twins 5-2 for third straight victory.",
-        "Today's betting board is led by MLB: Colorado Rockies over Washington Nationals (50.7%); MLB: Tampa Bay Rays over Toronto Blue Jays (56.1%); MLB: Los Angeles Dodgers over Philadelphia Phillies (60.8%).",
-        "In MLB, the news cycle is centered on Nick Fortes, Yandy Díaz hit 3-run homers as Rays use season-high 21 hits to rout Blue Jays 12-2. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
-        "In MLB, the news cycle is centered on San Diego Padres vs. Atlanta Braves: Game Highlights. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
-        "In MLB, the news cycle is centered on Hedges and Halpin hit sac flies in the 6th, Guardians beat Twins 5-2 for third straight victory. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
-        "Prediction Lab connects sports news to betting context by comparing model win probabilities against market prices. The daily betting results report remains the verification layer, while this news and market breakdown gives crawlers and readers a concise explanation of what the models and the broader sports calendar are watching today.",
-        "The most important signal is not a single story or pick in isolation. It is the relationship between news, model confidence, sportsbook pricing, recent result tracking, and whether multiple model layers point in the same direction.",
-        "Check the sport prediction pages for the live cards and the daily results report for completed-game tracking. New daily sports news and betting analysis pages are generated server-side so the latest context stays crawlable and internally linked from the homepage."
+        "Los Angeles Angels at Baltimore Orioles is on the MLB board for August 4, 2026, scheduled for 6:35 PM ET at Oriole Park at Camden Yards (Baltimore).",
+        "Los Angeles Angels enter at 43-69 and Baltimore Orioles sit at 54-58 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Los Angeles Angels — Grayson Rodriguez (3-3, 7.98); Baltimore Orioles — TBD.",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
           "sport": "MLB",
-          "topic": "Nick Fortes, Yandy Díaz hit 3-run homers as Rays use season-high 21 hits to rout Blue Jays 12-2",
-          "summary_hint": "— Nick Fortes and Yandy Díaz each hit a three-run homer, Jonny DeLuca added two hits and three RBI and the Tampa Bay Rays had a season-high 21 hits in a 12-2 rout of the slumping Toronto Blue Jays on Tuesday night.",
-          "source": "ESPN",
-          "url": "http://www.espn.com/mlb/recap?gameId=401816206"
-        },
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
+        }
+      ]
+    },
+    {
+      "title": "Athletics at Cincinnati Reds — August 4, 2026 preview",
+      "slug": "mlb-athletics-at-cincinnati-reds-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Athletics at Cincinnati Reds is on the MLB board for August 4, 2026, scheduled for 6:40 PM ET at Great American Ball Park (Cincinnati). Athletics enter at 45-67 and Cincinnati Reds sit at 53-58 on the season standings board heading into tip/first pitch.",
+      "body": [
+        "Athletics at Cincinnati Reds is on the MLB board for August 4, 2026, scheduled for 6:40 PM ET at Great American Ball Park (Cincinnati).",
+        "Athletics enter at 45-67 and Cincinnati Reds sit at 53-58 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Athletics — J.T. Ginn (8-6, 3.46); Cincinnati Reds — Brady Singer (5-10, 4.35).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
+      ],
+      "news_items": [
         {
           "sport": "MLB",
-          "topic": "San Diego Padres vs. Atlanta Braves: Game Highlights",
-          "summary_hint": "San Diego Padres vs.",
-          "source": "ESPN",
-          "url": "https://www.espn.com/video/clip/_/id/49421534/game-highlights"
-        },
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
+        }
+      ]
+    },
+    {
+      "title": "New York Mets at Cleveland Guardians — August 4, 2026 preview",
+      "slug": "mlb-new-york-mets-at-cleveland-guardians-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "New York Mets at Cleveland Guardians is on the MLB board for August 4, 2026, scheduled for 6:40 PM ET at Progressive Field (Cleveland). New York Mets enter at 47-66 and Cleveland Guardians sit at 57-56 on the season standings board heading into tip/first pitch.",
+      "body": [
+        "New York Mets at Cleveland Guardians is on the MLB board for August 4, 2026, scheduled for 6:40 PM ET at Progressive Field (Cleveland).",
+        "New York Mets enter at 47-66 and Cleveland Guardians sit at 57-56 on the season standings board heading into tip/first pitch.",
+        "Probable starters: New York Mets — Sean Manaea (2-5, 4.42); Cleveland Guardians — Joey Cantillo (8-6, 3.88).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
+      ],
+      "news_items": [
         {
           "sport": "MLB",
-          "topic": "Hedges and Halpin hit sac flies in the 6th, Guardians beat Twins 5-2 for third straight victory",
-          "summary_hint": "— Austin Hedges and Petey Halpin hit sacrifice flies in the sixth inning as the Cleveland Guardians, a night after hitting seven homers, used small ball to beat the Minnesota Twins 5-2 on Tuesday for a third straight victory.",
-          "source": "ESPN",
-          "url": "http://www.espn.com/mlb/recap?gameId=401816203"
-        },
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
+        }
+      ]
+    },
+    {
+      "title": "Washington Nationals at Philadelphia Phillies — August 4, 2026 preview",
+      "slug": "mlb-washington-nationals-at-philadelphia-phillies-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Washington Nationals at Philadelphia Phillies is on the MLB board for August 4, 2026, scheduled for 6:40 PM ET at Citizens Bank Park (Philadelphia). Washington Nationals enter at 55-59 and Philadelphia Phillies sit at 60-53 on the season standings board heading into tip/first pitch.",
+      "body": [
+        "Washington Nationals at Philadelphia Phillies is on the MLB board for August 4, 2026, scheduled for 6:40 PM ET at Citizens Bank Park (Philadelphia).",
+        "Washington Nationals enter at 55-59 and Philadelphia Phillies sit at 60-53 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Washington Nationals — Zack Littell (7-8, 4.94); Philadelphia Phillies — Jesus Luzardo (9-5, 3.57).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
+      ],
+      "news_items": [
         {
           "sport": "MLB",
-          "topic": "MLB home run leaders for each MLB team",
-          "summary_hint": "Check out each team's all-time home run leaders.",
-          "source": "ESPN",
-          "url": "https://www.espn.com/mlb/story/_/id/48873964/mlb-home-run-leaders-mlb-team"
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Cruz Azul - Puebla: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "cruz-azul-puebla-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Cruz Azul - Puebla after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "St. Louis Cardinals at New York Yankees — August 4, 2026 preview",
+      "slug": "mlb-st-louis-cardinals-at-new-york-yankees-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "St. Louis Cardinals at New York Yankees is on the MLB board for August 4, 2026, scheduled for 7:05 PM ET at Yankee Stadium (Bronx).",
       "body": [
-        "Cruz Azul - Puebla after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "St. Louis Cardinals at New York Yankees is on the MLB board for August 4, 2026, scheduled for 7:05 PM ET at Yankee Stadium (Bronx).",
+        "St. Louis Cardinals enter at 56-57 and New York Yankees sit at 63-50 on the season standings board heading into tip/first pitch.",
+        "Probable starters: St. Louis Cardinals — Hunter Dobbins (2-1, 3.74); New York Yankees — Ryan Weathers (4-7, 3.99).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: cruz azul - puebla",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Nationals Vs Rockies: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "nationals-vs-rockies-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "SOCCER",
-      "excerpt": "Nationals Vs Rockies after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For SOCCER bettors, the important question is not whether the trend is popular.",
+      "title": "Chicago White Sox at Boston Red Sox — August 4, 2026 preview",
+      "slug": "mlb-chicago-white-sox-at-boston-red-sox-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Chicago White Sox at Boston Red Sox is on the MLB board for August 4, 2026, scheduled for 7:10 PM ET at Fenway Park (Boston). Chicago White Sox enter at 59-52 and Boston Red Sox sit at 60-51 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Nationals Vs Rockies after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For SOCCER bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Chicago White Sox at Boston Red Sox is on the MLB board for August 4, 2026, scheduled for 7:10 PM ET at Fenway Park (Boston).",
+        "Chicago White Sox enter at 59-52 and Boston Red Sox sit at 60-51 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Chicago White Sox — Davis Martin (9-5, 3.62); Boston Red Sox — Patrick Sandoval (0-0, 3.32).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "SOCCER",
-          "topic": "Google Trends: nationals vs rockies",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Sickkids Doctor Charged: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "sickkids-doctor-charged-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Sickkids Doctor Charged after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "Miami Marlins at Atlanta Braves — August 4, 2026 preview",
+      "slug": "mlb-miami-marlins-at-atlanta-braves-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Miami Marlins at Atlanta Braves is on the MLB board for August 4, 2026, scheduled for 7:15 PM ET at Truist Park (Atlanta). Miami Marlins enter at 58-55 and Atlanta Braves sit at 67-45 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Sickkids Doctor Charged after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Miami Marlins at Atlanta Braves is on the MLB board for August 4, 2026, scheduled for 7:15 PM ET at Truist Park (Atlanta).",
+        "Miami Marlins enter at 58-55 and Atlanta Braves sit at 67-45 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Miami Marlins — Ryan Gusto (0-2, 5.31); Atlanta Braves — Grant Holmes (6-4, 3.88).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: sickkids doctor charged",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Jason Robertson: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "jason-robertson-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Jason Robertson after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "Minnesota Twins at Kansas City Royals — August 4, 2026 preview",
+      "slug": "mlb-minnesota-twins-at-kansas-city-royals-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Minnesota Twins at Kansas City Royals is on the MLB board for August 4, 2026, scheduled for 7:40 PM ET at Kauffman Stadium (Kansas City). Minnesota Twins enter at 56-57 and Kansas City Royals sit at 46-67 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Jason Robertson after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Minnesota Twins at Kansas City Royals is on the MLB board for August 4, 2026, scheduled for 7:40 PM ET at Kauffman Stadium (Kansas City).",
+        "Minnesota Twins enter at 56-57 and Kansas City Royals sit at 46-67 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Minnesota Twins — Joe Ryan (6-7, 3.52); Kansas City Royals — Randy Dobnak (1-0, 1.04).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: jason robertson",
-          "summary_hint": "500+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Cérémonie: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "c-r-monie-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Cérémonie after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "Pittsburgh Pirates at Milwaukee Brewers — August 4, 2026 preview",
+      "slug": "mlb-pittsburgh-pirates-at-milwaukee-brewers-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Pittsburgh Pirates at Milwaukee Brewers is on the MLB board for August 4, 2026, scheduled for 7:40 PM ET at American Family Field (Milwaukee). Pittsburgh Pirates enter at 57-57 and Milwaukee Brewers sit at 69-43 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Cérémonie after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Pittsburgh Pirates at Milwaukee Brewers is on the MLB board for August 4, 2026, scheduled for 7:40 PM ET at American Family Field (Milwaukee).",
+        "Pittsburgh Pirates enter at 57-57 and Milwaukee Brewers sit at 69-43 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Pittsburgh Pirates — Jared Jones (2-2, 3.81); Milwaukee Brewers — Logan Henderson (5-1, 2.66).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: cérémonie",
-          "summary_hint": "100+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Red Sox: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "red-sox-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Red Sox after 1000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "Los Angeles Dodgers at Chicago Cubs — August 4, 2026 preview",
+      "slug": "mlb-los-angeles-dodgers-at-chicago-cubs-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Los Angeles Dodgers at Chicago Cubs is on the MLB board for August 4, 2026, scheduled for 8:05 PM ET at Wrigley Field (Chicago). Los Angeles Dodgers enter at 69-44 and Chicago Cubs sit at 64-49 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Red Sox after 1000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Los Angeles Dodgers at Chicago Cubs is on the MLB board for August 4, 2026, scheduled for 8:05 PM ET at Wrigley Field (Chicago).",
+        "Los Angeles Dodgers enter at 69-44 and Chicago Cubs sit at 64-49 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Los Angeles Dodgers — Tarik Skubal (7-5, 2.79); Chicago Cubs — Javier Assad (6-1, 3.75).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: red sox",
-          "summary_hint": "1000+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Colin Montgomerie: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "colin-montgomerie-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Colin Montgomerie after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "San Francisco Giants at Texas Rangers — August 4, 2026 preview",
+      "slug": "mlb-san-francisco-giants-at-texas-rangers-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "San Francisco Giants at Texas Rangers is on the MLB board for August 4, 2026, scheduled for 8:05 PM ET at Globe Life Field (Arlington). San Francisco Giants enter at 48-65 and Texas Rangers sit at 55-58 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Colin Montgomerie after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "San Francisco Giants at Texas Rangers is on the MLB board for August 4, 2026, scheduled for 8:05 PM ET at Globe Life Field (Arlington).",
+        "San Francisco Giants enter at 48-65 and Texas Rangers sit at 55-58 on the season standings board heading into tip/first pitch.",
+        "Probable starters: San Francisco Giants — Blade Tidwell (0-0, 3.00); Texas Rangers — MacKenzie Gore (6-9, 4.77).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: colin montgomerie",
-          "summary_hint": "100+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Universidad Central Vs Santos: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "universidad-central-vs-santos-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "SOCCER",
-      "excerpt": "Universidad Central Vs Santos after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For SOCCER bettors, the important question is not whether the trend is popular.",
+      "title": "Toronto Blue Jays at Houston Astros — August 4, 2026 preview",
+      "slug": "mlb-toronto-blue-jays-at-houston-astros-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Toronto Blue Jays at Houston Astros is on the MLB board for August 4, 2026, scheduled for 8:10 PM ET at Daikin Park (Houston). Toronto Blue Jays enter at 53-60 and Houston Astros sit at 58-56 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Universidad Central Vs Santos after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For SOCCER bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Toronto Blue Jays at Houston Astros is on the MLB board for August 4, 2026, scheduled for 8:10 PM ET at Daikin Park (Houston).",
+        "Toronto Blue Jays enter at 53-60 and Houston Astros sit at 58-56 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Toronto Blue Jays — Trey Yesavage (5-5, 3.73); Houston Astros — Hayden Wesneski (1-0, 4.76).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "SOCCER",
-          "topic": "Google Trends: universidad central vs santos",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Marlins Vs Astros: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "marlins-vs-astros-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "SOCCER",
-      "excerpt": "Marlins Vs Astros after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For SOCCER bettors, the important question is not whether the trend is popular.",
+      "title": "Tampa Bay Rays at Colorado Rockies — August 4, 2026 preview",
+      "slug": "mlb-tampa-bay-rays-at-colorado-rockies-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Tampa Bay Rays at Colorado Rockies is on the MLB board for August 4, 2026, scheduled for 8:40 PM ET at Coors Field (Denver). Tampa Bay Rays enter at 66-46 and Colorado Rockies sit at 45-68 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Marlins Vs Astros after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For SOCCER bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Tampa Bay Rays at Colorado Rockies is on the MLB board for August 4, 2026, scheduled for 8:40 PM ET at Coors Field (Denver).",
+        "Tampa Bay Rays enter at 66-46 and Colorado Rockies sit at 45-68 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Tampa Bay Rays — Freddy Peralta (5-9, 4.99); Colorado Rockies — Gabriel Hughes (0-3, 3.33).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "SOCCER",
-          "topic": "Google Trends: marlins vs astros",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Amd: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "amd-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Amd after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "Detroit Tigers at Seattle Mariners — August 4, 2026 preview",
+      "slug": "mlb-detroit-tigers-at-seattle-mariners-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "Detroit Tigers at Seattle Mariners is on the MLB board for August 4, 2026, scheduled for 9:40 PM ET at T-Mobile Park (Seattle). Detroit Tigers enter at 54-58 and Seattle Mariners sit at 55-58 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Amd after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Detroit Tigers at Seattle Mariners is on the MLB board for August 4, 2026, scheduled for 9:40 PM ET at T-Mobile Park (Seattle).",
+        "Detroit Tigers enter at 54-58 and Seattle Mariners sit at 55-58 on the season standings board heading into tip/first pitch.",
+        "Probable starters: Detroit Tigers — TBD; Seattle Mariners — Emerson Hancock (6-5, 3.26).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: amd",
-          "summary_hint": "100+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Boston Bar: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "boston-bar-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Boston Bar after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "San Diego Padres at Arizona Diamondbacks — August 4, 2026 preview",
+      "slug": "mlb-san-diego-padres-at-arizona-diamondbacks-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "San Diego Padres at Arizona Diamondbacks is on the MLB board for August 4, 2026, scheduled for 9:40 PM ET at Chase Field (Phoenix). San Diego Padres enter at 58-55 and Arizona Diamondbacks sit at 60-53 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Boston Bar after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "San Diego Padres at Arizona Diamondbacks is on the MLB board for August 4, 2026, scheduled for 9:40 PM ET at Chase Field (Phoenix).",
+        "San Diego Padres enter at 58-55 and Arizona Diamondbacks sit at 60-53 on the season standings board heading into tip/first pitch.",
+        "Probable starters: San Diego Padres — Randy Vasquez (6-6, 4.45); Arizona Diamondbacks — Eduardo Rodriguez (10-3, 2.48).",
+        "This is a schedule preview built from the day's MLB slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's MLB picks board at /mlb-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: boston bar",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "MLB",
+          "topic": "MLB picks — live model board",
+          "summary_hint": "Prediction Lab MLB predictions",
+          "source": "Prediction Lab",
+          "url": "/mlb-picks"
         }
       ]
     },
     {
-      "title": "Benjamin Netanyahu: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "benjamin-netanyahu-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Benjamin Netanyahu after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
+      "title": "Toronto Tempo at Golden State Valkyries — August 4, 2026 preview",
+      "slug": "wnba-toronto-tempo-at-golden-state-valkyries-preview-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "WNBA",
+      "excerpt": "Toronto Tempo at Golden State Valkyries is on the WNBA board for August 4, 2026, scheduled for 10:00 PM ET at Chase Center (San Francisco). Toronto Tempo enter at 10-19 and Golden State Valkyries sit at 20-9 on the season standings board heading into tip/first pitch.",
       "body": [
-        "Benjamin Netanyahu after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
+        "Toronto Tempo at Golden State Valkyries is on the WNBA board for August 4, 2026, scheduled for 10:00 PM ET at Chase Center (San Francisco).",
+        "Toronto Tempo enter at 10-19 and Golden State Valkyries sit at 20-9 on the season standings board heading into tip/first pitch.",
+        "This is a schedule preview built from the day's WNBA slate — not a rumor roundup. For model win probabilities and moneyline context on this matchup, open Prediction Lab's WNBA picks board at /wnba-picks.",
+        "Compare the model's projected win probability with the available market price before you bet, and use the daily results report afterward to see how completed cards graded."
       ],
       "news_items": [
         {
-          "sport": "Sports",
-          "topic": "Google Trends: benjamin netanyahu",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Google Maps Canada Meteorite Discovery: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "google-maps-canada-meteorite-discovery-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Google Maps Canada Meteorite Discovery after 1000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Google Maps Canada Meteorite Discovery after 1000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "Sports",
-          "topic": "Google Trends: google maps canada meteorite discovery",
-          "summary_hint": "1000+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Below Deck Mediterranean: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "below-deck-mediterranean-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Below Deck Mediterranean after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Below Deck Mediterranean after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "Sports",
-          "topic": "Google Trends: below deck mediterranean",
-          "summary_hint": "100+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Protéine Tau: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "prot-ine-tau-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Protéine Tau after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Protéine Tau after 2000+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "Sports",
-          "topic": "Google Trends: protéine tau",
-          "summary_hint": "2000+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Athletics Vs Diamondbacks: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "athletics-vs-diamondbacks-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "SOCCER",
-      "excerpt": "Athletics Vs Diamondbacks after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For SOCCER bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Athletics Vs Diamondbacks after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For SOCCER bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "SOCCER",
-          "topic": "Google Trends: athletics vs diamondbacks",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Lázaro Estrada: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "l-zaro-estrada-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Lázaro Estrada after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Lázaro Estrada after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "Sports",
-          "topic": "Google Trends: lázaro estrada",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Cardinals Vs Angels: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "cardinals-vs-angels-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "SOCCER",
-      "excerpt": "Cardinals Vs Angels after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For SOCCER bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Cardinals Vs Angels after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For SOCCER bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "SOCCER",
-          "topic": "Google Trends: cardinals vs angels",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Northern Lights Forecast: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "northern-lights-forecast-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Northern Lights Forecast after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Northern Lights Forecast after 200+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "Sports",
-          "topic": "Google Trends: northern lights forecast",
-          "summary_hint": "200+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Reds Vs Mariners: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "reds-vs-mariners-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "SOCCER",
-      "excerpt": "Reds Vs Mariners after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For SOCCER bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Reds Vs Mariners after 500+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For SOCCER bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "SOCCER",
-          "topic": "Google Trends: reds vs mariners",
-          "summary_hint": "500+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
-        }
-      ]
-    },
-    {
-      "title": "Liga Mx: Google Trends Betting Angle (July 21, 2026)",
-      "slug": "liga-mx-google-trends-betting-angle-2026-07-21",
-      "date": "2026-07-21",
-      "sport_tag": "Sports",
-      "excerpt": "Liga Mx after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor. For Sports bettors, the important question is not whether the trend is popular.",
-      "body": [
-        "Liga Mx after 100+ Google searches is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        "For Sports bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed."
-      ],
-      "news_items": [
-        {
-          "sport": "Sports",
-          "topic": "Google Trends: liga mx",
-          "summary_hint": "100+ searches in the last 24 hours",
-          "source": "Google Trends",
-          "url": "https://trends.google.com/trending?geo=US"
+          "sport": "WNBA",
+          "topic": "WNBA picks — live model board",
+          "summary_hint": "Prediction Lab WNBA predictions",
+          "source": "Prediction Lab",
+          "url": "/wnba-picks"
         }
       ]
     }
