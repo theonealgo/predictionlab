@@ -171,7 +171,9 @@ _STANDALONE_PROPS_PKG = "_standalone_player_props"
 
 
 _PL_BOOK_ODDS_LIMIT_BY_SPORT = {
-    'SOCCER': 40,
+    # Soccer slates are large (cups + multi-league). Scoreboard nested odds cover most;
+    # Core fetch still needed when scoreboard returns null odds for a competition.
+    'SOCCER': 100,
     'NBA': 80,
     'MLB': 80,
     'NHL': 60,
@@ -2430,16 +2432,67 @@ def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
         card.pop('disp_pl_spread', None)
         return
     sp = _round_to_half(float(sp))
-    # MLB spread is faded at parameter level; do not re-align to ensemble ML.
-    if sport != 'MLB':
+    # Align spread sign to moneyline pick so projected scores / run line agree.
+    # MLB previously skipped this ("faded" spread) and showed Nationals 6–Phillies 4.5
+    # while Consensus/G2 picked Phillies. Use ensemble ML — not efficiency-derived
+    # disp_ml_prob — so we do not no-op when disp_ml_prob was itself spread-built.
+    if sport == 'MLB':
+        hp = None
+        for key in ('ensemble_prob', 'ens_prob'):
+            v = _safe_float(card.get(key))
+            if v is not None:
+                hp = _normalize_home_win_prob_pct(v)
+                break
+        if hp is None:
+            hp = _pl_home_prob_for_spread_display(card)
+    else:
         hp = _pl_home_prob_for_spread_display(card)
-        if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
-            home_ml_fav = hp > 50.0
-            if home_ml_fav and sp < 0:
-                sp = -sp
-            elif not home_ml_fav and sp > 0:
-                sp = -sp
+    if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
+        home_ml_fav = hp > 50.0
+        if home_ml_fav and sp < 0:
+            sp = -sp
+        elif not home_ml_fav and sp > 0:
+            sp = -sp
     card['disp_pl_spread'] = sp
+
+
+def _set_card_projected_scores(card: dict) -> None:
+    """Projected Score box — derive PL/XSharp from spread+total (half-point increments)."""
+    _home_id = card.get('home_team_id') or card.get('home')
+    _away_id = card.get('away_team_id') or card.get('away')
+    _picked = card.get('predicted_winner') or card.get('face_pick_team')
+
+    ps = _safe_float(card.get('disp_pl_spread')) or _safe_float(card.get('our_spread'))
+    pt = _safe_float(card.get('disp_pl_total')) or _safe_float(card.get('our_total'))
+    if ps is not None and pt is not None:
+        xh, xa = _scores_from_spread_total(ps, pt)
+        if xh is not None:
+            _pl_winner = _home_id if xh >= xa else _away_id
+            if _picked and _pl_winner and _pl_winner != _picked:
+                # Regenerate: swap so the ML pick has the higher projected score.
+                # Keep total; flip displayed PL spread to match.
+                card['pl_proj_home_pts'] = _round_to_half(xa)
+                card['pl_proj_away_pts'] = _round_to_half(xh)
+                if _safe_float(card.get('disp_pl_spread')) is not None:
+                    card['disp_pl_spread'] = -float(card['disp_pl_spread'])
+            else:
+                card['pl_proj_home_pts'] = _round_to_half(xh)
+                card['pl_proj_away_pts'] = _round_to_half(xa)
+
+    xs = _safe_float(card.get('disp_xs_spread')) or _safe_float(card.get('xgb_spread'))
+    xt = _safe_float(card.get('disp_xs_total')) or _safe_float(card.get('xgb_total'))
+    if xs is not None and xt is not None:
+        xh, xa = _scores_from_spread_total(xs, xt)
+        if xh is not None:
+            _xs_winner = _home_id if xh >= xa else _away_id
+            if _picked and _xs_winner and _xs_winner != _picked:
+                card['xs_proj_home_pts'] = _round_to_half(xa)
+                card['xs_proj_away_pts'] = _round_to_half(xh)
+                if _safe_float(card.get('disp_xs_spread')) is not None:
+                    card['disp_xs_spread'] = -float(card['disp_xs_spread'])
+            else:
+                card['xs_proj_home_pts'] = _round_to_half(xh)
+                card['xs_proj_away_pts'] = _round_to_half(xa)
 
 
 def _set_card_pl_moneylines(card: dict) -> None:
@@ -2479,39 +2532,6 @@ def _set_card_pl_moneylines(card: dict) -> None:
     if ml:
         card['pl_model_home_ml'] = ml.get('moneyline_home')
         card['pl_model_away_ml'] = ml.get('moneyline_away')
-
-
-def _set_card_projected_scores(card: dict) -> None:
-    """Projected Score box — derive PL/XSharp from spread+total (half-point increments)."""
-    _home_id = card.get('home_team_id') or card.get('home')
-    _picked   = card.get('predicted_winner')
-
-    ps = _safe_float(card.get('disp_pl_spread')) or _safe_float(card.get('our_spread'))
-    pt = _safe_float(card.get('disp_pl_total')) or _safe_float(card.get('our_total'))
-    if ps is not None and pt is not None:
-        xh, xa = _scores_from_spread_total(ps, pt)
-        if xh is not None:
-            # Suppress PL score when it contradicts the pick direction.
-            # Happens on V2 games where the efficiency model and the ensemble disagree.
-            _pl_winner = _home_id if xh >= xa else card.get('away_team_id') or card.get('away')
-            if _picked and _pl_winner and _pl_winner != _picked:
-                pass  # do not set — score would say opposite team wins
-            else:
-                card['pl_proj_home_pts'] = _round_to_half(xh)
-                card['pl_proj_away_pts'] = _round_to_half(xa)
-
-    xs = _safe_float(card.get('disp_xs_spread')) or _safe_float(card.get('xgb_spread'))
-    xt = _safe_float(card.get('disp_xs_total')) or _safe_float(card.get('xgb_total'))
-    if xs is not None and xt is not None:
-        xh, xa = _scores_from_spread_total(xs, xt)
-        if xh is not None:
-            # Same guard for XSharp projected score
-            _xs_winner = _home_id if xh >= xa else card.get('away_team_id') or card.get('away')
-            if _picked and _xs_winner and _xs_winner != _picked:
-                pass
-            else:
-                card['xs_proj_home_pts'] = _round_to_half(xh)
-                card['xs_proj_away_pts'] = _round_to_half(xa)
 
 
 def _attach_nba_efficiency_to_daily_results(sport, daily_results) -> None:
@@ -3195,7 +3215,14 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _regression = {'High': 0.0, 'Med': 0.15, 'Low': 0.35}.get(_conf, 0.0)
     _pl_sp = _safe_float(_raw_pl_sp)
     _our_method = pred.get('our_method')
-    if _pl_sp is not None and abs(_pl_sp) >= 1.0 and _our_method in ('efficiency', 'team-avg-fallback'):
+    # MLB: never rebuild disp_ml_prob / predicted_winner from efficiency spread —
+    # that caused projected Nationals 6–Phillies 4.5 while Consensus picked Phillies.
+    if (
+        sport != 'MLB'
+        and _pl_sp is not None
+        and abs(_pl_sp) >= 1.0
+        and _our_method in ('efficiency', 'team-avg-fallback')
+    ):
         import math as _mt
         _sigma_pl = 12.0  # NBA spread distribution std dev
         _pl_home_prob = 50.0 + 50.0 * _mt.erf(_pl_sp / (_sigma_pl * _mt.sqrt(2)))
@@ -3235,10 +3262,21 @@ def _sync_pick_winner_to_pl_spread(pred: dict, sport: str = 'NBA') -> None:
     """Align predicted_winner with PL spread after disp sign normalization."""
     if pred.get('home_score') is not None:
         return
-    _min_spread = {'NHL': 0.3, 'MLB': 0.5, 'WNBA': 1.0}.get(sport, 3.0)
-    sp = _safe_float(pred.get('our_spread'))
+    # MLB: moneyline (ensemble) is source of truth. disp_pl_spread is flipped to
+    # match ML in _set_card_pl_spread — do not override the pick from raw our_spread.
+    if sport == 'MLB':
+        ens = _safe_float(pred.get('ensemble_prob')) or _safe_float(pred.get('ens_prob'))
+        if ens is not None:
+            ens_pct = _normalize_home_win_prob_pct(ens)
+            if ens_pct is not None:
+                pred['predicted_winner'] = (
+                    pred.get('home_team_id') if ens_pct >= 50.0 else pred.get('away_team_id')
+                )
+        return
+    _min_spread = {'NHL': 0.3, 'WNBA': 1.0}.get(sport, 3.0)
+    sp = _safe_float(pred.get('disp_pl_spread'))
     if sp is None:
-        sp = _safe_float(pred.get('disp_pl_spread'))
+        sp = _safe_float(pred.get('our_spread'))
     if sp is None or abs(sp) < _min_spread:
         return
     pred['predicted_winner'] = (
@@ -4932,6 +4970,83 @@ def _soccer_league_from_espn_uid(uid: str, id_map: dict):
     return id_map.get(match.group(1))
 
 
+def _parse_espn_line_number(raw):
+    """Parse ESPN line strings like '-0.5', '+1.5', 'o2.5' into float."""
+    if raw is None:
+        return None
+    try:
+        s = str(raw).strip().replace('½', '.5').replace(' ', '')
+        s = s.replace('o', '').replace('u', '').replace('O', '').replace('U', '')
+        if not s or s in {'-', '+', 'PK', 'pk', 'EVEN', 'even'}:
+            return 0.0 if s.upper() in {'PK', 'EVEN'} else None
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_espn_american_odds(raw):
+    """Parse American odds from int/float/string ('-160', '+380')."""
+    if raw is None:
+        return None
+    try:
+        return int(round(float(str(raw).strip().replace(',', ''))))
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_espn_embedded_odds_item(item):
+    """Parse one ESPN odds object (Core flat fields or scoreboard nested widgets).
+
+    Returns dict with home_ml/away_ml/spread/total/provider, or None if unusable/live.
+    Book spread convention: negative = home favored (same as ESPN Core `spread`).
+    """
+    if not isinstance(item, dict):
+        return None
+    prov = ((item.get('provider') or {}).get('name') or '')
+    if 'live' in prov.lower():
+        return None
+
+    home_ml = _parse_espn_american_odds(
+        (item.get('homeTeamOdds') or {}).get('moneyLine')
+    )
+    away_ml = _parse_espn_american_odds(
+        (item.get('awayTeamOdds') or {}).get('moneyLine')
+    )
+    spread = _parse_espn_line_number(item.get('spread'))
+    total = _parse_espn_line_number(item.get('overUnder'))
+
+    # Current site.api scoreboard DraftKings widget: nested pointSpread / moneyline.
+    if spread is None:
+        ps_home = ((item.get('pointSpread') or {}).get('home') or {})
+        ps_close = ps_home.get('close') or ps_home.get('open') or {}
+        spread = _parse_espn_line_number(ps_close.get('line'))
+    if home_ml is None or away_ml is None:
+        ml = item.get('moneyline') or {}
+        if home_ml is None:
+            h_block = (ml.get('home') or {})
+            h_close = h_block.get('close') or h_block.get('open') or {}
+            home_ml = _parse_espn_american_odds(h_close.get('odds'))
+        if away_ml is None:
+            a_block = (ml.get('away') or {})
+            a_close = a_block.get('close') or a_block.get('open') or {}
+            away_ml = _parse_espn_american_odds(a_close.get('odds'))
+    if total is None:
+        tot = item.get('total') or {}
+        over = (tot.get('over') or {})
+        o_close = over.get('close') or over.get('open') or {}
+        total = _parse_espn_line_number(o_close.get('line'))
+
+    if home_ml is None and away_ml is None and spread is None and total is None:
+        return None
+    return {
+        'home_ml': home_ml,
+        'away_ml': away_ml,
+        'spread': spread,
+        'total': total,
+        'provider': prov or 'ESPN',
+    }
+
+
 def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
     """Curated soccer games from ESPN soccer/all (one request per day, all leagues)."""
     days_back = SOCCER_PICKS_DAYS_BACK if days_back is None else days_back
@@ -4980,33 +5095,21 @@ def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
                 except Exception:
                     continue
             # Extract book odds directly from the scoreboard response.
-            # This covers lower-division leagues (esp.2, eng.2, etc.) that ESPN
-            # Core odds API doesn't serve, so the picks page shows real lines.
+            # Supports legacy flat fields (spread/homeTeamOdds) and current nested
+            # DraftKings widgets (pointSpread/moneyline). Core API still used later
+            # when scoreboard odds are null (common for some cups).
             _sb_home_ml = _sb_away_ml = _sb_spread = _sb_total = None
             _sb_source = None
             for _odds_item in (competition.get('odds') or []):
-                if not isinstance(_odds_item, dict):
+                parsed = _parse_espn_embedded_odds_item(_odds_item)
+                if not parsed:
                     continue
-                _prov = ((_odds_item.get('provider') or {}).get('name') or '').lower()
-                if 'live' in _prov:
-                    continue
-                try:
-                    _hml = (_odds_item.get('homeTeamOdds') or {}).get('moneyLine')
-                    _aml = (_odds_item.get('awayTeamOdds') or {}).get('moneyLine')
-                    if _hml is not None:
-                        _sb_home_ml = int(round(float(_hml)))
-                    if _aml is not None:
-                        _sb_away_ml = int(round(float(_aml)))
-                    _sp = _odds_item.get('spread')
-                    if _sp is not None:
-                        _sb_spread = float(_sp)
-                    _ou = _odds_item.get('overUnder')
-                    if _ou is not None:
-                        _sb_total = float(_ou)
-                    _sb_source = ((_odds_item.get('provider') or {}).get('name') or 'ESPN')
-                except (TypeError, ValueError):
-                    pass
-                if _sb_home_ml is not None or _sb_spread is not None:
+                _sb_home_ml = parsed.get('home_ml')
+                _sb_away_ml = parsed.get('away_ml')
+                _sb_spread = parsed.get('spread')
+                _sb_total = parsed.get('total')
+                _sb_source = parsed.get('provider') or 'ESPN'
+                if _sb_home_ml is not None or _sb_spread is not None or _sb_total is not None:
                     break  # use first valid provider
             _game_entry = {
                 'game_id': f'SOCCER_{league_code}_{event_id}',
@@ -10218,13 +10321,17 @@ BASE_TEMPLATE = """
         .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.6),inset 0 1px 0 rgba(255,255,255,0.15);}
         .nav-cta-premium{display:inline-flex;align-items:center;padding:9px 16px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-size:0.84em;font-weight:800;text-decoration:none;letter-spacing:0.2px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(251,191,36,0.35);}
         .nav-cta-premium:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(251,191,36,0.45);}
-        .tv-premium-cta{display:flex;align-items:center;justify-content:center;margin:10px 12px 6px;padding:12px 14px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;font-size:0.92em;text-decoration:none;letter-spacing:0.2px;}
+        .tv-premium-cta-row{display:flex;align-items:stretch;gap:8px;margin:10px 12px 6px;}
+        .tv-premium-cta{display:flex;align-items:center;justify-content:center;flex:1;margin:0;padding:12px 14px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;font-size:0.92em;text-decoration:none;letter-spacing:0.2px;text-align:center;}
         .tv-premium-cta:hover{box-shadow:0 4px 14px rgba(251,191,36,0.4);}
+        .tv-premium-cta-weekly{background:linear-gradient(90deg,#312e81 0%,#6d28d9 48%,#db2777 100%);color:#fff;}
+        .tv-premium-cta-weekly:hover{box-shadow:0 4px 14px rgba(109,40,217,0.4);color:#fff;}
         .join-premium-bar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
         .join-premium-inner{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
         .join-premium-copy{color:#e2e8f0;font-size:0.86em;font-weight:600;line-height:1.35;}
-        .join-premium-actions{display:flex;align-items:center;gap:8px;}
-        .join-premium-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.82em;}
+        .join-premium-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .join-premium-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.82em;white-space:nowrap;}
+        .join-premium-btn-weekly{background:linear-gradient(90deg,#312e81 0%,#6d28d9 48%,#db2777 100%);color:#fff;}
         .join-premium-close{border:1px solid rgba(255,255,255,0.3);background:transparent;color:#fff;border-radius:999px;width:28px;height:28px;line-height:1;cursor:pointer;font-size:18px;}
         @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}.nav-cta-premium{padding:8px 12px;font-size:0.78em;}}
         .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:1;}
@@ -10381,12 +10488,18 @@ BASE_TEMPLATE = """
           </div>
           {% endif %}
           {% if not is_premium %}
-          <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
+          <div class="tv-premium-cta-row">
+            <a href="/checkout/weekly" class="tv-premium-cta tv-premium-cta-weekly">Try a Week</a>
+            <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
+          </div>
           {% endif %}
           <div class="tv-menu-list">
             <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
             <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
             <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+            {# Desktop .pl2-nav (Blog + Pricing) is hidden on mobile — keep both in every hamburger #}
+            <a href="/blog" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Blog</span></a>
+            <a href="/plans" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Pricing</span></a>
             <button class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
             <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
               <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'community\')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
@@ -10438,7 +10551,7 @@ BASE_TEMPLATE = """
     {% include "partials/site_directory_footer.html" %}
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -10460,7 +10573,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();c
         <div class="join-premium-inner">
             <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
             <div class="join-premium-actions">
-                <a href="/plans" class="join-premium-btn">Join Now</a>
+                <a href="/checkout/weekly" class="join-premium-btn join-premium-btn-weekly">Try a Week</a>
+                <a href="/plans" class="join-premium-btn">Join Premium</a>
                 <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
             </div>
         </div>
@@ -13375,6 +13489,31 @@ def _homepage_pick_today_str():
         return datetime.now().strftime('%Y-%m-%d')
 
 
+def _homepage_matchup_key(sport, away, home) -> str:
+    """Stable board key: same series matchup must only appear once on the homepage."""
+    return f"{(sport or '').strip()}::{(away or '').strip()}::{(home or '').strip()}"
+
+
+def _dedupe_homepage_picks(picks, limit=6):
+    """Keep first occurrence per game_id and per sport/away/home matchup."""
+    _out = []
+    _seen = set()
+    for _p in picks:
+        if not isinstance(_p, dict):
+            continue
+        _gid = str(_p.get('game_id') or '').strip()
+        _mkey = _homepage_matchup_key(_p.get('sport'), _p.get('away'), _p.get('home'))
+        if (_gid and _gid in _seen) or _mkey in _seen:
+            continue
+        if _gid:
+            _seen.add(_gid)
+        _seen.add(_mkey)
+        _out.append(_p)
+        if len(_out) >= limit:
+            break
+    return _out
+
+
 def _home_win_prob_from_pred(pred) -> float | None:
     for _k in ('ensemble_prob', 'elo_prob', 'xgb_prob'):
         _v = pred.get(_k)
@@ -13403,9 +13542,12 @@ def _fill_homepage_picks_from_live_slates(todays_picks, target=6):
     if len(todays_picks) >= target:
         return
     _today = _homepage_pick_today_str()
-    _existing = {
-        f"{p.get('sport')}::{p.get('away')}::{p.get('home')}" for p in todays_picks
-    }
+    _existing = set()
+    for p in todays_picks:
+        _gid = str(p.get('game_id') or '').strip()
+        if _gid:
+            _existing.add(_gid)
+        _existing.add(_homepage_matchup_key(p.get('sport'), p.get('away'), p.get('home')))
     _pool = []
     for _sport in ('MLB', 'NBA', 'NHL', 'WNBA', 'NFL', 'NCAAB', 'SOCCER'):
         if _sport == 'SOCCER' and not SOCCER_ENABLED:
@@ -13427,6 +13569,7 @@ def _fill_homepage_picks_from_live_slates(todays_picks, target=6):
             _home_picked = _ens >= 0.5
             _pick_prob = _ens if _home_picked else (1.0 - _ens)
             _pool.append({
+                'game_id': _pred.get('game_id'),
                 'away': _away,
                 'home': _home,
                 'pick': _home if _home_picked else _away,
@@ -13444,9 +13587,12 @@ def _fill_homepage_picks_from_live_slates(todays_picks, target=6):
     # the whole site (including /static) times out with 0 bytes.
     _pool.sort(key=lambda x: x['fallback_score'], reverse=True)
     for _row in _pool:
-        _key = f"{_row['sport']}::{_row['away']}::{_row['home']}"
-        if _key in _existing:
+        _gid = str(_row.get('game_id') or '').strip()
+        _key = _homepage_matchup_key(_row['sport'], _row['away'], _row['home'])
+        if (_gid and _gid in _existing) or _key in _existing:
             continue
+        if _gid:
+            _existing.add(_gid)
         _existing.add(_key)
         todays_picks.append(_row)
         if len(todays_picks) >= target:
@@ -13462,8 +13608,8 @@ def build_todays_top_picks():
         _tp_conn = get_db_connection()
         _tp_rows = _tp_conn.execute('''
             SELECT p.game_id, p.sport, p.home_team_id, p.away_team_id, p.win_probability,
-                   p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob,
-                   b.home_implied_prob, b.away_implied_prob
+                   p.game_date, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob,
+                   p.meta_home_prob, b.home_implied_prob, b.away_implied_prob
             FROM predictions p
             LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport
             LEFT JOIN betting_odds b ON p.game_id = b.game_id
@@ -13513,6 +13659,7 @@ def build_todays_top_picks():
             _conf_bonus = (_pick_prob - 0.5) * 55.0
             _heavy_penalty = max(0.0, _pick_prob - 0.77) * 130.0
             _quality_score = _conf_bonus + _edge_bonus + _agreement_bonus - _heavy_penalty
+            _gd = str(_tp['game_date'] or '')[:10]
 
             _candidates.append({
                 'game_id': _tp['game_id'],
@@ -13526,18 +13673,31 @@ def build_todays_top_picks():
                 'is_live': False,
                 'sport': _tp['sport'],
                 'slug': SPORT_SEO_SLUGS.get(_tp['sport'], ''),
+                'game_date': _gd,
                 'quality_score': _quality_score,
                 'fallback_score': abs(_ens_home - 0.5),
             })
 
-        _seen_game_ids = set()
-        _scored = sorted(_candidates, key=lambda x: x['quality_score'], reverse=True)
+        # Prefer today's slate, then quality. Dedupe by ESPN game_id AND matchup
+        # (MLB series days share sport/away/home but have different game_ids).
+        _seen_keys = set()
+        _scored = sorted(
+            _candidates,
+            key=lambda x: (
+                0 if x.get('game_date') == _tp_today else 1,
+                -x['quality_score'],
+            ),
+        )
         for _row in _scored:
-            _gid = _row.get('game_id') or f"{_row['sport']}::{_row['away']}::{_row['home']}"
-            if _gid in _seen_game_ids:
+            _gid = str(_row.get('game_id') or '').strip()
+            _mkey = _homepage_matchup_key(_row['sport'], _row['away'], _row['home'])
+            if (_gid and _gid in _seen_keys) or _mkey in _seen_keys:
                 continue
-            _seen_game_ids.add(_gid)
+            if _gid:
+                _seen_keys.add(_gid)
+            _seen_keys.add(_mkey)
             todays_picks.append({
+                'game_id': _row.get('game_id'),
                 'away': _row['away'], 'home': _row['home'],
                 'pick': _row['pick'], 'prob': _row['prob'],
                 'home_prob': _row.get('home_prob'), 'away_prob': _row.get('away_prob'),
@@ -13548,14 +13708,23 @@ def build_todays_top_picks():
                 break
 
         if len(todays_picks) < _target:
-            _picked_keys = {f"{p['sport']}::{p['away']}::{p['home']}" for p in todays_picks}
-            _fallback = sorted(_candidates, key=lambda x: x['fallback_score'], reverse=True)
+            _fallback = sorted(
+                _candidates,
+                key=lambda x: (
+                    0 if x.get('game_date') == _tp_today else 1,
+                    -x['fallback_score'],
+                ),
+            )
             for _row in _fallback:
-                _key = f"{_row['sport']}::{_row['away']}::{_row['home']}"
-                if _key in _picked_keys:
+                _gid = str(_row.get('game_id') or '').strip()
+                _key = _homepage_matchup_key(_row['sport'], _row['away'], _row['home'])
+                if (_gid and _gid in _seen_keys) or _key in _seen_keys:
                     continue
-                _picked_keys.add(_key)
+                if _gid:
+                    _seen_keys.add(_gid)
+                _seen_keys.add(_key)
                 todays_picks.append({
+                    'game_id': _row.get('game_id'),
                     'away': _row['away'], 'home': _row['home'],
                     'pick': _row['pick'], 'prob': _row['prob'],
                     'home_prob': _row.get('home_prob'), 'away_prob': _row.get('away_prob'),
@@ -13567,7 +13736,7 @@ def build_todays_top_picks():
     except Exception as _tp_err:
         logger.debug(f"Today's Top Picks DB query failed: {_tp_err}")
     _fill_homepage_picks_from_live_slates(todays_picks, target=_target)
-    return todays_picks
+    return _dedupe_homepage_picks(todays_picks, limit=_target)
 
 
 @app.route('/healthz')
@@ -15667,7 +15836,9 @@ def sitemap_xml():
     urls.append((_SITE_DOMAIN + '/our-model-vs-sportsbooks', 'weekly', '0.7'))
     urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/terms', 'monthly', '0.3'))
+    urls.append((_SITE_DOMAIN + '/refund-policy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/responsible-gaming', 'monthly', '0.4'))
+
 
     # Defense: never advertise redirecting URLs (www, http, /sport/*/predictions)
     urls = [(loc, freq, prio) for loc, freq, prio in urls if _sitemap_loc_is_canonical(loc)]
@@ -16308,9 +16479,14 @@ def privacy_page():
 def terms_page():
     return render_template('terms.html')
 
+@app.route('/refund-policy')
+def refund_policy_page():
+    return render_template('refund_policy.html')
+
 @app.route('/ai-sports-betting-picks-today')
 def ai_picks_today_page():
     return render_template('ai_picks_today.html')
+
 
 @app.route('/what-are-ai-sports-betting-picks')
 def what_are_ai_picks_page():
@@ -18337,7 +18513,7 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
     <header class="top">
         <span class="eyebrow">Daily articles</span>
         <h1>Prediction Lab Blog</h1>
-        <p class="sub">Daily sports news, AI-generated betting insights, game previews, and model analysis — updated every day.</p>
+        <p class="sub">Game-day previews for today's slate — matchups, times, and links to Prediction Lab model picks.</p>
     </header>
     <section class="blog-section" aria-label="Soro blog feed">
         <h2 class="blog-section-title">Trending in Sports</h2>
@@ -18362,7 +18538,7 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
                 <div class="news-list">
                     <h3>Related coverage</h3>
                     {% for item in post.news_items %}
-                    {% if item.url %}
+                    {% if item.url and item.source != 'Google Trends' and 'trends.google' not in (item.url or '') and 'Google Trends' not in (item.topic or '') %}
                     <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.sport }}: {{ item.topic }}</a>
                     {% endif %}
                     {% endfor %}
@@ -18534,6 +18710,35 @@ _BLOG_CACHE_TTL = 300
 _BLOG_NEWS_CACHE_TTL = 900
 
 _BLOG_POSTS_FILE = _os.path.join(_BASE_DIR, 'data', 'blog_posts.json')
+# Append-only quarantine sink — Render disk rewrite on /blog load dumps spam here.
+_BLOG_TRENDS_QUARANTINE_FILE = _os.path.join(
+    _BASE_DIR, 'data', 'blog_posts_quarantine_trends.json'
+)
+
+# OWNER (2026-08-03): Google Trends → blog auto-publish is PERMANENTLY OFF.
+# Category-17 CA Trends RSS returned non-sports queries (Disney, stocks, weather…)
+# wrapped in a “Google Trends Betting Angle / after N+ Google searches” template.
+# Do NOT re-enable. Game-day previews (MLB/WNBA/UFC) replace that path.
+# Shipping this to predictionlab.io requires owner Manual Deploy — agents never push.
+# Even if this flag is flipped True, _fetch_google_trends / _generate_trend_blog_post
+# still return empty — Trends titles must never be recreated.
+# CRITICAL: every /blog load also rewrites data/blog_posts.json on disk so an old
+# Render volume JSON cannot keep serving Trends spam after code-only deploys.
+_BLOG_AUTO_TRENDS_ENABLED = False
+
+# In-season US-popular sports that may auto-publish game-day preview posts.
+# Tennis / ATP / Washington Open / etc. are NOT in this list — no Trends leftovers.
+# Expand later (NBA/NFL/NHL/CFB/tennis) only when those leagues are live and reviewed.
+_BLOG_GAME_DAY_SPORTS = ('MLB', 'WNBA', 'UFC')
+
+_BLOG_GAME_DAY_ESPN = {
+    'MLB': ('baseball', 'mlb'),
+    'WNBA': ('basketball', 'wnba'),
+    'UFC': ('mma', 'ufc'),
+}
+
+_BLOG_GAME_DAY_AUTO_PUBLISH = True
+_BLOG_GAME_DAY_MAX_POSTS = 24
 
 _CONF_BUCKETS = [
     ("90-100%", 90, 1000), ("85-89%", 85, 90), ("80-84%", 80, 85),
@@ -18567,23 +18772,8 @@ _EV_BUCKETS = [
     ("Negative EV", -1e9, 0),
 ]
 
-_PINNED_SPORTS_TRENDS_20260616 = [
-    {'query': 'emil andrae', 'traffic': '20K+', 'sport': 'NHL'},
-    {'query': 'france vs senegal', 'traffic': '10K+', 'sport': 'SOCCER'},
-    {'query': 'kyle calder', 'traffic': '10K+', 'sport': 'NHL'},
-    {'query': 'staal comments on marner trade', 'traffic': '10K+', 'sport': 'NHL'},
-    {'query': 'iran new zealand', 'traffic': '20K+', 'sport': 'SOCCER'},
-    {'query': 'elijah just', 'traffic': '20K+', 'sport': 'SOCCER'},
-    {'query': 'hockey night in canada', 'traffic': '2K+', 'sport': 'NHL'},
-    {'query': 'argentina vs algeria', 'traffic': '2K+', 'sport': 'SOCCER'},
-    {'query': 'algerie argentine', 'traffic': '2K+', 'sport': 'SOCCER'},
-    {'query': 'senegal', 'traffic': '2K+', 'sport': 'SOCCER'},
-    {'query': 'nhl trades', 'traffic': '1K+', 'sport': 'NHL'},
-    {'query': 'saudi arabia vs uruguay', 'traffic': '20K+', 'sport': 'SOCCER'},
-    {'query': 'iraq vs norway', 'traffic': '1K+', 'sport': 'SOCCER'},
-    {'query': 'new zealand vs sri lanka', 'traffic': '200+', 'sport': 'CRICKET'},
-    {'query': 'oilers interested in montembeault', 'traffic': '100+', 'sport': 'NHL'},
-]
+# Retired — was only used by Trends→blog. Kept empty so nothing can pin Trends topics.
+_PINNED_SPORTS_TRENDS_20260616: list[dict] = []
 
 
 # --- helper functions ---
@@ -18592,36 +18782,250 @@ def _blog_template_posts():
     posts = _get_blog_posts(include_generated=True)
     return [{**p, 'display_date': _blog_display_date(p)} for p in posts]
 
+def _blog_today_et():
+    try:
+        return datetime.now(ZoneInfo('America/New_York'))
+    except Exception:
+        return datetime.now()
+
+def _is_google_trends_blog_spam(post: dict) -> bool:
+    """True for Trends-template filler — never show or persist."""
+    if not isinstance(post, dict):
+        return False
+    slug = str(post.get('slug') or '').lower()
+    title = str(post.get('title') or '').lower()
+    excerpt = str(post.get('excerpt') or '')
+    source = str(post.get('source') or '')
+    topic = str(post.get('topic') or '')
+    sport_tag = str(post.get('sport_tag') or post.get('sport') or '')
+    body_parts: list[str] = []
+    body = post.get('body') or post.get('content') or []
+    if isinstance(body, list):
+        body_parts = [str(p) for p in body]
+    elif isinstance(body, str):
+        body_parts = [body]
+    body_blob = '\n'.join(body_parts)
+    news_blob = ''
+    news = post.get('news_items') or []
+    if isinstance(news, list):
+        news_blob = json.dumps(news, ensure_ascii=False)
+    # Full raw dump catches nested/odd shapes Render may still have on disk.
+    try:
+        raw_blob = json.dumps(post, ensure_ascii=False)
+    except Exception:
+        raw_blob = ''
+    hay = (
+        f'{slug}\n{title}\n{excerpt}\n{source}\n{topic}\n{sport_tag}\n'
+        f'{body_blob}\n{news_blob}\n{raw_blob}'
+    ).lower()
+    if 'google-trends-betting-angle' in slug or 'google-trends-betting-angle' in hay:
+        return True
+    if 'google trends' in hay:
+        return True
+    if 'betting angle' in title or 'betting angle' in slug or 'betting angle' in hay:
+        return True
+    if 'trends.google.com' in hay or 'trends.google' in hay:
+        return True
+    if str(source).strip().lower() == 'google trends':
+        return True
+    if 'sports searches moving fastest' in hay:
+        return True
+    if 'google searches is one of the sports searches' in hay:
+        return True
+    if re.search(r'after\s+\d+\+?\s+google searches', hay):
+        return True
+    if 'temporary trend feed' in hay:
+        return True
+    return False
+
+
+def _append_trends_blog_quarantine(spam_posts: list) -> None:
+    """Append purged Trends posts to quarantine JSON (never user-facing)."""
+    if not spam_posts:
+        return
+    try:
+        existing: list = []
+        if _os.path.exists(_BLOG_TRENDS_QUARANTINE_FILE):
+            with open(_BLOG_TRENDS_QUARANTINE_FILE, encoding='utf-8') as fh:
+                payload = json.load(fh)
+            if isinstance(payload, dict):
+                existing = list(payload.get('posts') or [])
+            elif isinstance(payload, list):
+                existing = list(payload)
+        seen = {
+            str((p or {}).get('slug') or '')
+            for p in existing
+            if isinstance(p, dict)
+        }
+        for post in spam_posts:
+            if not isinstance(post, dict):
+                continue
+            slug = str(post.get('slug') or '')
+            if slug and slug in seen:
+                continue
+            existing.append(post)
+            if slug:
+                seen.add(slug)
+        _os.makedirs(_os.path.dirname(_BLOG_TRENDS_QUARANTINE_FILE), exist_ok=True)
+        with open(_BLOG_TRENDS_QUARANTINE_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(
+                {
+                    'quarantined_at_note': (
+                        'Google Trends auto-blog spam. Not user-facing. '
+                        'Appended by _purge_google_trends_from_blog_disk on /blog load.'
+                    ),
+                    'posts': existing,
+                },
+                fh,
+                indent=2,
+                ensure_ascii=False,
+            )
+            fh.write('\n')
+    except Exception as exc:
+        logger.warning(f"Blog Trends quarantine write failed: {exc}")
+
+
+def _purge_google_trends_from_blog_disk() -> int:
+    """CRITICAL for Render: strip Trends spam from data/blog_posts.json on disk.
+
+    Called on every /blog load. Filters in-memory alone is not enough — an old
+    Render persistent JSON would otherwise keep the spam forever after a code
+    deploy. Rewrites the file whenever any Trends / Betting Angle post remains.
+    Returns number of posts removed. Idempotent when already clean.
+    """
+    path = _BLOG_POSTS_FILE
+    if not _os.path.exists(path):
+        return 0
+    try:
+        with open(path, encoding='utf-8') as fh:
+            raw_text = fh.read()
+        payload = json.loads(raw_text) if raw_text.strip() else {'posts': []}
+    except Exception as exc:
+        logger.warning(f"Blog Trends disk purge: read failed: {exc}")
+        return 0
+
+    items = payload.get('posts', payload) if isinstance(payload, dict) else payload
+    if not isinstance(items, list):
+        return 0
+
+    clean: list = []
+    spam: list = []
+    for raw in items:
+        if isinstance(raw, dict) and _is_google_trends_blog_spam(raw):
+            spam.append(raw)
+        elif isinstance(raw, dict):
+            clean.append(raw)
+        # drop non-dicts silently
+
+    # Nuclear text pass: if markers remain in the file even after per-post filter,
+    # force-drop any item whose serialized form still matches.
+    markers = (
+        'google-trends-betting-angle',
+        'google trends betting angle',
+        'google trends',
+        'betting angle',
+        'trends.google',
+        'sports searches moving fastest',
+    )
+    lower_file = raw_text.lower()
+    if not spam and any(m in lower_file for m in markers):
+        clean2: list = []
+        spam2: list = []
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                blob = json.dumps(raw, ensure_ascii=False).lower()
+            except Exception:
+                blob = str(raw).lower()
+            if any(m in blob for m in markers):
+                spam2.append(raw)
+            else:
+                clean2.append(raw)
+        if spam2:
+            clean, spam = clean2, spam2
+
+    if not spam:
+        return 0
+
+    _append_trends_blog_quarantine(spam)
+    try:
+        _os.makedirs(_os.path.dirname(path), exist_ok=True)
+        # Serialize only clean posts (legacy daily digests also stripped here).
+        serializable = []
+        for post in clean:
+            if not isinstance(post, dict):
+                continue
+            slug = str(post.get('slug') or '')
+            if _is_legacy_daily_blog_slug(slug):
+                continue
+            if _is_google_trends_blog_spam(post):
+                continue
+            serializable.append(post)
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump({'posts': serializable}, fh, indent=2, ensure_ascii=False)
+            fh.write('\n')
+        # Bust cache so the next load sees the rewritten file.
+        _BLOG_CACHE.update({'ts': 0, 'posts': []})
+        logger.warning(
+            "Purged %s Google Trends blog post(s) from %s (quarantined)",
+            len(spam),
+            path,
+        )
+    except Exception as exc:
+        logger.warning(f"Blog Trends disk purge: rewrite failed: {exc}")
+        return 0
+    return len(spam)
+
+
 def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
-    posts = _load_blog_posts_from_json()
-    if include_generated:
-        generated = _generate_daily_blog_post(todays_picks=todays_picks)
+    # Unavoidable on every blog assemble: rewrite Render disk if Trends remain.
+    purged = _purge_google_trends_from_blog_disk()
+    posts = [p for p in _load_blog_posts_from_json() if not _is_google_trends_blog_spam(p)]
+    if include_generated and _BLOG_GAME_DAY_AUTO_PUBLISH:
         by_slug = {p['slug']: p for p in posts}
-        by_slug[generated['slug']] = generated
-        today_str = str(generated.get('date') or '').strip()[:10]
-        trend_merged = 0
+        today_dt = _blog_today_et()
+        today_str = today_dt.strftime('%Y-%m-%d')
+        merged = 0
         try:
-            today_dt = _blog_date_key(generated)
-            date_str = today_dt.strftime('%Y-%m-%d')
-            display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
-            for trend in _trend_items_for_blog(limit=15):
-                trend_post = _generate_trend_blog_post(trend, date_str, display_date)
-                by_slug[trend_post['slug']] = trend_post
-                trend_merged += 1
+            for post in _generate_game_day_blog_posts(today=today_dt):
+                if not post or _is_google_trends_blog_spam(post):
+                    continue
+                by_slug[post['slug']] = post
+                merged += 1
         except Exception as exc:
-            logger.debug(f"Trend blog merge failed: {exc}")
+            logger.debug(f"Game-day blog merge failed: {exc}")
         by_slug = _prune_stale_auto_blog_posts(by_slug, keep_date=today_str)
+        # Never keep Trends spam even if somehow still on disk
+        by_slug = {
+            slug: post for slug, post in by_slug.items()
+            if not _is_google_trends_blog_spam(post)
+            and 'google-trends-betting-angle' not in str(slug).lower()
+        }
         posts = list(by_slug.values())
-        if trend_merged > 0:
+        # Persist when game-day merged OR when we just wiped Trends off disk —
+        # keeps Render volume aligned with the in-memory clean list.
+        if merged > 0 or purged > 0:
             _persist_blog_posts_to_json(posts)
+    elif purged > 0:
+        _persist_blog_posts_to_json(posts)
     posts.sort(key=_blog_date_key, reverse=True)
     return posts
 
+def _is_legacy_daily_blog_slug(slug: str) -> bool:
+    """Old ESPN-headline daily digests — retired with Trends filler."""
+    return bool(re.match(r'^prediction-lab-blog-\d{4}-\d{2}-\d{2}$', str(slug or '').strip().lower()))
+
 def _is_auto_generated_blog_slug(slug: str) -> bool:
     s = str(slug or '').strip().lower()
-    if re.match(r'^prediction-lab-blog-\d{4}-\d{2}-\d{2}$', s):
+    if _is_legacy_daily_blog_slug(s):
         return True
-    return '-google-trends-betting-angle-' in s
+    if 'google-trends-betting-angle' in s:
+        return True
+    # Game-day previews: mlb-cardinals-at-yankees-preview-2026-08-03
+    if re.search(r'-preview-\d{4}-\d{2}-\d{2}$', s):
+        return True
+    return False
 
 def _auto_blog_slug_date(slug: str):
     s = str(slug or '').strip().lower()
@@ -18634,12 +19038,16 @@ def _auto_blog_slug_date(slug: str):
         return None
 
 def _prune_stale_auto_blog_posts(by_slug: dict, *, keep_date: str) -> dict:
-    """Drop yesterday's server-generated daily/trend posts; keep manual archive entries."""
+    """Drop stale server-generated posts; keep manual archive entries."""
     keep_date = str(keep_date or '').strip()[:10]
     if not keep_date:
         return by_slug
     out = {}
     for slug, post in (by_slug or {}).items():
+        if _is_google_trends_blog_spam(post) or 'google-trends-betting-angle' in str(slug).lower():
+            continue  # quarantine forever — never keep Trends filler
+        if _is_legacy_daily_blog_slug(slug):
+            continue  # retired daily ESPN-digest template
         if not _is_auto_generated_blog_slug(slug):
             out[slug] = post
             continue
@@ -18649,14 +19057,19 @@ def _prune_stale_auto_blog_posts(by_slug: dict, *, keep_date: str) -> dict:
     return out
 
 def _persist_blog_posts_to_json(posts: list[dict]) -> None:
-    """Cache today's generated archive so /blog stays populated when Trends RSS is unreachable."""
-    if not posts:
-        return
+    """Persist game-day (and manual) archive posts. Never writes Trends spam.
+
+    Empty ``posts`` is allowed — used after a full Trends wipe so Render disk
+    cannot keep serving an old spam-filled JSON.
+    """
     try:
         _os.makedirs(_os.path.dirname(_BLOG_POSTS_FILE), exist_ok=True)
         serializable = []
-        for post in posts:
-            if not isinstance(post, dict):
+        for post in (posts or []):
+            if not isinstance(post, dict) or _is_google_trends_blog_spam(post):
+                continue
+            slug = str(post.get('slug') or '')
+            if 'google-trends-betting-angle' in slug.lower() or _is_legacy_daily_blog_slug(slug):
                 continue
             serializable.append({
                 'title': post.get('title'),
@@ -18670,7 +19083,7 @@ def _persist_blog_posts_to_json(posts: list[dict]) -> None:
         with open(_BLOG_POSTS_FILE, 'w', encoding='utf-8') as fh:
             json.dump({'posts': serializable}, fh, indent=2, ensure_ascii=False)
             fh.write('\n')
-        _BLOG_CACHE.update({'ts': _time.time(), 'posts': list(posts)})
+        _BLOG_CACHE.update({'ts': _time.time(), 'posts': list(serializable)})
     except Exception as exc:
         logger.debug(f"Blog JSON persist failed: {exc}")
 
@@ -18688,122 +19101,10 @@ def _blog_date_key(post: dict):
     except Exception:
         return datetime.min
 
-def _generate_daily_blog_post(today=None, todays_picks=None, news_items=None) -> dict:
-    try:
-        _tz = ZoneInfo('America/New_York')
-        today_dt = today or datetime.now(_tz)
-    except Exception:
-        today_dt = today or datetime.now()
-    date_str = today_dt.strftime('%Y-%m-%d')
-    display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
-    picks = todays_picks if todays_picks is not None else build_todays_top_picks()
-    news = news_items if news_items is not None else _fetch_espn_news_items(limit=4)
-    primary_sport = (news[0]['sport'] if news else None) or (picks[0]['sport'] if picks else 'Sports News')
-    slug = f"prediction-lab-blog-{date_str}"
-    title = f"Prediction Lab Blog: {display_date}"
-    if picks:
-        pick_bits = [
-            f"{p['sport']}: {p['pick']} over {p['away'] if p['pick'] == p['home'] else p['home']} ({p['prob']}%)"
-            for p in picks[:3]
-        ]
-        lead = "Today's betting board is led by " + '; '.join(pick_bits) + "."
-    else:
-        lead = "Today's betting board is focused on moneyline model agreement, market pricing, and completed-result transparency across active sports."
-    if news:
-        news_lead = (
-            "The sports news side of the board is being shaped by "
-            + '; '.join(f"{item['sport']}: {item['topic']}" for item in news[:3])
-            + "."
-        )
-    else:
-        news_lead = "The sports news side of the board is monitored through ESPN feeds when available, then connected back to model movement and market context."
-    body = [
-        news_lead,
-        lead,
-        *[_news_market_paragraph(item) for item in news[:3]],
-        "Prediction Lab connects sports news to betting context by comparing model win probabilities against market prices. The daily betting results report remains the verification layer, while this news and market breakdown gives crawlers and readers a concise explanation of what the models and the broader sports calendar are watching today.",
-        "The most important signal is not a single story or pick in isolation. It is the relationship between news, model confidence, sportsbook pricing, recent result tracking, and whether multiple model layers point in the same direction.",
-        "Check the sport prediction pages for the live cards and the daily results report for completed-game tracking. New daily sports news and betting analysis pages are generated server-side so the latest context stays crawlable and internally linked from the homepage.",
-    ]
-    excerpt = _blog_excerpt(' '.join(body), 3)
-    return {
-        'title': title,
-        'slug': slug,
-        'date': date_str,
-        'sport_tag': primary_sport,
-        'excerpt': excerpt,
-        'body': body,
-        'news_items': news,
-    }
-def _fetch_google_trends(geo: str = 'CA', category: int = 17, limit: int = 20) -> list[dict]:
-    """Fetch sports trending searches from Google Trends RSS for Canada."""
-    try:
-        url = f"https://trends.google.com/trending/rss?geo={geo}&category={category}"
-        import urllib.request
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            raw = resp.read().decode('utf-8', errors='ignore')
-        import xml.etree.ElementTree as ET
-        root = ET.fromstring(raw)
-        ns = {'ht': 'https://trends.google.com/trending/rss'}
-        items = []
-        for item in root.findall('.//item'):
-            title_el = item.find('title')
-            traffic_el = item.find('ht:approx_traffic', ns)
-            query = (title_el.text or '').strip() if title_el is not None else ''
-            traffic = (traffic_el.text or '').strip() if traffic_el is not None else ''
-            if query:
-                items.append({
-                    'query': query,
-                    'traffic': traffic,
-                    'sport': _infer_trend_sport(query),
-                })
-            if len(items) >= limit:
-                break
-        logger.info(f"Google Trends fetched {len(items)} items (geo={geo})")
-        return items
-    except Exception as exc:
-        logger.warning(f"Google Trends fetch failed: {exc}")
-        return []
-def _trend_items_for_blog(limit: int = 15) -> list[dict]:
-    items = []
-    today_key = datetime.now().strftime('%Y-%m-%d')
-    if today_key == '2026-06-16':
-        items.extend(_PINNED_SPORTS_TRENDS_20260616)
-    fetch = globals().get('_fetch_google_trends')
-    if callable(fetch):
-        try:
-            for tr in fetch() or []:
-                query = str(tr.get('query') or '').strip()
-                if query:
-                    items.append({
-                        'query': query,
-                        'traffic': str(tr.get('traffic') or '').strip(),
-                        'sport': _infer_trend_sport(query),
-                    })
-        except Exception as exc:
-            logger.debug(f"Google Trends blog fetch failed: {exc}")
-    out = []
-    seen = set()
-    for item in items:
-        query = str(item.get('query') or '').strip()
-        key = query.lower()
-        if not query or key in seen:
-            continue
-        seen.add(key)
-        out.append({
-            'query': query,
-            'traffic': str(item.get('traffic') or '').strip(),
-            'sport': item.get('sport') or _infer_trend_sport(query),
-        })
-        if len(out) >= limit:
-            break
-    return out
-
 def _load_blog_posts_from_json() -> list[dict]:
     now_ts = _time.time()
     if _BLOG_CACHE.get('posts') and (now_ts - _BLOG_CACHE.get('ts', 0)) < _BLOG_CACHE_TTL:
-        return list(_BLOG_CACHE.get('posts') or [])
+        return [p for p in (_BLOG_CACHE.get('posts') or []) if not _is_google_trends_blog_spam(p)]
     posts: list[dict] = []
     try:
         if _os.path.exists(_BLOG_POSTS_FILE):
@@ -18813,7 +19114,12 @@ def _load_blog_posts_from_json() -> list[dict]:
             if isinstance(items, list):
                 for raw in items:
                     post = _normalize_blog_post(raw)
-                    if post:
+                    if (
+                        post
+                        and not _is_google_trends_blog_spam(post)
+                        and not _is_google_trends_blog_spam(raw if isinstance(raw, dict) else {})
+                        and not _is_legacy_daily_blog_slug(post.get('slug'))
+                    ):
                         posts.append(post)
     except Exception as exc:
         logger.debug(f"Blog JSON load failed: {exc}")
@@ -18821,34 +19127,263 @@ def _load_blog_posts_from_json() -> list[dict]:
     _BLOG_CACHE.update({'ts': now_ts, 'posts': posts})
     return list(posts)
 
-def _generate_trend_blog_post(item: dict, date_str: str, display_date: str) -> dict:
-    query = str(item.get('query') or '').strip()
-    traffic = str(item.get('traffic') or '').strip()
-    sport = item.get('sport') or _infer_trend_sport(query)
-    title_query = query.title()
-    traffic_clause = f" after {traffic} Google searches" if traffic else ""
-    topic = f"{title_query}{traffic_clause}"
-    body = [
-        f"{topic} is one of the sports searches moving fastest on Google Trends over the last 24 hours. Prediction Lab is treating it as a live market-monitoring topic because search demand can change how quickly public betting attention reaches a matchup, player story, or transaction rumor.",
-        f"For {sport} bettors, the important question is not whether the trend is popular. The important question is whether sportsbooks have already moved the moneyline, spread, totals, or futures market before casual search traffic catches up.",
-        "Our model workflow compares projected win probability against available market prices, then checks whether the edge survives vig, injury context, schedule pressure, and recent performance. A trending query can explain why attention is moving, but the bet still has to clear the numbers.",
-        "Use the live prediction pages for current cards and the daily results report for completed-game tracking. This article exists so the trend has a crawlable betting-context page tied back to Prediction Lab's model coverage instead of sitting only inside a temporary trend feed.",
-    ]
+def _fetch_google_trends(geo: str = 'CA', category: int = 17, limit: int = 20) -> list[dict]:
+    """DISABLED forever — never fetch Trends RSS for blogging (flag ignored)."""
+    _ = (geo, category, limit, _BLOG_AUTO_TRENDS_ENABLED)
+    return []
+
+def _trend_items_for_blog(limit: int = 15) -> list[dict]:
+    """DISABLED forever — Trends→blog pipeline retired Aug 2026."""
+    _ = (limit, _BLOG_AUTO_TRENDS_ENABLED, _PINNED_SPORTS_TRENDS_20260616)
+    return []
+
+def _generate_trend_blog_post(item: dict, date_str: str, display_date: str) -> dict | None:
+    """DISABLED forever — never recreate “Google Trends Betting Angle” titles."""
+    _ = (item, date_str, display_date, _BLOG_AUTO_TRENDS_ENABLED)
+    return None
+
+def _infer_trend_sport(query: str) -> str:
+    """Legacy helper; unused — Trends blogging is off."""
+    _ = query
+    return 'Sports'
+
+def _blog_picks_path(sport: str) -> str:
+    slug = SPORT_SEO_SLUGS.get(str(sport or '').upper())
+    return f'/{slug}' if slug else '/'
+
+def _blog_competitor_label(comp: dict) -> str:
+    team = comp.get('team') or {}
+    athlete = comp.get('athlete') or {}
+    return (
+        team.get('displayName')
+        or team.get('name')
+        or athlete.get('displayName')
+        or athlete.get('fullName')
+        or ''
+    ).strip()
+
+def _blog_record_summary(comp: dict) -> str:
+    for rec in (comp.get('records') or []):
+        if str(rec.get('type') or '').lower() in ('total', 'overall') or str(rec.get('name') or '').lower() == 'overall':
+            summary = str(rec.get('summary') or '').strip()
+            if summary:
+                return summary
+    for rec in (comp.get('records') or []):
+        summary = str(rec.get('summary') or '').strip()
+        if summary:
+            return summary
+    return ''
+
+def _blog_probable_pitcher(comp: dict) -> str:
+    for prob in (comp.get('probables') or []):
+        if 'pitch' not in str(prob.get('name') or '').lower() and 'pitch' not in str(prob.get('displayName') or '').lower():
+            # still accept first probable if unlabeled
+            pass
+        athlete = prob.get('athlete') or {}
+        name = (athlete.get('displayName') or athlete.get('fullName') or '').strip()
+        if not name:
+            continue
+        record = str(prob.get('record') or '').strip()
+        return f"{name} {record}".strip() if record else name
+    return ''
+
+def _blog_event_local_time(event: dict, competition: dict) -> str:
+    raw = (
+        competition.get('date')
+        or event.get('date')
+        or (competition.get('status') or {}).get('type', {}).get('shortDetail')
+    )
+    if not raw:
+        return ''
+    try:
+        if isinstance(raw, str) and 'T' in raw:
+            dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+            local = dt.astimezone(ZoneInfo('America/New_York'))
+            return local.strftime('%I:%M %p').lstrip('0') + ' ET'
+    except Exception:
+        pass
+    detail = ((competition.get('status') or event.get('status') or {}).get('type') or {}).get('shortDetail') or ''
+    # e.g. "8/3 - 7:05 PM EDT"
+    if ' - ' in detail:
+        return detail.split(' - ', 1)[1].strip()
+    return str(detail).strip()
+
+def _blog_parse_scoreboard_event(sport: str, event: dict, target_date: str) -> dict | None:
+    competitions = event.get('competitions') or []
+    if not competitions:
+        return None
+    competition = competitions[0] or {}
+    event_date = _espn_event_date_to_local(
+        competition.get('date') or event.get('date') or competition.get('startDate')
+    )
+    if event_date and event_date != target_date:
+        return None
+    competitors = competition.get('competitors') or []
+    if len(competitors) < 2:
+        return None
+    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+    if not home or not away:
+        # UFC / MMA often omit homeAway
+        away, home = competitors[0], competitors[1]
+    away_name = _blog_competitor_label(away)
+    home_name = _blog_competitor_label(home)
+    if not away_name or not home_name:
+        return None
+    venue = ((competition.get('venue') or {}).get('fullName') or '').strip()
+    city = ((competition.get('venue') or {}).get('address') or {}).get('city') or ''
+    status = ((competition.get('status') or event.get('status') or {}).get('type') or {})
+    status_name = str(status.get('name') or status.get('description') or '').strip()
     return {
-        'title': f"{title_query}: Google Trends Betting Angle ({display_date})",
-        'slug': _slugify_blog(f"{query}-google-trends-betting-angle-{date_str}"),
+        'sport': sport,
+        'event_id': str(event.get('id') or competition.get('id') or ''),
+        'away': away_name,
+        'home': home_name,
+        'away_record': _blog_record_summary(away),
+        'home_record': _blog_record_summary(home),
+        'away_pitcher': _blog_probable_pitcher(away) if sport == 'MLB' else '',
+        'home_pitcher': _blog_probable_pitcher(home) if sport == 'MLB' else '',
+        'venue': venue,
+        'city': city,
+        'local_time': _blog_event_local_time(event, competition),
+        'status': status_name,
+        'date': target_date,
+        'is_mma': sport == 'UFC',
+    }
+
+def _fetch_game_day_slate(sport: str, date_str: str) -> list[dict]:
+    """Pull today's ESPN scoreboard events for one gated blog sport."""
+    sport = str(sport or '').upper()
+    if sport not in _BLOG_GAME_DAY_SPORTS:
+        return []
+    pair = _BLOG_GAME_DAY_ESPN.get(sport)
+    if not pair:
+        return []
+    espn_sport, espn_league = pair
+    ymd = date_str.replace('-', '')
+    url = (
+        f"https://site.api.espn.com/apis/site/v2/sports/{espn_sport}/"
+        f"{espn_league}/scoreboard?dates={ymd}"
+    )
+    try:
+        data = _cached_get(url, timeout=12)
+    except Exception as exc:
+        logger.debug(f"Game-day scoreboard fetch failed ({sport} {date_str}): {exc}")
+        return []
+    events = data.get('events') if isinstance(data, dict) else None
+    if not isinstance(events, list):
+        return []
+    out = []
+    for event in events:
+        parsed = _blog_parse_scoreboard_event(sport, event, date_str)
+        if parsed:
+            out.append(parsed)
+    return out
+
+def _generate_game_preview_post(game: dict, display_date: str) -> dict:
+    """Neutral slate preview — schedule facts + Prediction Lab picks CTA. No fake news."""
+    sport = str(game.get('sport') or '').upper()
+    away = game.get('away') or 'Away'
+    home = game.get('home') or 'Home'
+    date_str = str(game.get('date') or '')[:10]
+    is_mma = bool(game.get('is_mma')) or sport == 'UFC'
+    matchup = f"{away} vs {home}" if is_mma else f"{away} at {home}"
+    title = f"{matchup} — {display_date} preview"
+    slug_core = f"{away}-vs-{home}" if is_mma else f"{away}-at-{home}"
+    slug = _slugify_blog(f"{sport.lower()}-{slug_core}-preview-{date_str}")
+
+    time_bit = game.get('local_time') or ''
+    venue = game.get('venue') or ''
+    city = game.get('city') or ''
+    venue_bit = venue
+    if city and city.lower() not in venue.lower():
+        venue_bit = f"{venue} ({city})" if venue else city
+
+    lead_parts = [f"{matchup} is on the {sport} board for {display_date}"]
+    if time_bit:
+        lead_parts[0] += f", scheduled for {time_bit}"
+    if venue_bit:
+        lead_parts[0] += f" at {venue_bit}"
+    lead_parts[0] += "."
+
+    body = [lead_parts[0]]
+
+    form_bits = []
+    if game.get('away_record'):
+        form_bits.append(f"{away} enter at {game['away_record']}")
+    if game.get('home_record'):
+        form_bits.append(f"{home} sit at {game['home_record']}")
+    if form_bits:
+        body.append(' and '.join(form_bits) + " on the season standings board heading into tip/first pitch.")
+
+    if sport == 'MLB' and (game.get('away_pitcher') or game.get('home_pitcher')):
+        ap = game.get('away_pitcher') or 'TBD'
+        hp = game.get('home_pitcher') or 'TBD'
+        body.append(f"Probable starters: {away} — {ap}; {home} — {hp}.")
+
+    picks_path = _blog_picks_path(sport)
+    body.append(
+        f"This is a schedule preview built from the day's {sport} slate — not a rumor roundup. "
+        f"For model win probabilities and moneyline context on this matchup, open Prediction Lab's "
+        f"{sport} picks board at {picks_path}."
+    )
+    body.append(
+        "Compare the model's projected win probability with the available market price before you bet, "
+        "and use the daily results report afterward to see how completed cards graded."
+    )
+
+    excerpt = _blog_excerpt(' '.join(body), 2)
+    return {
+        'title': title,
+        'slug': slug,
         'date': date_str,
         'sport_tag': sport,
-        'excerpt': _blog_excerpt(' '.join(body), 3),
+        'excerpt': excerpt,
         'body': body,
         'news_items': [{
             'sport': sport,
-            'topic': f"Google Trends: {query}",
-            'summary_hint': f"{traffic} searches in the last 24 hours" if traffic else 'Trending sports search in the last 24 hours',
-            'source': 'Google Trends',
-            'url': 'https://trends.google.com/trending?geo=US',
+            'topic': f"{sport} picks — live model board",
+            'summary_hint': f"Prediction Lab {sport} predictions",
+            'source': 'Prediction Lab',
+            'url': picks_path,
         }],
     }
+
+def _generate_game_day_blog_posts(today=None, sports=None) -> list[dict]:
+    """Build one preview post per game for gated in-season sports."""
+    today_dt = today or _blog_today_et()
+    if hasattr(today_dt, 'strftime'):
+        date_str = today_dt.strftime('%Y-%m-%d')
+        display_date = today_dt.strftime('%B %d, %Y').replace(' 0', ' ')
+    else:
+        date_str = str(today_dt)[:10]
+        display_date = date_str
+    allow = tuple(sports) if sports else _BLOG_GAME_DAY_SPORTS
+    posts: list[dict] = []
+    for sport in allow:
+        sport_u = str(sport).upper()
+        if sport_u not in _BLOG_GAME_DAY_SPORTS:
+            continue
+        for game in _fetch_game_day_slate(sport_u, date_str):
+            posts.append(_generate_game_preview_post(game, display_date))
+            if len(posts) >= _BLOG_GAME_DAY_MAX_POSTS:
+                return posts
+    return posts
+
+def _rebuild_game_day_blog_archive(today=None, persist: bool = True) -> list[dict]:
+    """CLI/helper: regenerate today's game-day posts and optionally write blog_posts.json."""
+    today_dt = today or _blog_today_et()
+    today_str = today_dt.strftime('%Y-%m-%d') if hasattr(today_dt, 'strftime') else str(today_dt)[:10]
+    existing = [p for p in _load_blog_posts_from_json() if not _is_google_trends_blog_spam(p)]
+    by_slug = {p['slug']: p for p in existing}
+    for post in _generate_game_day_blog_posts(today=today_dt):
+        by_slug[post['slug']] = post
+    by_slug = _prune_stale_auto_blog_posts(by_slug, keep_date=today_str)
+    posts = list(by_slug.values())
+    posts.sort(key=_blog_date_key, reverse=True)
+    if persist:
+        _persist_blog_posts_to_json(posts)
+    return posts
 
 def _slugify_blog(value: str) -> str:
     value = (value or '').strip().lower()
@@ -18861,18 +19396,6 @@ def _blog_excerpt(text: str, max_sentences: int = 3) -> str:
         return ''
     parts = re.split(r'(?<=[.!?])\s+', clean)
     return ' '.join(parts[:max_sentences]).strip()
-
-def _infer_trend_sport(query: str) -> str:
-    q = f" {str(query or '').lower()} "
-    if any(term in q for term in (' nhl ', ' hockey ', ' andrae ', ' calder ', ' staal ', ' marner ', ' oilers ', ' montembeault ')):
-        return 'NHL'
-    if any(term in q for term in (' sri lanka ', ' cricket ')):
-        return 'CRICKET'
-    if any(term in q for term in (' vs ', ' france ', ' senegal ', ' argentina ', ' algeria ', ' algerie ', ' uruguay ', ' saudi ', ' iraq ', ' norway ', ' iran ', ' zealand ', ' elijah just ')):
-        return 'SOCCER'
-    if any(term in q for term in (' us open ', ' golf ')):
-        return 'GOLF'
-    return 'Sports'
 
 def _normalize_blog_post(raw: dict):
     if not isinstance(raw, dict):
@@ -19088,6 +19611,9 @@ def downloads_page():
 
 @app.route('/blog')
 def blog_archive_page():
+    # First hit after Manual Deploy rewrites Render's on-disk blog_posts.json
+    # if any Google Trends / Betting Angle spam is still present.
+    _purge_google_trends_from_blog_disk()
     posts = _blog_template_posts()
     return render_template_string(
         BLOG_ARCHIVE_TEMPLATE,
@@ -19100,13 +19626,18 @@ def blog_archive_page():
 
 @app.route('/blog/<slug>')
 def blog_post_redirect(slug):
-    """Per-slug blog URLs are ephemeral (auto trend posts prune daily).
+    """Per-slug blog URLs are ephemeral (game-day previews rotate daily).
 
     301 to the archive so Google consolidates on /blog instead of crawling
-    soft hash redirects ("Crawled - currently not indexed"). Archive itself is
-    noindex while Trends filler stays thin.
+    soft hash redirects ("Crawled - currently not indexed").
+    Trends Betting Angle slugs also trigger an on-disk purge + noindex.
     """
-    _ = _slugify_blog(slug)
+    clean_slug = _slugify_blog(slug)
+    if (
+        'google-trends-betting-angle' in clean_slug.lower()
+        or _is_google_trends_blog_spam({'slug': clean_slug, 'title': clean_slug})
+    ):
+        _purge_google_trends_from_blog_disk()
     resp = redirect(f'{_SITE_DOMAIN}/blog', code=301)
     resp.headers['X-Robots-Tag'] = 'noindex, follow'
     return resp
