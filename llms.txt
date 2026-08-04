@@ -52,6 +52,7 @@ Important notes:
 - [Robots](https://predictionlab.io/robots.txt): Crawler allow/disallow rules
 - [Privacy policy](https://predictionlab.io/privacy): Data handling and privacy terms
 - [Terms of service](https://predictionlab.io/terms): Site usage terms
+- [Refund policy](https://predictionlab.io/refund-policy): Weekly / monthly / yearly satisfaction windows
 - [Responsible gaming](https://predictionlab.io/responsible-gaming): Risk awareness and responsible betting guidance
 
 ## Optional

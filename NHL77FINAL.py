@@ -171,9 +171,7 @@ _STANDALONE_PROPS_PKG = "_standalone_player_props"
 
 
 _PL_BOOK_ODDS_LIMIT_BY_SPORT = {
-    # Soccer slates are large (cups + multi-league). Scoreboard nested odds cover most;
-    # Core fetch still needed when scoreboard returns null odds for a competition.
-    'SOCCER': 100,
+    'SOCCER': 40,
     'NBA': 80,
     'MLB': 80,
     'NHL': 60,
@@ -2432,49 +2430,33 @@ def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
         card.pop('disp_pl_spread', None)
         return
     sp = _round_to_half(float(sp))
-    # Align spread sign to moneyline pick so projected scores / run line agree.
-    # MLB previously skipped this ("faded" spread) and showed Nationals 6–Phillies 4.5
-    # while Consensus/G2 picked Phillies. Use ensemble ML — not efficiency-derived
-    # disp_ml_prob — so we do not no-op when disp_ml_prob was itself spread-built.
-    if sport == 'MLB':
-        hp = None
-        for key in ('ensemble_prob', 'ens_prob'):
-            v = _safe_float(card.get(key))
-            if v is not None:
-                hp = _normalize_home_win_prob_pct(v)
-                break
-        if hp is None:
-            hp = _pl_home_prob_for_spread_display(card)
-    else:
+    # MLB spread is faded at parameter level; do not re-align to ensemble ML.
+    if sport != 'MLB':
         hp = _pl_home_prob_for_spread_display(card)
-    if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
-        home_ml_fav = hp > 50.0
-        if home_ml_fav and sp < 0:
-            sp = -sp
-        elif not home_ml_fav and sp > 0:
-            sp = -sp
+        if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
+            home_ml_fav = hp > 50.0
+            if home_ml_fav and sp < 0:
+                sp = -sp
+            elif not home_ml_fav and sp > 0:
+                sp = -sp
     card['disp_pl_spread'] = sp
 
 
 def _set_card_projected_scores(card: dict) -> None:
     """Projected Score box — derive PL/XSharp from spread+total (half-point increments)."""
     _home_id = card.get('home_team_id') or card.get('home')
-    _away_id = card.get('away_team_id') or card.get('away')
-    _picked = card.get('predicted_winner') or card.get('face_pick_team')
+    _picked   = card.get('predicted_winner')
 
     ps = _safe_float(card.get('disp_pl_spread')) or _safe_float(card.get('our_spread'))
     pt = _safe_float(card.get('disp_pl_total')) or _safe_float(card.get('our_total'))
     if ps is not None and pt is not None:
         xh, xa = _scores_from_spread_total(ps, pt)
         if xh is not None:
-            _pl_winner = _home_id if xh >= xa else _away_id
+            # Suppress PL score when it contradicts the pick direction.
+            # Happens on V2 games where the efficiency model and the ensemble disagree.
+            _pl_winner = _home_id if xh >= xa else card.get('away_team_id') or card.get('away')
             if _picked and _pl_winner and _pl_winner != _picked:
-                # Regenerate: swap so the ML pick has the higher projected score.
-                # Keep total; flip displayed PL spread to match.
-                card['pl_proj_home_pts'] = _round_to_half(xa)
-                card['pl_proj_away_pts'] = _round_to_half(xh)
-                if _safe_float(card.get('disp_pl_spread')) is not None:
-                    card['disp_pl_spread'] = -float(card['disp_pl_spread'])
+                pass  # do not set — score would say opposite team wins
             else:
                 card['pl_proj_home_pts'] = _round_to_half(xh)
                 card['pl_proj_away_pts'] = _round_to_half(xa)
@@ -2484,12 +2466,10 @@ def _set_card_projected_scores(card: dict) -> None:
     if xs is not None and xt is not None:
         xh, xa = _scores_from_spread_total(xs, xt)
         if xh is not None:
-            _xs_winner = _home_id if xh >= xa else _away_id
+            # Same guard for XSharp projected score
+            _xs_winner = _home_id if xh >= xa else card.get('away_team_id') or card.get('away')
             if _picked and _xs_winner and _xs_winner != _picked:
-                card['xs_proj_home_pts'] = _round_to_half(xa)
-                card['xs_proj_away_pts'] = _round_to_half(xh)
-                if _safe_float(card.get('disp_xs_spread')) is not None:
-                    card['disp_xs_spread'] = -float(card['disp_xs_spread'])
+                pass
             else:
                 card['xs_proj_home_pts'] = _round_to_half(xh)
                 card['xs_proj_away_pts'] = _round_to_half(xa)
@@ -3215,14 +3195,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
     _regression = {'High': 0.0, 'Med': 0.15, 'Low': 0.35}.get(_conf, 0.0)
     _pl_sp = _safe_float(_raw_pl_sp)
     _our_method = pred.get('our_method')
-    # MLB: never rebuild disp_ml_prob / predicted_winner from efficiency spread —
-    # that caused projected Nationals 6–Phillies 4.5 while Consensus picked Phillies.
-    if (
-        sport != 'MLB'
-        and _pl_sp is not None
-        and abs(_pl_sp) >= 1.0
-        and _our_method in ('efficiency', 'team-avg-fallback')
-    ):
+    if _pl_sp is not None and abs(_pl_sp) >= 1.0 and _our_method in ('efficiency', 'team-avg-fallback'):
         import math as _mt
         _sigma_pl = 12.0  # NBA spread distribution std dev
         _pl_home_prob = 50.0 + 50.0 * _mt.erf(_pl_sp / (_sigma_pl * _mt.sqrt(2)))
@@ -3262,21 +3235,10 @@ def _sync_pick_winner_to_pl_spread(pred: dict, sport: str = 'NBA') -> None:
     """Align predicted_winner with PL spread after disp sign normalization."""
     if pred.get('home_score') is not None:
         return
-    # MLB: moneyline (ensemble) is source of truth. disp_pl_spread is flipped to
-    # match ML in _set_card_pl_spread — do not override the pick from raw our_spread.
-    if sport == 'MLB':
-        ens = _safe_float(pred.get('ensemble_prob')) or _safe_float(pred.get('ens_prob'))
-        if ens is not None:
-            ens_pct = _normalize_home_win_prob_pct(ens)
-            if ens_pct is not None:
-                pred['predicted_winner'] = (
-                    pred.get('home_team_id') if ens_pct >= 50.0 else pred.get('away_team_id')
-                )
-        return
-    _min_spread = {'NHL': 0.3, 'WNBA': 1.0}.get(sport, 3.0)
-    sp = _safe_float(pred.get('disp_pl_spread'))
+    _min_spread = {'NHL': 0.3, 'MLB': 0.5, 'WNBA': 1.0}.get(sport, 3.0)
+    sp = _safe_float(pred.get('our_spread'))
     if sp is None:
-        sp = _safe_float(pred.get('our_spread'))
+        sp = _safe_float(pred.get('disp_pl_spread'))
     if sp is None or abs(sp) < _min_spread:
         return
     pred['predicted_winner'] = (
@@ -4970,83 +4932,6 @@ def _soccer_league_from_espn_uid(uid: str, id_map: dict):
     return id_map.get(match.group(1))
 
 
-def _parse_espn_line_number(raw):
-    """Parse ESPN line strings like '-0.5', '+1.5', 'o2.5' into float."""
-    if raw is None:
-        return None
-    try:
-        s = str(raw).strip().replace('½', '.5').replace(' ', '')
-        s = s.replace('o', '').replace('u', '').replace('O', '').replace('U', '')
-        if not s or s in {'-', '+', 'PK', 'pk', 'EVEN', 'even'}:
-            return 0.0 if s.upper() in {'PK', 'EVEN'} else None
-        return float(s)
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_espn_american_odds(raw):
-    """Parse American odds from int/float/string ('-160', '+380')."""
-    if raw is None:
-        return None
-    try:
-        return int(round(float(str(raw).strip().replace(',', ''))))
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_espn_embedded_odds_item(item):
-    """Parse one ESPN odds object (Core flat fields or scoreboard nested widgets).
-
-    Returns dict with home_ml/away_ml/spread/total/provider, or None if unusable/live.
-    Book spread convention: negative = home favored (same as ESPN Core `spread`).
-    """
-    if not isinstance(item, dict):
-        return None
-    prov = ((item.get('provider') or {}).get('name') or '')
-    if 'live' in prov.lower():
-        return None
-
-    home_ml = _parse_espn_american_odds(
-        (item.get('homeTeamOdds') or {}).get('moneyLine')
-    )
-    away_ml = _parse_espn_american_odds(
-        (item.get('awayTeamOdds') or {}).get('moneyLine')
-    )
-    spread = _parse_espn_line_number(item.get('spread'))
-    total = _parse_espn_line_number(item.get('overUnder'))
-
-    # Current site.api scoreboard DraftKings widget: nested pointSpread / moneyline.
-    if spread is None:
-        ps_home = ((item.get('pointSpread') or {}).get('home') or {})
-        ps_close = ps_home.get('close') or ps_home.get('open') or {}
-        spread = _parse_espn_line_number(ps_close.get('line'))
-    if home_ml is None or away_ml is None:
-        ml = item.get('moneyline') or {}
-        if home_ml is None:
-            h_block = (ml.get('home') or {})
-            h_close = h_block.get('close') or h_block.get('open') or {}
-            home_ml = _parse_espn_american_odds(h_close.get('odds'))
-        if away_ml is None:
-            a_block = (ml.get('away') or {})
-            a_close = a_block.get('close') or a_block.get('open') or {}
-            away_ml = _parse_espn_american_odds(a_close.get('odds'))
-    if total is None:
-        tot = item.get('total') or {}
-        over = (tot.get('over') or {})
-        o_close = over.get('close') or over.get('open') or {}
-        total = _parse_espn_line_number(o_close.get('line'))
-
-    if home_ml is None and away_ml is None and spread is None and total is None:
-        return None
-    return {
-        'home_ml': home_ml,
-        'away_ml': away_ml,
-        'spread': spread,
-        'total': total,
-        'provider': prov or 'ESPN',
-    }
-
-
 def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
     """Curated soccer games from ESPN soccer/all (one request per day, all leagues)."""
     days_back = SOCCER_PICKS_DAYS_BACK if days_back is None else days_back
@@ -5095,21 +4980,33 @@ def _fetch_soccer_scoreboard_api_games(days_back=None, days_forward=None):
                 except Exception:
                     continue
             # Extract book odds directly from the scoreboard response.
-            # Supports legacy flat fields (spread/homeTeamOdds) and current nested
-            # DraftKings widgets (pointSpread/moneyline). Core API still used later
-            # when scoreboard odds are null (common for some cups).
+            # This covers lower-division leagues (esp.2, eng.2, etc.) that ESPN
+            # Core odds API doesn't serve, so the picks page shows real lines.
             _sb_home_ml = _sb_away_ml = _sb_spread = _sb_total = None
             _sb_source = None
             for _odds_item in (competition.get('odds') or []):
-                parsed = _parse_espn_embedded_odds_item(_odds_item)
-                if not parsed:
+                if not isinstance(_odds_item, dict):
                     continue
-                _sb_home_ml = parsed.get('home_ml')
-                _sb_away_ml = parsed.get('away_ml')
-                _sb_spread = parsed.get('spread')
-                _sb_total = parsed.get('total')
-                _sb_source = parsed.get('provider') or 'ESPN'
-                if _sb_home_ml is not None or _sb_spread is not None or _sb_total is not None:
+                _prov = ((_odds_item.get('provider') or {}).get('name') or '').lower()
+                if 'live' in _prov:
+                    continue
+                try:
+                    _hml = (_odds_item.get('homeTeamOdds') or {}).get('moneyLine')
+                    _aml = (_odds_item.get('awayTeamOdds') or {}).get('moneyLine')
+                    if _hml is not None:
+                        _sb_home_ml = int(round(float(_hml)))
+                    if _aml is not None:
+                        _sb_away_ml = int(round(float(_aml)))
+                    _sp = _odds_item.get('spread')
+                    if _sp is not None:
+                        _sb_spread = float(_sp)
+                    _ou = _odds_item.get('overUnder')
+                    if _ou is not None:
+                        _sb_total = float(_ou)
+                    _sb_source = ((_odds_item.get('provider') or {}).get('name') or 'ESPN')
+                except (TypeError, ValueError):
+                    pass
+                if _sb_home_ml is not None or _sb_spread is not None:
                     break  # use first valid provider
             _game_entry = {
                 'game_id': f'SOCCER_{league_code}_{event_id}',

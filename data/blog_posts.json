@@ -366,6 +366,53 @@
           "url": "/wnba-picks"
         }
       ]
+    },
+    {
+      "title": "Prediction Lab Blog: August 4, 2026",
+      "slug": "prediction-lab-blog-2026-08-04",
+      "date": "2026-08-04",
+      "sport_tag": "MLB",
+      "excerpt": "The sports news side of the board is being shaped by MLB: Fantasy baseball: Wood hurt for Washington and more news for Tuesday; MLB: Is Brian Cashman's future with the Yankees at risk?; MLB: MLB trade deadline 2026: Ranking prospects who changed teams. Today's betting board is led by SOCCER: León over Nashville SC (57.7%); WNBA: New York Liberty over Seattle Storm (52.9%); WNBA: Chicago Sky over Los Angeles Sparks (51.4%). In MLB, the news cycle is centered on Fantasy baseball: Wood hurt for Washington and more news for Tuesday.",
+      "body": [
+        "The sports news side of the board is being shaped by MLB: Fantasy baseball: Wood hurt for Washington and more news for Tuesday; MLB: Is Brian Cashman's future with the Yankees at risk?; MLB: MLB trade deadline 2026: Ranking prospects who changed teams.",
+        "Today's betting board is led by SOCCER: León over Nashville SC (57.7%); WNBA: New York Liberty over Seattle Storm (52.9%); WNBA: Chicago Sky over Los Angeles Sparks (51.4%).",
+        "In MLB, the news cycle is centered on Fantasy baseball: Wood hurt for Washington and more news for Tuesday. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "In MLB, the news cycle is centered on Is Brian Cashman's future with the Yankees at risk?. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "In MLB, the news cycle is centered on MLB trade deadline 2026: Ranking prospects who changed teams. From a betting perspective, that kind of update matters because roster availability, team form, travel spots, and public market reaction can all change how moneyline, spread, and totals prices should be interpreted.",
+        "Prediction Lab connects sports news to betting context by comparing model win probabilities against market prices. The daily betting results report remains the verification layer, while this news and market breakdown gives crawlers and readers a concise explanation of what the models and the broader sports calendar are watching today.",
+        "The most important signal is not a single story or pick in isolation. It is the relationship between news, model confidence, sportsbook pricing, recent result tracking, and whether multiple model layers point in the same direction.",
+        "Check the sport prediction pages for the live cards and the daily results report for completed-game tracking. New daily sports news and betting analysis pages are generated server-side so the latest context stays crawlable and internally linked from the homepage."
+      ],
+      "news_items": [
+        {
+          "sport": "MLB",
+          "topic": "Fantasy baseball: Wood hurt for Washington and more news for Tuesday",
+          "summary_hint": "All of the important fantasy spin and actionable takeaways resulting from the latest baseball news.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/48297021/espn-fantasy-baseball-buzz-injuries-promotions-demotions-trades-prospects-lineup-changes-mlb-news-analysis-2026"
+        },
+        {
+          "sport": "MLB",
+          "topic": "Is Brian Cashman's future with the Yankees at risk?",
+          "summary_hint": "Is Brian Cashman's future with the Yankees at risk?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/video/clip/_/id/49528784/is-brian-cashman-future-yankees-risk"
+        },
+        {
+          "sport": "MLB",
+          "topic": "MLB trade deadline 2026: Ranking prospects who changed teams",
+          "summary_hint": "You know the major leaguers on the move -- but what about the potential stars of tomorrow headed the other way in those deals?",
+          "source": "ESPN",
+          "url": "https://www.espn.com/mlb/story/_/id/49464501/mlb-trade-deadline-2026-ranking-prospects-changed-teams"
+        },
+        {
+          "sport": "MLB",
+          "topic": "Fantasy baseball forecaster: Team hitting ratings",
+          "summary_hint": "Stay ahead of the game and optimize your fantasy baseball hitters with our forecaster, which provides a rolling 10-day outlook of every team's hitting matchups as well as the potential for stolen bases.",
+          "source": "ESPN",
+          "url": "https://www.espn.com/fantasy/baseball/story/_/id/31165089/fantasy-baseball-forecaster-team-hitting-stolen-base-ratings-platoon-matchups-daily-weekly-leagues"
+        }
+      ]
     }
   ]
 }
