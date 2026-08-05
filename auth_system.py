@@ -153,15 +153,20 @@ def _ensure_users_table():
             is_premium INTEGER DEFAULT 0,
             premium_expires TEXT,
             stripe_customer_id TEXT,
+            stripe_subscription_id TEXT,
             session_token TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         )
     ''')
-    # Add session_token column if missing (existing DBs)
-    try:
-        conn.execute('ALTER TABLE users ADD COLUMN session_token TEXT')
-    except Exception:
-        pass
+    # Add columns if missing (existing DBs)
+    for col_sql in (
+        'ALTER TABLE users ADD COLUMN session_token TEXT',
+        'ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT',
+    ):
+        try:
+            conn.execute(col_sql)
+        except Exception:
+            pass
     # One-time set-password / claim-account tokens (post-checkout for guests)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -171,6 +176,14 @@ def _ensure_users_table():
             expires_at TEXT NOT NULL,
             used_at TEXT,
             created_at TEXT DEFAULT (datetime('now'))
+        )
+    ''')
+    # Stripe webhook idempotency (event.id)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+            event_id TEXT PRIMARY KEY,
+            event_type TEXT,
+            processed_at TEXT DEFAULT (datetime('now'))
         )
     ''')
     conn.commit()
@@ -196,10 +209,15 @@ def _load_user_by_id(user_id):
 
 
 def _load_user_by_email(email):
-    """Load user from database by email."""
+    """Load user from database by email (case-insensitive)."""
+    if not email:
+        return None
     try:
+        email_norm = email.strip().lower()
         conn = _get_db()
-        row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        row = conn.execute(
+            'SELECT * FROM users WHERE lower(email) = ?', (email_norm,)
+        ).fetchone()
         conn.close()
         if row:
             return User(
@@ -214,8 +232,7 @@ def _load_user_by_email(email):
 
 
 def _set_session_token(user_id):
-    """Generate a new session token, store in DB and session cookie.
-    This invalidates any previous session for this user."""
+    """Store a session marker in the cookie (does not force-logout other devices)."""
     token = secrets.token_hex(32)
     try:
         conn = _get_db()
@@ -229,13 +246,82 @@ def _set_session_token(user_id):
 
 # ─── Init ─────────────────────────────────────────────────────────────────────────────
 
+def _running_on_render():
+    """Best-effort detection of the Render (production HTTPS) environment."""
+    return bool(
+        os.environ.get('RENDER')
+        or os.environ.get('RENDER_EXTERNAL_URL')
+        or os.path.isdir('/data')
+    )
+
+
+def _resolve_secret_key():
+    """Return a STABLE Flask session secret.
+
+    A changing secret invalidates every session + remember-me cookie on restart.
+    Order: SECRET_KEY env → persisted disk key → process-local random fallback.
+    """
+    env_key = (os.environ.get('SECRET_KEY') or '').strip()
+    if env_key:
+        return env_key
+
+    data_dir = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
+    key_path = os.path.join(data_dir, '.flask_secret_key')
+    try:
+        if os.path.exists(key_path):
+            with open(key_path, 'r') as fh:
+                disk_key = fh.read().strip()
+            if disk_key:
+                logger.warning(
+                    "[auth] SECRET_KEY env var not set — using persisted key at %s. "
+                    "Set SECRET_KEY in Render to silence this.", key_path)
+                return disk_key
+        new_key = secrets.token_hex(32)
+        tmp_path = key_path + '.tmp'
+        with open(tmp_path, 'w') as fh:
+            fh.write(new_key)
+        os.replace(tmp_path, key_path)
+        try:
+            os.chmod(key_path, 0o600)
+        except Exception:
+            pass
+        logger.warning(
+            "[auth] SECRET_KEY env var not set — generated and persisted a new key at %s. "
+            "Set SECRET_KEY in Render to control this.", key_path)
+        return new_key
+    except Exception as e:
+        logger.error(
+            "[auth] Could not persist a session key (%s) — using a process-local "
+            "random key; users may be logged out on restart.", e)
+        return secrets.token_hex(32)
+
+
 def init_auth(app, db_path=None):
     """Initialize auth system on the Flask app."""
     global _DB_PATH
     _DB_PATH = db_path or app.config.get('DATABASE', 'sports_predictions_original.db')
 
-    # Secret key for sessions
-    app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+    # Secret key for sessions — MUST stay stable across restarts.
+    app.secret_key = _resolve_secret_key()
+
+    app.config.setdefault('PERMANENT_SESSION_LIFETIME', timedelta(days=90))
+    app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
+    app.config.setdefault('REMEMBER_COOKIE_HTTPONLY', True)
+    app.config.setdefault('REMEMBER_COOKIE_DURATION', timedelta(days=90))
+    if _running_on_render():
+        app.config.setdefault('SESSION_COOKIE_SAMESITE', 'None')
+        app.config.setdefault('SESSION_COOKIE_SECURE', True)
+        app.config.setdefault('REMEMBER_COOKIE_SAMESITE', 'None')
+        app.config.setdefault('REMEMBER_COOKIE_SECURE', True)
+    else:
+        app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
+        app.config.setdefault('SESSION_COOKIE_SECURE', False)
+        app.config.setdefault('REMEMBER_COOKIE_SAMESITE', 'Lax')
+        app.config.setdefault('REMEMBER_COOKIE_SECURE', False)
+
+    @app.before_request
+    def _make_session_permanent():
+        session.permanent = True
 
     # Flask-Login setup
     _login_manager.init_app(app)
@@ -244,35 +330,6 @@ def init_auth(app, db_path=None):
     @_login_manager.user_loader
     def load_user(user_id):
         return _load_user_by_id(user_id)
-
-    # Concurrent session limiter — only one active session per premium user
-    @app.before_request
-    def _check_session_token():
-        try:
-            if not current_user.is_authenticated:
-                return None
-            if not current_user.premium_active:
-                return None
-            if current_user.is_admin:
-                return None
-            local_token = session.get('_session_token')
-            if not local_token:
-                return None
-            conn = _get_db()
-            try:
-                row = conn.execute('SELECT session_token FROM users WHERE id = ?', (current_user.id,)).fetchone()
-                db_token = row['session_token'] if row else None
-            except Exception:
-                db_token = None
-            finally:
-                conn.close()
-            if db_token and db_token != local_token:
-                logout_user()
-                session.clear()
-                return redirect('/login?error=session_expired')
-        except Exception:
-            pass
-        return None
 
     # Create users table
     _ensure_users_table()
@@ -430,7 +487,12 @@ def login_page():
         'no_email': 'Could not get email from Google.',
         'oauth_failed': 'Google login failed. Please try again.',
         'mismatch': 'Passwords do not match.',
-        'session_expired': 'Your session was ended because your account was logged in on another device.',
+        'session_expired': 'Your session expired. Please log in again.',
+        'set_password': (
+            'This account was created at checkout and still needs a password. '
+            'Check your email for a set-password link, or use the link from the '
+            'checkout success page. If you just paid, open /set-password from that email.'
+        ),
     }.get(error, '')
 
     return render_template(
@@ -453,19 +515,39 @@ def login_submit():
     if not user:
         return redirect(url_for('auth.login_page', error='invalid'))
 
-    # Check password
+    # Check password (case-insensitive email match)
     conn = _get_db()
-    row = conn.execute('SELECT password_hash FROM users WHERE email = ?', (email,)).fetchone()
+    row = conn.execute(
+        'SELECT password_hash FROM users WHERE lower(email) = ?', (email,)
+    ).fetchone()
     conn.close()
 
     if not row or not row['password_hash']:
-        return redirect(url_for('auth.login_page', error='invalid'))
+        # Guest checkout: premium may be active but no password yet — re-issue claim link
+        try:
+            claim_token = _ensure_claim_token_for_user(user.id, force_new=True)
+            if claim_token:
+                _maybe_send_claim_email(
+                    email, claim_token,
+                    base_url=request.url_root.rstrip('/'),
+                )
+                logger.info(
+                    "[auth] Passwordless login for user_id=%s email=%s premium=%s — claim link issued",
+                    user.id, email, bool(user.premium_active),
+                )
+        except Exception as e:
+            logger.warning("[auth] Claim re-issue on login failed: %s", e)
+        return redirect(url_for('auth.login_page', error='set_password'))
 
     if not check_password_hash(row['password_hash'], password):
         return redirect(url_for('auth.login_page', error='invalid'))
 
     login_user(user, remember=True)
     _set_session_token(user.id)
+    logger.info(
+        "[auth] Login ok user_id=%s email=%s premium=%s expires=%s",
+        user.id, email, bool(user.premium_active), user.premium_expires,
+    )
     return redirect(request.args.get('next', '/'))
 
 
@@ -761,31 +843,96 @@ def _iso_from_unix(ts):
         return None
 
 
+def _obj_get(obj, key, default=None):
+    """Safe get for dict or StripeObject."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    try:
+        return obj.get(key, default)
+    except Exception:
+        pass
+    return getattr(obj, key, default)
+
+
+def _stripe_id(value):
+    """Coerce expanded Stripe objects / dicts down to an id string."""
+    if not value:
+        return None
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, dict):
+        return _stripe_id(value.get('id'))
+    return _stripe_id(getattr(value, 'id', None))
+
+
 def _subscription_id_from_invoice(invoice):
     """Extract subscription id from invoice across classic and newer Stripe shapes."""
     if not invoice:
         return None
-    sub_id = invoice.get('subscription')
+    sub_id = _stripe_id(_obj_get(invoice, 'subscription'))
     if sub_id:
         return sub_id
-    parent = invoice.get('parent') or {}
-    details = parent.get('subscription_details') or {}
-    return details.get('subscription')
+    parent = _obj_get(invoice, 'parent') or {}
+    details = _obj_get(parent, 'subscription_details') or {}
+    return _stripe_id(_obj_get(details, 'subscription'))
+
+
+def _price_id_from_subscription(subscription):
+    """Best-effort price id from subscription items."""
+    if not subscription:
+        return None
+    try:
+        items = _obj_get(subscription, 'items') or {}
+        data = _obj_get(items, 'data') if not isinstance(items, list) else items
+        if not data:
+            return None
+        first = data[0]
+        price = _obj_get(first, 'price') or {}
+        return _stripe_id(price) or _obj_get(price, 'id')
+    except Exception:
+        return None
+
+
+def _period_end_from_subscription(subscription):
+    """current_period_end from subscription root or first item (newer API shapes)."""
+    if not subscription:
+        return None
+    pe = _obj_get(subscription, 'current_period_end')
+    if pe:
+        return _iso_from_unix(pe)
+    try:
+        items = _obj_get(subscription, 'items') or {}
+        data = _obj_get(items, 'data') if not isinstance(items, list) else items
+        for item in data or []:
+            pe = _obj_get(item, 'current_period_end')
+            if pe:
+                return _iso_from_unix(pe)
+    except Exception:
+        pass
+    return None
 
 
 def _plan_from_checkout_or_subscription(session_data, subscription=None):
     """Resolve plan from checkout metadata, else from subscription price id."""
-    plan = (session_data.get('metadata') or {}).get('plan') if session_data else None
+    plan = None
+    if session_data:
+        meta = _obj_get(session_data, 'metadata') or {}
+        plan = _obj_get(meta, 'plan') if not isinstance(meta, dict) else meta.get('plan')
+        if isinstance(plan, str):
+            plan = plan.strip().lower()
     if plan in VALID_CHECKOUT_PLANS:
         return plan
     if subscription:
         try:
-            items = (subscription.get('items') or {}).get('data') or []
-            if items:
-                price_id = ((items[0].get('price') or {}) or {}).get('id')
-                inferred = _plan_from_price_id(price_id)
-                if inferred:
-                    return inferred
+            meta = _obj_get(subscription, 'metadata') or {}
+            sub_plan = meta.get('plan') if isinstance(meta, dict) else _obj_get(meta, 'plan')
+            if isinstance(sub_plan, str) and sub_plan.strip().lower() in VALID_CHECKOUT_PLANS:
+                return sub_plan.strip().lower()
+            inferred = _plan_from_price_id(_price_id_from_subscription(subscription))
+            if inferred:
+                return inferred
         except Exception:
             pass
     return plan if plan in VALID_CHECKOUT_PLANS else 'monthly'
@@ -793,13 +940,14 @@ def _plan_from_checkout_or_subscription(session_data, subscription=None):
 
 def _find_user_id_by_customer(stripe_customer_id):
     """Return users.id for a Stripe customer id, or None."""
-    if not stripe_customer_id:
+    customer_id = _stripe_id(stripe_customer_id)
+    if not customer_id:
         return None
     try:
         conn = _get_db()
         row = conn.execute(
             'SELECT id FROM users WHERE stripe_customer_id = ?',
-            (stripe_customer_id,)
+            (customer_id,)
         ).fetchone()
         conn.close()
         return row['id'] if row else None
@@ -808,26 +956,98 @@ def _find_user_id_by_customer(stripe_customer_id):
         return None
 
 
+def _find_or_create_user_by_email(email, name=None):
+    """Find user by email or create a passwordless account. Returns User or None."""
+    email = (email or '').strip().lower()
+    if not email:
+        return None
+    user = _load_user_by_email(email)
+    if user:
+        return user
+    try:
+        conn = _get_db()
+        conn.execute(
+            'INSERT INTO users (email, name) VALUES (?, ?)',
+            (email, name or email.split('@')[0])
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.IntegrityError:
+        # Race: another webhook/success path created the row
+        pass
+    except Exception as e:
+        logger.error("[stripe] create user failed for %s: %s", email, e)
+        return _load_user_by_email(email)
+    user = _load_user_by_email(email)
+    if user:
+        logger.info("[stripe] Auto-created account for %s user_id=%s", email, user.id)
+    return user
+
+
+def _webhook_event_already_processed(event_id):
+    if not event_id:
+        return False
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            'SELECT 1 FROM stripe_webhook_events WHERE event_id = ?', (event_id,)
+        ).fetchone()
+        conn.close()
+        return bool(row)
+    except Exception as e:
+        logger.warning("[stripe] idempotency lookup failed: %s", e)
+        return False
+
+
+def _mark_webhook_event_processed(event_id, event_type=None):
+    if not event_id:
+        return
+    try:
+        conn = _get_db()
+        conn.execute(
+            'INSERT OR IGNORE INTO stripe_webhook_events (event_id, event_type) VALUES (?, ?)',
+            (event_id, event_type or '')
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("[stripe] idempotency store failed: %s", e)
+
+
+def _log_premium_decision(context, *, user_id=None, email=None, customer_id=None,
+                          subscription_id=None, status=None, plan=None,
+                          is_premium=None, expires=None):
+    """Server-only premium decision log (never render in HTML)."""
+    logger.info(
+        "[stripe] %s user_id=%s email=%s customer=%s sub=%s status=%s plan=%s "
+        "premium=%s expires=%s",
+        context, user_id, email, customer_id, subscription_id, status, plan,
+        is_premium, expires,
+    )
+
+
 def _sync_premium_from_subscription(subscription, plan=None):
     """
     Sync local premium access from a Stripe Subscription (renewals).
-    ONLY updates is_premium / premium_expires / stripe_customer_id.
+    ONLY updates is_premium / premium_expires / stripe_customer_id [/subscription id].
+    Never raises — logs and returns on incomplete payloads.
     """
     if not subscription:
         return
 
-    def _get(k, default=None):
-        if isinstance(subscription, dict):
-            return subscription.get(k, default)
-        return getattr(subscription, k, default)
-
-    customer_id = _get('customer')
-    status = (_get('status') or '').strip()
-    period_end_iso = _iso_from_unix(_get('current_period_end'))
+    customer_id = _stripe_id(_obj_get(subscription, 'customer'))
+    subscription_id = _stripe_id(_obj_get(subscription, 'id'))
+    status = (_obj_get(subscription, 'status') or '').strip()
+    period_end_iso = _period_end_from_subscription(subscription)
+    resolved_plan = plan or _plan_from_checkout_or_subscription(None, subscription)
 
     user_id = _find_user_id_by_customer(customer_id)
     if not user_id:
-        logger.warning(f"[stripe] No user for customer {customer_id} on renewal sync")
+        # Fallback: try subscription metadata email / customer email is not on sub
+        logger.warning(
+            "[stripe] No user for customer=%s sub=%s status=%s on renewal sync",
+            customer_id, subscription_id, status,
+        )
         return
 
     now = datetime.now()
@@ -842,27 +1062,60 @@ def _sync_premium_from_subscription(subscription, plan=None):
         is_premium = 1
     elif status == 'canceled' and expires_dt and expires_dt > now:
         is_premium = 1
+    elif not status and period_end_iso:
+        # Incomplete thin/partial object — still extend if period_end present
+        is_premium = 1
     else:
         is_premium = 0
 
     if not period_end_iso and is_premium:
-        _activate_premium(user_id, plan=plan or 'monthly', stripe_customer_id=customer_id)
+        _activate_premium(
+            user_id,
+            plan=resolved_plan or 'monthly',
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+        )
+        _log_premium_decision(
+            'sync_activate_fallback',
+            user_id=user_id, customer_id=customer_id,
+            subscription_id=subscription_id, status=status,
+            plan=resolved_plan, is_premium=1, expires='plan_calendar',
+        )
         return
 
-    conn = _get_db()
-    conn.execute(
-        '''UPDATE users SET
-               is_premium = ?,
-               premium_expires = COALESCE(?, premium_expires),
-               stripe_customer_id = COALESCE(?, stripe_customer_id)
-           WHERE id = ?''',
-        (is_premium, period_end_iso, customer_id, user_id)
-    )
-    conn.commit()
-    conn.close()
-    logger.info(
-        f"[stripe] Synced user {user_id}: premium={is_premium} "
-        f"expires={period_end_iso} status={status}"
+    try:
+        conn = _get_db()
+        # stripe_subscription_id column is optional on very old DBs — try full update first
+        try:
+            conn.execute(
+                '''UPDATE users SET
+                       is_premium = ?,
+                       premium_expires = COALESCE(?, premium_expires),
+                       stripe_customer_id = COALESCE(?, stripe_customer_id),
+                       stripe_subscription_id = COALESCE(?, stripe_subscription_id)
+                   WHERE id = ?''',
+                (is_premium, period_end_iso, customer_id, subscription_id, user_id)
+            )
+        except sqlite3.OperationalError:
+            conn.execute(
+                '''UPDATE users SET
+                       is_premium = ?,
+                       premium_expires = COALESCE(?, premium_expires),
+                       stripe_customer_id = COALESCE(?, stripe_customer_id)
+                   WHERE id = ?''',
+                (is_premium, period_end_iso, customer_id, user_id)
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error("[stripe] sync DB update failed user_id=%s: %s", user_id, e)
+        return
+
+    _log_premium_decision(
+        'sync_subscription',
+        user_id=user_id, customer_id=customer_id,
+        subscription_id=subscription_id, status=status,
+        plan=resolved_plan, is_premium=is_premium, expires=period_end_iso,
     )
 
 
@@ -941,27 +1194,29 @@ def checkout_success():
             if cs.payment_status == 'paid':
                 email = (cs.customer_details or {}).get('email') or cs.get('customer_email', '')
                 email = email.strip().lower() if email else ''
-                plan = (cs.metadata or {}).get('plan', 'monthly')
-                if plan not in VALID_CHECKOUT_PLANS:
-                    plan = 'monthly'
-                customer_id = cs.get('customer')
+                plan = _plan_from_checkout_or_subscription(cs)
+                customer_id = _stripe_id(cs.get('customer'))
+                subscription_id = _stripe_id(cs.get('subscription'))
+                period_end = None
+                if subscription_id:
+                    try:
+                        sub_obj = stripe.Subscription.retrieve(subscription_id)
+                        period_end = _period_end_from_subscription(sub_obj)
+                        plan = _plan_from_checkout_or_subscription(cs, sub_obj)
+                    except Exception as se:
+                        logger.warning("[checkout/success] sub retrieve failed: %s", se)
 
                 if email:
-                    # Find or create user from payment email
-                    user = _load_user_by_email(email)
-                    if not user:
-                        conn = _get_db()
-                        conn.execute(
-                            'INSERT INTO users (email, name) VALUES (?, ?)',
-                            (email, email.split('@')[0])
-                        )
-                        conn.commit()
-                        conn.close()
-                        user = _load_user_by_email(email)
-                        logger.info(f"[checkout/success] Auto-created account for {email}")
-
+                    user = _find_or_create_user_by_email(email)
                     if user:
-                        _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
+                        _activate_premium(
+                            user.id, plan=plan,
+                            stripe_customer_id=customer_id,
+                            stripe_subscription_id=subscription_id,
+                            premium_expires=period_end,
+                        )
+                        # Reload so premium_active reflects DB
+                        user = _load_user_by_id(user.id) or user
                         login_user(user, remember=True)
                         _set_session_token(user.id)
                         claim_email = email
@@ -972,13 +1227,17 @@ def checkout_success():
                                     email, claim_token,
                                     base_url=request.url_root.rstrip('/'),
                                 )
-                            # Dedicated set-password page (token + session) — not cookie-only
                             if claim_token:
                                 return redirect(
                                     url_for('auth.set_password_page', token=claim_token)
                                 )
                             return redirect(url_for('auth.set_password_page'))
-                        logger.info(f"[checkout/success] Activated premium for {email}")
+                        _log_premium_decision(
+                            'checkout/success',
+                            user_id=user.id, email=email, customer_id=customer_id,
+                            subscription_id=subscription_id, plan=plan,
+                            is_premium=1, expires=period_end or 'plan_calendar',
+                        )
         except Exception as e:
             logger.warning(f"[checkout/success] Stripe verification failed: {e}")
 
@@ -1069,10 +1328,163 @@ def set_password_page():
     )
 
 
+def _parse_stripe_webhook_event(payload, sig, webhook_secret):
+    """Verify signature and parse Snapshot webhook events.
+
+    Thin (v2.core.event) payloads are detected after signature verify and returned
+    as (None, 'thin', data) so the route can ack 200 without crashing.
+    Returns (event_or_none, kind, raw_data) where kind is 'snapshot'|'thin'|'error'.
+    """
+    import json
+    import stripe
+
+    raw = payload.decode('utf-8') if hasattr(payload, 'decode') else payload
+    try:
+        stripe.WebhookSignature.verify_header(raw, sig, webhook_secret)
+    except Exception as e:
+        return None, 'error', str(e)
+
+    try:
+        data = json.loads(raw)
+    except Exception as e:
+        return None, 'error', f'invalid json: {e}'
+
+    obj_type = data.get('object') if isinstance(data, dict) else None
+    if obj_type == 'v2.core.event':
+        return None, 'thin', data
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, webhook_secret)
+        return event, 'snapshot', data
+    except ValueError as e:
+        # construct_event raises ValueError for thin after verify — belt and suspenders
+        if 'thin event' in str(e).lower():
+            return None, 'thin', data
+        return None, 'error', str(e)
+    except Exception as e:
+        return None, 'error', str(e)
+
+
+def _handle_checkout_session_completed(session_data, stripe_mod=None):
+    """Activate premium from checkout.session.completed (Snapshot object)."""
+    customer_id = _stripe_id(_obj_get(session_data, 'customer'))
+    subscription_id = _stripe_id(_obj_get(session_data, 'subscription'))
+    email = ''
+    details = _obj_get(session_data, 'customer_details') or {}
+    email = (_obj_get(details, 'email') if details else None) or _obj_get(session_data, 'customer_email') or ''
+    email = email.strip().lower() if email else ''
+
+    period_end = None
+    sub_obj = None
+    if subscription_id and stripe_mod is not None:
+        try:
+            sub_obj = stripe_mod.Subscription.retrieve(subscription_id)
+            period_end = _period_end_from_subscription(sub_obj)
+        except Exception as se:
+            logger.warning("[stripe] Could not retrieve subscription %s: %s", subscription_id, se)
+
+    plan = _plan_from_checkout_or_subscription(session_data, sub_obj)
+
+    if email:
+        user = _find_or_create_user_by_email(email)
+        if user:
+            _activate_premium(
+                user.id, plan=plan,
+                stripe_customer_id=customer_id,
+                stripe_subscription_id=subscription_id,
+                premium_expires=period_end,
+            )
+            claim_token = _ensure_claim_token_for_user(user.id, force_new=False)
+            if claim_token:
+                _maybe_send_claim_email(email, claim_token)
+            _log_premium_decision(
+                'checkout.session.completed',
+                user_id=user.id, email=email, customer_id=customer_id,
+                subscription_id=subscription_id, status='paid', plan=plan,
+                is_premium=1, expires=period_end or 'plan_calendar',
+            )
+            return
+    meta = _obj_get(session_data, 'metadata') or {}
+    user_id = meta.get('user_id') if isinstance(meta, dict) else _obj_get(meta, 'user_id')
+    if user_id:
+        _activate_premium(
+            int(user_id), plan=plan,
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+            premium_expires=period_end,
+        )
+        _log_premium_decision(
+            'checkout.session.completed_meta',
+            user_id=int(user_id), email=email, customer_id=customer_id,
+            subscription_id=subscription_id, plan=plan, is_premium=1,
+            expires=period_end or 'plan_calendar',
+        )
+    else:
+        logger.warning(
+            "[stripe] checkout.session.completed with no email/user_id customer=%s",
+            customer_id,
+        )
+
+
+def _handle_invoice_payment_succeeded(invoice, stripe_mod=None):
+    """Extend premium on successful invoice (initial + renewals). Never raises."""
+    customer_id = _stripe_id(_obj_get(invoice, 'customer'))
+    subscription_id = _subscription_id_from_invoice(invoice)
+    period_end = _iso_from_unix(_obj_get(invoice, 'period_end'))
+
+    if subscription_id and stripe_mod is not None:
+        try:
+            sub_obj = stripe_mod.Subscription.retrieve(subscription_id)
+            _sync_premium_from_subscription(sub_obj)
+            return
+        except Exception as e:
+            logger.error(
+                "[stripe] invoice.payment_succeeded retrieve/sync failed sub=%s: %s",
+                subscription_id, e,
+            )
+
+    user_id = _find_user_id_by_customer(customer_id)
+    if not user_id:
+        logger.info(
+            "[stripe] invoice.payment_succeeded no user for customer=%s sub=%s",
+            customer_id, subscription_id,
+        )
+        return
+
+    plan = 'monthly'
+    try:
+        lines = _obj_get(invoice, 'lines') or {}
+        data = _obj_get(lines, 'data') or []
+        if data:
+            price = _obj_get(data[0], 'price') or {}
+            plan = _plan_from_price_id(_stripe_id(price) or _obj_get(price, 'id')) or plan
+    except Exception:
+        pass
+    _activate_premium(
+        user_id,
+        plan=plan,
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=subscription_id,
+        premium_expires=period_end,
+    )
+    _log_premium_decision(
+        'invoice.payment_succeeded_fallback',
+        user_id=user_id, customer_id=customer_id,
+        subscription_id=subscription_id, plan=plan,
+        is_premium=1, expires=period_end or 'plan_calendar',
+    )
+
+
 @auth_bp.route('/stripe/webhook', methods=['POST'])
 def stripe_webhook():
-    """Handle Stripe webhook events."""
+    """Handle Stripe webhook events (Snapshot payloads).
+
+    Always returns 200 after a valid signature so renewals do not stick in
+    HTTP 500 retry loops. Thin payloads are acknowledged with a clear log
+    (configure the Dashboard endpoint for Snapshot / full event payloads).
+    """
     if not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
+        logger.error("[stripe] webhook missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET")
         return '', 400
 
     import stripe
@@ -1081,95 +1493,81 @@ def stripe_webhook():
     payload = request.get_data()
     sig = request.headers.get('Stripe-Signature', '')
 
-    try:
-        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
-    except Exception as e:
-        logger.error(f"Stripe webhook error: {e}")
+    event, kind, extra = _parse_stripe_webhook_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    if kind == 'error':
+        logger.error("[stripe] webhook signature/parse error: %s", extra)
         return '', 400
 
-    etype = event['type']
+    if kind == 'thin':
+        thin_id = (extra or {}).get('id') if isinstance(extra, dict) else None
+        thin_type = (extra or {}).get('type') if isinstance(extra, dict) else None
+        logger.error(
+            "[stripe] Thin webhook payload received (id=%s type=%s object=v2.core.event). "
+            "Premium sync requires Snapshot (full) event payloads — set the Stripe "
+            "Dashboard webhook to Snapshot. Acknowledging 200 without applying premium.",
+            thin_id, thin_type,
+        )
+        return '', 200
 
-    if etype == 'checkout.session.completed':
-        session_data = event['data']['object']
-        plan = session_data.get('metadata', {}).get('plan', 'monthly')
-        if plan not in VALID_CHECKOUT_PLANS:
-            plan = _plan_from_checkout_or_subscription(session_data) or 'monthly'
-        customer_id = session_data.get('customer')
-        # Get email from Stripe session (works for both logged-in and guest checkouts)
-        email = (session_data.get('customer_details') or {}).get('email') or session_data.get('customer_email', '')
-        email = email.strip().lower() if email else ''
+    try:
+        etype = event['type'] if hasattr(event, '__getitem__') else _obj_get(event, 'type')
+        event_id = _stripe_id(_obj_get(event, 'id')) or (event.get('id') if isinstance(event, dict) else None)
+        data_obj = event['data']['object'] if hasattr(event, '__getitem__') else _obj_get(_obj_get(event, 'data'), 'object')
 
-        if email:
-            user = _load_user_by_email(email)
-            if not user:
-                # Auto-create account from payment email
-                conn = _get_db()
-                conn.execute(
-                    'INSERT INTO users (email, name) VALUES (?, ?)',
-                    (email, email.split('@')[0])
+        if event_id and _webhook_event_already_processed(event_id):
+            logger.info("[stripe] Ignoring duplicate event_id=%s type=%s", event_id, etype)
+            return '', 200
+
+        logger.info("[stripe] webhook event_id=%s type=%s", event_id, etype)
+
+        if etype == 'checkout.session.completed':
+            _handle_checkout_session_completed(data_obj, stripe_mod=stripe)
+
+        elif etype == 'invoice.payment_succeeded':
+            _handle_invoice_payment_succeeded(data_obj, stripe_mod=stripe)
+
+        elif etype in ('customer.subscription.created', 'customer.subscription.updated'):
+            _sync_premium_from_subscription(data_obj)
+
+        elif etype == 'customer.subscription.deleted':
+            customer_id = _stripe_id(_obj_get(data_obj, 'customer'))
+            if customer_id:
+                _deactivate_premium_by_customer(customer_id)
+                _log_premium_decision(
+                    'customer.subscription.deleted',
+                    customer_id=customer_id, is_premium=0,
+                    subscription_id=_stripe_id(_obj_get(data_obj, 'id')),
+                    status='canceled',
                 )
-                conn.commit()
-                conn.close()
-                user = _load_user_by_email(email)
-                logger.info(f"[stripe webhook] Auto-created account for {email}")
-            if user:
-                _activate_premium(user.id, plan=plan, stripe_customer_id=customer_id)
-                # Issue claim token + optional email only if none pending
-                # (success page may force_new for redirect — that's the primary path)
-                claim_token = _ensure_claim_token_for_user(user.id, force_new=False)
-                if claim_token:
-                    _maybe_send_claim_email(email, claim_token)
-                logger.info(f"[stripe webhook] Activated premium for {email} ({plan})")
+
         else:
-            # Fallback: try user_id from metadata (legacy)
-            user_id = session_data.get('metadata', {}).get('user_id')
-            if user_id:
-                _activate_premium(int(user_id), plan=plan, stripe_customer_id=customer_id)
-                logger.info(f"[stripe webhook] Activated premium for user_id {user_id} ({plan})")
+            logger.info("[stripe] Unhandled event type=%s (acked)", etype)
 
-    elif etype == 'invoice.payment_succeeded':
-        # Renewal: extend premium from Stripe subscription period_end only
-        invoice = event['data']['object']
-        customer_id = invoice.get('customer')
-        subscription_id = _subscription_id_from_invoice(invoice)
-        if subscription_id:
-            try:
-                sub_obj = stripe.Subscription.retrieve(subscription_id)
-                _sync_premium_from_subscription(sub_obj)
-            except Exception as e:
-                logger.error(f"[stripe] invoice.payment_succeeded sync failed: {e}")
-                period_end = _iso_from_unix(invoice.get('period_end'))
-                user_id = _find_user_id_by_customer(customer_id)
-                if user_id and period_end:
-                    _activate_premium(
-                        user_id,
-                        stripe_customer_id=customer_id,
-                        premium_expires=period_end,
-                    )
-        elif customer_id:
-            logger.info(f"[stripe] invoice.payment_succeeded without subscription for {customer_id}")
-
-    elif etype == 'customer.subscription.updated':
-        _sync_premium_from_subscription(event['data']['object'])
-
-    elif etype == 'customer.subscription.deleted':
-        customer_id = event['data']['object'].get('customer')
-        if customer_id:
-            _deactivate_premium_by_customer(customer_id)
-            logger.info(f"[stripe] Deactivated premium for customer {customer_id}")
+        _mark_webhook_event_processed(event_id, etype)
+    except Exception as e:
+        # Do not 500 — log and ack so Stripe renewals do not loop on permanent bugs.
+        # Operator can replay after fix; idempotency skips already-marked successes.
+        logger.exception("[stripe] webhook handler error (returning 200): %s", e)
+        return '', 200
 
     return '', 200
 
 
-def _activate_premium(user_id, plan='monthly', stripe_customer_id=None, premium_expires=None):
+def _activate_premium(user_id, plan='monthly', stripe_customer_id=None,
+                      stripe_subscription_id=None, premium_expires=None):
     """Activate premium for a user.
 
     Prefer explicit ``premium_expires`` (e.g. Stripe current_period_end).
     Otherwise: weekly +7, yearly +365, monthly +31.
     """
+    if not user_id:
+        return
     plan = (plan or 'monthly').strip().lower()
     if plan not in VALID_CHECKOUT_PLANS:
         plan = 'monthly'
+
+    customer_id = _stripe_id(stripe_customer_id)
+    subscription_id = _stripe_id(stripe_subscription_id)
 
     if not premium_expires:
         if plan == 'yearly':
@@ -1179,30 +1577,56 @@ def _activate_premium(user_id, plan='monthly', stripe_customer_id=None, premium_
         else:
             premium_expires = (datetime.now() + timedelta(days=31)).isoformat()
 
-    conn = _get_db()
-    if stripe_customer_id:
-        conn.execute(
-            'UPDATE users SET is_premium = 1, premium_expires = ?, stripe_customer_id = ? WHERE id = ?',
-            (premium_expires, stripe_customer_id, user_id)
+    try:
+        conn = _get_db()
+        try:
+            conn.execute(
+                '''UPDATE users SET
+                       is_premium = 1,
+                       premium_expires = ?,
+                       stripe_customer_id = COALESCE(?, stripe_customer_id),
+                       stripe_subscription_id = COALESCE(?, stripe_subscription_id)
+                   WHERE id = ?''',
+                (premium_expires, customer_id, subscription_id, user_id)
+            )
+        except sqlite3.OperationalError:
+            if customer_id:
+                conn.execute(
+                    'UPDATE users SET is_premium = 1, premium_expires = ?, stripe_customer_id = ? WHERE id = ?',
+                    (premium_expires, customer_id, user_id)
+                )
+            else:
+                conn.execute(
+                    'UPDATE users SET is_premium = 1, premium_expires = ? WHERE id = ?',
+                    (premium_expires, user_id)
+                )
+        conn.commit()
+        conn.close()
+        _log_premium_decision(
+            'activate_premium',
+            user_id=user_id, customer_id=customer_id,
+            subscription_id=subscription_id, plan=plan,
+            is_premium=1, expires=premium_expires,
         )
-    else:
-        conn.execute(
-            'UPDATE users SET is_premium = 1, premium_expires = ? WHERE id = ?',
-            (premium_expires, user_id)
-        )
-    conn.commit()
-    conn.close()
+    except Exception as e:
+        logger.error("[stripe] _activate_premium failed user_id=%s: %s", user_id, e)
 
 
 def _deactivate_premium_by_customer(stripe_customer_id):
     """Deactivate premium when subscription is cancelled."""
-    conn = _get_db()
-    conn.execute(
-        'UPDATE users SET is_premium = 0 WHERE stripe_customer_id = ?',
-        (stripe_customer_id,)
-    )
-    conn.commit()
-    conn.close()
+    customer_id = _stripe_id(stripe_customer_id)
+    if not customer_id:
+        return
+    try:
+        conn = _get_db()
+        conn.execute(
+            'UPDATE users SET is_premium = 0 WHERE stripe_customer_id = ?',
+            (customer_id,)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error("[stripe] deactivate failed customer=%s: %s", customer_id, e)
 
 
 # ─── Helper: check premium in views ──────────────────────────────────────────
@@ -1211,7 +1635,18 @@ def is_premium_user():
     """Check if current request is from a premium user."""
     if not current_user.is_authenticated:
         return False
-    return current_user.premium_active
+    active = current_user.premium_active
+    try:
+        logger.debug(
+            "[auth] is_premium_user user_id=%s email=%s decision=%s expires=%s",
+            getattr(current_user, 'id', None),
+            getattr(current_user, 'email', None),
+            active,
+            getattr(current_user, 'premium_expires', None),
+        )
+    except Exception:
+        pass
+    return active
 
 
 # ─── Templates ────────────────────────────────────────────────────────────────

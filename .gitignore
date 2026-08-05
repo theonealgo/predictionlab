@@ -9,6 +9,7 @@
 .env.local
 .env.*.local
 *.env
+.flask_secret_key
 
 # ── Python ────────────────────────────────────────────────────────────────────
 .cache/
