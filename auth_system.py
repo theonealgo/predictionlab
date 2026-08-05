@@ -868,15 +868,65 @@ def _stripe_id(value):
 
 
 def _subscription_id_from_invoice(invoice):
-    """Extract subscription id from invoice across classic and newer Stripe shapes."""
+    """Extract subscription id from invoice across classic and newer Stripe shapes.
+
+    Classic: invoice.subscription
+    API 2026-06-24.dahlia+: invoice.parent.subscription_details.subscription
+    Also: lines.data[].subscription / line.parent.subscription_item_details
+    Never raises.
+    """
     if not invoice:
         return None
-    sub_id = _stripe_id(_obj_get(invoice, 'subscription'))
-    if sub_id:
-        return sub_id
-    parent = _obj_get(invoice, 'parent') or {}
-    details = _obj_get(parent, 'subscription_details') or {}
-    return _stripe_id(_obj_get(details, 'subscription'))
+    try:
+        sub_id = _stripe_id(_obj_get(invoice, 'subscription'))
+        if sub_id:
+            return sub_id
+        parent = _obj_get(invoice, 'parent') or {}
+        details = _obj_get(parent, 'subscription_details') or {}
+        sub_id = _stripe_id(_obj_get(details, 'subscription'))
+        if sub_id:
+            return sub_id
+        # Some payloads only nest the subscription on invoice lines.
+        lines = _obj_get(invoice, 'lines') or {}
+        data = _obj_get(lines, 'data') or []
+        for line in data or []:
+            sub_id = _stripe_id(_obj_get(line, 'subscription'))
+            if sub_id:
+                return sub_id
+            line_parent = _obj_get(line, 'parent') or {}
+            item_details = (
+                _obj_get(line_parent, 'subscription_item_details')
+                or _obj_get(line_parent, 'subscription_details')
+                or {}
+            )
+            sub_id = _stripe_id(_obj_get(item_details, 'subscription'))
+            if sub_id:
+                return sub_id
+    except Exception as e:
+        logger.warning("[stripe] _subscription_id_from_invoice failed: %s", e)
+    return None
+
+
+def _price_id_from_invoice(invoice):
+    """Best-effort price id from invoice lines (classic price + dahlia pricing)."""
+    if not invoice:
+        return None
+    try:
+        lines = _obj_get(invoice, 'lines') or {}
+        data = _obj_get(lines, 'data') or []
+        for line in data or []:
+            price = _obj_get(line, 'price')
+            pid = _stripe_id(price)
+            if pid:
+                return pid
+            pricing = _obj_get(line, 'pricing') or {}
+            details = _obj_get(pricing, 'price_details') or {}
+            pid = _stripe_id(_obj_get(details, 'price'))
+            if pid:
+                return pid
+    except Exception as e:
+        logger.warning("[stripe] _price_id_from_invoice failed: %s", e)
+    return None
 
 
 def _price_id_from_subscription(subscription):
@@ -1427,130 +1477,169 @@ def _handle_checkout_session_completed(session_data, stripe_mod=None):
 
 
 def _handle_invoice_payment_succeeded(invoice, stripe_mod=None):
-    """Extend premium on successful invoice (initial + renewals). Never raises."""
-    customer_id = _stripe_id(_obj_get(invoice, 'customer'))
-    subscription_id = _subscription_id_from_invoice(invoice)
-    period_end = _iso_from_unix(_obj_get(invoice, 'period_end'))
+    """Extend premium on successful invoice (initial + renewals). Never raises.
 
-    if subscription_id and stripe_mod is not None:
-        try:
-            sub_obj = stripe_mod.Subscription.retrieve(subscription_id)
-            _sync_premium_from_subscription(sub_obj)
-            return
-        except Exception as e:
-            logger.error(
-                "[stripe] invoice.payment_succeeded retrieve/sync failed sub=%s: %s",
-                subscription_id, e,
-            )
-
-    user_id = _find_user_id_by_customer(customer_id)
-    if not user_id:
-        logger.info(
-            "[stripe] invoice.payment_succeeded no user for customer=%s sub=%s",
-            customer_id, subscription_id,
-        )
-        return
-
-    plan = 'monthly'
+    Tolerates Stripe API 2026-06-24.dahlia invoices that omit top-level
+    ``subscription`` / ``lines[].price`` in favor of parent.subscription_details
+    and lines[].pricing.price_details.price.
+    """
     try:
-        lines = _obj_get(invoice, 'lines') or {}
-        data = _obj_get(lines, 'data') or []
-        if data:
-            price = _obj_get(data[0], 'price') or {}
-            plan = _plan_from_price_id(_stripe_id(price) or _obj_get(price, 'id')) or plan
-    except Exception:
-        pass
-    _activate_premium(
-        user_id,
-        plan=plan,
-        stripe_customer_id=customer_id,
-        stripe_subscription_id=subscription_id,
-        premium_expires=period_end,
-    )
-    _log_premium_decision(
-        'invoice.payment_succeeded_fallback',
-        user_id=user_id, customer_id=customer_id,
-        subscription_id=subscription_id, plan=plan,
-        is_premium=1, expires=period_end or 'plan_calendar',
-    )
+        customer_id = _stripe_id(_obj_get(invoice, 'customer'))
+        subscription_id = _subscription_id_from_invoice(invoice)
+        period_end = _iso_from_unix(_obj_get(invoice, 'period_end'))
+        customer_email = (_obj_get(invoice, 'customer_email') or '').strip().lower()
+
+        synced = False
+        if subscription_id and stripe_mod is not None:
+            try:
+                sub_obj = stripe_mod.Subscription.retrieve(subscription_id)
+                _sync_premium_from_subscription(sub_obj)
+                # Only treat as done if we can resolve the payer locally.
+                if customer_id and _find_user_id_by_customer(customer_id):
+                    synced = True
+            except Exception as e:
+                logger.error(
+                    "[stripe] invoice.payment_succeeded retrieve/sync failed sub=%s: %s",
+                    subscription_id, e,
+                )
+
+        if synced:
+            return
+
+        user_id = _find_user_id_by_customer(customer_id) if customer_id else None
+        if not user_id and customer_email:
+            user = _find_or_create_user_by_email(customer_email)
+            user_id = getattr(user, 'id', None) if user else None
+
+        if not user_id:
+            logger.info(
+                "[stripe] invoice.payment_succeeded no user for customer=%s "
+                "email=%s sub=%s (acked)",
+                customer_id, customer_email or None, subscription_id,
+            )
+            return
+
+        plan = _plan_from_price_id(_price_id_from_invoice(invoice)) or 'monthly'
+        _activate_premium(
+            user_id,
+            plan=plan,
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+            premium_expires=period_end,
+        )
+        _log_premium_decision(
+            'invoice.payment_succeeded_fallback',
+            user_id=user_id, email=customer_email or None,
+            customer_id=customer_id,
+            subscription_id=subscription_id, plan=plan,
+            is_premium=1, expires=period_end or 'plan_calendar',
+        )
+    except Exception as e:
+        logger.exception(
+            "[stripe] invoice.payment_succeeded handler error (non-fatal): %s", e,
+        )
 
 
 @auth_bp.route('/stripe/webhook', methods=['POST'])
 def stripe_webhook():
     """Handle Stripe webhook events (Snapshot payloads).
 
-    Always returns 200 after a valid signature so renewals do not stick in
-    HTTP 500 retry loops. Thin payloads are acknowledged with a clear log
-    (configure the Dashboard endpoint for Snapshot / full event payloads).
+    After a valid signature: never HTTP 500 — activate/skip and return 200 so
+    renewals do not stick in Stripe retry loops. Thin payloads are acknowledged
+    with a clear log (Dashboard endpoint must use Snapshot / full payloads).
     """
-    if not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
-        logger.error("[stripe] webhook missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET")
-        return '', 400
-
-    import stripe
-    stripe.api_key = STRIPE_SECRET_KEY
-
-    payload = request.get_data()
-    sig = request.headers.get('Stripe-Signature', '')
-
-    event, kind, extra = _parse_stripe_webhook_event(payload, sig, STRIPE_WEBHOOK_SECRET)
-    if kind == 'error':
-        logger.error("[stripe] webhook signature/parse error: %s", extra)
-        return '', 400
-
-    if kind == 'thin':
-        thin_id = (extra or {}).get('id') if isinstance(extra, dict) else None
-        thin_type = (extra or {}).get('type') if isinstance(extra, dict) else None
-        logger.error(
-            "[stripe] Thin webhook payload received (id=%s type=%s object=v2.core.event). "
-            "Premium sync requires Snapshot (full) event payloads — set the Stripe "
-            "Dashboard webhook to Snapshot. Acknowledging 200 without applying premium.",
-            thin_id, thin_type,
-        )
-        return '', 200
-
     try:
-        etype = event['type'] if hasattr(event, '__getitem__') else _obj_get(event, 'type')
-        event_id = _stripe_id(_obj_get(event, 'id')) or (event.get('id') if isinstance(event, dict) else None)
-        data_obj = event['data']['object'] if hasattr(event, '__getitem__') else _obj_get(_obj_get(event, 'data'), 'object')
+        if not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
+            logger.error(
+                "[stripe] webhook missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET"
+            )
+            return '', 400
 
-        if event_id and _webhook_event_already_processed(event_id):
-            logger.info("[stripe] Ignoring duplicate event_id=%s type=%s", event_id, etype)
+        import stripe
+        stripe.api_key = STRIPE_SECRET_KEY
+
+        payload = request.get_data()
+        sig = request.headers.get('Stripe-Signature', '')
+
+        event, kind, extra = _parse_stripe_webhook_event(
+            payload, sig, STRIPE_WEBHOOK_SECRET
+        )
+        if kind == 'error':
+            logger.error("[stripe] webhook signature/parse error: %s", extra)
+            return '', 400
+
+        if kind == 'thin':
+            thin_id = (extra or {}).get('id') if isinstance(extra, dict) else None
+            thin_type = (extra or {}).get('type') if isinstance(extra, dict) else None
+            logger.error(
+                "[stripe] Thin webhook payload received (id=%s type=%s object=v2.core.event). "
+                "Premium sync requires Snapshot (full) event payloads — set the Stripe "
+                "Dashboard webhook to Snapshot. Acknowledging 200 without applying premium.",
+                thin_id, thin_type,
+            )
             return '', 200
 
-        logger.info("[stripe] webhook event_id=%s type=%s", event_id, etype)
+        try:
+            etype = (
+                event['type'] if hasattr(event, '__getitem__')
+                else _obj_get(event, 'type')
+            )
+            event_id = _stripe_id(_obj_get(event, 'id')) or (
+                event.get('id') if isinstance(event, dict) else None
+            )
+            data_obj = (
+                event['data']['object'] if hasattr(event, '__getitem__')
+                else _obj_get(_obj_get(event, 'data'), 'object')
+            )
 
-        if etype == 'checkout.session.completed':
-            _handle_checkout_session_completed(data_obj, stripe_mod=stripe)
-
-        elif etype == 'invoice.payment_succeeded':
-            _handle_invoice_payment_succeeded(data_obj, stripe_mod=stripe)
-
-        elif etype in ('customer.subscription.created', 'customer.subscription.updated'):
-            _sync_premium_from_subscription(data_obj)
-
-        elif etype == 'customer.subscription.deleted':
-            customer_id = _stripe_id(_obj_get(data_obj, 'customer'))
-            if customer_id:
-                _deactivate_premium_by_customer(customer_id)
-                _log_premium_decision(
-                    'customer.subscription.deleted',
-                    customer_id=customer_id, is_premium=0,
-                    subscription_id=_stripe_id(_obj_get(data_obj, 'id')),
-                    status='canceled',
+            if event_id and _webhook_event_already_processed(event_id):
+                logger.info(
+                    "[stripe] Ignoring duplicate event_id=%s type=%s", event_id, etype
                 )
+                return '', 200
 
-        else:
-            logger.info("[stripe] Unhandled event type=%s (acked)", etype)
+            logger.info("[stripe] webhook event_id=%s type=%s", event_id, etype)
 
-        _mark_webhook_event_processed(event_id, etype)
-    except Exception as e:
-        # Do not 500 — log and ack so Stripe renewals do not loop on permanent bugs.
-        # Operator can replay after fix; idempotency skips already-marked successes.
-        logger.exception("[stripe] webhook handler error (returning 200): %s", e)
+            if etype == 'checkout.session.completed':
+                _handle_checkout_session_completed(data_obj, stripe_mod=stripe)
+
+            elif etype == 'invoice.payment_succeeded':
+                _handle_invoice_payment_succeeded(data_obj, stripe_mod=stripe)
+
+            elif etype in (
+                'customer.subscription.created',
+                'customer.subscription.updated',
+            ):
+                _sync_premium_from_subscription(data_obj)
+
+            elif etype == 'customer.subscription.deleted':
+                customer_id = _stripe_id(_obj_get(data_obj, 'customer'))
+                if customer_id:
+                    _deactivate_premium_by_customer(customer_id)
+                    _log_premium_decision(
+                        'customer.subscription.deleted',
+                        customer_id=customer_id, is_premium=0,
+                        subscription_id=_stripe_id(_obj_get(data_obj, 'id')),
+                        status='canceled',
+                    )
+
+            else:
+                logger.info("[stripe] Unhandled event type=%s (acked)", etype)
+
+            _mark_webhook_event_processed(event_id, etype)
+        except Exception as e:
+            # Do not 500 — log and ack so Stripe renewals do not loop on permanent bugs.
+            # Operator can Resend after fix; idempotency skips already-marked successes.
+            logger.exception(
+                "[stripe] webhook handler error (returning 200): %s", e
+            )
+            return '', 200
+
         return '', 200
-
-    return '', 200
+    except Exception as e:
+        # Absolute last resort: never 500 the Stripe endpoint.
+        logger.exception("[stripe] webhook outer error (returning 200): %s", e)
+        return '', 200
 
 
 def _activate_premium(user_id, plan='monthly', stripe_customer_id=None,

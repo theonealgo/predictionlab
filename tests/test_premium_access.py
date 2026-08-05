@@ -52,6 +52,37 @@ class PremiumAccessHelpersTest(unittest.TestCase):
     def test_valid_plans_include_weekly(self):
         self.assertEqual(auth.VALID_CHECKOUT_PLANS, frozenset({'monthly', 'yearly', 'weekly'}))
 
+    def test_subscription_and_price_id_from_dahlia_invoice(self):
+        inv = {
+            'customer': 'cus_UyNMRYYeQlV4aT',
+            'parent': {
+                'subscription_details': {
+                    'subscription': 'sub_1TyQc7LqTMBLPh0wCpnIfvgY',
+                }
+            },
+            'lines': {
+                'data': [{
+                    'pricing': {
+                        'price_details': {
+                            'price': 'price_1TayccLqTMBLPh0wCsTLZh4j',
+                        }
+                    }
+                }]
+            },
+        }
+        self.assertEqual(
+            auth._subscription_id_from_invoice(inv),
+            'sub_1TyQc7LqTMBLPh0wCpnIfvgY',
+        )
+        self.assertEqual(
+            auth._price_id_from_invoice(inv),
+            'price_1TayccLqTMBLPh0wCsTLZh4j',
+        )
+        self.assertEqual(
+            auth._subscription_id_from_invoice({'subscription': 'sub_legacy'}),
+            'sub_legacy',
+        )
+
     def test_activate_premium_weekly(self):
         before = datetime.now()
         auth._activate_premium(self.user_id, plan='weekly', stripe_customer_id='cus_test_123')
@@ -248,6 +279,119 @@ class StripeWebhookPremiumTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         conn = auth._get_db()
         row = conn.execute('SELECT * FROM users WHERE id = ?', (self.user_id,)).fetchone()
+        conn.close()
+        self.assertEqual(row['is_premium'], 1)
+        self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
+
+    def test_invoice_payment_succeeded_dahlia_shape_weekly_extends(self):
+        """Stripe API 2026-06-24.dahlia: no top-level subscription / lines[].price."""
+        ts = int((datetime.now() + timedelta(days=7)).timestamp())
+        weekly_price = 'price_weekly_test'
+        fake_sub = {
+            'id': 'sub_1TyQc7LqTMBLPh0wCpnIfvgY',
+            'object': 'subscription',
+            'customer': 'cus_renew_1',
+            'status': 'active',
+            'current_period_end': ts,
+            'items': {'data': [{'price': {'id': weekly_price}}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                self.assertEqual(sub_id, 'sub_1TyQc7LqTMBLPh0wCpnIfvgY')
+                return fake_sub
+
+        invoice_obj = {
+            'id': 'in_dahlia_1',
+            'object': 'invoice',
+            # No top-level "subscription" (dahlia).
+            'customer': 'cus_renew_1',
+            'customer_email': 'reyes.paul94@gmail.com',
+            'billing_reason': 'subscription_cycle',
+            'period_end': ts,
+            'parent': {
+                'type': 'subscription_details',
+                'subscription_details': {
+                    'subscription': 'sub_1TyQc7LqTMBLPh0wCpnIfvgY',
+                },
+            },
+            'lines': {
+                'data': [{
+                    # No classic "price"; dahlia nests under pricing.price_details.
+                    'pricing': {
+                        'price_details': {
+                            'price': weekly_price,
+                        }
+                    }
+                }]
+            },
+        }
+        self.assertEqual(
+            auth._subscription_id_from_invoice(invoice_obj),
+            'sub_1TyQc7LqTMBLPh0wCpnIfvgY',
+        )
+        self.assertEqual(auth._price_id_from_invoice(invoice_obj), weekly_price)
+
+        with mock.patch('stripe.Subscription', _SubAPI):
+            resp = self._post_event({
+                'id': 'evt_1U0zrLLqTMBLPh0w53n3Jo1L',
+                'object': 'event',
+                'type': 'invoice.payment_succeeded',
+                'data': {'object': invoice_obj},
+            })
+        self.assertEqual(resp.status_code, 200)
+        conn = auth._get_db()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (self.user_id,)).fetchone()
+        conn.close()
+        self.assertEqual(row['is_premium'], 1)
+        self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
+
+    def test_invoice_dahlia_fallback_activate_weekly_when_retrieve_fails(self):
+        """No top-level subscription; retrieve fails; still 200 + weekly activate."""
+        ts = int((datetime.now() + timedelta(days=7)).timestamp())
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                raise RuntimeError('stripe retrieve unavailable')
+
+        with mock.patch('stripe.Subscription', _SubAPI):
+            resp = self._post_event({
+                'id': 'evt_dahlia_fallback',
+                'object': 'event',
+                'type': 'invoice.payment_succeeded',
+                'data': {
+                    'object': {
+                        'id': 'in_dahlia_fb',
+                        'object': 'invoice',
+                        'customer': 'cus_renew_1',
+                        'customer_email': 'renew@example.com',
+                        'billing_reason': 'subscription_cycle',
+                        'period_end': ts,
+                        'parent': {
+                            'subscription_details': {
+                                'subscription': 'sub_dahlia_fb',
+                            }
+                        },
+                        'lines': {
+                            'data': [{
+                                'pricing': {
+                                    'price_details': {
+                                        'price': 'price_weekly_test',
+                                    }
+                                }
+                            }]
+                        },
+                    }
+                },
+            })
+        self.assertEqual(resp.status_code, 200)
+        conn = auth._get_db()
+        row = conn.execute(
+            'SELECT is_premium, premium_expires FROM users WHERE id = ?',
+            (self.user_id,),
+        ).fetchone()
         conn.close()
         self.assertEqual(row['is_premium'], 1)
         self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
