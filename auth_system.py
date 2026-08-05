@@ -492,8 +492,13 @@ def login_page():
         'session_expired': 'Your session expired. Please log in again.',
         'set_password': (
             'This account was created at checkout and still needs a password. '
-            'Check your email for a set-password link, or use the link from the '
-            'checkout success page. If you just paid, open /set-password from that email.'
+            'Check your email for a set-password link. '
+            'If you just paid, open /set-password from that email.'
+        ),
+        'checkout_failed': (
+            'We could not confirm your payment yet. '
+            'If you were charged, try logging in — premium may already be active. '
+            'Otherwise contact support.'
         ),
     }.get(error, '')
 
@@ -1309,79 +1314,87 @@ def checkout(plan):
 @auth_bp.route('/checkout/success')
 def checkout_success():
     """Handle successful Stripe checkout.
-    
+
     Verifies the Stripe session, auto-creates account if needed,
-    logs the user in, and activates premium.
+    logs the user in, and activates premium — then redirects to the homepage.
     Guests without a password are sent to /set-password with a one-time token.
+    Stripe success_url must keep pointing here with session_id.
     """
     session_id = request.args.get('session_id')
     if not session_id:
         return redirect('/plans')
 
-    claim_token = None
-    claim_email = None
+    if not STRIPE_SECRET_KEY:
+        logger.warning("[checkout/success] STRIPE_SECRET_KEY missing")
+        return redirect(url_for('auth.login_page', error='checkout_failed'))
 
-    if STRIPE_SECRET_KEY and session_id:
-        try:
-            import stripe
-            stripe.api_key = STRIPE_SECRET_KEY
-            cs = stripe.checkout.Session.retrieve(session_id)
-            if cs.payment_status == 'paid':
-                email = (cs.customer_details or {}).get('email') or cs.get('customer_email', '')
-                email = email.strip().lower() if email else ''
-                plan = _plan_from_checkout_or_subscription(cs)
-                customer_id = _stripe_id(cs.get('customer'))
-                subscription_id = _stripe_id(cs.get('subscription'))
-                period_end = None
-                if subscription_id:
-                    try:
-                        sub_obj = stripe.Subscription.retrieve(subscription_id)
-                        period_end = _period_end_from_subscription(sub_obj)
-                        plan = _plan_from_checkout_or_subscription(cs, sub_obj)
-                    except Exception as se:
-                        logger.warning("[checkout/success] sub retrieve failed: %s", se)
+    try:
+        import stripe
+        stripe.api_key = STRIPE_SECRET_KEY
+        cs = stripe.checkout.Session.retrieve(session_id)
+        if cs.payment_status != 'paid':
+            logger.warning(
+                "[checkout/success] session %s not paid (status=%s)",
+                session_id, getattr(cs, 'payment_status', None),
+            )
+            return redirect('/plans')
 
-                if email:
-                    user = _find_or_create_user_by_email(email)
-                    if user:
-                        _activate_premium(
-                            user.id, plan=plan,
-                            stripe_customer_id=customer_id,
-                            stripe_subscription_id=subscription_id,
-                            premium_expires=period_end,
-                        )
-                        # Reload so premium_active reflects DB
-                        user = _load_user_by_id(user.id) or user
-                        login_user(user, remember=True)
-                        _set_session_token(user.id)
-                        claim_email = email
-                        if not _user_has_password(user.id):
-                            claim_token = _ensure_claim_token_for_user(user.id, force_new=True)
-                            if claim_token:
-                                _maybe_send_claim_email(
-                                    email, claim_token,
-                                    base_url=request.url_root.rstrip('/'),
-                                )
-                            if claim_token:
-                                return redirect(
-                                    url_for('auth.set_password_page', token=claim_token)
-                                )
-                            return redirect(url_for('auth.set_password_page'))
-                        _log_premium_decision(
-                            'checkout/success',
-                            user_id=user.id, email=email, customer_id=customer_id,
-                            subscription_id=subscription_id, plan=plan,
-                            is_premium=1, expires=period_end or 'plan_calendar',
-                        )
-        except Exception as e:
-            logger.warning(f"[checkout/success] Stripe verification failed: {e}")
+        email = (cs.customer_details or {}).get('email') or cs.get('customer_email', '')
+        email = email.strip().lower() if email else ''
+        plan = _plan_from_checkout_or_subscription(cs)
+        customer_id = _stripe_id(cs.get('customer'))
+        subscription_id = _stripe_id(cs.get('subscription'))
+        period_end = None
+        if subscription_id:
+            try:
+                sub_obj = stripe.Subscription.retrieve(subscription_id)
+                period_end = _period_end_from_subscription(sub_obj)
+                plan = _plan_from_checkout_or_subscription(cs, sub_obj)
+            except Exception as se:
+                logger.warning("[checkout/success] sub retrieve failed: %s", se)
 
-    return render_template_string(
-        SUCCESS_TEMPLATE,
-        page='success',
-        claim_token=claim_token,
-        claim_email=claim_email,
-    )
+        if not email:
+            logger.warning("[checkout/success] paid session missing email")
+            return redirect(url_for('auth.login_page', error='checkout_failed'))
+
+        user = _find_or_create_user_by_email(email)
+        if not user:
+            logger.warning("[checkout/success] could not find/create user for %s", email)
+            return redirect(url_for('auth.login_page', error='checkout_failed'))
+
+        _activate_premium(
+            user.id, plan=plan,
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+            premium_expires=period_end,
+        )
+        # Reload so premium_active reflects DB
+        user = _load_user_by_id(user.id) or user
+        login_user(user, remember=True)
+        _set_session_token(user.id)
+
+        if not _user_has_password(user.id):
+            claim_token = _ensure_claim_token_for_user(user.id, force_new=True)
+            if claim_token:
+                _maybe_send_claim_email(
+                    email, claim_token,
+                    base_url=request.url_root.rstrip('/'),
+                )
+                return redirect(
+                    url_for('auth.set_password_page', token=claim_token)
+                )
+            return redirect(url_for('auth.set_password_page'))
+
+        _log_premium_decision(
+            'checkout/success',
+            user_id=user.id, email=email, customer_id=customer_id,
+            subscription_id=subscription_id, plan=plan,
+            is_premium=1, expires=period_end or 'plan_calendar',
+        )
+        return redirect('/')
+    except Exception as e:
+        logger.warning(f"[checkout/success] Stripe verification failed: {e}")
+        return redirect(url_for('auth.login_page', error='checkout_failed'))
 
 
 @auth_bp.route('/set-password', methods=['GET', 'POST'])
@@ -1408,7 +1421,7 @@ def set_password_page():
         if not can_set:
             error_msg = (
                 'This set-password link is invalid or has expired. '
-                'If you just paid, open the link from checkout success or contact support.'
+                'If you just paid, check your email for the set-password link or contact support.'
             )
         return render_template_string(
             SET_PASSWORD_TEMPLATE,
@@ -1923,32 +1936,6 @@ SIGNUP_TEMPLATE = """
     </form>
     <div class="auth-link">Already have an account? <a href="/login">Log in</a></div>
     <div class="auth-link" style="margin-top:10px;"><a href="/">← Back to Home</a></div>
-</div>
-</body></html>
-"""
-
-SUCCESS_TEMPLATE = """
-<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Welcome to Premium — predictionlab.io</title>
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
-<meta name="robots" content="noindex, nofollow">
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;}</style>
-""" + _AUTH_STYLES + """
-</head><body>
-<div style="text-align:center;padding:40px;max-width:480px;">
-    <div style="font-size:4em;margin-bottom:20px;">🎉</div>
-    <h1 style="color:#fbbf24;margin-bottom:12px;">Welcome to Premium!</h1>
-    <p style="opacity:0.8;margin-bottom:20px;">You now have full access to Spreads, Totals, and Score Predictions.</p>
-    {% if claim_token %}
-    <div style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.45);border-radius:12px;padding:18px 16px;margin-bottom:22px;text-align:left;">
-        <p style="font-weight:700;color:#fbbf24;margin-bottom:8px;">Set a password for {{ claim_email or 'your account' }}</p>
-        <p style="opacity:0.85;font-size:0.92em;margin-bottom:14px;line-height:1.5;">Premium is active. Set a password so you can log back in later — do not rely only on this browser session.</p>
-        <a href="/set-password?token={{ claim_token }}" class="auth-btn auth-btn-primary" style="display:inline-block;width:auto;padding:12px 22px;text-decoration:none;">Set password →</a>
-    </div>
-    {% endif %}
-    <a href="/" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;">View Today's Picks →</a>
 </div>
 </body></html>
 """
