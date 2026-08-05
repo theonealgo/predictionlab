@@ -2395,7 +2395,7 @@ def plans_page():
                         <li>All Sports Covered</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    {% include "includes/stripe_weekly_buy_button.html" %}
+                    <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="plan-btn plan-btn-secondary">Try This Week</a>
                 </div>
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>
