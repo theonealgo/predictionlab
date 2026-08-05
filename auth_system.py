@@ -26,8 +26,8 @@ Env vars needed:
       in Google Console (or remove the env var and rely on auto-generated URLs).
     STRIPE_SECRET_KEY       - from dashboard.stripe.com/apikeys
     STRIPE_WEBHOOK_SECRET   - from Stripe webhook settings
-    STRIPE_PRICE_MONTHLY    - Stripe Price ID for monthly plan
-    STRIPE_PRICE_YEARLY     - Stripe Price ID for yearly plan
+    STRIPE_PRICE_MONTHLY    - Stripe Price ID for monthly plan (falls back to Payment Link)
+    STRIPE_PRICE_YEARLY     - Stripe Price ID for yearly plan (falls back to Payment Link)
     STRIPE_PRICE_WEEKLY     - Stripe Price ID for weekly plan (falls back to Payment Link)
     SECRET_KEY              - Flask session secret (auto-generated if missing)
 """
@@ -83,7 +83,9 @@ STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
 STRIPE_PRICE_MONTHLY = os.environ.get('STRIPE_PRICE_MONTHLY', '').strip()
 STRIPE_PRICE_YEARLY = os.environ.get('STRIPE_PRICE_YEARLY', '').strip()
 STRIPE_PRICE_WEEKLY = os.environ.get('STRIPE_PRICE_WEEKLY', '').strip()
-STRIPE_WEEKLY_URL = 'https://buy.stripe.com/14A6oI4Ra66ReWLczTao802'  # legacy Payment Link fallback
+STRIPE_WEEKLY_URL = 'https://buy.stripe.com/14A6oI4Ra66ReWLczTao802'
+STRIPE_MONTHLY_URL = 'https://buy.stripe.com/bJeeVe0AU1QB7uj7fzao801'
+STRIPE_YEARLY_URL = 'https://buy.stripe.com/8x228s83mfHr8yneI1ao803'
 VALID_CHECKOUT_PLANS = frozenset({'monthly', 'yearly', 'weekly'})
 SET_PASSWORD_TOKEN_HOURS = 48
 
@@ -833,6 +835,62 @@ def _plan_from_price_id(price_id):
     return None
 
 
+def _plan_from_recurring_interval(interval):
+    """Map Stripe recurring.interval (week|month|year) to plan slug."""
+    if not interval:
+        return None
+    key = str(interval).strip().lower()
+    if key in ('year', 'yearly', 'annual', 'annually'):
+        return 'yearly'
+    if key in ('week', 'weekly'):
+        return 'weekly'
+    if key in ('month', 'monthly'):
+        return 'monthly'
+    return None
+
+
+def _recurring_interval_from_price(price):
+    """Best-effort recurring.interval from a price object (not a bare id string)."""
+    if not price or isinstance(price, str):
+        return None
+    recurring = _obj_get(price, 'recurring') or {}
+    return _obj_get(recurring, 'interval')
+
+
+def _plan_from_subscription_interval(subscription):
+    """Infer plan from subscription item price.recurring.interval (Payment Link path)."""
+    if not subscription:
+        return None
+    try:
+        items = _obj_get(subscription, 'items') or {}
+        data = _obj_get(items, 'data') if not isinstance(items, list) else items
+        for item in data or []:
+            price = _obj_get(item, 'price') or {}
+            plan = _plan_from_recurring_interval(_recurring_interval_from_price(price))
+            if plan:
+                return plan
+    except Exception:
+        pass
+    return None
+
+
+def _plan_from_invoice_interval(invoice):
+    """Infer plan from invoice line price.recurring.interval when price id is unmapped."""
+    if not invoice:
+        return None
+    try:
+        lines = _obj_get(invoice, 'lines') or {}
+        data = _obj_get(lines, 'data') or []
+        for line in data or []:
+            price = _obj_get(line, 'price')
+            plan = _plan_from_recurring_interval(_recurring_interval_from_price(price))
+            if plan:
+                return plan
+    except Exception:
+        pass
+    return None
+
+
 def _iso_from_unix(ts):
     """Convert a Stripe unix timestamp to ISO datetime string."""
     if not ts:
@@ -965,7 +1023,11 @@ def _period_end_from_subscription(subscription):
 
 
 def _plan_from_checkout_or_subscription(session_data, subscription=None):
-    """Resolve plan from checkout metadata, else from subscription price id."""
+    """Resolve plan from checkout metadata, price id, or recurring interval.
+
+    Payment Links often omit metadata.plan; interval inference keeps yearly/weekly
+    from activating as monthly when STRIPE_PRICE_* env is unset.
+    """
     plan = None
     if session_data:
         meta = _obj_get(session_data, 'metadata') or {}
@@ -981,6 +1043,9 @@ def _plan_from_checkout_or_subscription(session_data, subscription=None):
             if isinstance(sub_plan, str) and sub_plan.strip().lower() in VALID_CHECKOUT_PLANS:
                 return sub_plan.strip().lower()
             inferred = _plan_from_price_id(_price_id_from_subscription(subscription))
+            if inferred:
+                return inferred
+            inferred = _plan_from_subscription_interval(subscription)
             if inferred:
                 return inferred
         except Exception:
@@ -1169,6 +1234,15 @@ def _sync_premium_from_subscription(subscription, plan=None):
     )
 
 
+def _payment_link_for_plan(plan):
+    """Hardcoded Stripe Payment Link for weekly/monthly/yearly."""
+    return {
+        'weekly': STRIPE_WEEKLY_URL,
+        'monthly': STRIPE_MONTHLY_URL,
+        'yearly': STRIPE_YEARLY_URL,
+    }.get(plan, '')
+
+
 @auth_bp.route('/checkout/<plan>')
 def checkout(plan):
     """Create Stripe Checkout session.
@@ -1176,25 +1250,33 @@ def checkout(plan):
     No login required. Stripe collects the email during checkout.
     The webhook auto-creates the user account and activates premium.
     If the user is already logged in, we pre-fill their email.
-    Weekly uses the same path as monthly/yearly when STRIPE_PRICE_WEEKLY is set;
-    otherwise falls back to the legacy Payment Link.
+    Uses Checkout Sessions when STRIPE_PRICE_* is set; otherwise (or on
+    Session create failure) falls back to the plan Payment Link.
     """
     plan = (plan or '').strip().lower()
     if plan not in VALID_CHECKOUT_PLANS:
         return "Invalid plan. Use monthly, yearly, or weekly.", 400
 
+    payment_link = _payment_link_for_plan(plan)
+    price_id = _stripe_price_for_plan(plan)
+    if not price_id:
+        if payment_link:
+            logger.warning(
+                "[checkout] STRIPE_PRICE_%s unset; falling back to Payment Link",
+                plan.upper(),
+            )
+            return redirect(payment_link)
+        if not STRIPE_SECRET_KEY:
+            return "Stripe not configured. Set STRIPE_SECRET_KEY.", 500
+        return f"Stripe price not configured for {plan}.", 500
+
     if not STRIPE_SECRET_KEY:
+        if payment_link:
+            return redirect(payment_link)
         return "Stripe not configured. Set STRIPE_SECRET_KEY.", 500
 
     import stripe
     stripe.api_key = STRIPE_SECRET_KEY
-
-    price_id = _stripe_price_for_plan(plan)
-    if not price_id:
-        if plan == 'weekly' and STRIPE_WEEKLY_URL:
-            logger.warning("[checkout] STRIPE_PRICE_WEEKLY unset; falling back to Payment Link")
-            return redirect(STRIPE_WEEKLY_URL)
-        return f"Stripe price not configured for {plan}.", 500
 
     try:
         session_kwargs = {
@@ -1215,9 +1297,12 @@ def checkout(plan):
         return redirect(checkout_session.url)
     except Exception as e:
         logger.error(f"Stripe checkout error: {e}")
-        if plan == 'weekly' and STRIPE_WEEKLY_URL:
-            logger.warning("[checkout] Weekly Checkout Session failed; falling back to Payment Link")
-            return redirect(STRIPE_WEEKLY_URL)
+        if payment_link:
+            logger.warning(
+                "[checkout] %s Checkout Session failed; falling back to Payment Link",
+                plan.capitalize(),
+            )
+            return redirect(payment_link)
         return f"Payment error: {e}", 500
 
 
@@ -1519,7 +1604,11 @@ def _handle_invoice_payment_succeeded(invoice, stripe_mod=None):
             )
             return
 
-        plan = _plan_from_price_id(_price_id_from_invoice(invoice)) or 'monthly'
+        plan = (
+            _plan_from_price_id(_price_id_from_invoice(invoice))
+            or _plan_from_invoice_interval(invoice)
+            or 'monthly'
+        )
         _activate_premium(
             user_id,
             plan=plan,
@@ -1991,7 +2080,7 @@ def plans_page():
                         <li>All Sports Covered</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="/checkout/weekly" class="plan-btn plan-btn-secondary">Try This Week</a>
+                    <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="plan-btn plan-btn-secondary">Try This Week</a>
                 </div>
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>
@@ -2008,7 +2097,7 @@ def plans_page():
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="/checkout/monthly" class="plan-btn plan-btn-secondary">Get Monthly Access</a>
+                    <a href="https://buy.stripe.com/bJeeVe0AU1QB7uj7fzao801" class="plan-btn plan-btn-secondary">Get Monthly Access</a>
                 </div>
                 <div class="plan-card popular">
                     <div class="plan-badge">BEST VALUE</div>
@@ -2026,7 +2115,7 @@ def plans_page():
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="/checkout/yearly" class="plan-btn plan-btn-primary">Get Yearly Access</a>
+                    <a href="https://buy.stripe.com/8x228s83mfHr8yneI1ao803" class="plan-btn plan-btn-primary">Get Yearly Access</a>
                 </div>
             </div>
             <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily. Cancel any plan anytime. <a href="/refund-policy" style="color:#00529B;font-weight:600;text-decoration:none;">Refund policy</a></p>

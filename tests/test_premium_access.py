@@ -172,18 +172,45 @@ class PremiumAccessHelpersTest(unittest.TestCase):
             self.assertIn('/set-password', rules)
             self.assertIn('/claim-account', rules)
             client = app.test_client()
-            # Without Stripe key, weekly should still accept the plan slug
-            # (500 "not configured" is ok; 400 invalid plan is not)
+            # Without Stripe price env, checkout falls back to Payment Links
             with mock.patch.object(auth, 'STRIPE_SECRET_KEY', ''):
-                resp = client.get('/checkout/weekly')
-                self.assertEqual(resp.status_code, 500)
-                self.assertIn(b'Stripe not configured', resp.data)
+                with mock.patch.object(auth, 'STRIPE_PRICE_WEEKLY', ''):
+                    resp = client.get('/checkout/weekly', follow_redirects=False)
+                    self.assertEqual(resp.status_code, 302)
+                    self.assertIn(
+                        'buy.stripe.com/14A6oI4Ra66ReWLczTao802',
+                        resp.headers.get('Location', ''),
+                    )
             with mock.patch.object(auth, 'STRIPE_SECRET_KEY', 'sk_test'):
                 with mock.patch.object(auth, 'STRIPE_PRICE_WEEKLY', ''):
                     with mock.patch.object(auth, 'STRIPE_WEEKLY_URL', 'https://buy.stripe.com/test_weekly'):
                         resp = client.get('/checkout/weekly', follow_redirects=False)
                         self.assertEqual(resp.status_code, 302)
                         self.assertIn('buy.stripe.com/test_weekly', resp.headers.get('Location', ''))
+                with mock.patch.object(auth, 'STRIPE_PRICE_MONTHLY', ''):
+                    with mock.patch.object(
+                        auth,
+                        'STRIPE_MONTHLY_URL',
+                        'https://buy.stripe.com/bJeeVe0AU1QB7uj7fzao801',
+                    ):
+                        resp = client.get('/checkout/monthly', follow_redirects=False)
+                        self.assertEqual(resp.status_code, 302)
+                        self.assertIn(
+                            'buy.stripe.com/bJeeVe0AU1QB7uj7fzao801',
+                            resp.headers.get('Location', ''),
+                        )
+                with mock.patch.object(auth, 'STRIPE_PRICE_YEARLY', ''):
+                    with mock.patch.object(
+                        auth,
+                        'STRIPE_YEARLY_URL',
+                        'https://buy.stripe.com/8x228s83mfHr8yneI1ao803',
+                    ):
+                        resp = client.get('/checkout/yearly', follow_redirects=False)
+                        self.assertEqual(resp.status_code, 302)
+                        self.assertIn(
+                            'buy.stripe.com/8x228s83mfHr8yneI1ao803',
+                            resp.headers.get('Location', ''),
+                        )
         finally:
             try:
                 os.unlink(db_path)
@@ -437,6 +464,66 @@ class StripeWebhookPremiumTest(unittest.TestCase):
         conn.close()
         self.assertEqual(row['is_premium'], 1)
         self.assertEqual(row['stripe_customer_id'], 'cus_new_week')
+        self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
+
+    def test_checkout_yearly_payment_link_activates_via_interval(self):
+        """Payment Link checkout often omits metadata.plan; infer yearly from interval."""
+        ts = int((datetime.now() + timedelta(days=365)).timestamp())
+        fake_sub = {
+            'id': 'sub_year_pl',
+            'customer': 'cus_new_year',
+            'status': 'active',
+            'current_period_end': ts,
+            'metadata': {},
+            'items': {
+                'data': [{
+                    'price': {
+                        'id': 'price_unmapped_yearly',
+                        'recurring': {'interval': 'year'},
+                    }
+                }]
+            },
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        prev_yearly = auth.STRIPE_PRICE_YEARLY
+        auth.STRIPE_PRICE_YEARLY = ''
+        try:
+            with mock.patch('stripe.Subscription', _SubAPI):
+                resp = self._post_event({
+                    'id': 'evt_checkout_year_pl',
+                    'object': 'event',
+                    'type': 'checkout.session.completed',
+                    'data': {
+                        'object': {
+                            'id': 'cs_year_pl',
+                            'object': 'checkout.session',
+                            'customer': 'cus_new_year',
+                            'subscription': 'sub_year_pl',
+                            'customer_details': {'email': 'yearly@example.com'},
+                            'metadata': {},
+                        }
+                    },
+                })
+        finally:
+            auth.STRIPE_PRICE_YEARLY = prev_yearly
+
+        self.assertEqual(resp.status_code, 200)
+        user = auth._load_user_by_email('yearly@example.com')
+        self.assertIsNotNone(user)
+        self.assertTrue(user.premium_active)
+        self.assertEqual(
+            auth._plan_from_checkout_or_subscription({}, fake_sub),
+            'yearly',
+        )
+        conn = auth._get_db()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user.id,)).fetchone()
+        conn.close()
+        self.assertEqual(row['is_premium'], 1)
         self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
 
     def test_webhook_idempotency(self):
