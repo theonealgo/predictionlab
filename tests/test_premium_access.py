@@ -218,6 +218,15 @@ class PremiumAccessHelpersTest(unittest.TestCase):
                 pass
 
 
+# Plan interval fixtures for parameterized activation coverage.
+_PLAN_INTERVALS = (
+    # plan, price_id, recurring.interval, days_for_period_end
+    ('weekly', 'price_weekly_test', 'week', 7),
+    ('monthly', 'price_monthly_test', 'month', 31),
+    ('yearly', 'price_yearly_test', 'year', 365),
+)
+
+
 class StripeWebhookPremiumTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
@@ -227,9 +236,13 @@ class StripeWebhookPremiumTest(unittest.TestCase):
         self._prev_secret = auth.STRIPE_SECRET_KEY
         self._prev_wh = auth.STRIPE_WEBHOOK_SECRET
         self._prev_weekly = auth.STRIPE_PRICE_WEEKLY
+        self._prev_monthly = auth.STRIPE_PRICE_MONTHLY
+        self._prev_yearly = auth.STRIPE_PRICE_YEARLY
         auth.STRIPE_SECRET_KEY = 'sk_test_premium'
         auth.STRIPE_WEBHOOK_SECRET = self.whsec
         auth.STRIPE_PRICE_WEEKLY = 'price_weekly_test'
+        auth.STRIPE_PRICE_MONTHLY = 'price_monthly_test'
+        auth.STRIPE_PRICE_YEARLY = 'price_yearly_test'
         auth._DB_PATH = self.db_path
 
         from flask import Flask
@@ -254,6 +267,8 @@ class StripeWebhookPremiumTest(unittest.TestCase):
         auth.STRIPE_SECRET_KEY = self._prev_secret
         auth.STRIPE_WEBHOOK_SECRET = self._prev_wh
         auth.STRIPE_PRICE_WEEKLY = self._prev_weekly
+        auth.STRIPE_PRICE_MONTHLY = self._prev_monthly
+        auth.STRIPE_PRICE_YEARLY = self._prev_yearly
         try:
             os.unlink(self.db_path)
         except OSError:
@@ -560,7 +575,14 @@ class StripeWebhookPremiumTest(unittest.TestCase):
             r2 = self._post_event(event)
         self.assertEqual(r1.status_code, 200)
         self.assertEqual(r2.status_code, 200)
-        self.assertEqual(_SubAPI.calls, 1)
+        # Activation events may re-run on Resend (safe / idempotent activate).
+        self.assertGreaterEqual(_SubAPI.calls, 1)
+        conn = auth._get_db()
+        row = conn.execute(
+            'SELECT is_premium FROM users WHERE id = ?', (self.user_id,)
+        ).fetchone()
+        conn.close()
+        self.assertEqual(row['is_premium'], 1)
 
     def test_thin_payload_acks_200_without_500(self):
         payload = json.dumps({
@@ -642,6 +664,759 @@ class StripeWebhookPremiumTest(unittest.TestCase):
                 pass
         # Direct property used by is_premium_user
         self.assertTrue(user.premium_active)
+
+    def test_zero_dollar_invoice_active_weekly_grants_premium(self):
+        """100% coupon: amount_paid=0 + active weekly sub → durable premium."""
+        ts = int((datetime.now() + timedelta(days=7)).timestamp())
+        # Existing account with password, NOT yet linked to Stripe customer
+        conn = auth._get_db()
+        conn.execute(
+            "INSERT INTO users (email, name, password_hash, is_premium) VALUES (?, ?, ?, 0)",
+            ('theonealgo@gmail.com', 'Nima', 'pbkdf2:sha256:fakefor tests',),
+        )
+        conn.commit()
+        uid = conn.execute(
+            "SELECT id FROM users WHERE email = ?", ('theonealgo@gmail.com',)
+        ).fetchone()['id']
+        conn.close()
+
+        fake_sub = {
+            'id': 'sub_1U14N4LqTMBLPh0wgk2Ds0FA',
+            'customer': 'cus_coupon_new',
+            'status': 'active',
+            'current_period_end': ts,
+            'items': {'data': [{'price': {'id': 'price_weekly_test',
+                                          'recurring': {'interval': 'week'}}}]},
+        }
+
+        class _API:
+            @staticmethod
+            def retrieve_sub(sub_id):
+                return fake_sub
+
+            @staticmethod
+            def retrieve_cust(cid):
+                return {'id': cid, 'email': 'theonealgo@gmail.com'}
+
+        with mock.patch('stripe.Subscription') as Sub, \
+             mock.patch('stripe.Customer') as Cust:
+            Sub.retrieve = _API.retrieve_sub
+            Cust.retrieve = _API.retrieve_cust
+            resp = self._post_event({
+                'id': 'evt_zero_dollar_inv',
+                'object': 'event',
+                'type': 'invoice.payment_succeeded',
+                'data': {
+                    'object': {
+                        'id': 'in_zero',
+                        'object': 'invoice',
+                        'customer': 'cus_coupon_new',
+                        # No customer_email on invoice (Buy Button edge)
+                        'amount_paid': 0,
+                        'amount_due': 0,
+                        'status': 'paid',
+                        'period_end': ts,
+                        'parent': {
+                            'subscription_details': {
+                                'subscription': 'sub_1U14N4LqTMBLPh0wgk2Ds0FA',
+                            }
+                        },
+                        'lines': {
+                            'data': [{
+                                'pricing': {
+                                    'price_details': {'price': 'price_weekly_test'}
+                                }
+                            }]
+                        },
+                    }
+                },
+            })
+        self.assertEqual(resp.status_code, 200)
+        conn = auth._get_db()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+        conn.close()
+        self.assertEqual(row['is_premium'], 1)
+        self.assertEqual(row['stripe_customer_id'], 'cus_coupon_new')
+        self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
+        user = auth._load_user_by_id(uid)
+        self.assertTrue(user.premium_active)
+
+    def test_checkout_completed_no_client_reference_customer_email(self):
+        """Buy Button / Payment Link: empty client_reference_id, email on session."""
+        ts = int((datetime.now() + timedelta(days=7)).timestamp())
+        fake_sub = {
+            'id': 'sub_buy_btn',
+            'customer': 'cus_buy_btn',
+            'status': 'active',
+            'current_period_end': ts,
+            'metadata': {},
+            'items': {'data': [{'price': {
+                'id': 'price_weekly_test',
+                'recurring': {'interval': 'week'},
+            }}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        with mock.patch('stripe.Subscription', _SubAPI):
+            resp = self._post_event({
+                'id': 'evt_buy_btn_checkout',
+                'object': 'event',
+                'type': 'checkout.session.completed',
+                'data': {
+                    'object': {
+                        'id': 'cs_buy_btn',
+                        'object': 'checkout.session',
+                        'customer': 'cus_buy_btn',
+                        'subscription': 'sub_buy_btn',
+                        'client_reference_id': None,
+                        'payment_status': 'no_payment_required',
+                        'customer_details': {'email': 'BuyButton.User@Example.com'},
+                        'customer_email': None,
+                        'metadata': {},
+                    }
+                },
+            })
+        self.assertEqual(resp.status_code, 200)
+        user = auth._load_user_by_email('buybutton.user@example.com')
+        self.assertIsNotNone(user)
+        self.assertTrue(user.premium_active)
+        conn = auth._get_db()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user.id,)).fetchone()
+        conn.close()
+        self.assertEqual(row['is_premium'], 1)
+        self.assertEqual(row['stripe_customer_id'], 'cus_buy_btn')
+
+    def test_checkout_completed_fetches_customer_email_when_missing(self):
+        """Session has customer id but no email fields — fetch Customer.email."""
+        ts = int((datetime.now() + timedelta(days=7)).timestamp())
+        fake_sub = {
+            'id': 'sub_cust_email',
+            'customer': 'cus_fetch_email',
+            'status': 'active',
+            'current_period_end': ts,
+            'items': {'data': [{'price': {'id': 'price_weekly_test',
+                                          'recurring': {'interval': 'week'}}}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        class _CustAPI:
+            @staticmethod
+            def retrieve(cid):
+                return {'id': cid, 'email': 'fetched@example.com'}
+
+        with mock.patch('stripe.Subscription', _SubAPI), \
+             mock.patch('stripe.Customer', _CustAPI):
+            resp = self._post_event({
+                'id': 'evt_fetch_cust_email',
+                'object': 'event',
+                'type': 'checkout.session.completed',
+                'data': {
+                    'object': {
+                        'id': 'cs_no_email',
+                        'customer': 'cus_fetch_email',
+                        'subscription': 'sub_cust_email',
+                        'client_reference_id': '',
+                        'payment_status': 'paid',
+                        'customer_details': {},
+                        'metadata': {},
+                    }
+                },
+            })
+        self.assertEqual(resp.status_code, 200)
+        user = auth._load_user_by_email('fetched@example.com')
+        self.assertIsNotNone(user)
+        self.assertTrue(user.premium_active)
+
+    def test_login_after_activation_still_premium(self):
+        """Premium written by webhook survives logout/login (DB-backed)."""
+        from werkzeug.security import generate_password_hash
+
+        conn = auth._get_db()
+        conn.execute(
+            "INSERT INTO users (email, name, password_hash, is_premium) VALUES (?, ?, ?, 0)",
+            ('loginprem@example.com', 'LP', generate_password_hash('secret99')),
+        )
+        conn.commit()
+        uid = conn.execute(
+            "SELECT id FROM users WHERE email = ?", ('loginprem@example.com',)
+        ).fetchone()['id']
+        conn.close()
+
+        ts = int((datetime.now() + timedelta(days=7)).timestamp())
+        fake_sub = {
+            'id': 'sub_login_prem',
+            'customer': 'cus_login_prem',
+            'status': 'active',
+            'current_period_end': ts,
+            'items': {'data': [{'price': {'id': 'price_weekly_test'}}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        with mock.patch('stripe.Subscription', _SubAPI):
+            resp = self._post_event({
+                'id': 'evt_login_prem',
+                'object': 'event',
+                'type': 'checkout.session.completed',
+                'data': {
+                    'object': {
+                        'id': 'cs_login_prem',
+                        'customer': 'cus_login_prem',
+                        'subscription': 'sub_login_prem',
+                        'payment_status': 'no_payment_required',
+                        'customer_details': {'email': 'loginprem@example.com'},
+                        'metadata': {},
+                    }
+                },
+            })
+        self.assertEqual(resp.status_code, 200)
+
+        # Fresh load as login does — not session cookie state
+        user = auth._load_user_by_email('loginprem@example.com')
+        self.assertEqual(user.id, uid)
+        self.assertTrue(user.premium_active)
+        self.assertEqual(user.is_premium, True)
+
+        # Simulate logout then login_submit path
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        login_resp = self.client.post(
+            '/login',
+            data={'email': 'loginprem@example.com', 'password': 'secret99'},
+            follow_redirects=False,
+        )
+        self.assertIn(login_resp.status_code, (302, 303))
+        user2 = auth._load_user_by_id(uid)
+        self.assertTrue(user2.premium_active)
+
+    def test_checkout_payment_ok_accepts_no_payment_required(self):
+        self.assertTrue(auth._checkout_payment_ok('paid'))
+        self.assertTrue(auth._checkout_payment_ok('no_payment_required'))
+        self.assertFalse(auth._checkout_payment_ok('unpaid'))
+        self.assertFalse(auth._checkout_payment_ok(''))
+
+    def test_noop_activation_not_marked_idempotent(self):
+        """Failed resolve must not mark event_id — Dashboard Resend can retry."""
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return {
+                    'id': sub_id,
+                    'customer': 'cus_unknown_zzz',
+                    'status': 'active',
+                    'current_period_end': int(
+                        (datetime.now() + timedelta(days=7)).timestamp()
+                    ),
+                }
+
+        class _CustAPI:
+            @staticmethod
+            def retrieve(cid):
+                return {'id': cid, 'email': None}
+
+        with mock.patch('stripe.Subscription', _SubAPI), \
+             mock.patch('stripe.Customer', _CustAPI):
+            resp = self._post_event({
+                'id': 'evt_noop_unmarked',
+                'object': 'event',
+                'type': 'customer.subscription.created',
+                'data': {
+                    'object': {
+                        'id': 'sub_unknown_zzz',
+                        'customer': 'cus_unknown_zzz',
+                        'status': 'active',
+                        'current_period_end': int(
+                            (datetime.now() + timedelta(days=7)).timestamp()
+                        ),
+                    }
+                },
+            })
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(auth._webhook_event_already_processed('evt_noop_unmarked'))
+
+    def test_resend_of_previously_marked_activation_still_applies(self):
+        """Older builds marked no-ops; Resend after fix must still grant premium."""
+        ts = int((datetime.now() + timedelta(days=7)).timestamp())
+        auth._mark_webhook_event_processed('evt_old_noop', 'checkout.session.completed')
+        self.assertTrue(auth._webhook_event_already_processed('evt_old_noop'))
+
+        fake_sub = {
+            'id': 'sub_resend',
+            'customer': 'cus_resend',
+            'status': 'active',
+            'current_period_end': ts,
+            'items': {'data': [{'price': {'id': 'price_weekly_test',
+                                          'recurring': {'interval': 'week'}}}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        with mock.patch('stripe.Subscription', _SubAPI):
+            resp = self._post_event({
+                'id': 'evt_old_noop',
+                'object': 'event',
+                'type': 'checkout.session.completed',
+                'data': {
+                    'object': {
+                        'id': 'cs_resend',
+                        'customer': 'cus_resend',
+                        'subscription': 'sub_resend',
+                        'payment_status': 'no_payment_required',
+                        'customer_details': {'email': 'resend@example.com'},
+                        'metadata': {},
+                    }
+                },
+            })
+        self.assertEqual(resp.status_code, 200)
+        user = auth._load_user_by_email('resend@example.com')
+        self.assertIsNotNone(user)
+        self.assertTrue(user.premium_active)
+
+    def test_plan_from_price_id_all_intervals(self):
+        """Weekly/monthly/yearly env price ids resolve identically."""
+        self.assertEqual(auth._plan_from_price_id('price_weekly_test'), 'weekly')
+        self.assertEqual(auth._plan_from_price_id('price_monthly_test'), 'monthly')
+        self.assertEqual(auth._plan_from_price_id('price_yearly_test'), 'yearly')
+        self.assertIsNone(auth._plan_from_price_id('price_unknown_zzz'))
+        self.assertIsNone(auth._plan_from_price_id('prod_not_a_price'))
+
+    def test_checkout_all_intervals_no_client_reference_customer_email(self):
+        """Payment Link / Buy Button: each interval activates without client_reference_id."""
+        for plan, price_id, interval, days in _PLAN_INTERVALS:
+            with self.subTest(plan=plan):
+                ts = int((datetime.now() + timedelta(days=days)).timestamp())
+                email = f'{plan}.buyer@example.com'
+                cus = f'cus_pl_{plan}'
+                sub_id = f'sub_pl_{plan}'
+                fake_sub = {
+                    'id': sub_id,
+                    'customer': cus,
+                    'status': 'active',
+                    'current_period_end': ts,
+                    'metadata': {},
+                    'items': {'data': [{'price': {
+                        'id': price_id,
+                        'recurring': {'interval': interval},
+                    }}]},
+                }
+
+                class _SubAPI:
+                    @staticmethod
+                    def retrieve(sid):
+                        return fake_sub
+
+                with mock.patch('stripe.Subscription', _SubAPI):
+                    resp = self._post_event({
+                        'id': f'evt_checkout_{plan}_noref',
+                        'object': 'event',
+                        'type': 'checkout.session.completed',
+                        'data': {
+                            'object': {
+                                'id': f'cs_{plan}_noref',
+                                'customer': cus,
+                                'subscription': sub_id,
+                                'client_reference_id': None,
+                                'payment_status': 'paid',
+                                'customer_details': {'email': email},
+                                'metadata': {},
+                            }
+                        },
+                    })
+                self.assertEqual(resp.status_code, 200)
+                self.assertTrue(
+                    auth._webhook_event_already_processed(f'evt_checkout_{plan}_noref')
+                )
+                user = auth._load_user_by_email(email)
+                self.assertIsNotNone(user)
+                self.assertTrue(user.premium_active)
+                conn = auth._get_db()
+                row = conn.execute(
+                    'SELECT is_premium, stripe_customer_id, premium_expires '
+                    'FROM users WHERE id = ?',
+                    (user.id,),
+                ).fetchone()
+                conn.close()
+                self.assertEqual(row['is_premium'], 1)
+                self.assertEqual(row['stripe_customer_id'], cus)
+                self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
+                self.assertEqual(
+                    auth._plan_from_checkout_or_subscription({}, fake_sub),
+                    plan,
+                )
+
+    def test_checkout_all_intervals_no_payment_required(self):
+        """$0 / coupon: no_payment_required grants premium for every interval."""
+        for plan, price_id, interval, days in _PLAN_INTERVALS:
+            with self.subTest(plan=plan):
+                ts = int((datetime.now() + timedelta(days=days)).timestamp())
+                email = f'{plan}.zero@example.com'
+                cus = f'cus_zero_{plan}'
+                sub_id = f'sub_zero_{plan}'
+                fake_sub = {
+                    'id': sub_id,
+                    'customer': cus,
+                    'status': 'active',
+                    'current_period_end': ts,
+                    'items': {'data': [{'price': {
+                        'id': price_id,
+                        'recurring': {'interval': interval},
+                    }}]},
+                }
+
+                class _SubAPI:
+                    @staticmethod
+                    def retrieve(sid):
+                        return fake_sub
+
+                with mock.patch('stripe.Subscription', _SubAPI):
+                    resp = self._post_event({
+                        'id': f'evt_zero_checkout_{plan}',
+                        'object': 'event',
+                        'type': 'checkout.session.completed',
+                        'data': {
+                            'object': {
+                                'id': f'cs_zero_{plan}',
+                                'customer': cus,
+                                'subscription': sub_id,
+                                'client_reference_id': '',
+                                'payment_status': 'no_payment_required',
+                                'customer_details': {'email': email},
+                                'metadata': {},
+                            }
+                        },
+                    })
+                self.assertEqual(resp.status_code, 200)
+                user = auth._load_user_by_email(email)
+                self.assertIsNotNone(user)
+                self.assertTrue(user.premium_active)
+                self.assertEqual(
+                    auth._load_user_by_id(user.id).stripe_customer_id, cus,
+                )
+
+    def test_subscription_created_all_intervals_customer_retrieve_email(self):
+        """customer.subscription.created: only customer id; email from Customer.retrieve."""
+        for plan, price_id, interval, days in _PLAN_INTERVALS:
+            with self.subTest(plan=plan):
+                ts = int((datetime.now() + timedelta(days=days)).timestamp())
+                email = f'{plan}.subcreate@example.com'
+                cus = f'cus_subc_{plan}'
+                sub_id = f'sub_subc_{plan}'
+
+                class _CustAPI:
+                    @staticmethod
+                    def retrieve(cid):
+                        self.assertEqual(cid, cus)
+                        return {'id': cid, 'email': email}
+
+                with mock.patch('stripe.Customer', _CustAPI):
+                    resp = self._post_event({
+                        'id': f'evt_sub_created_{plan}',
+                        'object': 'event',
+                        'type': 'customer.subscription.created',
+                        'data': {
+                            'object': {
+                                'id': sub_id,
+                                'customer': cus,
+                                'status': 'active',
+                                'current_period_end': ts,
+                                'metadata': {},
+                                'items': {'data': [{'price': {
+                                    'id': price_id,
+                                    'recurring': {'interval': interval},
+                                }}]},
+                            }
+                        },
+                    })
+                self.assertEqual(resp.status_code, 200)
+                user = auth._load_user_by_email(email)
+                self.assertIsNotNone(user)
+                self.assertTrue(user.premium_active)
+                conn = auth._get_db()
+                row = conn.execute(
+                    'SELECT is_premium, stripe_customer_id, premium_expires '
+                    'FROM users WHERE id = ?',
+                    (user.id,),
+                ).fetchone()
+                conn.close()
+                self.assertEqual(row['is_premium'], 1)
+                self.assertEqual(row['stripe_customer_id'], cus)
+                self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
+
+    def test_invoice_paid_and_payment_succeeded_activate(self):
+        """Both invoice.paid and invoice.payment_succeeded grant premium."""
+        for etype, suffix in (
+            ('invoice.paid', 'paid'),
+            ('invoice.payment_succeeded', 'succeeded'),
+        ):
+            with self.subTest(etype=etype):
+                ts = int((datetime.now() + timedelta(days=31)).timestamp())
+                email = f'inv.{suffix}@example.com'
+                cus = f'cus_inv_{suffix}'
+                sub_id = f'sub_inv_{suffix}'
+                fake_sub = {
+                    'id': sub_id,
+                    'customer': cus,
+                    'status': 'active',
+                    'current_period_end': ts,
+                    'items': {'data': [{'price': {
+                        'id': 'price_monthly_test',
+                        'recurring': {'interval': 'month'},
+                    }}]},
+                }
+
+                class _SubAPI:
+                    @staticmethod
+                    def retrieve(sid):
+                        return fake_sub
+
+                class _CustAPI:
+                    @staticmethod
+                    def retrieve(cid):
+                        return {'id': cid, 'email': email}
+
+                with mock.patch('stripe.Subscription', _SubAPI), \
+                     mock.patch('stripe.Customer', _CustAPI):
+                    resp = self._post_event({
+                        'id': f'evt_inv_{suffix}',
+                        'object': 'event',
+                        'type': etype,
+                        'data': {
+                            'object': {
+                                'id': f'in_{suffix}',
+                                'customer': cus,
+                                'amount_paid': 1999 if suffix == 'succeeded' else 0,
+                                'status': 'paid',
+                                'period_end': ts,
+                                'parent': {
+                                    'subscription_details': {
+                                        'subscription': sub_id,
+                                    }
+                                },
+                                'lines': {'data': [{'pricing': {
+                                    'price_details': {'price': 'price_monthly_test'},
+                                }}]},
+                            }
+                        },
+                    })
+                self.assertEqual(resp.status_code, 200)
+                user = auth._load_user_by_email(email)
+                self.assertIsNotNone(user)
+                self.assertTrue(user.premium_active)
+                self.assertTrue(auth._webhook_event_already_processed(f'evt_inv_{suffix}'))
+
+    def test_zero_dollar_invoice_all_intervals(self):
+        """amount_paid=0 + active sub → premium for weekly/monthly/yearly."""
+        for plan, price_id, interval, days in _PLAN_INTERVALS:
+            with self.subTest(plan=plan):
+                ts = int((datetime.now() + timedelta(days=days)).timestamp())
+                email = f'{plan}.invzero@example.com'
+                cus = f'cus_invz_{plan}'
+                sub_id = f'sub_invz_{plan}'
+                fake_sub = {
+                    'id': sub_id,
+                    'customer': cus,
+                    'status': 'active',
+                    'current_period_end': ts,
+                    'items': {'data': [{'price': {
+                        'id': price_id,
+                        'recurring': {'interval': interval},
+                    }}]},
+                }
+
+                class _SubAPI:
+                    @staticmethod
+                    def retrieve(sid):
+                        return fake_sub
+
+                class _CustAPI:
+                    @staticmethod
+                    def retrieve(cid):
+                        return {'id': cid, 'email': email}
+
+                with mock.patch('stripe.Subscription', _SubAPI), \
+                     mock.patch('stripe.Customer', _CustAPI):
+                    resp = self._post_event({
+                        'id': f'evt_inv_zero_{plan}',
+                        'object': 'event',
+                        'type': 'invoice.paid',
+                        'data': {
+                            'object': {
+                                'id': f'in_zero_{plan}',
+                                'customer': cus,
+                                'amount_paid': 0,
+                                'amount_due': 0,
+                                'status': 'paid',
+                                'period_end': ts,
+                                'parent': {
+                                    'subscription_details': {'subscription': sub_id},
+                                },
+                                'lines': {'data': [{'pricing': {
+                                    'price_details': {'price': price_id},
+                                }}]},
+                            }
+                        },
+                    })
+                self.assertEqual(resp.status_code, 200)
+                user = auth._load_user_by_email(email)
+                self.assertIsNotNone(user)
+                self.assertTrue(user.premium_active)
+
+    def test_unknown_price_active_sub_still_grants_premium(self):
+        """Mismatched/unknown price must not crash; active sub still unlocks premium."""
+        ts = int((datetime.now() + timedelta(days=30)).timestamp())
+        fake_sub = {
+            'id': 'sub_unknown_price',
+            'customer': 'cus_renew_1',
+            'status': 'active',
+            'current_period_end': ts,
+            'items': {'data': [{'price': {
+                'id': 'price_totally_unmapped',
+                'recurring': {'interval': 'month'},
+            }}]},
+        }
+        resp = self._post_event({
+            'id': 'evt_unknown_price',
+            'object': 'event',
+            'type': 'customer.subscription.created',
+            'data': {'object': fake_sub},
+        })
+        self.assertEqual(resp.status_code, 200)
+        conn = auth._get_db()
+        row = conn.execute(
+            'SELECT is_premium, premium_expires FROM users WHERE id = ?',
+            (self.user_id,),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(row['is_premium'], 1)
+        self.assertEqual(row['premium_expires'], auth._iso_from_unix(ts))
+        # Interval inference still yields monthly for expires semantics
+        self.assertEqual(
+            auth._plan_from_checkout_or_subscription({}, fake_sub),
+            'monthly',
+        )
+
+    def test_login_after_monthly_and_yearly_activation(self):
+        """Premium from monthly/yearly webhooks survives logout/login."""
+        from werkzeug.security import generate_password_hash
+
+        for plan, price_id, interval, days in (
+            ('monthly', 'price_monthly_test', 'month', 31),
+            ('yearly', 'price_yearly_test', 'year', 365),
+        ):
+            with self.subTest(plan=plan):
+                email = f'login.{plan}@example.com'
+                conn = auth._get_db()
+                conn.execute(
+                    "INSERT INTO users (email, name, password_hash, is_premium) "
+                    "VALUES (?, ?, ?, 0)",
+                    (email, plan, generate_password_hash('secret99')),
+                )
+                conn.commit()
+                uid = conn.execute(
+                    "SELECT id FROM users WHERE email = ?", (email,)
+                ).fetchone()['id']
+                conn.close()
+
+                ts = int((datetime.now() + timedelta(days=days)).timestamp())
+                fake_sub = {
+                    'id': f'sub_login_{plan}',
+                    'customer': f'cus_login_{plan}',
+                    'status': 'active',
+                    'current_period_end': ts,
+                    'items': {'data': [{'price': {
+                        'id': price_id,
+                        'recurring': {'interval': interval},
+                    }}]},
+                }
+
+                class _SubAPI:
+                    @staticmethod
+                    def retrieve(sid):
+                        return fake_sub
+
+                with mock.patch('stripe.Subscription', _SubAPI):
+                    resp = self._post_event({
+                        'id': f'evt_login_{plan}',
+                        'object': 'event',
+                        'type': 'checkout.session.completed',
+                        'data': {
+                            'object': {
+                                'id': f'cs_login_{plan}',
+                                'customer': f'cus_login_{plan}',
+                                'subscription': f'sub_login_{plan}',
+                                'payment_status': 'paid',
+                                'customer_details': {'email': email},
+                                'metadata': {},
+                            }
+                        },
+                    })
+                self.assertEqual(resp.status_code, 200)
+
+                with self.client.session_transaction() as sess:
+                    sess.clear()
+                login_resp = self.client.post(
+                    '/login',
+                    data={'email': email, 'password': 'secret99'},
+                    follow_redirects=False,
+                )
+                self.assertIn(login_resp.status_code, (302, 303))
+                user = auth._load_user_by_id(uid)
+                self.assertTrue(user.premium_active)
+                self.assertEqual(user.stripe_customer_id, f'cus_login_{plan}')
+
+    def test_grant_premium_helper_used_for_all_plans(self):
+        """Shared helper writes durable premium for each plan slug."""
+        for plan, _price, _interval, days in _PLAN_INTERVALS:
+            with self.subTest(plan=plan):
+                email = f'grant.{plan}@example.com'
+                ok = auth._grant_premium_to_payer(
+                    customer_id=f'cus_grant_{plan}',
+                    email=email,
+                    plan=plan,
+                    subscription_id=f'sub_grant_{plan}',
+                    context='test_grant',
+                )
+                self.assertTrue(ok)
+                user = auth._load_user_by_email(email)
+                self.assertTrue(user.premium_active)
+                before = datetime.now()
+                exp = datetime.fromisoformat(user.premium_expires)
+                self.assertGreater(exp, before + timedelta(days=days - 1))
+                self.assertLess(exp, before + timedelta(days=days + 2))
+
+    def test_unpaid_checkout_marked_processed_not_activation_miss(self):
+        """Unpaid checkout is intentional skip — mark processed (not Resend forever)."""
+        resp = self._post_event({
+            'id': 'evt_unpaid_skip',
+            'object': 'event',
+            'type': 'checkout.session.completed',
+            'data': {
+                'object': {
+                    'id': 'cs_unpaid',
+                    'customer': 'cus_unpaid',
+                    'payment_status': 'unpaid',
+                    'customer_details': {'email': 'unpaid@example.com'},
+                    'metadata': {},
+                }
+            },
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(auth._webhook_event_already_processed('evt_unpaid_skip'))
+        self.assertIsNone(auth._load_user_by_email('unpaid@example.com'))
 
 
 if __name__ == '__main__':
