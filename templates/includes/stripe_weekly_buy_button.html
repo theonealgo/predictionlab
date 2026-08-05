@@ -1,8 +1,11 @@
-{# Weekly plan Stripe Buy Button — drop-in for "Try a Week" CTAs. #}
-<span class="pl-stripe-weekly{% if wrap_class %} {{ wrap_class }}{% endif %}" role="group" aria-label="Try a Week">
-<stripe-buy-button
-  buy-button-id="buy_btn_1U14VxLqTMBLPh0waRbeDmUr"
-  publishable-key="pk_live_51TCgvoLqTMBLPh0wfpT3AtR970GrHNWOSR0Sxjv2bHGbsaTrZM0sVfVnETcTOya8twSwSaMXwZDp26pefns2q6Jj00P4qXouKw"
->
-</stripe-buy-button>
-</span>
+{# Weekly plan CTA — Stripe Payment Link only. #}
+{% set _weekly_href = "https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" %}
+{% if wrap_class == "tv-premium-cta-weekly" %}
+<a href="{{ _weekly_href }}" class="tv-premium-cta tv-premium-cta-weekly">Try a Week</a>
+{% elif wrap_class == "join-premium-btn-weekly" %}
+<a href="{{ _weekly_href }}" class="join-premium-btn join-premium-btn-weekly">Try a Week</a>
+{% elif wrap_class == "nav-cta-weekly" %}
+<a href="{{ _weekly_href }}" class="nav-cta nav-cta-weekly">Try a Week</a>
+{% else %}
+<a href="{{ _weekly_href }}" class="{{ wrap_class or 'pl2-btn' }}">Try a Week — $4.99 →</a>
+{% endif %}

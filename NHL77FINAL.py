@@ -10386,7 +10386,7 @@ BASE_TEMPLATE = """
           {% endif %}
           {% if not is_premium %}
           <div class="tv-premium-cta-row">
-            <a href="/checkout/weekly" class="tv-premium-cta tv-premium-cta-weekly">Try a Week</a>
+            <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="tv-premium-cta tv-premium-cta-weekly">Try a Week</a>
             <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
           </div>
           {% endif %}
@@ -10470,7 +10470,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();c
         <div class="join-premium-inner">
             <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
             <div class="join-premium-actions">
-                <a href="/checkout/weekly" class="join-premium-btn join-premium-btn-weekly">Try a Week</a>
+                <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="join-premium-btn join-premium-btn-weekly">Try a Week</a>
                 <a href="/plans" class="join-premium-btn">Join Premium</a>
                 <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
             </div>
