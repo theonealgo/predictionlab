@@ -1573,6 +1573,25 @@ def checkout(plan):
         return f"Payment error: {e}", 500
 
 
+def _is_real_checkout_session_id(session_id: str | None) -> bool:
+    """True only for a real Stripe Checkout Session id (cs_...).
+
+    Stripe substitutes `{CHECKOUT_SESSION_ID}` in success_url at redirect time.
+    Never call Session.retrieve with the literal placeholder or other junk —
+    that becomes GET /v1/checkout/sessions/%7BCHECKOUT_SESSION_ID%7D and
+    resource_missing in Stripe logs.
+    """
+    if not session_id:
+        return False
+    from urllib.parse import unquote
+
+    sid = unquote(str(session_id)).strip()
+    if not sid or "CHECKOUT_SESSION_ID" in sid:
+        return False
+    # Live/test Checkout Session ids always start with cs_
+    return sid.startswith("cs_") and len(sid) >= 10
+
+
 @auth_bp.route('/checkout/success')
 def checkout_success():
     """Handle successful Stripe checkout.
@@ -1582,8 +1601,12 @@ def checkout_success():
     Guests without a password are sent to /set-password with a one-time token.
     Stripe success_url must keep pointing here with session_id.
     """
-    session_id = request.args.get('session_id')
-    if not session_id:
+    session_id = (request.args.get('session_id') or '').strip()
+    if not _is_real_checkout_session_id(session_id):
+        logger.warning(
+            "[checkout/success] missing/invalid session_id=%r — skipping Stripe retrieve",
+            session_id or None,
+        )
         return redirect('/plans')
 
     if not STRIPE_SECRET_KEY:
