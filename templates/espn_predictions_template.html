@@ -27,6 +27,7 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap"></noscript>
     <link rel="canonical" href="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
+    {% include 'includes/google_ads_tag.html' %}
     {% if ga_tracking_id %}
     <script>
       (function(){

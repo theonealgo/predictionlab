@@ -2945,6 +2945,7 @@ SET_PASSWORD_TEMPLATE = """
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Set Password — predictionlab.io</title>
+{% include 'includes/google_ads_tag.html' %}
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
 <meta name="robots" content="noindex, nofollow">
