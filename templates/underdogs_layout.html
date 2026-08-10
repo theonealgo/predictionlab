@@ -156,10 +156,10 @@
         .acct-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;}
         .acct-btn:hover{border-color:#00529B;background:#f0f7ff;}
         .acct-btn svg{color:#475569;}
-        .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:160px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
+        .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;min-width:200px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
         .acct-menu.open{display:block;}
-        .acct-menu a{display:block;padding:9px 12px;font-size:0.85em;font-weight:600;color:#1e293b;text-decoration:none;border-radius:8px;}
-        .acct-menu a:hover{background:#f1f5f9;color:#00529B;}
+        .acct-menu a,.acct-menu-action{display:block;width:100%;padding:9px 12px;font-size:0.85em;font-weight:600;color:#1e293b;text-decoration:none;border-radius:8px;border:0;background:transparent;text-align:left;cursor:pointer;font-family:inherit;}
+        .acct-menu a:hover,.acct-menu-action:hover{background:#f1f5f9;color:#00529B;}
         .acct-menu-divider{height:1px;background:#f1f5f9;margin:4px 0;}
         /* Search overlay */
         .srch-overlay{display:none;position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);}
@@ -240,6 +240,9 @@
                     <a href="/plans">Join Premium</a>
                     {% endif %}
                     {% if is_logged_in %}
+                    <form method="POST" action="/create-portal-session" style="margin:0;" onclick="event.stopPropagation()">
+                        <button type="submit" class="acct-menu-action">Manage Subscription</button>
+                    </form>
                     <a href="/logout">Sign Out</a>
                     {% else %}
                     <a href="/login">Sign In</a>
@@ -384,7 +387,7 @@ function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var ope
 
 /* ── Account dropdown ── */
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
-document.addEventListener('click',function(){document.getElementById('acctMenu').classList.remove('open');});
+document.addEventListener('click',function(e){var a=document.getElementById('acctMenu');if(a&&!a.contains(e.target)&&!(e.target.closest&&e.target.closest('.acct-btn')))a.classList.remove('open');});
 
 /* ── Search overlay ── */
 var _srchFilter='all';

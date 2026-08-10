@@ -105,8 +105,8 @@ function tvBack(){
   if(title)title.textContent='Menu';
 }
 function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
-function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
-document.addEventListener('click',function(){var a=document.getElementById('acctMenu');if(a)a.classList.remove('open');});
+function toggleAcctMenu(e){e.stopPropagation();var m=document.getElementById('acctMenu');if(m)m.classList.toggle('open');}
+document.addEventListener('click',function(e){var a=document.getElementById('acctMenu');if(a&&!a.contains(e.target)&&!(e.target.closest&&e.target.closest('.acct-btn')))a.classList.remove('open');});
 var _srchFilter='all';
 var _srchDefaults=[
   {l:'Join Premium',h:'/plans',s:'all'},

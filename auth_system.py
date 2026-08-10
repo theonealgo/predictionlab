@@ -29,10 +29,20 @@ Env vars needed:
     STRIPE_PRICE_MONTHLY    - Stripe Price ID for monthly plan (falls back to Payment Link)
     STRIPE_PRICE_YEARLY     - Stripe Price ID for yearly plan (falls back to Payment Link)
     STRIPE_PRICE_WEEKLY     - Stripe Price ID for weekly plan (falls back to Payment Link)
+    STRIPE_PORTAL_RETURN_URL - optional; Customer Portal return URL
+                              (default https://predictionlab.io/; local uses request host)
     SECRET_KEY              - Flask session secret (auto-generated if missing)
+
+    SMTP (welcome + claim + contact — same Gmail/App-Password pattern on Render):
+    SMTP_PASSWORD or CONTACT_SMTP_PASSWORD  - required to send mail
+    SMTP_HOST               - default smtp.gmail.com
+    SMTP_PORT               - default 587
+    SMTP_USER               - default SUPPORT_EMAIL
+    SUPPORT_EMAIL           - From address fallback (default underdogsbetemail@gmail.com)
 """
 
 import os
+import html
 import sqlite3
 import logging
 import secrets
@@ -86,6 +96,9 @@ STRIPE_PRICE_WEEKLY = os.environ.get('STRIPE_PRICE_WEEKLY', '').strip()
 STRIPE_WEEKLY_URL = 'https://buy.stripe.com/14A6oI4Ra66ReWLczTao802'
 STRIPE_MONTHLY_URL = 'https://buy.stripe.com/bJeeVe0AU1QB7uj7fzao801'
 STRIPE_YEARLY_URL = 'https://buy.stripe.com/8x228s83mfHr8yneI1ao803'
+# Customer Portal return URL — production default; override with env if needed.
+STRIPE_PORTAL_RETURN_URL = os.environ.get('STRIPE_PORTAL_RETURN_URL', '').strip()
+DEFAULT_STRIPE_PORTAL_RETURN_URL = 'https://predictionlab.io/'
 VALID_CHECKOUT_PLANS = frozenset({'monthly', 'yearly', 'weekly'})
 SET_PASSWORD_TOKEN_HOURS = 48
 
@@ -164,6 +177,8 @@ def _ensure_users_table():
     for col_sql in (
         'ALTER TABLE users ADD COLUMN session_token TEXT',
         'ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT',
+        'ALTER TABLE users ADD COLUMN welcome_email_sent_at TEXT',
+        'ALTER TABLE users ADD COLUMN welcome_email_subscription_id TEXT',
     ):
         try:
             conn.execute(col_sql)
@@ -186,6 +201,16 @@ def _ensure_users_table():
             event_id TEXT PRIMARY KEY,
             event_type TEXT,
             processed_at TEXT DEFAULT (datetime('now'))
+        )
+    ''')
+    # Premium welcome email: one send per Stripe subscription_id (retries + renewals safe)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS premium_welcome_emails (
+            subscription_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            event_id TEXT,
+            plan TEXT,
+            sent_at TEXT DEFAULT (datetime('now'))
         )
     ''')
     conn.commit()
@@ -814,6 +839,373 @@ def _maybe_send_claim_email(email, raw_token, base_url=None):
     except Exception as e:
         logger.warning(f"[claim] Email send failed (non-fatal): {e}")
         return False
+
+
+# ─── Premium welcome email (first-time subscribe only) ─────────────────────────
+
+_PLAN_DISPLAY_NAMES = {
+    'weekly': 'Weekly',
+    'monthly': 'Monthly',
+    'yearly': 'Yearly',
+}
+
+
+def _plan_display_name(plan):
+    """Human plan label for email copy (Weekly / Monthly / Yearly)."""
+    key = _normalize_plan(plan) if plan else 'monthly'
+    return _PLAN_DISPLAY_NAMES.get(key, 'Premium')
+
+
+def _first_name_for_email(name=None, email=None):
+    """Best-effort first name for greeting; never raises."""
+    try:
+        if name:
+            part = str(name).strip().split()[0]
+            if part and '@' not in part and len(part) < 40:
+                return part
+        if email:
+            local = str(email).split('@')[0].strip()
+            token = local.replace('.', ' ').replace('_', ' ').replace('-', ' ').split()[0]
+            if token and token.isalpha():
+                return token.capitalize()
+    except Exception:
+        pass
+    return 'there'
+
+
+def _smtp_credentials():
+    """Return (host, port, user, password, support) or None if password missing."""
+    smtp_password = (
+        os.environ.get('SMTP_PASSWORD')
+        or os.environ.get('CONTACT_SMTP_PASSWORD')
+        or ''
+    ).strip()
+    if not smtp_password:
+        return None
+    smtp_host = (os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
+    smtp_port = int(os.environ.get('SMTP_PORT') or '587')
+    support = (os.environ.get('SUPPORT_EMAIL') or 'underdogsbetemail@gmail.com').strip()
+    smtp_user = (os.environ.get('SMTP_USER') or support).strip()
+    return smtp_host, smtp_port, smtp_user, smtp_password, support
+
+
+def _welcome_subscription_key(subscription_id=None, event_id=None):
+    """Idempotency key: prefer Stripe subscription id; else event id once."""
+    sub = _stripe_id(subscription_id) if subscription_id else None
+    if sub:
+        return sub
+    evt = _stripe_id(event_id) if event_id else None
+    if evt:
+        return f'evt:{evt}'
+    return None
+
+
+def _claim_welcome_email_slot(subscription_key, user_id, event_id=None, plan=None):
+    """Atomically claim the welcome send for this subscription. True = caller owns send."""
+    if not subscription_key or not user_id:
+        return False
+    try:
+        conn = _get_db()
+        cur = conn.execute(
+            '''INSERT OR IGNORE INTO premium_welcome_emails
+               (subscription_id, user_id, event_id, plan)
+               VALUES (?, ?, ?, ?)''',
+            (subscription_key, user_id, event_id or '', plan or ''),
+        )
+        conn.commit()
+        claimed = (cur.rowcount or 0) > 0
+        conn.close()
+        return claimed
+    except Exception as e:
+        logger.warning("[welcome] claim slot failed (non-fatal): %s", e)
+        return False
+
+
+def _release_welcome_email_slot(subscription_key):
+    """Release claim after send failure so a later initial event can retry."""
+    if not subscription_key:
+        return
+    try:
+        conn = _get_db()
+        conn.execute(
+            'DELETE FROM premium_welcome_emails WHERE subscription_id = ?',
+            (subscription_key,),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("[welcome] release slot failed (non-fatal): %s", e)
+
+
+def _finalize_welcome_email_sent(user_id, subscription_key):
+    """Mirror send onto users.welcome_email_* for ops visibility."""
+    if not user_id or not subscription_key:
+        return
+    sent_at = datetime.now().isoformat()
+    try:
+        conn = _get_db()
+        try:
+            conn.execute(
+                '''UPDATE users SET
+                       welcome_email_sent_at = ?,
+                       welcome_email_subscription_id = ?
+                   WHERE id = ?''',
+                (sent_at, subscription_key, user_id),
+            )
+        except sqlite3.OperationalError:
+            # Columns missing on very old DBs — table row is enough for idempotency
+            pass
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("[welcome] finalize user columns failed (non-fatal): %s", e)
+
+
+def _build_premium_welcome_email_html(*, first_name, plan_label, site_url='https://predictionlab.io'):
+    """Responsive HTML welcome body. No payment / card details."""
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    login_url = f'{site}/login'
+    plans_url = f'{site}/plans'
+    safe_name = first_name or 'there'
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome to PredictionLab Premium</title>
+</head>
+<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e2e8f0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0f172a;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#1e293b;border:1px solid #334155;border-radius:16px;overflow:hidden;">
+        <tr><td style="padding:28px 28px 12px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;letter-spacing:0.3px;color:#fbbf24;">PredictionLab</div>
+          <div style="margin-top:6px;font-size:13px;color:#94a3b8;">AI sports predictions</div>
+        </td></tr>
+        <tr><td style="padding:8px 28px 8px;">
+          <h1 style="margin:0 0 12px;font-size:22px;line-height:1.35;color:#f8fafc;">Welcome to Premium, {safe_name}</h1>
+          <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#cbd5e1;">
+            Your <strong style="color:#fbbf24;">{plan_label}</strong> PredictionLab Premium subscription is active.
+            After you log in, spreads, totals, projected scores, and full model edge unlock across supported sports.
+          </p>
+          <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#cbd5e1;">
+            Open PredictionLab, sign in with the email you used at checkout, and you are ready to go.
+          </p>
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto 18px;">
+            <tr><td style="border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);">
+              <a href="{site}/" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:800;color:#0f172a;text-decoration:none;">
+                Go to PredictionLab.io
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 10px;font-size:14px;line-height:1.55;color:#94a3b8;">
+            <a href="{login_url}" style="color:#93c5fd;font-weight:600;">Log in</a>
+            &nbsp;·&nbsp;
+            <a href="{plans_url}" style="color:#93c5fd;font-weight:600;">Account / subscription (Plans)</a>
+          </p>
+          <p style="margin:16px 0 0;font-size:13px;line-height:1.55;color:#64748b;">
+            You can manage or cancel your subscription anytime from the Plans page on PredictionLab
+            or through the billing email Stripe sends you. No payment details are included in this message.
+          </p>
+        </td></tr>
+        <tr><td style="padding:18px 28px 26px;text-align:center;border-top:1px solid #334155;">
+          <p style="margin:0;font-size:12px;color:#64748b;">
+            PredictionLab · <a href="{site}/" style="color:#94a3b8;text-decoration:none;">{site.replace('https://', '')}</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>'''
+
+
+def _build_premium_welcome_email_text(*, first_name, plan_label, site_url='https://predictionlab.io'):
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    return (
+        f'Welcome to PredictionLab Premium, {first_name or "there"}!\n\n'
+        f'Your {plan_label} Premium subscription is active.\n'
+        f'Log in at {site}/login — Premium unlocks after login.\n'
+        f'Manage or cancel anytime: {site}/plans\n\n'
+        f'Open the site: {site}/\n'
+        f'(This email does not include payment details.)\n'
+    )
+
+
+def _send_premium_welcome_email_smtp(*, to_email, first_name, plan_label):
+    """Send welcome HTML via existing SMTP env. Never raises. Returns True on success."""
+    creds = _smtp_credentials()
+    if not creds:
+        logger.warning("[welcome] failed: SMTP password not configured (non-fatal)")
+        return False
+    smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
+    try:
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        site = 'https://predictionlab.io'
+        text_body = _build_premium_welcome_email_text(
+            first_name=first_name, plan_label=plan_label, site_url=site,
+        )
+        html_body = _build_premium_welcome_email_html(
+            first_name=first_name, plan_label=plan_label, site_url=site,
+        )
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'Welcome to PredictionLab Premium'
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.sendmail(smtp_user, [to_email], msg.as_string())
+        return True
+    except Exception as e:
+        # Do not log credentials or message bodies
+        logger.warning("[welcome] SMTP send failed (non-fatal): %s", e)
+        return False
+
+
+def _maybe_send_premium_welcome_email(
+    *,
+    user_id=None,
+    email=None,
+    name=None,
+    plan=None,
+    subscription_id=None,
+    event_id=None,
+    is_initial_subscribe=True,
+):
+    """Send one Premium welcome per Stripe subscription_id.
+
+    Server-side only; never raises; never blocks Premium activation.
+    Logging outcomes: attempted / sent / skipped already_sent / skipped not_initial /
+    skipped missing / failed.
+    """
+    subscription_key = None
+    try:
+        if not is_initial_subscribe:
+            logger.info(
+                "[welcome] skipped not_initial user_id=%s sub=%s event_id=%s",
+                user_id, subscription_id, event_id,
+            )
+            return False
+
+        email_norm = _normalize_email(email)
+        subscription_key = _welcome_subscription_key(subscription_id, event_id)
+        if not user_id or not email_norm or not subscription_key:
+            logger.info(
+                "[welcome] skipped missing user_id=%s email=%s sub_key=%s event_id=%s",
+                user_id, bool(email_norm), subscription_key, event_id,
+            )
+            return False
+
+        # Fast path: same subscription already welcomed on the user row
+        try:
+            conn = _get_db()
+            row = conn.execute(
+                'SELECT welcome_email_subscription_id FROM users WHERE id = ?',
+                (user_id,),
+            ).fetchone()
+            conn.close()
+            if row is not None:
+                try:
+                    prior = row['welcome_email_subscription_id']
+                except (KeyError, IndexError, TypeError):
+                    prior = None
+                if prior and prior == subscription_key:
+                    logger.info(
+                        "[welcome] skipped already_sent user_id=%s sub=%s",
+                        user_id, subscription_key,
+                    )
+                    return False
+        except sqlite3.OperationalError:
+            pass
+        except Exception as e:
+            logger.warning("[welcome] prior-sent lookup failed (continuing): %s", e)
+
+        plan_key = _normalize_plan(plan)
+        plan_label = _plan_display_name(plan_key)
+        first_name = _first_name_for_email(name, email_norm)
+
+        logger.info(
+            "[welcome] attempted user_id=%s sub=%s plan=%s event_id=%s",
+            user_id, subscription_key, plan_key, event_id,
+        )
+
+        if not _claim_welcome_email_slot(
+            subscription_key, user_id, event_id=event_id, plan=plan_key,
+        ):
+            logger.info(
+                "[welcome] skipped already_sent user_id=%s sub=%s",
+                user_id, subscription_key,
+            )
+            return False
+
+        ok = _send_premium_welcome_email_smtp(
+            to_email=email_norm,
+            first_name=first_name,
+            plan_label=plan_label,
+        )
+        if ok:
+            _finalize_welcome_email_sent(user_id, subscription_key)
+            logger.info(
+                "[welcome] sent user_id=%s sub=%s plan=%s",
+                user_id, subscription_key, plan_key,
+            )
+            return True
+
+        _release_welcome_email_slot(subscription_key)
+        logger.warning(
+            "[welcome] failed user_id=%s sub=%s (premium still active)",
+            user_id, subscription_key,
+        )
+        return False
+    except Exception as e:
+        logger.warning("[welcome] failed unexpected (non-fatal): %s", e)
+        try:
+            if subscription_key:
+                _release_welcome_email_slot(subscription_key)
+        except Exception:
+            pass
+        return False
+
+
+def _welcome_after_premium_grant(
+    *,
+    user_id=None,
+    email=None,
+    name=None,
+    plan=None,
+    subscription_id=None,
+    event_id=None,
+    is_initial_subscribe=True,
+):
+    """Best-effort welcome after premium was already granted. Never raises."""
+    try:
+        if not user_id and email:
+            user = _load_user_by_email(email)
+            if user:
+                user_id = user.id
+                name = name or user.name
+        if user_id and not email:
+            user = _load_user_by_id(user_id)
+            if user:
+                email = user.email
+                name = name or user.name
+        _maybe_send_premium_welcome_email(
+            user_id=user_id,
+            email=email,
+            name=name,
+            plan=plan,
+            subscription_id=subscription_id,
+            event_id=event_id,
+            is_initial_subscribe=is_initial_subscribe,
+        )
+    except Exception as e:
+        logger.warning("[welcome] post-grant hook failed (non-fatal): %s", e)
 
 
 # ─── Stripe Payments ──────────────────────────────────────────────────────────
@@ -1510,6 +1902,167 @@ def _payment_link_for_plan(plan):
     }.get(plan, '')
 
 
+def _portal_return_url():
+    """Return URL after Stripe Customer Portal (cancel / payment methods / invoices).
+
+    Order: STRIPE_PORTAL_RETURN_URL env → local request host → production default
+    ``https://predictionlab.io/``. Never invent customer IDs; this only picks a URL.
+    """
+    explicit = (STRIPE_PORTAL_RETURN_URL or '').strip()
+    if explicit:
+        return explicit
+    try:
+        host = (request.host or '').split(':')[0].lower()
+    except Exception:
+        host = ''
+    local = host in {'localhost', '127.0.0.1'} or host.endswith('.local')
+    if local:
+        try:
+            root = (request.url_root or '').rstrip('/')
+            if root:
+                return root + '/'
+        except Exception:
+            pass
+    return DEFAULT_STRIPE_PORTAL_RETURN_URL
+
+
+def _stripe_customer_id_from_db(user_id):
+    """Load stripe_customer_id from the users table — never from the browser."""
+    if not user_id:
+        return None
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            'SELECT stripe_customer_id FROM users WHERE id = ?',
+            (user_id,),
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None
+        return _stripe_id(row['stripe_customer_id'])
+    except Exception as e:
+        logger.error("[billing/portal] DB lookup failed user_id=%s: %s", user_id, e)
+        return None
+
+
+def _billing_support_email():
+    """Public support address for billing/portal error pages."""
+    return (os.environ.get('SUPPORT_EMAIL') or 'support.predictionlab@gmail.com').strip()
+
+
+def _billing_error_page(title, message, status_code=400):
+    """Always return visible HTML for billing/portal failures (never a blank page)."""
+    safe_title = html.escape(str(title or 'Billing'))
+    safe_msg = html.escape(str(message or 'Something went wrong.'))
+    support = _billing_support_email()
+    safe_mailto = html.escape(support, quote=True)
+    body = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{safe_title} — PredictionLab</title>
+  <style>
+    body {{ margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           background:#f8fafc; color:#0f172a; }}
+    .wrap {{ max-width:560px; margin:12vh auto; padding:24px; }}
+    .card {{ background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+             padding:28px 24px; box-shadow:0 10px 30px rgba(15,23,42,.06); }}
+    h1 {{ margin:0 0 12px; font-size:1.35rem; }}
+    p {{ margin:0 0 18px; line-height:1.55; color:#334155; }}
+    a {{ color:#00529B; font-weight:600; text-decoration:none; }}
+    a:hover {{ text-decoration:underline; }}
+    .actions {{ display:flex; gap:14px; flex-wrap:wrap; }}
+  </style>
+</head>
+<body>
+  <div class="wrap"><div class="card">
+    <h1>{safe_title}</h1>
+    <p>{safe_msg}</p>
+    <div class="actions">
+      <a href="/plans">Back to Plans</a>
+      <a href="/">Home</a>
+      <a href="mailto:{safe_mailto}">Contact support</a>
+    </div>
+  </div></div>
+</body>
+</html>"""
+    return body, status_code, {'Content-Type': 'text/html; charset=utf-8'}
+
+
+@auth_bp.route('/create-portal-session', methods=['POST', 'GET'])
+@auth_bp.route('/billing/portal', methods=['POST', 'GET'])
+@_flask_login_required
+def create_portal_session():
+    """Create a Stripe Billing Portal session and redirect the logged-in user.
+
+    Customer id is always read from the database. Secret key stays server-side.
+    Portal configuration (cancel, payment methods, invoices) is managed in Stripe
+    Dashboard — this only opens a session for the stored customer.
+    """
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login_page', next=request.path))
+
+    customer_id = _stripe_customer_id_from_db(current_user.id)
+    if not customer_id:
+        logger.warning(
+            "[billing/portal] no stripe_customer_id for user_id=%s email=%s",
+            getattr(current_user, 'id', None),
+            getattr(current_user, 'email', None),
+        )
+        support = _billing_support_email()
+        return _billing_error_page(
+            'Manage Subscription unavailable',
+            'No Stripe customer is linked to this account. '
+            'If you subscribe through PredictionLab, contact support at '
+            f'{support} so we can link your billing profile.',
+            400,
+        )
+
+    if not STRIPE_SECRET_KEY:
+        logger.error("[billing/portal] STRIPE_SECRET_KEY missing")
+        return _billing_error_page(
+            'Billing not configured',
+            'Stripe is not configured on this server (missing STRIPE_SECRET_KEY). '
+            'Add the key to the local environment and restart, then try again.',
+            500,
+        )
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    try:
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=_portal_return_url(),
+        )
+        portal_url = _obj_get(portal_session, 'url')
+        if not portal_url:
+            logger.error("[billing/portal] Session.create returned no url")
+            return _billing_error_page(
+                'Could not open billing portal',
+                'Stripe did not return a portal URL. Please try again in a moment.',
+                502,
+            )
+        return redirect(portal_url)
+    except Exception as e:
+        logger.error(
+            "[billing/portal] Session.create failed user_id=%s customer=%s: %s",
+            getattr(current_user, 'id', None),
+            customer_id,
+            e,
+        )
+        support = _billing_support_email()
+        return _billing_error_page(
+            'Could not open billing portal',
+            'Could not open the billing portal. Please try again in a moment, '
+            f'or contact support at {support}. '
+            '(Common local causes: test/live Stripe key mismatch, or Customer '
+            'Portal not enabled in that Stripe mode.)',
+            502,
+        )
+
+
 @auth_bp.route('/checkout/<plan>')
 def checkout(plan):
     """Create Stripe Checkout session.
@@ -1854,10 +2407,11 @@ def _handle_checkout_session_completed(
 
     # Shared grant path — session email / client_reference_id matter for Buy Button
     # and Payment Links (weekly/monthly/yearly) that omit linked stripe_customer_id.
-    return _grant_premium_to_payer(
+    detail_name = _obj_get(details, 'name') if details else None
+    granted = _grant_premium_to_payer(
         customer_id=customer_id,
         email=email,
-        name=_obj_get(details, 'name') if details else None,
+        name=detail_name,
         client_reference_id=client_ref,
         metadata=meta,
         stripe_mod=stripe_mod,
@@ -1870,6 +2424,32 @@ def _handle_checkout_session_completed(
         payment_status=payment_status or 'paid',
         send_claim_email=True,
     )
+    if granted:
+        # Initial checkout only — renewals never emit checkout.session.completed.
+        # Email failure must not affect granted / webhook HTTP status.
+        try:
+            user_id, resolved_email = _resolve_user_for_stripe_payer(
+                customer_id=customer_id,
+                email=email,
+                name=detail_name,
+                client_reference_id=client_ref,
+                metadata=meta,
+                stripe_mod=stripe_mod,
+            )
+            _welcome_after_premium_grant(
+                user_id=user_id,
+                email=resolved_email or email,
+                name=detail_name,
+                plan=plan,
+                subscription_id=subscription_id,
+                event_id=event_id,
+                is_initial_subscribe=True,
+            )
+        except Exception as we:
+            logger.warning(
+                "[welcome] checkout.session.completed hook failed (non-fatal): %s", we
+            )
+    return granted
 
 
 def _handle_invoice_payment_succeeded(
@@ -1891,48 +2471,88 @@ def _handle_invoice_payment_succeeded(
         subscription_id = _subscription_id_from_invoice(invoice)
         period_end = _iso_from_unix(_obj_get(invoice, 'period_end'))
         customer_email = _normalize_email(_obj_get(invoice, 'customer_email'))
+        billing_reason = (_obj_get(invoice, 'billing_reason') or '').strip()
         # amount_paid may be 0 for 100% off — still activate (do not gate on it)
         amount_paid = _obj_get(invoice, 'amount_paid')
         logger.info(
             "[stripe] invoice payment event_id=%s type=%s customer=%s email=%s "
-            "sub=%s amount_paid=%s",
+            "sub=%s amount_paid=%s billing_reason=%s",
             event_id, etype, customer_id, customer_email, subscription_id,
-            amount_paid,
+            amount_paid, billing_reason or None,
+        )
+
+        # Welcome only on the first invoice of a subscription — never renewals.
+        # Missing billing_reason: do not welcome here (checkout.session.completed /
+        # customer.subscription.created cover first-time; empty reason on cycle
+        # invoices must not re-welcome).
+        is_initial_invoice = billing_reason == 'subscription_create'
+
+        applied = False
+        plan = (
+            _plan_from_price_id(_price_id_from_invoice(invoice))
+            or _plan_from_invoice_interval(invoice)
+            or 'monthly'
         )
 
         if subscription_id and stripe_mod is not None:
             try:
                 sub_obj = stripe_mod.Subscription.retrieve(subscription_id)
+                plan = _normalize_plan(
+                    _plan_from_checkout_or_subscription(None, sub_obj) or plan
+                )
                 if _sync_premium_from_subscription(
                     sub_obj, stripe_mod=stripe_mod,
                     event_id=event_id, event_type=etype,
                     fallback_email=customer_email,
                 ):
-                    return True
+                    applied = True
             except Exception as e:
                 logger.error(
                     "[stripe] %s retrieve/sync failed sub=%s event_id=%s: %s",
                     etype, subscription_id, event_id, e,
                 )
 
-        plan = (
-            _plan_from_price_id(_price_id_from_invoice(invoice))
-            or _plan_from_invoice_interval(invoice)
-            or 'monthly'
-        )
-        return _grant_premium_to_payer(
-            customer_id=customer_id,
-            email=customer_email,
-            stripe_mod=stripe_mod,
-            plan=plan,
-            subscription_id=subscription_id,
-            premium_expires=period_end,
-            context=f'{etype}_fallback',
-            event_id=event_id,
-            event_type=etype,
-            payment_status='paid',
-            send_claim_email=False,
-        )
+        if not applied:
+            applied = bool(_grant_premium_to_payer(
+                customer_id=customer_id,
+                email=customer_email,
+                stripe_mod=stripe_mod,
+                plan=plan,
+                subscription_id=subscription_id,
+                premium_expires=period_end,
+                context=f'{etype}_fallback',
+                event_id=event_id,
+                event_type=etype,
+                payment_status='paid',
+                send_claim_email=False,
+            ))
+
+        if applied and is_initial_invoice:
+            try:
+                user_id, resolved_email = _resolve_user_for_stripe_payer(
+                    customer_id=customer_id,
+                    email=customer_email,
+                    stripe_mod=stripe_mod,
+                )
+                _welcome_after_premium_grant(
+                    user_id=user_id,
+                    email=resolved_email or customer_email,
+                    plan=plan,
+                    subscription_id=subscription_id,
+                    event_id=event_id,
+                    is_initial_subscribe=True,
+                )
+            except Exception as we:
+                logger.warning(
+                    "[welcome] %s hook failed (non-fatal): %s", etype, we
+                )
+        elif applied and not is_initial_invoice:
+            logger.info(
+                "[welcome] skipped not_initial invoice billing_reason=%s sub=%s",
+                billing_reason or None, subscription_id,
+            )
+
+        return applied
     except Exception as e:
         logger.exception(
             "[stripe] %s handler error event_id=%s (non-fatal): %s",
@@ -2053,6 +2673,36 @@ def stripe_webhook():
                         event_id=event_id, event_type=etype,
                     )
                 )
+                # Welcome on brand-new subscription only (not updates / renewals).
+                # Idempotent by subscription_id if checkout/invoice already welcomed.
+                if applied and etype == 'customer.subscription.created':
+                    try:
+                        sub_id = _stripe_id(_obj_get(data_obj, 'id'))
+                        cust_id = _stripe_id(_obj_get(data_obj, 'customer'))
+                        plan = _plan_from_checkout_or_subscription(None, data_obj)
+                        user_id, resolved_email = _resolve_user_for_stripe_payer(
+                            customer_id=cust_id,
+                            metadata=_obj_get(data_obj, 'metadata'),
+                            stripe_mod=stripe,
+                        )
+                        _welcome_after_premium_grant(
+                            user_id=user_id,
+                            email=resolved_email,
+                            plan=plan,
+                            subscription_id=sub_id,
+                            event_id=event_id,
+                            is_initial_subscribe=True,
+                        )
+                    except Exception as we:
+                        logger.warning(
+                            "[welcome] subscription.created hook failed (non-fatal): %s",
+                            we,
+                        )
+                elif etype == 'customer.subscription.updated':
+                    logger.info(
+                        "[welcome] skipped not_initial subscription.updated sub=%s",
+                        _stripe_id(_obj_get(data_obj, 'id')),
+                    )
 
             elif etype == 'customer.subscription.deleted':
                 customer_id = _stripe_id(_obj_get(data_obj, 'customer'))

@@ -150,23 +150,31 @@
     position: absolute;
     top: calc(100% + 10px);
     right: 0;
-    min-width: 138px;
+    min-width: 200px;
     padding: 7px;
     border: 1px solid var(--pl-line);
     background: var(--pl-paper);
     box-shadow: 0 14px 34px rgba(11, 11, 10, .14);
 }
 .pl2-account-menu[hidden] { display: none; }
-.pl2-account-menu a {
+.pl2-account-menu a,
+.pl2-account-menu .pl2-account-menu-action {
     display: block;
+    width: 100%;
     padding: 10px 11px;
     color: var(--pl-ink);
     font: 800 .66rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     letter-spacing: .08em;
     text-decoration: none;
     text-transform: uppercase;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
 }
-.pl2-account-menu a:hover { background: var(--pl-neon); }
+.pl2-account-portal-form { margin: 0; }
+.pl2-account-menu a:hover,
+.pl2-account-menu .pl2-account-menu-action:hover { background: var(--pl-neon); }
 .pl2-cta {
     padding: 11px 16px;
     border: 1px solid var(--pl-neon);

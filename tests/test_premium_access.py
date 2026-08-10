@@ -1419,5 +1419,444 @@ class StripeWebhookPremiumTest(unittest.TestCase):
         self.assertIsNone(auth._load_user_by_email('unpaid@example.com'))
 
 
+
+class PremiumWelcomeEmailTest(unittest.TestCase):
+    """Welcome email: first sub only, idempotent on retries, new sub after cancel OK."""
+
+    def setUp(self):
+        self._tmp = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+        self._tmp.close()
+        self.db_path = self._tmp.name
+        self.whsec = 'whsec_test_welcome'
+        self._prev_secret = auth.STRIPE_SECRET_KEY
+        self._prev_wh = auth.STRIPE_WEBHOOK_SECRET
+        self._prev_monthly = auth.STRIPE_PRICE_MONTHLY
+        auth.STRIPE_SECRET_KEY = 'sk_test_welcome'
+        auth.STRIPE_WEBHOOK_SECRET = self.whsec
+        auth.STRIPE_PRICE_MONTHLY = 'price_monthly_test'
+        auth._DB_PATH = self.db_path
+
+        from flask import Flask
+        self.app = Flask(__name__)
+        self.app.config['SECRET_KEY'] = 'test-welcome-secret'
+        self.app.config['TESTING'] = True
+        auth.init_auth(self.app, db_path=self.db_path)
+        self.client = self.app.test_client()
+
+        conn = auth._get_db()
+        conn.execute(
+            "INSERT INTO users (email, name, stripe_customer_id) VALUES (?, ?, ?)",
+            ('welcome@example.com', 'Ada Lovelace', 'cus_welcome_1'),
+        )
+        conn.commit()
+        self.user_id = conn.execute(
+            "SELECT id FROM users WHERE email = ?", ('welcome@example.com',)
+        ).fetchone()['id']
+        conn.close()
+
+    def tearDown(self):
+        auth.STRIPE_SECRET_KEY = self._prev_secret
+        auth.STRIPE_WEBHOOK_SECRET = self._prev_wh
+        auth.STRIPE_PRICE_MONTHLY = self._prev_monthly
+        try:
+            os.unlink(self.db_path)
+        except OSError:
+            pass
+
+    def _post_event(self, event: dict):
+        payload = json.dumps(event).encode('utf-8')
+        sig = _sign_stripe_payload(payload, self.whsec)
+        return self.client.post(
+            '/stripe/webhook',
+            data=payload,
+            headers={
+                'Stripe-Signature': sig,
+                'Content-Type': 'application/json',
+            },
+        )
+
+    def test_helper_idempotent_same_subscription(self):
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=True) as send:
+            ok1 = auth._maybe_send_premium_welcome_email(
+                user_id=self.user_id,
+                email='welcome@example.com',
+                name='Ada Lovelace',
+                plan='monthly',
+                subscription_id='sub_welcome_A',
+                event_id='evt_w1',
+                is_initial_subscribe=True,
+            )
+            ok2 = auth._maybe_send_premium_welcome_email(
+                user_id=self.user_id,
+                email='welcome@example.com',
+                name='Ada Lovelace',
+                plan='monthly',
+                subscription_id='sub_welcome_A',
+                event_id='evt_w1_retry',
+                is_initial_subscribe=True,
+            )
+        self.assertTrue(ok1)
+        self.assertFalse(ok2)
+        self.assertEqual(send.call_count, 1)
+        conn = auth._get_db()
+        row = conn.execute(
+            'SELECT welcome_email_subscription_id FROM users WHERE id = ?',
+            (self.user_id,),
+        ).fetchone()
+        n = conn.execute(
+            'SELECT COUNT(*) AS c FROM premium_welcome_emails WHERE subscription_id = ?',
+            ('sub_welcome_A',),
+        ).fetchone()['c']
+        conn.close()
+        self.assertEqual(row['welcome_email_subscription_id'], 'sub_welcome_A')
+        self.assertEqual(n, 1)
+
+    def test_helper_skips_renewals_flag(self):
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=True) as send:
+            ok = auth._maybe_send_premium_welcome_email(
+                user_id=self.user_id,
+                email='welcome@example.com',
+                plan='monthly',
+                subscription_id='sub_renew_skip',
+                event_id='evt_renew',
+                is_initial_subscribe=False,
+            )
+        self.assertFalse(ok)
+        self.assertEqual(send.call_count, 0)
+
+    def test_new_subscription_after_cancel_gets_new_welcome(self):
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=True) as send:
+            self.assertTrue(auth._maybe_send_premium_welcome_email(
+                user_id=self.user_id,
+                email='welcome@example.com',
+                plan='weekly',
+                subscription_id='sub_old',
+                event_id='evt_old',
+                is_initial_subscribe=True,
+            ))
+            self.assertTrue(auth._maybe_send_premium_welcome_email(
+                user_id=self.user_id,
+                email='welcome@example.com',
+                plan='monthly',
+                subscription_id='sub_new',
+                event_id='evt_new',
+                is_initial_subscribe=True,
+            ))
+        self.assertEqual(send.call_count, 2)
+
+    def test_send_failure_releases_slot_for_retry(self):
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=False):
+            self.assertFalse(auth._maybe_send_premium_welcome_email(
+                user_id=self.user_id,
+                email='welcome@example.com',
+                plan='monthly',
+                subscription_id='sub_fail',
+                event_id='evt_fail1',
+                is_initial_subscribe=True,
+            ))
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=True) as send:
+            self.assertTrue(auth._maybe_send_premium_welcome_email(
+                user_id=self.user_id,
+                email='welcome@example.com',
+                plan='monthly',
+                subscription_id='sub_fail',
+                event_id='evt_fail2',
+                is_initial_subscribe=True,
+            ))
+            self.assertEqual(send.call_count, 1)
+
+    def test_checkout_webhook_sends_once_on_duplicate_replay(self):
+        fake_sub = {
+            'id': 'sub_wh_welcome',
+            'object': 'subscription',
+            'customer': 'cus_welcome_1',
+            'status': 'active',
+            'current_period_end': int((datetime.now() + timedelta(days=30)).timestamp()),
+            'items': {'data': [{'price': {'id': 'price_monthly_test'}}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        event = {
+            'id': 'evt_wh_welcome_1',
+            'object': 'event',
+            'type': 'checkout.session.completed',
+            'data': {
+                'object': {
+                    'id': 'cs_wh_welcome',
+                    'customer': 'cus_welcome_1',
+                    'subscription': 'sub_wh_welcome',
+                    'payment_status': 'paid',
+                    'customer_details': {
+                        'email': 'welcome@example.com',
+                        'name': 'Ada Lovelace',
+                    },
+                    'metadata': {'plan': 'monthly'},
+                }
+            },
+        }
+
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=True) as send:
+            with mock.patch('stripe.Subscription', _SubAPI):
+                r1 = self._post_event(event)
+                # Duplicate Stripe delivery (same event id)
+                r2 = self._post_event(event)
+                # Sibling initial event for same subscription
+                r3 = self._post_event({
+                    **event,
+                    'id': 'evt_wh_welcome_invoice',
+                    'type': 'invoice.payment_succeeded',
+                    'data': {
+                        'object': {
+                            'id': 'in_wh_welcome',
+                            'customer': 'cus_welcome_1',
+                            'customer_email': 'welcome@example.com',
+                            'subscription': 'sub_wh_welcome',
+                            'billing_reason': 'subscription_create',
+                            'amount_paid': 1999,
+                            'period_end': fake_sub['current_period_end'],
+                        }
+                    },
+                })
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r3.status_code, 200)
+        self.assertEqual(send.call_count, 1)
+        user = auth._load_user_by_id(self.user_id)
+        self.assertTrue(user.premium_active)
+
+    def test_renewal_invoice_does_not_welcome(self):
+        auth._activate_premium(
+            self.user_id, plan='monthly',
+            stripe_customer_id='cus_welcome_1',
+            stripe_subscription_id='sub_cycle',
+        )
+        fake_sub = {
+            'id': 'sub_cycle',
+            'object': 'subscription',
+            'customer': 'cus_welcome_1',
+            'status': 'active',
+            'current_period_end': int((datetime.now() + timedelta(days=30)).timestamp()),
+            'items': {'data': [{'price': {'id': 'price_monthly_test'}}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=True) as send:
+            with mock.patch('stripe.Subscription', _SubAPI):
+                resp = self._post_event({
+                    'id': 'evt_cycle_no_welcome',
+                    'object': 'event',
+                    'type': 'invoice.payment_succeeded',
+                    'data': {
+                        'object': {
+                            'id': 'in_cycle',
+                            'customer': 'cus_welcome_1',
+                            'customer_email': 'welcome@example.com',
+                            'subscription': 'sub_cycle',
+                            'billing_reason': 'subscription_cycle',
+                            'amount_paid': 1999,
+                            'period_end': fake_sub['current_period_end'],
+                        }
+                    },
+                })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(send.call_count, 0)
+
+    def test_email_failure_still_returns_200_and_keeps_premium(self):
+        fake_sub = {
+            'id': 'sub_fail_mail',
+            'object': 'subscription',
+            'customer': 'cus_welcome_1',
+            'status': 'active',
+            'current_period_end': int((datetime.now() + timedelta(days=30)).timestamp()),
+            'items': {'data': [{'price': {'id': 'price_monthly_test'}}]},
+        }
+
+        class _SubAPI:
+            @staticmethod
+            def retrieve(sub_id):
+                return fake_sub
+
+        with mock.patch.object(auth, '_send_premium_welcome_email_smtp', return_value=False):
+            with mock.patch('stripe.Subscription', _SubAPI):
+                resp = self._post_event({
+                    'id': 'evt_fail_mail',
+                    'object': 'event',
+                    'type': 'checkout.session.completed',
+                    'data': {
+                        'object': {
+                            'id': 'cs_fail_mail',
+                            'customer': 'cus_welcome_1',
+                            'subscription': 'sub_fail_mail',
+                            'payment_status': 'paid',
+                            'customer_details': {'email': 'welcome@example.com'},
+                            'metadata': {},
+                        }
+                    },
+                })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(auth._load_user_by_id(self.user_id).premium_active)
+
+    def test_html_contains_branding_and_no_card_numbers(self):
+        html = auth._build_premium_welcome_email_html(
+            first_name='Ada', plan_label='Monthly',
+        )
+        self.assertIn('PredictionLab', html)
+        self.assertIn('Monthly', html)
+        self.assertIn('predictionlab.io', html)
+        self.assertIn('/plans', html)
+        self.assertIn('/login', html)
+        self.assertIn('manage or cancel', html.lower())
+        # No PAN-like digit runs / card brand leakage
+        self.assertNotRegex(html, r'\b\d{12,19}\b')
+        self.assertNotIn('visa', html.lower())
+        self.assertNotIn('mastercard', html.lower())
+
+
+class StripeCustomerPortalTest(unittest.TestCase):
+    """Billing portal session: auth + DB customer id + mocked Stripe redirect."""
+
+    def setUp(self):
+        self._tmp = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+        self._tmp.close()
+        self.db_path = self._tmp.name
+        self._prev_secret = auth.STRIPE_SECRET_KEY
+        self._prev_return = auth.STRIPE_PORTAL_RETURN_URL
+        auth.STRIPE_SECRET_KEY = 'sk_test_portal'
+        auth.STRIPE_PORTAL_RETURN_URL = ''
+        auth._DB_PATH = self.db_path
+
+        from flask import Flask
+        from werkzeug.security import generate_password_hash
+
+        self.app = Flask(__name__)
+        self.app.config['SECRET_KEY'] = 'test-portal-secret'
+        self.app.config['TESTING'] = True
+        auth.init_auth(self.app, db_path=self.db_path)
+        self.client = self.app.test_client()
+
+        conn = auth._get_db()
+        conn.execute(
+            "INSERT INTO users (email, name, password_hash, is_premium, stripe_customer_id) "
+            "VALUES (?, ?, ?, 1, ?)",
+            (
+                'portal@example.com',
+                'Portal User',
+                generate_password_hash('portal-pass-123'),
+                'cus_portal_abc',
+            ),
+        )
+        conn.execute(
+            "INSERT INTO users (email, name, password_hash, is_premium) "
+            "VALUES (?, ?, ?, 1)",
+            (
+                'nocustomer@example.com',
+                'No Customer',
+                generate_password_hash('portal-pass-123'),
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        auth.STRIPE_SECRET_KEY = self._prev_secret
+        auth.STRIPE_PORTAL_RETURN_URL = self._prev_return
+        try:
+            os.unlink(self.db_path)
+        except OSError:
+            pass
+
+    def _login(self, email='portal@example.com'):
+        resp = self.client.post(
+            '/login',
+            data={'email': email, 'password': 'portal-pass-123'},
+            follow_redirects=False,
+        )
+        self.assertIn(resp.status_code, (302, 303))
+
+    def test_portal_routes_registered(self):
+        rules = {str(r) for r in self.app.url_map.iter_rules()}
+        self.assertIn('/create-portal-session', rules)
+        self.assertIn('/billing/portal', rules)
+
+    def test_unauthenticated_redirects_to_login(self):
+        resp = self.client.post('/create-portal-session', follow_redirects=False)
+        self.assertIn(resp.status_code, (302, 303, 401))
+        loc = resp.headers.get('Location', '')
+        self.assertTrue('/login' in loc or resp.status_code == 401)
+
+    def test_missing_customer_id_clear_error(self):
+        self._login('nocustomer@example.com')
+        resp = self.client.post('/create-portal-session', follow_redirects=False)
+        self.assertEqual(resp.status_code, 400)
+        body = resp.get_data(as_text=True).lower()
+        self.assertIn('no stripe customer', body)
+        self.assertNotIn('sk_test', body)
+
+    def test_portal_session_redirects_with_db_customer(self):
+        self._login('portal@example.com')
+        created = {}
+
+        class _PortalAPI:
+            @staticmethod
+            def create(**kwargs):
+                # Customer must come from server/DB — never invent or accept browser ids.
+                created.update(kwargs)
+                return {'url': 'https://billing.stripe.com/p/session/test_portal'}
+
+        with mock.patch('stripe.billing_portal.Session', _PortalAPI):
+            resp = self.client.post('/create-portal-session', follow_redirects=False)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(
+            resp.headers.get('Location'),
+            'https://billing.stripe.com/p/session/test_portal',
+        )
+        self.assertEqual(created.get('customer'), 'cus_portal_abc')
+        # test_client host is localhost → helper may use request host; always a URL.
+        self.assertTrue(str(created.get('return_url') or '').startswith('http'))
+        self.assertNotIn('sk_test', resp.get_data(as_text=True))
+
+    def test_billing_portal_alias_same_behavior(self):
+        self._login('portal@example.com')
+
+        class _PortalAPI:
+            @staticmethod
+            def create(**kwargs):
+                return type('S', (), {'url': 'https://billing.stripe.com/p/session/alias'})()
+
+        with mock.patch('stripe.billing_portal.Session', _PortalAPI):
+            resp = self.client.get('/billing/portal', follow_redirects=False)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('billing.stripe.com', resp.headers.get('Location', ''))
+
+    def test_portal_return_url_env_override(self):
+        auth.STRIPE_PORTAL_RETURN_URL = 'https://predictionlab.io/plans'
+        with self.app.test_request_context('/'):
+            self.assertEqual(auth._portal_return_url(), 'https://predictionlab.io/plans')
+
+    def test_portal_return_url_local_uses_request_host(self):
+        auth.STRIPE_PORTAL_RETURN_URL = ''
+        with self.app.test_request_context('http://127.0.0.1:5050/'):
+            self.assertEqual(auth._portal_return_url(), 'http://127.0.0.1:5050/')
+
+    def test_portal_return_url_production_default(self):
+        auth.STRIPE_PORTAL_RETURN_URL = ''
+        with self.app.test_request_context(
+            '/',
+            base_url='https://predictionlab.io/',
+        ):
+            self.assertEqual(
+                auth._portal_return_url(),
+                auth.DEFAULT_STRIPE_PORTAL_RETURN_URL,
+            )
+
+
 if __name__ == '__main__':
     unittest.main()

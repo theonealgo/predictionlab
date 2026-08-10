@@ -61,6 +61,9 @@
             </button>
             <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
                 {% if is_logged_in|default(false) %}
+                <form class="pl2-account-portal-form" method="POST" action="/create-portal-session" onclick="event.stopPropagation()">
+                    <button type="submit" class="pl2-account-menu-action">Manage Subscription</button>
+                </form>
                 <a href="/logout">Sign Out</a>
                 {% else %}
                 <a href="/login">Login</a>
