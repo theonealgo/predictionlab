@@ -33,7 +33,7 @@ Env vars needed:
                               (default https://predictionlab.io/; local uses request host)
     SECRET_KEY              - Flask session secret (auto-generated if missing)
 
-    SMTP (welcome + claim + contact — same Gmail/App-Password pattern on Render):
+    SMTP (welcome + claim + forgot-password + contact — same Gmail/App-Password pattern):
     SMTP_PASSWORD or CONTACT_SMTP_PASSWORD  - required to send mail
     SMTP_HOST               - default smtp.gmail.com
     SMTP_PORT               - default 587
@@ -101,6 +101,11 @@ STRIPE_PORTAL_RETURN_URL = os.environ.get('STRIPE_PORTAL_RETURN_URL', '').strip(
 DEFAULT_STRIPE_PORTAL_RETURN_URL = 'https://predictionlab.io/'
 VALID_CHECKOUT_PLANS = frozenset({'monthly', 'yearly', 'weekly'})
 SET_PASSWORD_TOKEN_HOURS = 48
+PASSWORD_RESET_TOKEN_HOURS = 1  # forgot-password links: short-lived, single-use
+# Soft rate limits for /forgot-password (SQLite-backed; no Flask-Limiter in project)
+FORGOT_PASSWORD_MAX_PER_EMAIL = 5
+FORGOT_PASSWORD_MAX_PER_IP = 20
+FORGOT_PASSWORD_WINDOW_SECONDS = 3600
 
 # Admin emails get automatic premium — no payment needed
 ADMIN_EMAILS = {
@@ -211,6 +216,14 @@ def _ensure_users_table():
             event_id TEXT,
             plan TEXT,
             sent_at TEXT DEFAULT (datetime('now'))
+        )
+    ''')
+    # Auth rate limits (forgot-password etc.)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS auth_rate_limits (
+            bucket TEXT PRIMARY KEY,
+            count INTEGER NOT NULL DEFAULT 0,
+            window_start TEXT NOT NULL
         )
     ''')
     conn.commit()
@@ -555,6 +568,9 @@ def login_submit():
     conn.close()
 
     if not row or not row['password_hash']:
+        # Google-only accounts: never issue set-password / claim links from login
+        if user.google_id:
+            return redirect(url_for('auth.login_page', error='invalid'))
         # Guest checkout: premium may be active but no password yet — re-issue claim link
         try:
             claim_token = _ensure_claim_token_for_user(user.id, force_new=True)
@@ -788,13 +804,34 @@ def _has_unused_set_password_token(user_id):
         return False
 
 
+def _user_is_google_only(user_id):
+    """True if user signed up via Google and has no local password_hash."""
+    if not user_id:
+        return False
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            'SELECT google_id, password_hash FROM users WHERE id = ?', (user_id,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return False
+        return bool(row['google_id']) and not bool(row['password_hash'])
+    except Exception as e:
+        logger.error(f"_user_is_google_only failed: {e}")
+        return False
+
+
 def _ensure_claim_token_for_user(user_id, force_new=False):
     """If user has no password, issue a claim token; else return None.
 
     When force_new is False and an unused token already exists, return None
     (raw token cannot be recovered — used by webhook to avoid clobbering).
+    Google-only accounts never get claim tokens (must use Google Sign-In).
     """
     if _user_has_password(user_id):
+        return None
+    if _user_is_google_only(user_id):
         return None
     if not force_new and _has_unused_set_password_token(user_id):
         return None
@@ -839,6 +876,178 @@ def _maybe_send_claim_email(email, raw_token, base_url=None):
     except Exception as e:
         logger.warning(f"[claim] Email send failed (non-fatal): {e}")
         return False
+
+
+def _auth_rate_limit_allow(bucket, max_count, window_seconds):
+    """Return True if the action is allowed under a sliding fixed window.
+
+    Uses SQLite so limits work across Gunicorn workers sharing the same DB file.
+    Never raises — on DB errors, allow the request (email still gated elsewhere).
+    """
+    if not bucket or max_count <= 0 or window_seconds <= 0:
+        return True
+    try:
+        now = datetime.now()
+        conn = _get_db()
+        row = conn.execute(
+            'SELECT count, window_start FROM auth_rate_limits WHERE bucket = ?',
+            (bucket,),
+        ).fetchone()
+        if not row:
+            conn.execute(
+                'INSERT INTO auth_rate_limits (bucket, count, window_start) VALUES (?, 1, ?)',
+                (bucket, now.isoformat()),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        try:
+            started = datetime.fromisoformat(row['window_start'])
+        except Exception:
+            started = now
+        if (now - started).total_seconds() >= window_seconds:
+            conn.execute(
+                'UPDATE auth_rate_limits SET count = 1, window_start = ? WHERE bucket = ?',
+                (now.isoformat(), bucket),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        if int(row['count'] or 0) >= max_count:
+            conn.close()
+            return False
+        conn.execute(
+            'UPDATE auth_rate_limits SET count = count + 1 WHERE bucket = ?',
+            (bucket,),
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.warning("[auth] rate limit check failed (allowing): %s", e)
+        return True
+
+
+def _send_password_reset_email(email, raw_token, base_url=None):
+    """Send forgot-password reset link. Never logs the raw token. Returns bool."""
+    if not email or not raw_token:
+        return False
+    creds = _smtp_credentials()
+    if not creds:
+        logger.warning("[reset] SMTP password not configured — cannot send reset email")
+        return False
+    smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        root = (base_url or '').rstrip('/') or 'https://predictionlab.io'
+        link = f'{root}/reset-password?token={raw_token}'
+        body = (
+            f'We received a request to reset the password for {email}.\n\n'
+            f'Reset your password (link expires in {PASSWORD_RESET_TOKEN_HOURS} hour'
+            f'{"s" if PASSWORD_RESET_TOKEN_HOURS != 1 else ""}):\n{link}\n\n'
+            f'This link can be used once. If you did not request a reset, you can ignore this email.\n'
+        )
+        msg = MIMEText(body)
+        msg['Subject'] = 'Reset your Prediction Lab password'
+        msg['From'] = smtp_user
+        msg['To'] = email
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.sendmail(smtp_user, [email], msg.as_string())
+        logger.info("[reset] Sent password-reset email to %s", email)
+        return True
+    except Exception as e:
+        logger.warning("[reset] Email send failed (non-fatal): %s", e)
+        return False
+
+
+def _send_google_only_signin_email(email, base_url=None):
+    """Tell Google-only users to use Google Sign-In (no password created)."""
+    if not email:
+        return False
+    creds = _smtp_credentials()
+    if not creds:
+        return False
+    smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        root = (base_url or '').rstrip('/') or 'https://predictionlab.io'
+        body = (
+            f'We received a password reset request for {email}.\n\n'
+            f'This account uses Google Sign-In, so there is no password to reset.\n'
+            f'Go to {root}/login and click “Continue with Google”.\n\n'
+            f'If you did not request this, you can ignore this email.\n'
+        )
+        msg = MIMEText(body)
+        msg['Subject'] = 'Sign in to Prediction Lab with Google'
+        msg['From'] = smtp_user
+        msg['To'] = email
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.sendmail(smtp_user, [email], msg.as_string())
+        logger.info("[reset] Sent Google-only sign-in email to %s", email)
+        return True
+    except Exception as e:
+        logger.warning("[reset] Google-only email failed (non-fatal): %s", e)
+        return False
+
+
+def _process_forgot_password_request(email, client_ip=None, base_url=None):
+    """Handle forgot-password side effects. Always returns a generic success dict.
+
+    Never reveals whether the email exists. Does not create passwords for Google-only users.
+    """
+    result = {
+        'ok': True,
+        'message': (
+            'If an account exists for that email, we have sent password reset instructions. '
+            'Check your inbox and spam folder.'
+        ),
+        'rate_limited': False,
+    }
+    email_norm = (email or '').strip().lower()
+    if not email_norm or '@' not in email_norm:
+        result['ok'] = False
+        result['message'] = 'Please enter a valid email address.'
+        return result
+
+    ip = (client_ip or 'unknown').strip() or 'unknown'
+    if not _auth_rate_limit_allow(
+        f'forgot_ip:{ip}', FORGOT_PASSWORD_MAX_PER_IP, FORGOT_PASSWORD_WINDOW_SECONDS
+    ):
+        result['rate_limited'] = True
+        result['message'] = 'Too many reset requests. Please try again later.'
+        return result
+    if not _auth_rate_limit_allow(
+        f'forgot_email:{email_norm}',
+        FORGOT_PASSWORD_MAX_PER_EMAIL,
+        FORGOT_PASSWORD_WINDOW_SECONDS,
+    ):
+        result['rate_limited'] = True
+        result['message'] = 'Too many reset requests. Please try again later.'
+        return result
+
+    user = _load_user_by_email(email_norm)
+    if not user:
+        return result
+
+    if _user_is_google_only(user.id):
+        _send_google_only_signin_email(email_norm, base_url=base_url)
+        return result
+
+    # Password account (or guest with no password yet): issue short-lived reset token
+    raw = _issue_set_password_token(user.id, ttl_hours=PASSWORD_RESET_TOKEN_HOURS)
+    if raw:
+        _send_password_reset_email(email_norm, raw, base_url=base_url)
+        logger.info(
+            "[reset] Issued password-reset token user_id=%s email=%s",
+            user.id, email_norm,
+        )
+    return result
 
 
 # ─── Premium welcome email (first-time subscribe only) ─────────────────────────
@@ -2267,6 +2476,10 @@ def set_password_page():
         user_id = current_user.id
         email = current_user.email
 
+    # Google-only accounts must use Google Sign-In — never set a local password here
+    if user_id and _user_is_google_only(user_id):
+        user_id, email = None, None
+
     can_set = bool(user_id)
 
     if request.method == 'GET':
@@ -2325,6 +2538,119 @@ def set_password_page():
         email=email or '',
         error_msg=error_msg,
         premium_active=can_set,
+    )
+
+
+# ─── Forgot password / reset password ─────────────────────────────────────────
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password_page():
+    """Request a password-reset email. Always shows a generic success message."""
+    error_msg = ''
+    success_msg = ''
+    email_value = ''
+
+    if request.method == 'POST':
+        email_value = request.form.get('email', '').strip().lower()
+        xff = (request.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+        outcome = _process_forgot_password_request(
+            email_value,
+            client_ip=xff or (request.remote_addr or ''),
+            base_url=request.url_root.rstrip('/'),
+        )
+        if not outcome.get('ok'):
+            error_msg = outcome.get('message') or 'Please enter a valid email address.'
+        elif outcome.get('rate_limited'):
+            error_msg = outcome.get('message') or 'Too many reset requests. Please try again later.'
+        else:
+            success_msg = outcome.get('message') or (
+                'If an account exists for that email, we have sent password reset instructions.'
+            )
+
+    return render_template(
+        'forgot_password.html',
+        error_msg=error_msg,
+        success_msg=success_msg,
+        email_value=email_value,
+        page='forgot_password',
+    )
+
+
+@auth_bp.route('/reset-password', methods=['GET', 'POST'])
+def reset_password_page():
+    """Validate a one-time reset token and set a new password. Does not auto-login."""
+    token = (request.values.get('token') or '').strip()
+    error_msg = ''
+    success_msg = ''
+    user_id, email = _lookup_set_password_token(token) if token else (None, None)
+    token_valid = bool(user_id)
+
+    # Google-only: never allow password creation via reset even if a stale token exists
+    if token_valid and _user_is_google_only(user_id):
+        token_valid = False
+        user_id, email = None, None
+
+    if request.method == 'GET':
+        if not token_valid:
+            error_msg = (
+                'This reset link is invalid or has expired. '
+                'You can request a new one from the forgot password page.'
+            )
+        return render_template(
+            'reset_password.html',
+            error_msg=error_msg,
+            success_msg=success_msg,
+            token=token,
+            token_valid=token_valid,
+            email=email or '',
+            page='reset_password',
+        )
+
+    # POST
+    password = request.form.get('password', '')
+    confirm = request.form.get('confirm', '')
+    if not token_valid:
+        error_msg = 'This reset link is invalid or has expired.'
+    elif not password or len(password) < 6:
+        error_msg = 'Password must be at least 6 characters.'
+    elif password != confirm:
+        error_msg = 'Passwords do not match.'
+    else:
+        # Re-check token immediately before consume (single-use / expiry race)
+        check_uid, _ = _lookup_set_password_token(token)
+        if not check_uid or check_uid != user_id:
+            error_msg = 'This reset link is invalid or has expired.'
+            token_valid = False
+        else:
+            user = _consume_set_password_token(token, password)
+            if user:
+                # Success: invalidate any other unused tokens for this user
+                try:
+                    conn = _get_db()
+                    conn.execute(
+                        "UPDATE password_reset_tokens SET used_at = datetime('now') "
+                        "WHERE user_id = ? AND used_at IS NULL",
+                        (user.id,),
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception as e:
+                    logger.warning("[reset] leftover token invalidate failed: %s", e)
+                logger.info("[reset] Password updated user_id=%s", user.id)
+                success_msg = 'Your password has been reset. You can log in with your new password.'
+                token_valid = False  # hide form
+            else:
+                error_msg = 'Could not reset password. The link may have already been used.'
+                token_valid = False
+
+    return render_template(
+        'reset_password.html',
+        error_msg=error_msg,
+        success_msg=success_msg,
+        token=token,
+        token_valid=token_valid and not success_msg,
+        email=email or '',
+        page='reset_password',
     )
 
 
