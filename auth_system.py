@@ -37,8 +37,11 @@ Env vars needed:
     SMTP_PASSWORD or CONTACT_SMTP_PASSWORD  - required to send mail
     SMTP_HOST               - default smtp.gmail.com
     SMTP_PORT               - default 587
-    SMTP_USER               - default SUPPORT_EMAIL
-    SUPPORT_EMAIL           - From address fallback (default underdogsbetemail@gmail.com)
+    SMTP_USER               - Gmail login user; MUST match the App Password account
+                              (default: SUPPORT_EMAIL → support.predictionlab@gmail.com).
+                              Must match contact form / render.yaml — do NOT leave this as
+                              a different mailbox than SMTP_PASSWORD.
+    SUPPORT_EMAIL           - From address fallback (default support.predictionlab@gmail.com)
 """
 
 import os
@@ -842,40 +845,22 @@ def _maybe_send_claim_email(email, raw_token, base_url=None):
     """Best-effort claim email via SMTP. Never raises; success page works without it."""
     if not email or not raw_token:
         return False
-    smtp_password = (
-        os.environ.get('SMTP_PASSWORD')
-        or os.environ.get('CONTACT_SMTP_PASSWORD')
-        or ''
-    ).strip()
-    if not smtp_password:
-        return False
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        smtp_host = (os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
-        smtp_port = int(os.environ.get('SMTP_PORT') or '587')
-        support = (os.environ.get('SUPPORT_EMAIL') or 'underdogsbetemail@gmail.com').strip()
-        smtp_user = (os.environ.get('SMTP_USER') or support).strip()
-        root = (base_url or '').rstrip('/') or 'https://predictionlab.io'
-        link = f'{root}/set-password?token={raw_token}'
-        body = (
-            f'Your Prediction Lab Premium access is active for {email}.\n\n'
-            f'Set your password so you can log in anytime:\n{link}\n\n'
-            f'This link expires in {SET_PASSWORD_TOKEN_HOURS} hours.\n'
-        )
-        msg = MIMEText(body)
-        msg['Subject'] = 'Set your Prediction Lab password'
-        msg['From'] = smtp_user
-        msg['To'] = email
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            smtp.sendmail(smtp_user, [email], msg.as_string())
-        logger.info(f"[claim] Sent set-password email to {email}")
-        return True
-    except Exception as e:
-        logger.warning(f"[claim] Email send failed (non-fatal): {e}")
-        return False
+    root = _public_site_base_url(base_url)
+    link = f'{root}/set-password?token={raw_token}'
+    body = (
+        f'Your Prediction Lab Premium access is active for {email}.\n\n'
+        f'Set your password so you can log in anytime:\n{link}\n\n'
+        f'This link expires in {SET_PASSWORD_TOKEN_HOURS} hours.\n'
+    )
+    ok, msg_id = _smtp_send_text_email(
+        to_email=email,
+        subject='Set your Prediction Lab password',
+        body=body,
+        purpose='claim',
+    )
+    if ok:
+        logger.info("[claim] Sent set-password email to %s message_id=%s", email, msg_id)
+    return ok
 
 
 def _auth_rate_limit_allow(bucket, max_count, window_seconds):
@@ -932,68 +917,51 @@ def _send_password_reset_email(email, raw_token, base_url=None):
     """Send forgot-password reset link. Never logs the raw token. Returns bool."""
     if not email or not raw_token:
         return False
-    creds = _smtp_credentials()
-    if not creds:
-        logger.warning("[reset] SMTP password not configured — cannot send reset email")
-        return False
-    smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        root = (base_url or '').rstrip('/') or 'https://predictionlab.io'
-        link = f'{root}/reset-password?token={raw_token}'
-        body = (
-            f'We received a request to reset the password for {email}.\n\n'
-            f'Reset your password (link expires in {PASSWORD_RESET_TOKEN_HOURS} hour'
-            f'{"s" if PASSWORD_RESET_TOKEN_HOURS != 1 else ""}):\n{link}\n\n'
-            f'This link can be used once. If you did not request a reset, you can ignore this email.\n'
+    root = _public_site_base_url(base_url)
+    link = f'{root}/reset-password?token={raw_token}'
+    body = (
+        f'We received a request to reset the password for {email}.\n\n'
+        f'Reset your password (link expires in {PASSWORD_RESET_TOKEN_HOURS} hour'
+        f'{"s" if PASSWORD_RESET_TOKEN_HOURS != 1 else ""}):\n{link}\n\n'
+        f'This link can be used once. If you did not request a reset, you can ignore this email.\n'
+    )
+    ok, msg_id = _smtp_send_text_email(
+        to_email=email,
+        subject='Reset your Prediction Lab password',
+        body=body,
+        purpose='reset',
+    )
+    if ok:
+        logger.info(
+            "[reset] SMTP accepted password-reset email to %s message_id=%s",
+            email, msg_id,
         )
-        msg = MIMEText(body)
-        msg['Subject'] = 'Reset your Prediction Lab password'
-        msg['From'] = smtp_user
-        msg['To'] = email
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            smtp.sendmail(smtp_user, [email], msg.as_string())
-        logger.info("[reset] Sent password-reset email to %s", email)
-        return True
-    except Exception as e:
-        logger.warning("[reset] Email send failed (non-fatal): %s", e)
-        return False
+    return ok
 
 
 def _send_google_only_signin_email(email, base_url=None):
     """Tell Google-only users to use Google Sign-In (no password created)."""
     if not email:
         return False
-    creds = _smtp_credentials()
-    if not creds:
-        return False
-    smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        root = (base_url or '').rstrip('/') or 'https://predictionlab.io'
-        body = (
-            f'We received a password reset request for {email}.\n\n'
-            f'This account uses Google Sign-In, so there is no password to reset.\n'
-            f'Go to {root}/login and click “Continue with Google”.\n\n'
-            f'If you did not request this, you can ignore this email.\n'
+    root = _public_site_base_url(base_url)
+    body = (
+        f'We received a password reset request for {email}.\n\n'
+        f'This account uses Google Sign-In, so there is no password to reset.\n'
+        f'Go to {root}/login and click "Continue with Google".\n\n'
+        f'If you did not request this, you can ignore this email.\n'
+    )
+    ok, msg_id = _smtp_send_text_email(
+        to_email=email,
+        subject='Sign in to Prediction Lab with Google',
+        body=body,
+        purpose='google_only',
+    )
+    if ok:
+        logger.info(
+            "[reset] Sent Google-only sign-in email to %s message_id=%s",
+            email, msg_id,
         )
-        msg = MIMEText(body)
-        msg['Subject'] = 'Sign in to Prediction Lab with Google'
-        msg['From'] = smtp_user
-        msg['To'] = email
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            smtp.sendmail(smtp_user, [email], msg.as_string())
-        logger.info("[reset] Sent Google-only sign-in email to %s", email)
-        return True
-    except Exception as e:
-        logger.warning("[reset] Google-only email failed (non-fatal): %s", e)
-        return False
+    return ok
 
 
 def _process_forgot_password_request(email, client_ip=None, base_url=None):
@@ -1036,17 +1004,34 @@ def _process_forgot_password_request(email, client_ip=None, base_url=None):
         return result
 
     if _user_is_google_only(user.id):
-        _send_google_only_signin_email(email_norm, base_url=base_url)
+        sent = _send_google_only_signin_email(email_norm, base_url=base_url)
+        if sent:
+            logger.info(
+                "[reset] Google-only guidance emailed user_id=%s email=%s",
+                user.id, email_norm,
+            )
+        else:
+            logger.warning(
+                "[reset] Google-only guidance SMTP send failed user_id=%s email=%s",
+                user.id, email_norm,
+            )
         return result
 
     # Password account (or guest with no password yet): issue short-lived reset token
     raw = _issue_set_password_token(user.id, ttl_hours=PASSWORD_RESET_TOKEN_HOURS)
     if raw:
-        _send_password_reset_email(email_norm, raw, base_url=base_url)
-        logger.info(
-            "[reset] Issued password-reset token user_id=%s email=%s",
-            user.id, email_norm,
-        )
+        sent = _send_password_reset_email(email_norm, raw, base_url=base_url)
+        if sent:
+            logger.info(
+                "[reset] Issued+sent password-reset token user_id=%s email=%s",
+                user.id, email_norm,
+            )
+        else:
+            logger.warning(
+                "[reset] Issued password-reset token but SMTP send failed "
+                "user_id=%s email=%s",
+                user.id, email_norm,
+            )
     return result
 
 
@@ -1082,8 +1067,35 @@ def _first_name_for_email(name=None, email=None):
     return 'there'
 
 
+# Must match NHL77FINAL contact form + render.yaml (Gmail App Password account).
+_DEFAULT_SUPPORT_EMAIL = 'support.predictionlab@gmail.com'
+
+
+def _public_site_base_url(base_url=None):
+    """Canonical https site root for email links (never log tokens with this)."""
+    raw = (base_url or '').strip().rstrip('/')
+    if not raw:
+        return 'https://predictionlab.io'
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(raw if '://' in raw else f'https://{raw}')
+        host = (parsed.hostname or '').lower()
+    except Exception:
+        host = ''
+    if host in ('predictionlab.io', 'www.predictionlab.io', 'underdogs.bet', 'www.underdogs.bet') or host.endswith('.onrender.com'):
+        return 'https://predictionlab.io'
+    if raw.startswith('http://') or raw.startswith('https://'):
+        return raw
+    return f'https://{raw.lstrip("/")}'
+
+
 def _smtp_credentials():
-    """Return (host, port, user, password, support) or None if password missing."""
+    """Return (host, port, user, password, support) or None if password missing.
+
+    SMTP_USER must be the Gmail account that owns SMTP_PASSWORD / CONTACT_SMTP_PASSWORD.
+    Login user matches the contact form: SMTP_USER or support.predictionlab@gmail.com
+    (NOT legacy underdogsbetemail, and NOT SUPPORT_EMAIL — that env is display/billing only).
+    """
     smtp_password = (
         os.environ.get('SMTP_PASSWORD')
         or os.environ.get('CONTACT_SMTP_PASSWORD')
@@ -1093,9 +1105,71 @@ def _smtp_credentials():
         return None
     smtp_host = (os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
     smtp_port = int(os.environ.get('SMTP_PORT') or '587')
-    support = (os.environ.get('SUPPORT_EMAIL') or 'underdogsbetemail@gmail.com').strip()
-    smtp_user = (os.environ.get('SMTP_USER') or support).strip()
+    # Same resolution as NHL77FINAL._send_contact_form_email
+    smtp_user = (os.environ.get('SMTP_USER') or _DEFAULT_SUPPORT_EMAIL).strip()
+    if 'underdogsbetemail' in smtp_user.lower():
+        logger.warning(
+            "[smtp] SMTP_USER=%s looks like the legacy mailbox; contact/reset App Password "
+            "is for %s — update SMTP_USER on Render or sends will fail",
+            smtp_user, _DEFAULT_SUPPORT_EMAIL,
+        )
+    support = (
+        os.environ.get('SUPPORT_EMAIL')
+        or os.environ.get('CONTACT_TO_EMAIL')
+        or _DEFAULT_SUPPORT_EMAIL
+    ).strip()
     return smtp_host, smtp_port, smtp_user, smtp_password, support
+
+
+def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
+    """Send a plain-text email via SMTP. Returns (ok, message_id).
+
+    Logs message_id on success and smtp_user/error on failure. Never logs passwords or tokens.
+    """
+    if not to_email or not subject:
+        return False, None
+    creds = _smtp_credentials()
+    if not creds:
+        logger.warning(
+            "[%s] SMTP password not configured — set SMTP_PASSWORD (or CONTACT_SMTP_PASSWORD) "
+            "and SMTP_USER=%s on Render",
+            purpose, _DEFAULT_SUPPORT_EMAIL,
+        )
+        return False, None
+    smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
+    try:
+        import smtplib
+        import uuid
+        from email.message import EmailMessage
+        domain = smtp_user.split('@')[-1] if '@' in smtp_user else 'predictionlab.io'
+        msg_id = f"<{purpose}.{uuid.uuid4().hex}@{domain}>"
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg['Message-ID'] = msg_id
+        msg.set_content(body or '')
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            refused = smtp.send_message(msg)
+        if refused:
+            logger.warning(
+                "[%s] SMTP refused recipients to=%s from=%s message_id=%s refused=%s",
+                purpose, to_email, smtp_user, msg_id, list(refused.keys()),
+            )
+            return False, msg_id
+        logger.info(
+            "[%s] SMTP accepted to=%s from=%s host=%s message_id=%s",
+            purpose, to_email, smtp_user, smtp_host, msg_id,
+        )
+        return True, msg_id
+    except Exception as e:
+        logger.warning(
+            "[%s] SMTP send failed (non-fatal) to=%s from=%s host=%s error=%s",
+            purpose, to_email, smtp_user, smtp_host, e,
+        )
+        return False, None
 
 
 def _welcome_subscription_key(subscription_id=None, event_id=None):
