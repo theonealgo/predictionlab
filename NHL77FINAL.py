@@ -7659,11 +7659,29 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 if soccer_pred is None:
                     soccer_bundle = _get_soccer_model_bundle(completed_games, soccer_league)
                     if soccer_bundle and getattr(soccer_bundle, 'ready', False):
-                        soccer_pred = soccer_bundle.predict(
-                            game.get('home_team_id') or game.get('home_team_name'),
-                            game.get('away_team_id') or game.get('away_team_name'),
-                            league=soccer_league,
-                        )
+                        _home = game.get('home_team_id') or game.get('home_team_name')
+                        _away = game.get('away_team_id') or game.get('away_team_name')
+                        try:
+                            # league= is accepted by current soccer_models; older
+                            # bundles may not — never let that blank the slate.
+                            soccer_pred = soccer_bundle.predict(
+                                _home, _away, league=soccer_league,
+                            )
+                        except TypeError:
+                            try:
+                                soccer_pred = soccer_bundle.predict(_home, _away)
+                            except Exception as _sp_e:
+                                logger.warning(
+                                    "[SOCCER] predict failed for %s vs %s: %s",
+                                    _home, _away, _sp_e,
+                                )
+                                soccer_pred = None
+                        except Exception as _sp_e:
+                            logger.warning(
+                                "[SOCCER] predict failed for %s vs %s: %s",
+                                _home, _away, _sp_e,
+                            )
+                            soccer_pred = None
                     elif soccer_bundle:
                         soccer_note = soccer_bundle.reason
                     else:
@@ -16662,9 +16680,10 @@ def sport_predictions(sport, filter_date=None):
             _page_usable = (
                 cached_ts is not None
                 and cached_html
-                and 'game-card' in cached_html
+                and 'class="game-card' in cached_html
                 and 'no predictions available' not in cached_html.lower()
                 and 'refreshing this page right now' not in cached_html.lower()
+                and 'upstream data/model dependency failed' not in cached_html.lower()
             )
             if _page_usable and _page_age is not None and _page_age < cache_ttl:
                 return cached_html
@@ -17715,7 +17734,19 @@ def sport_results(sport):
                             logger.debug(f"[soccer-frozen] results lookup skipped: {_fz_e}")
                             soccer_pred = None
                         if soccer_pred is None and soccer_bundle and getattr(soccer_bundle, 'ready', False):
-                            soccer_pred = soccer_bundle.predict(home_team, away_team, league=league_name)
+                            try:
+                                soccer_pred = soccer_bundle.predict(
+                                    home_team, away_team, league=league_name,
+                                )
+                            except TypeError:
+                                try:
+                                    soccer_pred = soccer_bundle.predict(home_team, away_team)
+                                except Exception as _sp_e:
+                                    logger.debug(f"[SOCCER] results predict failed: {_sp_e}")
+                                    soccer_pred = None
+                            except Exception as _sp_e:
+                                logger.debug(f"[SOCCER] results predict failed: {_sp_e}")
+                                soccer_pred = None
                         elif soccer_pred is None and soccer_bundle:
                             model_note = soccer_bundle.reason
 
