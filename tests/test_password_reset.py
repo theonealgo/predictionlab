@@ -151,6 +151,85 @@ class PasswordResetTests(unittest.TestCase):
         conn.close()
         self.assertEqual(n, 0)
 
+
+    # 6b. Google-only must call shared SMTP with Google Sign-In guidance (no reset token)
+    def test_forgot_google_only_uses_smtp_guidance(self):
+        with mock.patch.object(
+            auth, '_smtp_send_text_email', return_value=(True, '<google_only.test@gmail.com>')
+        ) as smtp_send:
+            resp = self.client.post(
+                '/forgot-password',
+                data={'email': 'googleonly@example.com'},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('If an account exists', resp.get_data(as_text=True))
+        smtp_send.assert_called_once()
+        kwargs = smtp_send.call_args.kwargs
+        self.assertEqual(kwargs.get('purpose'), 'google_only')
+        self.assertIn('Google', kwargs.get('subject', ''))
+        self.assertIn('Google Sign-In', kwargs.get('body', ''))
+        self.assertIn('Continue with Google', kwargs.get('body', ''))
+        self.assertNotIn('/reset-password?token=', kwargs.get('body', ''))
+        conn = auth._get_db()
+        n = conn.execute(
+            'SELECT COUNT(*) AS c FROM password_reset_tokens WHERE user_id = ?',
+            (self.google_uid,),
+        ).fetchone()['c']
+        conn.close()
+        self.assertEqual(n, 0)
+
+    # 6c. Google + local password → normal reset link email (not Google-only guidance)
+    def test_forgot_google_plus_password_sends_reset(self):
+        conn = auth._get_db()
+        conn.execute(
+            'INSERT INTO users (email, name, google_id, password_hash) VALUES (?, ?, ?, ?)',
+            (
+                'both@example.com',
+                'Both',
+                'google-sub-both',
+                generate_password_hash('haspass1'),
+            ),
+        )
+        conn.commit()
+        uid = conn.execute(
+            "SELECT id FROM users WHERE email='both@example.com'"
+        ).fetchone()[0]
+        conn.close()
+        with mock.patch.object(
+            auth, '_smtp_send_text_email', return_value=(True, '<reset.test@gmail.com>')
+        ) as smtp_send:
+            resp = self.client.post(
+                '/forgot-password',
+                data={'email': 'both@example.com'},
+            )
+        self.assertEqual(resp.status_code, 200)
+        smtp_send.assert_called_once()
+        kwargs = smtp_send.call_args.kwargs
+        self.assertEqual(kwargs.get('purpose'), 'reset')
+        self.assertIn('/reset-password?token=', kwargs.get('body', ''))
+        self.assertNotIn('Google Sign-In', kwargs.get('body', ''))
+        conn = auth._get_db()
+        n = conn.execute(
+            'SELECT COUNT(*) AS c FROM password_reset_tokens WHERE user_id = ?',
+            (uid,),
+        ).fetchone()['c']
+        conn.close()
+        self.assertEqual(n, 1)
+
+    # 6d. Legacy SMTP_USER underdogs is overridden to support mailbox
+    def test_smtp_credentials_override_legacy_user(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                'SMTP_PASSWORD': 'x' * 16,
+                'SMTP_USER': 'underdogsbetemail@gmail.com',
+            },
+            clear=False,
+        ):
+            creds = auth._smtp_credentials()
+        self.assertIsNotNone(creds)
+        self.assertEqual(creds[2], 'support.predictionlab@gmail.com')
+
     # 7. Reset with valid token updates password; single-use
     def test_reset_valid_token_sets_password_once(self):
         raw = auth._issue_set_password_token(self.pw_uid, ttl_hours=1)

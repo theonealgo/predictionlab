@@ -940,8 +940,13 @@ def _send_password_reset_email(email, raw_token, base_url=None):
 
 
 def _send_google_only_signin_email(email, base_url=None):
-    """Tell Google-only users to use Google Sign-In (no password created)."""
+    """Tell Google-only users to use Google Sign-In (no password created).
+
+    Always attempts SMTP (same path as password-reset mail). Never creates a
+    local password or reset token. Logs accept/fail with message_id.
+    """
     if not email:
+        logger.warning("[google_only] skip send — empty email")
         return False
     root = _public_site_base_url(base_url)
     body = (
@@ -958,7 +963,12 @@ def _send_google_only_signin_email(email, base_url=None):
     )
     if ok:
         logger.info(
-            "[reset] Sent Google-only sign-in email to %s message_id=%s",
+            "[reset] SMTP accepted Google-only guidance email to %s message_id=%s",
+            email, msg_id,
+        )
+    else:
+        logger.warning(
+            "[reset] SMTP failed Google-only guidance email to %s message_id=%s",
             email, msg_id,
         )
     return ok
@@ -1003,7 +1013,9 @@ def _process_forgot_password_request(email, client_ip=None, base_url=None):
     if not user:
         return result
 
-    if _user_is_google_only(user.id):
+    # Google-only (has google_id, no local password): MUST send guidance email.
+    # Never skip silently — UI stays generic regardless of SMTP outcome.
+    if _user_is_google_only(user.id) or (bool(user.google_id) and not _user_has_password(user.id)):
         sent = _send_google_only_signin_email(email_norm, base_url=base_url)
         if sent:
             logger.info(
@@ -1012,7 +1024,8 @@ def _process_forgot_password_request(email, client_ip=None, base_url=None):
             )
         else:
             logger.warning(
-                "[reset] Google-only guidance SMTP send failed user_id=%s email=%s",
+                "[reset] Google-only guidance SMTP send failed user_id=%s email=%s "
+                "(check [google_only] SMTP logs for message_id)",
                 user.id, email_norm,
             )
         return result
@@ -1095,6 +1108,9 @@ def _smtp_credentials():
     SMTP_USER must be the Gmail account that owns SMTP_PASSWORD / CONTACT_SMTP_PASSWORD.
     Login user matches the contact form: SMTP_USER or support.predictionlab@gmail.com
     (NOT legacy underdogsbetemail, and NOT SUPPORT_EMAIL — that env is display/billing only).
+
+    Legacy underdogsbetemail is force-overridden to support.predictionlab so forgot-password /
+    Google-only guidance mail cannot silently fail behind a generic success page.
     """
     smtp_password = (
         os.environ.get('SMTP_PASSWORD')
@@ -1105,14 +1121,14 @@ def _smtp_credentials():
         return None
     smtp_host = (os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
     smtp_port = int(os.environ.get('SMTP_PORT') or '587')
-    # Same resolution as NHL77FINAL._send_contact_form_email
     smtp_user = (os.environ.get('SMTP_USER') or _DEFAULT_SUPPORT_EMAIL).strip()
-    if 'underdogsbetemail' in smtp_user.lower():
-        logger.warning(
-            "[smtp] SMTP_USER=%s looks like the legacy mailbox; contact/reset App Password "
-            "is for %s — update SMTP_USER on Render or sends will fail",
-            smtp_user, _DEFAULT_SUPPORT_EMAIL,
-        )
+    if not smtp_user or 'underdogsbetemail' in smtp_user.lower():
+        if smtp_user and 'underdogsbetemail' in smtp_user.lower():
+            logger.warning(
+                "[smtp] Overriding legacy SMTP_USER=%s → %s (App Password mailbox)",
+                smtp_user, _DEFAULT_SUPPORT_EMAIL,
+            )
+        smtp_user = _DEFAULT_SUPPORT_EMAIL
     support = (
         os.environ.get('SUPPORT_EMAIL')
         or os.environ.get('CONTACT_TO_EMAIL')
@@ -1124,7 +1140,8 @@ def _smtp_credentials():
 def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
     """Send a plain-text email via SMTP. Returns (ok, message_id).
 
-    Logs message_id on success and smtp_user/error on failure. Never logs passwords or tokens.
+    Logs message_id on accept and on fail. Never logs passwords or tokens.
+    If the configured SMTP_USER fails auth, retries once as support.predictionlab.
     """
     if not to_email or not subject:
         return False, None
@@ -1137,39 +1154,63 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
         )
         return False, None
     smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
-    try:
-        import smtplib
-        import uuid
-        from email.message import EmailMessage
-        domain = smtp_user.split('@')[-1] if '@' in smtp_user else 'predictionlab.io'
-        msg_id = f"<{purpose}.{uuid.uuid4().hex}@{domain}>"
-        msg = EmailMessage()
-        msg['Subject'] = subject
-        msg['From'] = smtp_user
-        msg['To'] = to_email
-        msg['Message-ID'] = msg_id
-        msg.set_content(body or '')
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            refused = smtp.send_message(msg)
-        if refused:
-            logger.warning(
-                "[%s] SMTP refused recipients to=%s from=%s message_id=%s refused=%s",
-                purpose, to_email, smtp_user, msg_id, list(refused.keys()),
+    import smtplib
+    import uuid
+    from email.message import EmailMessage
+
+    users_to_try = [smtp_user]
+    if smtp_user.lower() != _DEFAULT_SUPPORT_EMAIL.lower():
+        users_to_try.append(_DEFAULT_SUPPORT_EMAIL)
+
+    domain = (smtp_user.split('@')[-1] if '@' in smtp_user else 'predictionlab.io')
+    msg_id = f"<{purpose}.{uuid.uuid4().hex}@{domain}>"
+    last_error = None
+
+    for attempt_user in users_to_try:
+        try:
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = attempt_user
+            msg['To'] = to_email
+            msg['Message-ID'] = msg_id
+            msg.set_content(body or '')
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+                smtp.starttls()
+                smtp.login(attempt_user, smtp_password)
+                refused = smtp.send_message(msg)
+            if refused:
+                logger.warning(
+                    "[%s] SMTP refused recipients to=%s from=%s message_id=%s refused=%s",
+                    purpose, to_email, attempt_user, msg_id, list(refused.keys()),
+                )
+                last_error = f"refused:{list(refused.keys())}"
+                continue
+            logger.info(
+                "[%s] SMTP accepted to=%s from=%s host=%s message_id=%s",
+                purpose, to_email, attempt_user, smtp_host, msg_id,
             )
-            return False, msg_id
-        logger.info(
-            "[%s] SMTP accepted to=%s from=%s host=%s message_id=%s",
-            purpose, to_email, smtp_user, smtp_host, msg_id,
-        )
-        return True, msg_id
-    except Exception as e:
-        logger.warning(
-            "[%s] SMTP send failed (non-fatal) to=%s from=%s host=%s error=%s",
-            purpose, to_email, smtp_user, smtp_host, e,
-        )
-        return False, None
+            return True, msg_id
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                "[%s] SMTP send failed (non-fatal) to=%s from=%s host=%s "
+                "message_id=%s error=%s",
+                purpose, to_email, attempt_user, smtp_host, msg_id, e,
+            )
+            # Only retry on likely auth/mailbox mismatch
+            err_l = str(e).lower()
+            if attempt_user.lower() == _DEFAULT_SUPPORT_EMAIL.lower():
+                break
+            if not any(tok in err_l for tok in (
+                'auth', 'username', 'password', 'credentials', '535', '534', '530'
+            )):
+                break
+
+    logger.warning(
+        "[%s] SMTP give up to=%s message_id=%s last_error=%s",
+        purpose, to_email, msg_id, last_error,
+    )
+    return False, msg_id
 
 
 def _welcome_subscription_key(subscription_id=None, event_id=None):
