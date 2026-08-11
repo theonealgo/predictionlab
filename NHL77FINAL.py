@@ -15712,18 +15712,11 @@ _CONTACT_TOPIC_LABELS = {
 
 
 def _send_contact_form_email(name, reply_to, topic, message):
-    """Deliver contact form to SUPPORT_EMAIL via SMTP (configure SMTP_PASSWORD on Render)."""
-    import smtplib
-    from email.message import EmailMessage
+    """Deliver contact form to SUPPORT_EMAIL via the shared auth SMTP path.
 
-    smtp_password = (_os.environ.get('SMTP_PASSWORD') or _os.environ.get('CONTACT_SMTP_PASSWORD') or '').strip()
-    if not smtp_password:
-        logger.warning('[contact] SMTP_PASSWORD not set — contact form cannot send mail')
-        return False, 'Email is not configured yet. Please try again later or DM us on X @predictionlab_io.'
-
-    smtp_host = (_os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
-    smtp_port = int(_os.environ.get('SMTP_PORT') or '587')
-    smtp_user = (_os.environ.get('SMTP_USER') or SUPPORT_EMAIL).strip()
+    Uses the same Gmail App Password env vars as forgot-password
+    (SMTP_PASSWORD / CONTACT_SMTP_PASSWORD, SMTP_USER → support.predictionlab).
+    """
     to_addr = (_os.environ.get('CONTACT_TO_EMAIL') or SUPPORT_EMAIL).strip()
     topic_label = _CONTACT_TOPIC_LABELS.get(topic, topic or 'General')
     subject = f'[predictionlab.io] {topic_label} — {name}'
@@ -15734,21 +15727,28 @@ def _send_contact_form_email(name, reply_to, topic, message):
         f'Topic: {topic_label}\n\n'
         f'{message}\n'
     )
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = smtp_user
-    msg['To'] = to_addr
-    msg['Reply-To'] = reply_to
-    msg.set_content(body)
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            smtp.send_message(msg)
-        return True, None
+        from auth_system import _smtp_credentials, _smtp_send_text_email
     except Exception as exc:
-        logger.error(f'[contact] send failed: {exc}', exc_info=True)
+        logger.error('[contact] auth_system SMTP import failed: %s', exc)
         return False, 'We could not send your message right now. Please try again in a few minutes.'
+
+    if not _smtp_credentials():
+        logger.warning('[contact] SMTP_PASSWORD not set — contact form cannot send mail')
+        return False, 'Email is not configured yet. Please try again later or DM us on X @predictionlab_io.'
+
+    ok, msg_id = _smtp_send_text_email(
+        to_email=to_addr,
+        subject=subject,
+        body=body,
+        purpose='contact',
+        reply_to=reply_to,
+    )
+    if ok:
+        logger.info('[contact] SMTP accepted message_id=%s', msg_id)
+        return True, None
+    logger.error('[contact] SMTP send failed message_id=%s', msg_id)
+    return False, 'We could not send your message right now. Please try again in a few minutes.'
 
 
 def _validate_contact_submission():

@@ -341,6 +341,51 @@ class PasswordResetTests(unittest.TestCase):
         resp = self.client.post('/forgot-password', data={'email': 'not-an-email'})
         self.assertIn('valid email', resp.get_data(as_text=True).lower())
 
+    # 14. Masked emails + no raw tokens in forgot-password logs
+    def test_forgot_logs_mask_email_no_raw_token(self):
+        self.assertEqual(auth._mask_email('pwuser@example.com'), 'p***@example.com')
+        self.assertEqual(auth._mask_email(''), '(none)')
+        with mock.patch.object(
+            auth, '_smtp_send_text_email', return_value=(True, '<reset.test@id>')
+        ):
+            with self.assertLogs(auth.logger, level='INFO') as cm:
+                self.client.post(
+                    '/forgot-password',
+                    data={'email': 'pwuser@example.com'},
+                )
+        joined = '\n'.join(cm.output)
+        self.assertIn('forgot-password request received', joined)
+        self.assertIn('account lookup ok', joined)
+        self.assertIn('token generated', joined)
+        self.assertIn('p***@example.com', joined)
+        self.assertNotIn('pwuser@example.com', joined)
+        self.assertNotIn('/reset-password?token=', joined)
+        # Confirm the stored raw token value is not present in any log line
+        conn = auth._get_db()
+        row = conn.execute(
+            'SELECT token_hash FROM password_reset_tokens WHERE user_id = ? '
+            'ORDER BY id DESC LIMIT 1',
+            (self.pw_uid,),
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(row)
+        # Hash itself is fine to appear only if we logged it (we don't); ensure absent
+        self.assertNotIn(row['token_hash'], joined)
+
+    # 15. Reset link host is production domain (not localhost) for public hosts
+    def test_reset_email_uses_production_base_url(self):
+        with mock.patch.object(
+            auth, '_smtp_send_text_email', return_value=(True, '<id>')
+        ) as smtp_send:
+            auth._send_password_reset_email(
+                'pwuser@example.com',
+                'tok_example_only_for_test',
+                base_url='https://predictionlab.io/',
+            )
+        body = smtp_send.call_args.kwargs.get('body', '')
+        self.assertIn('https://predictionlab.io/reset-password?token=', body)
+        self.assertNotIn('localhost', body)
+
 
 if __name__ == '__main__':
     unittest.main()

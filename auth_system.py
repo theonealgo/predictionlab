@@ -918,6 +918,7 @@ def _send_password_reset_email(email, raw_token, base_url=None):
     if not email or not raw_token:
         return False
     root = _public_site_base_url(base_url)
+    # Production / known public hosts always get https://predictionlab.io links.
     link = f'{root}/reset-password?token={raw_token}'
     body = (
         f'We received a request to reset the password for {email}.\n\n'
@@ -934,7 +935,12 @@ def _send_password_reset_email(email, raw_token, base_url=None):
     if ok:
         logger.info(
             "[reset] SMTP accepted password-reset email to %s message_id=%s",
-            email, msg_id,
+            _mask_email(email), msg_id,
+        )
+    else:
+        logger.warning(
+            "[reset] SMTP failed password-reset email to %s message_id=%s",
+            _mask_email(email), msg_id,
         )
     return ok
 
@@ -964,12 +970,12 @@ def _send_google_only_signin_email(email, base_url=None):
     if ok:
         logger.info(
             "[reset] SMTP accepted Google-only guidance email to %s message_id=%s",
-            email, msg_id,
+            _mask_email(email), msg_id,
         )
     else:
         logger.warning(
             "[reset] SMTP failed Google-only guidance email to %s message_id=%s",
-            email, msg_id,
+            _mask_email(email), msg_id,
         )
     return ok
 
@@ -978,6 +984,7 @@ def _process_forgot_password_request(email, client_ip=None, base_url=None):
     """Handle forgot-password side effects. Always returns a generic success dict.
 
     Never reveals whether the email exists. Does not create passwords for Google-only users.
+    Logs use masked emails only — never raw reset tokens or passwords.
     """
     result = {
         'ok': True,
@@ -988,9 +995,12 @@ def _process_forgot_password_request(email, client_ip=None, base_url=None):
         'rate_limited': False,
     }
     email_norm = (email or '').strip().lower()
+    masked = _mask_email(email_norm)
+    logger.info("[reset] forgot-password request received email=%s", masked)
     if not email_norm or '@' not in email_norm:
         result['ok'] = False
         result['message'] = 'Please enter a valid email address.'
+        logger.info("[reset] forgot-password rejected invalid email email=%s", masked)
         return result
 
     ip = (client_ip or 'unknown').strip() or 'unknown'
@@ -999,6 +1009,7 @@ def _process_forgot_password_request(email, client_ip=None, base_url=None):
     ):
         result['rate_limited'] = True
         result['message'] = 'Too many reset requests. Please try again later.'
+        logger.warning("[reset] forgot-password rate-limited (ip) email=%s", masked)
         return result
     if not _auth_rate_limit_allow(
         f'forgot_email:{email_norm}',
@@ -1007,44 +1018,86 @@ def _process_forgot_password_request(email, client_ip=None, base_url=None):
     ):
         result['rate_limited'] = True
         result['message'] = 'Too many reset requests. Please try again later.'
+        logger.warning("[reset] forgot-password rate-limited (email) email=%s", masked)
         return result
 
     user = _load_user_by_email(email_norm)
     if not user:
+        # No enumeration in UI; log lookup miss for ops only.
+        logger.info("[reset] account lookup miss email=%s (generic UI response)", masked)
+        logger.info("[reset] forgot-password completed email=%s outcome=unknown_or_missing", masked)
         return result
+
+    logger.info(
+        "[reset] account lookup ok user_id=%s email=%s google_only=%s has_password=%s",
+        user.id,
+        masked,
+        bool(user.google_id) and not _user_has_password(user.id),
+        _user_has_password(user.id),
+    )
 
     # Google-only (has google_id, no local password): MUST send guidance email.
     # Never skip silently — UI stays generic regardless of SMTP outcome.
     if _user_is_google_only(user.id) or (bool(user.google_id) and not _user_has_password(user.id)):
+        logger.info(
+            "[reset] email attempt start purpose=google_only user_id=%s email=%s",
+            user.id, masked,
+        )
         sent = _send_google_only_signin_email(email_norm, base_url=base_url)
         if sent:
             logger.info(
                 "[reset] Google-only guidance emailed user_id=%s email=%s",
-                user.id, email_norm,
+                user.id, masked,
             )
         else:
             logger.warning(
                 "[reset] Google-only guidance SMTP send failed user_id=%s email=%s "
-                "(check [google_only] SMTP logs for message_id)",
-                user.id, email_norm,
+                "(check [google_only] SMTP logs for message_id / error class)",
+                user.id, masked,
             )
+        logger.info(
+            "[reset] forgot-password completed email=%s outcome=google_only sent=%s",
+            masked, sent,
+        )
         return result
 
     # Password account (or guest with no password yet): issue short-lived reset token
     raw = _issue_set_password_token(user.id, ttl_hours=PASSWORD_RESET_TOKEN_HOURS)
-    if raw:
-        sent = _send_password_reset_email(email_norm, raw, base_url=base_url)
-        if sent:
-            logger.info(
-                "[reset] Issued+sent password-reset token user_id=%s email=%s",
-                user.id, email_norm,
-            )
-        else:
-            logger.warning(
-                "[reset] Issued password-reset token but SMTP send failed "
-                "user_id=%s email=%s",
-                user.id, email_norm,
-            )
+    if not raw:
+        logger.error(
+            "[reset] token generation failed user_id=%s email=%s (no raw token logged)",
+            user.id, masked,
+        )
+        logger.info(
+            "[reset] forgot-password completed email=%s outcome=token_issue_failed",
+            masked,
+        )
+        return result
+
+    logger.info(
+        "[reset] token generated user_id=%s email=%s ttl_hours=%s (hash stored; raw not logged)",
+        user.id, masked, PASSWORD_RESET_TOKEN_HOURS,
+    )
+    logger.info(
+        "[reset] email attempt start purpose=reset user_id=%s email=%s",
+        user.id, masked,
+    )
+    sent = _send_password_reset_email(email_norm, raw, base_url=base_url)
+    if sent:
+        logger.info(
+            "[reset] Issued+sent password-reset token user_id=%s email=%s",
+            user.id, masked,
+        )
+    else:
+        logger.warning(
+            "[reset] Issued password-reset token but SMTP send failed "
+            "user_id=%s email=%s",
+            user.id, masked,
+        )
+    logger.info(
+        "[reset] forgot-password completed email=%s outcome=reset sent=%s",
+        masked, sent,
+    )
     return result
 
 
@@ -1082,6 +1135,21 @@ def _first_name_for_email(name=None, email=None):
 
 # Must match NHL77FINAL contact form + render.yaml (Gmail App Password account).
 _DEFAULT_SUPPORT_EMAIL = 'support.predictionlab@gmail.com'
+
+
+def _mask_email(email):
+    """Mask an email for logs (no full address). Never raises."""
+    try:
+        e = (email or '').strip().lower()
+        if not e or '@' not in e:
+            return '(none)'
+        local, _, domain = e.partition('@')
+        if not local:
+            return f'*@{domain}'
+        keep = local[0]
+        return f'{keep}***@{domain}'
+    except Exception:
+        return '(masked)'
 
 
 def _public_site_base_url(base_url=None):
@@ -1137,14 +1205,16 @@ def _smtp_credentials():
     return smtp_host, smtp_port, smtp_user, smtp_password, support
 
 
-def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
+def _smtp_send_text_email(*, to_email, subject, body, purpose='mail', reply_to=None):
     """Send a plain-text email via SMTP. Returns (ok, message_id).
 
     Logs message_id on accept and on fail. Never logs passwords or tokens.
     If the configured SMTP_USER fails auth, retries once as support.predictionlab.
+    Optional reply_to is used by the contact form (same Gmail path).
     """
     if not to_email or not subject:
         return False, None
+    masked_to = _mask_email(to_email)
     creds = _smtp_credentials()
     if not creds:
         logger.warning(
@@ -1154,6 +1224,10 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
         )
         return False, None
     smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
+    logger.info(
+        "[%s] SMTP attempt start to=%s from=%s host=%s port=%s",
+        purpose, masked_to, smtp_user, smtp_host, smtp_port,
+    )
     import smtplib
     import uuid
     from email.message import EmailMessage
@@ -1165,6 +1239,7 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
     domain = (smtp_user.split('@')[-1] if '@' in smtp_user else 'predictionlab.io')
     msg_id = f"<{purpose}.{uuid.uuid4().hex}@{domain}>"
     last_error = None
+    last_error_class = None
 
     for attempt_user in users_to_try:
         try:
@@ -1173,6 +1248,8 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
             msg['From'] = attempt_user
             msg['To'] = to_email
             msg['Message-ID'] = msg_id
+            if reply_to:
+                msg['Reply-To'] = reply_to
             msg.set_content(body or '')
             with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
                 smtp.starttls()
@@ -1181,21 +1258,25 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
             if refused:
                 logger.warning(
                     "[%s] SMTP refused recipients to=%s from=%s message_id=%s refused=%s",
-                    purpose, to_email, attempt_user, msg_id, list(refused.keys()),
+                    purpose, masked_to, attempt_user, msg_id, list(refused.keys()),
                 )
                 last_error = f"refused:{list(refused.keys())}"
+                last_error_class = 'SMTPRecipientsRefused'
                 continue
             logger.info(
                 "[%s] SMTP accepted to=%s from=%s host=%s message_id=%s",
-                purpose, to_email, attempt_user, smtp_host, msg_id,
+                purpose, masked_to, attempt_user, smtp_host, msg_id,
             )
             return True, msg_id
         except Exception as e:
             last_error = e
+            last_error_class = type(e).__name__
+            # Log error class + short message; never credentials/tokens.
             logger.warning(
                 "[%s] SMTP send failed (non-fatal) to=%s from=%s host=%s "
-                "message_id=%s error=%s",
-                purpose, to_email, attempt_user, smtp_host, msg_id, e,
+                "message_id=%s error_class=%s error=%s",
+                purpose, masked_to, attempt_user, smtp_host, msg_id,
+                last_error_class, e,
             )
             # Only retry on likely auth/mailbox mismatch
             err_l = str(e).lower()
@@ -1207,8 +1288,8 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail'):
                 break
 
     logger.warning(
-        "[%s] SMTP give up to=%s message_id=%s last_error=%s",
-        purpose, to_email, msg_id, last_error,
+        "[%s] SMTP give up to=%s message_id=%s error_class=%s last_error=%s",
+        purpose, masked_to, msg_id, last_error_class, last_error,
     )
     return False, msg_id
 
