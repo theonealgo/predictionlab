@@ -334,9 +334,7 @@ class SoccerModelBundle:
     markov: Optional[MarkovChainModel] = None
     elo: Optional[SoccerEloModel] = None
 
-    def predict(self, home: str, away: str, league: Optional[str] = None, **kwargs) -> Optional[dict]:
-        # league/kwargs accepted for caller compatibility; ignored (no Efficiency/math change).
-        _ = league, kwargs
+    def predict(self, home: str, away: str) -> Optional[dict]:
         if not self.ready or not self.poisson_xg or not self.poisson_reg or not self.markov or not self.elo:
             return None
         xg = self.poisson_xg.predict(home, away)

@@ -1130,20 +1130,9 @@ def _apply_soccer_ml_grading(
     ens_prob,
     home_won,
     is_draw,
-    draw_by_model=None,
 ):
-    """Set 3-way soccer ML correct flags; grade draws instead of skip_grading.
-
-    draw_by_model (optional): per-component draw probs keyed by
-    glicko2/trueskill/elo/xgb/ensemble. When omitted, draw_dec is shared.
-    """
-    _dbm = draw_by_model if isinstance(draw_by_model, dict) else {}
-    g2_d = _dbm.get('glicko2', draw_dec)
-    ts_d = _dbm.get('trueskill', draw_dec)
-    elo_d = _dbm.get('elo', draw_dec)
-    xgb_d = _dbm.get('xgb', draw_dec)
-    ens_d = _dbm.get('ensemble', draw_dec)
-    if draw_dec is None and ens_d is None:
+    """Set 3-way soccer ML correct flags; grade draws instead of skip_grading."""
+    if draw_dec is None:
         game_info['glicko2_correct'] = (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None
         game_info['trueskill_correct'] = (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None
         game_info['elo_correct'] = (elo_prob >= 0.5) == home_won if elo_prob is not None and home_won is not None else None
@@ -1151,17 +1140,16 @@ def _apply_soccer_ml_grading(
         game_info['ens_correct'] = (ens_prob >= 0.5) == home_won if ens_prob is not None and home_won is not None else None
         game_info['skip_grading'] = home_won is None
         return
-    _face_draw = ens_d if ens_d is not None else draw_dec
-    _hw, _dw, _aw = _soccer_threeway_probs(ens_prob, _face_draw)
+    _hw, _dw, _aw = _soccer_threeway_probs(ens_prob, draw_dec)
     if _hw is not None:
         game_info['draw_prob'] = round(_dw * 100, 1)
         game_info['home_win_prob'] = round(_hw * 100, 1)
         game_info['away_win_prob'] = round(_aw * 100, 1)
-    game_info['glicko2_correct'] = _soccer_model_correct(glicko2_prob, g2_d if g2_d is not None else draw_dec, home_won, is_draw) if glicko2_prob is not None else None
-    game_info['trueskill_correct'] = _soccer_model_correct(trueskill_prob, ts_d if ts_d is not None else draw_dec, home_won, is_draw) if trueskill_prob is not None else None
-    game_info['elo_correct'] = _soccer_model_correct(elo_prob, elo_d if elo_d is not None else draw_dec, home_won, is_draw)
-    game_info['xgb_correct'] = _soccer_model_correct(xgb_prob, xgb_d if xgb_d is not None else draw_dec, home_won, is_draw)
-    game_info['ens_correct'] = _soccer_model_correct(ens_prob, ens_d if ens_d is not None else draw_dec, home_won, is_draw)
+    game_info['glicko2_correct'] = _soccer_model_correct(glicko2_prob, draw_dec, home_won, is_draw) if glicko2_prob is not None else None
+    game_info['trueskill_correct'] = _soccer_model_correct(trueskill_prob, draw_dec, home_won, is_draw) if trueskill_prob is not None else None
+    game_info['elo_correct'] = _soccer_model_correct(elo_prob, draw_dec, home_won, is_draw)
+    game_info['xgb_correct'] = _soccer_model_correct(xgb_prob, draw_dec, home_won, is_draw)
+    game_info['ens_correct'] = _soccer_model_correct(ens_prob, draw_dec, home_won, is_draw)
     game_info['skip_grading'] = False
 
 
@@ -7628,66 +7616,21 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             # ============================================================
             soccer_pred = None
             soccer_note = None
-            soccer_league = None
-            is_completed = game.get('home_score') is not None
             if sport == 'SOCCER':
                 soccer_league = _canonical_soccer_league_name(game.get('league')) or game.get('league')
-                # Serve immutable pre-kickoff freeze for upcoming AND completed.
-                if game.get('game_id'):
-                    try:
-                        from soccer_frozen_ledger import (
-                            get_frozen_models as _soc_get_frozen,
-                            frozen_to_soccer_pred_overlay as _soc_frozen_overlay,
-                            attach_results as _soc_attach_results,
-                        )
-                        _fz = _soc_get_frozen(game['game_id'])
-                        _ov = _soc_frozen_overlay(_fz)
-                        if _ov:
-                            soccer_pred = _ov
-                        if (
-                            is_completed
-                            and game.get('home_score') is not None
-                            and game.get('away_score') is not None
-                        ):
-                            _soc_attach_results(
-                                game['game_id'],
-                                int(game['home_score']),
-                                int(game['away_score']),
-                            )
-                    except Exception as _fz_e:
-                        logger.debug(f"[soccer-frozen] overlay skipped: {_fz_e}")
-                if soccer_pred is None:
-                    soccer_bundle = _get_soccer_model_bundle(completed_games, soccer_league)
-                    if soccer_bundle and getattr(soccer_bundle, 'ready', False):
-                        _home = game.get('home_team_id') or game.get('home_team_name')
-                        _away = game.get('away_team_id') or game.get('away_team_name')
-                        try:
-                            # league= is accepted by current soccer_models; older
-                            # bundles may not — never let that blank the slate.
-                            soccer_pred = soccer_bundle.predict(
-                                _home, _away, league=soccer_league,
-                            )
-                        except TypeError:
-                            try:
-                                soccer_pred = soccer_bundle.predict(_home, _away)
-                            except Exception as _sp_e:
-                                logger.warning(
-                                    "[SOCCER] predict failed for %s vs %s: %s",
-                                    _home, _away, _sp_e,
-                                )
-                                soccer_pred = None
-                        except Exception as _sp_e:
-                            logger.warning(
-                                "[SOCCER] predict failed for %s vs %s: %s",
-                                _home, _away, _sp_e,
-                            )
-                            soccer_pred = None
-                    elif soccer_bundle:
-                        soccer_note = soccer_bundle.reason
-                    else:
-                        soccer_note = "Soccer models are unavailable."
+                soccer_bundle = _get_soccer_model_bundle(completed_games, soccer_league)
+                if soccer_bundle and getattr(soccer_bundle, 'ready', False):
+                    soccer_pred = soccer_bundle.predict(
+                        game.get('home_team_id') or game.get('home_team_name'),
+                        game.get('away_team_id') or game.get('away_team_name'),
+                    )
+                elif soccer_bundle:
+                    soccer_note = soccer_bundle.reason
+                else:
+                    soccer_note = "Soccer models are unavailable."
 
             v2_pred = None
+            is_completed = game.get('home_score') is not None
             # Skip live v2 when a published moneyline snapshot already exists.
             _has_published_ml = (
                 game.get('stored_ensemble_prob') is not None
@@ -7731,30 +7674,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     game['soccer_model_note'] = None
                 game['v2_expected_home'] = soccer_pred.get('expected_home_score')
                 game['v2_expected_away'] = soccer_pred.get('expected_away_score')
-                game['takedown_model_version'] = soccer_pred.get('takedown_model_version')
-                game['consensus_model_version'] = soccer_pred.get('consensus_model_version')
                 game['is_v2'] = True
-                # Freeze upcoming (pre-kickoff) predictions — immutable after insert.
-                if not is_completed and game.get('game_id') and not soccer_pred.get('from_frozen_ledger'):
-                    try:
-                        from soccer_frozen_ledger import (
-                            rows_from_soccer_pred as _soc_freeze_rows,
-                            persist_pre_kickoff as _soc_persist_freeze,
-                        )
-                        _rows = _soc_freeze_rows(
-                            game_id=game['game_id'],
-                            game_date=game.get('game_date'),
-                            league=soccer_league,
-                            home_team_id=game.get('home_team_id') or game.get('home_team_name'),
-                            away_team_id=game.get('away_team_id') or game.get('away_team_name'),
-                            soccer_pred=soccer_pred,
-                            book_spread=game.get('book_spread') or game.get('spread'),
-                            home_ml=game.get('book_home_moneyline') or game.get('home_moneyline'),
-                            away_ml=game.get('book_away_moneyline') or game.get('away_moneyline'),
-                        )
-                        _soc_persist_freeze(_rows)
-                    except Exception as _fz_e:
-                        logger.debug(f"[soccer-frozen] persist skipped: {_fz_e}")
             elif sport == 'SOCCER' and not soccer_pred:
                 # Soccer without model data — show insufficient data
                 elo_prob = None
@@ -17719,36 +17639,10 @@ def sport_results(sport):
 
                     soccer_pred = None
                     model_note = None
-                    if sport == 'SOCCER':
-                        # Prefer immutable pre-kickoff freeze; never regenerate historical with future games.
-                        try:
-                            from soccer_frozen_ledger import (
-                                get_frozen_models as _soc_get_frozen,
-                                frozen_to_soccer_pred_overlay as _soc_frozen_overlay,
-                                attach_results as _soc_attach_results,
-                            )
-                            _fz = _soc_get_frozen(game['game_id'])
-                            soccer_pred = _soc_frozen_overlay(_fz)
-                            _soc_attach_results(game['game_id'], int(home_score), int(away_score))
-                        except Exception as _fz_e:
-                            logger.debug(f"[soccer-frozen] results lookup skipped: {_fz_e}")
-                            soccer_pred = None
-                        if soccer_pred is None and soccer_bundle and getattr(soccer_bundle, 'ready', False):
-                            try:
-                                soccer_pred = soccer_bundle.predict(
-                                    home_team, away_team, league=league_name,
-                                )
-                            except TypeError:
-                                try:
-                                    soccer_pred = soccer_bundle.predict(home_team, away_team)
-                                except Exception as _sp_e:
-                                    logger.debug(f"[SOCCER] results predict failed: {_sp_e}")
-                                    soccer_pred = None
-                            except Exception as _sp_e:
-                                logger.debug(f"[SOCCER] results predict failed: {_sp_e}")
-                                soccer_pred = None
-                        elif soccer_pred is None and soccer_bundle:
-                            model_note = soccer_bundle.reason
+                    if sport == 'SOCCER' and soccer_bundle and getattr(soccer_bundle, 'ready', False):
+                        soccer_pred = soccer_bundle.predict(home_team, away_team)
+                    elif sport == 'SOCCER' and soccer_bundle:
+                        model_note = soccer_bundle.reason
 
                     if soccer_pred:
                         glicko2_prob = soccer_pred.get('poisson_xg_prob')
@@ -17774,19 +17668,8 @@ def sport_results(sport):
                         'xgb_prob':         round(xgb_prob  * 100, 1) if xgb_prob is not None else None,
                         'ens_prob':         round(ens_prob  * 100, 1) if ens_prob is not None else None,
                         'model_data_note':   model_note,
-                        'takedown_model_version': (soccer_pred or {}).get('takedown_model_version'),
-                        'consensus_model_version': (soccer_pred or {}).get('consensus_model_version'),
                     }
                     _draw_dec = soccer_pred.get('draw_prob') if soccer_pred else None
-                    _draw_by_model = None
-                    if sport == 'SOCCER' and soccer_pred:
-                        _draw_by_model = {
-                            'glicko2': soccer_pred.get('glicko2_draw_prob', _draw_dec),
-                            'trueskill': soccer_pred.get('trueskill_draw_prob', _draw_dec),
-                            'elo': soccer_pred.get('elo_draw_prob', _draw_dec),
-                            'xgb': soccer_pred.get('xgb_draw_prob', _draw_dec),
-                            'ensemble': soccer_pred.get('ensemble_draw_prob', _draw_dec),
-                        }
                     _apply_soccer_ml_grading(
                         game_info,
                         draw_dec=_draw_dec if sport == 'SOCCER' else None,
@@ -17797,7 +17680,6 @@ def sport_results(sport):
                         ens_prob=ens_prob,
                         home_won=home_won,
                         is_draw=is_draw,
-                        draw_by_model=_draw_by_model,
                     )
                     daily_results[game_info['date']]['games'].append(game_info)
                 except Exception as _row_err:
