@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    {% include 'includes/google_ads_tag.html' %}
     {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
     {% set _meta_title = sport_info.name ~ ' Predictions for ' ~ sorted_dates[0] ~ ' | predictionlab.io' %}
     {% set _meta_desc = 'AI-powered ' ~ sport_info.name ~ ' predictions and game forecasts for ' ~ sorted_dates[0] ~ ' — model projections and matchup analysis on predictionlab.io.' %}
@@ -27,20 +28,14 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap"></noscript>
     <link rel="canonical" href="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
-    {% include 'includes/google_ads_tag.html' %}
-    {% if ga_tracking_id %}
+        {% if ga_tracking_id %}
     <script>
       (function(){
         function initGA(){
           if (window.__gaLoaded) return;
           window.__gaLoaded = true;
-          var s = document.createElement('script');
-          s.async = true;
-          s.src = 'https://www.googletagmanager.com/gtag/js?id={{ ga_tracking_id }}';
-          document.head.appendChild(s);
           window.dataLayer = window.dataLayer || [];
           window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
-          gtag('js', new Date());
           gtag('config', '{{ ga_tracking_id }}');
         }
         if ('requestIdleCallback' in window) {

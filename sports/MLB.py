@@ -227,9 +227,11 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
         m._cache_market_lines_for_results(sport, daily_results, limit=150)
         m._attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
         _st_stats = m._compute_spread_total_for_daily(sport, daily_results)
+        # Efficiency ML must be graded before overall_stats / season panel tallies.
+        m._grade_efficiency_for_results(sport, daily_results)
+        m._finalize_daily_result_cards(sport, daily_results)
         overall_stats = m.compute_overall_stats_from_daily(daily_results)
         overall_stats = m._merge_snapshot_efficiency_into_overall(overall_stats, sport)
-        m._finalize_daily_result_cards(sport, daily_results)
         season_perf = m._build_season_performance_summary(overall_stats, _st_stats)
         roi_total = m.compute_roi_for_range(daily_results, None, None)
 

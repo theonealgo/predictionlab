@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% include 'includes/google_ads_tag.html' %}
     <meta charset="UTF-8">
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,19 +12,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@800&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@800&family=Oswald:wght@400;600;700&display=swap"></noscript>
-    {% include 'includes/google_ads_tag.html' %}
-    <script>
+        <script>
     (function(){
         function initGA(){
             if (window.__gaLoaded) return;
             window.__gaLoaded = true;
-            var s = document.createElement('script');
-            s.async = true;
-            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG';
-            document.head.appendChild(s);
             window.dataLayer = window.dataLayer || [];
             window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
-            gtag('js', new Date());
             gtag('config', 'G-R4XM0WKTGG');
         }
         if ('requestIdleCallback' in window) {

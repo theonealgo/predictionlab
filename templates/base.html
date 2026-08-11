@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% include 'includes/google_ads_tag.html' %}
     <meta charset="UTF-8">
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
@@ -242,8 +243,7 @@
     <link rel="stylesheet" href="/static/css/research-theme.css">
     <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
     {% endblock %}
-    {% include 'includes/google_ads_tag.html' %}
-</head>
+    </head>
 <body class="research-site">
 {% include "partials/research_header.html" %}
 <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>

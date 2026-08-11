@@ -2868,10 +2868,11 @@ _AUTH_STYLES = """
 
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html><head>
+{% include 'includes/google_ads_tag.html' %}
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login — predictionlab.io</title>
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
+<script>window.gtag=window.gtag||function(){window.dataLayer=window.dataLayer||[];window.dataLayer.push(arguments);};gtag("config","G-R4XM0WKTGG");</script>
 <meta name="description" content="Log in to your predictionlab.io account to access AI-powered sports picks, spreads, and totals.">
 <meta property="og:title" content="Login — predictionlab.io">
 <meta property="og:description" content="Log in to access AI-powered sports predictions and forecasts.">
@@ -2905,10 +2906,11 @@ LOGIN_TEMPLATE = """
 
 SIGNUP_TEMPLATE = """
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html><head>
+{% include 'includes/google_ads_tag.html' %}
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign Up — predictionlab.io</title>
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
+<script>window.gtag=window.gtag||function(){window.dataLayer=window.dataLayer||[];window.dataLayer.push(arguments);};gtag("config","G-R4XM0WKTGG");</script>
 <meta name="description" content="Create a free predictionlab.io account to access AI-powered sports picks. Upgrade for spreads, totals, and score predictions.">
 <meta property="og:title" content="Sign Up — predictionlab.io">
 <meta property="og:description" content="Create a free account for AI-powered sports predictions and forecasts.">
@@ -2943,11 +2945,11 @@ SIGNUP_TEMPLATE = """
 
 SET_PASSWORD_TEMPLATE = """
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Set Password — predictionlab.io</title>
+<html><head>
 {% include 'includes/google_ads_tag.html' %}
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-R4XM0WKTGG");</script>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Set Password — predictionlab.io</title>
+<script>window.gtag=window.gtag||function(){window.dataLayer=window.dataLayer||[];window.dataLayer.push(arguments);};gtag("config","G-R4XM0WKTGG");</script>
 <meta name="robots" content="noindex, nofollow">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:white;min-height:100vh;}body::before{content:'';position:fixed;inset:0;background:rgba(7,10,20,0.82);z-index:0;}body>*{position:relative;z-index:1;}</style>
 """ + _AUTH_STYLES + """

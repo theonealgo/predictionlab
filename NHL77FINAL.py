@@ -1130,9 +1130,20 @@ def _apply_soccer_ml_grading(
     ens_prob,
     home_won,
     is_draw,
+    draw_by_model=None,
 ):
-    """Set 3-way soccer ML correct flags; grade draws instead of skip_grading."""
-    if draw_dec is None:
+    """Set 3-way soccer ML correct flags; grade draws instead of skip_grading.
+
+    draw_by_model (optional): per-component draw probs keyed by
+    glicko2/trueskill/elo/xgb/ensemble. When omitted, draw_dec is shared.
+    """
+    _dbm = draw_by_model if isinstance(draw_by_model, dict) else {}
+    g2_d = _dbm.get('glicko2', draw_dec)
+    ts_d = _dbm.get('trueskill', draw_dec)
+    elo_d = _dbm.get('elo', draw_dec)
+    xgb_d = _dbm.get('xgb', draw_dec)
+    ens_d = _dbm.get('ensemble', draw_dec)
+    if draw_dec is None and ens_d is None:
         game_info['glicko2_correct'] = (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None
         game_info['trueskill_correct'] = (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None
         game_info['elo_correct'] = (elo_prob >= 0.5) == home_won if elo_prob is not None and home_won is not None else None
@@ -1140,16 +1151,17 @@ def _apply_soccer_ml_grading(
         game_info['ens_correct'] = (ens_prob >= 0.5) == home_won if ens_prob is not None and home_won is not None else None
         game_info['skip_grading'] = home_won is None
         return
-    _hw, _dw, _aw = _soccer_threeway_probs(ens_prob, draw_dec)
+    _face_draw = ens_d if ens_d is not None else draw_dec
+    _hw, _dw, _aw = _soccer_threeway_probs(ens_prob, _face_draw)
     if _hw is not None:
         game_info['draw_prob'] = round(_dw * 100, 1)
         game_info['home_win_prob'] = round(_hw * 100, 1)
         game_info['away_win_prob'] = round(_aw * 100, 1)
-    game_info['glicko2_correct'] = _soccer_model_correct(glicko2_prob, draw_dec, home_won, is_draw) if glicko2_prob is not None else None
-    game_info['trueskill_correct'] = _soccer_model_correct(trueskill_prob, draw_dec, home_won, is_draw) if trueskill_prob is not None else None
-    game_info['elo_correct'] = _soccer_model_correct(elo_prob, draw_dec, home_won, is_draw)
-    game_info['xgb_correct'] = _soccer_model_correct(xgb_prob, draw_dec, home_won, is_draw)
-    game_info['ens_correct'] = _soccer_model_correct(ens_prob, draw_dec, home_won, is_draw)
+    game_info['glicko2_correct'] = _soccer_model_correct(glicko2_prob, g2_d if g2_d is not None else draw_dec, home_won, is_draw) if glicko2_prob is not None else None
+    game_info['trueskill_correct'] = _soccer_model_correct(trueskill_prob, ts_d if ts_d is not None else draw_dec, home_won, is_draw) if trueskill_prob is not None else None
+    game_info['elo_correct'] = _soccer_model_correct(elo_prob, elo_d if elo_d is not None else draw_dec, home_won, is_draw)
+    game_info['xgb_correct'] = _soccer_model_correct(xgb_prob, xgb_d if xgb_d is not None else draw_dec, home_won, is_draw)
+    game_info['ens_correct'] = _soccer_model_correct(ens_prob, ens_d if ens_d is not None else draw_dec, home_won, is_draw)
     game_info['skip_grading'] = False
 
 
@@ -3813,7 +3825,8 @@ def _model_probs_from_row_and_v2(
     need_v2 = any(
         p is None for p in (glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob)
     )
-    if skip_v2 and sport == 'NHL':
+    # Honor skip_v2 for ALL sports (was NHL-only; that let MLB recompute and drift).
+    if skip_v2:
         need_v2 = False
     if sport != 'SOCCER' and need_v2 and v2_budget_ok:
         run_v2 = _snapshot_build or sport == 'NHL'
@@ -3876,7 +3889,9 @@ def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_ke
             ens_prob = meta_ens
             had_stored_ens = True
 
-    need_frozen = any(
+    # Published DB snapshot wins: never backfill missing model legs from live v2
+    # once an ensemble was stored pre-kickoff (prevents Padres-style drift).
+    need_frozen = (not had_stored_ens) and any(
         p is None for p in (glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob)
     )
     if need_frozen:
@@ -6919,6 +6934,100 @@ _PICKS_DISPLAY_WINDOW = {
 }
 
 
+
+def _persist_upcoming_prediction_row(cursor, sport, pred) -> bool:
+    """Insert the first published prediction snapshot; never overwrite probs.
+
+    Immutable after first store (locked=1). Only repairs game_id when the same
+    sport/date/matchup already exists under a different ESPN id.
+    Returns True if a row was inserted or game_id repaired; False if skipped.
+    """
+    if pred is None:
+        return False
+    if pred.get('home_score') is not None:
+        return False
+    game_id = pred.get('game_id')
+    if not game_id:
+        return False
+    _elo = pred.get('elo_prob')
+    _xgb = pred.get('xgb_prob')
+    _ens = pred.get('ensemble_prob')
+    if _elo is None or _xgb is None or _ens is None:
+        return False
+
+    def _as_frac(v):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return None
+        return v / 100.0 if v > 1.0 else v
+
+    elo_f = _as_frac(_elo)
+    xgb_f = _as_frac(_xgb)
+    ens_f = _as_frac(_ens)
+    if elo_f is None or xgb_f is None or ens_f is None:
+        return False
+
+    existing = cursor.execute(
+        'SELECT id FROM predictions WHERE game_id = ? AND sport = ?',
+        (game_id, sport),
+    ).fetchone()
+    if existing:
+        return False
+
+    game_date = pred.get('game_date')
+    home = pred.get('home_team_id')
+    away = pred.get('away_team_id')
+    if not game_date or not home or not away:
+        return False
+
+    matchup = cursor.execute(
+        "SELECT id, game_id FROM predictions "
+        "WHERE sport = ? AND date(game_date) = date(?) "
+        "AND home_team_id = ? AND away_team_id = ?",
+        (sport, game_date, home, away),
+    ).fetchone()
+    if matchup:
+        old_gid = matchup['game_id'] if hasattr(matchup, 'keys') else matchup[1]
+        row_id = matchup['id'] if hasattr(matchup, 'keys') else matchup[0]
+        if old_gid != game_id:
+            cursor.execute(
+                'UPDATE predictions SET game_id = ? WHERE id = ?',
+                (game_id, row_id),
+            )
+            return True
+        return False
+
+    g2_f = _as_frac(pred.get('glicko2_prob')) if pred.get('glicko2_prob') is not None else None
+    ts_f = _as_frac(pred.get('trueskill_prob')) if pred.get('trueskill_prob') is not None else None
+    league = pred.get('league') or sport
+    try:
+        cursor.execute(
+            "INSERT INTO predictions ("
+            "game_id, sport, league, game_date, home_team_id, away_team_id, "
+            "elo_home_prob, xgboost_home_prob, win_probability, "
+            "glicko_home_prob, trueskill_home_prob, locked"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+            (
+                game_id, sport, league, game_date, home, away,
+                elo_f, xgb_f, ens_f, g2_f, ts_f,
+            ),
+        )
+    except Exception:
+        # Older / test schemas may lack glicko/trueskill columns.
+        cursor.execute(
+            "INSERT INTO predictions ("
+            "game_id, sport, league, game_date, home_team_id, away_team_id, "
+            "elo_home_prob, xgboost_home_prob, win_probability, locked"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+            (
+                game_id, sport, league, game_date, home, away,
+                elo_f, xgb_f, ens_f,
+            ),
+        )
+    return True
+
+
 def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     """Get a sport's near-term prediction slate (recent finals + upcoming games).
     
@@ -7042,13 +7151,19 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
         conn = get_db_connection()
         for game in api_games:
             pred = conn.execute('''
-                SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability
+                SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
+                       glicko_home_prob, trueskill_home_prob
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             if pred:
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
+                try:
+                    game['stored_glicko_prob'] = _to_float_safe(pred['glicko_home_prob'])
+                    game['stored_trueskill_prob'] = _to_float_safe(pred['trueskill_home_prob'])
+                except (KeyError, IndexError, TypeError):
+                    pass
         conn.close()
 
         # Build dates list
@@ -7201,7 +7316,9 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 SELECT g.*,
                        p.elo_home_prob as stored_elo_prob,
                        p.xgboost_home_prob as stored_xgb_prob,
-                       p.win_probability as stored_ensemble_prob
+                       p.win_probability as stored_ensemble_prob,
+                       p.glicko_home_prob as stored_glicko_prob,
+                       p.trueskill_home_prob as stored_trueskill_prob
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ?
@@ -7219,7 +7336,8 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             if game.get('stored_elo_prob') is not None:
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
-                SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability
+                SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
+                       glicko_home_prob, trueskill_home_prob
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
@@ -7227,6 +7345,11 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
+                try:
+                    game['stored_glicko_prob'] = _to_float_safe(pred['glicko_home_prob'])
+                    game['stored_trueskill_prob'] = _to_float_safe(pred['trueskill_home_prob'])
+                except (KeyError, IndexError, TypeError):
+                    pass
         conn.close()
         
         # Build dates list
@@ -7286,6 +7409,8 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                    p.elo_home_prob as stored_elo_prob,
                    p.xgboost_home_prob as stored_xgb_prob,
                    p.win_probability as stored_ensemble_prob,
+                   p.glicko_home_prob as stored_glicko_prob,
+                   p.trueskill_home_prob as stored_trueskill_prob,
                    gg.home_goalie, gg.away_goalie,
                    gg.home_goalie_save_pct, gg.away_goalie_save_pct,
                    gg.home_goalie_gaa, gg.away_goalie_gaa,
@@ -7503,25 +7628,55 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             # ============================================================
             soccer_pred = None
             soccer_note = None
+            soccer_league = None
+            is_completed = game.get('home_score') is not None
             if sport == 'SOCCER':
                 soccer_league = _canonical_soccer_league_name(game.get('league')) or game.get('league')
-                soccer_bundle = _get_soccer_model_bundle(completed_games, soccer_league)
-                if soccer_bundle and getattr(soccer_bundle, 'ready', False):
-                    soccer_pred = soccer_bundle.predict(
-                        game.get('home_team_id') or game.get('home_team_name'),
-                        game.get('away_team_id') or game.get('away_team_name'),
-                    )
-                elif soccer_bundle:
-                    soccer_note = soccer_bundle.reason
-                else:
-                    soccer_note = "Soccer models are unavailable."
+                # Serve immutable pre-kickoff freeze for upcoming AND completed.
+                if game.get('game_id'):
+                    try:
+                        from soccer_frozen_ledger import (
+                            get_frozen_models as _soc_get_frozen,
+                            frozen_to_soccer_pred_overlay as _soc_frozen_overlay,
+                            attach_results as _soc_attach_results,
+                        )
+                        _fz = _soc_get_frozen(game['game_id'])
+                        _ov = _soc_frozen_overlay(_fz)
+                        if _ov:
+                            soccer_pred = _ov
+                        if (
+                            is_completed
+                            and game.get('home_score') is not None
+                            and game.get('away_score') is not None
+                        ):
+                            _soc_attach_results(
+                                game['game_id'],
+                                int(game['home_score']),
+                                int(game['away_score']),
+                            )
+                    except Exception as _fz_e:
+                        logger.debug(f"[soccer-frozen] overlay skipped: {_fz_e}")
+                if soccer_pred is None:
+                    soccer_bundle = _get_soccer_model_bundle(completed_games, soccer_league)
+                    if soccer_bundle and getattr(soccer_bundle, 'ready', False):
+                        soccer_pred = soccer_bundle.predict(
+                            game.get('home_team_id') or game.get('home_team_name'),
+                            game.get('away_team_id') or game.get('away_team_name'),
+                            league=soccer_league,
+                        )
+                    elif soccer_bundle:
+                        soccer_note = soccer_bundle.reason
+                    else:
+                        soccer_note = "Soccer models are unavailable."
 
             v2_pred = None
-            is_completed = game.get('home_score') is not None
-            # Always run V2 for non-soccer sports (including finished games) so
-            # Grinder2 / Takedown probabilities stay on the card; see frozen DB
-            # snapshot block below so moneyline stack does not drift after scores.
-            if sport != 'SOCCER' and not _fast_cold_build:
+            # Skip live v2 when a published moneyline snapshot already exists.
+            _has_published_ml = (
+                game.get('stored_ensemble_prob') is not None
+                and game.get('stored_xgb_prob') is not None
+                and game.get('stored_elo_prob') is not None
+            )
+            if sport != 'SOCCER' and not _fast_cold_build and not _has_published_ml:
                 v2_pred = get_v2_prediction(
                         sport, 
                         game.get('home_team_id') or game.get('home_team_name'),
@@ -7558,7 +7713,30 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     game['soccer_model_note'] = None
                 game['v2_expected_home'] = soccer_pred.get('expected_home_score')
                 game['v2_expected_away'] = soccer_pred.get('expected_away_score')
+                game['takedown_model_version'] = soccer_pred.get('takedown_model_version')
+                game['consensus_model_version'] = soccer_pred.get('consensus_model_version')
                 game['is_v2'] = True
+                # Freeze upcoming (pre-kickoff) predictions — immutable after insert.
+                if not is_completed and game.get('game_id') and not soccer_pred.get('from_frozen_ledger'):
+                    try:
+                        from soccer_frozen_ledger import (
+                            rows_from_soccer_pred as _soc_freeze_rows,
+                            persist_pre_kickoff as _soc_persist_freeze,
+                        )
+                        _rows = _soc_freeze_rows(
+                            game_id=game['game_id'],
+                            game_date=game.get('game_date'),
+                            league=soccer_league,
+                            home_team_id=game.get('home_team_id') or game.get('home_team_name'),
+                            away_team_id=game.get('away_team_id') or game.get('away_team_name'),
+                            soccer_pred=soccer_pred,
+                            book_spread=game.get('book_spread') or game.get('spread'),
+                            home_ml=game.get('book_home_moneyline') or game.get('home_moneyline'),
+                            away_ml=game.get('book_away_moneyline') or game.get('away_moneyline'),
+                        )
+                        _soc_persist_freeze(_rows)
+                    except Exception as _fz_e:
+                        logger.debug(f"[soccer-frozen] persist skipped: {_fz_e}")
             elif sport == 'SOCCER' and not soccer_pred:
                 # Soccer without model data — show insufficient data
                 elo_prob = None
@@ -7636,24 +7814,30 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 if sport == 'NFL':
                     ensemble_prob = elo_prob
 
-            # Finished games: restore the published Elo / XSharp / ensemble snapshot
-            # from the predictions row so displayed picks cannot drift after the final.
-            if is_completed and sport != 'SOCCER':
-                _fp_se = game.get('stored_ensemble_prob')
-                _fp_sx = game.get('stored_xgb_prob')
-                _fp_selo = game.get('stored_elo_prob')
-                _fp_elo = _to_float_safe(_fp_selo)
-                _fp_xgb = _to_float_safe(_fp_sx)
-                _fp_ens = _to_float_safe(_fp_se)
-                if _fp_elo is not None:
-                    elo_prob = _fp_elo
-                if _fp_xgb is not None:
-                    xgb_prob = _fp_xgb
-                if _fp_ens is not None:
-                    ensemble_prob = _fp_ens
-                if v2_pred:
-                    game['glicko2_prob'] = v2_pred.get('glicko2_prob')
-                    game['trueskill_prob'] = v2_pred.get('trueskill_prob')
+            # Published snapshot wins for upcoming AND completed (immutable after
+            # first store). Do not live-fill Grinder2/Takedown once ensemble exists.
+            if sport != 'SOCCER':
+                _fp_elo = _to_float_safe(game.get('stored_elo_prob'))
+                _fp_xgb = _to_float_safe(game.get('stored_xgb_prob'))
+                _fp_ens = _to_float_safe(game.get('stored_ensemble_prob'))
+                _fp_g2 = _to_float_safe(game.get('stored_glicko_prob'))
+                _fp_ts = _to_float_safe(game.get('stored_trueskill_prob'))
+                _has_published = any(v is not None for v in (_fp_elo, _fp_xgb, _fp_ens))
+                if _has_published:
+                    if _fp_elo is not None:
+                        elo_prob = _fp_elo
+                    if _fp_xgb is not None:
+                        xgb_prob = _fp_xgb
+                    if _fp_ens is not None:
+                        ensemble_prob = _fp_ens
+                    if _fp_g2 is not None:
+                        game['glicko2_prob'] = _fp_g2
+                    elif _fp_ens is not None:
+                        game['glicko2_prob'] = None
+                    if _fp_ts is not None:
+                        game['trueskill_prob'] = _fp_ts
+                    elif _fp_ens is not None:
+                        game['trueskill_prob'] = None
             
             # Add predictions to game dict
             game_dict = dict(game)
@@ -8148,38 +8332,14 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
         conn_save = get_db_connection()
         cursor_save = conn_save.cursor()
         saved_count = 0
-        
+
         for pred in predictions:
-            # Only save if game has game_id and no scores yet (not played)
-            if pred.get('game_id') and pred.get('home_score') is None:
-                # Check if prediction already exists
-                existing = cursor_save.execute('''
-                    SELECT id FROM predictions WHERE game_id = ? AND sport = ?
-                ''', (pred['game_id'], sport)).fetchone()
-                
-                if not existing:
-                    _elo_save = pred.get('elo_prob')
-                    _xgb_save = pred.get('xgb_prob')
-                    _ens_save = pred.get('ensemble_prob')
-                    if _elo_save is None or _xgb_save is None or _ens_save is None:
-                        continue
-                    try:
-                        cursor_save.execute('''
-                            INSERT INTO predictions (
-                                game_id, sport, league, game_date, home_team_id, away_team_id,
-                                elo_home_prob, xgboost_home_prob, win_probability, locked
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                        ''', (
-                            pred['game_id'], sport, pred.get('league') or sport, pred['game_date'],
-                            pred['home_team_id'], pred['away_team_id'],
-                            float(_elo_save) / 100.0,
-                            float(_xgb_save) / 100.0,
-                            float(_ens_save) / 100.0,
-                        ))
-                        saved_count += 1
-                    except Exception as e:
-                        logger.error(f"Error saving prediction for {pred['game_id']}: {e}")
-        
+            try:
+                if _persist_upcoming_prediction_row(cursor_save, sport, pred):
+                    saved_count += 1
+            except Exception as e:
+                logger.error(f"Error saving prediction for {pred.get('game_id')}: {e}")
+
         if saved_count > 0:
             conn_save.commit()
             logger.info(f"Saved {saved_count} new {sport} predictions to database")
@@ -10117,7 +10277,8 @@ BASE_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    {% include 'includes/google_ads_tag.html' %}
+    <meta charset=\"UTF-8\">
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% if page_title is defined and page_title %}{% set _meta_title = page_title %}
@@ -10145,19 +10306,13 @@ BASE_TEMPLATE = """
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
-    {% include 'includes/google_ads_tag.html' %}
     <script>
     (function(){
         function initGA(){
             if (window.__gaLoaded) return;
             window.__gaLoaded = true;
-            var s = document.createElement('script');
-            s.async = true;
-            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG';
-            document.head.appendChild(s);
             window.dataLayer = window.dataLayer || [];
             window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
-            gtag('js', new Date());
             gtag('config', 'G-R4XM0WKTGG');
         }
         if ('requestIdleCallback' in window) {
@@ -15753,6 +15908,7 @@ def sitemap_xml():
 PROMO_TOP_PICKS_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
+    {% include 'includes/google_ads_tag.html' %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex,nofollow">
@@ -17544,10 +17700,24 @@ def sport_results(sport):
 
                     soccer_pred = None
                     model_note = None
-                    if sport == 'SOCCER' and soccer_bundle and getattr(soccer_bundle, 'ready', False):
-                        soccer_pred = soccer_bundle.predict(home_team, away_team)
-                    elif sport == 'SOCCER' and soccer_bundle:
-                        model_note = soccer_bundle.reason
+                    if sport == 'SOCCER':
+                        # Prefer immutable pre-kickoff freeze; never regenerate historical with future games.
+                        try:
+                            from soccer_frozen_ledger import (
+                                get_frozen_models as _soc_get_frozen,
+                                frozen_to_soccer_pred_overlay as _soc_frozen_overlay,
+                                attach_results as _soc_attach_results,
+                            )
+                            _fz = _soc_get_frozen(game['game_id'])
+                            soccer_pred = _soc_frozen_overlay(_fz)
+                            _soc_attach_results(game['game_id'], int(home_score), int(away_score))
+                        except Exception as _fz_e:
+                            logger.debug(f"[soccer-frozen] results lookup skipped: {_fz_e}")
+                            soccer_pred = None
+                        if soccer_pred is None and soccer_bundle and getattr(soccer_bundle, 'ready', False):
+                            soccer_pred = soccer_bundle.predict(home_team, away_team, league=league_name)
+                        elif soccer_pred is None and soccer_bundle:
+                            model_note = soccer_bundle.reason
 
                     if soccer_pred:
                         glicko2_prob = soccer_pred.get('poisson_xg_prob')
@@ -17573,8 +17743,19 @@ def sport_results(sport):
                         'xgb_prob':         round(xgb_prob  * 100, 1) if xgb_prob is not None else None,
                         'ens_prob':         round(ens_prob  * 100, 1) if ens_prob is not None else None,
                         'model_data_note':   model_note,
+                        'takedown_model_version': (soccer_pred or {}).get('takedown_model_version'),
+                        'consensus_model_version': (soccer_pred or {}).get('consensus_model_version'),
                     }
                     _draw_dec = soccer_pred.get('draw_prob') if soccer_pred else None
+                    _draw_by_model = None
+                    if sport == 'SOCCER' and soccer_pred:
+                        _draw_by_model = {
+                            'glicko2': soccer_pred.get('glicko2_draw_prob', _draw_dec),
+                            'trueskill': soccer_pred.get('trueskill_draw_prob', _draw_dec),
+                            'elo': soccer_pred.get('elo_draw_prob', _draw_dec),
+                            'xgb': soccer_pred.get('xgb_draw_prob', _draw_dec),
+                            'ensemble': soccer_pred.get('ensemble_draw_prob', _draw_dec),
+                        }
                     _apply_soccer_ml_grading(
                         game_info,
                         draw_dec=_draw_dec if sport == 'SOCCER' else None,
@@ -17585,6 +17766,7 @@ def sport_results(sport):
                         ens_prob=ens_prob,
                         home_won=home_won,
                         is_draw=is_draw,
+                        draw_by_model=_draw_by_model,
                     )
                     daily_results[game_info['date']]['games'].append(game_info)
                 except Exception as _row_err:
