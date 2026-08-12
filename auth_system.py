@@ -1697,72 +1697,133 @@ def _finalize_welcome_email_sent(user_id, subscription_key):
         logger.warning("[welcome] finalize user columns failed (non-fatal): %s", e)
 
 
-def _build_premium_welcome_email_html(*, first_name, plan_label, site_url='https://predictionlab.io'):
-    """Responsive HTML welcome body. No payment / card details."""
+def _build_premium_welcome_email_html(
+    *,
+    first_name,
+    plan_label,
+    site_url='https://predictionlab.io',
+    support_email=None,
+):
+    """Responsive HTML welcome body. Brand-aligned; no payment / vendor / IP details."""
     site = (site_url or 'https://predictionlab.io').rstrip('/')
     login_url = f'{site}/login'
     plans_url = f'{site}/plans'
-    safe_name = first_name or 'there'
-    return f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Welcome to PredictionLab Premium</title>
-</head>
-<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e2e8f0;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0f172a;padding:24px 12px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#1e293b;border:1px solid #334155;border-radius:16px;overflow:hidden;">
-        <tr><td style="padding:28px 28px 12px;text-align:center;">
-          <div style="font-size:22px;font-weight:800;letter-spacing:0.3px;color:#fbbf24;">PredictionLab</div>
-          <div style="margin-top:6px;font-size:13px;color:#94a3b8;">AI sports predictions</div>
-        </td></tr>
-        <tr><td style="padding:8px 28px 8px;">
-          <h1 style="margin:0 0 12px;font-size:22px;line-height:1.35;color:#f8fafc;">Welcome to Premium, {safe_name}</h1>
-          <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#cbd5e1;">
-            Your <strong style="color:#fbbf24;">{plan_label}</strong> PredictionLab Premium subscription is active.
-            After you log in, spreads, totals, projected scores, and full model edge unlock across supported sports.
-          </p>
-          <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#cbd5e1;">
-            Open PredictionLab, sign in with the email you used at checkout, and you are ready to go.
-          </p>
-          <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto 18px;">
-            <tr><td style="border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);">
-              <a href="{site}/" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:800;color:#0f172a;text-decoration:none;">
-                Go to PredictionLab.io
-              </a>
-            </td></tr>
-          </table>
-          <p style="margin:0 0 10px;font-size:14px;line-height:1.55;color:#94a3b8;">
-            <a href="{login_url}" style="color:#93c5fd;font-weight:600;">Log in</a>
-            &nbsp;·&nbsp;
-            <a href="{plans_url}" style="color:#93c5fd;font-weight:600;">Account / subscription (Plans)</a>
-          </p>
-          <p style="margin:16px 0 0;font-size:13px;line-height:1.55;color:#64748b;">
-            You can manage or cancel your subscription anytime from the Plans page on PredictionLab
-            or through the billing email Stripe sends you. No payment details are included in this message.
-          </p>
-        </td></tr>
-        <tr><td style="padding:18px 28px 26px;text-align:center;border-top:1px solid #334155;">
-          <p style="margin:0;font-size:12px;color:#64748b;">
-            PredictionLab · <a href="{site}/" style="color:#94a3b8;text-decoration:none;">{site.replace('https://', '')}</a>
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>'''
-
-
-def _build_premium_welcome_email_text(*, first_name, plan_label, site_url='https://predictionlab.io'):
-    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    safe_name = html.escape(str(first_name or 'there'))
+    safe_plan = html.escape(str(plan_label or 'Premium'))
+    safe_support = html.escape(support)
+    safe_support_href = html.escape(support, quote=True)
+    host_label = html.escape(site.replace('https://', '').replace('http://', ''))
     return (
-        f'Welcome to PredictionLab Premium, {first_name or "there"}!\n\n'
-        f'Your {plan_label} Premium subscription is active.\n'
-        f'Log in at {site}/login — Premium unlocks after login.\n'
-        f'Manage or cancel anytime: {site}/plans\n\n'
+        "<!DOCTYPE html>"
+        "<html lang=\"en\">"
+        "<head>"
+        "<meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<meta name=\"color-scheme\" content=\"light\">"
+        "<title>Welcome to PredictionLab Premium</title>"
+        "</head>"
+        "<body style=\"margin:0;padding:0;background:#e8eef5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;\">"
+        "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"background:#e8eef5;padding:28px 12px;\">"
+        "<tr><td align=\"center\">"
+        "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #d7e0ea;border-radius:18px;overflow:hidden;\">"
+        "<tr><td style=\"background:#00529B;padding:22px 28px;text-align:center;\">"
+        "<div style=\"font-size:22px;font-weight:800;letter-spacing:0.2px;color:#ffffff;\">PredictionLab</div>"
+        "<div style=\"margin-top:4px;font-size:13px;color:rgba(255,255,255,0.88);\">AI sports predictions</div>"
+        "</td></tr>"
+        "<tr><td style=\"padding:28px 28px 8px;\">"
+        f"<h1 style=\"margin:0 0 10px;font-size:24px;line-height:1.3;color:#0f172a;font-weight:800;\">Welcome to Premium, {safe_name}</h1>"
+        "<p style=\"margin:0 0 16px;font-size:15px;line-height:1.65;color:#334155;\">"
+        f"Your <strong style=\"color:#00529B;\">{safe_plan}</strong> PredictionLab Premium subscription is active. "
+        "Thanks for joining &mdash; here is how to get started."
+        "</p>"
+        "</td></tr>"
+        "<tr><td style=\"padding:0 28px 8px;\">"
+        "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;\">"
+        "<tr><td style=\"padding:16px 18px;\">"
+        "<p style=\"margin:0 0 8px;font-size:13px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#00529B;\">How to log in</p>"
+        "<p style=\"margin:0;font-size:14px;line-height:1.6;color:#334155;\">"
+        f"Go to <a href=\"{login_url}\" style=\"color:#00529B;font-weight:700;text-decoration:none;\">predictionlab.io/login</a> "
+        "and sign in with the same email you used at checkout. "
+        "If you paid as a guest, use the set-password link from checkout (or request a new one from the login page). "
+        "Google Sign-In works if that is how you created your account."
+        "</p>"
+        "</td></tr></table>"
+        "</td></tr>"
+        "<tr><td style=\"padding:14px 28px 8px;\">"
+        "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;\">"
+        "<tr><td style=\"padding:16px 18px;\">"
+        "<p style=\"margin:0 0 8px;font-size:13px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#00529B;\">What you get</p>"
+        "<p style=\"margin:0 0 10px;font-size:14px;line-height:1.6;color:#334155;\">"
+        "Premium unlocks full picks across supported sports:"
+        "</p>"
+        "<ul style=\"margin:0;padding:0 0 0 18px;color:#334155;font-size:14px;line-height:1.65;\">"
+        "<li style=\"margin:0 0 4px;\">Moneyline, spread, and totals picks</li>"
+        "<li style=\"margin:0 0 4px;\">Projected scores and model edge on game cards</li>"
+        "<li style=\"margin:0;\">Results and performance views after you are signed in</li>"
+        "</ul>"
+        "</td></tr></table>"
+        "</td></tr>"
+        "<tr><td style=\"padding:18px 28px 10px;text-align:center;\">"
+        "<table role=\"presentation\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:0 auto 12px;\">"
+        "<tr><td style=\"border-radius:10px;background:#00529B;\">"
+        f"<a href=\"{login_url}\" style=\"display:inline-block;padding:14px 28px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;\">"
+        "Log in to PredictionLab"
+        "</a>"
+        "</td></tr></table>"
+        "<p style=\"margin:0 0 6px;font-size:14px;line-height:1.55;color:#475569;\">"
+        f"<a href=\"{plans_url}\" style=\"color:#00529B;font-weight:700;text-decoration:none;\">Manage Subscription</a>"
+        "<span style=\"color:#94a3b8;\">&nbsp;&middot;&nbsp;</span>"
+        f"<a href=\"{site}/\" style=\"color:#00529B;font-weight:700;text-decoration:none;\">Browse picks</a>"
+        "</p>"
+        "<p style=\"margin:10px 0 0;font-size:13px;line-height:1.55;color:#64748b;\">"
+        "After you log in, open <strong>Manage Subscription</strong> from your account menu "
+        "(or visit the Plans page) to update billing or cancel anytime. "
+        "This email does not include payment details."
+        "</p>"
+        "</td></tr>"
+        "<tr><td style=\"padding:8px 28px 24px;text-align:center;\">"
+        "<p style=\"margin:0;font-size:13px;line-height:1.55;color:#64748b;\">"
+        "Questions? Email "
+        f"<a href=\"mailto:{safe_support_href}\" style=\"color:#00529B;font-weight:700;text-decoration:none;\">{safe_support}</a>"
+        "</p>"
+        "</td></tr>"
+        "<tr><td style=\"padding:16px 28px 22px;text-align:center;border-top:1px solid #e2e8f0;background:#f8fafc;\">"
+        "<p style=\"margin:0;font-size:12px;color:#94a3b8;\">"
+        "PredictionLab &middot; "
+        f"<a href=\"{site}/\" style=\"color:#64748b;text-decoration:none;\">{host_label}</a>"
+        "</p>"
+        "</td></tr>"
+        "</table>"
+        "</td></tr></table>"
+        "</body></html>"
+    )
+
+
+def _build_premium_welcome_email_text(
+    *,
+    first_name,
+    plan_label,
+    site_url='https://predictionlab.io',
+    support_email=None,
+):
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    name = first_name or 'there'
+    plan = plan_label or 'Premium'
+    return (
+        f'Welcome to PredictionLab Premium, {name}!\n\n'
+        f'Your {plan} Premium subscription is active.\n\n'
+        f'How to log in\n'
+        f'  Sign in at {site}/login with the email you used at checkout.\n'
+        f'  Guest checkout: use your set-password link, or request one from the login page.\n'
+        f'  Google accounts: use Continue with Google on the login page.\n\n'
+        f'What you get\n'
+        f'  Full picks (moneyline, spread, totals), projected scores, and model edge\n'
+        f'  on supported sports after you log in.\n\n'
+        f'Manage Subscription: {site}/plans\n'
+        f'  (Log in first, then use Manage Subscription from your account menu.)\n\n'
+        f'Support: {support}\n'
         f'Open the site: {site}/\n'
         f'(This email does not include payment details.)\n'
     )
@@ -1774,23 +1835,30 @@ def _send_premium_welcome_email_smtp(*, to_email, first_name, plan_label):
     if not creds:
         logger.warning("[welcome] failed: SMTP password not configured (non-fatal)")
         return False
-    smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
+    smtp_host, smtp_port, smtp_user, smtp_password, support = creds
     try:
-        import smtplib
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
         site = 'https://predictionlab.io'
         text_body = _build_premium_welcome_email_text(
-            first_name=first_name, plan_label=plan_label, site_url=site,
+            first_name=first_name,
+            plan_label=plan_label,
+            site_url=site,
+            support_email=support,
         )
         html_body = _build_premium_welcome_email_html(
-            first_name=first_name, plan_label=plan_label, site_url=site,
+            first_name=first_name,
+            plan_label=plan_label,
+            site_url=site,
+            support_email=support,
         )
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'Welcome to PredictionLab Premium'
         msg['From'] = smtp_user
         msg['To'] = to_email
+        if support:
+            msg['Reply-To'] = support
         msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
         msg.attach(MIMEText(html_body, 'html', 'utf-8'))
         smtp, _transport = _smtp_connect(smtp_host, smtp_port, timeout=15)

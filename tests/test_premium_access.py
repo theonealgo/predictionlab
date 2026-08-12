@@ -1713,7 +1713,20 @@ class PremiumWelcomeEmailTest(unittest.TestCase):
         self.assertIn('predictionlab.io', html)
         self.assertIn('/plans', html)
         self.assertIn('/login', html)
-        self.assertIn('manage or cancel', html.lower())
+        self.assertIn('Manage Subscription', html)
+        self.assertIn('How to log in', html)
+        self.assertIn('What you get', html)
+        self.assertIn('Moneyline', html)
+        self.assertIn('support.predictionlab@gmail.com', html)
+        self.assertIn('#00529B', html)
+        self.assertIn('manage', html.lower())
+        self.assertIn('cancel', html.lower())
+        # Escapes untrusted name fragments
+        nasty = auth._build_premium_welcome_email_html(
+            first_name='<script>x</script>', plan_label='Monthly',
+        )
+        self.assertNotIn('<script>', nasty)
+        self.assertIn('&lt;script&gt;', nasty)
         # No PAN-like digit runs / card brand leakage
         self.assertNotRegex(html, r'\b\d{12,19}\b')
         self.assertNotIn('visa', html.lower())
