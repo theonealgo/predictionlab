@@ -65,10 +65,12 @@
                 <form class="pl2-account-portal-form" method="POST" action="/create-portal-session" onclick="event.stopPropagation()">
                     <button type="submit" class="pl2-account-menu-action">Manage Subscription</button>
                 </form>
+                <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer">Billing portal login</a>
                 <a href="/logout">Sign Out</a>
                 {% else %}
                 <a href="/login">Login</a>
                 <a href="/signup">Sign Up</a>
+                <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer">Manage billing</a>
                 {% endif %}
             </div>
         </div>

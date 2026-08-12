@@ -53,6 +53,7 @@
             <button type="submit" class="auth-btn auth-btn-primary">Log In</button>
         </form>
         <div class="auth-link">Don't have an account? <a href="/signup">Sign up</a></div>
+        <div class="auth-link">Existing customer? <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer">Manage billing</a></div>
     </div>
 </div>
 {% endblock %}

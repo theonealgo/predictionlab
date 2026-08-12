@@ -240,10 +240,12 @@
                     <form method="POST" action="/create-portal-session" style="margin:0;" onclick="event.stopPropagation()">
                         <button type="submit" class="acct-menu-action">Manage Subscription</button>
                     </form>
+                    <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer">Billing portal login</a>
                     <a href="/logout">Sign Out</a>
                     {% else %}
                     <a href="/login">Sign In</a>
                     <a href="/signup">Sign Up</a>
+                    <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer">Manage billing</a>
                     {% endif %}
                     <div class="acct-menu-divider"></div>
                     <a href="/faq">Help</a>

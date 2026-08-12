@@ -104,6 +104,11 @@ STRIPE_PRICE_WEEKLY = os.environ.get('STRIPE_PRICE_WEEKLY', '').strip()
 STRIPE_WEEKLY_URL = 'https://buy.stripe.com/14A6oI4Ra66ReWLczTao802'
 STRIPE_MONTHLY_URL = 'https://buy.stripe.com/bJeeVe0AU1QB7uj7fzao801'
 STRIPE_YEARLY_URL = 'https://buy.stripe.com/8x228s83mfHr8yneI1ao803'
+# Public Customer Portal login (email → manage/cancel). Distinct from /create-portal-session.
+STRIPE_CUSTOMER_PORTAL_LOGIN_URL = (
+    os.environ.get('STRIPE_CUSTOMER_PORTAL_LOGIN_URL', '').strip()
+    or 'https://billing.stripe.com/p/login/8x228sabu7aV7uj43nao800'
+)
 # Customer Portal return URL — production default; override with env if needed.
 STRIPE_PORTAL_RETURN_URL = os.environ.get('STRIPE_PORTAL_RETURN_URL', '').strip()
 DEFAULT_STRIPE_PORTAL_RETURN_URL = 'https://predictionlab.io/'
@@ -543,6 +548,7 @@ def init_auth(app, db_path=None):
             'user': current_user,
             'is_premium': is_prem,
             'is_logged_in': current_user.is_authenticated,
+            'stripe_customer_portal_login_url': STRIPE_CUSTOMER_PORTAL_LOGIN_URL,
         }
 
     logger.info("[auth] Auth system initialized")
@@ -4865,6 +4871,17 @@ def plans_page():
                 </div>
             </div>
             <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily. Cancel any plan anytime. <a href="/refund-policy" style="color:#00529B;font-weight:600;text-decoration:none;">Refund policy</a></p>
+            <div style="text-align:center;font-size:0.95em;color:#334155;margin-top:14px;line-height:1.6;">
+                Already subscribed?
+                {% if is_logged_in|default(false) %}
+                <form method="POST" action="/create-portal-session" style="display:inline;margin:0;">
+                    <button type="submit" style="background:none;border:none;padding:0;color:#00529B;font-weight:700;font-size:inherit;cursor:pointer;text-decoration:underline;">Manage Subscription</button>
+                </form>
+                or
+                {% endif %}
+                <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer" style="color:#00529B;font-weight:700;text-decoration:none;">Billing portal login</a>
+                (email login — no site account needed)
+            </div>
             <div class="free-section">
                 <p class="free-head">Start Free</p>
                 <p class="free-copy">Start free. Upgrade when you're ready for the full edge.</p>
