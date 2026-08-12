@@ -226,6 +226,33 @@ a.pl-brand-logo.pl-brand-logo--holding {
     background: linear-gradient(90deg, #312e81 0%, #6d28d9 48%, #db2777 100%);
     color: #fff;
 }
+/* Stripe weekly Buy Button sits where Try a Week CTAs were */
+.pl-stripe-weekly {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    line-height: 0;
+    max-width: 100%;
+}
+.tv-premium-cta-row .pl-stripe-weekly {
+    flex: 1;
+    min-width: 0;
+}
+.join-premium-actions .pl-stripe-weekly {
+    flex-shrink: 0;
+}
+.plan-card .pl-stripe-weekly,
+.pl2-plan .pl-stripe-weekly {
+    display: flex;
+    width: 100%;
+}
+.nav-cta-weekly.pl-stripe-weekly {
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+}
 .join-premium-close {
     border: 1px solid rgba(255,255,255,0.3);
     background: transparent;
@@ -391,6 +418,18 @@ body.has-join-premium-bar { padding-bottom: 58px; }
     transition: background .15s;
 }
 .tv-menu-btn:hover { background: #f1f5f9; }
+.tv-menu-auth {
+  border-top: 1px solid #f1f5f9;
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.tv-menu-auth-form { margin: 0; }
+.tv-menu-auth button.tv-menu-btn {
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+
 .tv-menu-label { flex: 1; font-size: 0.95rem; font-weight: 700; color: #0f172a; }
 .tv-menu-arrow { color: #94a3b8; font-size: 1rem; }
 .tv-sub-link {

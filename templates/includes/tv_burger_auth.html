@@ -1,0 +1,16 @@
+{# Mobile burger auth — parity with desktop .pl2-account-menu in research_header.html #}
+<div class="tv-menu-auth">
+  {% if is_logged_in|default(false) %}
+  <a href="/account" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Account</span></a>
+  <a href="/account" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Change password</span></a>
+  <form method="POST" action="/create-portal-session" class="tv-menu-auth-form">
+    <button type="submit" class="tv-menu-btn"><span class="tv-menu-label">Manage Subscription</span></button>
+  </form>
+  <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Billing portal</span></a>
+  <a href="/logout" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Sign out</span></a>
+  {% else %}
+  <a href="/login" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Login</span></a>
+  <a href="/signup" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Sign up</span></a>
+  <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Manage billing</span></a>
+  {% endif %}
+</div>
