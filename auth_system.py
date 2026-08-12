@@ -33,7 +33,9 @@ Env vars needed:
                               (default https://predictionlab.io/; local uses request host)
     SECRET_KEY              - Flask session secret (auto-generated if missing)
 
-    SMTP (welcome + claim + forgot-password + contact — same Gmail/App-Password pattern):
+    SMTP (welcome + lifecycle + claim + forgot-password + contact — same Gmail/App-Password pattern):
+    Lifecycle emails (payment failed, cancel confirm, renewal, expired/win-back) use the
+    same SMTP helpers and are triggered from Stripe webhooks (see stripe_webhook).
     SMTP_PASSWORD or CONTACT_SMTP_PASSWORD  - required to send mail
                               (spaces/quotes are stripped — paste Gmail App Password as shown)
     SMTP_HOST               - default smtp.gmail.com
@@ -230,6 +232,16 @@ def _ensure_users_table():
             bucket TEXT PRIMARY KEY,
             count INTEGER NOT NULL DEFAULT 0,
             window_start TEXT NOT NULL
+        )
+    ''')
+    # Lifecycle emails (payment failed / cancel / renewal / expired) — idempotent by key
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS lifecycle_emails (
+            idem_key TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            user_id INTEGER,
+            event_id TEXT,
+            sent_at TEXT DEFAULT (datetime('now'))
         )
     ''')
     conn.commit()
@@ -2020,6 +2032,584 @@ def _welcome_after_premium_grant(
         logger.warning("[welcome] post-grant hook failed (non-fatal): %s", e)
 
 
+# ─── Lifecycle emails (payment failed / cancel / renewal / expired) ───────────
+
+_LIFECYCLE_KIND_PAYMENT_FAILED = 'payment_failed'
+_LIFECYCLE_KIND_CANCEL_CONFIRM = 'cancel_confirm'
+_LIFECYCLE_KIND_RENEWAL_NOTICE = 'renewal_notice'
+_LIFECYCLE_KIND_EXPIRED_WINBACK = 'expired_winback'
+
+
+def _claim_lifecycle_email_slot(idem_key, kind, user_id=None, event_id=None):
+    """Atomically claim a lifecycle send. True = caller owns the send."""
+    if not idem_key or not kind:
+        return False
+    try:
+        conn = _get_db()
+        cur = conn.execute(
+            '''INSERT OR IGNORE INTO lifecycle_emails
+               (idem_key, kind, user_id, event_id)
+               VALUES (?, ?, ?, ?)''',
+            (idem_key, kind, user_id, event_id or ''),
+        )
+        conn.commit()
+        claimed = (cur.rowcount or 0) > 0
+        conn.close()
+        return claimed
+    except Exception as e:
+        logger.warning("[lifecycle] claim slot failed kind=%s (non-fatal): %s", kind, e)
+        return False
+
+
+def _release_lifecycle_email_slot(idem_key):
+    """Release claim after SMTP failure so Stripe retry can resend."""
+    if not idem_key:
+        return
+    try:
+        conn = _get_db()
+        conn.execute('DELETE FROM lifecycle_emails WHERE idem_key = ?', (idem_key,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("[lifecycle] release slot failed (non-fatal): %s", e)
+
+
+def _format_email_date(iso_or_unix=None):
+    """Human date for emails (e.g. Aug 12, 2026). Empty string if unknown."""
+    if iso_or_unix is None or iso_or_unix == '':
+        return ''
+    try:
+        if isinstance(iso_or_unix, (int, float)):
+            dt = datetime.fromtimestamp(int(iso_or_unix))
+        else:
+            s = str(iso_or_unix).strip()
+            if s.isdigit():
+                dt = datetime.fromtimestamp(int(s))
+            else:
+                dt = datetime.fromisoformat(s.replace('Z', '+00:00').replace('+00:00', ''))
+        return dt.strftime('%b %d, %Y')
+    except Exception:
+        return ''
+
+
+def _build_branded_lifecycle_email_html(
+    *,
+    title,
+    first_name,
+    lead_html,
+    body_sections=None,
+    cta_label=None,
+    cta_url=None,
+    secondary_html=None,
+    site_url='https://predictionlab.io',
+    support_email=None,
+):
+    """Shared PredictionLab HTML shell (matches Premium welcome brand)."""
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    safe_name = html.escape(str(first_name or 'there'))
+    safe_title = html.escape(str(title or 'PredictionLab'))
+    safe_support = html.escape(support)
+    safe_support_href = html.escape(support, quote=True)
+    host_label = html.escape(site.replace('https://', '').replace('http://', ''))
+    sections_html = ''
+    for sec in (body_sections or []):
+        heading = html.escape(str(sec.get('heading') or ''))
+        body = sec.get('body_html') or ''
+        sections_html += (
+            "<tr><td style=\"padding:14px 28px 8px;\">"
+            "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" "
+            "style=\"background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;\">"
+            "<tr><td style=\"padding:16px 18px;\">"
+            f"<p style=\"margin:0 0 8px;font-size:13px;font-weight:800;letter-spacing:0.04em;"
+            f"text-transform:uppercase;color:#00529B;\">{heading}</p>"
+            f"<div style=\"margin:0;font-size:14px;line-height:1.6;color:#334155;\">{body}</div>"
+            "</td></tr></table>"
+            "</td></tr>"
+        )
+    cta_block = ''
+    if cta_label and cta_url:
+        safe_cta = html.escape(str(cta_label))
+        safe_href = html.escape(str(cta_url), quote=True)
+        cta_block = (
+            "<tr><td style=\"padding:18px 28px 10px;text-align:center;\">"
+            "<table role=\"presentation\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:0 auto 12px;\">"
+            "<tr><td style=\"border-radius:10px;background:#00529B;\">"
+            f"<a href=\"{safe_href}\" style=\"display:inline-block;padding:14px 28px;font-size:15px;"
+            f"font-weight:800;color:#ffffff;text-decoration:none;\">{safe_cta}</a>"
+            "</td></tr></table>"
+            "</td></tr>"
+        )
+    secondary = secondary_html or ''
+    return (
+        "<!DOCTYPE html>"
+        "<html lang=\"en\">"
+        "<head>"
+        "<meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<meta name=\"color-scheme\" content=\"light\">"
+        f"<title>{safe_title}</title>"
+        "</head>"
+        "<body style=\"margin:0;padding:0;background:#e8eef5;font-family:-apple-system,BlinkMacSystemFont,"
+        "'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;\">"
+        "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" "
+        "style=\"background:#e8eef5;padding:28px 12px;\">"
+        "<tr><td align=\"center\">"
+        "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" "
+        "style=\"max-width:580px;background:#ffffff;border:1px solid #d7e0ea;border-radius:18px;overflow:hidden;\">"
+        "<tr><td style=\"background:#00529B;padding:22px 28px;text-align:center;\">"
+        "<div style=\"font-size:22px;font-weight:800;letter-spacing:0.2px;color:#ffffff;\">PredictionLab</div>"
+        "<div style=\"margin-top:4px;font-size:13px;color:rgba(255,255,255,0.88);\">AI sports predictions</div>"
+        "</td></tr>"
+        "<tr><td style=\"padding:28px 28px 8px;\">"
+        f"<h1 style=\"margin:0 0 10px;font-size:24px;line-height:1.3;color:#0f172a;font-weight:800;\">{safe_title}</h1>"
+        f"<p style=\"margin:0 0 16px;font-size:15px;line-height:1.65;color:#334155;\">Hi {safe_name},</p>"
+        f"<div style=\"margin:0 0 8px;font-size:15px;line-height:1.65;color:#334155;\">{lead_html}</div>"
+        "</td></tr>"
+        f"{sections_html}"
+        f"{cta_block}"
+        f"{secondary}"
+        "<tr><td style=\"padding:8px 28px 24px;text-align:center;\">"
+        "<p style=\"margin:0;font-size:13px;line-height:1.55;color:#64748b;\">"
+        "Questions? Email "
+        f"<a href=\"mailto:{safe_support_href}\" style=\"color:#00529B;font-weight:700;"
+        f"text-decoration:none;\">{safe_support}</a>"
+        "</p>"
+        "</td></tr>"
+        "<tr><td style=\"padding:16px 28px 22px;text-align:center;border-top:1px solid #e2e8f0;background:#f8fafc;\">"
+        "<p style=\"margin:0;font-size:12px;color:#94a3b8;\">"
+        "PredictionLab &middot; "
+        f"<a href=\"{site}/\" style=\"color:#64748b;text-decoration:none;\">{host_label}</a>"
+        "</p>"
+        "</td></tr>"
+        "</table>"
+        "</td></tr></table>"
+        "</body></html>"
+    )
+
+
+def _smtp_send_html_email(*, to_email, subject, text_body, html_body, purpose='lifecycle'):
+    """Send multipart HTML+text via existing Gmail SMTP. Never raises. Returns bool."""
+    if not to_email or not subject:
+        return False
+    creds = _smtp_credentials()
+    if not creds:
+        logger.warning("[%s] failed: SMTP password not configured (non-fatal)", purpose)
+        return False
+    smtp_host, smtp_port, smtp_user, smtp_password, support = creds
+    try:
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        if support:
+            msg['Reply-To'] = support
+        msg.attach(MIMEText(text_body or '', 'plain', 'utf-8'))
+        msg.attach(MIMEText(html_body or '', 'html', 'utf-8'))
+        smtp, _transport = _smtp_connect(smtp_host, smtp_port, timeout=15)
+        try:
+            smtp.login(smtp_user, smtp_password)
+            smtp.sendmail(smtp_user, [to_email], msg.as_string())
+        finally:
+            try:
+                smtp.quit()
+            except Exception:
+                try:
+                    smtp.close()
+                except Exception:
+                    pass
+        return True
+    except Exception as e:
+        logger.warning("[%s] SMTP send failed (non-fatal): %s", purpose, e)
+        return False
+
+
+def _resolve_lifecycle_recipient(*, customer_id=None, email=None, metadata=None, stripe_mod=None):
+    """Resolve local user + email for a Stripe payer. Returns (user_id, email, name)."""
+    user_id, resolved_email = _resolve_user_for_stripe_payer(
+        customer_id=customer_id,
+        email=email,
+        metadata=metadata,
+        stripe_mod=stripe_mod,
+    )
+    name = None
+    if user_id:
+        user = _load_user_by_id(user_id)
+        if user:
+            name = user.name
+            resolved_email = resolved_email or user.email
+    return user_id, _normalize_email(resolved_email), name
+
+
+def _build_payment_failed_email_content(*, first_name, site_url='https://predictionlab.io', support_email=None):
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    portal_hint = f'{site}/plans'
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    lead = (
+        "We could not process your latest PredictionLab Premium payment. "
+        "Update your payment method so your access stays uninterrupted."
+    )
+    sections = [{
+        'heading': 'What to do',
+        'body_html': (
+            "Log in, open <strong>Manage Subscription</strong> from your account menu, "
+            "and update your card. Stripe usually retries failed payments automatically."
+        ),
+    }]
+    html_body = _build_branded_lifecycle_email_html(
+        title='Payment unsuccessful',
+        first_name=first_name,
+        lead_html=lead,
+        body_sections=sections,
+        cta_label='Manage Subscription',
+        cta_url=portal_hint,
+        site_url=site,
+        support_email=support,
+    )
+    text_body = (
+        f'Hi {first_name or "there"},\n\n'
+        f'We could not process your latest PredictionLab Premium payment.\n'
+        f'Update your payment method via Manage Subscription ({portal_hint}) '
+        f'after you log in, or email {support}.\n'
+    )
+    return 'Action needed: PredictionLab payment unsuccessful', text_body, html_body
+
+
+def _build_cancel_confirm_email_content(
+    *, first_name, access_until='', site_url='https://predictionlab.io', support_email=None,
+):
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    until_bit = (
+        f' You keep Premium access through <strong>{html.escape(access_until)}</strong>.'
+        if access_until else
+        ' You keep Premium access through the end of your current billing period.'
+    )
+    lead = (
+        "Your PredictionLab Premium cancellation is confirmed."
+        f"{until_bit} After that, your account returns to free access."
+    )
+    sections = [{
+        'heading': 'Changed your mind?',
+        'body_html': (
+            "You can renew anytime from the Plans page, or reopen "
+            "<strong>Manage Subscription</strong> while your period is still active."
+        ),
+    }]
+    html_body = _build_branded_lifecycle_email_html(
+        title='Cancellation confirmed',
+        first_name=first_name,
+        lead_html=lead,
+        body_sections=sections,
+        cta_label='View Plans',
+        cta_url=f'{site}/plans',
+        site_url=site,
+        support_email=support,
+    )
+    until_text = f' through {access_until}' if access_until else ' through the end of your billing period'
+    text_body = (
+        f'Hi {first_name or "there"},\n\n'
+        f'Your PredictionLab Premium cancellation is confirmed. '
+        f'You keep access{until_text}.\n'
+        f'Renew anytime: {site}/plans\n'
+        f'Support: {support}\n'
+    )
+    return 'PredictionLab: cancellation confirmed', text_body, html_body
+
+
+def _build_renewal_notice_email_content(
+    *, first_name, renew_on='', plan_label='', site_url='https://predictionlab.io', support_email=None,
+):
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    safe_plan = html.escape(str(plan_label or 'Premium'))
+    when = (
+        f' on <strong>{html.escape(renew_on)}</strong>' if renew_on else ' soon'
+    )
+    lead = (
+        f"Just a heads-up: your <strong style=\"color:#00529B;\">{safe_plan}</strong> "
+        f"PredictionLab Premium subscription renews{when}."
+    )
+    sections = [{
+        'heading': 'Manage billing',
+        'body_html': (
+            "No action is needed if you want to continue. To update your card or cancel "
+            "before renewal, log in and open <strong>Manage Subscription</strong>."
+        ),
+    }]
+    html_body = _build_branded_lifecycle_email_html(
+        title='Upcoming renewal',
+        first_name=first_name,
+        lead_html=lead,
+        body_sections=sections,
+        cta_label='Manage Subscription',
+        cta_url=f'{site}/plans',
+        site_url=site,
+        support_email=support,
+    )
+    when_text = f' on {renew_on}' if renew_on else ' soon'
+    text_body = (
+        f'Hi {first_name or "there"},\n\n'
+        f'Your {plan_label or "Premium"} PredictionLab subscription renews{when_text}.\n'
+        f'Manage billing: {site}/plans (log in → Manage Subscription)\n'
+        f'Support: {support}\n'
+    )
+    return 'PredictionLab: upcoming renewal', text_body, html_body
+
+
+def _build_expired_winback_email_content(
+    *, first_name, site_url='https://predictionlab.io', support_email=None,
+):
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    lead = (
+        "Your PredictionLab Premium access has ended. You can still browse free picks — "
+        "resubscribe anytime to unlock full spreads, totals, and model edge again."
+    )
+    sections = [{
+        'heading': 'Come back anytime',
+        'body_html': (
+            "Weekly, monthly, and yearly plans are on the Plans page. "
+            "Your account and login stay the same."
+        ),
+    }]
+    html_body = _build_branded_lifecycle_email_html(
+        title='We would love to have you back',
+        first_name=first_name,
+        lead_html=lead,
+        body_sections=sections,
+        cta_label='View Plans',
+        cta_url=f'{site}/plans',
+        site_url=site,
+        support_email=support,
+    )
+    text_body = (
+        f'Hi {first_name or "there"},\n\n'
+        f'Your PredictionLab Premium access has ended.\n'
+        f'Resubscribe anytime: {site}/plans\n'
+        f'Support: {support}\n'
+    )
+    return 'Your PredictionLab Premium access has ended', text_body, html_body
+
+
+def _maybe_send_lifecycle_email(
+    *,
+    kind,
+    idem_key,
+    to_email,
+    first_name,
+    subject,
+    text_body,
+    html_body,
+    user_id=None,
+    event_id=None,
+):
+    """Idempotent lifecycle send. True = sent or skip (no retry); False = retry."""
+    try:
+        email_norm = _normalize_email(to_email)
+        if not kind or not idem_key or not email_norm:
+            logger.info(
+                "[lifecycle] skipped missing kind=%s email=%s key=%s",
+                kind, bool(email_norm), idem_key,
+            )
+            return True
+        if not _claim_lifecycle_email_slot(
+            idem_key, kind, user_id=user_id, event_id=event_id,
+        ):
+            logger.info(
+                "[lifecycle] skipped already_sent kind=%s key=%s", kind, idem_key,
+            )
+            return True
+        logger.info(
+            "[lifecycle] attempted kind=%s user_id=%s key=%s event_id=%s",
+            kind, user_id, idem_key, event_id,
+        )
+        ok = _smtp_send_html_email(
+            to_email=email_norm,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            purpose=f'lifecycle_{kind}',
+        )
+        if ok:
+            logger.info("[lifecycle] sent kind=%s key=%s", kind, idem_key)
+            return True
+        _release_lifecycle_email_slot(idem_key)
+        logger.warning("[lifecycle] failed kind=%s key=%s (will allow retry)", kind, idem_key)
+        return False
+    except Exception as e:
+        logger.warning("[lifecycle] unexpected kind=%s (non-fatal): %s", kind, e)
+        try:
+            _release_lifecycle_email_slot(idem_key)
+        except Exception:
+            pass
+        return False
+
+
+def _maybe_send_payment_failed_from_invoice(invoice, *, event_id=None, stripe_mod=None):
+    """invoice.payment_failed → payment unsuccessful email. Never raises."""
+    try:
+        if not invoice:
+            return True
+        invoice_id = _stripe_id(_obj_get(invoice, 'id')) or event_id
+        customer_id = _stripe_id(_obj_get(invoice, 'customer'))
+        email = (
+            _obj_get(invoice, 'customer_email')
+            or _obj_get(invoice, 'email')
+        )
+        user_id, resolved_email, name = _resolve_lifecycle_recipient(
+            customer_id=customer_id, email=email, stripe_mod=stripe_mod,
+        )
+        if not resolved_email:
+            logger.info(
+                "[lifecycle] payment_failed skipped no_email customer=%s inv=%s",
+                customer_id, invoice_id,
+            )
+            return True
+        first = _first_name_for_email(name, resolved_email)
+        subject, text_body, html_body = _build_payment_failed_email_content(first_name=first)
+        return _maybe_send_lifecycle_email(
+            kind=_LIFECYCLE_KIND_PAYMENT_FAILED,
+            idem_key=f'payment_failed:{invoice_id}',
+            to_email=resolved_email,
+            first_name=first,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    except Exception as e:
+        logger.warning("[lifecycle] payment_failed hook failed (non-fatal): %s", e)
+        return True
+
+
+def _maybe_send_cancel_confirm_from_subscription(subscription, *, event_id=None, stripe_mod=None):
+    """Send cancel confirm when cancel_at_period_end is set. Never raises."""
+    try:
+        if not subscription:
+            return True
+        if not bool(_obj_get(subscription, 'cancel_at_period_end')):
+            return True
+        sub_id = _stripe_id(_obj_get(subscription, 'id'))
+        period_end = _period_end_from_subscription(subscription)
+        access_until = _format_email_date(period_end)
+        # One notice per subscription period-end (re-cancel after resume can notify again)
+        idem = f'cancel_confirm:{sub_id}:{period_end or "none"}'
+        customer_id = _stripe_id(_obj_get(subscription, 'customer'))
+        meta = _obj_get(subscription, 'metadata')
+        user_id, resolved_email, name = _resolve_lifecycle_recipient(
+            customer_id=customer_id, metadata=meta, stripe_mod=stripe_mod,
+        )
+        if not resolved_email:
+            logger.info(
+                "[lifecycle] cancel_confirm skipped no_email sub=%s", sub_id,
+            )
+            return True
+        first = _first_name_for_email(name, resolved_email)
+        subject, text_body, html_body = _build_cancel_confirm_email_content(
+            first_name=first, access_until=access_until,
+        )
+        return _maybe_send_lifecycle_email(
+            kind=_LIFECYCLE_KIND_CANCEL_CONFIRM,
+            idem_key=idem,
+            to_email=resolved_email,
+            first_name=first,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    except Exception as e:
+        logger.warning("[lifecycle] cancel_confirm hook failed (non-fatal): %s", e)
+        return True
+
+
+def _maybe_send_renewal_notice_from_invoice(invoice, *, event_id=None, stripe_mod=None):
+    """invoice.upcoming → renewal notice. Requires Stripe Dashboard event enabled."""
+    try:
+        if not invoice:
+            return True
+        invoice_id = _stripe_id(_obj_get(invoice, 'id')) or event_id
+        customer_id = _stripe_id(_obj_get(invoice, 'customer'))
+        email = _obj_get(invoice, 'customer_email') or _obj_get(invoice, 'email')
+        user_id, resolved_email, name = _resolve_lifecycle_recipient(
+            customer_id=customer_id, email=email, stripe_mod=stripe_mod,
+        )
+        if not resolved_email:
+            logger.info(
+                "[lifecycle] renewal_notice skipped no_email customer=%s inv=%s",
+                customer_id, invoice_id,
+            )
+            return True
+        # Prefer period_end / next_payment_attempt as renew-on date
+        renew_ts = (
+            _obj_get(invoice, 'next_payment_attempt')
+            or _obj_get(invoice, 'period_end')
+        )
+        renew_on = _format_email_date(renew_ts)
+        meta = _obj_get(invoice, 'metadata')
+        plan_from_meta = meta.get('plan') if isinstance(meta, dict) else None
+        plan = _plan_from_invoice_interval(invoice) or _normalize_plan(plan_from_meta)
+        plan_label = _plan_display_name(plan) if plan else 'Premium'
+        first = _first_name_for_email(name, resolved_email)
+        subject, text_body, html_body = _build_renewal_notice_email_content(
+            first_name=first, renew_on=renew_on, plan_label=plan_label,
+        )
+        return _maybe_send_lifecycle_email(
+            kind=_LIFECYCLE_KIND_RENEWAL_NOTICE,
+            idem_key=f'renewal_notice:{invoice_id}',
+            to_email=resolved_email,
+            first_name=first,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    except Exception as e:
+        logger.warning("[lifecycle] renewal_notice hook failed (non-fatal): %s", e)
+        return True
+
+
+def _maybe_send_expired_winback_from_subscription(subscription, *, event_id=None, stripe_mod=None):
+    """customer.subscription.deleted → expired / win-back. Never raises."""
+    try:
+        if not subscription:
+            return True
+        sub_id = _stripe_id(_obj_get(subscription, 'id'))
+        customer_id = _stripe_id(_obj_get(subscription, 'customer'))
+        meta = _obj_get(subscription, 'metadata')
+        user_id, resolved_email, name = _resolve_lifecycle_recipient(
+            customer_id=customer_id, metadata=meta, stripe_mod=stripe_mod,
+        )
+        if not resolved_email:
+            logger.info(
+                "[lifecycle] expired_winback skipped no_email sub=%s", sub_id,
+            )
+            return True
+        first = _first_name_for_email(name, resolved_email)
+        subject, text_body, html_body = _build_expired_winback_email_content(first_name=first)
+        return _maybe_send_lifecycle_email(
+            kind=_LIFECYCLE_KIND_EXPIRED_WINBACK,
+            idem_key=f'expired_winback:{sub_id or event_id}',
+            to_email=resolved_email,
+            first_name=first,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    except Exception as e:
+        logger.warning("[lifecycle] expired_winback hook failed (non-fatal): %s", e)
+        return True
+
+
 # ─── Stripe Payments ──────────────────────────────────────────────────────────
 
 def _stripe_price_for_plan(plan):
@@ -3257,6 +3847,94 @@ def reset_password_page():
     )
 
 
+# ─── Account / change password (logged-in) ────────────────────────────────────
+
+@auth_bp.route('/account', methods=['GET', 'POST'])
+@auth_bp.route('/change-password', methods=['GET', 'POST'])
+@_flask_login_required
+def account_page():
+    """Logged-in account settings: change password (or set one for Google-only)."""
+    error_msg = ''
+    success_msg = ''
+    has_password = _user_has_password(current_user.id)
+    google_only = _user_is_google_only(current_user.id)
+    has_google = bool(getattr(current_user, 'google_id', None)) or google_only
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or 'change_password').strip()
+        if action == 'change_password':
+            current_pw = request.form.get('current_password', '')
+            new_pw = request.form.get('password', '')
+            confirm = request.form.get('confirm', '')
+            if not new_pw or len(new_pw) < 6:
+                error_msg = 'Password must be at least 6 characters.'
+            elif new_pw != confirm:
+                error_msg = 'Passwords do not match.'
+            elif has_password:
+                # Verify current password
+                try:
+                    conn = _get_db()
+                    row = conn.execute(
+                        'SELECT password_hash FROM users WHERE id = ?',
+                        (current_user.id,),
+                    ).fetchone()
+                    conn.close()
+                    stored = row['password_hash'] if row else None
+                except Exception as e:
+                    logger.error("[account] password lookup failed: %s", e)
+                    stored = None
+                if not stored or not check_password_hash(stored, current_pw):
+                    error_msg = 'Current password is incorrect.'
+                else:
+                    try:
+                        pw_hash = generate_password_hash(new_pw)
+                        conn = _get_db()
+                        conn.execute(
+                            'UPDATE users SET password_hash = ? WHERE id = ?',
+                            (pw_hash, current_user.id),
+                        )
+                        conn.commit()
+                        conn.close()
+                        success_msg = 'Your password has been updated.'
+                        has_password = True
+                        google_only = False
+                        logger.info("[account] password changed user_id=%s", current_user.id)
+                    except Exception as e:
+                        logger.error("[account] password update failed: %s", e)
+                        error_msg = 'Could not update password. Please try again.'
+            else:
+                # Logged-in Google-only (or passwordless): set a password without current
+                try:
+                    pw_hash = generate_password_hash(new_pw)
+                    conn = _get_db()
+                    conn.execute(
+                        'UPDATE users SET password_hash = ? WHERE id = ?',
+                        (pw_hash, current_user.id),
+                    )
+                    conn.commit()
+                    conn.close()
+                    success_msg = 'Password added. You can now also sign in with email and password.'
+                    has_password = True
+                    google_only = False
+                    logger.info("[account] password set user_id=%s", current_user.id)
+                except Exception as e:
+                    logger.error("[account] password set failed: %s", e)
+                    error_msg = 'Could not set password. Please try again.'
+
+    return render_template(
+        'account.html',
+        error_msg=error_msg,
+        success_msg=success_msg,
+        email=current_user.email or '',
+        name=current_user.name or '',
+        has_password=has_password,
+        google_only=google_only,
+        has_google=has_google,
+        is_premium=bool(getattr(current_user, 'premium_active', False)),
+        page='account',
+    )
+
+
 def _parse_stripe_webhook_event(payload, sig, webhook_secret):
     """Verify signature and parse Snapshot webhook events.
 
@@ -3556,6 +4234,8 @@ def stripe_webhook():
                 'checkout.session.completed',
                 'invoice.payment_succeeded',
                 'invoice.paid',
+                'invoice.payment_failed',
+                'invoice.upcoming',
                 'customer.subscription.created',
                 'customer.subscription.updated',
                 'customer.subscription.deleted',
@@ -3589,6 +4269,23 @@ def stripe_webhook():
                     _handle_invoice_payment_succeeded(
                         data_obj, stripe_mod=stripe,
                         event_id=event_id, event_type=etype,
+                    )
+                )
+
+            elif etype == 'invoice.payment_failed':
+                # Email only — premium stays via past_due sync on subscription events.
+                applied = bool(
+                    _maybe_send_payment_failed_from_invoice(
+                        data_obj, event_id=event_id, stripe_mod=stripe,
+                    )
+                )
+
+            elif etype == 'invoice.upcoming':
+                # Requires invoice.upcoming enabled on the Stripe webhook endpoint.
+                # No local cron: Stripe sends this ~days before renewal when configured.
+                applied = bool(
+                    _maybe_send_renewal_notice_from_invoice(
+                        data_obj, event_id=event_id, stripe_mod=stripe,
                     )
                 )
 
@@ -3632,6 +4329,16 @@ def stripe_webhook():
                         "[welcome] skipped not_initial subscription.updated sub=%s",
                         _stripe_id(_obj_get(data_obj, 'id')),
                     )
+                    # Cancel-at-period-end confirm (idempotent per sub + period_end)
+                    try:
+                        _maybe_send_cancel_confirm_from_subscription(
+                            data_obj, event_id=event_id, stripe_mod=stripe,
+                        )
+                    except Exception as ce:
+                        logger.warning(
+                            "[lifecycle] cancel_confirm on updated failed (non-fatal): %s",
+                            ce,
+                        )
 
             elif etype == 'customer.subscription.deleted':
                 customer_id = _stripe_id(_obj_get(data_obj, 'customer'))
@@ -3643,6 +4350,15 @@ def stripe_webhook():
                         subscription_id=_stripe_id(_obj_get(data_obj, 'id')),
                         status='canceled',
                     )
+                    try:
+                        _maybe_send_expired_winback_from_subscription(
+                            data_obj, event_id=event_id, stripe_mod=stripe,
+                        )
+                    except Exception as ee:
+                        logger.warning(
+                            "[lifecycle] expired_winback on deleted failed (non-fatal): %s",
+                            ee,
+                        )
                     applied = True
                 else:
                     applied = False
@@ -3655,8 +4371,8 @@ def stripe_webhook():
                 _mark_webhook_event_processed(event_id, etype)
             else:
                 logger.error(
-                    "[stripe] event_id=%s type=%s acked 200 but premium not "
-                    "applied — leaving unmarked for Dashboard Resend",
+                    "[stripe] event_id=%s type=%s acked 200 but handler did not "
+                    "complete successfully — leaving unmarked for Dashboard Resend",
                     event_id, etype,
                 )
         except Exception as e:
