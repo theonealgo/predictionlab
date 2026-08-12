@@ -35,13 +35,16 @@ Env vars needed:
 
     SMTP (welcome + claim + forgot-password + contact — same Gmail/App-Password pattern):
     SMTP_PASSWORD or CONTACT_SMTP_PASSWORD  - required to send mail
+                              (spaces/quotes are stripped — paste Gmail App Password as shown)
     SMTP_HOST               - default smtp.gmail.com
-    SMTP_PORT               - default 587
+    SMTP_PORT               - default 587 (STARTTLS); use 465 for SMTP_SSL
+    SMTP_USE_SSL            - optional 1/0; defaults to SSL when port is 465
     SMTP_USER               - Gmail login user; MUST match the App Password account
-                              (default: SUPPORT_EMAIL → support.predictionlab@gmail.com).
+                              (default: support.predictionlab@gmail.com).
                               Must match contact form / render.yaml — do NOT leave this as
                               a different mailbox than SMTP_PASSWORD.
-    SUPPORT_EMAIL           - From address fallback (default support.predictionlab@gmail.com)
+    SUPPORT_EMAIL           - display/billing fallback (default support.predictionlab@gmail.com)
+    Admin SMTP probe        - GET /smtp-diag?token=ADMIN_PASSWORD (&send=1 to mail support)
 """
 
 import os
@@ -843,6 +846,107 @@ def admin_reset():
         return f'Error: {e}', 500
 
 
+@auth_bp.route('/smtp-diag')
+def smtp_diag():
+    """Temporary admin-only SMTP probe. ?token=ADMIN_PASSWORD
+
+    Returns JSON with config metadata + live login/send result.
+    Never returns passwords, app passwords, or reset tokens.
+    Optional: &send=1 to send a short probe mail to CONTACT_TO_EMAIL/SUPPORT_EMAIL.
+    """
+    from flask import jsonify
+    token = request.args.get('token', '').strip()
+    expected = os.environ.get('ADMIN_PASSWORD', '').strip()
+    if not token or not expected or token != expected:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 403
+
+    raw = (
+        os.environ.get('SMTP_PASSWORD')
+        or os.environ.get('CONTACT_SMTP_PASSWORD')
+        or ''
+    )
+    normalized, had_ws = _normalize_smtp_password(raw)
+    host = (os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
+    try:
+        port = int((os.environ.get('SMTP_PORT') or '587').strip() or '587')
+    except ValueError:
+        port = 587
+    user_env = (os.environ.get('SMTP_USER') or '').strip()
+    creds = _smtp_credentials()
+    payload = {
+        'ok': False,
+        'password_configured': bool(normalized),
+        'password_len': len(normalized),
+        'password_had_whitespace_or_quotes_normalized': bool(had_ws) or (
+            len(str(raw).strip()) >= 2
+            and str(raw).strip()[0] == str(raw).strip()[-1]
+            and str(raw).strip()[0] in ('"', "'")
+        ),
+        'env_SMTP_USER': user_env or None,
+        'env_SMTP_HOST': host,
+        'env_SMTP_PORT': port,
+        'transport': 'ssl' if _smtp_use_ssl(port) else 'starttls',
+        'effective_user': creds[2] if creds else None,
+        'support_from_creds': creds[4] if creds else None,
+        'probe': None,
+    }
+    if not creds:
+        payload['error'] = 'SMTP password not configured'
+        return jsonify(payload), 200
+
+    do_send = (request.args.get('send') or '').strip().lower() in ('1', 'true', 'yes')
+    smtp_host, smtp_port, smtp_user, smtp_password, support = creds
+    probe = {
+        'login_ok': False,
+        'send_ok': None,
+        'error_class': None,
+        'error': None,
+        'message_id': None,
+    }
+    try:
+        smtp, transport = _smtp_connect(smtp_host, smtp_port, timeout=20)
+        try:
+            smtp.login(smtp_user, smtp_password)
+            probe['login_ok'] = True
+            probe['transport_used'] = transport
+            if do_send:
+                to_addr = support or _DEFAULT_SUPPORT_EMAIL
+                ok, msg_id = _smtp_send_text_email(
+                    to_email=to_addr,
+                    subject='[predictionlab smtp-diag] probe',
+                    body=(
+                        'Temporary SMTP diagnostic probe from /smtp-diag.\n'
+                        'If you received this, password-reset SMTP can authenticate and send.\n'
+                    ),
+                    purpose='smtp_diag',
+                )
+                probe['send_ok'] = bool(ok)
+                probe['message_id'] = msg_id
+                probe['sent_to'] = _mask_email(to_addr)
+        finally:
+            try:
+                smtp.quit()
+            except Exception:
+                try:
+                    smtp.close()
+                except Exception:
+                    pass
+    except Exception as e:
+        probe['error_class'] = type(e).__name__
+        probe['error'] = str(e)[:300]
+
+    payload['probe'] = probe
+    payload['ok'] = bool(probe.get('login_ok')) and (
+        True if not do_send else bool(probe.get('send_ok'))
+    )
+    logger.info(
+        "[smtp_diag] ok=%s login_ok=%s send_ok=%s user=%s port=%s transport=%s error_class=%s",
+        payload['ok'], probe.get('login_ok'), probe.get('send_ok'),
+        smtp_user, smtp_port, payload['transport'], probe.get('error_class'),
+    )
+    return jsonify(payload), 200
+
+
 # ─── Set-password / claim-account (post-pay for guest checkouts) ──────────────
 
 def _hash_reset_token(raw_token):
@@ -1331,6 +1435,51 @@ def _public_site_base_url(base_url=None):
     return f'https://{raw.lstrip("/")}'
 
 
+def _normalize_smtp_password(raw):
+    """Normalize Gmail App Password / SMTP secret from env.
+
+    Render/dashboard pastes often include:
+    - surrounding quotes ("xxxx…")
+    - spaces shown in Google's App Password UI (xxxx xxxx xxxx xxxx)
+    Those break SMTP AUTH even when the App Password itself is valid.
+    Never log the returned value.
+    """
+    if raw is None:
+        return '', False
+    s = str(raw).strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        s = s[1:-1].strip()
+    had_whitespace = any(ch.isspace() for ch in s)
+    # Gmail App Passwords are 16 chars; spaces are display-only.
+    s = ''.join(ch for ch in s if not ch.isspace())
+    return s, had_whitespace
+
+
+def _smtp_use_ssl(port):
+    """True when we should use SMTP_SSL (implicit TLS), else STARTTLS."""
+    flag = (os.environ.get('SMTP_USE_SSL') or '').strip().lower()
+    if flag in ('1', 'true', 'yes', 'on'):
+        return True
+    if flag in ('0', 'false', 'no', 'off'):
+        return False
+    try:
+        return int(port) == 465
+    except (TypeError, ValueError):
+        return False
+
+
+def _smtp_connect(host, port, timeout=20):
+    """Open SMTP connection: SMTP_SSL on 465 (or SMTP_USE_SSL), else STARTTLS."""
+    import smtplib
+    use_ssl = _smtp_use_ssl(port)
+    if use_ssl:
+        smtp = smtplib.SMTP_SSL(host, port, timeout=timeout)
+        return smtp, 'ssl'
+    smtp = smtplib.SMTP(host, port, timeout=timeout)
+    smtp.starttls()
+    return smtp, 'starttls'
+
+
 def _smtp_credentials():
     """Return (host, port, user, password, support) or None if password missing.
 
@@ -1340,16 +1489,27 @@ def _smtp_credentials():
 
     Legacy underdogsbetemail is force-overridden to support.predictionlab so forgot-password /
     Google-only guidance mail cannot silently fail behind a generic success page.
+
+    Password is normalized (strip quotes + all whitespace) so Gmail App Password pastes work.
     """
-    smtp_password = (
+    raw_password = (
         os.environ.get('SMTP_PASSWORD')
         or os.environ.get('CONTACT_SMTP_PASSWORD')
         or ''
-    ).strip()
+    )
+    smtp_password, had_ws = _normalize_smtp_password(raw_password)
     if not smtp_password:
         return None
+    if had_ws:
+        logger.info(
+            "[smtp] Normalized SMTP password (removed whitespace); len=%s",
+            len(smtp_password),
+        )
     smtp_host = (os.environ.get('SMTP_HOST') or 'smtp.gmail.com').strip()
-    smtp_port = int(os.environ.get('SMTP_PORT') or '587')
+    try:
+        smtp_port = int((os.environ.get('SMTP_PORT') or '587').strip() or '587')
+    except ValueError:
+        smtp_port = 587
     smtp_user = (os.environ.get('SMTP_USER') or _DEFAULT_SUPPORT_EMAIL).strip()
     if not smtp_user or 'underdogsbetemail' in smtp_user.lower():
         if smtp_user and 'underdogsbetemail' in smtp_user.lower():
@@ -1372,6 +1532,7 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail', reply_to=N
     Logs message_id on accept and on fail. Never logs passwords or tokens.
     If the configured SMTP_USER fails auth, retries once as support.predictionlab.
     Optional reply_to is used by the contact form (same Gmail path).
+    Uses SMTP_SSL when port=465 (or SMTP_USE_SSL=1); otherwise STARTTLS on 587.
     """
     if not to_email or not subject:
         return False, None
@@ -1385,11 +1546,11 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail', reply_to=N
         )
         return False, None
     smtp_host, smtp_port, smtp_user, smtp_password, _support = creds
+    transport = 'ssl' if _smtp_use_ssl(smtp_port) else 'starttls'
     logger.info(
-        "[%s] SMTP attempt start to=%s from=%s host=%s port=%s",
-        purpose, masked_to, smtp_user, smtp_host, smtp_port,
+        "[%s] SMTP attempt start to=%s from=%s host=%s port=%s transport=%s password_len=%s",
+        purpose, masked_to, smtp_user, smtp_host, smtp_port, transport, len(smtp_password),
     )
-    import smtplib
     import uuid
     from email.message import EmailMessage
 
@@ -1403,6 +1564,7 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail', reply_to=N
     last_error_class = None
 
     for attempt_user in users_to_try:
+        smtp = None
         try:
             msg = EmailMessage()
             msg['Subject'] = subject
@@ -1412,10 +1574,18 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail', reply_to=N
             if reply_to:
                 msg['Reply-To'] = reply_to
             msg.set_content(body or '')
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
-                smtp.starttls()
+            smtp, used_transport = _smtp_connect(smtp_host, smtp_port, timeout=20)
+            try:
                 smtp.login(attempt_user, smtp_password)
                 refused = smtp.send_message(msg)
+            finally:
+                try:
+                    smtp.quit()
+                except Exception:
+                    try:
+                        smtp.close()
+                    except Exception:
+                        pass
             if refused:
                 logger.warning(
                     "[%s] SMTP refused recipients to=%s from=%s message_id=%s refused=%s",
@@ -1425,8 +1595,8 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail', reply_to=N
                 last_error_class = 'SMTPRecipientsRefused'
                 continue
             logger.info(
-                "[%s] SMTP accepted to=%s from=%s host=%s message_id=%s",
-                purpose, masked_to, attempt_user, smtp_host, msg_id,
+                "[%s] SMTP accepted to=%s from=%s host=%s transport=%s message_id=%s",
+                purpose, masked_to, attempt_user, smtp_host, used_transport, msg_id,
             )
             return True, msg_id
         except Exception as e:
@@ -1434,10 +1604,10 @@ def _smtp_send_text_email(*, to_email, subject, body, purpose='mail', reply_to=N
             last_error_class = type(e).__name__
             # Log error class + short message; never credentials/tokens.
             logger.warning(
-                "[%s] SMTP send failed (non-fatal) to=%s from=%s host=%s "
-                "message_id=%s error_class=%s error=%s",
-                purpose, masked_to, attempt_user, smtp_host, msg_id,
-                last_error_class, e,
+                "[%s] SMTP send failed (non-fatal) to=%s from=%s host=%s port=%s "
+                "transport=%s message_id=%s error_class=%s error=%s",
+                purpose, masked_to, attempt_user, smtp_host, smtp_port,
+                transport, msg_id, last_error_class, e,
             )
             # Only retry on likely auth/mailbox mismatch
             err_l = str(e).lower()
@@ -1623,10 +1793,18 @@ def _send_premium_welcome_email_smtp(*, to_email, first_name, plan_label):
         msg['To'] = to_email
         msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
         msg.attach(MIMEText(html_body, 'html', 'utf-8'))
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            smtp.starttls()
+        smtp, _transport = _smtp_connect(smtp_host, smtp_port, timeout=15)
+        try:
             smtp.login(smtp_user, smtp_password)
             smtp.sendmail(smtp_user, [to_email], msg.as_string())
+        finally:
+            try:
+                smtp.quit()
+            except Exception:
+                try:
+                    smtp.close()
+                except Exception:
+                    pass
         return True
     except Exception as e:
         # Do not log credentials or message bodies

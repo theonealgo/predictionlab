@@ -230,6 +230,34 @@ class PasswordResetTests(unittest.TestCase):
         self.assertIsNotNone(creds)
         self.assertEqual(creds[2], 'support.predictionlab@gmail.com')
 
+    def test_normalize_smtp_password_strips_spaces_and_quotes(self):
+        pw, had = auth._normalize_smtp_password(' abcd efgh ijkl mnop ')
+        self.assertTrue(had)
+        self.assertEqual(pw, 'abcdefghijklmnop')
+        pw2, had2 = auth._normalize_smtp_password('"abcdefghijklmnop"')
+        self.assertEqual(pw2, 'abcdefghijklmnop')
+        self.assertFalse(had2)
+
+    def test_smtp_credentials_strips_app_password_spaces(self):
+        spaced = 'abcd efgh ijkl mnop'
+        with mock.patch.dict(
+            os.environ,
+            {
+                'SMTP_PASSWORD': spaced,
+                'SMTP_USER': 'support.predictionlab@gmail.com',
+            },
+            clear=False,
+        ):
+            creds = auth._smtp_credentials()
+        self.assertIsNotNone(creds)
+        self.assertEqual(creds[3], 'abcdefghijklmnop')
+
+    def test_smtp_use_ssl_port_465(self):
+        self.assertTrue(auth._smtp_use_ssl(465))
+        self.assertFalse(auth._smtp_use_ssl(587))
+        with mock.patch.dict(os.environ, {'SMTP_USE_SSL': '1'}, clear=False):
+            self.assertTrue(auth._smtp_use_ssl(587))
+
     # 7. Reset with valid token updates password; single-use
     def test_reset_valid_token_sets_password_once(self):
         raw = auth._issue_set_password_token(self.pw_uid, ttl_hours=1)
