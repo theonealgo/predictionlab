@@ -282,7 +282,14 @@ class LifecycleWebhookTest(unittest.TestCase):
                 }
             },
         }
-        with mock.patch.object(auth, '_smtp_send_html_email', return_value=True) as send:
+
+        class _SubList:
+            @staticmethod
+            def list(**kwargs):
+                return {'data': []}
+
+        with mock.patch('stripe.Subscription', _SubList), \
+             mock.patch.object(auth, '_smtp_send_html_email', return_value=True) as send:
             resp = self._post_event(event)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(send.call_count, 1)

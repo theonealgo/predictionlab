@@ -3347,6 +3347,49 @@ def _stripe_customer_id_from_db(user_id):
         return None
 
 
+def _list_active_subscription_ids(customer_id, stripe_mod=None):
+    """Return Stripe subscription ids that are still billable for this customer.
+
+    Statuses: active, trialing, past_due (same set that grants premium).
+    Never raises — returns [] on missing key / API errors.
+    """
+    customer_id = _stripe_id(customer_id)
+    if not customer_id or not STRIPE_SECRET_KEY:
+        return []
+    try:
+        import stripe as stripe_pkg
+        stripe_mod = stripe_mod or stripe_pkg
+        stripe_mod.api_key = STRIPE_SECRET_KEY
+        subs = stripe_mod.Subscription.list(customer=customer_id, status='all', limit=20)
+        data = _obj_get(subs, 'data') or []
+        out = []
+        for sub in data:
+            status = (_obj_get(sub, 'status') or '').strip()
+            if status in ('active', 'trialing', 'past_due'):
+                sid = _stripe_id(_obj_get(sub, 'id'))
+                if sid:
+                    out.append(sid)
+        return out
+    except Exception as e:
+        logger.warning(
+            "[checkout] active-subscription lookup failed customer=%s: %s",
+            customer_id, e,
+        )
+        return []
+
+
+def _existing_subscriber_portal_redirect(customer_id, *, reason='already_subscribed'):
+    """Send an existing subscriber to the Billing Portal instead of a new Checkout."""
+    customer_id = _stripe_id(customer_id)
+    logger.info(
+        "[checkout] blocking duplicate subscribe reason=%s customer=%s",
+        reason, customer_id,
+    )
+    if not customer_id:
+        return redirect('/plans')
+    return redirect(url_for('auth.create_portal_session'))
+
+
 def _billing_support_email():
     """Public support address for billing/portal error pages."""
     return (os.environ.get('SUPPORT_EMAIL') or 'support.predictionlab@gmail.com').strip()
@@ -3468,10 +3511,13 @@ def create_portal_session():
 @auth_bp.route('/checkout/<plan>')
 def checkout(plan):
     """Create Stripe Checkout session.
-    
+
     No login required. Stripe collects the email during checkout.
     The webhook auto-creates the user account and activates premium.
-    If the user is already logged in, we pre-fill their email.
+    If the user is already logged in, we pre-fill their email / reuse
+    their Stripe customer id, and block a second subscribe when they
+    already have an active/trialing/past_due subscription (sends them to
+    the Billing Portal instead — prevents accidental double charges).
     Uses Checkout Sessions when STRIPE_PRICE_* is set; otherwise (or on
     Session create failure) falls back to the plan Payment Link.
     """
@@ -3481,8 +3527,41 @@ def checkout(plan):
 
     payment_link = _payment_link_for_plan(plan)
     price_id = _stripe_price_for_plan(plan)
+
+    # Duplicate-subscribe guard (logged-in only — guests have no customer id yet).
+    existing_customer_id = None
+    if current_user.is_authenticated:
+        existing_customer_id = _stripe_customer_id_from_db(current_user.id)
+        if existing_customer_id:
+            active_subs = _list_active_subscription_ids(existing_customer_id)
+            if active_subs:
+                return _existing_subscriber_portal_redirect(
+                    existing_customer_id,
+                    reason=f'active_sub:{active_subs[0]}',
+                )
+        # Local premium + linked customer, even if Stripe list failed/empty:
+        # still prefer portal over opening another Checkout.
+        try:
+            if (
+                existing_customer_id
+                and getattr(current_user, 'is_premium', False)
+                and current_user.premium_active
+            ):
+                return _existing_subscriber_portal_redirect(
+                    existing_customer_id,
+                    reason='local_premium_active',
+                )
+        except Exception:
+            pass
+
     if not price_id:
         if payment_link:
+            # Never send an already-linked subscriber to a Payment Link —
+            # those always create a brand-new subscription.
+            if existing_customer_id and _list_active_subscription_ids(existing_customer_id):
+                return _existing_subscriber_portal_redirect(
+                    existing_customer_id, reason='payment_link_blocked_active',
+                )
             logger.warning(
                 "[checkout] STRIPE_PRICE_%s unset; falling back to Payment Link",
                 plan.upper(),
@@ -3494,6 +3573,10 @@ def checkout(plan):
 
     if not STRIPE_SECRET_KEY:
         if payment_link:
+            if existing_customer_id and _list_active_subscription_ids(existing_customer_id):
+                return _existing_subscriber_portal_redirect(
+                    existing_customer_id, reason='payment_link_blocked_no_key',
+                )
             return redirect(payment_link)
         return "Stripe not configured. Set STRIPE_SECRET_KEY.", 500
 
@@ -3510,16 +3593,24 @@ def checkout(plan):
             'metadata': {'plan': plan},
             'subscription_data': {'metadata': {'plan': plan}},
         }
-        # Pre-fill email if logged in
+        # Reuse Stripe customer when known (avoids a second cus_ for same email).
+        # Otherwise pre-fill email if logged in. Never set both customer + customer_email.
         if current_user.is_authenticated:
-            session_kwargs['customer_email'] = current_user.email
             session_kwargs['metadata']['user_id'] = str(current_user.id)
+            if existing_customer_id:
+                session_kwargs['customer'] = existing_customer_id
+            else:
+                session_kwargs['customer_email'] = current_user.email
 
         checkout_session = stripe.checkout.Session.create(**session_kwargs)
         return redirect(checkout_session.url)
     except Exception as e:
         logger.error(f"Stripe checkout error: {e}")
         if payment_link:
+            if existing_customer_id and _list_active_subscription_ids(existing_customer_id):
+                return _existing_subscriber_portal_redirect(
+                    existing_customer_id, reason='payment_link_blocked_after_error',
+                )
             logger.warning(
                 "[checkout] %s Checkout Session failed; falling back to Payment Link",
                 plan.capitalize(),
@@ -4343,22 +4434,41 @@ def stripe_webhook():
             elif etype == 'customer.subscription.deleted':
                 customer_id = _stripe_id(_obj_get(data_obj, 'customer'))
                 if customer_id:
-                    _deactivate_premium_by_customer(customer_id)
-                    _log_premium_decision(
-                        'customer.subscription.deleted',
-                        customer_id=customer_id, is_premium=0,
-                        subscription_id=_stripe_id(_obj_get(data_obj, 'id')),
-                        status='canceled',
+                    # If the customer still has another active sub (double-subscribe
+                    # cleanup), keep premium — only deactivate when none remain.
+                    deleted_id = _stripe_id(_obj_get(data_obj, 'id'))
+                    remaining = _list_active_subscription_ids(
+                        customer_id, stripe_mod=stripe,
                     )
-                    try:
-                        _maybe_send_expired_winback_from_subscription(
-                            data_obj, event_id=event_id, stripe_mod=stripe,
+                    remaining = [s for s in remaining if s != deleted_id]
+                    if remaining:
+                        logger.info(
+                            "[stripe] subscription.deleted but customer=%s still has %s — keeping premium",
+                            customer_id, remaining[0],
                         )
-                    except Exception as ee:
-                        logger.warning(
-                            "[lifecycle] expired_winback on deleted failed (non-fatal): %s",
-                            ee,
+                        _log_premium_decision(
+                            'customer.subscription.deleted_keep',
+                            customer_id=customer_id, is_premium=1,
+                            subscription_id=deleted_id,
+                            status='canceled_other_active',
                         )
+                    else:
+                        _deactivate_premium_by_customer(customer_id)
+                        _log_premium_decision(
+                            'customer.subscription.deleted',
+                            customer_id=customer_id, is_premium=0,
+                            subscription_id=deleted_id,
+                            status='canceled',
+                        )
+                        try:
+                            _maybe_send_expired_winback_from_subscription(
+                                data_obj, event_id=event_id, stripe_mod=stripe,
+                            )
+                        except Exception as ee:
+                            logger.warning(
+                                "[lifecycle] expired_winback on deleted failed (non-fatal): %s",
+                                ee,
+                            )
                     applied = True
                 else:
                     applied = False
@@ -4716,7 +4826,7 @@ def plans_page():
                         <li>All Sports Covered</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="plan-btn plan-btn-secondary">Try This Week</a>
+                    <a href="/checkout/weekly" class="plan-btn plan-btn-secondary">Try This Week</a>
                 </div>
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>
@@ -4733,7 +4843,7 @@ def plans_page():
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="https://buy.stripe.com/bJeeVe0AU1QB7uj7fzao801" class="plan-btn plan-btn-secondary">Get Monthly Access</a>
+                    <a href="/checkout/monthly" class="plan-btn plan-btn-secondary">Get Monthly Access</a>
                 </div>
                 <div class="plan-card popular">
                     <div class="plan-badge">BEST VALUE</div>
@@ -4751,7 +4861,7 @@ def plans_page():
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="https://buy.stripe.com/8x228s83mfHr8yneI1ao803" class="plan-btn plan-btn-primary">Get Yearly Access</a>
+                    <a href="/checkout/yearly" class="plan-btn plan-btn-primary">Get Yearly Access</a>
                 </div>
             </div>
             <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily. Cancel any plan anytime. <a href="/refund-policy" style="color:#00529B;font-weight:600;text-decoration:none;">Refund policy</a></p>
