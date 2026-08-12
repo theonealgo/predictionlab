@@ -274,6 +274,117 @@ def _load_user_by_email(email):
     return None
 
 
+def _load_user_by_google_id(google_id):
+    """Load user by Google subject id."""
+    if not google_id:
+        return None
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            'SELECT * FROM users WHERE google_id = ?', (google_id,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return User(
+                id=row['id'], email=row['email'], name=row['name'],
+                google_id=row['google_id'], is_premium=row['is_premium'],
+                premium_expires=row['premium_expires'],
+                stripe_customer_id=row['stripe_customer_id']
+            )
+    except Exception:
+        pass
+    return None
+
+
+def _row_premium_rank(row):
+    """Higher = better premium entitlement for account-merge decisions."""
+    if not row:
+        return (-1, '')
+    try:
+        is_prem = int(row['is_premium'] or 0)
+    except Exception:
+        is_prem = 1 if row['is_premium'] else 0
+    expires = row['premium_expires'] or ''
+    return (is_prem, str(expires))
+
+
+def _merge_user_row_into(canonical_id, donor_id):
+    """Absorb donor premium/stripe/password/google into canonical; neutralize donor.
+
+    Used when Google subject and email point at two different users rows
+    (guest checkout premium vs later Google-created empty account).
+    """
+    if not canonical_id or not donor_id or canonical_id == donor_id:
+        return canonical_id
+    conn = _get_db()
+    try:
+        can = conn.execute('SELECT * FROM users WHERE id = ?', (canonical_id,)).fetchone()
+        don = conn.execute('SELECT * FROM users WHERE id = ?', (donor_id,)).fetchone()
+        if not can or not don:
+            return canonical_id if can else donor_id
+
+        # Prefer keeping the stronger premium row as canonical.
+        if _row_premium_rank(don) > _row_premium_rank(can):
+            canonical_id, donor_id = donor_id, canonical_id
+            can, don = don, can
+
+        def _blank(v):
+            return v is None or (isinstance(v, str) and not str(v).strip())
+
+        updates = {}
+        if _blank(can['google_id']) and not _blank(don['google_id']):
+            updates['google_id'] = don['google_id']
+        if _blank(can['password_hash']) and not _blank(don['password_hash']):
+            updates['password_hash'] = don['password_hash']
+        if _blank(can['stripe_customer_id']) and not _blank(don['stripe_customer_id']):
+            updates['stripe_customer_id'] = don['stripe_customer_id']
+        try:
+            if _blank(can['stripe_subscription_id']) and not _blank(don['stripe_subscription_id']):
+                updates['stripe_subscription_id'] = don['stripe_subscription_id']
+        except (KeyError, IndexError):
+            pass
+        if int(can['is_premium'] or 0) == 0 and int(don['is_premium'] or 0) == 1:
+            updates['is_premium'] = 1
+            updates['premium_expires'] = don['premium_expires']
+        elif int(can['is_premium'] or 0) == 1 and int(don['is_premium'] or 0) == 1:
+            if str(don['premium_expires'] or '') > str(can['premium_expires'] or ''):
+                updates['premium_expires'] = don['premium_expires']
+
+        if updates:
+            sets = ', '.join(f'{k} = ?' for k in updates)
+            conn.execute(
+                f'UPDATE users SET {sets} WHERE id = ?',
+                (*list(updates.values()), canonical_id),
+            )
+
+        merged_email = f"merged+{donor_id}.{canonical_id}@merged.invalid"
+        conn.execute(
+            "UPDATE users SET "
+            "email = ?, google_id = NULL, is_premium = 0, "
+            "stripe_customer_id = NULL, session_token = NULL "
+            "WHERE id = ?",
+            (merged_email, donor_id),
+        )
+        conn.commit()
+        logger.info(
+            "[auth] Merged duplicate user donor_id=%s into canonical_id=%s fields=%s",
+            donor_id, canonical_id, sorted(updates.keys()),
+        )
+        return canonical_id
+    except Exception as e:
+        logger.exception(
+            "[auth] merge users failed canonical=%s donor=%s: %s",
+            canonical_id, donor_id, e,
+        )
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return canonical_id
+    finally:
+        conn.close()
+
+
 def _set_session_token(user_id):
     """Store a session marker in the cookie (does not force-logout other devices)."""
     token = secrets.token_hex(32)
@@ -484,34 +595,84 @@ def google_callback():
         if not userinfo:
             userinfo = _oauth.google.get('https://openidconnect.googleapis.com/v1/userinfo').json()
 
-        email = userinfo.get('email')
+        email = _normalize_email(userinfo.get('email'))
         if not email:
             return redirect(url_for('auth.login_page', error='no_email'))
+        # Reject explicitly unverified Google emails (omit/True OK).
+        if userinfo.get('email_verified') is False:
+            logger.warning("[auth] Google email not verified for %s", _mask_email(email))
+            return redirect(url_for('auth.login_page', error='no_email'))
         name = userinfo.get('name') or email.split('@')[0]
-        google_id = userinfo.get('sub')
+        google_id = (userinfo.get('sub') or '').strip() or None
 
-        # Find or create user
-        user = _load_user_by_email(email)
-        if not user:
+        by_email = _load_user_by_email(email)
+        by_google = _load_user_by_google_id(google_id) if google_id else None
+
+        user = None
+        if by_email and by_google and by_email.id != by_google.id:
+            # Guest-checkout premium row + separate Google row for same person.
+            keep_id = _merge_user_row_into(by_email.id, by_google.id)
+            user = _load_user_by_id(keep_id)
+        elif by_email:
+            user = by_email
+        elif by_google:
+            user = by_google
+
+        if user:
             conn = _get_db()
-            conn.execute(
-                'INSERT INTO users (email, name, google_id) VALUES (?, ?, ?)',
-                (email, name, google_id)
-            )
-            conn.commit()
-            conn.close()
-            user = _load_user_by_email(email)
-        elif not user.google_id:
-            # Link Google to existing email account
-            conn = _get_db()
-            conn.execute('UPDATE users SET google_id = ?, name = ? WHERE id = ?',
-                         (google_id, name, user.id))
-            conn.commit()
-            conn.close()
+            try:
+                # Ensure Google subject + normalized email sit on the paid row.
+                conn.execute(
+                    "UPDATE users SET "
+                    "google_id = COALESCE(?, google_id), "
+                    "email = ?, "
+                    "name = COALESCE(?, name) "
+                    "WHERE id = ?",
+                    (google_id, email, name, user.id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
             user = _load_user_by_id(user.id)
+        else:
+            conn = _get_db()
+            try:
+                try:
+                    conn.execute(
+                        'INSERT INTO users (email, name, google_id) VALUES (?, ?, ?)',
+                        (email, name, google_id),
+                    )
+                    conn.commit()
+                except sqlite3.IntegrityError:
+                    # Race / unique collision: load existing and attach google_id.
+                    conn.rollback()
+                    existing = conn.execute(
+                        'SELECT id FROM users WHERE lower(email) = ?', (email,)
+                    ).fetchone()
+                    if existing:
+                        conn.execute(
+                            "UPDATE users SET google_id = COALESCE(?, google_id), "
+                            "name = COALESCE(?, name) WHERE id = ?",
+                            (google_id, name, existing['id']),
+                        )
+                        conn.commit()
+            finally:
+                conn.close()
+            user = _load_user_by_email(email)
+
+        if not user:
+            logger.error(
+                "[auth] Google callback could not resolve user email=%s",
+                _mask_email(email),
+            )
+            return redirect(url_for('auth.login_page', error='oauth_failed'))
 
         login_user(user, remember=True)
         _set_session_token(user.id)
+        logger.info(
+            "[auth] Google login ok user_id=%s email=%s premium=%s expires=%s",
+            user.id, _mask_email(email), bool(user.premium_active), user.premium_expires,
+        )
         return redirect(request.args.get('next', '/'))
 
     except Exception:
