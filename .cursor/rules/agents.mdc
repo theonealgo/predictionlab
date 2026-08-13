@@ -1,0 +1,15 @@
+---
+description: Read and follow AGENTS.md before any work in this project
+alwaysApply: true
+---
+
+# Project agent rules
+
+Before attempting any fix or change in this repository:
+
+1. Read [AGENTS.md](../../AGENTS.md) at the project root.
+2. Follow every rule in that file — especially **Rule 0: never touch production / never push**.
+3. Work and verify **locally only**. This site has paying customers; outages are unacceptable.
+4. Re-check your plan against those rules before editing files or running commands.
+
+If your planned work would violate any rule in AGENTS.md, stop and ask the user first.

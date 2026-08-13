@@ -1,0 +1,49 @@
+The automated QA audit for PredictionLab detected the following issues:
+Audit run: 20260731_075351  |  2026-07-31 07:53:51
+Target: https://predictionlab.io
+
+FAILURES (must fix):
+  - [content] Homepage grid: Tennis MISSING: Tennis is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: UFC MISSING: UFC is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] Homepage grid: Golf MISSING: Golf is not shown in the homepage 'Today's Picks by Sport' grid
+    Page: /
+  - [content] All Sports Results missing cells: 3 dashboard cell(s) render as a bare dash
+    Detail: Use real stats, Not tracked, or No games yet so blanks cannot hide broken data.
+    Page: /all-sports-results
+  - [content] Search overlay wiring: Navbar search overlay does NOT call /api/search — it only filters static links, so team searches return nothing
+    Page: /
+  - [navigation] Picks & Predictions: missing /nba-picks: Required link /nba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nhl-picks: Required link /nhl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nfl-picks: Required link /nfl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /mlb-picks: Required link /mlb-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaab-picks: Required link /ncaab-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaf-picks: Required link /ncaaf-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaw-picks: Required link /ncaaw-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /wnba-picks: Required link /wnba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Props: missing /player-props: Required link /player-props is NOT in the Props menu
+  - [navigation] Tools & Models: missing /performance: Required link /performance is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /ai-sports-betting-picks-today: Required link /ai-sports-betting-picks-today is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /our-model-vs-sportsbooks: Required link /our-model-vs-sportsbooks is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /tutorial: Required link /tutorial is NOT in the Tools & Models menu
+  - [navigation] Results & Tracking: missing /all-sports-results: Required link /all-sports-results is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /daily-report: Required link /daily-report is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /results/downloads: Required link /results/downloads is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /edge-performance: Required link /edge-performance is NOT in the Results & Tracking menu
+
+WARNINGS (should investigate):
+  - [routes] Picks CSV (needs login): Expected [302], got 401
+    Page: /picks/export.csv
+
+============================================================
+REQUIREMENTS FOR CLAUDE:
+============================================================
+  - Fix ONLY the issues listed above.
+  - Do NOT refactor unrelated code.
+  - Do NOT modify model architecture or prediction logic.
+  - Do NOT touch backup folders or archived files.
+  - Do NOT change working frontend layouts.
+  - Preserve all existing APIs and route signatures.
+  - After applying fixes, re-run: python qa/site_audit.py
+  - Verify the fixed checks now show PASS.

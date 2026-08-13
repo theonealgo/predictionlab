@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="CGY">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c8102e"/>
+      <stop offset="100%" stop-color="#c8102e" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <circle cx="64" cy="64" r="46" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="3"/>
+  <text x="64" y="74" text-anchor="middle" font-family="Arial Black, Helvetica, sans-serif"
+        font-size="34" font-weight="800" fill="#fff">CGY</text>
+</svg>

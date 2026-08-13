@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} Performance · Sandbox{% endblock %}
+{% block content %}
+<h1>{{ title }} performance</h1>
+<p style="color:var(--muted)">Accuracy / ROI from graded sandbox predictions (demo units @ -110 unless noted).</p>
+<div class="subnav">
+  <a class="btn" href="/{{ slug }}/">Picks</a>
+  <a class="btn" href="/{{ slug }}/total-edge">Total Edge</a>
+  <a class="btn" href="/{{ slug }}/results">Results</a>
+  <a class="btn primary" href="/{{ slug }}/performance">Performance</a>
+  <a class="btn" href="/{{ slug }}/models">Models</a>
+</div>
+<div class="statrow">
+  <div class="stat"><div class="k">Bets</div><div class="v">{{ perf.n }}</div></div>
+  <div class="stat"><div class="k">Win %</div><div class="v">{{ '%.1f'|format((perf.win_pct or 0)*100) }}%</div></div>
+  <div class="stat"><div class="k">Profit (u)</div><div class="v">{{ perf.profit }}</div></div>
+  <div class="stat"><div class="k">ROI</div><div class="v">{{ '%.1f'|format((perf.roi or 0)*100) }}%</div></div>
+</div>
+<div class="card">
+  <h2>Model runs</h2>
+  <table>
+    <thead><tr><th>Model</th><th>Accuracy</th><th>Brier</th><th>Notes</th></tr></thead>
+    <tbody>
+      {% for r in perf.model_runs or [] %}
+      <tr><td>{{ r.model_name }}</td><td>{{ r.accuracy }}</td><td>{{ r.brier }}</td><td>{{ r.notes }}</td></tr>
+      {% else %}
+      <tr><td colspan="4">No model runs yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

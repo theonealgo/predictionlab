@@ -1,0 +1,673 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    
+    <title>AI Sports Predictions &amp; Game Forecasts | predictionlab.io</title>
+    <meta name="description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
+    <meta property="og:title" content="AI Sports Predictions &amp; Game Forecasts | predictionlab.io">
+    <meta property="og:description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://predictionlab.io/plans">
+    <meta property="og:site_name" content="predictionlab.io">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="AI Sports Predictions &amp; Game Forecasts | predictionlab.io">
+    <meta name="twitter:description" content="Daily AI-powered sports predictions, game forecasts, model projections, and live performance tracking across major sports.">
+    <link rel="canonical" href="https://predictionlab.io/plans">
+    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
+    <meta name="author" content="predictionlab.io">
+    <meta name="publisher" content="GoodsandMore Inc.">
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap"></noscript>
+    <script>
+    (function(){
+        function initGA(){
+            if (window.__gaLoaded) return;
+            window.__gaLoaded = true;
+            var s = document.createElement('script');
+            s.async = true;
+            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG';
+            document.head.appendChild(s);
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+            gtag('js', new Date());
+            gtag('config', 'G-R4XM0WKTGG');
+        }
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(initGA, { timeout: 2500 });
+        } else {
+            window.addEventListener('load', function(){ setTimeout(initGA, 800); }, { once: true });
+        }
+    })();
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "predictionlab.io",
+      "url": "https://predictionlab.io",
+      "sameAs": [
+        "https://x.com/predictionlab_io",
+        "https://instagram.com/predictionlab.io",
+        "https://facebook.com/predictionlab.io",
+        "https://predictionlab.io",
+        "https://predictionlab.io"
+      ]
+    }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background:
+                radial-gradient(1200px 600px at 70% -10%, rgba(251,191,36,0.10), transparent 60%),
+                radial-gradient(900px 500px at -10% 20%, rgba(16,185,129,0.05), transparent 60%),
+                #ffffff;
+            color: #0f172a;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: #ffffff !important;
+            padding: 10px 0;
+            border-bottom: 1px solid #E0E3EB;
+            box-shadow: 0 2px 8px rgba(26,29,35,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .navbar-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            gap: 12px;
+            padding: 0 20px;
+        }
+        .logo{display:inline-flex;align-items:center;text-decoration:none;flex-shrink:0;order:2;border-radius:10px;}
+        .logo img,.logo .pl-brand-logo__img{display:block;height:36px;width:auto;max-height:42px;max-width:min(220px,42vw);object-fit:contain;}
+        a.pl-brand-logo.pl-brand-logo--holding{outline:2px solid rgba(0,82,155,0.35);outline-offset:2px;}
+        .nav-cta{display:inline-flex;align-items:center;padding:9px 20px;border-radius:999px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);color:#fff;font-size:0.84em;font-weight:700;text-decoration:none;letter-spacing:0.3px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 16px rgba(99,102,241,0.45),inset 0 1px 0 rgba(255,255,255,0.15);}
+        .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.6),inset 0 1px 0 rgba(255,255,255,0.15);}
+        .nav-cta-premium{display:inline-flex;align-items:center;padding:9px 16px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-size:0.84em;font-weight:800;text-decoration:none;letter-spacing:0.2px;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(251,191,36,0.35);}
+        .nav-cta-premium:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(251,191,36,0.45);}
+        .tv-premium-cta{display:flex;align-items:center;justify-content:center;margin:10px 12px 6px;padding:12px 14px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;font-size:0.92em;text-decoration:none;letter-spacing:0.2px;}
+        .tv-premium-cta:hover{box-shadow:0 4px 14px rgba(251,191,36,0.4);}
+        .join-premium-bar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.12);}
+        .join-premium-inner{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+        .join-premium-copy{color:#e2e8f0;font-size:0.86em;font-weight:600;line-height:1.35;}
+        .join-premium-actions{display:flex;align-items:center;gap:8px;}
+        .join-premium-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;text-decoration:none;font-weight:800;font-size:0.82em;}
+        .join-premium-close{border:1px solid rgba(255,255,255,0.3);background:transparent;color:#fff;border-radius:999px;width:28px;height:28px;line-height:1;cursor:pointer;font-size:18px;}
+        @media(max-width:480px){.nav-cta{padding:8px 14px;font-size:0.8em;}.nav-cta-premium{padding:8px 12px;font-size:0.78em;}}
+        .hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;cursor:pointer;padding:7px 9px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;order:1;}
+        .hamburger:hover{background:#f8fafc;}
+        .hamburger span{width:20px;height:1.5px;background:#0f172a;border-radius:2px;transition:all .2s;}
+        .tv-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1998;backdrop-filter:blur(2px);}
+        .tv-overlay.open{display:block;}
+        .tv-drawer{position:fixed;top:0;left:0;height:100%;width:min(280px,100vw);background:#fff;z-index:1999;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 32px rgba(15,23,42,0.18);}
+        .tv-drawer.open{transform:translateX(0);}
+        .tv-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
+        .tv-drawer-title{font-weight:800;font-size:1rem;color:#0f172a;}
+        .tv-header-btns{display:flex;gap:8px;align-items:center;}
+        .tv-back-btn{background:none;border:none;font-size:1.3rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
+        .tv-back-btn:hover{background:#f1f5f9;}
+        .tv-close-btn{background:none;border:none;font-size:1.1rem;cursor:pointer;color:#475569;padding:4px 8px;border-radius:6px;line-height:1;}
+        .tv-close-btn:hover{background:#f1f5f9;}
+        .tv-panels{flex:1;overflow:hidden;position:relative;}
+        .tv-panel{position:absolute;inset:0;overflow-y:auto;transition:transform .25s cubic-bezier(.4,0,.2,1);}
+        .tv-panel.hidden-left{transform:translateX(-100%);}
+        .tv-panel.hidden-right{transform:translateX(100%);}
+        .tv-panel.visible{transform:translateX(0);}
+        .tv-today-strip{padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+        .tv-today-label{font-size:0.68em;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#64748b;margin-bottom:8px;}
+        .tv-today-picks{display:flex;flex-direction:column;gap:6px;}
+        .tv-today-pick{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;text-decoration:none;color:inherit;}
+        .tv-today-pick:hover{border-color:#00529B;background:#f0f7ff;}
+        .tv-pick-match{font-size:0.78em;font-weight:700;color:#0f172a;}
+        .tv-pick-edge{font-size:0.72em;font-weight:800;color:#00C076;background:#f0fdf4;border-radius:6px;padding:2px 7px;}
+        .tv-menu-list{padding:8px;}
+        .tv-menu-btn{width:100%;display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;cursor:pointer;border-radius:8px;text-align:left;transition:background .15s;}
+        .tv-menu-btn:hover{background:#f1f5f9;}
+        .tv-menu-label{flex:1;font-size:0.9rem;font-weight:700;color:#0f172a;}
+        .tv-menu-arrow{color:#94a3b8;font-size:1rem;}
+        .tv-sub-link{display:flex;align-items:center;gap:10px;padding:10px 14px;text-decoration:none;color:#1e293b;font-size:0.88rem;font-weight:600;border-radius:8px;margin:1px 8px;transition:background .12s;}
+        .tv-sub-link:hover{background:#f1f5f9;color:#00529B;}
+        .tv-sub-link.highlight{color:#00529B;font-weight:800;}
+        .tv-sub-link .ext{font-size:0.7em;color:#94a3b8;margin-left:2px;}
+        .nav-search-wrap{position:relative;flex:1;max-width:560px;width:100%;min-width:0;margin:0 20px;order:3;}
+        .nav-search{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:7px 14px;cursor:text;transition:border-color .15s;}
+        .nav-search:hover{border-color:#cbd5e1;}
+        .nav-search svg{color:#94a3b8;flex-shrink:0;}
+        .nav-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;color:#0f172a;font-size:0.88em;cursor:text;}
+        .nav-search input::placeholder{color:#94a3b8;}
+        .nav-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;order:4;}
+        .acct-wrap{position:relative;display:flex;align-items:center;gap:8px;}
+        .acct-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+        .acct-btn:hover{border-color:#00529B;background:#f0f7ff;}
+        .acct-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:160px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.12);z-index:1100;padding:6px;}
+        .acct-menu.open{display:block;}
+        .acct-menu a{display:block;padding:9px 12px;font-size:0.85em;font-weight:600;color:#1e293b;text-decoration:none;border-radius:8px;}
+        .acct-menu a:hover{background:#f1f5f9;color:#00529B;}
+        .acct-menu-divider{height:1px;background:#f1f5f9;margin:4px 0;}
+        .srch-overlay{display:none;position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);}
+        .srch-overlay.open{display:block;}
+        .srch-box{position:absolute;top:70px;left:50%;transform:translateX(-50%);width:min(680px,96vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,0.18);overflow:hidden;}
+        .srch-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f1f5f9;}
+        .srch-input-row svg{color:#94a3b8;flex-shrink:0;}
+        .srch-input-row input{flex:1;border:none;outline:none;font-size:1rem;color:#0f172a;}
+        .srch-input-row input::placeholder{color:#94a3b8;}
+        .srch-close{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.1rem;padding:4px 6px;border-radius:6px;}
+        .srch-close:hover{background:#f1f5f9;color:#0f172a;}
+        .srch-filters{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid #f1f5f9;scrollbar-width:none;}
+        .srch-filters::-webkit-scrollbar{display:none;}
+        .srch-filter{flex-shrink:0;padding:5px 12px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:0.78em;font-weight:700;cursor:pointer;color:#475569;}
+        .srch-filter.active,.srch-filter:hover{background:#0f172a;color:#fff;border-color:#0f172a;}
+        .srch-items{max-height:340px;overflow-y:auto;padding:8px 0;}
+        .srch-item{display:flex;align-items:center;gap:10px;padding:10px 16px;text-decoration:none;color:#1e293b;}
+        .srch-item:hover{background:#f8fafc;}
+        .srch-item-label{font-size:0.88em;font-weight:600;flex:1;}
+        .srch-item-sport{font-size:0.72em;font-weight:700;color:#94a3b8;text-transform:uppercase;}
+        .srch-empty{padding:24px 16px;text-align:center;font-size:0.85em;color:#94a3b8;}
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        .site-footer {
+            background: #ffffff;
+            border-top: 1px solid rgba(15,23,42,0.12);
+            padding: 22px 24px 28px;
+            color: #475569;
+            font-size: 0.88em;
+        }
+        .footer-outer { max-width: 1200px; margin: 0 auto; }
+        .footer-brand { margin-bottom: 18px; }
+        .footer-columns-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 28px 36px;
+            align-items: start;
+        }
+        .footer-heading {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.55px;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 12px;
+        }
+        .footer-col-blk a {
+            display: block;
+            font-size: 0.88em;
+            line-height: 1.85;
+            color: #475569;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 2px 0;
+        }
+        .footer-col-blk a:hover { color: #00529B; text-decoration: underline; }
+        .footer-bottom { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(15,23,42,0.1); font-size: 0.82em; color: #475569; }
+        .share-strip { max-width: 1200px; margin: 0 auto 10px; padding: 10px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; background: rgba(244,247,249,0.7); border: 1px solid rgba(15,23,42,0.1); border-radius: 12px; }
+        .share-strip-label { font-size: 0.82em; font-weight: 800; color: #0f172a; letter-spacing: 0.2px; }
+        .share-icons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .share-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid rgba(15,23,42,0.14); background: #fff; }
+        .share-icon img { width: 16px; height: 16px; display: block; }
+        .share-icon img { width: 16px; height: 16px; display: block; }
+        .share-icon .txt { display:none; font-size: 0.64rem; font-weight: 800; line-height: 1; color: #0f172a; letter-spacing: 0.1px; }
+        .share-icon:hover { border-color: #00529B; background: rgba(0,82,155,0.08); }
+        @media (max-width: 720px) {
+            .footer-columns-3 { grid-template-columns: 1fr; gap: 22px; }
+        }
+        @media (max-width: 768px) { .nav-search-wrap{display:none;} .container{padding:20px 15px;} }
+        /* Nav dropdown groups */
+        .nav-group { position: relative; }
+        .nav-group-title { color: #00529B; font-weight: 700; cursor: pointer; padding: 8px 10px; border-radius: 8px; display: block; font-size: 0.88em; }
+        .nav-group-title:hover { background: rgba(0,82,155,0.08); }
+        .nav-group-items { display: none; padding-left: 12px; }
+        .nav-group.open .nav-group-items { display: flex; flex-direction: column; }
+        .nav-group-items a { font-size: 0.84em; padding: 6px 10px !important; opacity: 0.9; }
+        .nav-group-items a:hover { opacity: 1; color: #00529B; }
+        
+            .plans-wrap{max-width:1080px;margin:0 auto;padding:4px 0 40px;}
+            .plans-hero{background:#ffffff;border:1px solid #E0E4E8;border-radius:16px;padding:36px 22px 28px;text-align:center;box-shadow:0 4px 20px rgba(15,23,42,0.06);margin-bottom:24px;}
+            .plans-hero-logo{font-size:1.65em;font-weight:900;color:#0f172a;letter-spacing:0.3px;line-height:1.35;margin-top:10px;}
+            .plans-hero-sub{font-size:1.05em;color:#475569;margin-top:12px;max-width:650px;margin-left:auto;margin-right:auto;line-height:1.75;}
+            .plans-hero-stats{display:flex;justify-content:center;gap:12px;margin-top:18px;flex-wrap:wrap;}
+            .stat-pill{background:#F4F7F9;border:1px solid #E0E4E8;border-radius:24px;padding:8px 16px;font-size:0.82em;font-weight:600;color:#334155;}
+            .competitor-bar{background:#f8fafc;border:1px solid #E0E4E8;border-radius:10px;max-width:560px;margin:18px auto 0;padding:12px 18px;font-size:0.88em;color:#475569;}
+            .competitor-bar strong{color:#0f172a;}
+            .plans-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;}
+            .plan-card{background:#ffffff;color:#1e293b;border-radius:18px;padding:34px 26px;text-align:center;transition:all 0.25s;box-shadow:0 4px 18px rgba(15,23,42,0.08);border:1px solid #E0E4E8;position:relative;}
+            .plan-card:hover{transform:translateY(-4px);box-shadow:0 10px 28px rgba(15,23,42,0.12);}
+            .plan-card.popular{border:2px solid #00529B;}
+            #weekly{scroll-margin-top:88px;}
+            .plan-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#00529B;color:#fff;padding:5px 20px;border-radius:20px;font-size:0.78em;font-weight:800;}
+            .plan-name{font-size:1.35em;font-weight:800;margin-bottom:6px;color:#0f172a;}
+            .plan-old-price{font-size:1.05em;color:#475569;text-decoration:line-through;margin-bottom:2px;}
+            .plan-price{font-size:3em;font-weight:900;color:#0f172a;margin-bottom:2px;}
+            .plan-price span{font-size:0.3em;opacity:0.55;font-weight:500;}
+            .plan-save{color:#059669;font-size:0.88em;margin-bottom:20px;font-weight:700;}
+            .plan-features{text-align:left;margin-bottom:26px;padding:0;}
+            .plan-features li{padding:7px 0;font-size:0.9em;list-style:none;color:#334155;border-bottom:1px solid #f1f5f9;}
+            .plan-features li:last-child{border-bottom:none;}
+            .plan-features li::before{content:none;}
+            .plan-btn{display:block;width:100%;padding:15px;border:none;border-radius:10px;font-size:1.05em;font-weight:800;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.2s;}
+            .plan-btn-primary{background:#00529B;color:#fff;box-shadow:0 4px 14px rgba(0,82,155,0.25);}
+            .plan-btn-primary:hover{transform:translateY(-2px);background:#003d73;}
+            .plan-btn-secondary{background:#0f172a;color:#fff;}
+            .plan-btn-secondary:hover{background:#1e293b;}
+            .free-section{margin-top:32px;text-align:center;padding:26px 20px;background:#ffffff;border:1px solid #E0E4E8;border-radius:14px;}
+            .free-section .free-head{font-size:1.2em;margin-bottom:8px;font-weight:800;color:#0f172a;}
+            .free-section .free-copy{margin-bottom:14px;color:#475569;font-size:0.95em;line-height:1.55;}
+            .free-features{display:flex;justify-content:center;gap:12px;margin-top:12px;flex-wrap:wrap;}
+            .free-pill{background:#F4F7F9;border:1px solid #E0E4E8;border-radius:20px;padding:7px 16px;font-size:0.82em;color:#334155;font-weight:600;}
+            .plans-why-premium{max-width:920px;margin:28px auto 0;padding:28px 24px;background:#ffffff;border:1px solid #E0E4E8;border-radius:14px;}
+            .plans-why-title{font-size:1.35em;font-weight:900;color:#0f172a;margin:0 0 12px;text-align:center;}
+            .plans-why-lead{color:#475569;font-size:1em;line-height:1.75;margin:0 auto 16px;text-align:center;max-width:720px;}
+            .plans-why-list{margin:0 auto 18px;padding-left:22px;max-width:640px;color:#334155;line-height:1.7;font-size:0.95em;}
+            .plans-why-list li{margin-bottom:8px;}
+            .plans-why-foot{margin:0 auto;text-align:center;color:#475569;font-size:0.92em;line-height:1.65;max-width:680px;}
+            .plans-why-foot a{color:#00529B;font-weight:700;text-decoration:none;}
+            .plans-why-foot a:hover{text-decoration:underline;}
+            @media(max-width:900px){.plans-grid{grid-template-columns:1fr 1fr;}}
+            @media(max-width:640px){.plans-grid{grid-template-columns:1fr;}.plans-hero-stats{flex-direction:column;align-items:center;gap:10px;}}
+            
+    </style>
+    <link rel="stylesheet" href="/static/css/research-theme.css">
+    <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
+</head>
+<body>
+    <header class="pl2-header">
+    <button type="button" class="pl2-burger" id="navHamburger" onclick="if(window.tvToggle){tvToggle();return false;}if(window.tvOpen){tvOpen();return false;}" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+        <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav">
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Picks</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/nba-picks">NBA</a>
+                <a href="/nfl-picks">NFL</a>
+                <a href="/mlb-picks">MLB</a>
+                <a href="/nhl-picks">NHL</a>
+                <a href="/soccer-picks">Soccer</a>
+                <a href="/ncaab-picks">NCAAB</a>
+                <a href="/ncaaf-picks">NCAAF</a>
+                <a href="/ncaaw-picks">NCAAW</a>
+                <a href="/wnba-picks">WNBA</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Models</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/performance">Model Performance</a>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
+                <a href="/tutorial">Tutorial</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Results</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/nba-results">NBA</a>
+                <a href="/nfl-results">NFL</a>
+                <a href="/mlb-results">MLB</a>
+                <a href="/nhl-results">NHL</a>
+                <a href="/soccer-results">Soccer</a>
+                <a href="/ncaab-results">NCAAB</a>
+                <a href="/ncaaf-results">NCAAF</a>
+                <a href="/ncaaw-results">NCAAW</a>
+                <a href="/wnba-results">WNBA</a>
+                <a href="/daily-report">Daily Results</a>
+                <a href="/results/downloads">Download CSV</a>
+            </div>
+        </div>
+        <a href="/blog">Blog</a>
+        <a href="/plans">Pricing</a>
+    </nav>
+    <div class="pl2-header-actions">
+        <a class="pl2-search" href="/search" onclick="if(window.openSrch){openSrch();return false;}" aria-label="Search" title="Search teams, leagues, props">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </a>
+        
+        <div class="pl2-account">
+            <button class="pl2-account-button" type="button" aria-label="Account menu" aria-expanded="false" aria-controls="pl2AccountMenu">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21a8 8 0 0 1 16 0"></path>
+                </svg>
+            </button>
+            <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
+                
+                <a href="/login">Login</a>
+                <a href="/signup">Sign Up</a>
+                
+            </div>
+        </div>
+    </div>
+</header>
+
+<script>
+/* ACCOUNT MENU: opens the person icon menu and closes it on outside click/Escape. */
+(function () {
+    var account = document.querySelector('.pl2-account');
+    if (!account) return;
+    var button = account.querySelector('.pl2-account-button');
+    var menu = account.querySelector('.pl2-account-menu');
+    if (!button || !menu) return;
+
+    function closeAccountMenu() {
+        menu.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+    }
+
+    button.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var opening = menu.hidden;
+        menu.hidden = !opening;
+        button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (event) {
+        if (!account.contains(event.target)) closeAccountMenu();
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeAccountMenu();
+    });
+})();
+
+/* NAV DROPDOWNS: Picks / Models / Results open a menu on click. */
+(function () {
+    var drops = Array.prototype.slice.call(document.querySelectorAll('.pl2-navdrop'));
+    if (!drops.length) return;
+    function closeAll(except) {
+        drops.forEach(function (d) {
+            if (d === except) return;
+            var m = d.querySelector('.pl2-nav-menu');
+            var b = d.querySelector('.pl2-nav-trigger');
+            if (m) m.hidden = true;
+            if (b) b.setAttribute('aria-expanded', 'false');
+        });
+    }
+    drops.forEach(function (d) {
+        var b = d.querySelector('.pl2-nav-trigger');
+        var m = d.querySelector('.pl2-nav-menu');
+        if (!b || !m) return;
+        b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var opening = m.hidden;
+            closeAll(d);
+            m.hidden = !opening;
+            b.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        });
+    });
+    document.addEventListener('click', function (e) {
+        var inside = drops.some(function (d) { return d.contains(e.target); });
+        if (!inside) closeAll(null);
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAll(null);
+    });
+})();
+</script>
+    <div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+    <div class="tv-drawer" id="tvDrawer">
+      <div class="tv-drawer-header">
+        <div class="tv-header-btns"><button class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+        <button class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+      </div>
+      <div class="tv-panels">
+        <div class="tv-panel visible" id="tvMain">
+          
+          
+          <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
+          
+          <div class="tv-menu-list">
+            <button class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+            <button class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
+            <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
+              <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('community')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
+              <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('company')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="tv-panel hidden-right" id="tvSub"></div>
+      </div>
+    </div>
+    <div class="srch-overlay" id="srchOverlay" onclick="closeSrchOutside(event)">
+      <div class="srch-box">
+        <div class="srch-input-row">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="srchInput" placeholder="Search teams, leagues, or matchups...">
+          <button class="srch-close" onclick="closeSrch()">&#x2715;</button>
+        </div>
+        <div class="srch-filters">
+          <button class="srch-filter active" data-s="all">All</button>
+          <button class="srch-filter" data-s="nba">NBA</button>
+          <button class="srch-filter" data-s="nfl">NFL</button>
+          <button class="srch-filter" data-s="mlb">MLB</button>
+          <button class="srch-filter" data-s="nhl">NHL</button>
+          <button class="srch-filter" data-s="ncaab">NCAAB</button>
+          <button class="srch-filter" data-s="ncaaf">NCAAF</button>
+          <button class="srch-filter" data-s="wnba">WNBA</button>
+          <button class="srch-filter" data-s="props">Props</button>
+        </div>
+        <div class="srch-items" id="srchItems"></div>
+      </div>
+    </div>
+    <div class="container">
+        
+            <div class="plans-wrap">
+            <div class="plans-hero">
+                <h1 style="font-size:2em;font-weight:900;color:#0f172a;line-height:1.25;margin-bottom:8px;">AI Sports Betting Pricing Plans for Spreads, Totals and Score Predictions</h1>
+                <div class="plans-hero-logo">Built to Beat the Public &mdash; Not Follow It.</div>
+                <div class="plans-hero-sub">Data-driven spreads, totals, and score projections &mdash; tracked, transparent, and built for real edges.</div>
+                <div class="plans-hero-stats">
+                    <div class="stat-pill">Full Spread &amp; Total Coverage</div>
+                    <div class="stat-pill">Projected Scores for Every Game</div>
+                    <div class="stat-pill">Find Value the Public Misses</div>
+                </div>
+                <div class="plans-hero-stats" style="margin-top:10px;">
+                    <div class="stat-pill">Consistently Updated Models</div>
+                    <div class="stat-pill">Transparent Results &mdash; Always</div>
+                </div>
+                <div class="competitor-bar">
+                    Every pick is tracked. No deletes. No edits. Full transparency.
+                </div>
+            </div>
+            <p style="text-align:center;font-size:1.12em;color:#334155;margin-bottom:26px;font-weight:700;">Free gets you the winners. Premium gets you the edge.</p>
+            <div class="plans-grid">
+                <div class="plan-card" id="weekly">
+                    <div class="plan-name">Weekly</div>
+                    <div class="plan-price">$4.99<span>/week</span></div>
+                    <div class="plan-save">Try the edge. No commitment.</div>
+                    <ul class="plan-features">
+                        <li>Every Spread Pick (No Guessing)</li>
+                        <li>Every Total Pick (Our Strongest Edge)</li>
+                        <li>Projected Scores for Every Game</li>
+                        <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>Player Props Picks &amp; Projections</li>
+                        <li>Model Performance Calculator Access</li>
+                        <li>All Sports Covered</li>
+                        <li>Cancel Anytime</li>
+                    </ul>
+                    <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="plan-btn plan-btn-secondary">Try This Week</a>
+                </div>
+                <div class="plan-card">
+                    <div class="plan-name">Monthly</div>
+                    <div class="plan-price">$19.99<span>/month</span></div>
+                    <div class="plan-save">Flexible access. Cancel anytime.</div>
+                    <ul class="plan-features">
+                        <li>Every Spread Pick (No Guessing)</li>
+                        <li>Every Total Pick (Our Strongest Edge)</li>
+                        <li>Projected Scores for Every Game</li>
+                        <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>Player Props Picks &amp; Projections</li>
+                        <li>Model Performance Calculator Access</li>
+                        <li>All Sports Covered</li>
+                        <li>Priority Support</li>
+                        <li>Cancel Anytime</li>
+                    </ul>
+                    <a href="/checkout/monthly" class="plan-btn plan-btn-secondary">Get Monthly Access</a>
+                </div>
+                <div class="plan-card popular">
+                    <div class="plan-badge">BEST VALUE</div>
+                    <div class="plan-name">Yearly</div>
+                    <div class="plan-price">$149.99<span>/year</span></div>
+                    <div class="plan-save">Only $12.50/month &mdash; lock in the edge all year</div>
+                    <ul class="plan-features">
+                        <li>Every Spread Pick (No Guessing)</li>
+                        <li>Every Total Pick (Our Strongest Edge)</li>
+                        <li>Projected Scores for Every Game</li>
+                        <li>Full Odds Engine (ML, Spread, Total)</li>
+                        <li>Player Props Picks &amp; Projections</li>
+                        <li>Model Performance Calculator Access</li>
+                        <li>All Sports Covered</li>
+                        <li>Priority Support</li>
+                        <li>Cancel Anytime</li>
+                    </ul>
+                    <a href="/checkout/yearly" class="plan-btn plan-btn-primary">Get Yearly Access</a>
+                </div>
+            </div>
+            <p style="text-align:center;font-size:0.88em;color:#475569;margin-top:18px;">Tracked results updated daily. Cancel any plan anytime.</p>
+            <div class="free-section">
+                <p class="free-head">Start Free</p>
+                <p class="free-copy">Start free. Upgrade when you're ready for the full edge.</p>
+                <div class="free-features">
+                    <div class="free-pill">Moneyline Picks</div>
+                    <div class="free-pill">5-Model Win %</div>
+                    <div class="free-pill">Full Results</div>
+                    <div class="free-pill">All Sports Covered</div>
+                </div>
+            </div>
+            <div class="plans-why-premium">
+                <h2 class="plans-why-title">Why upgrade to Premium?</h2>
+                <p class="plans-why-lead">Free picks already show which side our models favor. Premium is for bettors who want the <strong style="color:#0f172a;">full picture</strong>—spreads, totals, and projected scores—so you are not reverse-engineering an edge from a moneyline alone.</p>
+                <ul class="plans-why-list">
+                    <li><strong>Save time:</strong> projected scores and lines in one place for every slate you follow.</li>
+                    <li><strong>See model agreement:</strong> where the stack lines up (or splits) before you put capital at risk.</li>
+                    <li><strong>Same transparency:</strong> the same public grading you trust on free results, applied to every premium market we publish.</li>
+                </ul>
+                <p class="plans-why-foot">Still deciding? Read the <a href="/#faq">homepage FAQ</a>. Ready to try the edge—pick monthly or yearly above. Prefer to look around first? <a href="/signup">Create a free account</a>, then upgrade when you want spreads and totals unlocked.</p>
+            </div>
+            </div>
+        
+    </div>
+    <div class="share-strip">
+        <span class="share-strip-label">Share on social media</span>
+        <div class="share-icons">
+            <a class="share-icon" href="https://x.com/intent/post?url=https%3A//predictionlab.io/plans" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+            <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u=https%3A//predictionlab.io/plans" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+            <a class="share-icon" href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+            <a class="share-icon" href="https://predictionlab.io" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+            <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A//predictionlab.io/plans" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+            <a class="share-icon" href="https://www.reddit.com/submit?url=https%3A//predictionlab.io/plans" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+            <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl=https%3A//predictionlab.io/plans" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+            <a class="share-icon" href="https://api.whatsapp.com/send?text=https%3A//predictionlab.io/plans" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+            <a class="share-icon" href="https://telegram.me/share/url?url=https%3A//predictionlab.io/plans" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+        </div>
+    </div>
+    <footer class="site-directory-footer">
+    <div class="directory-shell">
+        <span class="directory-label">Knowledge Directory</span>
+        <span class="directory-wordmark">PREDICTIONLABS.IO</span>
+        <div class="directory-sub">AI-powered sports betting picks. Daily. Transparent. Data-driven.</div>
+        <div class="directory-grid">
+            <div>
+                <div class="footer-heading">AI Picks by Sport</div>
+                <a href="/mlb-picks">MLB AI Picks</a>
+                <a href="/nba-picks">NBA AI Picks</a>
+                <a href="/nhl-picks">NHL AI Picks</a>
+                <a href="/nfl-picks">NFL AI Picks</a>
+                <a href="/soccer-picks">Soccer AI Picks</a>
+                <a href="/ncaab-picks">NCAAB AI Picks</a>
+                <a href="/ncaaf-picks">NCAAF AI Picks</a>
+                <a href="/ncaaw-picks">NCAAW AI Picks</a>
+                <a href="/wnba-picks">WNBA AI Picks</a>
+            </div>
+            <div>
+                <div class="footer-heading">Research Tools</div>
+                <a href="/performance" rel="nofollow">Model Performance</a>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/daily-report">Daily Results Report</a>
+                <a href="/player-props" rel="nofollow">Player Props</a>
+                <a href="/results/downloads">Data Downloads</a>
+            </div>
+            <div>
+                <div class="footer-heading">Access</div>
+                <a href="/ai-sports-betting-picks-today">Free Picks</a>
+                <a href="/plans">Premium Edge - $4.99/wk</a>
+                <a href="/plans">Monthly Plan - $19.99</a>
+                <a href="/plans">Yearly Plan - $149.99</a>
+                <a href="/login">Sign In</a>
+                <a href="/signup">Create Account</a>
+            </div>
+            <div>
+                <div class="footer-heading">Company</div>
+                <a href="/blog">Daily Blog</a>
+                <a href="/faq">FAQ</a>
+                <a href="/tutorial">Tutorial</a>
+                <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
+                <a href="/contact">Contact</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/responsible-gaming">Responsible Gaming</a>
+            </div>
+        </div>
+        <div class="directory-bottom">
+            <span>&copy; 2026 Prediction Lab. All rights reserved.</span>
+            <span>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.tiktok.com/@predictionlab" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://reddit.com/r/sportsbetting" target="_blank" rel="noopener">Reddit</a>
+            </span>
+            <span>For entertainment purposes. Bet responsibly.</span>
+        </div>
+    </div>
+</footer>
+    
+    <script>
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'FAQ',h:'/faq'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}};
+function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
+function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
+function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
+function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
+document.addEventListener('click',function(){var m=document.getElementById('acctMenu');if(m)m.classList.remove('open');});
+var _srchFilter='all';
+var _srchDefaults=[{l:'Join Premium',h:'/plans',s:'all'},{l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},{l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},{l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},{l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Soccer Picks',h:'/soccer-picks',s:'all'},{l:'Tennis Picks',h:'/tennis-picks',s:'all'},{l:'UFC Picks',h:'/ufc-picks',s:'all'},{l:'Golf Picks',h:'/golf-picks',s:'all'},{l:'Player Props',h:'/player-props',s:'props'},{l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}];
+function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){document.getElementById('srchInput').focus();},60);renderSrchItems('');}
+function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('srchInput').value='';}
+function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
+function renderSrchItems(q){var items=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&(!q||i.l.toLowerCase().includes(q.toLowerCase()));});var el=document.getElementById('srchItems');if(!items.length){el.innerHTML='<div class="srch-empty">No results found</div>';return;}el.innerHTML=items.map(function(i){return'<a class="srch-item" href="'+i.h+'"><span class="srch-item-label">'+i.l+'</span><span class="srch-item-sport">'+i.s.toUpperCase()+'</span></a>';}).join('');}
+document.addEventListener('DOMContentLoaded',function(){var inp=document.getElementById('srchInput');if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}document.querySelectorAll('.srch-filter').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});this.classList.add('active');_srchFilter=this.dataset.s;renderSrchItems(document.getElementById('srchInput').value);});});});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
+    </script>
+    
+    <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium" style="display:block;">
+        <div class="join-premium-inner">
+            <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
+            <div class="join-premium-actions">
+                <a href="/plans" class="join-premium-btn">Join Now</a>
+                <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/pl-header-logo.js" defer></script>
+</body>
+</html>

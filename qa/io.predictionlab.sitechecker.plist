@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.predictionlab.sitechecker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/nimamesghali/Documents/Personal/predictionlabfix_work/qa/run_checker.sh</string>
+    </array>
+
+    <!-- Run every day at 8:00 AM local time -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/nimamesghali/Documents/Personal/predictionlabfix_work/qa/checker_cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/nimamesghali/Documents/Personal/predictionlabfix_work/qa/checker_cron.log</string>
+
+    <!-- Run when the computer next wakes if it was asleep at 8 AM -->
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

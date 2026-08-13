@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} Picks · Sandbox{% endblock %}
+{% block content %}
+<h1>{{ title }} picks</h1>
+<p style="color:var(--muted)">{{ subtitle }}</p>
+<div class="subnav">
+  <a class="btn primary" href="/{{ slug }}/">Picks</a>
+  <a class="btn" href="/{{ slug }}/total-edge">Total Edge</a>
+  <a class="btn" href="/{{ slug }}/results">Results</a>
+  <a class="btn" href="/{{ slug }}/performance">Performance</a>
+  <a class="btn" href="/{{ slug }}/models">Models</a>
+  {% if lab_href %}<a class="btn" href="{{ lab_href }}">Isolation lab</a>{% endif %}
+</div>
+<div class="card">
+  <table>
+    <thead>
+      <tr>{% for h in headers %}<th>{{ h }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+      {% else %}
+      <tr><td colspan="{{ headers|length }}">No rows — run seed.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

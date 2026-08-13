@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} Isolation Lab · Sandbox{% endblock %}
+{% block content %}
+<h1>{{ title }} isolation lab bridge</h1>
+<p style="color:var(--muted)">This hub page does not modify live PredictionLab. It points at the existing isolation workspace.</p>
+<div class="card">
+  <p><strong>Path:</strong> <code>{{ lab.path }}</code></p>
+  <p><strong>Exists:</strong> {{ lab.exists }}</p>
+  <p><strong>Run:</strong> <code>{{ lab.how_to_run }}</code></p>
+  {% if lab.default_port %}<p><strong>Default port:</strong> {{ lab.default_port }}</p>{% endif %}
+  <p>Sandbox picks/results for {{ title }} remain under <a href="/{{ slug }}/">/{{ slug }}/</a>.</p>
+</div>
+{% endblock %}

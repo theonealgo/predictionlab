@@ -1,42 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-    {% include 'includes/google_ads_tag.html' %}
-    {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
-    {% set _meta_title = sport_info.name ~ ' Predictions for ' ~ sorted_dates[0] ~ ' | predictionlab.io' %}
-    {% set _meta_desc = 'AI-powered ' ~ sport_info.name ~ ' predictions and game forecasts for ' ~ sorted_dates[0] ~ ' — model projections and matchup analysis on predictionlab.io.' %}
-    {% else %}
-    {% set _meta_title = sport_info.name ~ ' Predictions Today | predictionlab.io' %}
-    {% set _meta_desc = 'Daily AI-powered ' ~ sport_info.name ~ ' predictions, game forecasts, model projections, and matchup analysis — updated on predictionlab.io.' %}
-    {% endif %}
-    <title>{{ _meta_title }}</title>
+    
+    
+    
+    
+    <title>NBA Predictions Today | predictionlab.io</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{{ _meta_desc }}">
-    <meta name="robots" content="{{ robots_meta | default('index,follow,max-image-preview:large,max-snippet:-1') }}">
-    <meta property="og:title" content="{{ _meta_title }}">
-    <meta property="og:description" content="{{ _meta_desc }}">
+    <meta name="description" content="Daily AI-powered NBA predictions, game forecasts, model projections, and matchup analysis — updated on predictionlab.io.">
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+    <meta property="og:title" content="NBA Predictions Today | predictionlab.io">
+    <meta property="og:description" content="Daily AI-powered NBA predictions, game forecasts, model projections, and matchup analysis — updated on predictionlab.io.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
+    <meta property="og:url" content="https://predictionlab.io/nba-picks">
         <meta property="og:site_name" content="predictionlab.io">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ _meta_title }}">
-    <meta name="twitter:description" content="{{ _meta_desc }}">
+    <meta name="twitter:title" content="NBA Predictions Today | predictionlab.io">
+    <meta name="twitter:description" content="Daily AI-powered NBA predictions, game forecasts, model projections, and matchup analysis — updated on predictionlab.io.">
     <link rel="icon" href="/static/pl-logo.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap"></noscript>
-    <link rel="canonical" href="{{ canonical_url or ('https://predictionlab.io' ~ request.path) }}">
-        {% if ga_tracking_id %}
+    <link rel="canonical" href="https://predictionlab.io/nba-picks">
+    
     <script>
       (function(){
         function initGA(){
           if (window.__gaLoaded) return;
           window.__gaLoaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-R4XM0WKTGG';
+          document.head.appendChild(s);
           window.dataLayer = window.dataLayer || [];
           window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
-          gtag('config', '{{ ga_tracking_id }}');
+          gtag('js', new Date());
+          gtag('config', 'G-R4XM0WKTGG');
         }
         if ('requestIdleCallback' in window) {
           requestIdleCallback(initGA, { timeout: 2500 });
@@ -45,7 +46,7 @@
         }
       })();
     </script>
-    {% endif %}
+    
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -67,21 +68,11 @@
       "@type": "BreadcrumbList",
       "itemListElement": [
         {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://predictionlab.io/"},
-        {"@type": "ListItem", "position": 2, "name": "{{ sport_info.name }} Picks", "item": "https://predictionlab.io/{{ sport_seo_slug }}"}
+        {"@type": "ListItem", "position": 2, "name": "NBA Picks", "item": "https://predictionlab.io/nba-picks"}
       ]
     }
     </script>
-    {% if grouped_predictions %}
-    {% for date in sorted_dates %}
-    {% for pred in grouped_predictions[date] %}
-    {% if pred.home_score is none and pred.home_team_id != 'TBD' and pred.away_team_id != 'TBD' and pred.home_team_id and pred.away_team_id %}
-    <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"SportsEvent","name":"{{ pred.away_team_id }} at {{ pred.home_team_id }}","description":"{{ sport_info.name }} game: {{ pred.away_team_id }} at {{ pred.home_team_id }}. AI predictions and picks at predictionlab.io.","startDate":"{{ date }}T19:00:00-04:00","endDate":"{{ date }}T22:00:00-04:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","location":{"@type":"Place","name":"{{ pred.home_team_id }} Home Venue","address":{"@type":"PostalAddress","addressCountry":"US"}},"homeTeam":{"@type":"SportsTeam","name":"{{ pred.home_team_id }}"},"awayTeam":{"@type":"SportsTeam","name":"{{ pred.away_team_id }}"},"organizer":{"@type":"Organization","name":"{{ sport_info.name }}","url":"https://predictionlab.io/{{ sport_seo_slug }}"},"offers":{"@type":"Offer","url":"https://predictionlab.io/{{ sport_seo_slug }}","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","validFrom":"{{ date }}"}}
-    </script>
-    {% endif %}
-    {% endfor %}
-    {% endfor %}
-    {% endif %}
+    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -588,68 +579,347 @@
     <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
 </head>
 <body>
-{% include 'includes/picks_nav_chrome.html' %}
+
+<header class="pl2-header">
+    <button type="button" class="pl2-burger" id="navHamburger" onclick="if(window.tvToggle){tvToggle();return false;}if(window.tvOpen){tvOpen();return false;}" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+        <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav">
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Picks</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/nba-picks">NBA</a>
+                <a href="/nfl-picks">NFL</a>
+                <a href="/mlb-picks">MLB</a>
+                <a href="/nhl-picks">NHL</a>
+                <a href="/soccer-picks">Soccer</a>
+                <a href="/ncaab-picks">NCAAB</a>
+                <a href="/ncaaf-picks">NCAAF</a>
+                <a href="/ncaaw-picks">NCAAW</a>
+                <a href="/wnba-picks">WNBA</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Models</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/performance">Model Performance</a>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
+                <a href="/tutorial">Tutorial</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Results</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/nba-results">NBA</a>
+                <a href="/nfl-results">NFL</a>
+                <a href="/mlb-results">MLB</a>
+                <a href="/nhl-results">NHL</a>
+                <a href="/soccer-results">Soccer</a>
+                <a href="/ncaab-results">NCAAB</a>
+                <a href="/ncaaf-results">NCAAF</a>
+                <a href="/ncaaw-results">NCAAW</a>
+                <a href="/wnba-results">WNBA</a>
+                <a href="/daily-report">Daily Results</a>
+                <a href="/results/downloads">Download CSV</a>
+            </div>
+        </div>
+        <a href="/blog">Blog</a>
+        <a href="/plans">Pricing</a>
+    </nav>
+    <div class="pl2-header-actions">
+        <a class="pl2-search" href="/search" onclick="if(window.openSrch){openSrch();return false;}" aria-label="Search" title="Search teams, leagues, props">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </a>
+        
+        <div class="pl2-account">
+            <button class="pl2-account-button" type="button" aria-label="Account menu" aria-expanded="false" aria-controls="pl2AccountMenu">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21a8 8 0 0 1 16 0"></path>
+                </svg>
+            </button>
+            <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
+                
+                <a href="/login">Login</a>
+                <a href="/signup">Sign Up</a>
+                
+            </div>
+        </div>
+    </div>
+</header>
+
+<script>
+/* ACCOUNT MENU: opens the person icon menu and closes it on outside click/Escape. */
+(function () {
+    var account = document.querySelector('.pl2-account');
+    if (!account) return;
+    var button = account.querySelector('.pl2-account-button');
+    var menu = account.querySelector('.pl2-account-menu');
+    if (!button || !menu) return;
+
+    function closeAccountMenu() {
+        menu.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+    }
+
+    button.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var opening = menu.hidden;
+        menu.hidden = !opening;
+        button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (event) {
+        if (!account.contains(event.target)) closeAccountMenu();
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeAccountMenu();
+    });
+})();
+
+/* NAV DROPDOWNS: Picks / Models / Results open a menu on click. */
+(function () {
+    var drops = Array.prototype.slice.call(document.querySelectorAll('.pl2-navdrop'));
+    if (!drops.length) return;
+    function closeAll(except) {
+        drops.forEach(function (d) {
+            if (d === except) return;
+            var m = d.querySelector('.pl2-nav-menu');
+            var b = d.querySelector('.pl2-nav-trigger');
+            if (m) m.hidden = true;
+            if (b) b.setAttribute('aria-expanded', 'false');
+        });
+    }
+    drops.forEach(function (d) {
+        var b = d.querySelector('.pl2-nav-trigger');
+        var m = d.querySelector('.pl2-nav-menu');
+        if (!b || !m) return;
+        b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var opening = m.hidden;
+            closeAll(d);
+            m.hidden = !opening;
+            b.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        });
+    });
+    document.addEventListener('click', function (e) {
+        var inside = drops.some(function (d) { return d.contains(e.target); });
+        if (!inside) closeAll(null);
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAll(null);
+    });
+})();
+</script>
+
+<div class="pl-week-free-bar">
+    <a href="/plans#weekly" class="pl-week-free-cta">
+        <svg class="pl-week-free-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2l1.4 4.3H18l-3.6 2.6 1.4 4.3L12 10.6 8.2 13.2l1.4-4.3L6 6.3h4.6L12 2z" fill="currentColor" opacity="0.95"/>
+            <path d="M19 8l.8 2.4H22l-2 1.5.8 2.4L19 12.8 17.2 14.3l.8-2.4-2-1.5h2.2L19 8z" fill="currentColor" opacity="0.75"/>
+            <path d="M5 14l.7 2.1H8L6.3 17l.7 2.1L5 17.6 3.3 19.1l.7-2.1-1.7-1.3h2.1L5 14z" fill="currentColor" opacity="0.75"/>
+        </svg>
+        Try a Week
+    </a>
+</div>
+
+<div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+<div class="tv-drawer" id="tvDrawer">
+  <div class="tv-drawer-header">
+    <div class="tv-header-btns"><button type="button" class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+    <button type="button" class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+  </div>
+  <div class="tv-panels">
+    <div class="tv-panel visible" id="tvMain">
+      
+      
+      <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
+      
+      <div class="tv-menu-list">
+        <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+        
+        <a href="/blog" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Blog</span></a>
+        <a href="/plans" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Pricing</span></a>
+        <button type="button" class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
+        <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
+          <button type="button" class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('community')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
+          <button type="button" class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('company')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="tv-panel hidden-right" id="tvSub"></div>
+  </div>
+</div>
+<div class="srch-overlay" id="srchOverlay" onclick="closeSrchOutside(event)">
+  <div class="srch-box">
+    <form class="srch-input-row" action="/search" method="get" role="search" onclick="event.stopPropagation()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="query" id="srchInput" placeholder="Search teams, leagues, or matchups..." autocomplete="off" aria-label="Search query">
+      <button type="button" class="srch-close" onclick="closeSrch()">&#x2715;</button>
+    </form>
+    <div class="srch-filters">
+      <button type="button" class="srch-filter active" data-s="all">All</button>
+      <button type="button" class="srch-filter" data-s="nba">NBA</button>
+      <button type="button" class="srch-filter" data-s="nfl">NFL</button>
+      <button type="button" class="srch-filter" data-s="mlb">MLB</button>
+      <button type="button" class="srch-filter" data-s="nhl">NHL</button>
+      <button type="button" class="srch-filter" data-s="ncaab">NCAAB</button>
+      <button type="button" class="srch-filter" data-s="ncaaf">NCAAF</button>
+      <button type="button" class="srch-filter" data-s="wnba">WNBA</button>
+      <button type="button" class="srch-filter" data-s="props">Props</button>
+    </div>
+    <div class="srch-items" id="srchItems"></div>
+  </div>
+</div>
+<script>
+var TV_MENUS={
+  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'}]},
+  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Tutorial',h:'/tutorial'}]},
+  results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'},{l:'Soccer',h:'/soccer-results'},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'Daily Results',h:'/daily-report'},{l:'Download CSV',h:'/results/downloads'},{l:'Model Performance',h:'/performance'},{l:'Edge Performance',h:'/edge-performance'}]},
+  community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://www.instagram.com/',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},
+  company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'}]}
+};
+function tvOpen(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';
+  if(h)h.setAttribute('aria-expanded','true');
+}
+function tvToggle(){
+  var d=document.getElementById('tvDrawer'),s=document.getElementById('tvSub');
+  if(d&&d.classList.contains('open')){
+    if(s&&s.classList.contains('visible')){tvBack();}else{tvClose();}
+  }else{tvOpen();}
+}
+function tvReset(){
+  var m=document.getElementById('tvMain'),s=document.getElementById('tvSub'),b=document.getElementById('tvBackBtn'),t=document.getElementById('tvDrawerTitle'),more=document.getElementById('tvMoreItems');
+  if(m){m.classList.remove('hidden-left','hidden-right');m.classList.add('visible');}
+  if(s){s.classList.remove('visible','hidden-left');s.classList.add('hidden-right');s.innerHTML='';}
+  if(b){b.style.display='none';b.setAttribute('aria-hidden','true');}
+  if(t)t.textContent='Menu';
+  if(more)more.style.display='none';
+}
+function tvClose(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';
+  if(h)h.setAttribute('aria-expanded','false');
+  tvReset();
+}
+function tvSub(key){
+  var menu=TV_MENUS[key],main=document.getElementById('tvMain'),sub=document.getElementById('tvSub'),back=document.getElementById('tvBackBtn'),title=document.getElementById('tvDrawerTitle');
+  if(!menu||!main||!sub)return;
+  var html='';
+  menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});
+  sub.innerHTML=html;
+  if(title)title.textContent=menu.title;
+  if(back){back.style.display='inline-flex';back.setAttribute('aria-hidden','false');}
+  main.classList.remove('visible','hidden-right');main.classList.add('hidden-left');
+  sub.classList.remove('hidden-right','hidden-left');sub.classList.add('visible');
+}
+function tvBack(){
+  var main=document.getElementById('tvMain'),sub=document.getElementById('tvSub'),back=document.getElementById('tvBackBtn'),title=document.getElementById('tvDrawerTitle');
+  if(main){main.classList.remove('hidden-left','hidden-right');main.classList.add('visible');}
+  if(sub){sub.classList.remove('visible','hidden-left');sub.classList.add('hidden-right');}
+  if(back){back.style.display='none';back.setAttribute('aria-hidden','true');}
+  if(title)title.textContent='Menu';
+}
+function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
+function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
+document.addEventListener('click',function(){var a=document.getElementById('acctMenu');if(a)a.classList.remove('open');});
+var _srchFilter='all';
+var _srchDefaults=[
+  {l:'Join Premium',h:'/plans',s:'all'},
+  {l:'NBA Picks',h:'/nba-picks',s:'nba'},{l:'NFL Picks',h:'/nfl-picks',s:'nfl'},
+  {l:'MLB Picks',h:'/mlb-picks',s:'mlb'},{l:'NHL Picks',h:'/nhl-picks',s:'nhl'},
+  {l:'NCAAB Picks',h:'/ncaab-picks',s:'ncaab'},{l:'NCAAF Picks',h:'/ncaaf-picks',s:'ncaaf'},
+  {l:'WNBA Picks',h:'/wnba-picks',s:'wnba'},{l:'Soccer Picks',h:'/soccer-picks',s:'all'},
+  {l:'Tennis Picks',h:'/tennis-picks',s:'all'},{l:'UFC Picks',h:'/ufc-picks',s:'all'},{l:'Golf Picks',h:'/golf-picks',s:'all'},
+  {l:'Player Props',h:'/player-props',s:'props'},
+  {l:'Model Performance',h:'/performance',s:'props'},{l:'Daily Results',h:'/daily-report',s:'all'}
+];
+function openSrch(){document.getElementById('srchOverlay').classList.add('open');document.body.style.overflow='hidden';setTimeout(function(){var i=document.getElementById('srchInput');if(i){i.focus();}},60);renderSrchItems('');}
+function closeSrch(){document.getElementById('srchOverlay').classList.remove('open');document.body.style.overflow='';var i=document.getElementById('srchInput');if(i)i.value='';}
+function closeSrchOutside(e){if(e.target===document.getElementById('srchOverlay'))closeSrch();}
+function srchEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);});}
+function srchLink(label,href,sport){return'<a class="srch-item" href="'+srchEsc(href||'/search')+'"><span class="srch-item-label">'+srchEsc(label)+'</span><span class="srch-item-sport">'+srchEsc((sport||'all').toUpperCase())+'</span></a>';}
+function renderSrchItems(q){
+  q=(q||'').trim();
+  var el=document.getElementById('srchItems');
+  if(!el)return;
+  if(!q){
+    var items=_srchDefaults.filter(function(i){return _srchFilter==='all'||i.s===_srchFilter;});
+    el.innerHTML=items.map(function(i){return srchLink(i.l,i.h,i.s);}).join('');
+    return;
+  }
+  el.innerHTML='<div class="srch-empty">Searching...</div>';
+  fetch('/api/search?query='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
+    .then(function(r){return r.ok?r.json():Promise.reject();})
+    .then(function(data){
+      var rows=[];
+      if(data.suggested_route){rows.push(srchLink('Best match for "'+q+'"',data.suggested_route,'go'));}
+      (data.page_results||[]).forEach(function(r){rows.push(srchLink(r.label||'Page',r.route||data.suggested_route||'/',r.sport||'site'));});
+      (data.team_results||[]).forEach(function(r){rows.push(srchLink((r.away_team||'Away')+' vs '+(r.home_team||'Home'),data.suggested_route||('/'+String(r.sport||'').toLowerCase()+'-picks'),r.sport));});
+      (data.espn_results||[]).forEach(function(r){rows.push(srchLink((r.away_team||'Away')+' at '+(r.home_team||'Home'),data.suggested_route||'/search?query='+encodeURIComponent(q),r.sport));});
+      (data.model_results||[]).forEach(function(r){rows.push(srchLink((r.sport||'Model')+' '+(r.model||'performance')+' '+(r.accuracy||''),'/performance',r.sport||'model'));});
+      if(!rows.length){
+        rows=_srchDefaults.filter(function(i){return(_srchFilter==='all'||i.s===_srchFilter)&&i.l.toLowerCase().includes(q.toLowerCase());}).map(function(i){return srchLink(i.l,i.h,i.s);});
+      }
+      el.innerHTML=rows.length?rows.join(''):'<div class="srch-empty">No results found. Press Enter to search.</div>';
+    })
+    .catch(function(){el.innerHTML='<div class="srch-empty">Search temporarily unavailable. Press Enter to search.</div>';});
+}
+document.addEventListener('DOMContentLoaded',function(){
+  var inp=document.getElementById('srchInput');
+  if(inp){inp.addEventListener('input',function(){renderSrchItems(this.value);});}
+  document.querySelectorAll('.srch-filter').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.srch-filter').forEach(function(b){b.classList.remove('active');});
+      this.classList.add('active');_srchFilter=this.dataset.s;
+      renderSrchItems(document.getElementById('srchInput').value);
+    });
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
+</script>
+<script src="/static/js/pl-header-logo.js" defer></script>
 <div class="search-results-wrap">
     <div id="searchResultsPicks" class="search-results" aria-live="polite"></div>
 </div>
 <div class="container">
 
     <div class="header">
-        <h1 id="pageHeading">{{ sport_info.icon }} {{ sport_info.name }} AI Picks, Predictions and Model Probabilities</h1>
+        <h1 id="pageHeading">🏀 NBA AI Picks, Predictions and Model Probabilities</h1>
     </div>
 
     <!-- SEO text block -->
     <div style="margin-bottom:16px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:0.85em;color:#475569;line-height:1.7;">
-        {% if sport == 'NBA' %}Our NBA picks today are powered by a multi-model AI system combining advanced team ratings, performance data, and real-time matchup analysis. Our models analyze pace, efficiency, and player trends to generate accurate daily predictions across moneyline, spread, and totals.
-        {% elif sport == 'MLB' %}Our MLB picks today are generated using a specialized system that focuses on starting pitchers, bullpen usage, and advanced matchup data. By analyzing strikeout rates, run projections, and team performance, we identify high-value opportunities across moneyline, spread, and totals.
-        {% elif sport == 'NHL' %}Our NHL picks are driven by advanced models that evaluate team strength, goaltending performance, shot metrics, and recent form. We combine real-time data with predictive analysis to generate daily value across moneyline, puck line, and totals.
-        {% elif sport == 'NFL' %}Our NFL picks are built using predictive systems that combine team performance metrics, quarterback play, and matchup data. We analyze offensive and defensive strengths to generate high-confidence predictions for spreads, totals, and moneyline outcomes.
-        {% elif sport == 'NCAAB' %}Our college basketball picks use advanced analytics, team ratings, and matchup-based projections to identify value in daily games. The system evaluates efficiency and recent performance trends to produce accurate predictions.
-        {% elif sport == 'NCAAF' %}Our college football picks are powered by data-driven models that analyze team strength, scoring efficiency, and matchup dynamics to project outcomes and identify value across spreads and totals.
-        {% elif sport == 'SOCCER' %}Our soccer predictions combine team form, expected performance metrics, and matchup data to generate accurate forecasts. The system evaluates both attacking and defensive strength to identify value opportunities.
-        {% elif sport == 'WNBA' %}Our WNBA picks are generated using advanced models that evaluate team efficiency, pace, and player performance trends to identify high-value opportunities in daily matchups.
-        {% elif sport == 'NCAAW' %}Our women's college basketball picks combine team ratings and performance analytics to identify value in daily matchups across spreads and totals.
-        {% else %}Our AI-powered picks combine multiple predictive models to generate accurate daily predictions across moneyline, spread, and totals.
-        {% endif %}
-        {% if sorted_dates and sorted_dates|length == 1 and sorted_dates[0] != today_date %}
-        <br><strong style="color:#334155;">Showing picks for {{ sorted_dates[0] }}.</strong> <a href="/{{ sport_seo_slug }}" style="color:#00529B;text-decoration:none;font-weight:700;">View today's picks →</a>
-        {% endif %}
+        Our NBA picks today are powered by a multi-model AI system combining advanced team ratings, performance data, and real-time matchup analysis. Our models analyze pace, efficiency, and player trends to generate accurate daily predictions across moneyline, spread, and totals.
+        
+        
     </div>
 
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
-        {% if not is_premium|default(false) %}
+        <a href="/nba-picks" class="tab active">📊 Predictions</a>
+        <a href="/nba-results" class="tab">🎯 Results</a>
+        
         <a href="/plans" class="tab" style="margin-left:auto;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:800;">⭐ Join Premium</a>
-        {% endif %}
+        
     </div>
-    {% if not is_premium|default(false) %}
+    
     <div class="premium-upsell-strip">Unlock spreads, totals, and projected scores — <a href="/plans">Join Premium →</a></div>
-    {% endif %}
-    {% set label_glicko2 = 'Grinder2' %}
-    {% set label_trueskill = 'Takedown' %}
-    {% set label_elo = 'Edge' %}
-    {% set label_xgb = 'XSharp' %}
-    {% set label_ensemble = 'Sharp Consensus' %}
-    {% from 'includes/score_macros.html' import fmt_half, fmt_labeled_final, fmt_labeled_proj, fmt_final_spread, team_short, fmt_spread_line %}
-    {% if soccer_leagues %}
-    <div class="league-slider">
-        <div class="league-badges" id="leagueBubbles">
-            {% for lg in soccer_leagues %}
-            <a class="league-pill {% if lg.active %}active{% endif %} {% if lg.live %}live-league{% endif %}" href="{{ lg.url }}">
-                {% if lg.live %}<span class="live-dot"></span>{% endif %}{{ lg.name }}
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    <div style="font-size:0.75em;color:#475569;text-align:center;margin:-6px 0 10px;"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#00C076;display:inline-block;"></span> Green = active fixtures</span></div>
-    {% endif %}
+    
+    
+    
+    
+    
+    
+    
+    
 
-    {% if prediction_error %}
-    <div style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.35);color:#fecaca;font-size:0.9em;">
-        {{ prediction_error }}
-    </div>
-    {% endif %}
+    
 
     <div class="date-nav">
         <div class="nav-arrow" onclick="previousWeek()">‹</div>
@@ -659,251 +929,27 @@
         </select>
     </div>
 
-    {# ===== SECTION: Chart View + Copy All controls ===== #}
-    {% if grouped_predictions %}
-    <style>
-        .picks-view-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:1200px;margin:0 auto 12px;padding:0 4px;}
-        .pv-toggle{display:inline-flex;border:1px solid #cbd5e1;border-radius:999px;overflow:hidden;background:#fff;}
-        .pv-btn{border:0;background:transparent;color:#475569;font-size:0.8em;font-weight:700;padding:6px 14px;cursor:pointer;}
-        .pv-btn.active{background:#00529B;color:#fff;}
-        .pv-copy{margin-left:auto;border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 14px;font-size:0.8em;font-weight:800;cursor:pointer;}
-        .pv-copy.copied{background:#00C076;border-color:#00C076;color:#fff;}
-        .chart-table-wrap{display:none;margin-top:4px;-webkit-overflow-scrolling:touch;}
-        .date-section.chart-mode .games-grid{display:none !important;}
-        .date-section.chart-mode .chart-table-wrap{display:block;max-height:78vh;overflow:auto;border:1px solid rgba(15,23,42,0.12);border-radius:10px;}
-        .picks-chart-table{width:100%;border-collapse:separate;border-spacing:0;font-size:0.8em;background:#fff;table-layout:auto;}
-        .picks-chart-table th{position:sticky;top:0;z-index:3;text-align:center;font-size:0.66em;text-transform:uppercase;letter-spacing:0.2px;color:#475569;padding:7px 8px;border-bottom:1px solid #dbe2ea;background:#eef2f7;white-space:nowrap;}
-        .picks-chart-table th.mu-col{text-align:left;}
-        .picks-chart-table th.num{text-align:right;}
-        .picks-chart-table td{padding:5px 8px;border-bottom:1px solid #eef2f7;color:#0f172a;font-weight:600;vertical-align:middle;white-space:nowrap;}
-        .picks-chart-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
-        .picks-chart-table td.ctr{text-align:center;}
-        .picks-chart-table tbody tr:nth-child(even) td{background:#f8fafc;}
-        .picks-chart-table tbody tr:hover td{background:#eff6ff;}
-        .picks-chart-table tr:last-child td{border-bottom:none;}
-        .picks-chart-table td.mu-col{white-space:normal;min-width:92px;max-width:150px;line-height:1.15;}
-        .picks-chart-table .mu-away{display:block;font-weight:600;color:#334155;}
-        .picks-chart-table .mu-home{display:block;font-weight:800;color:#0f172a;}
-        .picks-chart-table .t-time{color:#64748b;font-weight:600;font-size:0.94em;}
-        .picks-chart-table .pick-cell strong{color:#0c1e3a;}
-        .picks-chart-table .h2h-cell{color:#334155;font-weight:700;}
-        .picks-chart-table td.mdl .na{color:#94a3b8;font-weight:600;}
-        .picks-chart-table .conf-strong{color:#15803d;font-weight:800;}
-        .picks-chart-table .conf-mod{color:#b45309;font-weight:800;}
-        .picks-chart-table .conf-weak{color:#b91c1c;font-weight:700;}
-        .picks-chart-table .best-model{background:rgba(0,192,118,0.16);border-radius:5px;padding:1px 6px;box-shadow:inset 0 0 0 1px rgba(0,192,118,0.35);}
-        .picks-chart-table .pct-league-row td{background:#eef2f7 !important;color:#92400e;font-weight:800;font-size:0.74em;text-transform:uppercase;letter-spacing:0.3px;text-align:left;}
-        .picks-chart-table .pct-pick{color:#00529B;font-weight:800;}
-    </style>
-    <div class="picks-view-controls">
-        <div class="pv-toggle" role="tablist" aria-label="Pick view">
-            <button type="button" class="pv-btn active" id="pvCardsBtn" onclick="setPicksView('cards')">📊 Cards</button>
-            <button type="button" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
-        </div>
-        <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
-    </div>
-    {% endif %}
+    
+    
 
-    {% if sorted_dates %}
-    <ul class="sr-only">
-        {% for date in sorted_dates %}
-        <li><a href="#date-{{ date }}">{{ date }}</a></li>
-        {% endfor %}
-    </ul>
-    {% endif %}
+    
 
-    {% if grouped_predictions %}
-        {% for date in sorted_dates %}
-        <div class="date-section {% if date == (default_pick_date|default(today_date)) %}visible{% else %}seo-hidden{% endif %}" id="date-{{ date }}">
-            <div class="date-header">
-                📅 {{ date }}
-                {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
-            </div>
-            <div class="games-grid">
-                {% set _prev_league = namespace(val='') %}
-                {% if sport == 'SOCCER' %}
-                {% set _date_preds = grouped_predictions[date]|sort(attribute='league') %}
-                {% else %}
-                {% set _date_preds = grouped_predictions[date] %}
-                {% endif %}
-                {% for pred in _date_preds %}
-                {% if sport == 'SOCCER' and pred.league and pred.league != _prev_league.val %}
-                {% set _prev_league.val = pred.league %}
-                <div style="grid-column:1/-1;font-size:0.88em;font-weight:700;color:#92400e;padding:10px 0 4px;border-top:1px solid rgba(15,23,42,0.1);margin-top:6px;">{{ pred.league }}</div>
-                {% endif %}
-                {% set is_final = pred.home_score is not none %}
-                {% set home_wins = is_final and pred.home_score > pred.away_score %}
-                {% set away_wins = is_final and pred.away_score > pred.home_score %}
-                {% set home_picked = pred.predicted_winner == pred.home_team_id %}
-                {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
-                {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
-                {# ===== SECTION: Chart View + Copy All (per-pick data for JS) ===== #}
-                {# Chart Pick follows Sharp Consensus (ensemble) so it never contradicts the model columns. #}
-                {% set _cons = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
-                {% if _cons is not none %}
-                {% set _chart_pick = team_short(pred.home_team_id) if _cons >= 50 else team_short(pred.away_team_id) %}
-                {% set _chart_conf = _cons if _cons >= 50 else 100 - _cons %}
-                {% else %}
-                {% set _chart_pick = team_short(pred.predicted_winner) %}
-                {% set _chart_conf = none %}
-                {% endif %}
-                {% set _chart_edge = pred.face_edge_pct if (pred.face_edge_pct is defined and pred.face_edge_pct is not none) else (pred.edge_pct if (pred.edge_pct is defined and pred.edge_pct is not none) else none) %}
-                {# H2H last-10 average total - matches card display #}
-                {% set _h2h_txt = '' %}
-                {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
-                {% set _h2h_txt = fmt_half(pred.h2h_last10_total) %}
-                {% if pred.h2h_last10_games is defined and pred.h2h_last10_games %}
-                {% set _h2h_txt = _h2h_txt ~ ' (' ~ pred.h2h_last10_games ~ ' games)' %}
-                {% endif %}
-                {% endif %}
-                {% set _chart_result = '' %}
-                {% if is_final %}{% if (pred.predicted_winner == pred.home_team_id and home_wins) or (pred.predicted_winner == pred.away_team_id and away_wins) %}{% set _chart_result = 'WON' %}{% elif home_wins or away_wins %}{% set _chart_result = 'LOST' %}{% endif %}{% endif %}
-                <div class="game-card-stack" data-pick-card
-                    data-away="{{ team_short(pred.away_team_id) }}"
-                    data-home="{{ team_short(pred.home_team_id) }}"
-                    data-league="{{ pred.league if pred.league else '' }}"
-                    data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time is not none %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
-                    data-pick="{{ _chart_pick }}"
-                    data-conf="{% if _chart_conf is not none %}{{ '%.1f'|format(_chart_conf) }}{% endif %}"
-                    data-h2h="{{ _h2h_txt }}"
-                    data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
-                    data-books-spread="{% if pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
-                    data-books-total="{% if pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
-                    {% if is_premium|default(false) %}
-                    data-m-grinder2="{% if pred.glicko2_prob is not none %}{{ pred.glicko2_prob }}{% endif %}"
-                    data-m-takedown="{% if pred.trueskill_prob is not none %}{{ pred.trueskill_prob }}{% endif %}"
-                    data-m-edge="{% if pred.elo_prob is not none %}{{ pred.elo_prob }}{% endif %}"
-                    data-m-xsharp="{% if pred.xgb_prob is not none %}{{ pred.xgb_prob }}{% endif %}"
-                    data-m-efficiency="{% if pred.disp_ml_prob is not none %}{{ pred.disp_ml_prob }}{% endif %}"
-                    data-m-consensus="{% if pred.ensemble_prob is not none %}{{ pred.ensemble_prob }}{% endif %}"
-                    data-pl-proj="{% if pred.pl_proj_away_pts is not none and pred.pl_proj_home_pts is not none %}{{ fmt_half(pred.pl_proj_away_pts) }}–{{ fmt_half(pred.pl_proj_home_pts) }}{% endif %}"
-                    data-xs-proj="{% if pred.xs_proj_away_pts is not none and pred.xs_proj_home_pts is not none %}{{ fmt_half(pred.xs_proj_away_pts) }}–{{ fmt_half(pred.xs_proj_home_pts) }}{% endif %}"
-                    {% endif %}
-                    data-result="{{ _chart_result }}">
-                <div class="game-card pick-card" data-league="{{ pred.league if pred.league else 'Other' }}">
-                    {% set _force_rl = (sport == 'MLB') %}
-                    {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
-                    {% set card = pred %}
-                    {% set is_results = false %}
-                    {% set is_premium = is_premium|default(false) %}
-                    {% set spread_label = _spread_label %}
-                    {% set force_rl = _force_rl %}
-                    {% set away_score = pred.away_score %}
-                    {% set home_score = pred.home_score %}
-                    {% set show_pick_arrow = (not is_final) and _odds_pass %}
-                    {% set card_details_id = 'card-details-' ~ date ~ '-' ~ loop.index0 %}
-                    {% set conf_models = [
-                        {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
-                        {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
-                        {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
-                        {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
-                        {'name': 'Efficiency', 'prob': pred.disp_ml_prob, 'key': 'efficiency'},
-                        {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
-                    ] %}
-                    {% include 'includes/game_card_body.html' %}
-                    {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
-                    <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
-                    <div id="{{ analysis_id }}" class="analysis-panel">
-                        {% if pred.our_method == 'efficiency' and pred.our_home_eff and pred.our_away_eff %}
-                        <div class="analysis-title">Efficiency-based projection (last 5 games)</div>
-                        <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
-                            <div>{{ pred.home_team_id }}: ORtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['ortg'] }}{% else %}{{ pred.our_home_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['drtg'] }}{% else %}{{ pred.our_home_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['pace'] }}{% else %}{{ pred.our_home_eff.pace }}{% endif %}</strong></div>
-                            <div>{{ pred.away_team_id }}: ORtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['ortg'] }}{% else %}{{ pred.our_away_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['drtg'] }}{% else %}{{ pred.our_away_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['pace'] }}{% else %}{{ pred.our_away_eff.pace }}{% endif %}</strong></div>
-                            <div style="margin-top:4px;">Projected score: <strong>{{ (pred.home_team_id|string).split()[-1] }} {{ pred.our_home_pts }} &mdash; {{ pred.our_away_pts }} {{ (pred.away_team_id|string).split()[-1] }}</strong> &nbsp;·&nbsp; Game pace ~{{ pred.our_pace }}</div>
-                        </div>
-                        {% elif pred.total_trend_record is defined or pred.spread_trend_record is defined %}
-                        <div class="analysis-title">Last 3-Game Trend (vs current XSharp lines)</div>
-                        <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
-                            {% if pred.our_home_avg is defined and pred.our_away_avg is defined %}
-                            <div>{{ pred.home_team_id }} avg (last 3): <strong>{{ pred.our_home_avg }}</strong> &nbsp;·&nbsp; {{ pred.away_team_id }} avg (last 3): <strong>{{ pred.our_away_avg }}</strong></div>
-                            {% endif %}
-                            {% if pred.total_trend_record is defined %}
-                            <div>Combined record vs XSharp total ({{ pred.xgb_total }}): <strong>{{ pred.total_trend_record }}</strong></div>
-                            {% endif %}
-                            {% if pred.spread_trend_record is defined %}
-                            <div>Combined record vs XSharp spread ({{ "%+.1f"|format(pred.xgb_spread) }}): <strong>{{ pred.spread_trend_record }}</strong></div>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                        {% set _away_injuries = pred.away_injuries if pred.away_injuries is not none else [] %}
-                        {% set _home_injuries = pred.home_injuries if pred.home_injuries is not none else [] %}
-                        {% set _away_suspended = _away_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
-                        {% set _home_suspended = _home_injuries | selectattr('status', 'equalto', 'Suspended') | list %}
-                        {% set _away_injured = _away_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
-                        {% set _home_injured = _home_injuries | rejectattr('status', 'equalto', 'Suspended') | list %}
-                        {% if _away_suspended or _home_suspended %}
-                        <div class="analysis-title" style="color:#ef4444;">Suspensions</div>
-                        <div class="injury-list">
-                            {% for inj in _away_suspended %}
-                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ (pred.away_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
-                            {% endfor %}
-                            {% for inj in _home_suspended %}
-                            <span class="injury-pill" style="border-color:#ef4444;color:#ef4444;">&#x26A0; {{ (pred.home_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — Suspended</span>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        <div class="analysis-title">Injuries</div>
-                        {% if _away_injured or _home_injured %}
-                        <div class="injury-list">
-                            {% for inj in _away_injured %}
-                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ (pred.away_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
-                            {% endfor %}
-                            {% for inj in _home_injured %}
-                            <span class="injury-pill {% if inj.status == 'Doubtful' %}doubtful{% endif %}">⚠ {{ (pred.home_team_id|string).split()[-1] }}: {{ inj.name }}{% if inj.reason %} ({{ inj.reason }}){% endif %} — {{ inj.status }}</span>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <div class="analysis-empty">No injuries reported.</div>
-                        {% endif %}
-                    </div>
-                </div>
-                </div>
-                {% endfor %}
-            </div>
-            <div class="chart-table-wrap" id="chart-{{ date }}"></div>
-        </div>
-        {% endfor %}
-    {% else %}
-    {% if sport == 'SOCCER' %}
-    <div style="text-align:center;padding:48px 20px;max-width:520px;margin:0 auto;">
-        <div style="font-size:2em;margin-bottom:12px;">⚽</div>
-        <div style="font-size:1.1em;font-weight:700;color:#0f172a;margin-bottom:8px;">No fixtures available for this league</div>
-        <div style="color:#475569;font-size:0.92em;line-height:1.65;margin-bottom:20px;">
-            Select a <span style="color:#059669;font-weight:700;">green league</span> above to see active picks, or check the results page for completed season data.
-        </div>
-        <a href="/soccer-results" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">View Season Results →</a>
-    </div>
-    {% elif offseason_notice %}
-    {# ===== SECTION: Off-season notice (season starts <date> + last-season results) ===== #}
+    
+    
+    
     <div style="text-align:center;padding:48px 20px;max-width:560px;margin:0 auto;">
-        <div style="font-size:2em;margin-bottom:12px;">{{ sport_info.icon }}</div>
-        <div style="font-size:1.1em;font-weight:700;color:#0f172a;margin-bottom:8px;">{{ sport_info.name }} is in the off-season</div>
-        <div style="color:#475569;font-size:0.92em;line-height:1.65;margin-bottom:20px;">{{ offseason_notice.message }}</div>
-        <a href="{{ offseason_notice.results_url }}" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">{{ offseason_notice.results_label }} →</a>
+        <div style="font-size:2em;margin-bottom:12px;">🏀</div>
+        <div style="font-size:1.1em;font-weight:700;color:#0f172a;margin-bottom:8px;">NBA is in the off-season</div>
+        <div style="color:#475569;font-size:0.92em;line-height:1.65;margin-bottom:20px;">NBA is in the off-season. The next season starts October 1, 2026. Until then, you can review last season&#39;s results below.</div>
+        <a href="/nba-results" style="display:inline-block;background:#00529B;color:#fff;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.9em;">View last season&#39;s results →</a>
     </div>
-    {% else %}
-    <div class="no-data">No predictions available for {{ sport_info.name }}</div>
-    {% endif %}
-    {% endif %}
+    
+    
 
     <!-- Internal links to recent dated pages (past dates only) -->
-    {% set _past_dates = [] %}
-    {% for _d in sorted_dates if _d <= today_date %}
-    {% if _past_dates.append(_d) %}{% endif %}
-    {% endfor %}
-    {% if _past_dates|length > 1 %}
-    <div style="margin-top:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
-        <div style="font-size:0.82em;font-weight:700;color:#334155;margin-bottom:8px;">Recent {{ sport_info.name }} Picks</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            {% for _d in _past_dates[-7:] %}
-            {% set _m = _d.split('-') %}
-            {% if _m|length == 3 %}
-            <a href="/{{ sport_seo_slug }}-{{ {'01':'january','02':'february','03':'march','04':'april','05':'may','06':'june','07':'july','08':'august','09':'september','10':'october','11':'november','12':'december'}.get(_m[1],'january') }}-{{ _m[2]|int }}-{{ _m[0] }}" style="color:#475569;text-decoration:none;font-size:0.8em;padding:4px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;">{{ _d }}</a>
-            {% endif %}
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
+    
+    
+    
 
     <div class="seo-picks-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
         <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">How These AI Picks Are Generated</h2>
@@ -926,47 +972,92 @@
     </div>
 </div>
 
-{% if share_image_src %}
-<div class="social-export-wrap">
-    <div class="social-export-head">
-        <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
-        <div class="social-export-actions">
-            <a class="social-export-btn" href="{{ share_image_src }}" download="predictionlab-picks.jpg">Download image</a>
-            <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">Open fullscreen</a>
-        </div>
-    </div>
-    <a class="social-image-link" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">
-        <img src="{{ share_image_src }}" alt="">
-    </a>
-</div>
-{% endif %}
+
 <div class="share-strip">
     <span class="share-strip-label">Share on social media</span>
     <div class="share-icons">
-        <a class="share-icon" href="https://x.com/intent/post?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
-        <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
-        <a class="share-icon" href="{{ 'https://www.instagram.com/' if request.path == '/daily-report' else 'https://instagram.com/predictionlab.io' }}" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
-        <a class="share-icon" href="{{ 'https://www.tiktok.com/upload?lang=en' if request.path == '/daily-report' else 'https://predictionlab.io' }}" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
-        <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
-        <a class="share-icon" href="https://www.reddit.com/submit?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
-        <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
-        <a class="share-icon" href="https://api.whatsapp.com/send?text={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
-        <a class="share-icon" href="https://telegram.me/share/url?url={{ request.url|urlencode }}" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+        <a class="share-icon" href="https://x.com/intent/post?url=https%3A//predictionlab.io/nba-picks" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+        <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u=https%3A//predictionlab.io/nba-picks" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+        <a class="share-icon" href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+        <a class="share-icon" href="https://predictionlab.io" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+        <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A//predictionlab.io/nba-picks" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+        <a class="share-icon" href="https://www.reddit.com/submit?url=https%3A//predictionlab.io/nba-picks" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+        <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl=https%3A//predictionlab.io/nba-picks" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+        <a class="share-icon" href="https://api.whatsapp.com/send?text=https%3A//predictionlab.io/nba-picks" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+        <a class="share-icon" href="https://telegram.me/share/url?url=https%3A//predictionlab.io/nba-picks" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
     </div>
 </div>
-{% include "partials/site_directory_footer.html" %}
-{% if not is_premium|default(false) %}
+<footer class="site-directory-footer">
+    <div class="directory-shell">
+        <span class="directory-label">Knowledge Directory</span>
+        <span class="directory-wordmark">PREDICTIONLABS.IO</span>
+        <div class="directory-sub">AI-powered sports betting picks. Daily. Transparent. Data-driven.</div>
+        <div class="directory-grid">
+            <div>
+                <div class="footer-heading">AI Picks by Sport</div>
+                <a href="/mlb-picks">MLB AI Picks</a>
+                <a href="/nba-picks">NBA AI Picks</a>
+                <a href="/nhl-picks">NHL AI Picks</a>
+                <a href="/nfl-picks">NFL AI Picks</a>
+                <a href="/soccer-picks">Soccer AI Picks</a>
+                <a href="/ncaab-picks">NCAAB AI Picks</a>
+                <a href="/ncaaf-picks">NCAAF AI Picks</a>
+                <a href="/ncaaw-picks">NCAAW AI Picks</a>
+                <a href="/wnba-picks">WNBA AI Picks</a>
+            </div>
+            <div>
+                <div class="footer-heading">Research Tools</div>
+                <a href="/performance" rel="nofollow">Model Performance</a>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/daily-report">Daily Results Report</a>
+                <a href="/player-props" rel="nofollow">Player Props</a>
+                <a href="/results/downloads">Data Downloads</a>
+            </div>
+            <div>
+                <div class="footer-heading">Access</div>
+                <a href="/ai-sports-betting-picks-today">Free Picks</a>
+                <a href="/plans">Premium Edge - $4.99/wk</a>
+                <a href="/plans">Monthly Plan - $19.99</a>
+                <a href="/plans">Yearly Plan - $149.99</a>
+                <a href="/login">Sign In</a>
+                <a href="/signup">Create Account</a>
+            </div>
+            <div>
+                <div class="footer-heading">Company</div>
+                <a href="/blog">Daily Blog</a>
+                <a href="/faq">FAQ</a>
+                <a href="/tutorial">Tutorial</a>
+                <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
+                <a href="/contact">Contact</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/responsible-gaming">Responsible Gaming</a>
+            </div>
+        </div>
+        <div class="directory-bottom">
+            <span>&copy; 2026 Prediction Lab. All rights reserved.</span>
+            <span>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.tiktok.com/@predictionlab" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://reddit.com/r/sportsbetting" target="_blank" rel="noopener">Reddit</a>
+            </span>
+            <span>For entertainment purposes. Bet responsibly.</span>
+        </div>
+    </div>
+</footer>
+
 <div class="join-premium-bar" id="joinPremiumBar" role="complementary" aria-label="Join premium">
     <div class="join-premium-inner">
         <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
         <div class="join-premium-actions">
-            <a href="/checkout/weekly" class="join-premium-btn join-premium-btn-weekly">Try a Week</a>
-            <a href="/plans" class="join-premium-btn">Join Premium</a>
+            <a href="/plans" class="join-premium-btn">Join Now</a>
             <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
         </div>
     </div>
 </div>
-{% endif %}
+
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -1056,9 +1147,9 @@
             if (burger) burger.setAttribute('aria-expanded', 'false');
         }
     });
-    const allDates = {{ sorted_dates|tojson }};
-    const today = '{{ today_date }}';
-    const defaultPickDate = '{{ default_pick_date|default(today_date) }}';
+    const allDates = [];
+    const today = '2026-08-01';
+    const defaultPickDate = '2026-08-01';
     let currentWeekStart = 0, activeDate = defaultPickDate || today;
     const datesPerWeek = 7;
     let picksViewMode = 'cards';
@@ -1068,8 +1159,8 @@
         const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
     }
-    const sportIcon = '{{ sport_info.icon }}';
-    const sportName = '{{ sport_info.name }}';
+    const sportIcon = '🏀';
+    const sportName = 'NBA';
     function showDate(date) {
         document.querySelectorAll('.date-section').forEach(s=>{
             s.classList.remove('visible');

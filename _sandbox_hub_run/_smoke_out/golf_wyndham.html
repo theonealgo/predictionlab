@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Wyndham Championship Win Probability | Prediction Lab</title>
+<link rel="stylesheet" href="/static/css/research-theme.css"/>
+<link rel="stylesheet" href="/static/css/golf-board.css"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap">
+</head>
+<body class="golf-board research-site" data-theme="light"><div id="golf-sport-subnav" class="hub-sport-subnav" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;padding:10px 14px;background:rgba(255,255,255,.92);border-bottom:1px solid rgba(15,23,42,.08);position:sticky;top:0;z-index:9000;backdrop-filter:blur(8px);"><a href="/golf/" style="padding:6px 12px;border-radius:999px;background:#0c1e3a;color:#fff;font-weight:700;text-decoration:none;font-size:.82rem">Win probability</a><a href="/golf/results" style="padding:6px 12px;border-radius:999px;border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:650;text-decoration:none;font-size:.82rem">Results</a></div>
+<div class="golf-wrap"><h1>Wyndham Championship <span class="golf-status">(Scheduled)</span></h1><p class="golf-lede">Model-estimated <strong>probability of winning the tournament</strong> for each player in the selected field, ranked by Sharp Consensus. Not a head-to-head matchup board and not sportsbook odds.</p><form class="golf-picker" method="get" action="/golf/"><label for="golf-event">Tournament</label><select id="golf-event" name="event" onchange="this.form.submit()"><option value="401811964">TOUR Championship — 2026-08-27</option>
+<option value="401811963">BMW Championship — 2026-08-20</option>
+<option value="401811962">FedEx St. Jude Championship — 2026-08-13</option>
+<option value="401811961" selected>Wyndham Championship — 2026-08-06</option>
+<option value="401811960">Rocket Classic — 2026-07-30 · Final</option>
+<option value="401811959">3M Open — 2026-07-23</option>
+<option value="401811957">The Open — 2026-07-16</option>
+<option value="401811958">Corales Puntacana Championship — 2026-07-16</option>
+<option value="401811955">Genesis Scottish Open — 2026-07-09</option>
+<option value="401811956">ISCO Championship — 2026-07-09</option></select></form><p class="golf-note">Each column is a <strong>distinct component</strong> of the tournament win engine (field order, live score, blend, sandbox Elo, cut survival, consensus). Columns are not duplicated copies of one number. This board is <strong>tournament win probability</strong> — not head-to-head betting cards.</p><ul class="golf-legend"><li><strong>Grinder2</strong> — Field-order prior (ESPN leaderboard / start list)</li><li><strong>Takedown</strong> — Live stroke score (lower is stronger)</li><li><strong>Edge</strong> — Blend of field order + live score</li><li><strong>XSharp</strong> — Sandbox Elo / seeded win% when a name match exists</li><li><strong>Efficiency</strong> — Cut-survival / position-vs-cut strength</li><li><strong>Sharp Consensus</strong> — Weighted blend of available component models</li></ul><div class="golf-table-wrap"><table class="golf-table"><thead><tr><th scope="col">Consensus</th><th scope="col">Player</th><th scope="col" title="Field-order prior (ESPN leaderboard / start list)">Grinder2</th><th scope="col" title="Live stroke score (lower is stronger)">Takedown</th><th scope="col" title="Blend of field order + live score">Edge</th><th scope="col" title="Sandbox Elo / seeded win% when a name match exists">XSharp</th><th scope="col" title="Cut-survival / position-vs-cut strength">Efficiency</th><th scope="col">Win %</th></tr></thead><tbody><tr><td colspan="8" class="golf-empty">No field posted for this tournament yet. Pick a recent completed event, or check back when tee times / the leaderboard are up.</td></tr></tbody></table></div></div>
+</body></html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Sports Sandbox{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/hub.css" />
+  <script src="/static/js/theme.js" defer></script>
+  <style>
+    .hub-burger {
+      display: inline-flex; flex-direction: column; justify-content: center; gap: 5px;
+      width: 40px; height: 40px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px;
+      background: rgba(255,255,255,.06); cursor: pointer; padding: 0; vertical-align: middle;
+    }
+    .hub-burger span { display:block; width:18px; height:1.5px; background: #e8eef6; margin:0 auto; border-radius:2px; }
+    .hub-drawer-overlay {
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:4000;
+    }
+    .hub-drawer-overlay.open { display:block; }
+    .hub-drawer {
+      position:fixed; top:16px; left:16px; z-index:4001; width:min(360px, calc(100vw - 32px));
+      max-height: calc(100dvh - 32px); overflow:auto; background:#fff; color:#0c1e3a;
+      border-radius:14px; box-shadow:0 18px 44px rgba(0,0,0,.35); padding:0;
+      transform:translateY(-8px); opacity:0; pointer-events:none; transition:.2s;
+    }
+    .hub-drawer.open { transform:none; opacity:1; pointer-events:auto; }
+    .hub-drawer-h { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid #e2e8f0; font-weight:800; }
+    .hub-drawer-h button { border:0; background:none; font-size:1.3rem; cursor:pointer; color:#64748b; }
+    .hub-drawer a {
+      display:block; padding:11px 16px; color:#0c1e3a; text-decoration:none; font-weight:650; font-size:.92rem;
+    }
+    .hub-drawer a:hover { background:#f1f5f9; }
+    .hub-drawer .group { padding:8px 16px 4px; font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
+    .hub-drawer .indent { padding-left:28px; font-weight:600; font-size:.88rem; color:#334155; }
+  </style>
+</head>
+<body>
+  <div class="hub-drawer-overlay" id="hubOverlay"></div>
+  <aside class="hub-drawer" id="hubDrawer" aria-hidden="true">
+    <div class="hub-drawer-h">
+      <span>Sandbox menu</span>
+      <button type="button" id="hubDrawerClose" aria-label="Close">×</button>
+    </div>
+    <a href="/">Home</a>
+    <div class="group">Fantasy</div>
+    <a href="/fantasy/">Fantasy Dashboard</a>
+    <a class="indent" href="/fantasy/nfl">NFL</a>
+    <a class="indent" href="/fantasy/nfl/rankings">NFL Rankings</a>
+    <a class="indent" href="/fantasy/nfl/start-sit">NFL Start/Sit</a>
+    <a class="indent" href="/fantasy/nfl/waivers">NFL Waivers</a>
+    <a class="indent" href="/fantasy/nfl/matchups">NFL Matchups</a>
+    <a class="indent" href="/fantasy/nfl/draft">NFL Draft</a>
+    <a class="indent" href="/fantasy/mlb">MLB Fantasy</a>
+    <a class="indent" href="/fantasy/nba">NBA Fantasy</a>
+    <a class="indent" href="/fantasy/nhl">NHL Fantasy</a>
+    <div class="group">Sports (picks)</div>
+    <a href="/cfl/">CFL</a>
+    <a href="/golf/">Golf</a>
+    <a href="/ufc/">UFC</a>
+    <a href="/tennis/">Tennis</a>
+    <a href="/mlb/">MLB</a>
+    <a href="/soccer/">Soccer</a>
+    <a href="/wnba/">WNBA</a>
+  </aside>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <button type="button" class="hub-burger" id="hubBurger" aria-label="Open menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <strong>Sports Sandbox Hub</strong>
+        <span class="badge">Sports Sandbox · not live PredictionLab</span>
+      </div>
+      <div class="nav">
+        <a href="/" class="{% if sport=='home' %}active{% endif %}">Home</a>
+        <a href="/fantasy/" class="{% if sport=='fantasy' %}active{% endif %}">Fantasy</a>
+        <a href="/cfl/" class="{% if sport=='cfl' %}active{% endif %}">CFL</a>
+        <a href="/golf/" class="{% if sport=='golf' %}active{% endif %}">Golf</a>
+        <a href="/ufc/" class="{% if sport=='ufc' %}active{% endif %}">UFC</a>
+        <a href="/tennis/" class="{% if sport=='tennis' %}active{% endif %}">Tennis</a>
+        <a href="/mlb/" class="{% if sport=='mlb' %}active{% endif %}">MLB</a>
+        <a href="/soccer/" class="{% if sport=='soccer' %}active{% endif %}">Soccer</a>
+        <a href="/wnba/" class="{% if sport=='wnba' %}active{% endif %}">WNBA</a>
+        <button id="themeToggle" class="btn" type="button">Light mode</button>
+      </div>
+    </div>
+    {% block content %}{% endblock %}
+    <div class="footer">Local sandbox only · port 5081 · no production deploy</div>
+  </div>
+  <script>
+  (function(){
+    var burger=document.getElementById('hubBurger');
+    var drawer=document.getElementById('hubDrawer');
+    var overlay=document.getElementById('hubOverlay');
+    var closeBtn=document.getElementById('hubDrawerClose');
+    function open(){ drawer.classList.add('open'); overlay.classList.add('open'); drawer.setAttribute('aria-hidden','false'); burger.setAttribute('aria-expanded','true'); }
+    function close(){ drawer.classList.remove('open'); overlay.classList.remove('open'); drawer.setAttribute('aria-hidden','true'); burger.setAttribute('aria-expanded','false'); }
+    if(burger) burger.addEventListener('click', function(){ drawer.classList.contains('open')?close():open(); });
+    if(closeBtn) closeBtn.addEventListener('click', close);
+    if(overlay) overlay.addEventListener('click', close);
+  })();
+  </script>
+</body>
+</html>

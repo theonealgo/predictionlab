@@ -1,0 +1,74 @@
+SCHEDULE: one run daily at 8:00 AM local (Hour=8). Do not add evening runs.
+
+PredictionLab site checker — found & restored (Jul 31 2026)
+
+WHAT BROKE (not intentionally disabled)
+  Mac LaunchAgent: io.predictionlab.sitechecker
+  Scheduled daily at 8:00 AM local (Hour=8; was 8:00 PM). Historical note — script path was missing:
+    /Users/nimamesghali/Sports Sandbox/Sports Sandbox/qa/run_checker.sh
+  Log showed exit 127 every night: "No such file or directory"
+  Last good emails ~July 8 (qa folder was deleted from Sports Sandbox).
+
+WHERE THE CODE WAS
+  Copies still existed at:
+    ~/Documents/2025sports/predictionmay/qa/
+    ~/Documents/Sports Sandbox copy 2/qa/
+
+WHAT WE RESTORED (in project)
+  predictionlabfix_work/qa/
+    run_checker.sh      — audits https://predictionlab.io by default
+    site_checker.py
+    audit_config.py
+    checker_email.py    — EMAIL_PASSWORD is EMPTY (you must paste App Password)
+    expected_*.json, etc.
+
+Preflight check already OK: server reachable at https://predictionlab.io
+
+YOU MUST RUN THESE 3 STEPS (agent could not write LaunchAgents from sandbox)
+
+1) Paste Gmail App Password
+   Edit: predictionlabfix_work/qa/checker_email.py
+   Set EMAIL_PASSWORD = "xxxx xxxx xxxx xxxx"
+   https://myaccount.google.com/apppasswords
+
+2) Point LaunchAgent at the restored script (Terminal):
+
+cat > ~/Library/LaunchAgents/io.predictionlab.sitechecker.plist <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.predictionlab.sitechecker</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/nimamesghali/Documents/Personal/predictionlabfix_work/qa/run_checker.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/nimamesghali/Documents/Personal/predictionlabfix_work/qa/checker_cron.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/nimamesghali/Documents/Personal/predictionlabfix_work/qa/checker_cron.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
+PLIST
+
+launchctl bootout gui/$(id -u)/io.predictionlab.sitechecker 2>/dev/null
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.predictionlab.sitechecker.plist
+
+3) Test email once (manual; schedule is 8:00 AM daily):
+   cd ~/Documents/Personal/predictionlabfix_work
+   bash qa/run_checker.sh
+
+Or quick (~45s):
+   /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 qa/site_checker.py --quick --email

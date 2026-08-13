@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Soccer Results | Prediction Lab</title>
+  <link rel="stylesheet" href="/soccer/lab-static/css/research-theme.css" />
+  <link rel="stylesheet" href="/soccer/lab-static/audit.css" />
+</head>
+<body class="research-site"><header class="pl-header">
+    <a class="pl-brand" href="/">PL / <span>Prediction Lab</span></a>
+    <nav class="pl-nav" aria-label="Soccer">
+      <a href="/soccer/">Picks</a>
+      <a class="active" href="/soccer/results">Results</a>
+      <a href="/">Hub</a>
+    </nav>
+    <span class="pl-badge">Sandbox</span>
+  </header>
+
+  <header class="top">
+    <div class="brand">Soccer Results</div>
+    <p class="sub">Track graded results by market — Moneyline, Spread, and Totals (O/U). Each market has its own Last Night, Last 7, and Season record.</p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <label>
+        League
+        <select id="league">
+          <option value="ALL" selected>All Leagues</option>
+        </select>
+      </label>
+      <button id="run" type="button">Load results</button>
+      <span id="status" class="status"></span>
+    </section>
+
+    <nav class="market-tabs" id="market-tabs" aria-label="Bet type" hidden>
+      <button type="button" class="market-tab active" data-market="moneyline">Moneyline</button>
+      <button type="button" class="market-tab" data-market="spread">Spread</button>
+      <button type="button" class="market-tab" data-market="totals">Totals (O/U)</button>
+    </nav>
+
+    <div id="tallies" class="tally-wrap" hidden></div>
+
+    <p id="summary" class="note" hidden></p>
+
+    <section id="finals-wrap" hidden>
+      <h2 class="sec-title"><span id="games-heading">Games</span> <span id="game-count" class="tag"></span></h2>
+      <div class="table-wrap">
+        <table class="results-table" id="results-table">
+          <thead id="results-head"></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <div id="finals" class="cards" style="margin-top:1.5rem"></div>
+    </section>
+  </main>
+
+  <footer class="site-directory-footer">
+    <div class="directory-shell">
+      <span class="directory-label">Knowledge Directory</span>
+      <span class="directory-wordmark">PREDICTION LAB</span>
+    </div>
+  </footer>
+
+  <script>
+    window.SOCCER_API_BASE = "/soccer/api";
+  </script>
+  <script src="/soccer/lab-static/results.js"></script>
+</body>
+</html>

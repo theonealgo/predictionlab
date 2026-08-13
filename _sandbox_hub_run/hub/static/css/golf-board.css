@@ -1,0 +1,235 @@
+/* Golf tournament win-probability board — research-theme token parity with MLB/CFL */
+
+.golf-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 0 32px;
+  color: var(--pl-ink, #0b0b0a);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.golf-wrap h1 {
+  margin: 0 0 8px;
+  font-family: "Space Grotesk", Oswald, Arial, Helvetica, sans-serif;
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  color: var(--pl-ink, #0b0b0a);
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+.golf-status {
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--pl-muted, #656762);
+}
+
+.golf-lede,
+.golf-note {
+  color: #3e403c;
+  margin: 0 0 14px;
+  max-width: 52rem;
+  line-height: 1.5;
+  font-weight: 400;
+  font-size: 0.98rem;
+}
+
+.golf-note {
+  background: var(--pl-soft, #f2f2ed);
+  border: 1px solid var(--pl-line, rgba(11, 11, 10, 0.14));
+  border-radius: 2px;
+  padding: 12px 14px;
+}
+
+.golf-muted {
+  color: var(--pl-muted, #656762);
+}
+
+.golf-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: rgba(251, 251, 248, 0.92);
+  border: 1px solid var(--pl-line, rgba(11, 11, 10, 0.14));
+  border-radius: 2px;
+}
+
+.golf-picker label {
+  font-weight: 800;
+  color: var(--pl-ink, #0b0b0a);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.golf-picker select {
+  flex: 1 1 280px;
+  min-width: 220px;
+  max-width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--pl-ink, #0b0b0a);
+  background: #fff;
+  border: 1px solid var(--pl-line, rgba(11, 11, 10, 0.14));
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.golf-picker select:focus {
+  outline: 2px solid var(--pl-neon, #c7ff2e);
+  outline-offset: 2px;
+}
+
+.golf-legend {
+  margin: 0 0 16px;
+  padding: 0 0 0 1.1rem;
+  color: #3e403c;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  columns: 2;
+  column-gap: 1.5rem;
+}
+
+.golf-legend li {
+  break-inside: avoid;
+  margin-bottom: 6px;
+}
+
+.golf-legend strong {
+  color: var(--pl-ink, #0b0b0a);
+}
+
+.golf-table-wrap {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid var(--pl-line, rgba(11, 11, 10, 0.14));
+  border-radius: 2px;
+  overflow: auto;
+}
+
+.golf-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+  background: transparent;
+}
+
+.golf-table th {
+  text-align: left;
+  padding: 12px 10px;
+  color: #fff;
+  background: var(--pl-ink, #0b0b0a);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--pl-line, rgba(11, 11, 10, 0.14));
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.golf-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--pl-line, rgba(11, 11, 10, 0.14));
+  color: var(--pl-ink, #0b0b0a);
+  font-size: 0.95rem;
+  vertical-align: middle;
+}
+
+.golf-table tbody tr:nth-child(even) {
+  background: var(--pl-soft, #f2f2ed);
+}
+
+.golf-table tbody tr:hover {
+  background: rgba(199, 255, 46, 0.18);
+}
+
+.golf-rank {
+  font-weight: 800;
+  color: var(--pl-ink, #0b0b0a);
+}
+
+.golf-player strong {
+  color: var(--pl-ink, #0b0b0a);
+  font-size: 1.02rem;
+}
+
+.golf-headshot {
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--pl-soft, #f2f2ed);
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+.golf-winpct {
+  font-weight: 800;
+  font-size: 1.08rem;
+  color: var(--pl-ink, #0b0b0a);
+}
+
+.golf-pct-suffix {
+  font-size: 0.7em;
+  color: var(--pl-muted, #656762);
+}
+
+.golf-mrank {
+  font-weight: 800;
+  color: var(--pl-ink, #0b0b0a);
+}
+
+.golf-mpct {
+  color: var(--pl-muted, #656762);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.golf-empty {
+  padding: 20px 14px !important;
+  color: #3e403c;
+  font-weight: 600;
+}
+
+.golf-model-detail {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--pl-muted, #656762);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.golf-delta {
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+
+.golf-delta-up {
+  color: #047857;
+}
+
+.golf-delta-down {
+  color: #b91c1c;
+}
+
+.golf-delta-even {
+  color: var(--pl-ink, #0b0b0a);
+}
+
+.golf-wrap a {
+  color: var(--pl-ink, #0b0b0a);
+  font-weight: 650;
+  text-underline-offset: 3px;
+}
+
+.golf-wrap a:hover {
+  background: var(--pl-neon, #c7ff2e);
+}
+
+@media (max-width: 800px) {
+  .golf-legend {
+    columns: 1;
+  }
+}

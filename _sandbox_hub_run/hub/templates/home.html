@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Sports Sandbox Hub{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Independent sports modules</h1>
+  <p>One local hub for CFL, Golf, UFC, Tennis, MLB, Soccer, and WNBA. Model-only demos with SQLite, grading, and performance pages — not wired to live PredictionLab.</p>
+</section>
+<div class="grid">
+  {% for s in sports %}
+  <article class="card">
+    <h2>{{ s.title }}</h2>
+    <p>{{ s.blurb }}</p>
+    <div class="meta">
+      {% for c in s.chips %}<span class="chip">{{ c }}</span>{% endfor %}
+    </div>
+    <a class="btn primary" href="{{ s.href }}">Open {{ s.title }}</a>
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

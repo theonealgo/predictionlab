@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} Models · Sandbox{% endblock %}
+{% block content %}
+<h1>{{ title }} model comparison</h1>
+<p style="color:var(--muted)">Ensemble soft-vote over available boosters/linear/RF. Feature importance is a stub until real training artifacts exist.</p>
+<div class="subnav">
+  <a class="btn" href="/{{ slug }}/">Picks</a>
+  <a class="btn" href="/{{ slug }}/total-edge">Total Edge</a>
+  <a class="btn" href="/{{ slug }}/results">Results</a>
+  <a class="btn" href="/{{ slug }}/performance">Performance</a>
+  <a class="btn primary" href="/{{ slug }}/models">Models</a>
+</div>
+<div class="grid">
+  <div class="card">
+    <h2>Models</h2>
+    <ul>{% for m in models %}<li>{{ m }}</li>{% endfor %}</ul>
+  </div>
+  <div class="card">
+    <h2>Feature importance</h2>
+    <table>
+      <thead><tr><th>Feature</th><th>Importance</th></tr></thead>
+      <tbody>
+        {% for f in features %}
+        <tr><td>{{ f.feature }}</td><td>{{ '%.3f'|format(f.importance) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

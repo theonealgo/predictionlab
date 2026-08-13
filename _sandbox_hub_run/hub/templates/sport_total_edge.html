@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} Total Edge | Prediction Lab{% endblock %}
+{% block content %}
+<style>
+  .te-wrap { max-width: 920px; }
+  .te-lead { color: var(--muted); margin: 0 0 1rem; max-width: 40rem; }
+  .te-formula {
+    font-size: .88rem; color: var(--muted); margin: 0 0 1rem;
+    padding: .65rem .85rem; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg2);
+  }
+  .te-formula code { color: var(--accent); }
+  .subnav { display: flex; flex-wrap: wrap; gap: .45rem; margin: 0 0 1rem; }
+  .te-table-wrap { overflow-x: auto; }
+  .te-lean-over { color: var(--ok); font-weight: 700; }
+  .te-lean-under { color: var(--danger); font-weight: 700; }
+  .te-lean-neutral { color: var(--muted); }
+  .te-edge-pos { color: var(--ok); font-weight: 700; }
+  .te-edge-neg { color: var(--danger); font-weight: 700; }
+  .te-edge-na { color: var(--muted); }
+  .te-note { font-size: .8rem; color: var(--muted); margin-top: .85rem; }
+</style>
+
+<div class="te-wrap">
+  <h1>{{ title }} Total Edge</h1>
+  <p class="te-lead">Predicted total minus sportsbook total for today’s slate.</p>
+
+  <div class="subnav">
+    <a class="btn" href="/{{ slug }}/">Picks</a>
+    <a class="btn primary" href="/{{ slug }}/total-edge">Total Edge</a>
+    <a class="btn" href="/{{ slug }}/results">Results</a>
+  </div>
+
+  <div class="te-formula">
+    <strong>Total Edge</strong> = <code>Predicted Total − Book Total</code>
+    <br />Lean: {{ lean_doc }}
+  </div>
+
+  <div class="card te-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Game</th>
+          <th>Predicted</th>
+          <th>Book</th>
+          <th>Total Edge</th>
+          <th>Lean</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.game }}</td>
+          <td>{{ row.predicted_display }}</td>
+          <td>{{ row.book_display }}</td>
+          <td class="{% if row.edge is none %}te-edge-na{% elif row.edge > 0 %}te-edge-pos{% elif row.edge < 0 %}te-edge-neg{% else %}te-edge-na{% endif %}">{{ row.edge_display }}</td>
+          <td class="{% if 'Over' in row.lean %}te-lean-over{% elif 'Under' in row.lean %}te-lean-under{% else %}te-lean-neutral{% endif %}">{{ row.lean }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5">{{ empty_message or "No games with totals on the current slate." }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if note %}
+  <p class="te-note">{{ note }}</p>
+  {% endif %}
+</div>
+{% endblock %}
