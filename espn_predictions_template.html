@@ -277,7 +277,6 @@
         .date-bubble.active.today { background:#00C076; color:#fff; }
         .date-section { display:none; }
         .date-section.visible { display:block; }
-        .date-section.seo-hidden { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
         .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         .date-header { font-size:1.25em; margin-bottom:14px; color:#0F172A; font-weight:700; }
         .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
@@ -603,7 +602,7 @@
 
     {% if grouped_predictions %}
         {% for date in sorted_dates %}
-        <div class="date-section {% if date == (default_pick_date|default(today_date)) %}visible{% else %}seo-hidden{% endif %}" id="date-{{ date }}">
+        <div class="date-section{% if date == (default_pick_date|default(today_date)) %} visible{% endif %}" id="date-{{ date }}">
             <div class="date-header">
                 📅 {{ date }}
                 {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
@@ -925,10 +924,9 @@
     function showDate(date) {
         document.querySelectorAll('.date-section').forEach(s=>{
             s.classList.remove('visible');
-            s.classList.add('seo-hidden');
         });
         const sec=document.getElementById('date-'+date);
-        if(sec){sec.classList.remove('seo-hidden');sec.classList.add('visible');activeDate=date;}
+        if(sec){sec.classList.add('visible');activeDate=date;}
         // Update heading with selected date
         const h=document.getElementById('pageHeading');
         if(h){

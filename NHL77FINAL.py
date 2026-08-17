@@ -15663,14 +15663,22 @@ def site_search():
 def robots_txt():
     body = f"""User-agent: *
 Allow: /
+Allow: /login
+Allow: /signup
+Allow: /plans
 Disallow: /admin/
 Disallow: /checkout/
 Disallow: /stripe/
 Disallow: /auth/
 Disallow: /share/
 Disallow: /api/
-Disallow: /login
-Disallow: /signup
+
+# Ads review must see the same public pages users see.
+User-agent: AdsBot-Google
+Allow: /
+
+User-agent: AdsBot-Google-Mobile
+Allow: /
 
 Sitemap: {_SITE_DOMAIN}/sitemap.xml
 """

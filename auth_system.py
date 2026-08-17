@@ -4644,8 +4644,7 @@ LOGIN_TEMPLATE = """
 """ + _AUTH_STYLES + """
 </head><body>
 <div class="auth-container">
-    <h1 style="position:absolute;left:-9999px;">Log in to predictionlab.io AI sports picks platform</h1>
-    <div class="auth-title">🔐 Login</div>
+    <h1 class="auth-title">Login</h1>
     {% if error_msg %}<div class="auth-error">{{ error_msg }}</div>{% endif %}
     {% if google_enabled %}
     <a href="/auth/google" class="auth-btn auth-btn-google" style="text-decoration:none;">
@@ -4682,8 +4681,7 @@ SIGNUP_TEMPLATE = """
 """ + _AUTH_STYLES + """
 </head><body>
 <div class="auth-container">
-    <h1 style="position:absolute;left:-9999px;">Sign up for predictionlab.io AI sports picks access</h1>
-    <div class="auth-title">Create Account</div>
+    <h1 class="auth-title">Create Account</h1>
     <p style="text-align:center;color:#cbd5e1;font-size:0.85em;margin-bottom:18px;">Sign up to access free picks. Upgrade anytime for Spreads, Totals &amp; Score Predictions.</p>
     {% if google_enabled %}
     <a href="/auth/google" class="auth-btn auth-btn-google" style="text-decoration:none;">
