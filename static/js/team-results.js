@@ -63,8 +63,8 @@ function mlCardHtml(c, order) {
   let badge = `<span class="pill">Final</span>`;
   if (c.correct === true) badge = `<span class="pill ok-pill">Correct</span>`;
   if (c.correct === false) badge = `<span class="pill bad-pill">Wrong</span>`;
-  const score = c.home_score != null
-    ? `<div class="score">${esc(c.home_score)} – ${esc(c.away_score)}</div>` : "";
+  const score = c.away_score != null
+    ? `<div class="score">${esc(c.away_score)} – ${esc(c.home_score)}</div>` : "";
   const face = c.face_pick
     ? `<div class="face">Edge: <strong>${esc(c.face_pick)}</strong> · ${c.face_prob != null ? c.face_prob + "%" : "—"}</div>`
     : `<div class="face muted">${esc(c.note || "")}</div>`;
@@ -92,7 +92,7 @@ function mlRowHtml(c, order) {
     <td>${esc(c.game_date)}</td>
     <td>${esc(displayLeague(c.league))}</td>
     <td>${esc(teamName(c, "away"))} @ ${esc(teamName(c, "home"))}</td>
-    <td>${c.home_score != null ? esc(c.home_score) + "–" + esc(c.away_score) : "—"}</td>
+    <td>${c.away_score != null ? esc(c.away_score) + "–" + esc(c.home_score) : "—"}</td>
     <td>${esc(c.face_pick || "—")}</td>
     <td>${c.face_prob != null ? c.face_prob + "%" : "—"}</td>
     <td>${resultMark(c.correct)}</td>
@@ -106,8 +106,8 @@ function souCardHtml(c, marketKey) {
   if (row.push) badge = `<span class="pill">Push</span>`;
   else if (row.correct === true) badge = `<span class="pill ok-pill">Correct</span>`;
   else if (row.correct === false) badge = `<span class="pill bad-pill">Wrong</span>`;
-  const score = c.home_score != null
-    ? `<div class="score">${esc(c.home_score)} – ${esc(c.away_score)}</div>` : "";
+  const score = c.away_score != null
+    ? `<div class="score">${esc(c.away_score)} – ${esc(c.home_score)}</div>` : "";
   const label = marketKey === "spread" ? "Spread" : "Total";
   return `<article class="game-card ${row.correct === true ? "is-correct" : ""} ${row.correct === false ? "is-wrong" : ""}">
     <div class="game-top"><div>
@@ -125,7 +125,7 @@ function souRowHtml(c, marketKey) {
     <td>${esc(c.game_date)}</td>
     <td>${esc(displayLeague(c.league))}</td>
     <td>${esc(teamName(c, "away"))} @ ${esc(teamName(c, "home"))}</td>
-    <td>${c.home_score != null ? esc(c.home_score) + "–" + esc(c.away_score) : "—"}</td>
+    <td>${c.away_score != null ? esc(c.away_score) + "–" + esc(c.home_score) : "—"}</td>
     <td>${esc(row.pick || "—")}</td>
     <td>${resultMark(row.correct, row.push)}</td>
   </tr>`;

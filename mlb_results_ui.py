@@ -1664,7 +1664,7 @@ def inject_ssr_chart_bootstrap(html: str, payload: dict[str, Any], sport: str) -
         home = c.get("home") or c.get("home_team") or ""
         away = c.get("away") or c.get("away_team") or ""
         hs, aws = c.get("home_score"), c.get("away_score")
-        score = f"{hs}–{aws}" if hs is not None and aws is not None else "—"
+        score = f"{aws}–{hs}" if hs is not None and aws is not None else "—"
         face = c.get("face_pick") or "—"
         fp = c.get("face_prob")
         fp_s = f"{fp}%" if fp is not None else "—"

@@ -6610,22 +6610,52 @@ def _set_card_game_time(card: dict) -> None:
         card['game_time'] = formatted
 
 
+def _mlb_run_line_from_home_spread(xs, home, away):
+    """Home-centric model spread → (HOME|AWAY, team, -1.5). Pick'em → None.
+
+    Positive xs = home favored. Always the favorite −1.5 (never dog +1.5),
+    so the footer label matches fmt_spread_line / score-based −1.5 grading.
+    """
+    if xs is None or home is None or away is None:
+        return None
+    try:
+        v = float(xs)
+    except (TypeError, ValueError):
+        return None
+    if v > 0:
+        return ('HOME', home, -1.5)
+    if v < 0:
+        return ('AWAY', away, -1.5)
+    return None
+
+
+def _mlb_grade_minus_1_5(side, home_score, away_score):
+    """True if the −1.5 side covered: home/away must win by 2+ runs."""
+    try:
+        am = float(home_score) - float(away_score)
+    except (TypeError, ValueError):
+        return None
+    if side == 'HOME':
+        return am > 1.5
+    if side == 'AWAY':
+        return am < -1.5
+    return None
+
+
 def _set_mlb_spread_pick_label(card: dict) -> None:
-    """Run-line pick label from faded model spread (same sign as disp_pl_spread)."""
+    """Run-line pick label: favorite −1.5 from home-centric model spread."""
     sp = _safe_float(card.get('disp_pl_spread'))
     if sp is None:
         sp = _safe_float(_best_pl_spread(card))
     if sp is None:
         sp = _first_pred_float(card, ('our_spread', 'xgb_spread'))
-    if sp is None:
-        return
     h = card.get('home_team_id') or card.get('home')
     a = card.get('away_team_id') or card.get('away')
-    if not (h and a):
+    picked = _mlb_run_line_from_home_spread(sp, h, a)
+    if not picked:
         return
-    run_line = 1.5
-    pick_team = h if sp > 0 else a
-    card['spread_pick_label'] = f"{pick_team} {-run_line:+.1f}"
+    _side, pick_team, pick_line = picked
+    card['spread_pick_label'] = f"{pick_team} {pick_line:+.1f}"
 
 # ============================================================================
 # V2 PREDICTION SYSTEM HELPER
@@ -9266,6 +9296,7 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                     except Exception:
                         pass
 
+                xs = xt = None
                 try:
                     if _xgb:
                         _pair_key = (hk, ak, round(mt, 1) if mt is not None else None)
@@ -9388,31 +9419,17 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                     if xs is None:
                         g['spread_pick_reason'] = "model score unavailable"
                     else:
-                        if xs >= run_line:
-                            pick_team = h
-                            pick_line = -run_line
-                        elif xs <= -run_line:
-                            pick_team = a
-                            pick_line = -run_line
+                        picked = _mlb_run_line_from_home_spread(xs, h, a)
+                        if picked is None:
+                            g['spread_pick_reason'] = "pick'em — no run-line side"
                         else:
-                            pick_team = a if xs > 0 else h
-                            pick_line = run_line
-                        sp_disp = 'HOME' if pick_team == h else 'AWAY'
-                        g['spread_pick_label'] = f"{pick_team} {pick_line:+.1f}"
-                        if hs is not None and as_ is not None:
-                            if pick_team == h:
-                                if pick_line < 0:
-                                    sp_ok = am > run_line
-                                else:
-                                    sp_ok = am >= -run_line
-                            else:
-                                if pick_line < 0:
-                                    sp_ok = am < -run_line
-                                else:
-                                    sp_ok = am <= run_line
-                            st_gr += 1
-                            if sp_ok:
-                                st_cov += 1
+                            sp_disp, pick_team, pick_line = picked
+                            g['spread_pick_label'] = f"{pick_team} {pick_line:+.1f}"
+                            if hs is not None and as_ is not None:
+                                sp_ok = _mlb_grade_minus_1_5(sp_disp, hs, as_)
+                                st_gr += 1
+                                if sp_ok:
+                                    st_cov += 1
 
                     # ── MLB total grading: XSharp (+ park/rest/injury adj) vs Vegas total ──
                     inj_adj = _injury_total_adjustment(sport, h, a)
@@ -9504,29 +9521,14 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
 
                     ps = _safe_float(g.get('our_spread'))
                     if ps is not None and hs is not None and as_ is not None:
-                        if ps >= run_line:
-                            pl_pick_team = h
-                            pl_pick_line = -run_line
-                        elif ps <= -run_line:
-                            pl_pick_team = a
-                            pl_pick_line = -run_line
-                        else:
-                            pl_pick_team = a if ps > 0 else h
-                            pl_pick_line = run_line
-                        if pl_pick_team == h:
-                            if pl_pick_line < 0:
-                                pl_ok = am > run_line
-                            else:
-                                pl_ok = am >= -run_line
-                        else:
-                            if pl_pick_line < 0:
-                                pl_ok = am < -run_line
-                            else:
-                                pl_ok = am <= run_line
-                        pl_st_gr += 1
-                        if pl_ok:
-                            pl_st_cov += 1
-                        g['pl_spread_correct'] = pl_ok
+                        pl_picked = _mlb_run_line_from_home_spread(ps, h, a)
+                        if pl_picked is not None:
+                            pl_side, _pl_team, _pl_line = pl_picked
+                            pl_ok = _mlb_grade_minus_1_5(pl_side, hs, as_)
+                            pl_st_gr += 1
+                            if pl_ok:
+                                pl_st_cov += 1
+                            g['pl_spread_correct'] = pl_ok
 
                 else:
                     # ── Non-MLB grading: Spread uses Vegas (unchanged).

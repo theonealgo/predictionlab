@@ -9,7 +9,7 @@ Ported from independent_sports/hub/sandbox_fixup.py (signed-off MLB UI).
 Does NOT replace header/footer/nav — work2 chrome stays intact.
 Does NOT invent vendor/IP labels in HTML.
 
-MLB_FLIP_SPREAD: default ON (set MLB_FLIP_SPREAD=0 to disable).
+MLB_FLIP_SPREAD: default OFF (set MLB_FLIP_SPREAD=1 only as a diagnostic).
 Display-only invert of PL/XSharp run-line sides; books/ML/totals unchanged.
 """
 from __future__ import annotations
@@ -20,13 +20,14 @@ import os
 import re
 from pathlib import Path
 
-# MLB spread display invert (publish layer only). Default ON.
-# Set MLB_FLIP_SPREAD=0 to disable. Does not touch ML/totals or graded DB.
-MLB_FLIP_SPREAD = os.environ.get("MLB_FLIP_SPREAD", "1").strip().lower() not in (
-    "0",
-    "false",
-    "off",
-    "no",
+# MLB spread display invert (publish layer only). Default OFF — a leftover
+# invert was hiding Home −1.5 and fighting the home-centric model sign.
+# Set MLB_FLIP_SPREAD=1 only as a diagnostic. Does not touch ML/totals or DB.
+MLB_FLIP_SPREAD = os.environ.get("MLB_FLIP_SPREAD", "0").strip().lower() in (
+    "1",
+    "true",
+    "on",
+    "yes",
 )
 
 
@@ -513,7 +514,7 @@ def flip_mlb_model_spread_display(html: str) -> str:
 
     Books run line / data-books-spread stay market. ML + totals unchanged.
     Display/publish layer for current slate — does not rewrite graded results DB.
-    Controlled by MLB_FLIP_SPREAD (default ON).
+    Controlled by MLB_FLIP_SPREAD (default OFF).
     """
     if not MLB_FLIP_SPREAD or not html or "data-pick-card" not in html:
         return html
