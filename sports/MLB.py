@@ -510,20 +510,9 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         return 0.0, 0.0, False
 
 def _set_mlb_spread_pick_label(card: dict) -> None:
-    """Run-line pick label: favorite −1.5 from home-centric model spread."""
+    """Run-line pick label from stored PL our_spread (same pick_spread_side)."""
     m = main()
-    sp = m._safe_float(card.get('disp_pl_spread'))
-    if sp is None:
-        sp = m._safe_float(m._best_pl_spread(card))
-    if sp is None:
-        sp = m._first_pred_float(card, ('our_spread', 'xgb_spread'))
-    h = card.get('home_team_id') or card.get('home')
-    a = card.get('away_team_id') or card.get('away')
-    picked = m._mlb_run_line_from_home_spread(sp, h, a)
-    if not picked:
-        return
-    _side, pick_team, pick_line = picked
-    card['spread_pick_label'] = f"{pick_team} {pick_line:+.1f}"
+    m._set_mlb_spread_pick_label(card)
 
 def _apply_mlb_ou_calibration(daily_results):
     """Cold-streak calibration for MLB totals.

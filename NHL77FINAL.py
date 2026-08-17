@@ -6610,52 +6610,86 @@ def _set_card_game_time(card: dict) -> None:
         card['game_time'] = formatted
 
 
-def _mlb_run_line_from_home_spread(xs, home, away):
-    """Home-centric model spread → (HOME|AWAY, team, -1.5). Pick'em → None.
+_MLB_SPREAD_PICK_MOD = None
 
-    Positive xs = home favored. Always the favorite −1.5 (never dog +1.5),
-    so the footer label matches fmt_spread_line / score-based −1.5 grading.
+
+def _mlb_spread_pick_mod():
+    """Load pick_spread_side / grade_spread_cover once (local file, then isolation).
+
+    Cached for the process lifetime so fade cannot apply 0×/1×/2× across reloads
+    when isolation and the workspace copy briefly diverge.
     """
-    if xs is None or home is None or away is None:
-        return None
-    try:
-        v = float(xs)
-    except (TypeError, ValueError):
-        return None
-    if v > 0:
-        return ('HOME', home, -1.5)
-    if v < 0:
-        return ('AWAY', away, -1.5)
-    return None
+    global _MLB_SPREAD_PICK_MOD
+    if _MLB_SPREAD_PICK_MOD is not None:
+        return _MLB_SPREAD_PICK_MOD
+    local = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), 'mlb_spread_pick.py')
+    iso = _os_v2.path.join(
+        _os_v2.path.expanduser('~'), 'Documents', 'Personal', 'mlb', 'engine', 'spread_pick.py'
+    )
+    for path in (local, iso):
+        if not _os_v2.path.isfile(path):
+            continue
+        spec = importlib.util.spec_from_file_location('mlb_spread_pick_unified', path)
+        if spec is None or spec.loader is None:
+            continue
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _MLB_SPREAD_PICK_MOD = mod
+        return mod
+    raise ImportError('mlb_spread_pick module not found')
 
 
-def _mlb_grade_minus_1_5(side, home_score, away_score):
-    """True if the −1.5 side covered: home/away must win by 2+ runs."""
-    try:
-        am = float(home_score) - float(away_score)
-    except (TypeError, ValueError):
+def pick_spread_side(our_spread, home=None, away=None):
+    """Product MLB run-line pick: HOME +1.5 / AWAY +1.5 / NO BET."""
+    return _mlb_spread_pick_mod().pick_spread_side(our_spread, home=home, away=away)
+
+
+def grade_spread_cover(side, home_score, away_score, line=None):
+    """Product MLB run-line grade on stored scores (+1.5 unless line says otherwise)."""
+    return _mlb_spread_pick_mod().grade_spread_cover(
+        side, home_score, away_score, line=line
+    )
+
+
+def _mlb_run_line_from_home_spread(xs, home, away):
+    """Home-centric PL our_spread → (HOME|AWAY, team, +1.5). NO BET → None.
+
+    Positive xs = home favored. Favorite −1.5 when |our_spread| >= 1.5, then
+    fade to the other side of the same run line (+1.5). Pick'em → no side.
+    """
+    picked = pick_spread_side(xs, home=home, away=away)
+    if picked.get('action') != 'BET' or picked.get('side') not in ('HOME', 'AWAY'):
         return None
-    if side == 'HOME':
-        return am > 1.5
-    if side == 'AWAY':
-        return am < -1.5
-    return None
+    team = home if picked['side'] == 'HOME' else away
+    if team is None:
+        return None
+    return (picked['side'], team, picked.get('line', 1.5))
+
+
+def _mlb_grade_minus_1_5(side, home_score, away_score, line=None):
+    """True if the faded +1.5 side covered (does not lose by 2+)."""
+    return grade_spread_cover(side, home_score, away_score, line=line)
 
 
 def _set_mlb_spread_pick_label(card: dict) -> None:
-    """Run-line pick label: favorite −1.5 from home-centric model spread."""
-    sp = _safe_float(card.get('disp_pl_spread'))
+    """Run-line pick label from stored PL our_spread (same pick_spread_side)."""
+    sp = _safe_float(card.get('our_spread'))
+    if sp is None:
+        sp = _safe_float(card.get('disp_pl_spread'))
     if sp is None:
         sp = _safe_float(_best_pl_spread(card))
-    if sp is None:
-        sp = _first_pred_float(card, ('our_spread', 'xgb_spread'))
     h = card.get('home_team_id') or card.get('home')
     a = card.get('away_team_id') or card.get('away')
-    picked = _mlb_run_line_from_home_spread(sp, h, a)
-    if not picked:
+    picked = pick_spread_side(sp, home=h, away=a)
+    if picked.get('action') != 'BET':
+        card['spread_pick_reason'] = picked.get('reason') or "pick'em — no run-line edge"
+        card.pop('spread_pick_label', None)
         return
-    _side, pick_team, pick_line = picked
-    card['spread_pick_label'] = f"{pick_team} {pick_line:+.1f}"
+    team = h if picked['side'] == 'HOME' else a
+    if not team:
+        return
+    card['spread_pick_label'] = f"{team} {picked['line']:+.1f}"
+    card['spread_pick_reason'] = None
 
 # ============================================================================
 # V2 PREDICTION SYSTEM HELPER
@@ -9416,20 +9450,29 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                     g['market_spread_label'] = "Run Line ±1.5"
                     g['market_spread'] = None
 
-                    if xs is None:
-                        g['spread_pick_reason'] = "model score unavailable"
+                    # Product spread: one pick/grade on stored PL our_spread.
+                    # Last night / last 7 / season / ROI / cards all use this.
+                    # Missing our_spread → NO BET (do not fall back to XSharp xs).
+                    _pl_sp = _safe_float(g.get('our_spread'))
+                    _applied = _mlb_spread_pick_mod().apply_spread_pick_and_grade(
+                        _pl_sp, hs, as_, home=h, away=a,
+                    )
+                    g['spread_pick_reason'] = _applied.get('reason')
+                    if _applied.get('action') != 'BET':
+                        g['spread_pick_label'] = None
+                        g['pl_spread_correct'] = None
                     else:
-                        picked = _mlb_run_line_from_home_spread(xs, h, a)
-                        if picked is None:
-                            g['spread_pick_reason'] = "pick'em — no run-line side"
-                        else:
-                            sp_disp, pick_team, pick_line = picked
-                            g['spread_pick_label'] = f"{pick_team} {pick_line:+.1f}"
-                            if hs is not None and as_ is not None:
-                                sp_ok = _mlb_grade_minus_1_5(sp_disp, hs, as_)
-                                st_gr += 1
-                                if sp_ok:
-                                    st_cov += 1
+                        sp_disp = _applied.get('side')
+                        g['spread_pick_label'] = _applied.get('label')
+                        if _applied.get('correct') is not None:
+                            sp_ok = _applied['correct']
+                            st_gr += 1
+                            if sp_ok:
+                                st_cov += 1
+                            pl_st_gr += 1
+                            if sp_ok:
+                                pl_st_cov += 1
+                            g['pl_spread_correct'] = sp_ok
 
                     # ── MLB total grading: XSharp (+ park/rest/injury adj) vs Vegas total ──
                     inj_adj = _injury_total_adjustment(sport, h, a)
@@ -9518,17 +9561,6 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                                 g['pl_total_correct'] = None
                     elif total_fallback_used:
                         g['total_pick_reason'] = "benchmark only (not graded)"
-
-                    ps = _safe_float(g.get('our_spread'))
-                    if ps is not None and hs is not None and as_ is not None:
-                        pl_picked = _mlb_run_line_from_home_spread(ps, h, a)
-                        if pl_picked is not None:
-                            pl_side, _pl_team, _pl_line = pl_picked
-                            pl_ok = _mlb_grade_minus_1_5(pl_side, hs, as_)
-                            pl_st_gr += 1
-                            if pl_ok:
-                                pl_st_cov += 1
-                            g['pl_spread_correct'] = pl_ok
 
                 else:
                     # ── Non-MLB grading: Spread uses Vegas (unchanged).
@@ -9876,6 +9908,49 @@ def _best_market_side(st, *, xsharp_prefix, pl_prefix, xsharp_label, pl_label):
     return xsharp_label, None, 0, 0
 
 
+def _pinned_ml_model_stats(overall_stats, key, label):
+    """Named moneyline model for a product face (not best-of)."""
+    m = (overall_stats or {}).get(key) or {}
+    total = int(m.get('total') or 0)
+    correct = int(m.get('correct') or 0)
+    acc = m.get('accuracy')
+    if total > 0 and acc is None:
+        acc = round(correct / total * 100, 1)
+    return {
+        'key': key,
+        'label': label,
+        'total': total,
+        'correct': correct,
+        'accuracy': acc if total > 0 else None,
+    }
+
+
+def _pinned_market_side(st, prefix, label):
+    """Named spread/O/U layer for a product face (not best-of)."""
+    st = st or {}
+    if prefix == 'spread':
+        graded = int(st.get('spread_graded') or 0)
+        wins = int(st.get('spread_covered') or 0)
+        pct = st.get('spread_pct')
+    elif prefix == 'total':
+        graded = int(st.get('total_graded') or 0)
+        wins = int(st.get('total_correct') or 0)
+        pct = st.get('total_pct')
+    elif prefix == 'pl_spread':
+        graded = int(st.get('pl_spread_graded') or 0)
+        wins = int(st.get('pl_spread_covered') or 0)
+        pct = st.get('pl_spread_pct')
+    else:
+        graded = int(st.get('pl_total_graded') or 0)
+        wins = int(st.get('pl_total_correct') or 0)
+        pct = st.get('pl_total_pct')
+    if graded <= 0:
+        return label, None, 0, 0
+    if pct is None:
+        pct = round(wins / graded * 100, 1)
+    return label, pct, wins, graded
+
+
 def _build_season_performance_summary(
     overall_stats,
     spread_total_stats,
@@ -9883,38 +9958,58 @@ def _build_season_performance_summary(
     scope_label=None,
     games_expected=None,
     games_in_scope=None,
+    sport=None,
 ):
-    """Season banner metrics — headline ML/spread/O/U use best-performing model per market."""
-    st = spread_total_stats or {}
-    best_ml = _best_ml_model_stats(overall_stats)
-    if best_ml:
-        ml_total = best_ml['total']
-        ml_correct = best_ml['correct']
-        ml_accuracy = best_ml['accuracy']
-        ml_model_label = best_ml['label']
-        ml_model_key = best_ml['key']
-    else:
-        ens = (overall_stats or {}).get('ensemble') or {}
-        ml_total = int(ens.get('total') or 0)
-        ml_correct = int(ens.get('correct') or 0)
-        ml_accuracy = ens.get('accuracy') if ml_total > 0 else None
-        ml_model_label = 'Sharp Consensus'
-        ml_model_key = 'ensemble'
+    """Season banner metrics.
 
-    spread_label, sp_pct, sp_wins, sp_gr = _best_market_side(
-        st,
-        xsharp_prefix='spread',
-        pl_prefix='pl_spread',
-        xsharp_label='XSharp',
-        pl_label='Prediction Lab',
-    )
-    ou_label, ou_pct, ou_wins, ou_gr = _best_market_side(
-        st,
-        xsharp_prefix='total',
-        pl_prefix='pl_total',
-        xsharp_label='XSharp',
-        pl_label='Prediction Lab',
-    )
+    MLB face is the published product stack (Sharp Consensus ML, Prediction Lab
+    spread, XSharp totals) from stored/live counters — never a best-of swap.
+    Other sports still headline the best-performing model per market.
+    """
+    st = spread_total_stats or {}
+    if (sport or '').upper() == 'MLB':
+        pinned = _pinned_ml_model_stats(overall_stats, 'ensemble', 'Sharp Consensus')
+        ml_total = pinned['total']
+        ml_correct = pinned['correct']
+        ml_accuracy = pinned['accuracy']
+        ml_model_label = pinned['label']
+        ml_model_key = pinned['key']
+        spread_label, sp_pct, sp_wins, sp_gr = _pinned_market_side(
+            st, 'pl_spread', 'Prediction Lab',
+        )
+        ou_label, ou_pct, ou_wins, ou_gr = _pinned_market_side(
+            st, 'total', 'XSharp',
+        )
+    else:
+        best_ml = _best_ml_model_stats(overall_stats)
+        if best_ml:
+            ml_total = best_ml['total']
+            ml_correct = best_ml['correct']
+            ml_accuracy = best_ml['accuracy']
+            ml_model_label = best_ml['label']
+            ml_model_key = best_ml['key']
+        else:
+            ens = (overall_stats or {}).get('ensemble') or {}
+            ml_total = int(ens.get('total') or 0)
+            ml_correct = int(ens.get('correct') or 0)
+            ml_accuracy = ens.get('accuracy') if ml_total > 0 else None
+            ml_model_label = 'Sharp Consensus'
+            ml_model_key = 'ensemble'
+
+        spread_label, sp_pct, sp_wins, sp_gr = _best_market_side(
+            st,
+            xsharp_prefix='spread',
+            pl_prefix='pl_spread',
+            xsharp_label='XSharp',
+            pl_label='Prediction Lab',
+        )
+        ou_label, ou_pct, ou_wins, ou_gr = _best_market_side(
+            st,
+            xsharp_prefix='total',
+            pl_prefix='pl_total',
+            xsharp_label='XSharp',
+            pl_label='Prediction Lab',
+        )
     return {
         'ml_total': ml_total,
         'ml_correct': ml_correct,
@@ -17901,7 +17996,9 @@ def sport_results(sport):
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
-            season_perf = _build_season_performance_summary(overall_stats, _st_stats)
+            season_perf = _build_season_performance_summary(
+                overall_stats, _st_stats, sport=sport,
+            )
             if _st_stats and int(_st_stats.get('total_graded') or 0) == 0 and int((overall_stats or {}).get('ensemble', {}).get('total') or 0) > 0:
                 logger.warning(
                     f"[{sport}] results O/U still 0 graded after book attach "
@@ -18565,6 +18662,7 @@ def _stats_from_season_snapshot(snapshot):
         scope_label=old_perf.get('scope_label'),
         games_expected=snapshot.get('games_expected'),
         games_in_scope=snapshot.get('games_in_scope'),
+        sport=snapshot.get('sport'),
     )
     return {
         'overall_stats': overall_stats,
