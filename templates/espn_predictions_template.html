@@ -292,6 +292,10 @@
         body:not(.sport-golf):not(.golf-board) .game-card-stack { max-width:none; }
         @media(max-width:1100px){ body:not(.sport-golf):not(.golf-board) .games-grid{grid-template-columns:repeat(2, minmax(0, 1fr));} }
         @media(max-width:768px){ body:not(.sport-golf):not(.golf-board) .games-grid{grid-template-columns:1fr;} }
+        /* Soccer: league lives on the card badge. In-grid headings restart the row. */
+        body.sport-soccer .games-grid > div[style*="grid-column:1/-1"],
+        body.sport-soccer .games-grid > .slate-league-heading { display:none !important; }
+        body.sport-soccer .league-badge { max-width:72%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .game-card-stack { min-width:0; max-width:420px; width:100%; justify-self:stretch; display:flex; flex-direction:column; }
         .game-card-stack .game-card { flex:0 0 auto; border-radius:12px 12px 0 0; }
         .game-card-stack .game-card.pick-card { border-radius:16px; }
@@ -778,17 +782,12 @@
                 {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
             </div>
             <div class="games-grid">
-                {% set _prev_league = namespace(val='') %}
                 {% if sport == 'SOCCER' %}
                 {% set _date_preds = grouped_predictions[date]|sort(attribute='league') %}
                 {% else %}
                 {% set _date_preds = grouped_predictions[date] %}
                 {% endif %}
                 {% for pred in _date_preds %}
-                {% if sport == 'SOCCER' and pred.league and pred.league != _prev_league.val %}
-                {% set _prev_league.val = pred.league %}
-                <div style="grid-column:1/-1;font-size:0.88em;font-weight:700;color:#92400e;padding:10px 0 4px;border-top:1px solid rgba(15,23,42,0.1);margin-top:6px;">{{ pred.league }}</div>
-                {% endif %}
                 {% set is_final = pred.home_score is not none %}
                 {% set home_wins = is_final and pred.home_score > pred.away_score %}
                 {% set away_wins = is_final and pred.away_score > pred.home_score %}

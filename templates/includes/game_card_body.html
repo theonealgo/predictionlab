@@ -171,7 +171,11 @@
 {% set _details_id = card_details_id if card_details_id is defined else ('card-details-' ~ loop.index0 if loop is defined else 'card-details') %}
 
 <header class="pick-card-header">
+    {% if sport == 'SOCCER' and card.league is defined and card.league %}
+    <span class="league-badge">{{ card.league }}</span>
+    {% else %}
     <span class="league-badge">{{ sport_info.icon if sport_info is defined else '' }} {{ sport_info.name if sport_info is defined else sport }}</span>
+    {% endif %}
     <span class="game-time">{% if is_final %}FINAL{% elif card.game_time is defined and card.game_time is not none %}{{ card.game_time }}{% else %}Upcoming{% endif %}</span>
 </header>
 
