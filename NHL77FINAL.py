@@ -3919,6 +3919,16 @@ def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_ke
         if v2:
             ens_prob = _to_float_safe(v2.get('home_prob'))
 
+    # MLB results must grade stored pre-game snapshots only. Do not re-run
+    # mlb_ml_v2 / IP-gate on already-locked games (that rewrites history).
+    # Older rows have no glicko/trueskill columns — map those legs to the
+    # stored elo/logistic values the live app used before those columns existed.
+    if sport == 'MLB':
+        if glicko2_prob is None:
+            glicko2_prob = elo_prob
+        if trueskill_prob is None:
+            trueskill_prob = elo_prob
+
     return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
 
 
@@ -8149,6 +8159,11 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                         game_dict['ensemble_prob']  = round(_blended * 100, 1)
                         game_dict['predicted_winner'] = _ht if _blended > 0.5 else _at
                         game_dict['model_win_pct'] = round(_model_pick_prob * 100.0, 1)
+                        try:
+                            from sports.MLB import apply_named_ml_v2_to_card
+                            apply_named_ml_v2_to_card(game_dict)
+                        except Exception:
+                            pass
                         game_dict['implied_win_pct'] = round((_implied or 0.0) * 100.0, 1) if _implied is not None else None
                         game_dict['edge_pct'] = round(_edge * 100.0, 2)
                         game_dict['adjusted_edge_pct'] = round(_edge * 100.0, 2)
@@ -10157,6 +10172,64 @@ def compute_roi_for_range(daily_results, start_date=None, end_date=None):
                 entry["reason"] = "No graded picks in range."
     return summary
 
+def _align_roi_entry_flat(entry, wins, graded, pushes=0):
+    """Overwrite one ROI market entry with flat +1/-1 units from a W-L sample."""
+    try:
+        w = int(wins or 0)
+        n = int(graded or 0)
+        p = int(pushes or 0)
+    except (TypeError, ValueError):
+        return entry
+    if n <= 0:
+        return entry
+    decided = max(0, n - max(0, p))
+    w = min(max(0, w), decided)
+    l = max(0, decided - w)
+    units = float(w - l)
+    out = dict(entry or {})
+    out.update(
+        {
+            "wins": w,
+            "losses": l,
+            "pushes": max(0, p),
+            "graded": decided,
+            "units_risked": decided,
+            "units_won": units,
+            "missing_odds": 0,
+            "reason": None,
+            "roi_pct": round((units / decided) * 100, 2) if decided else None,
+        }
+    )
+    return out
+
+
+def _align_roi_moneyline_to_season_perf(roi_total, season_perf):
+    """Force Season ROI W-L to match face Season Performance per market.
+
+    Moneyline ROI otherwise grades ens_prob only; face Season uses the best ML
+    model. Spread/Total can also drift by a game vs face — keep one sample.
+    """
+    if not isinstance(roi_total, dict) or not isinstance(season_perf, dict):
+        return roi_total
+    out = dict(roi_total)
+    out["moneyline"] = _align_roi_entry_flat(
+        out.get("moneyline"),
+        season_perf.get("ml_correct"),
+        season_perf.get("ml_total"),
+        0,
+    )
+    out["spread"] = _align_roi_entry_flat(
+        out.get("spread"),
+        season_perf.get("spread_covered"),
+        season_perf.get("spread_graded"),
+        0,
+    )
+    ou_n = int(season_perf.get("ou_graded") or 0)
+    ou_w = int(season_perf.get("ou_correct") or 0)
+    out["total"] = _align_roi_entry_flat(out.get("total"), ou_w, ou_n, 0)
+    return out
+
+
 def build_roi_cards(roi_daily, roi_weekly, roi_total):
     def _format_entry(entry):
         if not entry:
@@ -11615,11 +11688,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .section-tabs { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap; }
     .tab { padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s; background: #ffffff; color: #0f172a; border:1px solid rgba(15,23,42,0.18); font-size: 0.9em; }
     .tab.active { background: #bfdbfe; color: #0f172a; border: 1px solid #93c5fd; }
-    /* Type toggle */
-    .type-toggle { display:flex; gap:6px; justify-content:center; margin-bottom:16px; }
-    .toggle-btn { padding:8px 18px; border-radius:6px; border:2px solid rgba(15,23,42,0.2); background:#fff; color:#0f172a; font-weight:600; font-size:0.85em; cursor:pointer; transition:all 0.2s; }
-    .toggle-btn.active { background:linear-gradient(135deg,#8b5cf6,#6d28d9); border-color:#8b5cf6; }
-    .toggle-btn:hover { border-color:#8b5cf6; }
     .league-slider { display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 16px; }
     .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
     .league-pill { background:#ffffff; border:2px solid rgba(15,23,42,0.15); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#0f172a; text-decoration:none; display:inline-flex; align-items:center; }
@@ -11640,7 +11708,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .date-section { display:none; background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
     .date-header { color:#0F172A; font-size:1.3em; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #E2E8F0; }
-.games-grid, .results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; align-items:start; }
+.games-grid, .results-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; align-items:start; }
+    @media(max-width:1100px){ .games-grid, .results-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
     @media(max-width:480px){ .games-grid, .results-grid { grid-template-columns:1fr; } .game-card { max-width:100%; } }
     .game-card {
         background:#ffffff;
@@ -12008,14 +12077,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             </div>
             {% endfor %}
         </div>
-        <!-- ── Type Toggle ── -->
-        <div class="type-toggle">
-            <button class="toggle-btn active" onclick="filterSections('all',this)">ALL</button>
-            <button class="toggle-btn" onclick="filterSections('ml',this)">Moneyline</button>
-            <button class="toggle-btn" onclick="filterSections('spread',this)">Spread</button>
-            <button class="toggle-btn" onclick="filterSections('total',this)">Total</button>
-        </div>
-
         <!-- ── Date Slider ── -->
         <div class="date-nav">
             <div class="nav-arrow" onclick="previousWeek()">&#8249;</div>
@@ -12070,14 +12131,6 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <div style="text-align:center;padding:60px;opacity:0.7;">No results data available yet.</div>
     {% endif %}
 <script>
-    /* ── Section filter toggle ── */
-    function filterSections(mode, btn) {
-        document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.querySelectorAll('.section-ml,.section-spread,.section-total').forEach(el => {
-            el.style.display = (mode === 'all' || el.classList.contains('section-' + mode)) ? '' : 'none';
-        });
-    }
     /* ── Share Last Night's Results ── */
     function buildTallySharePayload(btn) {
         const sport = btn.dataset.sport || '';
@@ -16392,6 +16445,30 @@ def nba_shortcut():
 def mlb_shortcut():
     return redirect('/mlb-picks', code=301)
 
+@app.route('/mlb/results')
+def mlb_results_sandbox_alias():
+    """Sandbox-style /mlb/results → /mlb-results (preserve ?view=)."""
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/mlb-results' + (f'?{qs}' if qs else ''), code=302)
+
+@app.route('/mlb/api/picks')
+def mlb_api_picks():
+    """Chart API for team-results.js (MLB results chart)."""
+    try:
+        from mlb_results_ui import markets_from_live_html
+        cards = _mlb_results_cards_html_for_chart()
+        if not cards or len(cards) < 500:
+            return jsonify({'ok': False, 'error': 'MLB results source unavailable'}), 503
+        payload = markets_from_live_html(cards, 'mlb')
+        return jsonify(payload)
+    except Exception as e:
+        logger.exception('mlb_api_picks failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/mlb/api/leagues')
+def mlb_api_leagues():
+    return jsonify({'ok': True, 'leagues': []})
+
 @app.route('/nfl')
 def nfl_shortcut():
     return redirect('/nfl-picks', code=301)
@@ -16589,6 +16666,91 @@ def _results_fallback_page(sport, message):
         message=message
     )
 
+
+def _apply_mlb_picks_html_fixups(html):
+    """Publish-layer MLB picks UI (spread flip, RL confidence, chart attrs). Keeps live chrome."""
+    if not html or not isinstance(html, str):
+        return html
+    if 'data-mlb-ui-fixup="1"' in html or "<!-- mlb-ui-fixup -->" in html:
+        return html
+    try:
+        from mlb_ui_fixup import apply_mlb_picks_fixups
+        out = apply_mlb_picks_fixups(html)
+        if out and "<!-- mlb-ui-fixup -->" not in out:
+            if re.search(r"</body\s*>", out, flags=re.I):
+                out = re.sub(r"</body\s*>", "<!-- mlb-ui-fixup -->\n</body>", out, count=1, flags=re.I)
+            else:
+                out = out + "<!-- mlb-ui-fixup -->"
+        return out
+    except Exception as _mlb_ui_e:
+        logger.exception("MLB picks UI fixup failed: %s", _mlb_ui_e)
+        return html
+
+
+def _mlb_results_cards_html_for_chart():
+    """Cards HTML used to build chart API/SSR payload (never view=chart)."""
+    cache_key = 'MLB_daily_results_html_v3'
+    cached = _SPORT_RESULTS_CACHE.get(cache_key)
+    if isinstance(cached, dict):
+        html = cached.get('html')
+        if html and len(html) > 500:
+            return _apply_mlb_results_html_fixups(html)
+    try:
+        with app.test_request_context('/mlb-results'):
+            return sport_results('MLB')
+    except Exception as e:
+        logger.exception('MLB cards HTML for chart failed: %s', e)
+        return ''
+
+
+def _render_mlb_results_chart_page():
+    """Cards|Chart chart view for /mlb-results?view=chart."""
+    from mlb_results_ui import markets_from_live_html, render_mlb_results_chart_page
+
+    cards = _mlb_results_cards_html_for_chart()
+    payload = None
+    if cards and len(cards) > 500:
+        try:
+            payload = markets_from_live_html(cards, 'mlb')
+        except Exception as e:
+            logger.exception('MLB chart payload failed: %s', e)
+    return render_mlb_results_chart_page(payload=payload)
+
+
+def _apply_mlb_results_html_fixups(html):
+    """Publish-layer MLB results analytics / efficiency fill. Keeps live chrome."""
+    if not html or not isinstance(html, str):
+        return html
+    try:
+        if 'class="pl-mlb-analytics"' in html or "class='pl-mlb-analytics'" in html:
+            html = re.sub(
+                r'<section class="pl-mlb-analytics"[\s\S]*?</section>\s*'
+                r'(?:<style>[\s\S]*?\.pl-mlb-analytics[\s\S]*?</style>\s*)?',
+                '',
+                html,
+                count=1,
+                flags=re.I,
+            )
+        html = html.replace("<!-- mlb-results-ui-fixup -->", "")
+        from mlb_ui_fixup import apply_mlb_results_fixups
+        out = apply_mlb_results_fixups(html)
+        if out and "<!-- mlb-results-ui-fixup -->" not in out:
+            if re.search(r"</body\s*>", out, flags=re.I):
+                out = re.sub(
+                    r"</body\s*>",
+                    "<!-- mlb-results-ui-fixup -->\n</body>",
+                    out,
+                    count=1,
+                    flags=re.I,
+                )
+            else:
+                out = out + "<!-- mlb-results-ui-fixup -->"
+        return out
+    except Exception as _mlb_res_e:
+        logger.exception("MLB results UI fixup failed: %s", _mlb_res_e)
+        return html
+
+
 def sport_predictions(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
     log_site_visit(f'/{SPORT_SEO_SLUGS.get(sport, sport)}')
@@ -16615,12 +16777,16 @@ def sport_predictions(sport, filter_date=None):
                 and 'upstream data/model dependency failed' not in cached_html.lower()
             )
             if _page_usable and _page_age is not None and _page_age < cache_ttl:
+                if sport == 'MLB':
+                    return _apply_mlb_picks_html_fixups(cached_html)
                 return cached_html
             # Stale-while-revalidate: serve last good HTML while models refresh.
             _stale_max = _SPORT_PREDICTIONS_PAGE_STALE_MAX.get(sport, 900)
             if _page_usable and _page_age is not None and _page_age < _stale_max:
                 if _page_age >= cache_ttl:
                     _start_background_predictions_refresh(sport)
+                if sport == 'MLB':
+                    return _apply_mlb_picks_html_fixups(cached_html)
                 return cached_html
     prediction_error = None
     try:
@@ -16973,6 +17139,8 @@ def sport_predictions(sport, filter_date=None):
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         return _predictions_fallback_page(sport, filter_date=filter_date)
+    if sport == 'MLB':
+        rendered = _apply_mlb_picks_html_fixups(rendered)
     _default_games = grouped_predictions.get(default_pick_date, []) if grouped_predictions else []
     _default_with_books = sum(
         1 for g in _default_games
@@ -17004,6 +17172,18 @@ def sport_results(sport):
             return "Sport not found", 404
         if sport == 'SOCCER' and not SOCCER_ENABLED:
             return "Soccer results are temporarily hidden while data loads.", 404
+
+        # MLB chart view: team-results.js + Cards|Chart toggle.
+        if sport == 'MLB':
+            try:
+                view = (request.args.get('view') or '').strip().lower()
+            except Exception:
+                view = ''
+            if view in ('chart', 'tabs', 'markets', 'tabbed'):
+                try:
+                    return _render_mlb_results_chart_page()
+                except Exception as _mlb_chart_e:
+                    logger.exception('MLB results chart render failed: %s', _mlb_chart_e)
 
         # New individual sports (Tennis/UFC/Golf) render via their own module pipeline.
         if sport in _SPORT_RESULTS_RENDERERS:
@@ -17501,6 +17681,8 @@ def sport_results(sport):
                     cache_key = f'{sport}_daily_results_html_{_soccer_league_slug(selected_league)}'
                 if not selected_slug:
                     skip_cache = True
+            if sport == 'MLB':
+                skip_cache = True  # always rebuild so Season face≡ROI≡chart
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 240)
             if not skip_cache:
                 cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
@@ -17513,6 +17695,8 @@ def sport_results(sport):
                         and (_time.time() - cached_ts) < cache_ttl
                         and _results_page_html_usable(cached_html)
                     ):
+                        if sport == 'MLB':
+                            return _apply_mlb_results_html_fixups(cached_html)
                         return cached_html
             # Update scores in background so the page is never blocked by API calls.
             # Soccer backfill can take 30-60s (100+ requests); run async always.
@@ -17736,6 +17920,9 @@ def sport_results(sport):
             roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
+            # MLB: Season Moneyline ROI must match face Season Performance (best ML).
+            if sport == 'MLB':
+                roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -17776,6 +17963,8 @@ def sport_results(sport):
                 selected_league=selected_league,
                 league_db_total=soccer_league_counts.get(selected_league, 0) if sport == 'SOCCER' else None,
             )
+            if sport == 'MLB':
+                rendered = _apply_mlb_results_html_fixups(rendered)
             if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
                 _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}

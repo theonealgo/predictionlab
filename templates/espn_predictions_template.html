@@ -287,6 +287,11 @@
         .date-header { font-size:1.25em; margin-bottom:14px; color:#0F172A; font-weight:700; }
         .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
         @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
+        /* Matchup cards: 3 per desktop row. Golf tournament board is excluded. */
+        body:not(.sport-golf):not(.golf-board) .games-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+        body:not(.sport-golf):not(.golf-board) .game-card-stack { max-width:none; }
+        @media(max-width:1100px){ body:not(.sport-golf):not(.golf-board) .games-grid{grid-template-columns:repeat(2, minmax(0, 1fr));} }
+        @media(max-width:768px){ body:not(.sport-golf):not(.golf-board) .games-grid{grid-template-columns:1fr;} }
         .game-card-stack { min-width:0; max-width:420px; width:100%; justify-self:stretch; display:flex; flex-direction:column; }
         .game-card-stack .game-card { flex:0 0 auto; border-radius:12px 12px 0 0; }
         .game-card-stack .game-card.pick-card { border-radius:16px; }
@@ -416,6 +421,25 @@
         .h2h-info-btn:hover, .h2h-info-btn[aria-expanded="true"] { border-color:#00529B; color:#00529B; background:#eff6ff; }
         .h2h-popover { display:none; position:absolute; left:0; bottom:calc(100% + 8px); min-width:280px; max-width:min(320px, 90vw); background:#fff; border:1px solid #e2e8f0; border-radius:10px; box-shadow:0 10px 28px rgba(15,23,42,0.14); padding:8px 0; z-index:30; max-height:220px; overflow-y:auto; }
         .h2h-popover.open { display:block; }
+        .rl-confidence-chip .line-chip-label { display:inline-flex; align-items:center; justify-content:center; gap:4px; flex-wrap:nowrap; }
+        .rl-confidence-chip .rl-conf-info {
+            width:16px; height:16px; border-radius:50%; border:1px solid #94a3b8; background:#fff;
+            color:#475569; font-size:0.62em; font-weight:800; font-style:italic; line-height:1;
+            padding:0; cursor:pointer; flex-shrink:0;
+        }
+        .rl-confidence-chip .rl-conf-info:hover,
+        .rl-confidence-chip .rl-conf-info:focus,
+        .rl-confidence-chip .rl-conf-info[aria-expanded="true"] {
+            border-color:#00529B; color:#00529B; background:#eff6ff; outline:none;
+        }
+        .rl-conf-live-tip {
+            display:none; position:fixed; z-index:4000; min-width:200px; max-width:min(280px, calc(100vw - 16px));
+            background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+            box-shadow:0 8px 20px rgba(15,23,42,0.14); padding:8px 10px;
+            font-size:0.78em; font-weight:500; color:#334155; line-height:1.45;
+            text-transform:none; letter-spacing:0;
+        }
+        .rl-conf-live-tip.open { display:block; }
         .h2h-pop-title { font-size:0.65em; text-transform:uppercase; font-weight:700; color:#64748b; padding:4px 12px 6px; letter-spacing:0.3px; }
         .h2h-pop-row { font-size:0.76em; color:#334155; padding:5px 12px; border-top:1px solid #f1f5f9; line-height:1.35; }
         .h2h-pop-row:first-of-type { border-top:none; }
@@ -585,8 +609,12 @@
     </style>
     <link rel="stylesheet" href="/static/css/research-theme.css">
     <link rel="stylesheet" href="/static/css/picks-nav-overrides.css">
+    {% if sport == 'MLB' %}
+    <link rel="stylesheet" href="/static/css/mlb-pick-cards.css?v=mlb9">
+    <link rel="stylesheet" href="/static/css/mlb-picks-chart.css?v=mlb9">
+    {% endif %}
 </head>
-<body>
+<body class="sport-{{ sport|lower }}" data-sport="{{ sport }}">
 {% include 'includes/picks_nav_chrome.html' %}
 <div class="search-results-wrap">
     <div id="searchResultsPicks" class="search-results" aria-live="polite"></div>
@@ -693,6 +721,30 @@
         .picks-chart-table .best-model{background:rgba(0,192,118,0.16);border-radius:5px;padding:1px 6px;box-shadow:inset 0 0 0 1px rgba(0,192,118,0.35);}
         .picks-chart-table .pct-league-row td{background:#eef2f7 !important;color:#92400e;font-weight:800;font-size:0.74em;text-transform:uppercase;letter-spacing:0.3px;text-align:left;}
         .picks-chart-table .pct-pick{color:#00529B;font-weight:800;}
+        {% if sport == 'MLB' %}
+        /* Market tabs (MLB / WNBA Chart) */
+        .picks-market-tabs{display:none;gap:8px;flex-wrap:wrap;margin:0;width:100%;}
+        .picks-view-controls.chart-active .picks-market-tabs{display:flex;}
+        .picks-market-tabs .market-tab{border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:0.8rem;padding:7px 14px;border-radius:999px;cursor:pointer;}
+        .picks-market-tabs .market-tab.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a;}
+        .picks-chart-market-label{font-size:0.72rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;margin:0 0 8px;}
+        .picks-chart-table .odds-cell{font-variant-numeric:tabular-nums;font-weight:800;}
+        .picks-chart-table .rl-conf-strong{color:#15803d;font-weight:800;}
+        .picks-chart-table .rl-conf-mod{color:#b45309;font-weight:800;}
+        .picks-chart-table .rl-conf-weak{color:#b91c1c;font-weight:700;}
+        .rl-confidence-chip .line-chip-val{font-weight:800;}
+        .picks-chart-locked{position:relative;min-height:220px;border:1px solid #dbe3ee;border-radius:12px;background:#f8fafc;overflow:hidden;}
+        .picks-chart-locked-blur{filter:blur(5px);user-select:none;pointer-events:none;opacity:.55;padding:16px;}
+        .picks-chart-locked-cta{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;background:rgba(248,250,252,.72);}
+        .picks-chart-locked-cta .lock-box{background:#fff;border:1px solid #dbe3ee;border-radius:12px;padding:18px 20px;max-width:360px;box-shadow:0 8px 24px rgba(15,23,42,.08);}
+        .picks-chart-locked-cta .lock-box strong{display:block;color:#0f172a;font-size:1.02rem;margin-bottom:6px;}
+        .picks-chart-locked-cta .lock-box p{margin:0 0 12px;color:#475569;font-size:.9rem;line-height:1.4;}
+        .picks-chart-locked-cta a{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;background:#0c1e3a;color:#fff;font-weight:800;text-decoration:none;font-size:.86rem;}
+        .picks-chart-table th.proj-col,.picks-chart-table td.proj-col,.picks-chart-table td.proj-cell{white-space:nowrap;text-align:left;line-height:1.25;font-size:0.95em;vertical-align:middle;}
+        .picks-chart-table th.proj-col{font-size:0.66em;}
+        .picks-chart-table td.proj-cell .proj-total{display:block;font-weight:800;font-variant-numeric:tabular-nums;color:#0f172a;line-height:1.2;}
+        .picks-chart-table td.proj-cell .proj-scoreline{display:block;margin-top:2px;font-weight:600;font-size:0.92em;color:#334155;line-height:1.25;white-space:nowrap;}
+        {% endif %}
     </style>
     <div class="picks-view-controls">
         <div class="pv-toggle" role="tablist" aria-label="Pick view">
@@ -700,6 +752,13 @@
             <button type="button" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
         </div>
         <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
+        {% if sport == 'MLB' %}
+        <nav class="picks-market-tabs" id="picksMarketTabs" aria-label="Pick market">
+            <button type="button" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
+            <button type="button" class="market-tab" data-market="spread" onclick="setPicksChartMarket('spread')">{% if sport == 'MLB' %}Spread / Run Line{% else %}Spread{% endif %}</button>
+            <button type="button" class="market-tab" data-market="totals" onclick="setPicksChartMarket('totals')">Totals</button>
+        </nav>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -1152,25 +1211,246 @@
     function previousWeek(){if(currentWeekStart>0){currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderDateBubbles();}}
     function nextWeek(){if(currentWeekStart+datesPerWeek<allDates.length){currentWeekStart+=datesPerWeek;renderDateBubbles();}}
     // ===== SECTION: Chart View + Copy All (client logic) =====
+    // MLB / WNBA: market tabs (Moneyline | Spread | Totals). Other sports: dense table.
+    // Moneyline + Spread chart tables are premium-gated (match live auth).
     function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
     function _visibleSection(){ return document.querySelector('.date-section.visible'); }
+    let picksChartMarket = 'moneyline';
+    const MLB_CHART = (sportName === 'MLB' || document.body.getAttribute('data-sport') === 'MLB' || {{ (sport == 'MLB')|tojson }});
+    const MARKET_CHART = MLB_CHART;
+    const IS_PREMIUM = {{ (is_premium|default(false))|tojson }};
+    const SPREAD_LABEL = MLB_CHART ? 'Spread / run line' : 'Spread';
+    const BOOKS_SPREAD_LABEL = MLB_CHART ? 'Books run line' : 'Books spread';
+    const PL_SPREAD_LABEL = MLB_CHART ? 'PL run line' : 'PL spread';
+    const XS_SPREAD_LABEL = MLB_CHART ? 'XSharp run line' : 'XSharp spread';
+    function _infoTh(label, tip, cls){
+        cls = cls || 'num';
+        const tipTxt = String(tip || '').trim() || ('About ' + String(label || ''));
+        return '<th class="'+cls+' pct-info-th"><span class="pct-th-label">'+_esc(label)
+            +'</span><button type="button" class="pct-info-btn" title="'+_esc(tipTxt)
+            +'" aria-label="'+_esc(tipTxt)+'" data-tip="'+_esc(tipTxt)+'">ⓘ</button></th>';
+    }
+    function _chartLockedHtml(marketLabel){
+        return '<div class="picks-chart-locked" data-chart-locked="1">'
+            + '<div class="picks-chart-locked-blur" aria-hidden="true">'
+            + '<table class="picks-chart-table"><thead><tr>'
+            + '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="num">Locked</th><th class="num">Locked</th><th class="num">Locked</th>'
+            + '</tr></thead><tbody>'
+            + '<tr><td class="mu-col"><span class="mu-away">Away</span><span class="mu-home">Home</span></td><td class="ctr">—</td><td class="num">•••</td><td class="num">•••</td><td class="num">•••</td></tr>'
+            + '<tr><td class="mu-col"><span class="mu-away">Away</span><span class="mu-home">Home</span></td><td class="ctr">—</td><td class="num">•••</td><td class="num">•••</td><td class="num">•••</td></tr>'
+            + '</tbody></table></div>'
+            + '<div class="picks-chart-locked-cta"><div class="lock-box">'
+            + '<strong>🔒 '+_esc(marketLabel)+' chart is premium</strong>'
+            + '<p>Log in or join premium to unlock moneyline model edges and spread / run-line charts.</p>'
+            + '<a href="/plans">Join Premium</a>'
+            + '</div></div></div>';
+    }
+    function setPicksChartMarket(market){
+        picksChartMarket = (market === 'spread' || market === 'totals') ? market : 'moneyline';
+        const bar = document.getElementById('picksMarketTabs');
+        if(bar){ bar.querySelectorAll('.market-tab').forEach(function(btn){ btn.classList.toggle('active', btn.getAttribute('data-market') === picksChartMarket); }); }
+        refreshChartForActive();
+    }
+    function _slotOdds(st, teamName){
+        const want = (teamName||'').trim().toLowerCase();
+        let books='—', pl='—';
+        st.querySelectorAll('.team-slot').forEach(function(slot){
+            const nameEl = slot.querySelector('.team-name');
+            const name = (nameEl && nameEl.textContent ? nameEl.textContent : '').trim().toLowerCase();
+            if(!want || name !== want) return;
+            const b = slot.querySelector('.face-books-ml .ml-num');
+            const p = slot.querySelector('.face-pl-ml .ml-num');
+            if(b && b.textContent) books = b.textContent.trim();
+            if(p && p.textContent) pl = p.textContent.trim();
+        });
+        return {books: books||'—', pl: pl||'—'};
+    }
+    function _rlConf(st){
+        const chip = st.querySelector('.rl-confidence-chip .line-chip-val');
+        if(chip && chip.textContent){ const n = parseFloat(String(chip.textContent).replace(/[^\d.]/g,'')); if(!isNaN(n)) return n; }
+        return null;
+    }
+    function _oddsLineCell(st, marketKeys, colCls){
+        const rows = st.querySelectorAll('.odds-pricing-table tbody tr');
+        for(let i=0;i<rows.length;i++){
+            const k = rows[i].querySelector('.market-k');
+            const name = ((k && k.textContent) || '').trim().toLowerCase();
+            if(!marketKeys.some(function(m){ return name.indexOf(m) >= 0; })) continue;
+            const cell = rows[i].querySelector('.'+colCls);
+            const t = (cell && cell.textContent ? cell.textContent : '').trim();
+            if(t && t !== '—' && t !== '-') return t;
+        }
+        return '';
+    }
+    function _roundHalf(n){ return Math.round(Number(n)*2)/2; }
+    function _fmtHalf(n){ const r=_roundHalf(n); return Number.isInteger(r)?String(r):String(r); }
+    function _parseTotalNum(raw){
+        const m = String(raw==null?'':raw).match(/(\d+(?:\.\d+)?)/);
+        if(!m) return null;
+        const n = parseFloat(m[1]);
+        return (isNaN(n) || n <= 0) ? null : n;
+    }
+    function _labelScoreline(st, raw){
+        const t = String(raw||'').trim();
+        if(!t || t === '—') return '';
+        if(/[A-Za-z]/.test(t) && /\d/.test(t)) return t;
+        const nums = t.match(/(\d+(?:\.\d+)?)/g);
+        if(!nums || nums.length < 2) return t;
+        const away = (st.getAttribute('data-away')||'').trim();
+        const home = (st.getAttribute('data-home')||'').trim();
+        if(away && home) return away+' '+nums[nums.length-2]+' – '+home+' '+nums[nums.length-1];
+        return nums[nums.length-2]+'–'+nums[nums.length-1];
+    }
+    function _plProjDisplay(st){
+        const fromAttr = (st.getAttribute('data-pl-proj')||'').trim();
+        if(fromAttr) return _labelScoreline(st, fromAttr) || fromAttr;
+        const prow = st.querySelectorAll('.proj-row');
+        for(let i=0;i<prow.length;i++){
+            const model = prow[i].querySelector('.proj-model');
+            const val = prow[i].querySelector('.proj-val');
+            if(!model || !val) continue;
+            const cls = (model.className||'').toLowerCase();
+            const labelTxt = (model.textContent||'').toLowerCase();
+            if(/\bpl\b/.test(cls) || labelTxt.indexOf('prediction lab') >= 0){
+                const t = (val.textContent||'').trim();
+                if(t) return _labelScoreline(st, t) || t;
+            }
+        }
+        // Last resort: any proj-val with two scores
+        for(let i=0;i<prow.length;i++){
+            const val = prow[i].querySelector('.proj-val');
+            const t = (val && val.textContent ? val.textContent : '').trim();
+            if(t && (t.match(/(\d+(?:\.\d+)?)/g)||[]).length >= 2){
+                return _labelScoreline(st, t) || t;
+            }
+        }
+        return '';
+    }
+    function _sumProjTotal(disp){
+        if(!disp || disp === '—') return '—';
+        const nums = String(disp).match(/(\d+(?:\.\d+)?)/g);
+        if(!nums || nums.length < 2) return '—';
+        const a = parseFloat(nums[nums.length-2]), b = parseFloat(nums[nums.length-1]);
+        if(isNaN(a) || isNaN(b)) return '—';
+        const sum = a + b;
+        return Number.isInteger(sum) ? String(sum) : String(Math.round(sum * 10) / 10);
+    }
+    /**
+     * Stacked totals cell HTML: total on its own line, scoreline underneath.
+     * e.g. 9.5 / Boston Red Sox 4.5 – Toronto Blue Jays 5
+     */
+    function _formatProjStackedHtml(disp){
+        let s = String(disp == null ? '' : disp).trim();
+        if(!s || s === '—') return '—';
+        const pref = s.match(/^(\d+(?:\.\d+)?)\s*[·•]\s*(.+)$/);
+        let total = '', scoreline = s;
+        if(pref){
+            total = pref[1];
+            scoreline = pref[2].trim();
+        } else {
+            total = _sumProjTotal(s);
+            if(total === '—'){
+                if(/^\d+(?:\.\d+)?$/.test(s)) return '<span class="proj-total">'+_esc(s)+'</span>';
+                return _esc(s);
+            }
+        }
+        if(!scoreline || scoreline === total){
+            return '<span class="proj-total">'+_esc(total)+'</span>';
+        }
+        return '<span class="proj-total">'+_esc(total)+'</span><span class="proj-scoreline">'+_esc(scoreline)+'</span>';
+    }
+    function _deriveXsFromPl(st, xsTotalRaw, plProjDisp){
+        const T = _parseTotalNum(xsTotalRaw);
+        if(T == null) return '';
+        const nums = String(plProjDisp||'').match(/(\d+(?:\.\d+)?)/g);
+        if(!nums || nums.length < 2) return '';
+        const plA = parseFloat(nums[nums.length-2]), plH = parseFloat(nums[nums.length-1]);
+        if(isNaN(plA) || isNaN(plH) || (plA+plH) <= 0) return '';
+        const sum = plA + plH;
+        const away = _roundHalf((plA/sum)*T);
+        const home = _roundHalf(T - away);
+        const awayName = (st.getAttribute('data-away')||'').trim();
+        const homeName = (st.getAttribute('data-home')||'').trim();
+        if(awayName && homeName) return awayName+' '+_fmtHalf(away)+' – '+homeName+' '+_fmtHalf(home);
+        return _fmtHalf(away)+'–'+_fmtHalf(home);
+    }
+    function _xsProjDisplay(st){
+        const fromAttr = (st.getAttribute('data-xs-proj')||'').trim();
+        if(fromAttr && /\d/.test(fromAttr) && /[–—-]/.test(fromAttr)){
+            const nums = fromAttr.match(/(\d+(?:\.\d+)?)/g) || [];
+            if(nums.length >= 2) return _labelScoreline(st, fromAttr) || fromAttr;
+        }
+        const prow = st.querySelectorAll('.proj-row');
+        for(let i=0;i<prow.length;i++){
+            const model = prow[i].querySelector('.proj-model');
+            const val = prow[i].querySelector('.proj-val');
+            if(!model || !val) continue;
+            const cls = (model.className||'').toLowerCase();
+            const labelTxt = (model.textContent||'').toLowerCase();
+            if(/\bxs\b/.test(cls) || labelTxt.indexOf('xsharp') >= 0){
+                const t = (val.textContent||'').trim();
+                if(t && /\d/.test(t)) return _labelScoreline(st, t) || t;
+            }
+        }
+        const xsTot = _oddsLineCell(st, ['total'], 'val-xs')
+            || (st.getAttribute('data-books-total')||'').trim();
+        const plProj = _plProjDisplay(st);
+        const derived = _deriveXsFromPl(st, xsTot, plProj);
+        if(derived) return derived;
+        const n = _parseTotalNum(xsTot);
+        return n != null ? _fmtHalf(n) : '';
+    }
+    function _totalEvTxt(st){
+        const fromAttr = (st.getAttribute('data-total-ev')||'').trim();
+        if(fromAttr){
+            const n = parseFloat(fromAttr);
+            if(!isNaN(n)) return (n > 0 ? '+' : '') + String(fromAttr).replace(/^\+/,'') + '%';
+            return fromAttr.indexOf('%') >= 0 ? fromAttr : fromAttr + '%';
+        }
+        const items = st.querySelectorAll('.sf-item');
+        for(let i=0;i<items.length;i++){
+            const lab = items[i].querySelector('.sf-label');
+            const val = items[i].querySelector('.sf-val');
+            if(((lab && lab.textContent)||'').trim().toLowerCase() !== 'total ev') continue;
+            const txt = (val && val.textContent ? val.textContent : '').trim();
+            if(txt) return txt;
+        }
+        return '—';
+    }
+    function _spreadCell(st, attr, colCls, chipLabels){
+        const fromAttr = (st.getAttribute(attr)||'').trim();
+        if(fromAttr) return fromAttr;
+        const fromTbl = _oddsLineCell(st, ['run line','spread','puck line'], colCls);
+        if(fromTbl) return fromTbl;
+        for(let i=0;i<(chipLabels||[]).length;i++){
+            const chips = st.querySelectorAll('.line-chip');
+            for(let j=0;j<chips.length;j++){
+                const lab = chips[j].querySelector('.line-chip-label');
+                const val = chips[j].querySelector('.line-chip-val');
+                const name = ((lab && lab.textContent)||'').trim().toLowerCase();
+                if(name !== chipLabels[i]) continue;
+                const t = (val && val.textContent ? val.textContent : '').trim();
+                if(t) return t;
+            }
+        }
+        return '—';
+    }
     function buildChartTable(section){
         if(!section) return;
         const wrap = section.querySelector('.chart-table-wrap');
         if(!wrap) return;
+        // Anonymous: Moneyline + Spread chart tables stay locked (live paywall).
+        if(MARKET_CHART && !IS_PREMIUM && (picksChartMarket === 'spread' || picksChartMarket === 'moneyline')){
+            const lab = picksChartMarket === 'spread' ? SPREAD_LABEL : 'Moneyline';
+            wrap.innerHTML = '<div class="picks-chart-market-label">'+_esc(lab)+'</div>' + _chartLockedHtml(lab);
+            return;
+        }
         const stacks = section.querySelectorAll('[data-pick-card]');
-        // Premium columns (model win %s + projected scores) are only rendered
-        // server-side for premium users; detect them so free users keep the
-        // compact table.
         let hasModels = false, hasProj = false;
         stacks.forEach(function(st){
             if(st.getAttribute('data-m-consensus')) hasModels = true;
-            if(st.getAttribute('data-xs-proj') || st.getAttribute('data-pl-proj')) hasProj = true;
+            if(st.getAttribute('data-xs-proj') || st.getAttribute('data-pl-proj') || st.querySelector('.proj-val')) hasProj = true;
         });
-        let head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="ctr">Pick</th><th class="ctr">H2H L10</th><th class="num">Edge</th><th class="num">Books Spr</th><th class="num">Books Tot</th>';
-        if(hasModels) head += '<th class="ctr">Grinder2</th><th class="ctr">Takedown</th><th class="ctr">Edge</th><th class="ctr">XSharp</th><th class="ctr">Efficiency</th><th class="ctr">Sharp Cons.</th>';
-        if(hasProj) head += '<th class="num">PL Proj</th><th class="num">XSharp Proj</th>';
-        const colCount = (head.match(/<th/g) || []).length;
         function modelInfo(st, attr){
             const raw = st.getAttribute(attr);
             if(raw === null || raw === '') return {valid:false};
@@ -1181,17 +1461,95 @@
         }
         function confClass(pct){ return pct >= 65 ? 'conf-strong' : (pct >= 55 ? 'conf-mod' : 'conf-weak'); }
         function textCell(st, attr){ const v = _esc(st.getAttribute(attr) || ''); return v || '—'; }
-        const MODEL_ATTRS = ['data-m-grinder2','data-m-takedown','data-m-edge','data-m-xsharp','data-m-efficiency','data-m-consensus'];
-        let rows = '', lastLeague = '';
+        function _hasRealBooksML(){
+            let found = false;
+            stacks.forEach(function(st){
+                if(found) return;
+                const pick = (st.getAttribute('data-pick')||'').trim();
+                const t = (_slotOdds(st, pick).books||'').trim();
+                if(t && t !== '—' && t !== '-' && t !== '–' && t.toLowerCase() !== 'n/a') found = true;
+            });
+            return found;
+        }
+        const ALL_MODEL_ATTRS = ['data-m-grinder2','data-m-takedown','data-m-edge','data-m-xsharp','data-m-efficiency','data-m-consensus'];
+        const ALL_MODEL_LABELS = ['Grinder2','Takedown','Edge','XSharp','Efficiency','Sharp Cons.'];
+        const MODEL_ATTRS = [];
+        const MODEL_LABELS = [];
+        ALL_MODEL_ATTRS.forEach(function(a, i){
+            let any = false;
+            stacks.forEach(function(st){
+                const raw = st.getAttribute(a);
+                if(raw !== null && raw !== '' && !isNaN(parseFloat(raw))) any = true;
+            });
+            if(any){ MODEL_ATTRS.push(a); MODEL_LABELS.push(ALL_MODEL_LABELS[i]); }
+        });
+        const showBooksML = _hasRealBooksML();
+        let head = '', label = '', rows = '', lastLeague = '';
+        if(MARKET_CHART && picksChartMarket === 'spread'){
+            label = SPREAD_LABEL;
+            head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="num">'+_esc(BOOKS_SPREAD_LABEL)+'</th><th class="num">'+_esc(PL_SPREAD_LABEL)+'</th><th class="num">'+_esc(XS_SPREAD_LABEL)+'</th>';
+        } else if(MARKET_CHART && picksChartMarket === 'totals'){
+            label = 'Totals';
+            const TOTAL_EV_TIP = MLB_CHART
+                ? 'Expected value on the totals market: how our projected run total compares to the books’ O/U line, shown as a percentage. Positive means the model sees value vs the market; negative means it doesn’t. Not moneyline Edge.'
+                : 'Expected value on the totals market: how our projected total compares to the books’ O/U line, shown as a percentage. Positive means the model sees value vs the market; negative means it doesn’t. Not moneyline Edge.';
+            head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="num">Books total</th><th class="ctr">H2H L10</th><th class="proj-col">Prediction Lab total</th><th class="proj-col">XSharp total</th>'+_infoTh('Total EV', TOTAL_EV_TIP);
+        } else if(MARKET_CHART){
+            label = 'Moneyline';
+            head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="ctr">Pick</th>';
+            if(showBooksML) head += '<th class="ctr">Books ML</th>';
+            head += '<th class="ctr">PL odds</th>';
+            if(hasModels) MODEL_LABELS.forEach(function(n){ head += '<th class="ctr">'+_esc(n)+'</th>'; });
+        } else {
+            head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="ctr">Pick</th><th class="ctr">H2H L10</th><th class="num">Edge</th><th class="num">Books Spr</th><th class="num">Books Tot</th>';
+            if(hasModels) head += '<th class="ctr">Grinder2</th><th class="ctr">Takedown</th><th class="ctr">Edge</th><th class="ctr">XSharp</th><th class="ctr">Efficiency</th><th class="ctr">Sharp Cons.</th>';
+            if(hasProj) head += '<th class="num">PL Proj</th><th class="num">XSharp Proj</th>';
+        }
+        const colCount = (head.match(/<th/g) || []).length;
         stacks.forEach(function(st){
             const lg = st.getAttribute('data-league') || '';
             if(lg && lg !== lastLeague){ lastLeague = lg; rows += '<tr class="pct-league-row"><td colspan="'+colCount+'">'+_esc(lg)+'</td></tr>'; }
             const away = _esc(st.getAttribute('data-away'));
             const home = _esc(st.getAttribute('data-home'));
             const time = _esc(st.getAttribute('data-time'));
-            const pick = _esc(st.getAttribute('data-pick') || '—');
             const edge = st.getAttribute('data-edge') || '';
             const edgeTxt = edge ? ((parseFloat(edge) > 0 ? '+' : '')+_esc(edge)+'%') : '—';
+            if(MARKET_CHART && picksChartMarket === 'spread'){
+                const booksRl = _spreadCell(st, 'data-books-spread', 'val-books', ['books run line','books spread']);
+                const plRl = _spreadCell(st, 'data-pl-spread', 'val-pl', ['pl run line','pl spread','model spread','prediction lab run line','prediction lab spread']);
+                const xsRl = _spreadCell(st, 'data-xs-spread', 'val-xs', ['xsharp run line','xsharp spread']);
+                rows += '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="num">'+_esc(booksRl)+'</td><td class="num">'+_esc(plRl||'—')+'</td><td class="num">'+_esc(xsRl||'—')+'</td></tr>';
+                return;
+            }
+            if(MARKET_CHART && picksChartMarket === 'totals'){
+                let tot = (st.getAttribute('data-books-total')||'').trim() || '—';
+                if(tot !== '—' && tot.toLowerCase().indexOf('o/u') < 0) tot = 'O/U '+tot;
+                const plProj = IS_PREMIUM ? (_formatProjStackedHtml(_plProjDisplay(st)) || '—') : '🔒';
+                const xsProj = IS_PREMIUM ? (_formatProjStackedHtml(_xsProjDisplay(st)) || '—') : '🔒';
+                const tev = IS_PREMIUM ? _esc(_totalEvTxt(st)) : '🔒';
+                rows += '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="num">'+_esc(tot)+'</td><td class="ctr h2h-cell">'+textCell(st,'data-h2h')+'</td><td class="proj-col proj-cell">'+plProj+'</td><td class="proj-col proj-cell">'+xsProj+'</td><td class="num">'+tev+'</td></tr>';
+                return;
+            }
+            const pickRaw = (st.getAttribute('data-pick') || '—').trim() || '—';
+            const pick = _esc(pickRaw);
+            if(MARKET_CHART){
+                const odds = _slotOdds(st, pickRaw);
+                let r = '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="ctr pick-cell"><strong>'+pick+'</strong></td>';
+                if(showBooksML) r += '<td class="ctr odds-cell">'+_esc(odds.books)+'</td>';
+                r += '<td class="ctr odds-cell">'+_esc(odds.pl)+'</td>';
+                if(hasModels){
+                    const infos = MODEL_ATTRS.map(function(a){ return modelInfo(st, a); });
+                    let maxPct = -1;
+                    infos.forEach(function(i){ if(i.valid && i.pct > maxPct) maxPct = i.pct; });
+                    infos.forEach(function(i){
+                        if(!i.valid){ r += '<td class="mdl ctr"><span class="na">—</span></td>'; return; }
+                        const best = (i.pct === maxPct) ? ' best-model' : '';
+                        r += '<td class="mdl ctr"><span class="'+confClass(i.pct)+best+'">'+i.side+' '+i.pct+'%</span></td>';
+                    });
+                }
+                rows += r + '</tr>';
+                return;
+            }
             let r = '<tr>'
                 + '<td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td>'
                 + '<td class="ctr t-time">'+time+'</td>'
@@ -1205,34 +1563,41 @@
                 let maxPct = -1;
                 infos.forEach(function(i){ if(i.valid && i.pct > maxPct) maxPct = i.pct; });
                 infos.forEach(function(i){
-                    if(!i.valid){ r += '<td class="mdl ctr"><span class="na" title="Model rating not available for this matchup yet">N/A</span></td>'; return; }
+                    if(!i.valid){ r += '<td class="mdl ctr"><span class="na">—</span></td>'; return; }
                     const best = (i.pct === maxPct) ? ' best-model' : '';
                     r += '<td class="mdl ctr"><span class="'+confClass(i.pct)+best+'">'+i.side+' '+i.pct+'%</span></td>';
                 });
             }
-            if(hasProj){
-                r += '<td class="num">'+textCell(st,'data-pl-proj')+'</td><td class="num">'+textCell(st,'data-xs-proj')+'</td>';
-            }
-            r += '</tr>';
-            rows += r;
+            if(hasProj){ r += '<td class="num">'+textCell(st,'data-pl-proj')+'</td><td class="num">'+textCell(st,'data-xs-proj')+'</td>'; }
+            rows += r + '</tr>';
         });
         if(!rows){ wrap.innerHTML = '<div style="padding:16px;color:#64748b;">No picks to chart for this date.</div>'; return; }
-        wrap.innerHTML = '<table class="picks-chart-table"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table>';
+        const labelHtml = label ? '<div class="picks-chart-market-label">'+_esc(label)+'</div>' : '';
+        wrap.innerHTML = labelHtml + '<table class="picks-chart-table"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody></table>';
     }
     function refreshChartForActive(){
         const sec = _visibleSection();
         document.querySelectorAll('.date-section').forEach(function(s){ if(s !== sec) s.classList.remove('chart-mode'); });
+        const controls = document.querySelector('.picks-view-controls');
         if(!sec) return;
-        if(picksViewMode === 'chart'){ buildChartTable(sec); sec.classList.add('chart-mode'); }
-        else { sec.classList.remove('chart-mode'); }
+        if(picksViewMode === 'chart'){
+            buildChartTable(sec); sec.classList.add('chart-mode');
+            if(controls) controls.classList.add('chart-active');
+        } else {
+            sec.classList.remove('chart-mode');
+            if(controls) controls.classList.remove('chart-active');
+        }
     }
     function setPicksView(mode){
         picksViewMode = (mode === 'chart') ? 'chart' : 'cards';
         const cb = document.getElementById('pvCardsBtn'), hb = document.getElementById('pvChartBtn');
         if(cb) cb.classList.toggle('active', picksViewMode === 'cards');
         if(hb) hb.classList.toggle('active', picksViewMode === 'chart');
-        if(picksViewMode === 'cards'){ document.querySelectorAll('.date-section').forEach(function(s){ s.classList.remove('chart-mode'); }); }
-        else { refreshChartForActive(); }
+        if(picksViewMode === 'cards'){
+            document.querySelectorAll('.date-section').forEach(function(s){ s.classList.remove('chart-mode'); });
+            const controls = document.querySelector('.picks-view-controls');
+            if(controls) controls.classList.remove('chart-active');
+        } else { refreshChartForActive(); }
     }
     function _fallbackCopy(text, done){
         const area = document.createElement('textarea');
@@ -1293,7 +1658,105 @@
         }
         showDate(activeDate);
         renderDateBubbles();
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const view = (params.get('view') || '').toLowerCase();
+            const market = (params.get('market') || '').toLowerCase();
+            if (market === 'spread' || market === 'totals' || market === 'moneyline') {
+                if (typeof setPicksChartMarket === 'function') setPicksChartMarket(market);
+                else picksChartMarket = market;
+            }
+            if (view === 'chart' || view === 'tabs' || view === 'markets') setPicksView('chart');
+        } catch (e) {}
     });
+    (function(){
+        var TIP_FALLBACK = 'Run Line Confidence is how strongly our model favors its run-line side, from 0 to 100. It is the confidence behind that run-line lean — not a moneyline or totals pick.';
+        var pinned = null;
+        function tipEl(){
+            var el = document.getElementById('rlConfLiveTip');
+            if (el) return el;
+            el = document.createElement('div');
+            el.id = 'rlConfLiveTip';
+            el.className = 'rl-conf-live-tip';
+            el.setAttribute('role', 'tooltip');
+            el.hidden = true;
+            document.body.appendChild(el);
+            return el;
+        }
+        function hideTip(){
+            var t = document.getElementById('rlConfLiveTip');
+            if (t){ t.hidden = true; t.classList.remove('open'); }
+            document.querySelectorAll('.rl-conf-info[aria-expanded="true"]').forEach(function(b){
+                b.setAttribute('aria-expanded', 'false');
+                b.removeAttribute('aria-describedby');
+            });
+            pinned = null;
+        }
+        function placeTip(btn){
+            var t = tipEl();
+            var text = (btn.getAttribute('data-tip') || TIP_FALLBACK).trim();
+            t.textContent = text;
+            t.hidden = false;
+            t.classList.add('open');
+            btn.setAttribute('aria-expanded', 'true');
+            btn.setAttribute('aria-describedby', 'rlConfLiveTip');
+            var r = btn.getBoundingClientRect();
+            var w = Math.min(280, Math.max(200, window.innerWidth - 16));
+            t.style.maxWidth = w + 'px';
+            t.style.left = '8px';
+            t.style.top = '8px';
+            var tw = t.getBoundingClientRect().width;
+            var th = t.getBoundingClientRect().height;
+            var left = r.left + (r.width / 2) - (tw / 2);
+            left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+            var top = r.bottom + 8;
+            if (top + th > window.innerHeight - 8) top = Math.max(8, r.top - th - 8);
+            t.style.left = left + 'px';
+            t.style.top = top + 'px';
+        }
+        document.addEventListener('click', function(e){
+            var btn = e.target.closest && e.target.closest('.rl-conf-info');
+            if (btn){
+                e.preventDefault();
+                e.stopPropagation();
+                if (pinned === btn){ hideTip(); return; }
+                hideTip();
+                pinned = btn;
+                placeTip(btn);
+                return;
+            }
+            if (e.target && e.target.id === 'rlConfLiveTip') return;
+            hideTip();
+        });
+        document.addEventListener('keydown', function(e){
+            if (e.key === 'Escape') hideTip();
+        });
+        document.addEventListener('mouseover', function(e){
+            var btn = e.target.closest && e.target.closest('.rl-conf-info');
+            if (!btn || pinned) return;
+            placeTip(btn);
+        });
+        document.addEventListener('mouseout', function(e){
+            var btn = e.target.closest && e.target.closest('.rl-conf-info');
+            if (!btn || pinned) return;
+            var rel = e.relatedTarget;
+            if (rel && (btn.contains(rel) || (rel.id === 'rlConfLiveTip'))) return;
+            if (document.activeElement === btn) return;
+            hideTip();
+        });
+        document.addEventListener('focusin', function(e){
+            if (e.target && e.target.classList && e.target.classList.contains('rl-conf-info')){
+                if (pinned && pinned !== e.target) return;
+                placeTip(e.target);
+            }
+        });
+        document.addEventListener('focusout', function(e){
+            if (pinned) return;
+            if (e.target && e.target.classList && e.target.classList.contains('rl-conf-info')) hideTip();
+        });
+        window.addEventListener('scroll', function(){ if (pinned) hideTip(); }, true);
+        window.addEventListener('resize', hideTip);
+    })();
 </script>
 </body>
 </html>

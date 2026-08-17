@@ -35,6 +35,49 @@ def mlb_model_probs_for_grading(game_row, home_team, away_team, game_date_key):
     return main()._model_probs_for_grading(SPORT, game_row, home_team, away_team, game_date_key)
 
 
+def apply_named_ml_v2(
+    game_id,
+    glicko2_prob,
+    trueskill_prob,
+    elo_prob,
+    xgb_prob,
+    ens_prob,
+    *,
+    game_date=None,
+    home=None,
+    away=None,
+):
+    """Overlay SP xFIP v2 onto named ML probs (0–1) for upcoming picks only.
+
+    Results grading must not call this — historical pages use stored snapshots.
+    Efficiency / spread / totals are not passed through here.
+    """
+    try:
+        from mlb_ml_v2 import mix_named_ml_v2
+        return mix_named_ml_v2(
+            game_id,
+            glicko2_prob,
+            trueskill_prob,
+            elo_prob,
+            xgb_prob,
+            ens_prob,
+            game_date=game_date,
+            home=home,
+            away=away,
+        )
+    except Exception:
+        return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
+
+
+def apply_named_ml_v2_to_card(game_dict: dict) -> None:
+    """Overwrite Grinder2/Takedown/Edge/XSharp/Consensus on an upcoming MLB card."""
+    try:
+        from mlb_ml_v2 import apply_v2_to_upcoming_dict
+        apply_v2_to_upcoming_dict(game_dict)
+    except Exception:
+        return
+
+
 def render_sport_results_page(sport: str, *, season_start_dt=None):
     """Render /mlb-results (called from sport_results when sport == MLB).
 
