@@ -8368,6 +8368,15 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     except Exception as _h2he:
         logger.debug(f"[h2h] attach failed for {sport}: {_h2he}")
 
+    # Soccer: fill H2H Last 10 display only (alias-aware, min_games=1).
+    # Does not overwrite our_total / our_spread (Efficiency / pick math).
+    if sport == 'SOCCER':
+        try:
+            from soccer_ui_fixup import fill_soccer_h2h_display_fields
+            fill_soccer_h2h_display_fields(predictions)
+        except Exception as _s_h2h:
+            logger.debug(f"[soccer] h2h L10 display fill failed: {_s_h2h}")
+
     # Model-level fades (spread / ML / O-U) once per prediction dict
     _apply_model_fades_batch(sport, predictions)
 
@@ -16784,6 +16793,26 @@ def _apply_mlb_picks_html_fixups(html):
         return html
 
 
+def _apply_soccer_picks_html_fixups(html):
+    """Publish-layer soccer picks: H2H L10 display + hide empty Total EV."""
+    if not html or not isinstance(html, str):
+        return html
+    if 'data-soccer-ui-fixup="1"' in html or "<!-- soccer-ui-fixup -->" in html:
+        return html
+    try:
+        from soccer_ui_fixup import apply_soccer_picks_fixups
+        out = apply_soccer_picks_fixups(html)
+        if out and "<!-- soccer-ui-fixup -->" not in out:
+            if re.search(r"</body\s*>", out, flags=re.I):
+                out = re.sub(r"</body\s*>", "<!-- soccer-ui-fixup -->\n</body>", out, count=1, flags=re.I)
+            else:
+                out = out + "<!-- soccer-ui-fixup -->"
+        return out
+    except Exception as _soccer_ui_e:
+        logger.exception("Soccer picks UI fixup failed: %s", _soccer_ui_e)
+        return html
+
+
 def _mlb_results_cards_html_for_chart():
     """Cards HTML used to build chart API/SSR payload (never view=chart)."""
     cache_key = 'MLB_daily_results_html_v3'
@@ -16876,6 +16905,8 @@ def sport_predictions(sport, filter_date=None):
             if _page_usable and _page_age is not None and _page_age < cache_ttl:
                 if sport == 'MLB':
                     return _apply_mlb_picks_html_fixups(cached_html)
+                if sport == 'SOCCER':
+                    return _apply_soccer_picks_html_fixups(cached_html)
                 return cached_html
             # Stale-while-revalidate: serve last good HTML while models refresh.
             _stale_max = _SPORT_PREDICTIONS_PAGE_STALE_MAX.get(sport, 900)
@@ -16884,6 +16915,8 @@ def sport_predictions(sport, filter_date=None):
                     _start_background_predictions_refresh(sport)
                 if sport == 'MLB':
                     return _apply_mlb_picks_html_fixups(cached_html)
+                if sport == 'SOCCER':
+                    return _apply_soccer_picks_html_fixups(cached_html)
                 return cached_html
     prediction_error = None
     try:
@@ -17238,6 +17271,8 @@ def sport_predictions(sport, filter_date=None):
         return _predictions_fallback_page(sport, filter_date=filter_date)
     if sport == 'MLB':
         rendered = _apply_mlb_picks_html_fixups(rendered)
+    elif sport == 'SOCCER':
+        rendered = _apply_soccer_picks_html_fixups(rendered)
     _default_games = grouped_predictions.get(default_pick_date, []) if grouped_predictions else []
     _default_with_books = sum(
         1 for g in _default_games

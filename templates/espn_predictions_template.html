@@ -725,8 +725,8 @@
         .picks-chart-table .best-model{background:rgba(0,192,118,0.16);border-radius:5px;padding:1px 6px;box-shadow:inset 0 0 0 1px rgba(0,192,118,0.35);}
         .picks-chart-table .pct-league-row td{background:#eef2f7 !important;color:#92400e;font-weight:800;font-size:0.74em;text-transform:uppercase;letter-spacing:0.3px;text-align:left;}
         .picks-chart-table .pct-pick{color:#00529B;font-weight:800;}
-        {% if sport == 'MLB' %}
-        /* Market tabs (MLB / WNBA Chart) */
+        {% if sport == 'MLB' or sport == 'SOCCER' %}
+        /* Market tabs (MLB Chart; soccer Moneyline | Spread | Totals) */
         .picks-market-tabs{display:none;gap:8px;flex-wrap:wrap;margin:0;width:100%;}
         .picks-view-controls.chart-active .picks-market-tabs{display:flex;}
         .picks-market-tabs .market-tab{border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:0.8rem;padding:7px 14px;border-radius:999px;cursor:pointer;}
@@ -756,7 +756,7 @@
             <button type="button" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
         </div>
         <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
-        {% if sport == 'MLB' %}
+        {% if sport == 'MLB' or sport == 'SOCCER' %}
         <nav class="picks-market-tabs" id="picksMarketTabs" aria-label="Pick market">
             <button type="button" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
             <button type="button" class="market-tab" data-market="spread" onclick="setPicksChartMarket('spread')">{% if sport == 'MLB' %}Spread / Run Line{% else %}Spread{% endif %}</button>
@@ -818,6 +818,7 @@
                 <div class="game-card-stack" data-pick-card
                     data-away="{{ team_short(pred.away_team_id) }}"
                     data-home="{{ team_short(pred.home_team_id) }}"
+                    {% if sport == 'SOCCER' %}data-away-full="{{ pred.away_team_id }}" data-home-full="{{ pred.home_team_id }}"{% endif %}
                     data-league="{{ pred.league if pred.league else '' }}"
                     data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time is not none %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
@@ -826,6 +827,11 @@
                     data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
                     data-books-spread="{% if pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-books-total="{% if pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
+                    {% if sport == 'SOCCER' %}
+                    data-pl-spread="{% if pred.disp_pl_spread is not none %}{{ fmt_spread_line(pred.disp_pl_spread, pred.home_team_id, pred.away_team_id, false) }}{% endif %}"
+                    data-xs-spread="{% if pred.disp_xs_spread is not none %}{{ fmt_spread_line(pred.disp_xs_spread, pred.home_team_id, pred.away_team_id, false) }}{% endif %}"
+                    {% endif %}
+                    data-total-ev="{% if sport != 'SOCCER' and pred.total_ev is defined and pred.total_ev is not none %}{{ '%.1f'|format(pred.total_ev) }}{% endif %}"
                     {% if is_premium|default(false) %}
                     data-m-grinder2="{% if pred.glicko2_prob is not none %}{{ pred.glicko2_prob }}{% endif %}"
                     data-m-takedown="{% if pred.trueskill_prob is not none %}{{ pred.trueskill_prob }}{% endif %}"
@@ -1210,13 +1216,14 @@
     function previousWeek(){if(currentWeekStart>0){currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderDateBubbles();}}
     function nextWeek(){if(currentWeekStart+datesPerWeek<allDates.length){currentWeekStart+=datesPerWeek;renderDateBubbles();}}
     // ===== SECTION: Chart View + Copy All (client logic) =====
-    // MLB / WNBA: market tabs (Moneyline | Spread | Totals). Other sports: dense table.
+    // MLB / soccer: market tabs (Moneyline | Spread | Totals). Other sports: dense table.
     // Moneyline + Spread chart tables are premium-gated (match live auth).
     function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
     function _visibleSection(){ return document.querySelector('.date-section.visible'); }
     let picksChartMarket = 'moneyline';
     const MLB_CHART = (sportName === 'MLB' || document.body.getAttribute('data-sport') === 'MLB' || {{ (sport == 'MLB')|tojson }});
-    const MARKET_CHART = MLB_CHART;
+    const SOCCER_CHART = (sportName === 'SOCCER' || document.body.getAttribute('data-sport') === 'SOCCER' || {{ (sport == 'SOCCER')|tojson }});
+    const MARKET_CHART = MLB_CHART || SOCCER_CHART;
     const IS_PREMIUM = {{ (is_premium|default(false))|tojson }};
     const SPREAD_LABEL = MLB_CHART ? 'Spread / run line' : 'Spread';
     const BOOKS_SPREAD_LABEL = MLB_CHART ? 'Books run line' : 'Books spread';
@@ -1483,6 +1490,7 @@
             if(any){ MODEL_ATTRS.push(a); MODEL_LABELS.push(ALL_MODEL_LABELS[i]); }
         });
         const showBooksML = _hasRealBooksML();
+        const showTotalEvCol = !SOCCER_CHART;
         let head = '', label = '', rows = '', lastLeague = '';
         if(MARKET_CHART && picksChartMarket === 'spread'){
             label = SPREAD_LABEL;
@@ -1492,7 +1500,7 @@
             const TOTAL_EV_TIP = MLB_CHART
                 ? 'Expected value on the totals market: how our projected run total compares to the books’ O/U line, shown as a percentage. Positive means the model sees value vs the market; negative means it doesn’t. Not moneyline Edge.'
                 : 'Expected value on the totals market: how our projected total compares to the books’ O/U line, shown as a percentage. Positive means the model sees value vs the market; negative means it doesn’t. Not moneyline Edge.';
-            head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="num">Books total</th><th class="ctr">H2H L10</th><th class="proj-col">Prediction Lab total</th><th class="proj-col">XSharp total</th>'+_infoTh('Total EV', TOTAL_EV_TIP);
+            head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="num">Books total</th><th class="ctr">H2H L10</th><th class="proj-col">Prediction Lab total</th><th class="proj-col">XSharp total</th>'+(showTotalEvCol ? _infoTh('Total EV', TOTAL_EV_TIP) : '');
         } else if(MARKET_CHART){
             label = 'Moneyline';
             head = '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="ctr">Pick</th>';
@@ -1526,7 +1534,7 @@
                 const plProj = IS_PREMIUM ? (_formatProjStackedHtml(_plProjDisplay(st)) || '—') : '🔒';
                 const xsProj = IS_PREMIUM ? (_formatProjStackedHtml(_xsProjDisplay(st)) || '—') : '🔒';
                 const tev = IS_PREMIUM ? _esc(_totalEvTxt(st)) : '🔒';
-                rows += '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="num">'+_esc(tot)+'</td><td class="ctr h2h-cell">'+textCell(st,'data-h2h')+'</td><td class="proj-col proj-cell">'+plProj+'</td><td class="proj-col proj-cell">'+xsProj+'</td><td class="num">'+tev+'</td></tr>';
+                rows += '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="num">'+_esc(tot)+'</td><td class="ctr h2h-cell">'+textCell(st,'data-h2h')+'</td><td class="proj-col proj-cell">'+plProj+'</td><td class="proj-col proj-cell">'+xsProj+'</td>'+(showTotalEvCol ? '<td class="num">'+tev+'</td>' : '')+'</tr>';
                 return;
             }
             const pickRaw = (st.getAttribute('data-pick') || '—').trim() || '—';
