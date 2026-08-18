@@ -10894,10 +10894,20 @@ _ML_PERF_MODEL_KEYS = (
 )
 
 
-def _best_ml_model_stats(overall_stats):
+def _best_ml_model_stats(overall_stats, sport=None):
     """Highest-accuracy moneyline model with at least one graded game."""
     best = None
-    for key, label in _ML_PERF_MODEL_KEYS:
+    keys = _ML_PERF_MODEL_KEYS
+    if (sport or '').upper() == 'WNBA':
+        # WNBA does not publish Grinder2 / Takedown. Include Efficiency
+        # so the season headline is the best published model, not Edge.
+        keys = (
+            ('elo', 'Edge'),
+            ('xgboost', 'XSharp'),
+            ('ensemble', 'Sharp Consensus'),
+            ('efficiency', 'Efficiency'),
+        )
+    for key, label in keys:
         m = (overall_stats or {}).get(key) or {}
         total = int(m.get('total') or 0)
         if total <= 0:
@@ -11031,7 +11041,7 @@ def _build_season_performance_summary(
             st, 'total', 'XSharp',
         )
     else:
-        best_ml = _best_ml_model_stats(overall_stats)
+        best_ml = _best_ml_model_stats(overall_stats, sport=sport)
         if best_ml:
             ml_total = best_ml['total']
             ml_correct = best_ml['correct']
@@ -17652,6 +17662,8 @@ def wnba_api_picks():
         if not cards or len(cards) < 500:
             return jsonify({'ok': False, 'error': 'WNBA results source unavailable'}), 503
         payload = markets_from_live_html(cards, 'wnba')
+        from wnba_ui_fixup import apply_wnba_best_ml_face
+        payload = apply_wnba_best_ml_face(payload)
         return jsonify(payload)
     except Exception as e:
         logger.exception('wnba_api_picks failed: %s', e)
@@ -18018,12 +18030,35 @@ def _apply_soccer_results_html_fixups(html):
         return html
 
 
+def _inject_wnba_blog_hub(html):
+    """Crawlable WNBA preview links below the picks slate. No model changes."""
+    if not html or not isinstance(html, str):
+        return html
+    try:
+        from sport_blog_previews import hub_bundle_from_posts, inject_sport_preview_hub
+        today_dt = _blog_today_et()
+        today = today_dt.strftime('%Y-%m-%d')
+        tomorrow = (today_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+        posts = _load_blog_posts_from_json()
+        bundle = hub_bundle_from_posts(
+            posts,
+            'WNBA',
+            today=today,
+            tomorrow=tomorrow,
+            next_date='',
+        )
+        return inject_sport_preview_hub(html, bundle, sport='WNBA')
+    except Exception as exc:
+        logger.debug('WNBA preview hub inject skipped: %s', exc)
+        return html
+
+
 def _apply_wnba_picks_html_fixups(html):
     """Publish-layer WNBA picks chart attrs (MLB template). Keeps live chrome."""
     if not html or not isinstance(html, str):
         return html
     if 'data-wnba-ui-fixup="1"' in html or "<!-- wnba-ui-fixup -->" in html:
-        return html
+        return _inject_wnba_blog_hub(html)
     try:
         from wnba_ui_fixup import apply_wnba_picks_fixups
         out = apply_wnba_picks_fixups(html)
@@ -18032,10 +18067,10 @@ def _apply_wnba_picks_html_fixups(html):
                 out = re.sub(r"</body\s*>", "<!-- wnba-ui-fixup -->\n</body>", out, count=1, flags=re.I)
             else:
                 out = out + "<!-- wnba-ui-fixup -->"
-        return out
+        return _inject_wnba_blog_hub(out)
     except Exception as _wnba_ui_e:
         logger.exception("WNBA picks UI fixup failed: %s", _wnba_ui_e)
-        return html
+        return _inject_wnba_blog_hub(html)
 
 
 def _wnba_results_cards_html_for_chart():
@@ -18064,6 +18099,8 @@ def _render_wnba_results_chart_page():
     if cards and len(cards) > 500:
         try:
             payload = markets_from_live_html(cards, 'wnba')
+            from wnba_ui_fixup import apply_wnba_best_ml_face
+            payload = apply_wnba_best_ml_face(payload)
         except Exception as e:
             logger.exception('WNBA chart payload failed: %s', e)
     return render_wnba_results_chart_page(payload=payload)

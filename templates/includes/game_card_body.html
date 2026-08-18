@@ -324,10 +324,10 @@
     </div>
 
     <div class="odds-extras-footer">
-        {% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}
+        {% if sport == 'WNBA' or (card.h2h_last10_total is defined and card.h2h_last10_total is not none) %}
         <div class="sf-item">
             <span class="sf-label">H2H Last 10</span>
-            <span class="sf-val">{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}</span>
+            <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% else %}—{% endif %}</span>
         </div>
         {% endif %}
         {% if card.ml_ev is defined and card.ml_ev is not none %}

@@ -616,6 +616,9 @@
     {% if sport == 'MLB' %}
     <link rel="stylesheet" href="/static/css/mlb-pick-cards.css?v=mlb9">
     <link rel="stylesheet" href="/static/css/mlb-picks-chart.css?v=mlb9">
+    {% elif sport == 'WNBA' %}
+    <link rel="stylesheet" href="/static/css/picks-chart.css?v=pc18">
+    <link rel="stylesheet" href="/static/css/mlb-picks-chart.css?v=mlb9">
     {% endif %}
 </head>
 <body class="sport-{{ sport|lower }}" data-sport="{{ sport }}">
@@ -725,8 +728,8 @@
         .picks-chart-table .best-model{background:rgba(0,192,118,0.16);border-radius:5px;padding:1px 6px;box-shadow:inset 0 0 0 1px rgba(0,192,118,0.35);}
         .picks-chart-table .pct-league-row td{background:#eef2f7 !important;color:#92400e;font-weight:800;font-size:0.74em;text-transform:uppercase;letter-spacing:0.3px;text-align:left;}
         .picks-chart-table .pct-pick{color:#00529B;font-weight:800;}
-        {% if sport == 'MLB' or sport == 'SOCCER' %}
-        /* Market tabs (MLB Chart; soccer Moneyline | Spread | Totals) */
+        {% if sport == 'MLB' or sport == 'SOCCER' or sport == 'WNBA' %}
+        /* Market tabs (MLB / soccer / WNBA Moneyline | Spread | Totals) */
         .picks-market-tabs{display:none;gap:8px;flex-wrap:wrap;margin:0;width:100%;}
         .picks-view-controls.chart-active .picks-market-tabs{display:flex;}
         .picks-market-tabs .market-tab{border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:0.8rem;padding:7px 14px;border-radius:999px;cursor:pointer;}
@@ -756,7 +759,7 @@
             <button type="button" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
         </div>
         <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
-        {% if sport == 'MLB' or sport == 'SOCCER' %}
+        {% if sport == 'MLB' or sport == 'SOCCER' or sport == 'WNBA' %}
         <nav class="picks-market-tabs" id="picksMarketTabs" aria-label="Pick market">
             <button type="button" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
             <button type="button" class="market-tab" data-market="spread" onclick="setPicksChartMarket('spread')">{% if sport == 'MLB' %}Spread / Run Line{% else %}Spread{% endif %}</button>
@@ -818,7 +821,7 @@
                 <div class="game-card-stack" data-pick-card
                     data-away="{{ team_short(pred.away_team_id) }}"
                     data-home="{{ team_short(pred.home_team_id) }}"
-                    {% if sport == 'SOCCER' %}data-away-full="{{ pred.away_team_id }}" data-home-full="{{ pred.home_team_id }}"{% endif %}
+                    {% if sport in ('SOCCER', 'WNBA') %}data-away-full="{{ pred.away_team_id }}" data-home-full="{{ pred.home_team_id }}"{% endif %}
                     data-league="{{ pred.league if pred.league else '' }}"
                     data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time is not none %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
@@ -947,6 +950,10 @@
     {% else %}
     <div class="no-data">No predictions available for {{ sport_info.name }}</div>
     {% endif %}
+    {% endif %}
+
+    {% if sport in ('MLB', 'WNBA', 'SOCCER') %}
+    <!-- mlb-preview-hub-slot -->
     {% endif %}
 
     <!-- Internal links to recent dated pages (past dates only) -->
@@ -1216,14 +1223,15 @@
     function previousWeek(){if(currentWeekStart>0){currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderDateBubbles();}}
     function nextWeek(){if(currentWeekStart+datesPerWeek<allDates.length){currentWeekStart+=datesPerWeek;renderDateBubbles();}}
     // ===== SECTION: Chart View + Copy All (client logic) =====
-    // MLB / soccer: market tabs (Moneyline | Spread | Totals). Other sports: dense table.
+    // MLB / soccer / WNBA: market tabs (Moneyline | Spread | Totals). Other sports: dense table.
     // Moneyline + Spread chart tables are premium-gated (match live auth).
     function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
     function _visibleSection(){ return document.querySelector('.date-section.visible'); }
     let picksChartMarket = 'moneyline';
     const MLB_CHART = (sportName === 'MLB' || document.body.getAttribute('data-sport') === 'MLB' || {{ (sport == 'MLB')|tojson }});
     const SOCCER_CHART = (sportName === 'SOCCER' || document.body.getAttribute('data-sport') === 'SOCCER' || {{ (sport == 'SOCCER')|tojson }});
-    const MARKET_CHART = MLB_CHART || SOCCER_CHART;
+    const WNBA_CHART = (sportName === 'WNBA' || document.body.getAttribute('data-sport') === 'WNBA' || {{ (sport == 'WNBA')|tojson }});
+    const MARKET_CHART = MLB_CHART || SOCCER_CHART || WNBA_CHART;
     const IS_PREMIUM = {{ (is_premium|default(false))|tojson }};
     const SPREAD_LABEL = MLB_CHART ? 'Spread / run line' : 'Spread';
     const BOOKS_SPREAD_LABEL = MLB_CHART ? 'Books run line' : 'Books spread';
@@ -1477,8 +1485,12 @@
             });
             return found;
         }
-        const ALL_MODEL_ATTRS = ['data-m-grinder2','data-m-takedown','data-m-edge','data-m-xsharp','data-m-efficiency','data-m-consensus'];
-        const ALL_MODEL_LABELS = ['Grinder2','Takedown','Edge','XSharp','Efficiency','Sharp Cons.'];
+        let ALL_MODEL_ATTRS = ['data-m-grinder2','data-m-takedown','data-m-edge','data-m-xsharp','data-m-efficiency','data-m-consensus'];
+        let ALL_MODEL_LABELS = ['Grinder2','Takedown','Edge','XSharp','Efficiency','Sharp Cons.'];
+        if (WNBA_CHART) {
+            ALL_MODEL_ATTRS = ALL_MODEL_ATTRS.filter(function(a){ return a !== 'data-m-grinder2' && a !== 'data-m-takedown'; });
+            ALL_MODEL_LABELS = ALL_MODEL_LABELS.filter(function(l){ return l !== 'Grinder2' && l !== 'Takedown'; });
+        }
         const MODEL_ATTRS = [];
         const MODEL_LABELS = [];
         ALL_MODEL_ATTRS.forEach(function(a, i){
