@@ -142,6 +142,7 @@ def h2h_projection(
     away_team: str,
     n: int = 10,
     min_games: int = 1,
+    before_date: str | None = None,
 ) -> dict[str, Any] | None:
     """Last-N scored H2H across every league in ``games``. Alias-aware."""
     if not home_team or not away_team:
@@ -153,11 +154,14 @@ def h2h_projection(
         return None
     placeholders_h = ",".join("?" * len(homes))
     placeholders_a = ",".join("?" * len(aways))
+    before = (str(before_date)[:10] if before_date else None)
+    as_of = "AND date(game_date) < date(?)" if before else ""
     sql = f"""
         SELECT home_team_id, away_team_id, home_score, away_score, game_date
         FROM games
         WHERE sport = 'SOCCER'
           AND home_score IS NOT NULL AND away_score IS NOT NULL
+          {as_of}
           AND (
                 (home_team_id IN ({placeholders_h}) AND away_team_id IN ({placeholders_a}))
              OR (home_team_id IN ({placeholders_a}) AND away_team_id IN ({placeholders_h}))
@@ -165,7 +169,7 @@ def h2h_projection(
         ORDER BY date(game_date) DESC
         LIMIT ?
     """
-    params = [*homes, *aways, *aways, *homes, int(n)]
+    params = ([before] if before else []) + [*homes, *aways, *aways, *homes, int(n)]
     try:
         rows = conn.execute(sql, params).fetchall()
     except Exception:
@@ -265,13 +269,28 @@ def _open_h2h_conns() -> list[sqlite3.Connection]:
     return out
 
 
-def _best_h2h_proj(home: str, away: str, conns: list[sqlite3.Connection]) -> dict[str, Any] | None:
+def _best_h2h_proj(
+    home: str,
+    away: str,
+    conns: list[sqlite3.Connection],
+    before_date: str | None = None,
+) -> dict[str, Any] | None:
     _, proj_fn = _iso_h2h_fns()
     best: dict[str, Any] | None = None
     best_n = -1
     for conn in conns:
         try:
-            proj = proj_fn(conn, home, away, n=10, min_games=1)
+            if before_date:
+                try:
+                    proj = proj_fn(
+                        conn, home, away, n=10, min_games=1, before_date=before_date,
+                    )
+                except TypeError:
+                    proj = h2h_projection(
+                        conn, home, away, n=10, min_games=1, before_date=before_date,
+                    )
+            else:
+                proj = proj_fn(conn, home, away, n=10, min_games=1)
         except Exception:
             proj = None
         if not proj:
@@ -303,11 +322,14 @@ def fill_soccer_h2h_display_fields(predictions: list | None) -> None:
         for pred in predictions:
             if not isinstance(pred, dict):
                 continue
-            ht = pred.get("home_team_id")
-            at = pred.get("away_team_id")
+            ht = pred.get("home_team_id") or pred.get("home")
+            at = pred.get("away_team_id") or pred.get("away")
             if not ht or not at:
                 continue
-            proj = _best_h2h_proj(str(ht), str(at), conns)
+            before = None
+            if pred.get("home_score") is not None:
+                before = (pred.get("date") or pred.get("game_date") or "")[:10] or None
+            proj = _best_h2h_proj(str(ht), str(at), conns, before_date=before)
             if not proj:
                 continue
             # Improve display when isolation finds more meetings; never touch our_*.
@@ -503,10 +525,816 @@ def enrich_soccer_h2h_from_db(html: str) -> str:
     return out
 
 
-def apply_soccer_picks_fixups(html: str) -> str:
-    """Publish-layer soccer picks: H2H L10 display + hide empty Total EV."""
-    if not html or "data-pick-card" not in html:
+def _replace_balanced_div(html: str, open_re: str, replacement: str) -> tuple[str, bool]:
+    m = re.search(open_re, html, flags=re.I)
+    if not m:
+        return html, False
+    start = m.start()
+    tag_end = html.find(">", start) + 1
+    depth = 1
+    j = tag_end
+    end = -1
+    while j < len(html) and depth > 0:
+        next_open = html.find("<div", j)
+        next_close = html.find("</div>", j)
+        if next_close < 0:
+            break
+        if next_open >= 0 and next_open < next_close:
+            depth += 1
+            j = next_open + 4
+        else:
+            depth -= 1
+            if depth == 0:
+                end = next_close + 6
+                break
+            j = next_close + 6
+    if end < 0:
+        return html, False
+    return html[:start] + replacement + html[end:], True
+
+
+def _html_attr(s: str) -> str:
+    return (
+        str(s or "")
+        .replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _html_text(s: str) -> str:
+    return (
+        str(s or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _soccer_league_pill_label(inner: str, *, is_live: bool) -> tuple[str, str]:
+    raw = inner or ""
+    count_m = re.search(
+        r'<span[^>]*\bleague-pill-count\b[^>]*>(.*?)</span>',
+        raw,
+        flags=re.I | re.S,
+    )
+    count_txt = ""
+    if count_m:
+        count_txt = re.sub(r"<[^>]+>", "", count_m.group(1) or "")
+        count_txt = re.sub(r"\s+", " ", count_txt).strip()
+    wo_count = re.sub(
+        r'<span[^>]*\bleague-pill-count\b[^>]*>.*?</span>',
+        " ",
+        raw,
+        flags=re.I | re.S,
+    )
+    wo_count = re.sub(
+        r'<span[^>]*\blive-dot\b[^>]*>.*?</span>',
+        " ",
+        wo_count,
+        flags=re.I | re.S,
+    )
+    name = re.sub(r"<[^>]+>", " ", wo_count)
+    name = re.sub(r"\s+", " ", name).strip()
+    if not name:
+        return "", ""
+    if not count_txt:
+        glued = re.match(r"^(.*?)(\d{1,4})$", name)
+        if glued and glued.group(1).strip() and not glued.group(1).strip()[-1:].isdigit():
+            name = glued.group(1).strip()
+            count_txt = glued.group(2)
+    label = f"{name} ({count_txt})" if count_txt else name
+    if is_live and name.lower() not in ("all leagues", "all"):
+        label = f"{label} · Live"
+    return name, label
+
+
+def _soccer_href_for_kind(href: str, kind: str) -> str:
+    href = href or ""
+    if kind == "picks":
+        href = re.sub(r"/soccer-results\b", "/soccer-picks", href)
+        href = re.sub(r"[?&]view=chart\b", "", href)
+        href = href.replace("?&", "?").rstrip("?&")
+        return href or "/soccer-picks"
+    href = re.sub(r"/soccer-picks\b", "/soccer-results", href)
+    if kind == "chart":
+        if "view=chart" not in href:
+            href = href + ("&" if "?" in href else "?") + "view=chart"
+        return href
+    href = re.sub(r"[?&]view=chart\b", "", href)
+    href = href.replace("?&", "?").rstrip("?&")
+    return href or "/soccer-results"
+
+
+def _options_from_soccer_select(html: str, *, kind: str) -> list[dict[str, str]]:
+    if not html or 'id="league"' not in html:
+        return []
+    m = re.search(r'<select[^>]*\bid="league"[^>]*>([\s\S]*?)</select>', html, flags=re.I)
+    if not m:
+        return []
+    options: list[dict[str, str]] = []
+    for om in re.finditer(r"<option\b([^>]*)>([\s\S]*?)</option>", m.group(1), flags=re.I):
+        attrs, inner = om.group(1), om.group(2)
+        label = re.sub(r"<[^>]+>", "", inner or "")
+        label = re.sub(r"\s+", " ", label).strip()
+        if not label:
+            continue
+        href_m = re.search(r'data-href="([^"]*)"', attrs, flags=re.I)
+        href = href_m.group(1) if href_m else ""
+        val_m = re.search(r'value="([^"]*)"', attrs, flags=re.I)
+        slug = val_m.group(1) if val_m else ""
+        if label.lower() in ("all leagues", "all"):
+            slug = ""
+            label = "All"
+        href = _soccer_href_for_kind(href, kind) if href else ""
+        if not href:
+            if kind == "picks":
+                href = f"/soccer-picks?league={slug}" if slug else "/soccer-picks"
+            elif kind == "chart":
+                href = f"/soccer-results?league={slug}&view=chart" if slug else "/soccer-results?view=chart"
+            else:
+                href = f"/soccer-results?league={slug}" if slug else "/soccer-results"
+        options.append(
+            {
+                "slug": slug,
+                "href": href,
+                "label": label,
+                "selected": "1" if re.search(r"\bselected\b", attrs, flags=re.I) else "",
+            }
+        )
+    return options
+
+
+def _options_from_soccer_pills(html: str, *, kind: str) -> list[dict[str, str]]:
+    if not html or ("league-slider" not in html and "league-pill" not in html):
+        return []
+    pills = list(
+        re.finditer(
+            r'<a\b([^>]*\bclass="[^"]*\bleague-pill\b[^"]*"[^>]*)>(.*?)</a>',
+            html,
+            flags=re.I | re.S,
+        )
+    )
+    options: list[dict[str, str]] = []
+    for m in pills:
+        attrs, inner = m.group(1), m.group(2)
+        href_m = re.search(r'href="([^"]*)"', attrs, flags=re.I)
+        href = href_m.group(1) if href_m else ""
+        is_live = bool(
+            re.search(r"\blive-league\b", attrs, flags=re.I)
+            or "live-dot" in (inner or "")
+        )
+        name, label = _soccer_league_pill_label(inner, is_live=is_live)
+        if not name:
+            continue
+        slug_m = re.search(r"[?&]league=([^&\"'#]+)", href)
+        slug = slug_m.group(1) if slug_m else ""
+        if name.lower() in ("all leagues", "all"):
+            slug = ""
+            label = "All"
+            if kind == "picks":
+                href = "/soccer-picks"
+            elif kind == "chart":
+                href = "/soccer-results?view=chart"
+            else:
+                href = "/soccer-results"
+        href = _soccer_href_for_kind(href, kind)
+        options.append(
+            {
+                "slug": slug,
+                "href": href,
+                "label": label,
+                "selected": "1" if re.search(r"\bactive\b", attrs, flags=re.I) else "",
+            }
+        )
+    return options
+
+
+def _soccer_filter_href(*, kind: str, league: str = "", region: str = "") -> str:
+    parts = []
+    if region:
+        parts.append(f"region={region}")
+    if league:
+        parts.append(f"league={league}")
+    if kind == "picks":
+        base = "/soccer-picks"
+        qs = "&".join(parts)
+        return f"{base}?{qs}" if qs else base
+    base = "/soccer-results"
+    if kind == "chart":
+        parts.append("view=chart")
+    qs = "&".join(parts)
+    return f"{base}?{qs}" if qs else base
+
+
+def _curated_soccer_league_options(
+    *,
+    kind: str,
+    selected_slug: str = "",
+    selected_region: str = "",
+) -> list[dict[str, str]]:
+    """Catalog leagues, optionally narrowed to one continent/region."""
+    selected = (selected_slug or "").strip()
+    region = (selected_region or "").strip().lower()
+    try:
+        from soccer_league_catalog import (
+            SOCCER_LEAGUE_ORDER,
+            SOCCER_REGION_DEFS,
+            soccer_leagues_for_region,
+            soccer_primary_region,
+            soccer_region_from_slug,
+        )
+        import NHL77FINAL as nhl
+
+        slug_fn = nhl._soccer_league_slug
+        region_key = soccer_region_from_slug(region)
+        live_names = None
+        if region_key == "live":
+            try:
+                live_names = nhl._soccer_live_competition_names(kind=kind)
+            except Exception:
+                live_names = []
+        names = (
+            soccer_leagues_for_region(region_key, live_names=live_names)
+            if region_key
+            else list(SOCCER_LEAGUE_ORDER)
+        )
+        region_labels = {key: label for key, label in SOCCER_REGION_DEFS}
+    except Exception:
+        return []
+    options = [
+        {
+            "slug": "",
+            "href": _soccer_filter_href(kind=kind, region=region_key or ""),
+            "label": "All",
+            "group": "",
+            "selected": "1" if not selected else "",
+        }
+    ]
+    for name in names:
+        slug = slug_fn(name)
+        primary = soccer_primary_region(name) or ""
+        options.append(
+            {
+                "slug": slug,
+                "href": _soccer_filter_href(kind=kind, league=slug, region=region_key or ""),
+                "label": name,
+                "group": region_labels.get(primary, ""),
+                "selected": "1" if selected and selected.lower() == slug.lower() else "",
+            }
+        )
+    return options
+
+
+def soccer_league_dropdown_html(
+    options: list[dict[str, str]],
+    *,
+    kind: str = "results",
+    selected_region: str = "",
+) -> str:
+    if not options:
+        return ""
+    region = (selected_region or "").strip().lower()
+    try:
+        from soccer_league_catalog import SOCCER_REGION_DEFS
+        region_defs = list(SOCCER_REGION_DEFS)
+    except Exception:
+        region_defs = []
+    region_tags = [
+        f'<option value="" data-href="{_html_attr(_soccer_filter_href(kind=kind))}"'
+        f'{" selected" if not region else ""}>All</option>'
+    ]
+    for key, label in region_defs:
+        sel = " selected" if region == key else ""
+        href = _soccer_filter_href(kind=kind, region=key)
+        region_tags.append(
+            f'<option value="{_html_attr(key)}" data-href="{_html_attr(href)}"{sel}>'
+            f'{_html_text(label)}</option>'
+        )
+    grouped: dict[str, list[dict[str, str]]] = {}
+    ungrouped: list[dict[str, str]] = []
+    for opt in options:
+        group = (opt.get("group") or "").strip()
+        if not opt.get("slug"):
+            ungrouped.append(opt)
+            continue
+        if group and not region:
+            grouped.setdefault(group, []).append(opt)
+        else:
+            ungrouped.append(opt)
+    option_tags = []
+    for opt in ungrouped:
+        sel = " selected" if opt.get("selected") else ""
+        option_tags.append(
+            f'<option value="{_html_attr(opt.get("slug", ""))}" '
+            f'data-href="{_html_attr(opt.get("href", ""))}"{sel}>'
+            f'{_html_text(opt.get("label", ""))}</option>'
+        )
+    if grouped:
+        try:
+            from soccer_league_catalog import SOCCER_REGION_DEFS
+            group_order = [label for _key, label in SOCCER_REGION_DEFS]
+        except Exception:
+            group_order = list(grouped)
+        for gname in group_order:
+            rows = grouped.get(gname) or []
+            if not rows:
+                continue
+            option_tags.append(f'<optgroup label="{_html_attr(gname)}">')
+            for opt in rows:
+                sel = " selected" if opt.get("selected") else ""
+                option_tags.append(
+                    f'<option value="{_html_attr(opt.get("slug", ""))}" '
+                    f'data-href="{_html_attr(opt.get("href", ""))}"{sel}>'
+                    f'{_html_text(opt.get("label", ""))}</option>'
+                )
+            option_tags.append("</optgroup>")
+    fallback = _soccer_filter_href(kind=kind, region=region)
+    return f"""
+<section class="controls soccer-league-controls" id="league-controls" aria-label="League filter">
+  <label>
+    Continent
+    <select id="soccer-region" name="region" aria-label="Select continent">
+      {"".join(region_tags)}
+    </select>
+  </label>
+  <label>
+    League
+    <select id="league" name="league" aria-label="Select league">
+      {"".join(option_tags)}
+    </select>
+  </label>
+</section>
+<style id="soccer-league-dropdown-css">
+.soccer-league-controls{{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 18px;
+  max-width:1100px;margin:8px auto 14px;padding:0 16px;}}
+.soccer-league-controls label{{display:flex;flex-direction:column;gap:6px;
+  font-size:0.78rem;font-weight:700;color:#475569;letter-spacing:0.02em;}}
+.soccer-league-controls select{{min-width:min(100%,280px);max-width:420px;padding:8px 12px;
+  border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;
+  font-size:0.95rem;font-weight:600;}}
+.league-slider{{display:none!important;}}
+</style>
+<script id="soccer-league-dropdown-js">
+(function(){{
+  function bind(id){{
+    var sel=document.getElementById(id);
+    if(!sel||sel.dataset.soccerDropdownBound==='1') return;
+    sel.dataset.soccerDropdownBound='1';
+    sel.addEventListener('change', function(){{
+      var opt=sel.options[sel.selectedIndex];
+      var href=(opt && opt.getAttribute('data-href')) || '{fallback}';
+      if(href) window.location.href=href;
+    }});
+  }}
+  bind('league');
+  bind('soccer-region');
+}})();
+</script>
+<script id="soccer-region-dropdown-js"></script>
+"""
+
+
+def _inject_soccer_league_dropdown_block(html: str, block: str) -> str:
+    if not html or not block:
         return html
-    html = enrich_soccer_h2h_from_db(html)
-    html = strip_soccer_empty_total_ev(html)
+    if 'id="soccer-region-dropdown-js"' in html and 'id="soccer-league-dropdown-js"' in html:
+        return html
+    if re.search(r'<section[^>]*\bid="league-controls"', html, flags=re.I):
+        html2, n = re.subn(
+            r'<section\b[^>]*\bid="league-controls"[^>]*>[\s\S]*?</section>',
+            block,
+            html,
+            count=1,
+            flags=re.I,
+        )
+        if n:
+            return html2
+    if "league-slider" in html:
+        html2, replaced = _replace_balanced_div(
+            html,
+            r'<div class="league-slider\b[^"]*"[^>]*>',
+            block,
+        )
+        if replaced:
+            return html2
+    for pat in (
+        r'(<div class="pl-view-toggle"[\s\S]*?</div>\s*(?:<style>[\s\S]*?</style>)?)',
+        r'(<div class="section-tabs"[\s\S]*?</div>)',
+        r'(<h1 class="page-title"[^>]*>[\s\S]*?</h1>)',
+        r'(<header class="top"[^>]*>[\s\S]*?</header>)',
+        r'(<main\b[^>]*>)',
+    ):
+        html2, n = re.subn(pat, r"\1" + block, html, count=1, flags=re.I)
+        if n:
+            return html2
+    return block + html
+
+
+def ensure_soccer_league_dropdown(
+    html: str,
+    *,
+    kind: str = "results",
+    league: str = "",
+    region: str = "",
+    source_html: str | None = None,
+) -> str:
+    """League + continent filters. All first; catalog leagues only."""
+    if not html:
+        return html
+    look = html.lower()
+    if not any(tok in look for tok in ('<html', '<main', '<body', 'game-card', 'league-slider', 'league-controls')):
+        return html
+    if (
+        'id="soccer-region-dropdown-js"' in html
+        and 'id="soccer-league-dropdown-js"' in html
+        and 'soccer-league-controls' in html
+    ):
+        return html
+    options = _curated_soccer_league_options(
+        kind=kind,
+        selected_slug=league,
+        selected_region=region,
+    )
+    if not options:
+        src = source_html or html
+        options = _options_from_soccer_pills(src, kind=kind)
+        if not options:
+            options = _options_from_soccer_select(src, kind=kind)
+    if not options:
+        return html
+    if league:
+        hit = False
+        for opt in options:
+            if (opt.get("slug") or "").lower() == league.strip().lower():
+                opt["selected"] = "1"
+                hit = True
+            elif opt.get("slug"):
+                opt["selected"] = ""
+        if hit:
+            for opt in options:
+                if not opt.get("slug"):
+                    opt["selected"] = ""
+    elif not any(opt.get("selected") for opt in options):
+        options[0]["selected"] = "1"
+    block = soccer_league_dropdown_html(
+        options, kind=kind, selected_region=region,
+    )
+    html = _inject_soccer_league_dropdown_block(html, block)
+    if 'id="soccer-league-dropdown-js"' in html and "league-slider" in html:
+        html, _ = _replace_balanced_div(
+            html,
+            r'<div class="league-slider\b[^"]*"[^>]*>',
+            "",
+        )
     return html
+
+
+_INFO_ASSET_MARK = 'id="pl-info-tips-css"'
+_INFO_JS_MARK = "pl-info-tips.js"
+
+# User-facing copy only — no vendor / blend / training-pipeline wording.
+_TIP_ML = (
+    "Win-loss record for {model} moneyline picks in this results view. "
+    "The percentage is how often the pick was correct (wins ÷ graded games). "
+    "It is a hit rate, not units won."
+)
+_TIP_SPREAD = (
+    "Win-loss record for {model} spread picks in this results view. "
+    "The percentage is cover rate (covers ÷ graded games). "
+    "It is a hit rate, not units won."
+)
+_TIP_OU = (
+    "Win-loss record for {model} over/under picks in this results view. "
+    "The percentage is how often the total pick was correct (wins ÷ graded games). "
+    "It is a hit rate, not units won."
+)
+_TIP_PICK_CONF = (
+    "Each box is that model's estimated chance its side wins. "
+    "The number is moneyline confidence — not a spread or totals pick."
+)
+_TIP_EFFICIENCY = (
+    "Efficiency is our recent-form model. The percentage is how strongly it "
+    "favors its moneyline side."
+)
+_TIP_EDGE = (
+    "Difference between our win probability and the sportsbook implied "
+    "probability. Positive means our model sees more value than the posted price."
+)
+_TIP_WIN_PCT = (
+    "This is the model's estimated chance that team wins the match. "
+    "A draw chance is shown separately when listed."
+)
+_TIP_H2H = (
+    "Average combined goals from recent meetings between these two clubs. "
+    "Empty when they have not played each other yet."
+)
+_TIP_SPREAD_LINE = (
+    "The posted handicap for this match. Our spread pick is the side we "
+    "expect to cover that line."
+)
+_TIP_ASR = (
+    "Wins-losses for this model in the current season sample. "
+    "The percentage above is hit rate (wins ÷ graded games), not units won."
+)
+
+
+def _info_btn(tip: str, extra_class: str = "") -> str:
+    text = " ".join((tip or "").split())
+    esc = html_lib.escape(text, quote=True)
+    cls = "pl-info-btn" + ((" " + extra_class) if extra_class else "")
+    return (
+        f'<button type="button" class="{cls}" data-tip="{esc}" '
+        f'data-pl-info-tip="{esc}" title="{esc}" aria-label="{esc}" '
+        f'aria-expanded="false" aria-haspopup="true">ⓘ</button>'
+    )
+
+
+def _model_from_heading(heading: str) -> str:
+    raw = re.sub(r"<[^>]+>", "", heading or "")
+    raw = re.sub(r"[🎯📈🎲🏆]", "", raw).strip()
+    m = re.search(r"\(([^)]+)\)", raw)
+    if m:
+        return m.group(1).strip() or "this model"
+    return "this model"
+
+
+def _season_tip_for_heading(heading: str) -> str:
+    low = heading.lower()
+    model = _model_from_heading(heading)
+    if "moneyline" in low or "ml " in low or low.startswith("ml"):
+        return _TIP_ML.format(model=model)
+    if "spread" in low or "puck" in low or "run line" in low:
+        return _TIP_SPREAD.format(model=model)
+    if "o/u" in low or "over" in low or "total" in low:
+        return _TIP_OU.format(model=model)
+    return _TIP_ASR
+
+
+_SEASON_INFO_SPAN = re.compile(
+    r'(<div style="font-size:0\.8em;[^"]*"[^>]*>)([^<]+)(</div>[\s\S]{0,500}?)'
+    r'(<span(?=[^>]*\btitle="Number of Games")[^>]*>\s*ⓘ\s*</span>)',
+    flags=re.I,
+)
+_BARE_NUMBER_OF_GAMES = re.compile(
+    r'<span(?=[^>]*\btitle="Number of Games")[^>]*>\s*ⓘ\s*</span>',
+    flags=re.I,
+)
+_ASR_INFO_SPAN = re.compile(
+    r'<span class="asr-info"[^>]*>\s*ⓘ\s*</span>',
+    flags=re.I,
+)
+
+
+def upgrade_soccer_season_info_icons(html: str) -> str:
+    """Turn decorative Season Performance ⓘ spans into real tooltip buttons."""
+    if not html or "ⓘ" not in html:
+        return html
+
+    def _season_box(m: re.Match[str]) -> str:
+        heading = m.group(2)
+        tip = _season_tip_for_heading(heading)
+        return m.group(1) + heading + m.group(3) + _info_btn(tip, "asr-info")
+
+    html = _SEASON_INFO_SPAN.sub(_season_box, html)
+    html = _ASR_INFO_SPAN.sub(_info_btn(_TIP_ASR, "asr-info"), html)
+    html = _BARE_NUMBER_OF_GAMES.sub(_info_btn(_TIP_ASR, "asr-info"), html)
+    return html
+
+
+def _insert_info_after_label(html: str, label_html: str, tip: str) -> str:
+    if not html or not label_html or label_html not in html:
+        return html
+    marker = label_html
+    # Already upgraded next to this label.
+    probe = html.split(marker, 1)
+    if len(probe) < 2:
+        return html
+    if 'class="pl-info-btn"' in probe[1][:80] or "pl-info-btn" in probe[1][:120]:
+        return html
+    btn = " " + _info_btn(tip)
+    return html.replace(marker, marker + btn)
+
+
+def upgrade_soccer_picks_info_icons(html: str) -> str:
+    """Add ⓘ explanations on soccer pick-card labels that had none."""
+    if not html:
+        return html
+    html = _insert_info_after_label(
+        html, '<div class="pick-conf-title">Pick Confidence</div>', _TIP_PICK_CONF
+    )
+    html = _insert_info_after_label(
+        html, '<div class="line-chip-label">Edge</div>', _TIP_EDGE
+    )
+    html = _insert_info_after_label(
+        html, '<div class="pc-name">Efficiency</div>', _TIP_EFFICIENCY
+    )
+    html = _insert_info_after_label(
+        html, '<span class="sf-label">H2H Last 10</span>', _TIP_H2H
+    )
+    html = _insert_info_after_label(
+        html, '<div class="line-chip-label">Books spread</div>', _TIP_SPREAD_LINE
+    )
+    # Face win % — ⓘ next to each team win % (not the draw row).
+    if 'class="win-pct"' in html and "data-winpct-info" not in html:
+        html = re.sub(
+            r'(<div class="win-pct">[\s\S]*?</div>)',
+            r'\1 <span data-winpct-info="1">' + _info_btn(_TIP_WIN_PCT) + "</span>",
+            html,
+        )
+    return html
+
+
+def inject_pl_info_tips_assets(html: str) -> str:
+    """Load shared tooltip CSS/JS on soccer picks + results."""
+    if not html:
+        return html
+    if _INFO_ASSET_MARK not in html:
+        link = (
+            '<link rel="stylesheet" href="/static/css/pl-info-tips.css" '
+            f'id="pl-info-tips-css">'
+        )
+        if re.search(r"</head\s*>", html, flags=re.I):
+            html = re.sub(r"</head\s*>", link + "\n</head>", html, count=1, flags=re.I)
+        else:
+            html = link + html
+    if _INFO_JS_MARK not in html:
+        script = '<script src="/static/js/pl-info-tips.js" defer></script>'
+        if re.search(r"</body\s*>", html, flags=re.I):
+            html = re.sub(r"</body\s*>", script + "\n</body>", html, count=1, flags=re.I)
+        else:
+            html = html + script
+    return html
+
+
+def apply_soccer_info_tooltips(html: str, *, kind: str = "results") -> str:
+    """Upgrade ⓘ markup and bind the shared tooltip script."""
+    if not html:
+        return html
+    html = upgrade_soccer_season_info_icons(html)
+    html = upgrade_soccer_picks_info_icons(html)
+    return inject_pl_info_tips_assets(html)
+
+
+def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") -> str:
+    """Publish-layer soccer picks: chart attrs, H2H L10, hide empty Total EV."""
+    if not html:
+        return html
+    if "data-pick-card" in html:
+        try:
+            from mlb_ui_fixup import enrich_mlb_chart_data_attrs
+
+            html = enrich_mlb_chart_data_attrs(html)
+        except Exception as e:
+            print(f"[soccer_ui_fixup] chart attrs: {e}", flush=True)
+        html = enrich_soccer_h2h_from_db(html)
+        html = strip_soccer_empty_total_ev(html)
+    html = apply_soccer_info_tooltips(html, kind="picks")
+    return ensure_soccer_league_dropdown(html, kind="picks", league=league, region=region)
+
+
+def _soccer_league_qs(league: str = "", region: str = "") -> tuple[str, str]:
+    parts = []
+    rg = (region or "").strip()
+    lg = (league or "").strip()
+    if rg:
+        parts.append(f"region={rg}")
+    if lg:
+        parts.append(f"league={lg}")
+    cards = ("?" + "&".join(parts)) if parts else ""
+    chart_parts = list(parts) + ["view=chart"]
+    return cards, "?" + "&".join(chart_parts)
+
+
+def soccer_results_view_toggle_html(*, active: str = "normal", league: str = "", region: str = "") -> str:
+    """MLB/WNBA Cards|Chart toggle pointed at soccer-results."""
+    n_cls = "active" if active == "normal" else ""
+    c_cls = "active" if active == "chart" else ""
+    cards_q, chart_q = _soccer_league_qs(league, region)
+    return (
+        '<div class="pl-view-toggle" role="navigation" aria-label="Results view">'
+        f'<a class="pl-view-btn {n_cls}" href="/soccer-results{cards_q}">Cards</a>'
+        f'<a class="pl-view-btn {c_cls}" href="/soccer-results{chart_q}">Chart</a>'
+        "</div>"
+        "<style>.pl-view-toggle{display:flex;gap:8px;margin:12px 16px 18px;flex-wrap:wrap}"
+        ".pl-view-btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;"
+        "border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:.85rem;"
+        "text-decoration:none}.pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}"
+        "</style>"
+    )
+
+
+def _league_from_soccer_results_html(html: str) -> str:
+    if not html:
+        return ""
+    m = re.search(
+        r'<select[^>]*\bid="league"[^>]*>[\s\S]*?'
+        r'<option[^>]*\bselected\b[^>]*value="([^"]*)"',
+        html,
+        flags=re.I,
+    )
+    if m:
+        val = (m.group(1) or "").strip()
+        if val and val.upper() != "ALL":
+            return val
+    m = re.search(
+        r'href="/soccer-results\?league=([^"&]+)"[^>]*\bactive\b'
+        r'|\bactive\b[^>]*href="/soccer-results\?league=([^"&]+)"',
+        html,
+        re.I,
+    )
+    if m:
+        return m.group(1) or m.group(2) or ""
+    return ""
+
+
+def inject_soccer_results_page_title(html: str) -> str:
+    """Visible Soccer Results heading at the top (Cards-style chrome)."""
+    if not html:
+        return html
+    if 'id="soccer-results-page-title"' in html:
+        return html
+    if re.search(r'class="page-title"[^>]*>[\s\S]*Soccer Results', html, flags=re.I):
+        return html
+    block = (
+        '<header class="top" id="soccer-results-page-title">'
+        '<div class="brand">Soccer Results</div>'
+        "</header>"
+    )
+    if re.search(r"<main\b", html, re.I):
+        return re.sub(r"(<main\b[^>]*>)", r"\1" + block, html, count=1, flags=re.I)
+    return block + html
+
+
+def inject_soccer_results_view_toggle(html: str, *, active: str = "normal", league: str = "", region: str = "") -> str:
+    if not html:
+        return html
+    if 'class="pl-view-toggle"' in html or "class='pl-view-toggle'" in html:
+        return html
+    lg = league or _league_from_soccer_results_html(html)
+    bar = soccer_results_view_toggle_html(active=active, league=lg, region=region)
+    if re.search(r"<main\b", html, re.I):
+        return re.sub(r"(<main\b[^>]*>)", r"\1" + bar, html, count=1, flags=re.I)
+    if re.search(r'class="container\b', html, re.I):
+        return re.sub(
+            r'(<div class="container\b[^"]*"[^>]*>)',
+            r"\1" + bar,
+            html,
+            count=1,
+            flags=re.I,
+        )
+    return bar + html
+
+
+def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = "") -> str:
+    """Cards|Chart toggle + league/continent dropdown on soccer results."""
+    if not html:
+        return html
+    html = inject_soccer_results_view_toggle(html, active="normal", league=league, region=region)
+    html = apply_soccer_info_tooltips(html, kind="results")
+    return ensure_soccer_league_dropdown(html, kind="results", league=league, region=region)
+
+
+def render_soccer_results_chart_page(
+    payload: dict[str, Any] | None = None,
+    *,
+    league: str = "",
+    region: str = "",
+    cards_html: str | None = None,
+) -> str:
+    """MLB-template Cards|Chart chart view for /soccer-results?view=chart."""
+    from pathlib import Path
+
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    from mlb_results_ui import inject_ssr_chart_bootstrap
+
+    root = Path(__file__).resolve().parent
+    env = Environment(
+        loader=FileSystemLoader(str(root / "templates")),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    cards_q, _chart_q = _soccer_league_qs(league, region)
+    html = env.get_template("team_results.html").render(
+        sport="soccer",
+        sport_label="Soccer",
+        api_base="/soccer/api",
+        show_league=False,
+        picks_href=f"/soccer-picks{cards_q}",
+        results_href=f"/soccer-results{cards_q}",
+    )
+    html = inject_soccer_results_view_toggle(html, active="chart", league=league, region=region)
+    html = inject_soccer_results_page_title(html)
+    html = ensure_soccer_league_dropdown(
+        html,
+        kind="chart",
+        league=league,
+        region=region,
+        source_html=cards_html,
+    )
+    if payload:
+        try:
+            html = inject_ssr_chart_bootstrap(html, payload, "soccer")
+        except Exception as e:
+            print(f"[soccer_ui_fixup] chart SSR bootstrap: {e}", flush=True)
+    return apply_soccer_info_tooltips(html, kind="results")

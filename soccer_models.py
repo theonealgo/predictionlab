@@ -5,6 +5,47 @@ from typing import Dict, Optional, Tuple, List
 from collections import defaultdict
 from datetime import datetime
 import math
+import re
+import unicodedata
+
+
+def _fold_team_name(name: str) -> str:
+    txt = unicodedata.normalize('NFKD', str(name or ''))
+    txt = ''.join(c for c in txt if not unicodedata.combining(c))
+    txt = txt.lower().replace('&', 'and')
+    txt = re.sub(r'[^a-z0-9]+', '', txt)
+    return txt
+
+
+# ESPN scoreboard short names → common DB / long names (folded).
+_TEAM_NAME_ALIASES = {
+    'atleticomg': ('atleticomineiro', 'clubeatleticomineiro', 'cam'),
+    'atleticomineiro': ('atleticomg', 'clubeatleticomineiro'),
+    'atleticopr': ('atleticoparanaense', 'athletico', 'athleticopr'),
+    'athletico': ('atleticopr', 'atleticoparanaense'),
+    'gremio': ('gremioportoalegre',),
+    'inter': ('internacional', 'scinternacional'),
+    'internacional': ('inter', 'scinternacional'),
+}
+
+
+def _resolve_team_key(name: Optional[str], known: Dict[str, object]) -> Optional[str]:
+    """Map a scoreboard name onto a fitted team key when spellings differ."""
+    if not name:
+        return name
+    if name in known:
+        return name
+    fold = _fold_team_name(name)
+    if not fold:
+        return name
+    for key in known:
+        if _fold_team_name(key) == fold:
+            return key
+    for alias in _TEAM_NAME_ALIASES.get(fold, ()):
+        for key in known:
+            if _fold_team_name(key) == alias:
+                return key
+    return name
 
 
 def _parse_game_date(game: dict) -> Optional[datetime]:
@@ -121,7 +162,7 @@ class PoissonXGModel:
         self.home_adv_goals = max(0.0, min(0.6, diff))
 
     def _team_rates(self, team: str) -> Tuple[float, float]:
-        stats = self.team_stats.get(team)
+        stats = self.team_stats.get(_resolve_team_key(team, self.team_stats) or team)
         if not stats or stats['games'] < self.min_team_games:
             return self.league_avg, self.league_avg
         return stats['scored'] / stats['games'], stats['allowed'] / stats['games']
@@ -191,6 +232,8 @@ class PoissonRegressionModel:
                     self.defense[team] = max(0.2, min(3.0, goals_allowed / exp_allowed))
 
     def predict_expected(self, home: str, away: str) -> Tuple[float, float]:
+        home = _resolve_team_key(home, self.attack) or home
+        away = _resolve_team_key(away, self.attack) or away
         home_attack = self.attack.get(home, 1.0)
         away_attack = self.attack.get(away, 1.0)
         home_def = self.defense.get(home, 1.0)
@@ -313,6 +356,8 @@ class SoccerEloModel:
         return max(0.1, min(0.45, base * (0.6 + 0.8 * closeness)))
 
     def predict(self, home: str, away: str) -> Tuple[float, float, float]:
+        home = _resolve_team_key(home, self.ratings) or home
+        away = _resolve_team_key(away, self.ratings) or away
         home_rating = self.ratings.get(home, 1500.0) + self.home_adv
         away_rating = self.ratings.get(away, 1500.0)
         diff = home_rating - away_rating

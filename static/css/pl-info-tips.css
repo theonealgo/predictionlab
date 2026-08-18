@@ -1,0 +1,46 @@
+/* Shared info-icon tooltip chrome (season records, chart %, confidence). */
+button.pl-info-btn {
+  display: inline;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  padding: 0 1px;
+  margin: 0;
+  cursor: help;
+  opacity: 0.75;
+  vertical-align: baseline;
+  pointer-events: auto;
+}
+button.pl-info-btn:hover,
+button.pl-info-btn:focus,
+button.pl-info-btn[aria-expanded="true"] {
+  opacity: 1;
+  outline: none;
+  color: #00529b;
+}
+.rl-conf-live-tip {
+  display: none;
+  position: fixed;
+  z-index: 4000;
+  min-width: 200px;
+  max-width: min(280px, calc(100vw - 16px));
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+  padding: 8px 10px;
+  font-size: 0.78em;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: 0;
+  pointer-events: auto;
+}
+.rl-conf-live-tip.open {
+  display: block;
+}
