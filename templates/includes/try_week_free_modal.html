@@ -1,0 +1,20 @@
+<link rel="stylesheet" href="/static/css/try-week-free-modal.css">
+<div id="plTryWeekModal" class="pl-try-week-modal" hidden>
+  <div class="pl-try-week-backdrop" data-pl-try-week-close tabindex="-1"></div>
+  <div class="pl-try-week-dialog" role="dialog" aria-modal="true" aria-labelledby="plTryWeekTitle" tabindex="-1">
+    <button type="button" class="pl-try-week-x" aria-label="Close" data-pl-try-week-close>&times;</button>
+    <h2 id="plTryWeekTitle" class="pl-try-week-title">🎁 Try PredictionLab FREE for 7 Days</h2>
+    <div class="pl-try-week-body">
+      <p>Use code:</p>
+      <div class="pl-try-week-code-row">
+        <span class="pl-try-week-code" id="plTryWeekCode">PLAY26</span>
+        <button type="button" class="pl-try-week-copy" id="plTryWeekCopy" aria-live="polite">Copy Code</button>
+      </div>
+      <p>at checkout to get your first week FREE.</p>
+      <p>After your free week, your subscription continues at $4.99/week.</p>
+      <p>Cancel anytime.</p>
+    </div>
+    <a id="plTryWeekCheckout" class="pl-try-week-continue" href="/checkout/weekly">Continue to Checkout</a>
+  </div>
+</div>
+<script src="/static/js/try-week-free-modal.js" defer></script>

@@ -4830,7 +4830,7 @@ def plans_page():
                         <li>All Sports Covered</li>
                         <li>Cancel Anytime</li>
                     </ul>
-                    <a href="/checkout/weekly" class="plan-btn plan-btn-secondary">Try This Week</a>
+                    <a href="/checkout/weekly" class="plan-btn plan-btn-secondary js-try-week-cta">Try a Week FREE</a>
                 </div>
                 <div class="plan-card">
                     <div class="plan-name">Monthly</div>

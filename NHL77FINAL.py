@@ -11710,7 +11710,7 @@ BASE_TEMPLATE = """
           {% endif %}
           {% if not is_premium %}
           <div class="tv-premium-cta-row">
-            <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="tv-premium-cta tv-premium-cta-weekly">Try a Week</a>
+            <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="tv-premium-cta tv-premium-cta-weekly js-try-week-cta">Try a Week FREE</a>
             <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
           </div>
           {% endif %}
@@ -11718,15 +11718,7 @@ BASE_TEMPLATE = """
             <button class="tv-menu-btn" onclick="tvSub(\'picks\')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
             <button class="tv-menu-btn" onclick="tvSub(\'props\')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
             <button class="tv-menu-btn" onclick="tvSub(\'results\')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
-            {# Desktop .pl2-nav (Blog + Pricing) is hidden on mobile — keep both in every hamburger #}
-            <a href="/blog" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Blog</span></a>
-            <a href="/plans" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Pricing</span></a>
-            <button class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
-            <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
-              <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'community\')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
-              <button class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub(\'company\')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
-            </div>
-            {% include "includes/tv_burger_auth.html" %}
+            {% include "includes/tv_burger_account_more.html" %}
           </div>
         </div>
         <div class="tv-panel hidden-right" id="tvSub"></div>
@@ -11795,13 +11787,14 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();c
         <div class="join-premium-inner">
             <span class="join-premium-copy">Join premium for spreads, totals, projected scores, and full model edge.</span>
             <div class="join-premium-actions">
-                <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="join-premium-btn join-premium-btn-weekly">Try a Week</a>
+                <a href="https://buy.stripe.com/14A6oI4Ra66ReWLczTao802" class="join-premium-btn join-premium-btn-weekly js-try-week-cta">Try a Week FREE</a>
                 <a href="/plans" class="join-premium-btn">Join Premium</a>
                 <button type="button" class="join-premium-close" onclick="document.getElementById('joinPremiumBar').style.display='none';" aria-label="Close">×</button>
             </div>
         </div>
     </div>
     {% endif %}
+    {% include "includes/try_week_free_modal.html" %}
     <script src="/static/js/pl-header-logo.js" defer></script>
 </body>
 </html>
