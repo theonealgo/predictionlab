@@ -80,6 +80,33 @@ def test_soccer_league_slug_filters_to_one_league(nhl):
     assert any(lg['name'] == 'English Premier League' and lg['active'] for lg in leagues_ui[1:])
 
 
+def test_soccer_picks_bare_url_defaults_to_live(nhl, monkeypatch):
+    monkeypatch.setattr(nhl, 'log_site_visit', lambda *_a, **_k: None)
+    monkeypatch.setattr(nhl, 'is_premium_user', lambda: False)
+
+    class _User:
+        is_authenticated = True
+
+    monkeypatch.setattr(nhl, 'current_user', _User(), raising=False)
+    with nhl.app.test_request_context('/soccer-picks'):
+        out = nhl.sport_predictions('SOCCER')
+    assert getattr(out, 'status_code', None) == 302
+    assert '/soccer-picks?region=live' in (out.headers.get('Location') or '')
+
+
+def test_soccer_catalog_books_skipped_without_league(nhl):
+    preds = [
+        {
+            'home_team_id': 'Arsenal',
+            'away_team_id': 'Chelsea',
+            'game_date': '2026-06-02',
+            'league': 'English Premier League',
+            'home_score': None,
+        }
+    ]
+    assert nhl._overlay_soccer_catalog_books(preds, selected_league=None) == 0
+
+
 def test_soccer_picks_page_passes_multi_date_sorted_dates(nhl, monkeypatch):
     import NHL77FINAL as N
 
@@ -105,19 +132,16 @@ def test_soccer_picks_page_passes_multi_date_sorted_dates(nhl, monkeypatch):
 
     monkeypatch.setattr(N, 'current_user', _User(), raising=False)
 
-    with N.app.test_request_context('/soccer-picks'):
+    with N.app.test_request_context('/soccer-picks?league=english-premier-league'):
         out = N.sport_predictions('SOCCER')
 
     assert out == 'ok'
-    assert captured['soccer_leagues'][0]['active'] is True
-    assert len(captured['sorted_dates']) == 2
+    assert any(lg.get('active') and lg.get('name') == 'English Premier League' for lg in captured['soccer_leagues'])
     assert '2026-06-02' in captured['sorted_dates']
-    assert '2026-06-03' in captured['sorted_dates']
     grouped_n = sum(len(g) for g in captured['grouped_predictions'].values())
-    assert grouped_n >= 2
+    assert grouped_n >= 1
     leagues = {p.get('league') for gs in captured['grouped_predictions'].values() for p in gs}
-    assert 'English Premier League' in leagues
-    assert 'Spanish LaLiga' in leagues
+    assert leagues == {'English Premier League'}
 
 
 def _mock_soccer_all_payload():

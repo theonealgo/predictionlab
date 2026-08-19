@@ -3247,7 +3247,10 @@ def _enrich_thin_soccer_predictions(predictions) -> int:
     if not predictions:
         return 0
     filled = []
+    deadline_ts = _time.time() + 4.0
     for pred in predictions:
+        if _time.time() >= deadline_ts:
+            break
         if _fill_soccer_model_fields_if_missing(pred):
             filled.append(pred)
         if isinstance(pred, dict):
@@ -3548,6 +3551,9 @@ def _overlay_soccer_catalog_books(predictions, selected_league=None, selected_re
     """Fetch per-league ESPN scoreboards so catalog cups get the same book source as EPL."""
     if not predictions:
         return 0
+    # Live / All / continent first paint must reuse soccer/all — never crawl the catalog.
+    if not selected_league:
+        return 0
     need_leagues = []
     seen = set()
     region_key = soccer_region_from_slug(selected_region)
@@ -3661,7 +3667,7 @@ def _parse_soccer_scoreboard_events(data, check_date, id_map=None):
     return api_games
 
 
-def _fetch_soccer_league_scoreboard_games(league_name, days_back=1, days_forward=7):
+def _fetch_soccer_league_scoreboard_games(league_name, days_back=1, days_forward=7, deadline_ts=None):
     """Lazy one-league scoreboard fetch when soccer/all has no slate for it."""
     league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_name)
     if not league_code:
@@ -3669,12 +3675,14 @@ def _fetch_soccer_league_scoreboard_games(league_name, days_back=1, days_forward
     id_map = _espn_soccer_league_id_map()
     games = []
     for days_offset in range(-int(days_back), int(days_forward) + 1):
+        if deadline_ts is not None and _time.time() >= deadline_ts:
+            break
         check_date = datetime.now() + timedelta(days=days_offset)
         date_str = check_date.strftime('%Y%m%d')
         try:
             data = _cached_get(
                 f'https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={date_str}',
-                timeout=10,
+                timeout=4,
             )
         except Exception:
             continue
@@ -3684,12 +3692,22 @@ def _fetch_soccer_league_scoreboard_games(league_name, days_back=1, days_forward
 
 def _fetch_soccer_region_scoreboard_games(region_slug, max_leagues=6, days_back=0, days_forward=2):
     """Small in-season fetch for a continent when soccer/all is empty for it."""
+    region_key = soccer_region_from_slug(region_slug)
+    # Live must stay on soccer/all + today's slate — never walk the catalog.
+    if region_key == 'live':
+        max_leagues = min(int(max_leagues or 0), 2)
+        days_back = 0
+        days_forward = 0
     names = soccer_leagues_for_region(region_slug)[:max_leagues]
     games = []
+    deadline_ts = _time.time() + 6.0
     for name in names:
+        if _time.time() >= deadline_ts:
+            break
         games.extend(
             _fetch_soccer_league_scoreboard_games(
                 name, days_back=days_back, days_forward=days_forward,
+                deadline_ts=deadline_ts,
             )
         )
     return games
@@ -5900,8 +5918,8 @@ def _invalidate_soccer_league_db_variants():
 # SOCCER_LEAGUE_ENDPOINTS imported from soccer_league_catalog.
 SOCCER_RESULTS_GAMES_ALL = 800
 
-SOCCER_PICKS_DAYS_BACK = 1
-SOCCER_PICKS_DAYS_FORWARD = 13
+SOCCER_PICKS_DAYS_BACK = 0
+SOCCER_PICKS_DAYS_FORWARD = 1
 _SOCCER_ESPN_LEAGUE_ID_CACHE: dict = {}
 _SOCCER_ESPN_LEAGUE_ID_TTL = 86400
 _SOCCER_ALL_SCOREBOARD_URL = (
@@ -6616,114 +6634,92 @@ def update_espn_scores(sport):
             except Exception:
                 _gap_days = 14
 
-            # Use date-range API calls (one per league) when gap > 7 days,
-            # so we backfill months of missing data without hundreds of requests.
-            # ESPN supports dates=YYYYMMDD-YYYYMMDD for a range window.
-            _use_range = _gap_days > 7
-            if _use_range:
-                # Chunk into 30-day windows to stay within ESPN's response limits
-                _backfill_days = min(_gap_days + 2, 180)
-                _chunk_size = 30
-                _date_ranges = []
-                _ptr = 0
-                while _ptr < _backfill_days:
-                    _end_offset = _ptr
-                    _start_offset = min(_ptr + _chunk_size - 1, _backfill_days - 1)
-                    _start_str = (today - timedelta(days=_start_offset)).strftime('%Y%m%d')
-                    _end_str   = (today - timedelta(days=_end_offset)).strftime('%Y%m%d')
-                    _date_ranges.append(f"{_start_str}-{_end_str}")
-                    _ptr += _chunk_size
-                logger.info(f"[SOCCER] gap={_gap_days}d — backfilling {len(_date_ranges)} range(s) × {len(SOCCER_SCORE_UPDATE_LEAGUES)} leagues")
-            else:
-                _days_recent = max(7, _gap_days + 2)
-                _date_ranges = [
-                    (today - timedelta(days=d)).strftime('%Y%m%d')
-                    for d in range(_days_recent)
-                ]
-
-            max_requests = 300
+            # Live worker: soccer/all only. Per-league catalog crawl hangs Render.
+            _date_ranges = [
+                (today - timedelta(days=d)).strftime('%Y%m%d')
+                for d in range(3)
+            ]
+            _id_map = _espn_soccer_league_id_map()
+            max_requests = 4
             for _dr in _date_ranges:
-                for league_label in SOCCER_SCORE_UPDATE_LEAGUES:
-                    if request_count >= max_requests:
-                        break
-                    league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_label)
-                    if not league_code:
+                if request_count >= max_requests:
+                    break
+                url = f'{_SOCCER_ALL_SCOREBOARD_URL}?dates={_dr}'
+                request_count += 1
+                try:
+                    response = requests.get(url, timeout=4)
+                    response.raise_for_status()
+                    data = response.json()
+                except Exception as e:
+                    logger.debug(f"Error fetching SOCCER all scoreboard for {_dr}: {e}")
+                    continue
+
+                events = data.get('events', []) if isinstance(data, dict) else []
+                for event in events:
+                    competition = (event.get('competitions') or [{}])[0] or {}
+                    competitors = competition.get('competitors', [])
+                    if len(competitors) != 2:
                         continue
-                    url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={_dr}&limit=200"
-                    request_count += 1
+                    status_info = event.get('status', {}).get('type', {})
+                    status_name = status_info.get('name', '')
+                    if not status_name.startswith('STATUS_FINAL'):
+                        continue
+
+                    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+                    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+                    if not home or not away:
+                        continue
+                    _register_soccer_from_competitor(home)
+                    _register_soccer_from_competitor(away)
+
+                    home_team = home.get('team', {}).get('displayName', '')
+                    away_team = away.get('team', {}).get('displayName', '')
                     try:
-                        response = requests.get(url, timeout=10)
-                        response.raise_for_status()
-                        data = response.json()
-                    except Exception as e:
-                        logger.debug(f"Error fetching SOCCER league {league_code} for {_dr}: {e}")
+                        home_score = int(home.get('score', 0))
+                        away_score = int(away.get('score', 0))
+                    except Exception:
                         continue
 
-                    league_info = (data.get('leagues', [{}])[0] or {}) if isinstance(data, dict) else {}
-                    league_name = _canonical_soccer_league_name(league_info.get('name')) or league_label
-                    events = data.get('events', []) if isinstance(data, dict) else []
+                    league_name = _soccer_league_from_espn_uid(competition.get('uid', ''), _id_map)
+                    if not league_name:
+                        league_name = _canonical_soccer_league_from_event(event, competition)
+                    league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_name) or 'all'
+                    event_dt = event.get('date', '')
+                    game_date = _espn_event_date_to_local(event_dt) or datetime.strptime(_dr[:8], '%Y%m%d').strftime('%Y-%m-%d')
+                    event_id = event.get('id', '')
+                    game_id = f"{sport}_{league_code}_{event_id}"
 
-                    for event in events:
-                        competition = event.get('competitions', [{}])[0]
-                        competitors = competition.get('competitors', [])
-                        if len(competitors) != 2:
-                            continue
-                        status_info = event.get('status', {}).get('type', {})
-                        status_name = status_info.get('name', '')
-                        if not status_name.startswith('STATUS_FINAL'):
-                            continue
+                    existing = cursor.execute(
+                        "SELECT 1 FROM games WHERE game_id = ? AND sport = ?",
+                        (game_id, sport)
+                    ).fetchone()
 
-                        home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
-                        away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
-                        if not home or not away:
-                            continue
-                        _register_soccer_from_competitor(home)
-                        _register_soccer_from_competitor(away)
-
-                        home_team = home.get('team', {}).get('displayName', '')
-                        away_team = away.get('team', {}).get('displayName', '')
+                    if existing:
+                        cursor.execute(
+                            """
+                            UPDATE games
+                            SET home_score = ?, away_score = ?, status = 'final'
+                            WHERE sport = ?
+                              AND game_id = ?
+                              AND (home_score IS NULL OR home_score != ?)
+                            """,
+                            (home_score, away_score, sport, game_id, home_score)
+                        )
+                    else:
                         try:
-                            home_score = int(home.get('score', 0))
-                            away_score = int(away.get('score', 0))
-                        except Exception:
-                            continue
-
-                        event_dt = event.get('date', '')
-                        game_date = _espn_event_date_to_local(event_dt) or (today - timedelta(days=days_offset)).strftime('%Y-%m-%d')
-                        event_id = event.get('id', '')
-                        game_id = f"{sport}_{league_code}_{event_id}"
-
-                        existing = cursor.execute(
-                            "SELECT 1 FROM games WHERE game_id = ? AND sport = ?",
-                            (game_id, sport)
-                        ).fetchone()
-
-                        if existing:
                             cursor.execute(
                                 """
-                                UPDATE games
-                                SET home_score = ?, away_score = ?, status = 'final'
-                                WHERE sport = ?
-                                  AND game_id = ?
-                                  AND (home_score IS NULL OR home_score != ?)
+                                INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
                                 """,
-                                (home_score, away_score, sport, game_id, home_score)
+                                (sport, league_name or sport, game_id, today.year, game_date, home_team, away_team, home_score, away_score)
                             )
-                        else:
-                            try:
-                                cursor.execute(
-                                    """
-                                    INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
-                                    """,
-                                    (sport, league_name or sport, game_id, today.year, game_date, home_team, away_team, home_score, away_score)
-                                )
-                                logger.info(f"Inserted new {sport} game: {away_team} @ {home_team} ({game_date})")
-                            except Exception as insert_error:
-                                logger.error(f"Error inserting {sport} game {game_id}: {insert_error}")
+                            logger.info(f"Inserted new {sport} game: {away_team} @ {home_team} ({game_date})")
+                        except Exception as insert_error:
+                            logger.error(f"Error inserting {sport} game {game_id}: {insert_error}")
 
-                        if cursor.rowcount > 0:
-                            updates_count += 1
+                    if cursor.rowcount > 0:
+                        updates_count += 1
 
             conn.commit()
             _invalidate_soccer_league_db_variants()
@@ -8032,6 +8028,9 @@ _PICKS_DISPLAY_WINDOW = {
     # Weekly-cadence sports: widen 'future' so next week's slate still shows.
     'NFL':   {'past': 3, 'future': 10},
     'NCAAF': {'past': 3, 'future': 10},
+    # Live soccer first paint: today + tomorrow only. Continent/league URLs
+    # still filter this slate; never build a 30-day catalog on the request path.
+    'SOCCER': {'past': 0, 'future': 1},
 }
 
 
@@ -8729,7 +8728,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             # ============================================================
             soccer_pred = None
             soccer_note = None
-            if sport == 'SOCCER':
+            if sport == 'SOCCER' and not _fast_cold_build:
                 soccer_league = _canonical_soccer_league_name(game.get('league')) or game.get('league')
                 soccer_bundle = _get_soccer_model_bundle(completed_games, soccer_league)
                 if soccer_bundle and getattr(soccer_bundle, 'ready', False):
@@ -8995,7 +8994,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                         game_dict['naive_away_score'] = round(exp_away, 2)
                         game_dict['naive_spread'] = round(exp_home - exp_away, 2)
                         game_dict['naive_total'] = round(exp_home + exp_away, 2)
-                if game_dict.get('naive_spread') is None:
+                if game_dict.get('naive_spread') is None and not _fast_cold_build:
                     try:
                         _sp = _score_predictor_instance(sport)
                         if _sp:
@@ -18197,12 +18196,16 @@ def sport_predictions(sport, filter_date=None):
         return "Sport not found", 404
     if sport == 'SOCCER' and not SOCCER_ENABLED:
         return "Soccer predictions are temporarily hidden while data loads.", 404
+    if sport == 'SOCCER' and not filter_date:
+        _soc_q_league = (request.args.get('league') or '').strip()
+        if 'region' not in request.args and not _soc_q_league:
+            return redirect('/soccer-picks?region=live')
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     if not current_user.is_authenticated:
         cache_key = (
-            f"pred_page::v23::{sport}::{filter_date or 'all'}::"
+            f"pred_page::v24::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
         )
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -18366,6 +18369,22 @@ def sport_predictions(sport, filter_date=None):
                     predictions, soccer_leagues, selected_league = _filter_soccer_picks(
                         _extra, _soc_league_arg, _soc_region_arg,
                     )
+        # Slim the working set before enrich / card prep so All does not hang.
+        if not selected_league:
+            _today_vis = _soccer_et_today_str()
+            _rg = soccer_region_from_slug(_soc_region_arg)
+            if _rg == 'live' or not _rg:
+                predictions = [
+                    p for p in predictions
+                    if isinstance(p, dict) and (p.get('game_date') or '')[:10] == _today_vis
+                ]
+            else:
+                _fwd_vis = (datetime.now() + timedelta(days=2)).strftime('%Y-%m-%d')
+                predictions = [
+                    p for p in predictions
+                    if isinstance(p, dict)
+                    and _today_vis <= (p.get('game_date') or '')[:10] <= _fwd_vis
+                ]
         _enrich_thin_soccer_predictions(predictions)
         try:
             _overlay_soccer_catalog_books(
@@ -18654,6 +18673,10 @@ def sport_results(sport):
             return "Sport not found", 404
         if sport == 'SOCCER' and not SOCCER_ENABLED:
             return "Soccer results are temporarily hidden while data loads.", 404
+        if sport == 'SOCCER':
+            _soc_q_league = (request.args.get('league') or '').strip()
+            if 'region' not in request.args and not _soc_q_league and not (request.args.get('view') or '').strip():
+                return redirect('/soccer-results?region=live')
 
         if sport == 'SOCCER':
             try:
@@ -19280,15 +19303,9 @@ def sport_results(sport):
             soccer_bundle = None
             soccer_live_names = None
             if sport == 'SOCCER':
-                _exclude_ids = []
-                for _sg in completed_games:
-                    try:
-                        _exclude_ids.append(_sg['game_id'])
-                    except Exception:
-                        pass
-                soccer_bundle = _get_soccer_model_bundle(
-                    completed_games, selected_league, exclude_game_ids=_exclude_ids,
-                )
+                # Do not train/predict a live soccer bundle on results — that
+                # re-fits after finals and can hang the worker. Grade stored
+                # pre-game snapshots only.
                 if selected_region == 'live':
                     soccer_live_names = _soccer_live_competition_names(
                         kind='results',
@@ -19302,7 +19319,8 @@ def sport_results(sport):
                     except Exception:
                         pass
                 _soccer_league_code = SOCCER_LEAGUE_ENDPOINTS.get(selected_league) if selected_league else None
-                _hydrate_soccer_team_logos(_soccer_team_names, league_code=_soccer_league_code)
+                if _soccer_league_code:
+                    _hydrate_soccer_team_logos(_soccer_team_names, league_code=_soccer_league_code)
             
             if not completed_games:
                 # Show message for offseason sports
