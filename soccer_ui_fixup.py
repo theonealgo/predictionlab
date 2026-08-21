@@ -29,7 +29,6 @@ _PREFIXES = (
     "fc ",
     "ca ",
     "rc ",
-    "club atletico ",
     "club ",
     "atletico de ",
     "atletico ",
@@ -65,6 +64,31 @@ def _cores(name: str) -> set[str]:
     return out
 
 
+def _alias_key(name: str) -> str:
+    """Strip FC/CD/Atletico prefixes so Atlético Madrid == Atletico de Madrid."""
+    f = _fold(name)
+    changed = True
+    while changed and f:
+        changed = False
+        for p in _PREFIXES:
+            if f.startswith(p) and len(f) > len(p) + 1:
+                f = f[len(p) :].strip()
+                changed = True
+        for suf in _SUFFIXES:
+            if f.endswith(suf) and len(f) > len(suf) + 1:
+                f = f[: -len(suf)].strip()
+                changed = True
+    return f
+
+
+H2H_MISSING_NO_HISTORY = (
+    "No prior completed meetings between these clubs in our records."
+)
+H2H_MISSING_NO_TEAMS = (
+    "Matchup teams are missing, so head-to-head cannot be shown."
+)
+
+
 @lru_cache(maxsize=1)
 def _espn_id_map() -> dict[str, str]:
     for path in (_ESPN_IDS, _ISO_ESPN_IDS):
@@ -91,6 +115,11 @@ def _espn_id_for(name: str) -> str | None:
     if f in m:
         return m[f]
     for c in _cores(name):
+        if c == f:
+            continue
+        # Single-token cores ("madrid") are too loose for ID lookup.
+        if len(c.split()) < 2 and len(c) < 10:
+            continue
         if c in m:
             return m[c]
     return None
@@ -101,6 +130,7 @@ def aliases_for(name: str, db_names: Iterable[str]) -> list[str]:
     if not name:
         return []
     want_id = _espn_id_for(name)
+    want_key = _alias_key(name)
     want_cores = _cores(name)
     found: list[str] = []
     seen: set[str] = set()
@@ -113,10 +143,17 @@ def aliases_for(name: str, db_names: Iterable[str]) -> list[str]:
                 seen.add(raw)
                 found.append(raw)
             continue
-        if want_cores & _cores(raw):
+        other_key = _alias_key(raw)
+        if want_key and other_key and want_key == other_key:
             if want_id and other_id and want_id != other_id:
                 continue
-            if other_id and want_id is None:
+            seen.add(raw)
+            found.append(raw)
+            continue
+        shared = want_cores & _cores(raw)
+        substantial = any(len(c.split()) >= 2 and len(c) >= 8 for c in shared)
+        if substantial:
+            if want_id and other_id and want_id != other_id:
                 continue
             seen.add(raw)
             found.append(raw)
@@ -125,7 +162,23 @@ def aliases_for(name: str, db_names: Iterable[str]) -> list[str]:
     return found
 
 
+_DB_TEAM_NAMES_CACHE: dict[str, tuple[float, list[str]]] = {}
+
+
 def _db_team_names(conn: sqlite3.Connection) -> list[str]:
+    path = ""
+    mtime = 0.0
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str((row[2] if row and len(row) > 2 else "") or "")
+        if path:
+            mtime = Path(path).stat().st_mtime
+    except Exception:
+        path = ""
+    cache_key = path or f"conn:{id(conn)}"
+    cached = _DB_TEAM_NAMES_CACHE.get(cache_key)
+    if cached and cached[0] == mtime and cached[1]:
+        return cached[1]
     rows = conn.execute(
         """
         SELECT DISTINCT home_team_id FROM games WHERE sport = 'SOCCER' AND home_team_id IS NOT NULL
@@ -133,7 +186,9 @@ def _db_team_names(conn: sqlite3.Connection) -> list[str]:
         SELECT DISTINCT away_team_id FROM games WHERE sport = 'SOCCER' AND away_team_id IS NOT NULL
         """
     ).fetchall()
-    return [str(r[0]) for r in rows if r and r[0]]
+    names = [str(r[0]) for r in rows if r and r[0]]
+    _DB_TEAM_NAMES_CACHE[cache_key] = (mtime, names)
+    return names
 
 
 def h2h_projection(
@@ -236,25 +291,26 @@ def format_h2h_last10(
     return f"{_fmt_half(float(proj['our_total']))} ({games})"
 
 
+@lru_cache(maxsize=1)
 def _iso_h2h_fns():
-    """Prefer isolation module when present (same alias rules)."""
-    try:
-        soccer_s = str(_ISO_SOCCER.resolve())
-        if soccer_s not in sys.path:
-            sys.path.insert(0, soccer_s)
-        from engine.h2h_lookup import format_h2h_last10 as iso_fmt
-        from engine.h2h_lookup import h2h_projection as iso_proj
-
-        return iso_fmt, iso_proj
-    except Exception:
-        return format_h2h_last10, h2h_projection
+    """Clone H2H only — isolation helper has no before-date (look-ahead)."""
+    return format_h2h_last10, h2h_projection
 
 
 def _h2h_db_paths() -> list[Path]:
-    return [
+    paths = [
         _LIVE_ROOT / "sports_predictions_original.db",
-        Path.home() / "Documents/Personal/soccer/data/sandbox_results.db",
+        _LIVE_ROOT / "data" / "sports_predictions_original.db",
     ]
+    seen: set[str] = set()
+    out: list[Path] = []
+    for path in paths:
+        key = str(path.resolve()) if path.exists() else str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(path)
+    return out
 
 
 def _open_h2h_conns() -> list[sqlite3.Connection]:
@@ -275,22 +331,13 @@ def _best_h2h_proj(
     conns: list[sqlite3.Connection],
     before_date: str | None = None,
 ) -> dict[str, Any] | None:
-    _, proj_fn = _iso_h2h_fns()
     best: dict[str, Any] | None = None
     best_n = -1
     for conn in conns:
         try:
-            if before_date:
-                try:
-                    proj = proj_fn(
-                        conn, home, away, n=10, min_games=1, before_date=before_date,
-                    )
-                except TypeError:
-                    proj = h2h_projection(
-                        conn, home, away, n=10, min_games=1, before_date=before_date,
-                    )
-            else:
-                proj = proj_fn(conn, home, away, n=10, min_games=1)
+            proj = h2h_projection(
+                conn, home, away, n=10, min_games=1, before_date=before_date,
+            )
         except Exception:
             proj = None
         if not proj:
@@ -302,13 +349,24 @@ def _best_h2h_proj(
     return best
 
 
-def _best_h2h_text(home: str, away: str, conns: list[sqlite3.Connection]) -> str:
-    proj = _best_h2h_proj(home, away, conns)
+def _best_h2h_text(
+    home: str,
+    away: str,
+    conns: list[sqlite3.Connection],
+    before_date: str | None = None,
+) -> str:
+    proj = _best_h2h_proj(home, away, conns, before_date=before_date)
     if not proj:
         return ""
     g = int(proj["games_used"])
     games = f"{g} game" if g == 1 else f"{g} games"
     return f"{_fmt_half(float(proj['our_total']))} ({games})"
+
+
+def h2h_missing_reason(*, home: str = "", away: str = "") -> str:
+    if not home or not away:
+        return H2H_MISSING_NO_TEAMS
+    return H2H_MISSING_NO_HISTORY
 
 
 def fill_soccer_h2h_display_fields(predictions: list | None) -> None:
@@ -317,6 +375,14 @@ def fill_soccer_h2h_display_fields(predictions: list | None) -> None:
         return
     conns = _open_h2h_conns()
     if not conns:
+        for pred in predictions:
+            if not isinstance(pred, dict):
+                continue
+            if pred.get("h2h_last10_total") is not None:
+                continue
+            pred.setdefault("h2h_last10_total", None)
+            pred.setdefault("h2h_last10_games", 0)
+            pred["h2h_missing_reason"] = H2H_MISSING_NO_HISTORY
         return
     try:
         for pred in predictions:
@@ -325,14 +391,20 @@ def fill_soccer_h2h_display_fields(predictions: list | None) -> None:
             ht = pred.get("home_team_id") or pred.get("home")
             at = pred.get("away_team_id") or pred.get("away")
             if not ht or not at:
+                pred.setdefault("h2h_last10_total", None)
+                pred.setdefault("h2h_last10_games", 0)
+                pred["h2h_missing_reason"] = H2H_MISSING_NO_TEAMS
                 continue
             before = None
             if pred.get("home_score") is not None:
                 before = (pred.get("date") or pred.get("game_date") or "")[:10] or None
             proj = _best_h2h_proj(str(ht), str(at), conns, before_date=before)
             if not proj:
+                pred.setdefault("h2h_last10_total", None)
+                pred.setdefault("h2h_last10_games", 0)
+                pred["h2h_missing_reason"] = h2h_missing_reason(home=str(ht), away=str(at))
                 continue
-            # Improve display when isolation finds more meetings; never touch our_*.
+            pred["h2h_missing_reason"] = None
             pred["h2h_last10_total"] = proj["our_total"]
             pred["h2h_last10_games"] = proj["games_used"]
             pred["h2h_last10_home_wins"] = proj.get("home_wins")
@@ -374,43 +446,31 @@ def strip_soccer_empty_total_ev(html: str) -> str:
 def enrich_soccer_h2h_from_db(html: str) -> str:
     """Fill data-h2h + View Details H2H chip when scored history exists.
 
-    Display-only. First meetings stay empty so the chart shows ``—``.
+    Display-only. First meetings get ⓘ + reason — never a silent dash.
     """
     if not html or "data-pick-card" not in html:
         return html
 
-    fmt_fn, _proj_fn = _iso_h2h_fns()
     conns = _open_h2h_conns()
     if not conns:
         return html
 
-    cache: dict[tuple[str, str], str] = {}
+    cache: dict[tuple[str, str, str], str] = {}
 
-    def _lookup(home: str, away: str) -> str:
+    def _lookup(home: str, away: str, before_date: str | None = None) -> str:
         if not home or not away:
             return ""
-        key = (home, away)
+        key = (home, away, before_date or "")
         if key in cache:
             return cache[key]
-        val = _best_h2h_text(home, away, conns)
-        if not val:
-            # Isolation formatter on the richest conn (sandbox last if present).
-            for conn in reversed(conns):
-                try:
-                    val = fmt_fn(conn, home, away, n=10, min_games=1) or ""
-                except Exception:
-                    val = ""
-                if _good(val):
-                    break
+        val = _best_h2h_text(home, away, conns, before_date=before_date)
         cache[key] = val
-        cache[(away, home)] = val
         return val
 
     def _set_attr(tag: str, name: str, value: str) -> str:
-        if not value:
-            return tag
         esc = (
-            value.replace("&", "&amp;")
+            (value or "")
+            .replace("&", "&amp;")
             .replace('"', "&quot;")
             .replace("<", "&lt;")
         )
@@ -424,37 +484,39 @@ def enrich_soccer_h2h_from_db(html: str) -> str:
             )
         return tag[:-1] + f' {name}="{esc}">'
 
-    def _chip_html(h2h: str) -> str:
+    def _chip_html(h2h: str, *, missing_reason: str = "") -> str:
+        extra = ""
+        if missing_reason:
+            extra = " " + _info_btn(missing_reason)
         return (
             '<div class="sf-item">'
             '<span class="sf-label">H2H Last 10</span> '
             f'<span class="sf-val">{html_lib.escape(h2h)}</span>'
+            f"{extra}"
             "</div>"
         )
 
-    def _ensure_chip(rest: str, h2h: str) -> str:
-        if not _good(h2h):
-            return rest
+    def _ensure_chip(rest: str, h2h: str, *, missing_reason: str = "") -> str:
+        display = h2h if _good(h2h) else "—"
         chip_re = re.compile(
             r'<div\b[^>]*\bclass="[^"]*\bsf-item\b[^"]*"[^>]*>\s*'
             r'<span\b[^>]*\bclass="[^"]*\bsf-label\b[^"]*"[^>]*>\s*H2H\s*Last\s*10\s*</span>\s*'
-            r'<span\b[^>]*\bclass="[^"]*\bsf-val\b[^"]*"[^>]*>\s*([^<]*?)\s*</span>\s*'
-            r"</div>",
+            r'<span\b[^>]*\bclass="[^"]*\bsf-val\b[^"]*"[^>]*>\s*([^<]*?)\s*</span>'
+            r'(?:\s*<button\b[^>]*\bpl-info-btn\b[^>]*>\s*ⓘ\s*</button>)?'
+            r'\s*</div>',
             flags=re.I,
         )
         m = chip_re.search(rest)
+        replacement = _chip_html(display, missing_reason=missing_reason)
         if m:
-            cur = (m.group(1) or "").strip()
-            if cur == h2h:
-                return rest
-            return rest[: m.start()] + _chip_html(h2h) + rest[m.end() :]
+            return rest[: m.start()] + replacement + rest[m.end() :]
         foot_m = re.search(
             r'(<div\b[^>]*\bclass="[^"]*\bodds-extras-footer\b[^"]*"[^>]*>)',
             rest,
             flags=re.I,
         )
         if foot_m:
-            return rest[: foot_m.end()] + "\n        " + _chip_html(h2h) + rest[foot_m.end() :]
+            return rest[: foot_m.end()] + "\n        " + replacement + rest[foot_m.end() :]
         return rest
 
     def _chip_value(rest: str) -> str:
@@ -468,13 +530,19 @@ def enrich_soccer_h2h_from_db(html: str) -> str:
             return ""
         return (chip_m.group(1) or "").strip()
 
-    def _resolve_h2h(home: str, away: str, existing: str, chip_val: str) -> str:
-        db_h2h = _lookup(home, away) if home and away else ""
+    def _resolve_h2h(
+        home: str,
+        away: str,
+        existing: str,
+        chip_val: str,
+        before_date: str | None = None,
+    ) -> str:
+        db_h2h = _lookup(home, away, before_date) if home and away else ""
         if _good(db_h2h):
             return db_h2h
-        if _good(existing):
+        if _good(existing) and existing.strip() not in ("N/A", "n/a"):
             return existing
-        if _good(chip_val):
+        if _good(chip_val) and chip_val.strip() not in ("N/A", "n/a"):
             return chip_val
         return ""
 
@@ -502,11 +570,22 @@ def enrich_soccer_h2h_from_db(html: str) -> str:
             existing = html_lib.unescape((am.group(1) or "").strip())
         chip_val = _chip_value(rest)
         home, away = _names_from_open(open_tag)
-        h2h = _resolve_h2h(home, away, existing, chip_val)
-        if not _good(h2h):
-            return stack
-        open2 = _set_attr(open_tag, "data-h2h", h2h)
-        rest2 = _ensure_chip(rest, h2h)
+        before = ""
+        dm = re.search(r'\bdata-date="([^"]*)"', open_tag, flags=re.I)
+        if dm:
+            before = (html_lib.unescape((dm.group(1) or "").strip()) or "")[:10]
+        # Completed cards (FINAL / scored) must not include this kickoff.
+        is_final = bool(re.search(r'\bdata-time="FINAL"', open_tag, flags=re.I))
+        before_date = before or None
+        if is_final and not before_date:
+            before_date = None
+        h2h = _resolve_h2h(home, away, existing, chip_val, before_date if is_final else None)
+        missing_reason = "" if _good(h2h) else h2h_missing_reason(home=home, away=away)
+        display = h2h if _good(h2h) else "N/A"
+        open2 = _set_attr(open_tag, "data-h2h", display)
+        if missing_reason:
+            open2 = _set_attr(open2, "data-h2h-reason", missing_reason)
+        rest2 = _ensure_chip(rest, display if _good(h2h) else "—", missing_reason=missing_reason)
         if open2 == open_tag and rest2 == rest:
             return stack
         return open2 + rest2
@@ -728,13 +807,37 @@ def _soccer_filter_href(*, kind: str, league: str = "", region: str = "") -> str
     return f"{base}?{qs}" if qs else base
 
 
+def _league_names_from_html_cards(html: str) -> list[str]:
+    """Unique catalog league names already on the page's pick/result cards."""
+    if not html:
+        return []
+    try:
+        from soccer_league_catalog import SOCCER_LEAGUE_ORDER, _SOCCER_LEAGUE_CANONICAL
+    except Exception:
+        return []
+    names: list[str] = []
+    seen: set[str] = set()
+    for m in re.finditer(r'\bdata-league="([^"]*)"', html, flags=re.I):
+        raw = (m.group(1) or "").strip()
+        if not raw or raw.lower() in ("other", "all", "all leagues"):
+            continue
+        name = _SOCCER_LEAGUE_CANONICAL.get(raw.lower()) or raw
+        if name not in SOCCER_LEAGUE_ORDER or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
 def _curated_soccer_league_options(
     *,
     kind: str,
     selected_slug: str = "",
     selected_region: str = "",
+    live_names: list[str] | None = None,
+    source_html: str | None = None,
 ) -> list[dict[str, str]]:
-    """Catalog leagues, optionally narrowed to one continent/region."""
+    """Catalog leagues, narrowed to the selected continent / Live slate."""
     selected = (selected_slug or "").strip()
     region = (selected_region or "").strip().lower()
     try:
@@ -749,27 +852,48 @@ def _curated_soccer_league_options(
 
         slug_fn = nhl._soccer_league_slug
         region_key = soccer_region_from_slug(region)
-        live_names = None
+        resolved_live = list(live_names) if live_names is not None else None
         if region_key == "live":
-            try:
-                live_names = nhl._soccer_live_competition_names(kind=kind)
-            except Exception:
-                live_names = []
-        names = (
-            soccer_leagues_for_region(region_key, live_names=live_names)
-            if region_key
-            else list(SOCCER_LEAGUE_ORDER)
-        )
+            if resolved_live is None:
+                try:
+                    resolved_live = list(nhl._soccer_live_competition_names(kind=kind) or [])
+                except Exception:
+                    resolved_live = []
+            if source_html:
+                have = set(resolved_live)
+                for name in _league_names_from_html_cards(source_html):
+                    if name not in have:
+                        resolved_live.append(name)
+                        have.add(name)
+        names = soccer_leagues_for_region(region_key, live_names=resolved_live)
+        if not region_key and region != "all":
+            names = list(SOCCER_LEAGUE_ORDER)
         region_labels = {key: label for key, label in SOCCER_REGION_DEFS}
     except Exception:
         return []
+    if region == "all":
+        keep_region = "all"
+    elif region_key:
+        keep_region = region_key
+    else:
+        keep_region = ""
+    selected_in_list = False
+    if selected:
+        selected_l = selected.lower()
+        try:
+            resolved = nhl._soccer_league_from_slug(selected)
+            if resolved:
+                selected_l = slug_fn(resolved).lower()
+        except Exception:
+            pass
+        selected_in_list = any(slug_fn(n).lower() == selected_l for n in names)
     options = [
         {
             "slug": "",
-            "href": _soccer_filter_href(kind=kind, region=region_key or ""),
+            "href": _soccer_filter_href(kind=kind, region=keep_region),
             "label": "All",
             "group": "",
-            "selected": "1" if not selected else "",
+            "selected": "1" if not selected_in_list else "",
         }
     ]
     for name in names:
@@ -778,13 +902,51 @@ def _curated_soccer_league_options(
         options.append(
             {
                 "slug": slug,
-                "href": _soccer_filter_href(kind=kind, league=slug, region=region_key or ""),
+                "href": _soccer_filter_href(kind=kind, league=slug, region=keep_region),
                 "label": name,
                 "group": region_labels.get(primary, ""),
-                "selected": "1" if selected and selected.lower() == slug.lower() else "",
+                "selected": "1" if selected_in_list and selected_l == slug.lower() else "",
             }
         )
     return options
+
+
+def soccer_showing_scope_label(
+    *,
+    selected_region: str = "",
+    options: list[dict[str, str]] | None = None,
+    league_slug: str = "",
+) -> str:
+    """Human scope line matching Continent/League dropdown labels."""
+    region = (selected_region or "").strip().lower()
+    try:
+        from soccer_league_catalog import SOCCER_REGION_DEFS
+        region_defs = list(SOCCER_REGION_DEFS)
+    except Exception:
+        region_defs = []
+    if (not region) or region == "all":
+        continent = "All continents"
+    else:
+        continent = next((lab for key, lab in region_defs if key == region), region)
+        if region == "live":
+            continent = "Live"
+    opts = options or []
+    selected_league = next(
+        (
+            (opt.get("label") or "").strip()
+            for opt in opts
+            if opt.get("selected") and (opt.get("slug") or "").strip()
+        ),
+        "",
+    )
+    if not selected_league and league_slug:
+        want = league_slug.strip().lower()
+        for opt in opts:
+            if (opt.get("slug") or "").strip().lower() == want:
+                selected_league = (opt.get("label") or "").strip()
+                break
+    league = selected_league or "All leagues"
+    return f"Showing: {continent} · {league}"
 
 
 def soccer_league_dropdown_html(
@@ -801,9 +963,11 @@ def soccer_league_dropdown_html(
         region_defs = list(SOCCER_REGION_DEFS)
     except Exception:
         region_defs = []
+    all_region = "all" if kind == "picks" else ""
+    all_selected = (not region) or region == "all"
     region_tags = [
-        f'<option value="" data-href="{_html_attr(_soccer_filter_href(kind=kind))}"'
-        f'{" selected" if not region else ""}>All</option>'
+        f'<option value="" data-href="{_html_attr(_soccer_filter_href(kind=kind, region=all_region))}"'
+        f'{" selected" if all_selected else ""}>All</option>'
     ]
     for key, label in region_defs:
         sel = " selected" if region == key else ""
@@ -851,45 +1015,108 @@ def soccer_league_dropdown_html(
                 )
             option_tags.append("</optgroup>")
     fallback = _soccer_filter_href(kind=kind, region=region)
+    if kind == "chart":
+        form_action = "/soccer-results"
+        view_hidden = '<input type="hidden" name="view" value="chart" />'
+    elif kind == "picks":
+        form_action = "/soccer-picks"
+        view_hidden = ""
+    else:
+        form_action = "/soccer-results"
+        view_hidden = ""
+    showing = soccer_showing_scope_label(
+        selected_region=region, options=options,
+    )
     return f"""
 <section class="controls soccer-league-controls" id="league-controls" aria-label="League filter">
-  <label>
-    Continent
-    <select id="soccer-region" name="region" aria-label="Select continent">
-      {"".join(region_tags)}
-    </select>
-  </label>
-  <label>
-    League
-    <select id="league" name="league" aria-label="Select league">
-      {"".join(option_tags)}
-    </select>
-  </label>
+  <form method="GET" action="{_html_attr(form_action)}" id="soccer-league-filter-form"
+        class="soccer-league-filter-form" data-fallback-href="{_html_attr(fallback)}">
+    {view_hidden}
+    <label>
+      Continent
+      <select id="soccer-region" name="region" aria-label="Select continent">
+        {"".join(region_tags)}
+      </select>
+    </label>
+    <label>
+      League
+      <select id="league" name="league" aria-label="Select league">
+        {"".join(option_tags)}
+      </select>
+    </label>
+    <button type="submit" id="soccer-league-load" class="soccer-league-load"
+            aria-label="Load selected continent and league">Load</button>
+  </form>
+  <p class="soccer-showing-scope" id="soccer-showing-scope" aria-live="polite">{_html_text(showing)}</p>
 </section>
 <style id="soccer-league-dropdown-css">
 .soccer-league-controls{{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 18px;
   max-width:1100px;margin:8px auto 14px;padding:0 16px;}}
+.soccer-league-filter-form{{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 18px;
+  width:100%;margin:0;}}
 .soccer-league-controls label{{display:flex;flex-direction:column;gap:6px;
   font-size:0.78rem;font-weight:700;color:#475569;letter-spacing:0.02em;}}
 .soccer-league-controls select{{min-width:min(100%,280px);max-width:420px;padding:8px 12px;
   border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;
   font-size:0.95rem;font-weight:600;}}
+.soccer-league-load{{padding:9px 18px;border:1px solid #0f172a;border-radius:8px;
+  background:#0f172a;color:#fff;font-size:0.9rem;font-weight:700;cursor:pointer;
+  letter-spacing:0.02em;}}
+.soccer-league-load:disabled{{opacity:0.7;cursor:wait;}}
+.soccer-showing-scope{{flex:1 1 100%;margin:2px 0 0;padding:0;font-size:0.92rem;
+  font-weight:650;color:#0f172a;letter-spacing:0.01em;}}
 .league-slider{{display:none!important;}}
 </style>
 <script id="soccer-league-dropdown-js">
 (function(){{
-  function bind(id){{
-    var sel=document.getElementById(id);
-    if(!sel||sel.dataset.soccerDropdownBound==='1') return;
+  var form=document.getElementById('soccer-league-filter-form');
+  var regionSel=document.getElementById('soccer-region');
+  var leagueSel=document.getElementById('league');
+  var loadBtn=document.getElementById('soccer-league-load');
+  var base=(form && form.getAttribute('action')) || '{form_action}';
+  var fallback=(form && form.getAttribute('data-fallback-href')) || '{fallback}';
+  var isPicks=base.indexOf('soccer-picks')>=0;
+  function buildHref(clearLeague){{
+    var opt=null, dh='';
+    if(!clearLeague && leagueSel && leagueSel.selectedIndex>=0){{
+      opt=leagueSel.options[leagueSel.selectedIndex];
+      dh=(opt && opt.getAttribute('data-href')) || '';
+      if(dh) return dh;
+    }}
+    if(clearLeague && regionSel && regionSel.selectedIndex>=0){{
+      opt=regionSel.options[regionSel.selectedIndex];
+      dh=(opt && opt.getAttribute('data-href')) || '';
+      if(dh) return dh;
+    }}
+    var parts=[];
+    var rv=regionSel ? String(regionSel.value || '') : '';
+    var lv=(!clearLeague && leagueSel) ? String(leagueSel.value || '') : '';
+    if(rv) parts.push('region='+encodeURIComponent(rv));
+    else if(isPicks) parts.push('region=all');
+    if(lv) parts.push('league='+encodeURIComponent(lv));
+    var view=form && form.querySelector('input[name="view"]');
+    if(view && view.value) parts.push('view='+encodeURIComponent(view.value));
+    return parts.length ? (base+'?'+parts.join('&')) : (fallback || base);
+  }}
+  function go(clearLeague){{
+    var href=buildHref(!!clearLeague);
+    if(loadBtn){{ loadBtn.disabled=true; loadBtn.textContent='Loading…'; }}
+    if(href) window.location.assign(href);
+  }}
+  function bindChange(sel, clearLeague){{
+    if(!sel || sel.dataset.soccerDropdownBound==='1') return;
     sel.dataset.soccerDropdownBound='1';
-    sel.addEventListener('change', function(){{
-      var opt=sel.options[sel.selectedIndex];
-      var href=(opt && opt.getAttribute('data-href')) || '{fallback}';
-      if(href) window.location.href=href;
+    sel.addEventListener('change', function(){{ go(clearLeague); }});
+  }}
+  bindChange(regionSel, true);
+  bindChange(leagueSel, false);
+  if(form && form.dataset.soccerFormBound!=='1'){{
+    form.dataset.soccerFormBound='1';
+    form.addEventListener('submit', function(ev){{
+      ev.preventDefault();
+      go(false);
     }});
   }}
-  bind('league');
-  bind('soccer-region');
 }})();
 </script>
 <script id="soccer-region-dropdown-js"></script>
@@ -899,11 +1126,12 @@ def soccer_league_dropdown_html(
 def _inject_soccer_league_dropdown_block(html: str, block: str) -> str:
     if not html or not block:
         return html
-    if 'id="soccer-region-dropdown-js"' in html and 'id="soccer-league-dropdown-js"' in html:
-        return html
     if re.search(r'<section[^>]*\bid="league-controls"', html, flags=re.I):
         html2, n = re.subn(
-            r'<section\b[^>]*\bid="league-controls"[^>]*>[\s\S]*?</section>',
+            r'<section\b[^>]*\bid="league-controls"[^>]*>[\s\S]*?</section>'
+            r'(?:\s*<style\b[^>]*\bid="soccer-league-dropdown-css"[^>]*>[\s\S]*?</style>)?'
+            r'(?:\s*<script\b[^>]*\bid="soccer-league-dropdown-js"[^>]*>[\s\S]*?</script>)?'
+            r'(?:\s*<script\b[^>]*\bid="soccer-region-dropdown-js"[^>]*>[\s\S]*?</script>)?',
             block,
             html,
             count=1,
@@ -939,26 +1167,23 @@ def ensure_soccer_league_dropdown(
     league: str = "",
     region: str = "",
     source_html: str | None = None,
+    live_names: list[str] | None = None,
 ) -> str:
-    """League + continent filters. All first; catalog leagues only."""
+    """League + continent filters. All first; leagues for that continent/Live only."""
     if not html:
         return html
     look = html.lower()
     if not any(tok in look for tok in ('<html', '<main', '<body', 'game-card', 'league-slider', 'league-controls')):
         return html
-    if (
-        'id="soccer-region-dropdown-js"' in html
-        and 'id="soccer-league-dropdown-js"' in html
-        and 'soccer-league-controls' in html
-    ):
-        return html
+    src = source_html or html
     options = _curated_soccer_league_options(
         kind=kind,
         selected_slug=league,
         selected_region=region,
+        live_names=live_names,
+        source_html=src,
     )
     if not options:
-        src = source_html or html
         options = _options_from_soccer_pills(src, kind=kind)
         if not options:
             options = _options_from_soccer_select(src, kind=kind)
@@ -966,8 +1191,16 @@ def ensure_soccer_league_dropdown(
         return html
     if league:
         hit = False
+        want = {league.strip().lower()}
+        try:
+            import NHL77FINAL as nhl
+            resolved = nhl._soccer_league_from_slug(league)
+            if resolved:
+                want.add(nhl._soccer_league_slug(resolved).lower())
+        except Exception:
+            pass
         for opt in options:
-            if (opt.get("slug") or "").lower() == league.strip().lower():
+            if (opt.get("slug") or "").lower() in want:
                 opt["selected"] = "1"
                 hit = True
             elif opt.get("slug"):
@@ -976,6 +1209,10 @@ def ensure_soccer_league_dropdown(
             for opt in options:
                 if not opt.get("slug"):
                     opt["selected"] = ""
+        else:
+            # Stale league (e.g. Championship after switching to Asia) → All.
+            for opt in options:
+                opt["selected"] = "1" if not opt.get("slug") else ""
     elif not any(opt.get("selected") for opt in options):
         options[0]["selected"] = "1"
     block = soccer_league_dropdown_html(
@@ -1026,9 +1263,15 @@ _TIP_WIN_PCT = (
     "This is the model's estimated chance that team wins the match. "
     "A draw chance is shown separately when listed."
 )
-_TIP_H2H = (
-    "Average combined goals from recent meetings between these two clubs. "
-    "Empty when they have not played each other yet."
+_TIP_PLXG = (
+    "Prediction Lab expected goals from each club’s recent form "
+    "(home and away), not a head-to-head last-10 average. "
+    "When it is missing, the ⓘ explains that a team does not have "
+    "enough prior matches."
+)
+_TIP_H2H = _TIP_PLXG
+_TIP_DRAW_ML = (
+    "Home or away moneyline picks. A draw counts as a loss for these 1X2 picks."
 )
 _TIP_SPREAD_LINE = (
     "The posted handicap for this match. Our spread pick is the side we "
@@ -1117,6 +1360,29 @@ def _insert_info_after_label(html: str, label_html: str, tip: str) -> str:
     return html.replace(marker, marker + btn)
 
 
+def _insert_info_after_plxg_value(html: str) -> str:
+    """Put the PL Expected Goals ⓘ after the number, not between label and value."""
+    if not html or "PL Expected Goals" not in html:
+        return html
+
+    def _add(m: re.Match[str]) -> str:
+        block = m.group(0)
+        if "pl-info-btn" in block:
+            return block
+        return block[:-6] + " " + _info_btn(_TIP_PLXG) + "</div>"
+
+    return re.sub(
+        r'<div\b[^>]*\bclass="[^"]*\bsf-item\b[^"]*"[^>]*>\s*'
+        r'<span\b[^>]*\bclass="[^"]*\bsf-label\b[^"]*"[^>]*>\s*'
+        r'PL\s*Expected\s*Goals\s*</span>\s*'
+        r'<span\b[^>]*\bclass="[^"]*\bsf-val\b[^"]*"[^>]*>\s*[^<]*?\s*</span>'
+        r'\s*</div>',
+        _add,
+        html,
+        flags=re.I,
+    )
+
+
 def upgrade_soccer_picks_info_icons(html: str) -> str:
     """Add ⓘ explanations on soccer pick-card labels that had none."""
     if not html:
@@ -1130,9 +1396,7 @@ def upgrade_soccer_picks_info_icons(html: str) -> str:
     html = _insert_info_after_label(
         html, '<div class="pc-name">Efficiency</div>', _TIP_EFFICIENCY
     )
-    html = _insert_info_after_label(
-        html, '<span class="sf-label">H2H Last 10</span>', _TIP_H2H
-    )
+    html = _insert_info_after_plxg_value(html)
     html = _insert_info_after_label(
         html, '<div class="line-chip-label">Books spread</div>', _TIP_SPREAD_LINE
     )
@@ -1177,8 +1441,164 @@ def apply_soccer_info_tooltips(html: str, *, kind: str = "results") -> str:
     return inject_pl_info_tips_assets(html)
 
 
+def sanitize_soccer_proj_entities(html: str) -> str:
+    """Unescape Be&#39;er so totals cannot ingest 39 from an apostrophe entity."""
+    if not html:
+        return html
+
+    def _fix(m: re.Match[str]) -> str:
+        name, raw = m.group(1), m.group(2)
+        val = html_lib.unescape(html_lib.unescape(raw or ""))
+        if name.lower() in ("data-pl-proj", "data-xs-proj"):
+            nums = re.findall(r"(\d+(?:\.\d+)?)", val)
+            if any(_safe_big(n) for n in nums):
+                good = [n for n in nums if not _safe_big(n)]
+                if len(good) >= 2:
+                    val = f"{good[-2]}–{good[-1]}"
+        esc = (
+            val.replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+        )
+        return f'{name}="{esc}"'
+
+    return re.sub(
+        r'\b(data-(?:pl-proj|xs-proj|pl-spread|xs-spread|home-full|away-full|home|away))="([^"]*)"',
+        _fix,
+        html,
+        flags=re.I,
+    )
+
+
+def _safe_big(n: str) -> bool:
+    try:
+        return float(n) > 8
+    except (TypeError, ValueError):
+        return False
+
+
+def enrich_soccer_chart_model_attrs(html: str) -> str:
+    """Copy Pick Confidence / face 3-way into data-m-* so the chart equals the card."""
+    if not html or "data-pick-card" not in html:
+        return html
+
+    name_to_attr = (
+        ("grinder2", "data-m-grinder2"),
+        ("takedown", "data-m-takedown"),
+        ("edge", "data-m-edge"),
+        ("xsharp", "data-m-xsharp"),
+        ("efficiency", "data-m-efficiency"),
+        ("sharp cons", "data-m-consensus"),
+        ("consensus", "data-m-consensus"),
+    )
+
+    def _attr(tag: str, name: str) -> str:
+        m = re.search(rf'\b{re.escape(name)}="([^"]*)"', tag, flags=re.I)
+        return html_lib.unescape((m.group(1) or "").strip()) if m else ""
+
+    def _set_attr(tag: str, name: str, value: str) -> str:
+        if re.search(rf'\b{re.escape(name)}="', tag, flags=re.I):
+            return re.sub(
+                rf'\b{re.escape(name)}="[^"]*"',
+                f'{name}="{value}"',
+                tag,
+                count=1,
+                flags=re.I,
+            )
+        return tag[:-1] + f' {name}="{value}">'
+
+    def _pct_from_box(box: str, home: str, away: str) -> str:
+        val_m = re.search(
+            r'<div\b[^>]*\bclass="[^"]*\bpc-val\b[^"]*"[^>]*>([\s\S]*?)</div>',
+            box,
+            flags=re.I,
+        )
+        side_m = re.search(
+            r'<div\b[^>]*\bclass="[^"]*\bpc-side\b[^"]*"[^>]*>([\s\S]*?)</div>',
+            box,
+            flags=re.I,
+        )
+        raw = re.sub(r"<[^>]+>", "", val_m.group(1) if val_m else "")
+        nums = re.findall(r"(\d+(?:\.\d+)?)", raw)
+        if not nums:
+            return ""
+        try:
+            pct = float(nums[0])
+        except ValueError:
+            return ""
+        if pct <= 0:
+            return ""
+        side = re.sub(r"<[^>]+>", "", side_m.group(1) if side_m else "").strip().lower()
+        if side in ("n/a", "na", "—", "-", ""):
+            return ""
+        home_l = home.lower()
+        away_l = away.lower()
+        if away_l and away_l in side:
+            pct = 100.0 - pct
+        return f"{pct:.1f}"
+
+    def _face_xsharp_twoway(rest: str) -> str:
+        slots = re.findall(
+            r'<div\b[^>]*\bclass="[^"]*\bteam-slot\b[^"]*"[^>]*>[\s\S]*?'
+            r'<div\b[^>]*\bclass="[^"]*\bwin-pct\b[^"]*"[^>]*>([\s\S]*?)</div>',
+            rest,
+            flags=re.I,
+        )
+        if len(slots) < 2:
+            return ""
+        nums = []
+        for block in slots[:2]:
+            found = re.findall(r"(\d+(?:\.\d+)?)", re.sub(r"<[^>]+>", "", block))
+            if not found:
+                return ""
+            nums.append(float(found[0]))
+        tot = nums[0] + nums[1]
+        if tot <= 1:
+            return ""
+        return f"{(nums[1] / tot) * 100.0:.1f}"
+
+    def _patch(stack: str) -> str:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            return stack
+        open_tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+        home = _attr(open_tag, "data-home-full") or _attr(open_tag, "data-home")
+        away = _attr(open_tag, "data-away-full") or _attr(open_tag, "data-away")
+        for box in re.finditer(
+            r'<div\b[^>]*\bclass="[^"]*\bpc-box\b[^"]*"[^>]*>[\s\S]*?</div>\s*</div>',
+            rest,
+            flags=re.I,
+        ):
+            block = box.group(0)
+            nm = re.search(
+                r'<div\b[^>]*\bclass="[^"]*\bpc-name\b[^"]*"[^>]*>([\s\S]*?)</div>',
+                block,
+                flags=re.I,
+            )
+            label = re.sub(r"<[^>]+>", "", nm.group(1) if nm else "").strip().lower()
+            attr = ""
+            for key, name in name_to_attr:
+                if key in label:
+                    attr = name
+                    break
+            if not attr or _attr(open_tag, attr):
+                continue
+            home_pct = _pct_from_box(block, home, away)
+            if home_pct:
+                open_tag = _set_attr(open_tag, attr, home_pct)
+        if not _attr(open_tag, "data-m-xsharp"):
+            tw = _face_xsharp_twoway(rest)
+            if tw:
+                open_tag = _set_attr(open_tag, "data-m-xsharp", tw)
+        return open_tag + rest
+
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    return "".join(_patch(p) if "data-pick-card" in p[:80] else p for p in parts)
+
+
 def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") -> str:
-    """Publish-layer soccer picks: chart attrs, H2H L10, hide empty Total EV."""
+    """Publish-layer soccer picks: chart attrs, PL Expected Goals, hide empty Total EV."""
     if not html:
         return html
     if "data-pick-card" in html:
@@ -1188,10 +1608,28 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") 
             html = enrich_mlb_chart_data_attrs(html)
         except Exception as e:
             print(f"[soccer_ui_fixup] chart attrs: {e}", flush=True)
-        html = enrich_soccer_h2h_from_db(html)
+        try:
+            html = enrich_soccer_chart_model_attrs(html)
+        except Exception as e:
+            print(f"[soccer_ui_fixup] model chart attrs: {e}", flush=True)
+        try:
+            from soccer_pl_xg import enrich_soccer_plxg_html, strip_soccer_h2h_labels
+
+            html = enrich_soccer_plxg_html(html)
+            html = strip_soccer_h2h_labels(html)
+        except Exception as e:
+            print(f"[soccer_ui_fixup] plxg: {e}", flush=True)
+        html = sanitize_soccer_proj_entities(html)
         html = strip_soccer_empty_total_ev(html)
     html = apply_soccer_info_tooltips(html, kind="picks")
-    return ensure_soccer_league_dropdown(html, kind="picks", league=league, region=region)
+    html = ensure_soccer_league_dropdown(html, kind="picks", league=league, region=region)
+    try:
+        from soccer_pl_xg import strip_soccer_h2h_labels
+
+        html = strip_soccer_h2h_labels(html)
+    except Exception:
+        pass
+    return html
 
 
 def _soccer_league_qs(league: str = "", region: str = "") -> tuple[str, str]:
@@ -1287,13 +1725,38 @@ def inject_soccer_results_view_toggle(html: str, *, active: str = "normal", leag
     return bar + html
 
 
+def _inject_soccer_draw_ml_tips(html: str) -> str:
+    """ⓘ on last-night / last-7 MONEYLINE labels: draws are 1X2 losses."""
+    if not html or "MONEYLINE" not in html:
+        return html
+    if "pl-draw-ml-tip" in html:
+        return html
+    btn = _info_btn(_TIP_DRAW_ML, "pl-draw-ml-tip")
+    return html.replace(">MONEYLINE</div>", f">MONEYLINE {btn}</div>")
+
+
 def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = "") -> str:
     """Cards|Chart toggle + league/continent dropdown on soccer results."""
     if not html:
         return html
     html = inject_soccer_results_view_toggle(html, active="normal", league=league, region=region)
+    if "data-pick-card" in html:
+        try:
+            from soccer_pl_xg import strip_soccer_h2h_labels
+
+            html = strip_soccer_h2h_labels(html)
+        except Exception as e:
+            print(f"[soccer_ui_fixup] results plxg: {e}", flush=True)
+    html = _inject_soccer_draw_ml_tips(html)
     html = apply_soccer_info_tooltips(html, kind="results")
-    return ensure_soccer_league_dropdown(html, kind="results", league=league, region=region)
+    html = ensure_soccer_league_dropdown(html, kind="results", league=league, region=region)
+    try:
+        from soccer_pl_xg import strip_soccer_h2h_labels
+
+        html = strip_soccer_h2h_labels(html)
+    except Exception:
+        pass
+    return html
 
 
 def render_soccer_results_chart_page(
