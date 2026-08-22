@@ -1,6 +1,16 @@
 """
 MLB — Professional baseball predictions & results.
 
+# ============================================================
+# MLB LOCK — DO NOT MODIFY
+# MLB was previously fixed and verified.
+# DO NOT change this logic unless the user explicitly says:
+# "UNLOCK MLB"
+# Changes to other sports must NOT modify MLB behavior.
+# Moneyline (Grinder2 / Takedown / Edge / XSharp / Sharp Consensus)
+# is a regression check — do not change its calculations or queries.
+# ============================================================
+
 This file holds MLB-specific logic extracted from NHL77FINAL.py:
 score updates, model grading pipeline, and the full /mlb-results page.
 

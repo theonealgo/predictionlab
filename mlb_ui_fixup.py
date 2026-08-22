@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """MLB UI SIGNED OFF — do not change without owner request.
 
-Locked 2026-08-10. See notes/MLB_LOCKED.md / qa/MLB_SIGNED_OFF.txt.
+# MLB LOCK — DO NOT MODIFY unless the owner says UNLOCK MLB.
+Locked 2026-08-10; results-number correction 2026-08-22.
+See notes/MLB_LOCKED.md / qa/MLB_SIGNED_OFF.txt.
 
 MLB publish-layer HTML fixups for the live duplicate (work2).
 

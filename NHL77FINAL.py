@@ -3757,6 +3757,20 @@ def _grade_efficiency_ml_from_spread(sport, daily_results):
         for g in dd.get('games', []):
             if g.get('skip_grading'):
                 continue
+            # ============================================================
+            # MLB LOCK — DO NOT MODIFY
+            # Seed Efficiency from stored PL/H2H our_spread (including 0.0).
+            # Do NOT use spread_pick / the faded +1.5 dog as the ML side.
+            # ONLY modify if the user explicitly says "UNLOCK MLB".
+            # ============================================================
+            if str(sport or '').upper() == 'MLB':
+                if g.get('efficiency_spread') is None:
+                    src = g.get('_unfaded_our_spread')
+                    if src is None:
+                        src = g.get('our_spread')
+                    if src is not None:
+                        g['efficiency_spread'] = src
+                continue
             if g.get('efficiency_spread') is None and g.get('our_spread') is not None:
                 g['efficiency_spread'] = g['our_spread']
     try:
@@ -7491,9 +7505,9 @@ def _compute_results_tally_bundle(
     weekly_start_dt = yesterday_dt - timedelta(days=6)
     weekly_end_dt = yesterday_dt
     sport_key = (sport or '').upper()
-    # WNBA: last-7 is 7 calendar days, not a time-of-day slice that drops the
-    # start date (and can leave Edge/XSharp/Consensus on last-night only).
-    if sport_key in ('WNBA', 'SOCCER'):
+    # WNBA / soccer / MLB: last-7 is 7 calendar days, not a time-of-day slice
+    # that drops the start date (Aug 15 00:00 < Aug 15 11:33 was excluded).
+    if sport_key in ('WNBA', 'SOCCER', 'MLB'):
         weekly_start_dt = weekly_start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
         weekly_end_dt = weekly_end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
     weekly_tally_date_range = f"{weekly_start_dt.strftime('%Y-%m-%d')} to {yesterday}"
@@ -10495,6 +10509,11 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                 g['total_pick_reason'] = None
 
                 if sport == 'MLB':
+                    # ============================================================
+                    # MLB LOCK — DO NOT MODIFY
+                    # Product fade: favorite −1.5 then other side +1.5.
+                    # ONLY modify if the user explicitly says "UNLOCK MLB".
+                    # ============================================================
                     run_line = 1.5
                     g['market_spread_label'] = "Run Line ±1.5"
                     g['market_spread'] = None
@@ -11005,8 +11024,12 @@ def _pinned_market_side(st, prefix, label):
         pct = st.get('pl_total_pct')
     if graded <= 0:
         return label, None, 0, 0
-    if pct is None:
-        pct = round(wins / graded * 100, 1)
+    # Face % must match the W-L shown (113-101 → 52.8%, not a stale 55.4
+    # computed on decided-only n). Pushes are not mixed into this % here —
+    # graded/wins are whatever the caller stored.
+    computed = _record_accuracy_pct(wins, max(0, graded - wins))
+    if pct is None or computed is None or pct != computed:
+        pct = computed
     return label, pct, wins, graded
 
 
@@ -19461,10 +19484,11 @@ def sport_results(sport):
                 _seed_soccer_under55_ml_fade_keys(daily_results)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
-            if sport == 'SOCCER':
+            if sport in ('SOCCER', 'MLB'):
                 _grade_efficiency_for_results(sport, daily_results)
-                _maybe_fade_soccer_efficiency(daily_results)
-                _st_stats = _maybe_fade_soccer_pl_spread(daily_results, _st_stats)
+                if sport == 'SOCCER':
+                    _maybe_fade_soccer_efficiency(daily_results)
+                    _st_stats = _maybe_fade_soccer_pl_spread(daily_results, _st_stats)
                 overall_stats = compute_overall_stats_from_daily(daily_results)
             season_perf = _build_season_performance_summary(
                 overall_stats, _st_stats, sport=sport,
@@ -19476,6 +19500,7 @@ def sport_results(sport):
                 )
             tally_bundle = _compute_results_tally_bundle(
                 daily_results, yesterday_dt, season_start_dt=season_start_dt,
+                sport=sport if sport == 'MLB' else None,
             )
             daily_tally = tally_bundle['daily_tally']
             daily_tally_date = tally_bundle['daily_tally_date']
@@ -19990,6 +20015,17 @@ def _grade_efficiency_for_results(sport, daily_results) -> None:
     ):
         return
     try:
+        # ============================================================
+        # MLB LOCK — DO NOT MODIFY
+        # MLB results already have H2H/PL our_spread from spread grading.
+        # Do NOT re-run ESPN attach on the full results page (timeout +
+        # different inputs). Grade from stored our_spread only.
+        # ONLY modify if the user explicitly says "UNLOCK MLB".
+        # ============================================================
+        if str(sport or '').upper() == 'MLB':
+            _eff_attach.fill_efficiency_spread_fallback(sport, daily_results)
+            _eff_attach.apply_efficiency_ml_grading(sport, daily_results)
+            return
         _eff_attach.grade_efficiency_for_daily_results(sport, daily_results)
     except Exception as exc:
         logger.debug(f"[eff] results grading failed for {sport}: {exc}")

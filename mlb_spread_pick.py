@@ -1,5 +1,13 @@
 """Canonical MLB run-line pick + grade. Isolation source of truth.
 
+# ============================================================
+# MLB LOCK — DO NOT MODIFY
+# MLB was previously fixed and verified.
+# DO NOT change this logic unless the user explicitly says:
+# "UNLOCK MLB"
+# Changes to other sports must NOT modify MLB behavior.
+# ============================================================
+
 Home-centric our_spread: positive = home favored (projected home − away).
 NO BET when there is no real run-line edge (pick'em / |our_spread| < 1.5).
 Decide favorite −1.5, then fade to the other side of the same run line (+1.5).

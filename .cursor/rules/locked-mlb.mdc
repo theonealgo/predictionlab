@@ -1,12 +1,28 @@
 ---
-description: MLB is signed off — do not edit unless unlocked
+description: MLB is permanently locked — do not edit unless UNLOCK MLB
 alwaysApply: true
 ---
 
-# Locked sport — MLB picks/results/spread fade 2026-08-17
+# MLB LOCKED — DO NOT MODIFY
 
-MLB picks, results, and the PL run-line fade (favorite −1.5 then other side +1.5) are locked after owner sign-off.
+MLB is permanently locked after the 2026-08-22 results correction.
 
-- Do not edit MLB models, spread pick/grade, results tallies, or MLB UI unless the owner explicitly unlocks.
-- Isolation remains `~/Documents/Personal/mlb/`.
-- Do not git push MLB again unless the owner confirms a production deploy.
+Do **not** modify MLB unless the user explicitly says:
+
+**UNLOCK MLB**
+
+This applies to:
+
+- MLB Moneyline (Grinder2, Takedown, Edge, XSharp, Sharp Consensus)
+- MLB Spread / run-line fade
+- MLB O/U
+- MLB Efficiency
+- MLB prediction generation, grading, aggregation, ROI
+- MLB historical data, result queries, strategy IDs, MLB-specific transforms
+
+Changes to soccer, NBA, NFL, CFL, NHL, NCAAF, NCAAB, or WNBA must **not**
+modify MLB behavior.
+
+Isolation remains `~/Documents/Personal/mlb/`.
+Do not git push MLB unless the owner confirms a production deploy.
+Do not run the live clone as `PORT=5050` (soccer isolation). MLB live chrome is `:5001`.
