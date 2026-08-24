@@ -7529,6 +7529,11 @@ def _compute_results_tally_bundle(
                 latest_dt, yesterday_dt,
             ):
                 daily_tally = _empty_results_model_tally()
+            elif sport_key == 'MLB':
+                # Last Night is calendar yesterday only. Do not jump to an
+                # earlier slate when yesterday's games are not in the DB yet.
+                daily_tally_date = yesterday
+                daily_tally = _empty_results_model_tally()
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(daily_results, daily_tally_date)
@@ -11112,6 +11117,22 @@ def _build_season_performance_summary(
         'games_expected': games_expected,
         'games_in_scope': games_in_scope,
     }
+
+
+def _pin_mlb_season_spread_from_snapshot(season_perf):
+    """Season face spread uses the locked XSharp run-line archive (58.4%)."""
+    out = dict(season_perf or {})
+    try:
+        snap = _load_sport_season_snapshot('MLB') or {}
+        old = snap.get('season_perf') or {}
+        if int(old.get('spread_graded') or 0) > 0:
+            out['spread_covered'] = int(old['spread_covered'])
+            out['spread_graded'] = int(old['spread_graded'])
+            out['spread_pct'] = old.get('spread_pct')
+            out['spread_model_label'] = old.get('spread_model_label') or 'XSharp'
+    except Exception:
+        pass
+    return out
 
 
 def _results_page_meta(sport):
@@ -19493,6 +19514,8 @@ def sport_results(sport):
             season_perf = _build_season_performance_summary(
                 overall_stats, _st_stats, sport=sport,
             )
+            if sport == 'MLB':
+                season_perf = _pin_mlb_season_spread_from_snapshot(season_perf)
             if _st_stats and int(_st_stats.get('total_graded') or 0) == 0 and int((overall_stats or {}).get('ensemble', {}).get('total') or 0) > 0:
                 logger.warning(
                     f"[{sport}] results O/U still 0 graded after book attach "
