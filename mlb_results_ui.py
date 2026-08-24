@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """MLB UI SIGNED OFF — do not change without owner request.
 
-# MLB LOCK — DO NOT MODIFY unless the owner says UNLOCK MLB.
-Locked 2026-08-10; results-number correction 2026-08-22.
-See notes/MLB_LOCKED.md / qa/MLB_SIGNED_OFF.txt.
+# ============================================================
+# MLB LOCK — DO NOT MODIFY
+# MLB was previously fixed and verified.
+# DO NOT change this logic unless the user explicitly says:
+# "UNLOCK MLB"
+# Changes to other sports must NOT modify MLB behavior.
+# ============================================================
+
+Locked 2026-08-10. See notes/MLB_LOCKED.md / qa/MLB_SIGNED_OFF.txt.
 
 MLB results HTML enrichments ported from sandbox team_tabbed_results.
 
@@ -35,6 +41,32 @@ MODEL_ORDER = [
     "Sharp Consensus",
     "Efficiency",
 ]
+
+# WNBA does not publish Grinder2 / Takedown.
+WNBA_MODEL_ORDER = [
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+]
+_WNBA_DROP_MODELS = frozenset({"Grinder2", "Takedown"})
+
+
+def model_order_for_sport(sport: str) -> list[str]:
+    if (sport or "").strip().lower() == "wnba":
+        return list(WNBA_MODEL_ORDER)
+    return list(MODEL_ORDER)
+
+
+def _strip_models_for_sport(block: dict[str, Any] | None, sport: str) -> dict[str, Any] | None:
+    """Drop Grinder2/Takedown tiles from WNBA tallies. MLB order unchanged."""
+    if not block or (sport or "").strip().lower() != "wnba":
+        return block
+    order = model_order_for_sport(sport)
+    models = block.get("models") or {}
+    block["models"] = {k: v for k, v in models.items() if k in order}
+    block["model_order"] = [n for n in order if n in block["models"]]
+    return block
 
 _EMOJI_MODEL = {
     "Grinder2": "Grinder2",
@@ -142,6 +174,9 @@ def _face_tally(games: int, w: int, l: int, p: int = 0, **extra) -> dict[str, An
         "w": w,
         "l": l,
         "n": n,
+        "graded": n,
+        "events": n + (p or 0),
+        "pushes": p or 0,
         "pct": pct,
         "record": f"{w}-{l}" + (f"-{p}" if p else ""),
         "units": units,
@@ -150,6 +185,9 @@ def _face_tally(games: int, w: int, l: int, p: int = 0, **extra) -> dict[str, An
                 "w": w,
                 "l": l,
                 "n": n,
+                "graded": n,
+                "events": n + (p or 0),
+                "pushes": p or 0,
                 "pct": pct,
                 "record": f"{w}-{l}" + (f"-{p}" if p else ""),
                 "units": units,
@@ -159,6 +197,84 @@ def _face_tally(games: int, w: int, l: int, p: int = 0, **extra) -> dict[str, An
     }
     block.update(extra)
     return block
+
+
+def _parse_wl_record(rec: str) -> tuple[int, int, int]:
+    parts = [int(x) for x in re.findall(r"\d+", rec or "")]
+    w = parts[0] if len(parts) > 0 else 0
+    l = parts[1] if len(parts) > 1 else 0
+    p = parts[2] if len(parts) > 2 else 0
+    return w, l, p
+
+
+def _honestize_model_block(m: dict[str, Any]) -> dict[str, Any]:
+    """Accuracy = W/(W+L). n/graded = W+L. events = W+L+P. Never call pushes graded."""
+    if not isinstance(m, dict):
+        return m
+    out = dict(m)
+    w = int(out.get("w") or 0)
+    l = int(out.get("l") or 0)
+    p = int(out.get("pushes") or 0)
+    rw, rl, rp = _parse_wl_record(str(out.get("record") or ""))
+    if (rw or rl or rp) and (w + l + p) == 0:
+        w, l, p = rw, rl, rp
+    elif rp and not p:
+        p = rp
+    graded = w + l
+    events = w + l + p
+    out["w"] = w
+    out["l"] = l
+    out["pushes"] = p
+    out["n"] = graded
+    out["graded"] = graded
+    out["events"] = events
+    out["record"] = f"{w}-{l}" + (f"-{p}" if p else "")
+    if graded:
+        out["pct"] = round(100.0 * w / graded, 1)
+    elif out.get("pct") is not None and not graded:
+        out["pct"] = None
+    if out.get("units") is None:
+        out["units"] = _units_from_wl(w, l)
+    return out
+
+
+def _honestize_tally(block: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(block, dict):
+        return block
+    out = dict(block)
+    models = {
+        name: _honestize_model_block(m)
+        for name, m in (out.get("models") or {}).items()
+        if isinstance(m, dict)
+    }
+    out["models"] = models
+    face = None
+    for name in (out.get("model_order") or []):
+        if name in models:
+            face = models[name]
+            break
+    if face is None and models:
+        face = next(iter(models.values()))
+    if face:
+        out["w"] = face.get("w")
+        out["l"] = face.get("l")
+        out["pushes"] = face.get("pushes") or 0
+        out["n"] = face.get("graded")
+        out["graded"] = face.get("graded")
+        out["events"] = face.get("events")
+        out["record"] = face.get("record")
+        out["pct"] = face.get("pct")
+        if out.get("units") is None:
+            out["units"] = face.get("units")
+    else:
+        w = int(out.get("w") or 0)
+        l = int(out.get("l") or 0)
+        p = int(out.get("pushes") or 0)
+        out["graded"] = w + l
+        out["events"] = w + l + p
+        out["n"] = w + l
+    return out
+
 
 def _parse_pct(raw: str) -> float | None:
     raw = (raw or "").strip().replace("%", "")
@@ -379,9 +495,12 @@ def _backfill_blank_ml_models(
         )
     return season_ml
 
-def _best_model(models: dict[str, Any]) -> dict[str, Any] | None:
+def _best_model(models: dict[str, Any], *, skip: frozenset[str] | None = None) -> dict[str, Any] | None:
     best = None
+    skip = skip or frozenset()
     for name, m in (models or {}).items():
+        if name in skip:
+            continue
         n = int(m.get("n") or 0)
         pct = m.get("pct")
         if n <= 0 or pct is None:
@@ -414,11 +533,12 @@ def build_results_analytics(
     ln = (tallies_ml or {}).get("last_night") or {}
     l7 = (tallies_ml or {}).get("last_7") or {}
     season = (tallies_ml or {}).get("season") or {}
+    skip_best = _WNBA_DROP_MODELS if (sport or "").strip().lower() == "wnba" else frozenset()
 
     best = {
-        "today": _best_model(ln.get("models") or {}),
-        "last_7": _best_model(l7.get("models") or {}),
-        "season": _best_model(season.get("models") or {}),
+        "today": _best_model(ln.get("models") or {}, skip=skip_best),
+        "last_7": _best_model(l7.get("models") or {}, skip=skip_best),
+        "season": _best_model(season.get("models") or {}, skip=skip_best),
     }
 
     season_models = season.get("models") or {}
@@ -1017,6 +1137,7 @@ def _extract_spread_totals(card_html: str) -> tuple[dict[str, Any] | None, dict[
             "line": pick,
             "correct": True if mark == "ok" else False if mark == "no" else None,
             "push": False,
+            "grade": "WIN" if mark == "ok" else "LOSS" if mark == "no" else None,
         }
     tm = re.search(
         r'Total pick</span>\s*<span class="sf-val">([^<]+?)(?:\s*<span class="pick-(ok|no)">)',
@@ -1030,9 +1151,80 @@ def _extract_spread_totals(card_html: str) -> tuple[dict[str, Any] | None, dict[
             "pick": pick,
             "line": pick,
             "correct": True if mark == "ok" else False if mark == "no" else None,
-            "push": False,
+            "push": "push" in pick.lower(),
+            "grade": "PUSH" if "push" in pick.lower() else (
+                "WIN" if mark == "ok" else "LOSS" if mark == "no" else None
+            ),
         }
+    row_re = re.compile(
+        r'<td class="market-k">([^<]+)</td>\s*'
+        r'<td class="val-books">([^<]*)</td>\s*'
+        r'<td class="val-pl">([^<]*)</td>\s*'
+        r'<td class="val-xs">([^<]*)</td>',
+        re.I,
+    )
+    for m in row_re.finditer(card_html or ""):
+        kind = (m.group(1) or "").strip().lower()
+        books = _clean_team_label(m.group(2))
+        pl = _clean_team_label(m.group(3))
+        xs = _clean_team_label(m.group(4))
+        if kind in ("run line", "spread"):
+            spread = spread or {}
+            spread["book"] = books
+            spread["pl_pick"] = pl
+            spread["xs_pick"] = xs
+        elif kind == "total":
+            totals = totals or {}
+            totals["book"] = books
+            totals["book_line"] = _parse_line_number(books)
+            totals["pl_pick"] = pl
+            totals["xs_pick"] = xs
+            totals["pl_line"] = _parse_line_number(pl)
+            totals["xs_line"] = _parse_line_number(xs)
     return spread, totals
+
+
+def _parse_line_number(raw: str | None) -> float | None:
+    if raw is None:
+        return None
+    m = re.search(r"([+-]?\d+(?:\.\d+)?)", str(raw).replace(",", ""))
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except ValueError:
+        return None
+
+
+def _grade_total_proj(
+    proj: float | None, book: float | None, actual: float | None
+) -> str | None:
+    if book is None or actual is None:
+        return None
+    if abs(actual - book) < 1e-9:
+        return "PUSH"
+    if proj is None or abs(proj - book) < 1e-9:
+        return None
+    lean_over = proj > book
+    hit_over = actual > book
+    if lean_over:
+        return "WIN" if hit_over else "LOSS"
+    return "WIN" if not hit_over else "LOSS"
+
+
+def _apply_pl_xs_grades(row: dict[str, Any]) -> None:
+    totals = row.get("totals")
+    hs = row.get("home_score")
+    aa = row.get("away_score")
+    if isinstance(totals, dict) and hs is not None and aa is not None:
+        actual = float(hs) + float(aa)
+        book = totals.get("book_line")
+        totals["pl_grade"] = _grade_total_proj(totals.get("pl_line"), book, actual)
+        totals["xs_grade"] = _grade_total_proj(totals.get("xs_line"), book, actual)
+        if book is not None and abs(actual - float(book)) < 1e-9:
+            totals["push"] = True
+            totals["correct"] = None
+            totals["grade"] = "PUSH"
 
 def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[str, Any] | None:
     away_m = re.search(
@@ -1069,7 +1261,55 @@ def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[s
         face_prob = first.get("prob")
         face_correct = first.get("correct")
     spread, totals = _extract_spread_totals(card_html)
-    return {
+    gid_m = re.search(r'data-game-id="([^"]*)"', card_html, re.I)
+    action_m = re.search(r'data-spread-action="([^"]*)"', card_html, re.I)
+    our_m = re.search(r'data-our-spread="([^"]*)"', card_html, re.I)
+    our_spread = None
+    if our_m and (our_m.group(1) or "").strip():
+        try:
+            our_spread = float(our_m.group(1))
+        except ValueError:
+            our_spread = None
+    h2h_m = re.search(
+        r'H2H Last 10</span>\s*<span class="sf-val">([^<]+)',
+        card_html,
+        re.I,
+    )
+    time_m = re.search(
+        r'data-time="([^"]+)"|class="t-time"[^>]*>\s*([^<]+)|'
+        r'class="card-hero-meta-line">([^<]+)|'
+        r'(\d{1,2}:\d{2}\s*[AP]M(?:\s*ET)?)',
+        card_html,
+        re.I,
+    )
+    game_time = ""
+    if time_m:
+        game_time = (
+            time_m.group(1) or time_m.group(2) or time_m.group(3) or time_m.group(4) or ""
+        ).strip()
+    pl_proj = ""
+    xs_proj = ""
+    for pm in re.finditer(
+        r'<span class="proj-model[^"]*">([^<]*)</span>\s*'
+        r'<span class="proj-val">([^<]+)</span>',
+        card_html,
+        re.I | re.S,
+    ):
+        name = _strip_emoji(pm.group(1)).lower()
+        val = _clean_team_label(pm.group(2))
+        if "prediction lab" in name or name.strip() == "pl":
+            pl_proj = val
+        elif "xsharp" in name or name.strip() == "xs":
+            xs_proj = val
+    if isinstance(totals, dict):
+        if pl_proj:
+            totals["pl_proj"] = pl_proj
+        if xs_proj:
+            totals["xs_proj"] = xs_proj
+    row = {
+        "game_id": (gid_m.group(1) if gid_m else "") or None,
+        "spread_action": (action_m.group(1) if action_m else "") or None,
+        "our_spread": our_spread,
         "game_date": str(date_key)[:10],
         "league": league or "MLB",
         "away_team_id": away,
@@ -1083,9 +1323,17 @@ def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[s
         "models": models,
         "spread": spread,
         "totals": totals,
+        "h2h10": _clean_team_label(h2h_m.group(1)) if h2h_m else "",
+        "game_time": game_time or "Final",
+        "pl_proj": pl_proj,
+        "xs_proj": xs_proj,
+        "total_ev": None,
     }
+    _apply_pl_xs_grades(row)
+    return row
 
-def _extract_game_rows(html: str, *, limit: int = 80) -> list[dict[str, Any]]:
+
+def _extract_game_rows(html: str, *, limit: int = 800) -> list[dict[str, Any]]:
     """Finals rows from live game-card HTML (teams-split / pick-conf / spread-total footer)."""
     rows: list[dict[str, Any]] = []
     date_chunks = re.split(r'<div id="date-([^"]+)"[^>]*>', html or "")
@@ -1352,7 +1600,7 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
     season_roi = _extract_season_roi(html)
     snap = _snapshot_season(sport)
     # Pull enough graded cards to backfill blank season model rows (e.g. Efficiency).
-    finals = synthesize_missing_ml_models(_extract_game_rows(html, limit=400))
+    finals = synthesize_missing_ml_models(_extract_game_rows(html, limit=800))
 
     by_kind = {s["kind"]: s for s in sections if s["kind"] in ("last_night", "last_7")}
 
@@ -1428,11 +1676,13 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
             label, r.get("pct"), f"{r['w']}-{r['l']}"
         )
         season_ml["model_order"] = [label]
-    # Fill blank named models (Efficiency / Grinder2 / Takedown —) from graded game cards.
+    # Fill blank named models (Efficiency, and G2/TD on sports that publish them).
     season_ml = _backfill_blank_ml_models(season_ml, finals)
-    # Also backfill last-night / last-7 blanks from windowed finals
     ln_ml = _backfill_blank_ml_models(ln_ml, finals[:40])
     l7_ml = _backfill_blank_ml_models(l7_ml, finals[:80])
+    season_ml = _strip_models_for_sport(season_ml, sport)
+    ln_ml = _strip_models_for_sport(ln_ml, sport)
+    l7_ml = _strip_models_for_sport(l7_ml, sport)
     # Face Season Performance merges into dual PL/XSharp (does not drop the other model).
     if season_roi.get("spread"):
         season_sp = _merge_face_roi_into_sou(season_sp, season_roi["spread"], sport=sport)
@@ -1443,6 +1693,50 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
     for blk in (season_sp, season_ou, l7_sp, l7_ou, ln_sp, ln_ou):
         if isinstance(blk, dict) and blk.get("units") is None:
             blk["units"] = _units_from_wl(int(blk.get("w") or 0), int(blk.get("l") or 0))
+
+    def _spread_window_ids(date_from: str | None, date_to: str | None, exact: str | None = None):
+        ids = []
+        w = l = 0
+        for f in finals:
+            d = str(f.get("game_date") or "")[:10]
+            if exact and d != exact:
+                continue
+            if not exact:
+                if date_from and d < date_from:
+                    continue
+                if date_to and d > date_to:
+                    continue
+            action = (f.get("spread_action") or "").upper()
+            side = None
+            if action in ("HOME", "AWAY"):
+                side = action
+            elif f.get("spread") and f["spread"].get("pick"):
+                side = "PICK"
+            if side is None or action == "NO BET":
+                continue
+            gid = f.get("game_id") or f"{d}|{f.get('away_team_id')}|{f.get('home_team_id')}"
+            ids.append(gid)
+            if f.get("spread") and f["spread"].get("correct") is True:
+                w += 1
+            elif f.get("spread") and f["spread"].get("correct") is False:
+                l += 1
+        return {"game_ids": ids, "w": w, "l": l, "n": w + l}
+
+    ln_date = ln_sp.get("date") or (by_kind.get("last_night") or {}).get("date")
+    l7_from = l7_sp.get("date_from") or (by_kind.get("last_7") or {}).get("date_from")
+    l7_to = l7_sp.get("date_to") or (by_kind.get("last_7") or {}).get("date_to") or ln_date
+    spread_windows = {
+        "last_night": {"date": ln_date, **_spread_window_ids(None, None, exact=ln_date)},
+        "last_7": {
+            "date_from": l7_from,
+            "date_to": l7_to,
+            **_spread_window_ids(l7_from, l7_to),
+        },
+        "season_label": (
+            (season_roi.get("spread") or {}).get("model_label")
+            or (season_sp.get("model_order") or ["Prediction Lab"])[0]
+        ),
+    }
 
     analytics = build_results_analytics(
         sport=sport,
@@ -1455,11 +1749,40 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
         snap=snap,
     )
 
-    return {
+    if isinstance(season_sp, dict) and season_sp.get("locked"):
+        season_sp = {**season_sp, "label": "Season snapshot"}
+    if isinstance(season_ou, dict) and season_ou.get("locked"):
+        season_ou = {**season_ou, "label": "Season snapshot"}
+    if (sport or "").lower() == "mlb" and isinstance(season_ml, dict):
+        if not season_ml.get("date_from"):
+            for src in (season_ou, season_sp):
+                if isinstance(src, dict) and src.get("date_from"):
+                    season_ml["date_from"] = src.get("date_from")
+                    season_ml["date_to"] = src.get("date_to")
+                    break
+        if season_ml.get("date_from") and season_ml.get("label") in (None, "", "Season"):
+            season_ml["label"] = "Season snapshot"
+
+    def _fin(market_key: str) -> list[dict[str, Any]]:
+        hit = [f for f in finals if f.get(market_key)]
+        return hit or list(finals)
+
+    ln_ml = _honestize_tally(ln_ml)
+    l7_ml = _honestize_tally(l7_ml)
+    season_ml = _honestize_tally(season_ml)
+    ln_sp = _honestize_tally({**ln_sp, "label": "Last Night"})
+    l7_sp = _honestize_tally({**l7_sp, "label": "Last 7"})
+    season_sp = _honestize_tally({**season_sp, "label": season_sp.get("label") or "Season"})
+    ln_ou = _honestize_tally({**ln_ou, "label": "Last Night"})
+    l7_ou = _honestize_tally({**l7_ou, "label": "Last 7"})
+    season_ou = _honestize_tally({**season_ou, "label": season_ou.get("label") or "Season"})
+
+    out = {
         "ok": True,
         "today": _today_et(),
-        "model_order": MODEL_ORDER,
+        "model_order": model_order_for_sport(sport),
         "finals": finals,
+        "spread_windows": spread_windows,
         "analytics": analytics,
         "tallies": {
             "last_night": ln_ml,
@@ -1474,15 +1797,16 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
                     "last_7": l7_ml,
                     "season": season_ml,
                 },
-                "model_order": MODEL_ORDER,
+                "model_order": model_order_for_sport(sport),
                 "finals": finals,
             },
             "spread": {
                 "label": "Spread" if (sport or "").lower() != "mlb" else "Run Line",
+                "windows": spread_windows,
                 "tallies": {
                     "last_night": {**ln_sp, "label": "Last Night"},
                     "last_7": {**l7_sp, "label": "Last 7"},
-                    "season": {**season_sp, "label": "Season"},
+                    "season": {**season_sp, "label": season_sp.get("label") or "Season"},
                 },
                 "model_order": (
                     list(season_sp.get("model_order") or [])
@@ -1498,14 +1822,14 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
                         or ["Prediction Lab"]
                     )
                 ),
-                "finals": [f for f in finals if f.get("spread")][:80] or finals[:40],
+                "finals": _fin("spread"),
             },
             "totals": {
                 "label": "Totals",
                 "tallies": {
                     "last_night": {**ln_ou, "label": "Last Night"},
                     "last_7": {**l7_ou, "label": "Last 7"},
-                    "season": {**season_ou, "label": "Season"},
+                    "season": {**season_ou, "label": season_ou.get("label") or "Season"},
                 },
                 "model_order": (
                     list(season_ou.get("model_order") or [])
@@ -1521,10 +1845,25 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
                         or ["Prediction Lab"]
                     )
                 ),
-                "finals": [f for f in finals if f.get("totals")][:80] or finals[:40],
+                "finals": _fin("totals"),
             },
         },
     }
+    for _mk, _m in out["markets"].items():
+        fins = list(_m.get("finals") or [])
+        ids = [str(f.get("game_id") or "") for f in fins if f.get("game_id")]
+        _m["records_shown"] = len(fins)
+        _m["unique_games"] = len(set(ids)) if ids else len(fins)
+        _m["ungraded"] = sum(
+            1
+            for f in fins
+            if (_mk == "moneyline" and f.get("correct") is None)
+            or (
+                _mk != "moneyline"
+                and ((f.get(_mk) or {}).get("grade") not in ("WIN", "LOSS", "PUSH"))
+            )
+        )
+    return out
 
 
 def fix_mlb_results_display(html: str) -> str:
@@ -1612,7 +1951,9 @@ def inject_ssr_chart_bootstrap(html: str, payload: dict[str, Any], sport: str) -
     tallies = ml.get("tallies") or payload.get("tallies") or {}
     finals = list(ml.get("finals") or payload.get("finals") or [])[:40]
     analytics = payload.get("analytics") or {}
-    order = list(ml.get("model_order") or payload.get("model_order") or MODEL_ORDER)
+    order = list(ml.get("model_order") or payload.get("model_order") or model_order_for_sport(sport))
+    if (sport or "").strip().lower() == "wnba":
+        order = [n for n in order if n not in _WNBA_DROP_MODELS] or list(WNBA_MODEL_ORDER)
 
     def _model_card(name: str, m: dict[str, Any]) -> str:
         pct = m.get("pct")

@@ -41,7 +41,7 @@
 
     <nav class="market-tabs" id="market-tabs" aria-label="Bet type" hidden>
       <button type="button" class="market-tab active" data-market="moneyline">Moneyline</button>
-      <button type="button" class="market-tab" data-market="spread">Spread</button>
+      <button type="button" class="market-tab" data-market="spread">{% if sport == 'mlb' %}Spread / Run Line{% else %}Spread{% endif %}</button>
       <button type="button" class="market-tab" data-market="totals">Totals (O/U)</button>
     </nav>
 
@@ -94,7 +94,8 @@
   <script>
     window.TEAM_API_BASE = {{ api_base|tojson }};
     window.TEAM_HIDE_LEAGUE = {{ (not show_league)|tojson }};
+    window.TEAM_SPORT = {{ sport|tojson }};
   </script>
-  <script src="/static/js/team-results.js"></script>
+  <script src="/static/js/team-results.js?v=mlb-audit-3"></script>
 </body>
 </html>

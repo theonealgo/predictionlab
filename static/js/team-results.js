@@ -83,7 +83,37 @@ const MARKET_LABELS = {
   spread: "Spread",
   totals: "Totals (O/U)",
 };
-const WINDOW_KEYS = ["last_night", "last_7", "season"];
+const WINDOW_KEYS = ["last_night", "last_7", "last_30", "season"];
+function isMlb() {
+  return String(window.TEAM_SPORT || "").toLowerCase() === "mlb";
+}
+function mlbScore(c) {
+  if (c.home_score == null && c.away_score == null) return "—";
+  return esc(c.away_score) + "–" + esc(c.home_score);
+}
+function countTag(block) {
+  if (!block) return "";
+  const w = Number(block.w || 0);
+  const l = Number(block.l || 0);
+  const graded = Number(block.graded != null ? block.graded : w + l);
+  const events = Number(block.events != null ? block.events : (block.games || graded));
+  const pushes = Number(block.pushes || 0);
+  const sub = block.date
+    ? String(block.date)
+    : (block.date_from && block.date_to ? `${block.date_from} → ${block.date_to}` : "");
+  const bits = [];
+  if (events) bits.push(events + (events === 1 ? " decision" : " decisions"));
+  bits.push(graded + " graded");
+  if (pushes) bits.push(pushes + (pushes === 1 ? " push" : " pushes"));
+  if (sub) bits.push(sub);
+  return bits.join(" · ");
+}
+function h2hText(c) {
+  const raw = c && (c.h2h10 || c.h2h_l10);
+  const s = raw == null ? "" : String(raw).trim();
+  if (!s || s === "—" || s === "-" || s === "–" || s.toLowerCase() === "n/a") return "N/A";
+  return s;
+}
 const API = (window.TEAM_API_BASE || window.SOCCER_API_BASE || "/api").replace(
   /\/$/,
   ""
@@ -201,11 +231,47 @@ function souCardHtml(c, marketKey) {
 
 function souRowHtml(c, marketKey) {
   const row = c[marketKey] || {};
+  const score = c.home_score != null || c.away_score != null
+    ? esc(c.away_score) + "–" + esc(c.home_score) : "—";
+  const match = `${esc(teamName(c, "away"))} @ ${esc(teamName(c, "home"))}`;
+  if (isMlb() && marketKey === "spread") {
+    return `<tr data-game-id="${esc(c.game_id || "")}">
+      <td>${esc(c.game_date)}</td>
+      <td>${esc(c.game_time || "Final")}</td>
+      <td>${match}</td>
+      <td>${score}</td>
+      <td>${esc(row.book || "—")}</td>
+      <td>${esc(row.pl_pick || "—")}</td>
+      <td>${esc(row.xs_pick || "—")}</td>
+      <td>${esc(row.pick || "—")}</td>
+      <td>${resultMark(row.correct, row.push)}</td>
+    </tr>`;
+  }
+  if (isMlb() && marketKey === "totals") {
+    const ev = row.total_ev != null ? row.total_ev : (c.total_ev != null ? c.total_ev : "—");
+    const plProj = row.pl_proj || c.pl_proj || "—";
+    const xsProj = row.xs_proj || c.xs_proj || "—";
+    return `<tr data-game-id="${esc(c.game_id || "")}">
+      <td>${esc(c.game_date)}</td>
+      <td>${esc(c.game_time || "Final")}</td>
+      <td>${match}</td>
+      <td>${score}</td>
+      <td>${esc(row.book || row.book_line || "—")}</td>
+      <td>${esc(h2hText(c))}</td>
+      <td>${esc(row.pl_pick || row.pl_line || "—")}</td>
+      <td>${esc(plProj)}</td>
+      <td>${esc(row.xs_pick || row.xs_line || "—")}</td>
+      <td>${esc(xsProj)}</td>
+      <td>${esc(ev)}</td>
+      <td>${esc(row.pick || "—")}</td>
+      <td>${resultMark(row.correct, row.push || row.grade === "PUSH")}</td>
+    </tr>`;
+  }
   return `<tr>
     <td>${esc(c.game_date)}</td>
     <td>${esc(displayLeague(c.league))}</td>
-    <td>${esc(teamName(c, "away"))} @ ${esc(teamName(c, "home"))}</td>
-    <td>${c.away_score != null ? esc(c.away_score) + "–" + esc(c.home_score) : "—"}</td>
+    <td>${match}</td>
+    <td>${score}</td>
     <td>${esc(row.pick || "—")}</td>
     <td>${resultMark(row.correct, row.push)}</td>
   </tr>`;
@@ -361,7 +427,7 @@ function tallyBlock(title, block, order, marketKey) {
   const readyNote = block.ready === false && block.reason
     ? `<p class="note">${esc(block.reason)}</p>` : "";
   return `<section class="tally">
-    <h2>${esc(title)} <span class="tag">(${block.games || 0} games${sub ? " · " + sub : ""})</span></h2>
+    <h2>${esc(title)} <span class="tag">(${esc(countTag(block) || ((block.games || 0) + " games" + (sub ? " · " + sub : "")))})</span></h2>
     ${readyNote}
     <div class="tally-grid">${cards}</div>
   </section>`;
@@ -453,11 +519,16 @@ function renderActiveMarket() {
   const seasonPct = face.pct != null ? `${face.pct}%` : (season.pct != null ? `${season.pct}%` : "—");
   const seasonRec = face.record || season.record || "—";
   sum.hidden = false;
-  sum.textContent = `${label} · Season ${seasonPct} (${seasonRec}) · ${finals.length} recent graded games shown.`;
+  const shown = finals.length;
+  const uniqueIds = [...new Set(finals.map((f) => f && f.game_id).filter(Boolean))];
+  const uniqueN = uniqueIds.length || shown;
+  const ungraded = Number((market && market.ungraded) || 0);
+  sum.textContent = `${label} · Season ${seasonPct} (${seasonRec}) · ${shown} records shown · ${uniqueN} unique games` +
+    (ungraded ? ` · ${ungraded} ungraded` : "");
 
   document.getElementById("finals-wrap").hidden = false;
-  document.getElementById("games-heading").textContent = `${label} games`;
-  document.getElementById("game-count").textContent = `(${finals.length})`;
+  document.getElementById("games-heading").textContent = `${label} records`;
+  document.getElementById("game-count").textContent = `(${shown})`;
 
   if (key === "moneyline") {
     // MLB keeps Edge pick. WNBA grades the best published ML model.
@@ -477,12 +548,30 @@ function renderActiveMarket() {
     }).join("");
   } else {
     const pickLabel = key === "spread" ? "Spread pick" : "O/U pick";
-    head.innerHTML = `<tr>
+    const mlbSou = isMlb();
+    if (mlbSou && key === "spread") {
+      head.innerHTML = `<tr>
+      <th>Date</th><th>Time</th><th>Match</th><th>Score</th>
+      <th>Books run line</th><th>Prediction Lab</th><th>XSharp</th>
+      <th>Published pick</th><th>Result</th>
+    </tr>`;
+    } else if (mlbSou && key === "totals") {
+      head.innerHTML = `<tr>
+      <th>Date</th><th>Time</th><th>Match</th><th>Score</th>
+      <th>Books total</th><th>H2H L10</th>
+      <th>Prediction Lab total</th><th>Prediction Lab projected score</th>
+      <th>XSharp total</th><th>XSharp projected score</th>
+      <th>Total EV</th><th>Published pick</th><th>Result</th>
+    </tr>`;
+    } else {
+      head.innerHTML = `<tr>
       <th>Date</th><th>League</th><th>Match</th><th>Score</th>
       <th>${esc(pickLabel)}</th><th>Result</th>
     </tr>`;
+    }
+    const emptyCols = (mlbSou && key === "totals") ? 13 : (mlbSou && key === "spread") ? 9 : 6;
     body.innerHTML = finals.map((c) => souRowHtml(c, key)).join("") ||
-      '<tr><td colspan="6" class="muted">No graded games for this market yet.</td></tr>';
+      `<tr><td colspan="${emptyCols}" class="muted">No records for this market on the current slate.</td></tr>`;
     cards.innerHTML = finals.map((c) => souCardHtml(c, key)).join("");
   }
 }
