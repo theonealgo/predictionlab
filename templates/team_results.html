@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ sport_label }} Results | Prediction Lab</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="/static/css/research-theme.css" />
+  <link rel="stylesheet" href="/static/css/picks-nav-overrides.css" />
+  <link rel="stylesheet" href="/static/css/sports-chrome.css" />
+  <link rel="stylesheet" href="/static/css/team-results.css" />
+</head>
+<body class="research-site">
+  {%- set picks_href = picks_href|default('/mlb-picks') -%}
+  {%- set results_href = results_href|default('/mlb-results') -%}
+
+  <header class="pl2-header">
+    <button type="button" class="pl2-burger" id="navHamburger" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+      <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav" aria-label="{{ sport_label }}">
+      <a href="{{ picks_href }}">Picks</a>
+      <a class="active" href="{{ results_href }}">Results</a>
+    </nav>
+    <div class="pl2-header-actions"></div>
+  </header>
+
+  <main>
+    <div class="container">
+    <section class="controls" id="league-controls"{% if not show_league %} hidden{% endif %}>
+      <label{% if not show_league %} hidden{% endif %}>
+        League
+        <select id="league">
+          <option value="ALL" selected>All Leagues</option>
+        </select>
+      </label>
+      <button id="run" type="button"{% if not show_league %} hidden{% endif %}>Load results</button>
+      <span id="status" class="status"></span>
+    </section>
+
+    <nav class="market-tabs" id="market-tabs" aria-label="Bet type" hidden>
+      <button type="button" class="market-tab active" data-market="moneyline">Moneyline</button>
+      <button type="button" class="market-tab" data-market="spread">{% if sport == 'mlb' %}Spread / Run Line{% else %}Spread{% endif %}</button>
+      <button type="button" class="market-tab" data-market="totals">Totals (O/U)</button>
+    </nav>
+
+    <div id="tallies" class="tally-wrap" hidden></div>
+    <p id="summary" class="note" hidden></p>
+
+    <section id="finals-wrap" hidden>
+      <h2 class="sec-title"><span id="games-heading">Games</span> <span id="game-count" class="tag"></span></h2>
+      <div class="table-wrap">
+        <table class="results-table" id="results-table">
+          <thead id="results-head"></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <div id="finals" class="cards games-grid" style="margin-top:1.5rem"></div>
+    </section>
+    </div>
+  </main>
+
+  <footer class="site-directory-footer">
+    <div class="directory-shell">
+      <span class="directory-label">Knowledge Directory</span>
+      <span class="directory-wordmark">PREDICTION LAB</span>
+      <div class="directory-sub">AI-powered sports betting picks. Daily. Transparent. Data-driven.</div>
+      <div class="directory-grid">
+        <div>
+          <div class="footer-heading">AI Picks by Sport</div>
+          <a href="/mlb-picks">MLB AI Picks</a>
+          <a href="/soccer-picks">Soccer AI Picks</a>
+          <a href="/wnba-picks">WNBA AI Picks</a>
+          <a href="/cfl-picks">CFL AI Picks</a>
+          <a href="/golf-picks">Golf AI Picks</a>
+        </div>
+        <div>
+          <div class="footer-heading">Results</div>
+          <a href="/mlb-results">MLB Results</a>
+          <a href="/soccer-results">Soccer Results</a>
+          <a href="/wnba-results">WNBA Results</a>
+          <a href="/cfl-results">CFL Results</a>
+          <a href="/golf-results">Golf Results</a>
+        </div>
+      </div>
+      <div class="directory-bottom">
+        <span>&copy; 2026 Prediction Lab. All rights reserved.</span>
+        <span>For entertainment purposes. Bet responsibly.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    window.TEAM_API_BASE = {{ api_base|tojson }};
+    window.TEAM_HIDE_LEAGUE = {{ (not show_league)|tojson }};
+    window.TEAM_SPORT = {{ sport|tojson }};
+  </script>
+  <script src="/static/js/team-results.js?v=mlb-audit-3"></script>
+</body>
+</html>

@@ -361,11 +361,26 @@ def grade_efficiency_for_daily_results(sport: str, daily_results) -> None:
     apply_efficiency_ml_grading(sport, daily_results)
 
 
-def _efficiency_spread_for_grading(g: dict) -> Optional[float]:
+def _efficiency_spread_for_grading(g: dict, sport: str = '') -> Optional[float]:
     """Spread used for Team Efficiency ML grading on a result game."""
+    # ============================================================
+    # MLB LOCK — DO NOT MODIFY
+    # MLB was previously fixed and verified.
+    # DO NOT change this logic unless the user explicitly says:
+    # "UNLOCK MLB"
+    # Changes to other sports must NOT modify MLB behavior.
+    # Efficiency ML uses the stored PL / H2H our_spread (favorite wins).
+    # Do NOT substitute the faded run-line pick / spread_pick.
+    # ============================================================
     sp = _safe_float(g.get('efficiency_spread'))
     if sp is not None:
         return sp
+    if str(sport or '').upper() == 'MLB':
+        for key in ('_unfaded_our_spread', 'our_spread'):
+            our_sp = _safe_float(g.get(key))
+            if our_sp is not None:
+                return our_sp
+        return None
     if g.get('our_method') in ('efficiency', 'team-avg-fallback'):
         our_sp = _safe_float(g.get('our_spread'))
         if our_sp is not None:
@@ -377,7 +392,11 @@ def _efficiency_spread_for_grading(g: dict) -> Optional[float]:
 
 
 def apply_efficiency_ml_grading(sport: str, daily_results) -> None:
-    """Set efficiency_prob, efficiency_pick, and efficiency_correct on graded games."""
+    """Set efficiency_prob, efficiency_pick, and efficiency_correct on graded games.
+
+    MLB LOCK: favorite from stored our_spread wins ML. Do not use spread_pick.
+    ONLY modify MLB if the user explicitly says "UNLOCK MLB".
+    """
     if sport not in EFFICIENCY_GRADING_SPORTS or not daily_results:
         return
     for dd in daily_results.values():
@@ -387,7 +406,7 @@ def apply_efficiency_ml_grading(sport: str, daily_results) -> None:
                 g['efficiency_pick'] = None
                 g['efficiency_correct'] = None
                 continue
-            sp = _efficiency_spread_for_grading(g)
+            sp = _efficiency_spread_for_grading(g, sport)
             if sp is None:
                 g['efficiency_prob'] = None
                 g['efficiency_pick'] = None

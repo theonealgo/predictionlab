@@ -1,0 +1,21 @@
+{
+  "config": {
+    "name": "w15_hl12.0_avg",
+    "window": 15,
+    "half_life": 12.0,
+    "venue_split": true,
+    "venue_shrink_k": 6.0,
+    "opp_adjust": true,
+    "league_env": true,
+    "league_shrink_k": 20.0,
+    "formulation": "avg",
+    "shot_blend": 0.0,
+    "h2h_weight": 0.0,
+    "team_shrink_k": 8.0
+  },
+  "min_edge": 0.25,
+  "rho": -0.08,
+  "drop_h2h": true,
+  "use_plxg_for_totals_picks": true,
+  "reason": "PL-xG lower OOS MAE than honest H2H"
+}

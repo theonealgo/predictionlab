@@ -44,7 +44,6 @@
                 <a href="/results/downloads">Download CSV</a>
             </div>
         </div>
-        <a href="/blog">Blog</a>
         <a href="/plans">Pricing</a>
     </nav>
     <div class="pl2-header-actions">
@@ -60,6 +59,7 @@
                 </svg>
             </button>
             <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
+                <a href="/plans">Pricing</a>
                 {% if is_logged_in|default(false) %}
                 <a href="/account">Account</a>
                 <form class="pl2-account-portal-form" method="POST" action="/create-portal-session" onclick="event.stopPropagation()">

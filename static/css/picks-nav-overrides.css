@@ -419,9 +419,7 @@ body.has-join-premium-bar { padding-bottom: 58px; }
 }
 .tv-menu-btn:hover { background: #f1f5f9; }
 .tv-menu-auth {
-  border-top: 1px solid #f1f5f9;
-  margin-top: 6px;
-  padding-top: 6px;
+  margin: 0;
 }
 .tv-menu-auth-form { margin: 0; }
 .tv-menu-auth button.tv-menu-btn {

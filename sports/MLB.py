@@ -1,6 +1,16 @@
 """
 MLB — Professional baseball predictions & results.
 
+# ============================================================
+# MLB LOCK — DO NOT MODIFY
+# MLB was previously fixed and verified.
+# DO NOT change this logic unless the user explicitly says:
+# "UNLOCK MLB"
+# Changes to other sports must NOT modify MLB behavior.
+# Moneyline (Grinder2 / Takedown / Edge / XSharp / Sharp Consensus)
+# is a regression check — do not change its calculations or queries.
+# ============================================================
+
 This file holds MLB-specific logic extracted from NHL77FINAL.py:
 score updates, model grading pipeline, and the full /mlb-results page.
 
@@ -33,6 +43,49 @@ def update_mlb_scores() -> None:
 def mlb_model_probs_for_grading(game_row, home_team, away_team, game_date_key):
     """MLB wrapper for shared _model_probs_for_grading."""
     return main()._model_probs_for_grading(SPORT, game_row, home_team, away_team, game_date_key)
+
+
+def apply_named_ml_v2(
+    game_id,
+    glicko2_prob,
+    trueskill_prob,
+    elo_prob,
+    xgb_prob,
+    ens_prob,
+    *,
+    game_date=None,
+    home=None,
+    away=None,
+):
+    """Overlay SP xFIP v2 onto named ML probs (0–1) for upcoming picks only.
+
+    Results grading must not call this — historical pages use stored snapshots.
+    Efficiency / spread / totals are not passed through here.
+    """
+    try:
+        from mlb_ml_v2 import mix_named_ml_v2
+        return mix_named_ml_v2(
+            game_id,
+            glicko2_prob,
+            trueskill_prob,
+            elo_prob,
+            xgb_prob,
+            ens_prob,
+            game_date=game_date,
+            home=home,
+            away=away,
+        )
+    except Exception:
+        return glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob
+
+
+def apply_named_ml_v2_to_card(game_dict: dict) -> None:
+    """Overwrite Grinder2/Takedown/Edge/XSharp/Consensus on an upcoming MLB card."""
+    try:
+        from mlb_ml_v2 import apply_v2_to_upcoming_dict
+        apply_v2_to_upcoming_dict(game_dict)
+    except Exception:
+        return
 
 
 def render_sport_results_page(sport: str, *, season_start_dt=None):
@@ -467,21 +520,9 @@ def _mlb_bullpen_fatigue_boost(team_name, game_date):
         return 0.0, 0.0, False
 
 def _set_mlb_spread_pick_label(card: dict) -> None:
-    """Run-line pick label from faded model spread (same sign as disp_pl_spread)."""
-    sp = main()._safe_float(card.get('disp_pl_spread'))
-    if sp is None:
-        sp = main()._safe_float(main()._best_pl_spread(card))
-    if sp is None:
-        sp = main()._first_pred_float(card, ('our_spread', 'xgb_spread'))
-    if sp is None:
-        return
-    h = card.get('home_team_id') or card.get('home')
-    a = card.get('away_team_id') or card.get('away')
-    if not (h and a):
-        return
-    run_line = 1.5
-    pick_team = h if sp > 0 else a
-    card['spread_pick_label'] = f"{pick_team} {-run_line:+.1f}"
+    """Run-line pick label from stored PL our_spread (same pick_spread_side)."""
+    m = main()
+    m._set_mlb_spread_pick_label(card)
 
 def _apply_mlb_ou_calibration(daily_results):
     """Cold-streak calibration for MLB totals.

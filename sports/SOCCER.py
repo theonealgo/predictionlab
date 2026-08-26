@@ -379,7 +379,7 @@ def _reorient_soccer_model_probs(pred: dict) -> None:
     if (hw > aw) == (ens >= 50.0):
         return
     for k in ('glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob',
-              'ensemble_prob', 'efficiency_prob'):
+              'ensemble_prob'):
         v = main()._safe_float(pred.get(k))
         if v is not None:
             pred[k] = round(100.0 - v, 1)

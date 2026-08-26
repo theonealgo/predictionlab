@@ -58,10 +58,13 @@ def test_mlb_grading_uses_frozen_v2_for_old_games(monkeypatch):
     )
 
     assert live_calls == []
-    assert len(frozen_calls) == 1
-    assert frozen_calls[0][0] == 'MLB'
-    assert g2 == 0.61
-    assert ts == 0.59
+    # Stored ensemble is present — do not backfill named legs from frozen v2
+    # or re-run mlb_ml_v2 / IP-gate. Missing G2/TS inherit stored Elo.
+    assert frozen_calls == []
+    assert g2 == 0.54
+    assert ts == 0.54
+    assert el == 0.54
+    assert xg == 0.56
     assert ens == 0.58
 
 

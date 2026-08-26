@@ -630,6 +630,7 @@
     #sec-pricing .pl2-plan { padding: 40px; }
     #sec-pricing .pl2-plan.premium { border-top-color: var(--pl-accent); }
     #sec-pricing .pl2-btn.primary { width: 100%; background: var(--pl-accent); }
+    #sec-pricing .pl2-btn.js-try-week-cta { word-spacing: 0.22em; }
     .pl2-footer { padding-top: 104px; }
     .pl2-footer h2 { font-family: Arial, Helvetica, sans-serif; font-size: clamp(3rem, 5vw, 4.8rem); }
     .pl2-terminal-label { opacity: .42; }
@@ -1066,7 +1067,7 @@
                                 <li>Player props picks and projections</li>
                                 <li>Model performance page access</li>
                             </ul>
-                            <a class="pl2-btn" href="/checkout/weekly">Try a Week — $4.99 →</a>
+                            <a class="pl2-btn primary js-try-week-cta" href="/checkout/weekly">Try a Week FREE</a>
                         </div>
                     </div>
                 </div>
@@ -1127,139 +1128,101 @@
 
 {% block scripts %}
 <script>
+function pl2Drawer(open) {
+    document.body.classList.toggle('pl2-drawer-open', !!open);
+}
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') pl2Drawer(false);
+});
+
 function pl2RunDeferred(fn) {
     if ('requestIdleCallback' in window) {
-        requestIdleCallback(fn, { timeout: 2000 });
+        requestIdleCallback(fn, { timeout: 1500 });
     } else {
         window.setTimeout(fn, 1);
     }
 }
 
 pl2RunDeferred(function () {
-    var reduceMotion = false;
-    var coarsePointer = false;
-    var narrowViewport = false;
-    try {
-        reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        coarsePointer = window.matchMedia('(pointer: coarse)').matches;
-        narrowViewport = window.matchMedia('(max-width: 767px)').matches;
-    } catch (e) {}
-    /* Mobile Chrome Insights: skip parallax/lens work that forced ~95ms style recalc. */
-    var lightMotion = reduceMotion || coarsePointer || narrowViewport;
-
-/* CountUp — rAF writes; snap instantly on light/mobile to avoid layout thrash. */
+/* CountUp — port of CountUp.jsx */
 (function () {
     var started = new WeakSet();
-    function finish(el, target, suffix) {
-        el.textContent = target.toLocaleString() + suffix;
-    }
     function runCountUp(el) {
         if (started.has(el)) return;
         started.add(el);
         var target = parseInt(el.getAttribute('data-target'), 10) || 0;
         var suffix = el.getAttribute('data-suffix') || '';
-        if (lightMotion || target <= 0) {
-            finish(el, target, suffix);
-            return;
-        }
-        var duration = 1200;
-        var start = 0;
-        var t0 = 0;
-        function frame(now) {
-            if (!t0) t0 = now;
-            var p = Math.min(1, (now - t0) / duration);
-            var current = Math.floor(target * p);
-            if (p >= 1) {
-                finish(el, target, suffix);
-                return;
+        var duration = 1500;
+        var steps = 60;
+        var increment = target / steps;
+        var current = 0;
+        var step = 0;
+        var timer = setInterval(function () {
+            step++;
+            current += increment;
+            if (current >= target) {
+                el.textContent = target.toLocaleString() + suffix;
+                clearInterval(timer);
+            } else {
+                el.textContent = Math.floor(current).toLocaleString() + suffix;
             }
-            if (current !== start) {
-                start = current;
-                el.textContent = current.toLocaleString() + suffix;
-            }
-            window.requestAnimationFrame(frame);
-        }
-        window.requestAnimationFrame(frame);
-    }
-    if (!('IntersectionObserver' in window)) {
-        document.querySelectorAll('.pl2-countup').forEach(runCountUp);
-        return;
+        }, duration / steps);
     }
     var observer = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-                runCountUp(entry.target);
-                observer.unobserve(entry.target);
-            }
+            if (entry.isIntersecting) runCountUp(entry.target);
         });
-    }, { threshold: 0.4 });
+    }, { threshold: 0.5 });
     document.querySelectorAll('.pl2-countup').forEach(function (el) { observer.observe(el); });
 })();
 
-/* Hero lens — desktop fine-pointer only; rect read in rAF, never after style writes. */
+/* Hero lens — layout read only on pointerenter/resize (never scroll/mousemove). */
 (function () {
-    if (lightMotion) return;
     var hero = document.getElementById('picks');
     var lens = document.getElementById('pl2Lens');
     if (!hero || !lens) return;
     var left = 0;
     var top = 0;
     var hasRect = false;
-    var pendingX = 0;
-    var pendingY = 0;
-    var moveRaf = 0;
     function syncRect() {
         var r = hero.getBoundingClientRect();
         left = r.left;
         top = r.top;
         hasRect = true;
     }
-    function flushMove() {
-        moveRaf = 0;
-        if (!hasRect) syncRect();
-        lens.style.setProperty('--lx', (pendingX - left) + 'px');
-        lens.style.setProperty('--ly', (pendingY - top) + 'px');
-    }
-    hero.addEventListener('pointerenter', function () {
-        window.requestAnimationFrame(syncRect);
-    }, { passive: true });
+    hero.addEventListener('pointerenter', syncRect, { passive: true });
     window.addEventListener('resize', function () { hasRect = false; }, { passive: true });
     hero.addEventListener('pointermove', function (e) {
-        pendingX = e.clientX;
-        pendingY = e.clientY;
-        if (!moveRaf) moveRaf = window.requestAnimationFrame(flushMove);
+        if (!hasRect) syncRect();
+        lens.style.setProperty('--lx', (e.clientX - left) + 'px');
+        lens.style.setProperty('--ly', (e.clientY - top) + 'px');
     }, { passive: true });
     hero.addEventListener('pointerleave', function () {
         hasRect = false;
-        if (moveRaf) {
-            window.cancelAnimationFrame(moveRaf);
-            moveRaf = 0;
-        }
         lens.style.setProperty('--lx', '-9999px');
         lens.style.setProperty('--ly', '-9999px');
     }, { passive: true });
 })();
 
-/* Fixed canvas parallax — desktop only; no eager render() (was ~95ms UpdateLayoutTree). */
+/* Fixed data canvas — the page scrolls over the research layer. */
 (function () {
-    if (lightMotion) return;
     var image = document.querySelector('.pl2-canvas-img');
     var line = document.querySelector('.pl2-horizon');
     if (!image || !line) return;
     var ticking = false;
-    var y = 0;
     function render() {
+        var y = window.scrollY || 0;
         image.style.transform = 'translate3d(0,' + Math.min(y * 0.025, 110) + 'px,0) scale(1.04)';
         line.style.transform = 'translate3d(0,' + Math.min(y * 0.05, 150) + 'px,0)';
         ticking = false;
     }
     window.addEventListener('scroll', function () {
-        y = window.scrollY || 0;
         if (!ticking) {
-            ticking = true;
             window.requestAnimationFrame(render);
+            ticking = true;
         }
     }, { passive: true });
+    render();
 })();
 
 /* Advertising copy controls. */
@@ -1276,27 +1239,32 @@ pl2RunDeferred(function () {
                 }, 1400);
             }
             if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(complete).catch(complete);
+                navigator.clipboard.writeText(text).then(complete);
                 return;
             }
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            document.execCommand('copy');
+            area.remove();
             complete();
         });
     });
 })();
 
-/* ActiveBreadcrumb — desktop only (hidden on mobile CSS); IO, no getBoundingClientRect. */
+/* ActiveBreadcrumb — IntersectionObserver (no getBoundingClientRect on scroll) */
 (function () {
-    if (lightMotion) return;
     var crumb = document.getElementById('pl2Breadcrumb');
     var crumbText = document.getElementById('pl2BreadcrumbText');
     if (!crumb || !crumbText) return;
     var sections = Array.prototype.slice.call(document.querySelectorAll('[data-bc]'));
     if (!sections.length) return;
     var current = sections[0];
-    var applyRaf = 0;
-    var pending = null;
     function apply(sec) {
-        if (!sec || sec === current && crumb.classList.contains('is-active')) return;
+        if (!sec) return;
         current = sec;
         crumbText.textContent = current.getAttribute('data-bc');
         crumb.classList.add('is-active');
@@ -1305,16 +1273,8 @@ pl2RunDeferred(function () {
             line.classList.toggle('active', index === railIndex);
         });
     }
-    function scheduleApply(sec) {
-        pending = sec;
-        if (applyRaf) return;
-        applyRaf = window.requestAnimationFrame(function () {
-            applyRaf = 0;
-            apply(pending);
-        });
-    }
     if (!('IntersectionObserver' in window)) {
-        scheduleApply(sections[0]);
+        apply(sections[0]);
         return;
     }
     var visible = new Map();
@@ -1331,10 +1291,10 @@ pl2RunDeferred(function () {
                 best = sec;
             }
         });
-        if (best) scheduleApply(best);
+        if (best) apply(best);
     }, { root: null, rootMargin: '-28% 0px -45% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
     sections.forEach(function (sec) { io.observe(sec); });
-    scheduleApply(sections[0]);
+    apply(sections[0]);
 })();
 });
 </script>

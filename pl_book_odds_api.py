@@ -13,7 +13,9 @@ Sign convention (matches ESPN/DraftKings):
 from __future__ import annotations
 
 import logging
+import os
 import re
+import time
 import unicodedata
 from datetime import datetime
 from typing import Any, Optional
@@ -99,6 +101,71 @@ SOCCER_PROBE_SLUGS = [
     'usa.open', 'mex.2',
 ]
 
+# Catalog display name → existing soccer keys on the same odds API tennis/golf use.
+# Only leagues that API actually lists. Cups it does not list (Copa do Brasil,
+# Copa Colombia, Copa Chile, …) stay ESPN-only.
+SOCCER_ODDS_API_KEYS = {
+    'English Premier League': 'soccer_epl',
+    'EFL Championship': 'soccer_efl_champ',
+    'EFL Cup': 'soccer_england_efl_cup',
+    'FA Cup': 'soccer_fa_cup',
+    'English League One': 'soccer_england_league1',
+    'English League Two': 'soccer_england_league2',
+    'Spanish LaLiga': 'soccer_spain_la_liga',
+    'Spanish Segunda División': 'soccer_spain_segunda_division',
+    'Spanish Copa del Rey': 'soccer_spain_copa_del_rey',
+    'German Bundesliga': 'soccer_germany_bundesliga',
+    'German 2. Bundesliga': 'soccer_germany_bundesliga2',
+    'German Cup': 'soccer_germany_dfb_pokal',
+    'Italian Serie A': 'soccer_italy_serie_a',
+    'Italian Serie B': 'soccer_italy_serie_b',
+    'Coppa Italia': 'soccer_italy_coppa_italia',
+    'French Ligue 1': 'soccer_france_ligue_one',
+    'French Ligue 2': 'soccer_france_ligue_two',
+    'Coupe de France': 'soccer_france_coupe_de_france',
+    'Dutch Eredivisie': 'soccer_netherlands_eredivisie',
+    'Portuguese Primeira Liga': 'soccer_portugal_primeira_liga',
+    'Scottish Premiership': 'soccer_spl',
+    'Belgian Pro League': 'soccer_belgium_first_div',
+    'Austrian Bundesliga': 'soccer_austria_bundesliga',
+    'Danish Superliga': 'soccer_denmark_superliga',
+    'Swedish Allsvenskan': 'soccer_sweden_allsvenskan',
+    'Norwegian Eliteserien': 'soccer_norway_eliteserien',
+    'Greek Super League': 'soccer_greece_super_league',
+    'Turkish Super Lig': 'soccer_turkey_super_league',
+    'Russian Premier League': 'soccer_russia_premier_league',
+    'UEFA Champions League': 'soccer_uefa_champs_league',
+    'UEFA Champions League Qualifying': 'soccer_uefa_champs_league_qualification',
+    'UEFA Europa League': 'soccer_uefa_europa_league',
+    'UEFA Europa Conference League': 'soccer_uefa_europa_conference_league',
+    'UEFA Nations League': 'soccer_uefa_nations_league',
+    'UEFA European Championship': 'soccer_uefa_european_championship',
+    'Major League Soccer': 'soccer_usa_mls',
+    'Liga MX': 'soccer_mexico_ligamx',
+    'Leagues Cup': 'soccer_concacaf_leagues_cup',
+    'Concacaf Gold Cup': 'soccer_concacaf_gold_cup',
+    'Argentine Liga Profesional de Fútbol': 'soccer_argentina_primera_division',
+    'Brazilian Serie A': 'soccer_brazil_campeonato',
+    'Brazilian Serie B': 'soccer_brazil_serie_b',
+    'Chilean Primera División': 'soccer_chile_campeonato',
+    'Copa Libertadores': 'soccer_conmebol_copa_libertadores',
+    'CONMEBOL Sudamericana': 'soccer_conmebol_copa_sudamericana',
+    'Copa América': 'soccer_conmebol_copa_america',
+    'Chinese Super League': 'soccer_china_superleague',
+    'Japanese J.League': 'soccer_japan_j_league',
+    'Australian A-League Men': 'soccer_australia_aleague',
+    'Saudi Pro League': 'soccer_saudi_arabia_pro_league',
+    'FIFA World Cup': 'soccer_fifa_world_cup',
+    'FIFA World Cup Qualifiers (UEFA)': 'soccer_fifa_world_cup_qualifiers_europe',
+    'FIFA World Cup Qualifiers (CONMEBOL)': 'soccer_fifa_world_cup_qualifiers_south_america',
+    'FIFA Club World Cup': 'soccer_fifa_club_world_cup',
+    'FIFA Women\'s World Cup': 'soccer_fifa_world_cup_womens',
+    'Africa Cup of Nations': 'soccer_africa_cup_of_nations',
+}
+
+_ODDS_API_SOCCER_CACHE: dict[str, dict[str, Any]] = {}
+_ODDS_API_SOCCER_TTL = 300.0
+
 def build_pl_book_odds():
 
     if sport == "TENNIS":
@@ -139,9 +206,35 @@ def _to_int_american(v) -> Optional[int]:
         return None
 
 
+def _soccer_slug_and_event_from_game_id(game_id: str) -> tuple[Optional[str], Optional[str]]:
+    """Parse SOCCER_<espn.slug.may_have_underscores>_<eventid>.
+
+    Slugs such as bra.copa_do_brazil and ita.coppa_italia must stay intact.
+    Splitting on every '_' used to send Core API `bra.copa` (empty).
+    """
+    raw = str(game_id or '').strip()
+    if not raw:
+        return None, None
+    if '_' not in raw:
+        return None, raw if raw.isdigit() else None
+    head, tail = raw.split('_', 1)
+    if head.upper() != 'SOCCER':
+        return None, tail.split('_')[-1] if tail.split('_')[-1].isdigit() else None
+    if tail.isdigit():
+        return None, tail
+    event = tail.rsplit('_', 1)
+    if len(event) == 2 and event[1].isdigit():
+        slug = event[0]
+        return (slug if slug else None), event[1]
+    return (tail if '.' in tail else None), None
+
+
 def _espn_event_id(game_id: str) -> Optional[str]:
     if not game_id:
         return None
+    _slug, event_id = _soccer_slug_and_event_from_game_id(game_id)
+    if event_id:
+        return event_id
     raw = str(game_id).split('_')[-1]
     return raw if raw.isdigit() else None
 
@@ -158,32 +251,61 @@ def _soccer_slug_from_league_name(league_name: Optional[str]) -> Optional[str]:
     canon = _SOCCER_LEAGUE_ALIASES.get(low, key)
     if re.match(r'^[a-z][a-z0-9._-]*$', str(canon).lower()) and '.' in str(canon):
         return str(canon).lower()
-    return SOCCER_LEAGUE_ESPN_SLUGS.get(canon) or SOCCER_LEAGUE_ESPN_SLUGS.get(key)
+    mapped = SOCCER_LEAGUE_ESPN_SLUGS.get(canon) or SOCCER_LEAGUE_ESPN_SLUGS.get(key)
+    if mapped:
+        return mapped
+    try:
+        from soccer_league_catalog import soccer_espn_slug
+        return soccer_espn_slug(canon) or soccer_espn_slug(key)
+    except Exception:
+        return None
 
 
 def _soccer_league_slugs_to_try(game_id: str, league_name: Optional[str] = None) -> list[str]:
     """Ordered ESPN league slugs for a soccer event (most likely first)."""
     slugs: list[str] = []
-    parts = str(game_id or '').split('_')
-    if len(parts) >= 3 and parts[0].upper() == 'SOCCER':
-        mid = parts[1]
-        if mid and '.' in mid:
-            slugs.append(mid)
     mapped = _soccer_slug_from_league_name(league_name)
-    if mapped and mapped not in slugs:
+    if mapped:
         slugs.append(mapped)
-    for slug in SOCCER_PROBE_SLUGS:
-        if slug not in slugs:
-            slugs.append(slug)
-    # Cap probes so picks/results pages cannot stall on 15+ sequential ESPN calls per game.
-    return slugs[:5]
+    parsed_slug, _event_id = _soccer_slug_and_event_from_game_id(game_id)
+    if parsed_slug and '.' in parsed_slug and parsed_slug not in slugs:
+        slugs.append(parsed_slug)
+    known = bool(slugs)
+    # Prefer the catalog/game_id slug. Do not fan out to EPL/etc. when we
+    # already know the competition — that made cup pages stall and miss books.
+    if not known:
+        for slug in SOCCER_PROBE_SLUGS:
+            if slug not in slugs:
+                slugs.append(slug)
+    return slugs[:2] if known else slugs[:5]
 
+
+
+def _core_moneyline(team_odds) -> Optional[int]:
+    if not isinstance(team_odds, dict):
+        return None
+    for key in ('moneyLine', 'moneyline'):
+        ml = _to_int_american(team_odds.get(key))
+        if ml is not None:
+            return ml
+        nested = team_odds.get(key)
+        if isinstance(nested, dict):
+            ml = _to_int_american(nested.get('odds') or nested.get('close') or nested.get('current'))
+            if ml is not None:
+                return ml
+    current = team_odds.get('current') or team_odds.get('close') or {}
+    if isinstance(current, dict):
+        return _to_int_american(current.get('moneyLine') or current.get('moneyline') or current.get('odds'))
+    return None
 
 
 def _parse_core_item(item: dict) -> Optional[dict[str, Any]]:
     spread = _to_float(item.get('spread'))
     total = _to_float(item.get('overUnder'))
-    if spread is None and total is None:
+    home_ml = _core_moneyline(item.get('homeTeamOdds') or {})
+    away_ml = _core_moneyline(item.get('awayTeamOdds') or {})
+    # Soccer cups often post 3-way ML with no AH / total. Keep those rows.
+    if spread is None and total is None and home_ml is None and away_ml is None:
         return None
     prov = item.get('provider') or {}
     return {
@@ -191,8 +313,8 @@ def _parse_core_item(item: dict) -> Optional[dict[str, Any]]:
         'provider_id': prov.get('id'),
         'spread': spread,
         'total': total,
-        'home_moneyline': _to_int_american((item.get('homeTeamOdds') or {}).get('moneyLine')),
-        'away_moneyline': _to_int_american((item.get('awayTeamOdds') or {}).get('moneyLine')),
+        'home_moneyline': home_ml,
+        'away_moneyline': away_ml,
         'is_live': 'live' in (prov.get('name') or '').lower(),
     }
 def _fetch_scoreboard_competition_odds(
@@ -381,7 +503,12 @@ def _fetch_core_odds_item(
     for item in items:
         prov = item.get('provider') or {}
         name = (prov.get('name') or '').lower()
-        if item.get('spread') is None and item.get('overUnder') is None:
+        if (
+            item.get('spread') is None
+            and item.get('overUnder') is None
+            and not ((item.get('homeTeamOdds') or {}).get('moneyLine')
+                     or (item.get('awayTeamOdds') or {}).get('moneyLine'))
+        ):
             continue
         if 'live' in name and dk is None and fallback is None:
             continue
@@ -466,6 +593,216 @@ def _ml_from_spread_fallback(spread: float, vig: float = 0.045) -> tuple[Optiona
     return _p_to_am(home_p), _p_to_am(away_p)
 
 
+def _odds_api_soccer_key(league_name: Optional[str]) -> Optional[str]:
+    if not league_name:
+        return None
+    key = str(league_name).strip()
+    mapped = SOCCER_ODDS_API_KEYS.get(key)
+    if mapped:
+        return mapped
+    try:
+        from soccer_league_catalog import _SOCCER_LEAGUE_CANONICAL
+        canon = _SOCCER_LEAGUE_CANONICAL.get(key.lower())
+        if canon:
+            return SOCCER_ODDS_API_KEYS.get(canon)
+    except Exception:
+        pass
+    return None
+
+
+def _soccer_team_keys_match(a: str, b: str) -> bool:
+    ka, kb = _normalize_team_key(a), _normalize_team_key(b)
+    if not ka or not kb:
+        return False
+    if ka == kb:
+        return True
+    aliases = {
+        'atleticomg': {'atleticomineiro'},
+        'atleticomineiro': {'atleticomg'},
+        'rbbragantino': {'redbullbragantino', 'bragantino'},
+        'redbullbragantino': {'rbbragantino', 'bragantino'},
+        'gremio': {'gremiofbpa'},
+        'vascodagama': {'vasco'},
+        'vasco': {'vascodagama'},
+    }
+    if kb in aliases.get(ka, ()) or ka in aliases.get(kb, ()):
+        return True
+    shorter, longer = (ka, kb) if len(ka) <= len(kb) else (kb, ka)
+    return len(shorter) >= 8 and shorter in longer
+
+
+def _fetch_odds_api_soccer_events(sport_key: str) -> list[dict]:
+    now = time.time()
+    cached = _ODDS_API_SOCCER_CACHE.get(sport_key)
+    if cached and (now - float(cached.get('ts') or 0)) < _ODDS_API_SOCCER_TTL:
+        return list(cached.get('events') or [])
+    api_key = os.getenv('ODDS_API_KEY') or os.getenv('THEODDS_API_KEY') or ''
+    if not api_key:
+        # Same default already used by theodds_api.py / sports tennis+golf adapters.
+        api_key = '18cfd484126cfef3f271472d619e2319'
+    if not api_key:
+        return []
+    try:
+        resp = requests.get(
+            f'https://api.the-odds-api.com/v4/sports/{sport_key}/odds',
+            params={
+                'apiKey': api_key,
+                'regions': 'us,uk,eu',
+                'markets': 'h2h,spreads,totals',
+                'oddsFormat': 'american',
+                'dateFormat': 'iso',
+            },
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            logger.debug('soccer odds-api %s status %s', sport_key, resp.status_code)
+            _ODDS_API_SOCCER_CACHE[sport_key] = {'ts': now, 'events': []}
+            return []
+        events = resp.json() if isinstance(resp.json(), list) else []
+    except Exception as exc:
+        logger.debug('soccer odds-api %s failed: %s', sport_key, exc)
+        return []
+    _ODDS_API_SOCCER_CACHE[sport_key] = {'ts': now, 'events': events}
+    return events
+
+
+def _pick_odds_api_book(event: dict) -> Optional[dict]:
+    books = event.get('bookmakers') or []
+    prefer = ('draftkings', 'fanduel', 'betmgm', 'caesars', 'williamhill', 'pinnacle')
+    chosen = None
+    for bk in books:
+        key = (bk.get('key') or bk.get('title') or '').lower()
+        if any(p in key for p in prefer):
+            chosen = bk
+            break
+        if chosen is None:
+            chosen = bk
+    return chosen
+
+
+def _odds_api_market_outcomes(book: dict, market_key: str) -> list[dict]:
+    for mkt in book.get('markets') or []:
+        if (mkt.get('key') or '') == market_key:
+            return list(mkt.get('outcomes') or [])
+    return []
+
+
+def _build_row_from_odds_api(
+    sport: str,
+    game_id: str,
+    home_team: str,
+    away_team: str,
+    game_date: Optional[str],
+    league_name: Optional[str],
+) -> Optional[dict[str, Any]]:
+    sport_key = _odds_api_soccer_key(league_name)
+    if not sport_key:
+        return None
+    events = _fetch_odds_api_soccer_events(sport_key)
+    if not events:
+        return None
+    want_date = (game_date or '')[:10]
+    match = None
+    for ev in events:
+        ev_home = ev.get('home_team') or ''
+        ev_away = ev.get('away_team') or ''
+        home_ok = (
+            _soccer_team_keys_match(home_team, ev_home)
+            or _soccer_team_keys_match(away_team, ev_away)
+        )
+        away_ok = (
+            _soccer_team_keys_match(away_team, ev_away)
+            or _soccer_team_keys_match(home_team, ev_away)
+        )
+        sides_ok = (
+            (_soccer_team_keys_match(home_team, ev_home) and _soccer_team_keys_match(away_team, ev_away))
+            or (_soccer_team_keys_match(home_team, ev_away) and _soccer_team_keys_match(away_team, ev_home))
+        )
+        if not sides_ok:
+            continue
+        commence = str(ev.get('commence_time') or '')[:10]
+        if want_date and commence and abs(
+            (datetime.strptime(want_date, '%Y-%m-%d') - datetime.strptime(commence, '%Y-%m-%d')).days
+        ) > 1:
+            continue
+        match = ev
+        if home_ok and away_ok:
+            break
+    if not match:
+        return None
+    book = _pick_odds_api_book(match)
+    if not book:
+        return None
+    ev_home = match.get('home_team') or ''
+    home_is_event_home = _soccer_team_keys_match(home_team, ev_home)
+    home_ml = away_ml = spread = total = None
+    for out in _odds_api_market_outcomes(book, 'h2h'):
+        name = out.get('name') or ''
+        price = _to_int_american(out.get('price'))
+        if price is None:
+            continue
+        if str(name).lower() in ('draw', 'tie'):
+            continue
+        if _soccer_team_keys_match(name, home_team):
+            home_ml = price
+        elif _soccer_team_keys_match(name, away_team):
+            away_ml = price
+        elif _soccer_team_keys_match(name, ev_home):
+            if home_is_event_home:
+                home_ml = price
+            else:
+                away_ml = price
+        else:
+            if home_is_event_home:
+                away_ml = away_ml if away_ml is not None else price
+            else:
+                home_ml = home_ml if home_ml is not None else price
+    for out in _odds_api_market_outcomes(book, 'spreads'):
+        point = _to_float(out.get('point'))
+        if point is None:
+            continue
+        if _soccer_team_keys_match(out.get('name') or '', home_team) or (
+            home_is_event_home and _soccer_team_keys_match(out.get('name') or '', ev_home)
+        ):
+            spread = point
+            break
+        if _soccer_team_keys_match(out.get('name') or '', away_team):
+            spread = -point
+            break
+    for out in _odds_api_market_outcomes(book, 'totals'):
+        if str(out.get('name') or '').lower() == 'over':
+            total = _to_float(out.get('point'))
+            if total is not None:
+                break
+    if spread is None and total is None and home_ml is None and away_ml is None:
+        return None
+    if spread is not None and (home_ml is None or away_ml is None):
+        h_fb, a_fb = _ml_from_spread_fallback(spread)
+        home_ml = home_ml if home_ml is not None else h_fb
+        away_ml = away_ml if away_ml is not None else a_fb
+    lines = _format_spread_line(home_team, away_team, spread or 0.0)
+    fav = lines.get('favorite_team') if spread is not None else None
+    return {
+        'sport': sport,
+        'game_id': game_id,
+        'game_date': game_date,
+        'home_team': home_team,
+        'away_team': away_team,
+        'spread': spread,
+        'total': total,
+        'home_moneyline': home_ml,
+        'away_moneyline': away_ml,
+        'favorite_team': fav,
+        'favorite_moneyline': home_ml if fav == home_team else (away_ml if fav == away_team else None),
+        'underdog_moneyline': away_ml if fav == home_team else (home_ml if fav == away_team else None),
+        'home_spread_line': lines.get('home_spread_line') if spread is not None else None,
+        'away_spread_line': lines.get('away_spread_line') if spread is not None else None,
+        'provider': 'sportsbook',
+        'source': 'pl_book_odds_api',
+        'as_of': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+    }
+
+
 def build_pl_book_odds(
     sport: str,
     game_id: str,
@@ -482,22 +819,32 @@ def build_pl_book_odds(
     favorite_team always matches spread sign.
     """
     event_id = str(espn_event_id) if espn_event_id else _espn_event_id(game_id)
-    if not event_id or not str(event_id).isdigit():
-        return None
-
-    item = _fetch_core_odds_item(
-        sport, event_id, game_id=game_id, league_name=league_name,
-    )
+    item = None
+    if event_id and str(event_id).isdigit():
+        item = _fetch_core_odds_item(
+            sport, event_id, game_id=game_id, league_name=league_name,
+        )
+    if not item and sport == 'SOCCER':
+        return _build_row_from_odds_api(
+            sport, game_id, home_team, away_team, game_date, league_name,
+        )
     if not item:
         return None
 
     spread = _to_float(item.get('spread'))
     total = _to_float(item.get('overUnder'))
-    if spread is None and total is None:
+    home_ml = _core_moneyline(item.get('homeTeamOdds') or {})
+    away_ml = _core_moneyline(item.get('awayTeamOdds') or {})
+    if home_ml is None:
+        home_ml = _to_int_american((item.get('homeTeamOdds') or {}).get('moneyLine'))
+    if away_ml is None:
+        away_ml = _to_int_american((item.get('awayTeamOdds') or {}).get('moneyLine'))
+    if spread is None and total is None and home_ml is None and away_ml is None:
+        if sport == 'SOCCER':
+            return _build_row_from_odds_api(
+                sport, game_id, home_team, away_team, game_date, league_name,
+            )
         return None
-
-    home_ml = _to_int_american((item.get('homeTeamOdds') or {}).get('moneyLine'))
-    away_ml = _to_int_american((item.get('awayTeamOdds') or {}).get('moneyLine'))
 
     if spread is not None and (home_ml is None or away_ml is None):
         h_fb, a_fb = _ml_from_spread_fallback(spread)

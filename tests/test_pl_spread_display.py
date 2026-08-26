@@ -33,7 +33,7 @@ def test_mlb_fade_spread_negates():
 
 
 def test_mlb_pick_card_shows_faded_spread(nhl):
-    """our_spread home+ → faded away run line on pick card."""
+    """our_spread home+ → faded away +1.5 on pick card (same pick_spread_side)."""
     card = {
         "home_team_id": "Texas Rangers",
         "away_team_id": "Kansas City Royals",
@@ -41,14 +41,8 @@ def test_mlb_pick_card_shows_faded_spread(nhl):
         "our_total": 8.5,
         "ensemble_prob": 62.0,
     }
-    nhl._apply_mlb_spread_fade(card)
     nhl._prepare_pred_card_display(card, sport="MLB")
-    assert card["our_spread"] == pytest.approx(-1.5)
-    assert card["disp_pl_spread"] == pytest.approx(-1.5)
-    assert _fmt_mlb_run_line(
-        card["disp_pl_spread"], card["home_team_id"], card["away_team_id"],
-    ) == "Kansas City Royals -1.5"
-    assert card.get("spread_pick_label") == "Kansas City Royals -1.5"
+    assert card.get("spread_pick_label") == "Kansas City Royals +1.5"
 
 
 def test_mlb_pick_card_faded_negative_model_spread(nhl):
@@ -58,12 +52,8 @@ def test_mlb_pick_card_faded_negative_model_spread(nhl):
         "our_spread": -1.5,
         "ensemble_prob": 38.5,
     }
-    nhl._apply_mlb_spread_fade(card)
     nhl._prepare_pred_card_display(card, sport="MLB")
-    assert card["disp_pl_spread"] == pytest.approx(1.5)
-    assert _fmt_mlb_run_line(
-        card["disp_pl_spread"], card["home_team_id"], card["away_team_id"],
-    ) == "Texas Rangers -1.5"
+    assert card.get("spread_pick_label") == "Texas Rangers +1.5"
 
 
 def test_mlb_results_card_uses_same_faded_spread(nhl):
@@ -211,6 +201,32 @@ def test_season_perf_uses_best_ml_model(nhl):
     assert perf["spread_pct"] == 66.7
     assert perf["spread_note"] is None
     assert perf["ou_note"] is None
+
+
+def test_mlb_season_perf_pins_product_models(nhl):
+    """MLB face is Sharp Consensus / PL spread / XSharp totals — not best-of."""
+    overall = {
+        "xgboost": {"total": 800, "correct": 414, "accuracy": 51.7},
+        "ensemble": {"total": 800, "correct": 412, "accuracy": 51.5},
+        "elo": {"total": 800, "correct": 411, "accuracy": 51.4},
+    }
+    st = {
+        "spread_graded": 699, "spread_covered": 338, "spread_pct": 48.4,
+        "pl_spread_graded": 699, "pl_spread_covered": 338, "pl_spread_pct": 48.4,
+        "total_graded": 797, "total_correct": 462, "total_pct": 60.7,
+        "pl_total_graded": 797, "pl_total_correct": 450, "pl_total_pct": 56.5,
+    }
+    perf = nhl._build_season_performance_summary(overall, st, sport="MLB")
+    assert perf["ml_model_label"] == "Sharp Consensus"
+    assert perf["ml_accuracy"] == 51.5
+    assert perf["ml_correct"] == 412
+    assert perf["spread_model_label"] == "Prediction Lab"
+    assert perf["spread_pct"] == 48.4
+    assert perf["spread_covered"] == 338
+    assert perf["spread_graded"] == 699
+    assert perf["ou_model_label"] == "XSharp"
+    assert perf["ou_pct"] == 60.7
+    assert perf["ou_correct"] == 462
 
 
 def test_pred_card_pl_spread_ignores_pre_enforce_prob(nhl):

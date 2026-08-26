@@ -11,7 +11,7 @@
       {# ===== SECTION: Today's Best Picks strip removed from burger menu (per request) ===== #}
       {% if not is_premium|default(false) %}
       <div class="tv-premium-cta-row">
-        <a href="/checkout/weekly" class="tv-premium-cta tv-premium-cta-weekly">Try a Week</a>
+        <a href="/checkout/weekly" class="tv-premium-cta tv-premium-cta-weekly js-try-week-cta">Try a Week FREE</a>
         <a href="/plans" class="tv-premium-cta">&#11088; Join Premium</a>
       </div>
       {% endif %}
@@ -19,15 +19,7 @@
         <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
         <button type="button" class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
         <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
-        {# Desktop header shows Blog + Pricing in .pl2-nav; on mobile that nav is hidden — keep them here #}
-        <a href="/blog" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Blog</span></a>
-        <a href="/plans" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Pricing</span></a>
-        <button type="button" class="tv-menu-btn" onclick="tvToggleMore(this)"><span class="tv-menu-label">More</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
-        <div id="tvMoreItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
-          <button type="button" class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('community')"><span class="tv-menu-label" style="font-size:0.88rem;">Community</span><span class="tv-menu-arrow">&#8250;</span></button>
-          <button type="button" class="tv-menu-btn" style="padding:10px 10px;" onclick="tvSub('company')"><span class="tv-menu-label" style="font-size:0.88rem;">Company</span><span class="tv-menu-arrow">&#8250;</span></button>
-        </div>
-        {% include "includes/tv_burger_auth.html" %}
+        {% include "includes/tv_burger_account_more.html" %}
       </div>
     </div>
     <div class="tv-panel hidden-right" id="tvSub"></div>
@@ -74,12 +66,14 @@ function tvToggle(){
   }else{tvOpen();}
 }
 function tvReset(){
-  var m=document.getElementById('tvMain'),s=document.getElementById('tvSub'),b=document.getElementById('tvBackBtn'),t=document.getElementById('tvDrawerTitle'),more=document.getElementById('tvMoreItems');
+  var m=document.getElementById('tvMain'),s=document.getElementById('tvSub'),b=document.getElementById('tvBackBtn'),t=document.getElementById('tvDrawerTitle'),more=document.getElementById('tvMoreItems'),acct=document.getElementById('tvAccountItems');
   if(m){m.classList.remove('hidden-left','hidden-right');m.classList.add('visible');}
   if(s){s.classList.remove('visible','hidden-left');s.classList.add('hidden-right');s.innerHTML='';}
   if(b){b.style.display='none';b.setAttribute('aria-hidden','true');}
   if(t)t.textContent='Menu';
   if(more)more.style.display='none';
+  if(acct)acct.style.display='none';
+  document.querySelectorAll('#tvMain .tv-more-arrow').forEach(function(a){a.style.transform='';});
 }
 function tvClose(){
   var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
@@ -164,3 +158,4 @@ document.addEventListener('DOMContentLoaded',function(){
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){tvClose();closeSrch();}});
 </script>
 <script src="/static/js/pl-header-logo.js" defer></script>
+{% include "includes/try_week_free_modal.html" %}

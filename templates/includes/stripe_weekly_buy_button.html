@@ -1,11 +1,11 @@
 {# Weekly plan CTA — Stripe Payment Link only. #}
 {% set _weekly_href = "/checkout/weekly" %}
 {% if wrap_class == "tv-premium-cta-weekly" %}
-<a href="{{ _weekly_href }}" class="tv-premium-cta tv-premium-cta-weekly">Try a Week</a>
+<a href="{{ _weekly_href }}" class="tv-premium-cta tv-premium-cta-weekly js-try-week-cta">Try a Week FREE</a>
 {% elif wrap_class == "join-premium-btn-weekly" %}
-<a href="{{ _weekly_href }}" class="join-premium-btn join-premium-btn-weekly">Try a Week</a>
+<a href="{{ _weekly_href }}" class="join-premium-btn join-premium-btn-weekly js-try-week-cta">Try a Week FREE</a>
 {% elif wrap_class == "nav-cta-weekly" %}
-<a href="{{ _weekly_href }}" class="nav-cta nav-cta-weekly">Try a Week</a>
+<a href="{{ _weekly_href }}" class="nav-cta nav-cta-weekly js-try-week-cta">Try a Week FREE</a>
 {% else %}
-<a href="{{ _weekly_href }}" class="{{ wrap_class or 'pl2-btn' }}">Try a Week — $4.99 →</a>
+<a href="{{ _weekly_href }}" class="{{ wrap_class or 'pl2-btn' }} js-try-week-cta">Try a Week FREE</a>
 {% endif %}

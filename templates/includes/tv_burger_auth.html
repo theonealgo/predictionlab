@@ -1,16 +1,20 @@
-{# Mobile burger auth — parity with desktop .pl2-account-menu in research_header.html #}
+{# Mobile burger Account dropdown — Pricing plus login/account/billing #}
 <div class="tv-menu-auth">
-  {% if is_logged_in|default(false) %}
-  <a href="/account" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Account</span></a>
-  <a href="/account" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Change password</span></a>
-  <form method="POST" action="/create-portal-session" class="tv-menu-auth-form">
-    <button type="submit" class="tv-menu-btn"><span class="tv-menu-label">Manage Subscription</span></button>
-  </form>
-  <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Billing portal</span></a>
-  <a href="/logout" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Sign out</span></a>
-  {% else %}
-  <a href="/login" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Login</span></a>
-  <a href="/signup" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Sign up</span></a>
-  <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Manage billing</span></a>
-  {% endif %}
+  <button type="button" class="tv-menu-btn" onclick="tvToggleAccount(this)"><span class="tv-menu-label">Account</span><span class="tv-more-arrow" style="color:#94a3b8;font-size:0.85rem;transition:transform .2s;">&#8250;</span></button>
+  <div id="tvAccountItems" style="display:none;padding-left:8px;border-left:2px solid #f1f5f9;margin:2px 8px 2px 14px;">
+    <a href="/plans" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Pricing</span></a>
+    {% if is_logged_in|default(false) %}
+    <a href="/account" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Account</span></a>
+    <a href="/account" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Change password</span></a>
+    <form method="POST" action="/create-portal-session" class="tv-menu-auth-form">
+      <button type="submit" class="tv-menu-btn" style="padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Manage Subscription</span></button>
+    </form>
+    <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Billing portal</span></a>
+    <a href="/logout" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Sign out</span></a>
+    {% else %}
+    <a href="/login" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Login</span></a>
+    <a href="/signup" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Sign up</span></a>
+    <a href="{{ stripe_customer_portal_login_url }}" target="_blank" rel="noopener noreferrer" class="tv-menu-btn" style="text-decoration:none;padding:10px 10px;"><span class="tv-menu-label" style="font-size:0.88rem;">Manage billing</span></a>
+    {% endif %}
+  </div>
 </div>
