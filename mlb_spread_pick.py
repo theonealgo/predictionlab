@@ -10,7 +10,7 @@
 
 Home-centric our_spread: positive = home favored (projected home − away).
 NO BET when there is no real run-line edge (pick'em / |our_spread| < 1.5).
-Decide favorite −1.5, then fade to the other side of the same run line (+1.5).
+Publish the favorite −1.5. Do not fade to the dog +1.5.
 
 Do not import Efficiency / ML / totals / IP-gate from here.
 """
@@ -37,11 +37,9 @@ def pick_spread_side(
     home: str | None = None,
     away: str | None = None,
 ) -> dict[str, Any]:
-    """Select HOME +1.5, AWAY +1.5, or NO BET from stored PL our_spread.
+    """Select HOME −1.5, AWAY −1.5, or NO BET from stored PL our_spread.
 
-    First decide the H2H favorite −1.5 when ``|our_spread| >= 1.5``.
-    If that is a bet, take the other side of the same run line (+1.5).
-    HOME −1.5 → AWAY +1.5; AWAY −1.5 → HOME +1.5. NO BET stays NO BET.
+    Favorite −1.5 when ``|our_spread| >= 1.5``. NO BET stays NO BET.
     ``home`` / ``away`` are optional labels only (not used for the decision).
     """
     del home, away
@@ -60,15 +58,12 @@ def pick_spread_side(
             "line": None,
             "reason": "pick'em — no run-line edge",
         }
-    # Favorite −1.5 from |our_spread| >= 1.5, then invert once to +1.5
-    # on the other team. No other caller may invert again — this is the only fade.
-    raw_side = "HOME" if xs >= MIN_ABS_SPREAD else "AWAY"
-    side = "AWAY" if raw_side == "HOME" else "HOME"
+    side = "HOME" if xs >= MIN_ABS_SPREAD else "AWAY"
     return {
         "action": "BET",
         "side": side,
-        "line": RUN_LINE,
-        "reason": "away +1.5" if side == "AWAY" else "home +1.5",
+        "line": -RUN_LINE,
+        "reason": "away -1.5" if side == "AWAY" else "home -1.5",
     }
 
 
@@ -81,10 +76,10 @@ def grade_spread_cover(
 ) -> bool | None:
     """Score-based run-line cover. None if no pick or scores missing.
 
-    Product fade is +1.5: covers unless that team loses by 2+
-    (opposite of −1.5 cover on the other team).
-    HOME +1.5 covers when home does not lose by 2+.
-    AWAY +1.5 covers when away does not lose by 2+.
+    Favorite −1.5: that side must win by 2+.
+    HOME −1.5 covers when home wins by 2+.
+    AWAY −1.5 covers when away wins by 2+.
+    Positive ``line`` still grades the old +1.5 dog cover.
     """
     if side not in ("HOME", "AWAY"):
         return None

@@ -1169,12 +1169,14 @@ def _extract_spread_totals(card_html: str) -> tuple[dict[str, Any] | None, dict[
         pl = _clean_team_label(m.group(3))
         xs = _clean_team_label(m.group(4))
         if kind in ("run line", "spread"):
-            spread = spread or {}
+            if not spread:
+                continue
             spread["book"] = books
             spread["pl_pick"] = pl
             spread["xs_pick"] = xs
         elif kind == "total":
-            totals = totals or {}
+            if not totals:
+                continue
             totals["book"] = books
             totals["book_line"] = _parse_line_number(books)
             totals["pl_pick"] = pl
@@ -1764,8 +1766,22 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
             season_ml["label"] = "Season snapshot"
 
     def _fin(market_key: str) -> list[dict[str, Any]]:
-        hit = [f for f in finals if f.get(market_key)]
-        return hit or list(finals)
+        hit = []
+        for f in finals:
+            blk = f.get(market_key)
+            if not isinstance(blk, dict):
+                continue
+            pick = str(blk.get("pick") or "").strip()
+            if not pick or pick in ("—", "-", "–"):
+                continue
+            if blk.get("correct") is None and blk.get("grade") not in (
+                "WIN",
+                "LOSS",
+                "PUSH",
+            ):
+                continue
+            hit.append(f)
+        return hit
 
     ln_ml = _honestize_tally(ln_ml)
     l7_ml = _honestize_tally(l7_ml)

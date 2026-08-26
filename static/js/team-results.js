@@ -61,9 +61,15 @@ function wnbaPrimaryFace(c, bestName) {
   return { name: bestName || "", pick: "—", prob: null, correct: null };
 }
 
+function isCflSport() {
+  return String(window.TEAM_SPORT || "").toLowerCase() === "cfl";
+}
 function sportModelOrder(order, marketKey) {
   const sport = String(window.TEAM_SPORT || "").toLowerCase();
   const base = order && order.length ? order : DEFAULT_ORDER;
+  if (sport === "cfl" && marketKey && marketKey !== "moneyline") {
+    return ["Prediction Lab"];
+  }
   if (sport === "wnba") {
     // Spread/Totals are face ATS/O-U (Prediction Lab / XSharp) — never
     // rewrite those labels to the four moneyline names.
@@ -477,6 +483,7 @@ function renderActiveMarket() {
   }
 
   const faceOrderFor = (block) => {
+    if (isCflSport() && key !== "moneyline") return ["Prediction Lab"];
     if (key === "moneyline") return baseOrder;
     const models = (block && block.models) || {};
     const fromBlock = (block && Array.isArray(block.model_order) && block.model_order.length)

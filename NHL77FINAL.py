@@ -1449,8 +1449,9 @@ def _attach_h2h_projection_to_predictions(sport, predictions, n: int = 10):
             at = pred.get('away_team_id')
             proj = _compute_h2h_projection(conn, sport, ht, at, n=n)
             if proj:
-                pred['our_total'] = proj['our_total']
                 pred['our_total_games'] = proj['games_used']
+                if not pred.get('_picks_locked') and pred.get('stored_ensemble_prob') is None:
+                    pred['our_total'] = proj['our_total']
                 pred['our_avg_home'] = proj['avg_home']
                 pred['our_avg_away'] = proj['avg_away']
                 # Keep H2H reference for UI (results page labels this "H2H Last 10";
@@ -4401,6 +4402,8 @@ def _enforce_pick_spread_consistency(pred: dict, sport: str = 'NBA') -> None:
     import math as _mc
     if pred.get('home_score') is not None:
         return
+    if pred.get('_picks_locked') or pred.get('stored_ensemble_prob') is not None:
+        return
 
     # Sport-specific σ for the spread normal distribution.
     _sigma = {'NBA': 12.0, 'NCAAB': 10.0, 'NFL': 14.0, 'NCAAF': 16.0,
@@ -5772,6 +5775,7 @@ SPORTS = {
     'TENNIS': {'name': 'Tennis', 'icon': '🎾', 'color': '#16a34a'},
     'UFC':    {'name': 'UFC / MMA', 'icon': '🥊', 'color': '#b91c1c'},
     'GOLF':   {'name': 'Golf', 'icon': '⛳', 'color': '#0369a1'},
+    'CFL':    {'name': 'CFL', 'icon': '🏈', 'color': '#b45309'},
 }
 SOCCER_ENABLED = True
 
@@ -5789,6 +5793,7 @@ SPORT_SEO_SLUGS = {
     'TENNIS': 'tennis-picks',
     'UFC':    'ufc-picks',
     'GOLF':   'golf-picks',
+    'CFL':    'cfl-picks',
 }
 _SEO_SLUG_TO_SPORT = {v: k for k, v in SPORT_SEO_SLUGS.items()}
 _SPORT_RESULTS_SLUGS = {k: v.replace('-picks', '-results') for k, v in SPORT_SEO_SLUGS.items()}
@@ -7060,7 +7065,11 @@ def _ensure_predictions_prob_columns():
     try:
         conn = sqlite3.connect(DATABASE)
         cols = {row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()}
-        for col in ('catboost_home_prob', 'glicko_home_prob', 'trueskill_home_prob'):
+        for col in (
+            'catboost_home_prob', 'glicko_home_prob', 'trueskill_home_prob',
+            'expected_home_score', 'expected_away_score',
+            'lock_xs_spread', 'lock_xs_total', 'lock_pl_spread', 'lock_pl_total',
+        ):
             if col not in cols:
                 conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} REAL")
         conn.commit()
@@ -7068,6 +7077,179 @@ def _ensure_predictions_prob_columns():
         _PREDICTIONS_PROB_SELECT_CACHE = None
     except Exception as _e:
         logger.debug(f"[predictions] column ensure failed: {_e}")
+
+
+def _lock_row_get(row, key, default=None):
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
+def _copy_stored_lock_markets(game, row) -> None:
+    if not game or row is None:
+        return
+    mapping = (
+        ('expected_home_score', 'stored_expected_home'),
+        ('expected_away_score', 'stored_expected_away'),
+        ('lock_xs_spread', 'stored_lock_xs_spread'),
+        ('lock_xs_total', 'stored_lock_xs_total'),
+        ('lock_pl_spread', 'stored_lock_pl_spread'),
+        ('lock_pl_total', 'stored_lock_pl_total'),
+    )
+    for src, dst in mapping:
+        val = _to_float_safe(_lock_row_get(row, src))
+        if val is None:
+            val = _to_float_safe(_lock_row_get(row, dst))
+        if val is not None:
+            game[dst] = val
+
+
+def _card_has_published_markets(card) -> bool:
+    if not card:
+        return False
+    return any(
+        card.get(k) is not None
+        for k in (
+            'stored_lock_xs_spread',
+            'stored_lock_xs_total',
+            'stored_lock_pl_spread',
+            'stored_lock_pl_total',
+        )
+    )
+
+
+def _apply_stored_markets_to_card(card) -> bool:
+    if not card or not _card_has_published_markets(card):
+        eh = _to_float_safe(card.get('stored_expected_home')) if card else None
+        ea = _to_float_safe(card.get('stored_expected_away')) if card else None
+        if card is not None and eh is not None:
+            card['v2_expected_home'] = eh
+            card['expected_home_score'] = eh
+        if card is not None and ea is not None:
+            card['v2_expected_away'] = ea
+            card['expected_away_score'] = ea
+        return False
+    xs = _to_float_safe(card.get('stored_lock_xs_spread'))
+    xt = _to_float_safe(card.get('stored_lock_xs_total'))
+    ps = _to_float_safe(card.get('stored_lock_pl_spread'))
+    pt = _to_float_safe(card.get('stored_lock_pl_total'))
+    if xs is not None:
+        card['xgb_spread'] = xs
+        card['xsharp_spread'] = xs
+    if xt is not None:
+        card['xgb_total'] = xt
+    if ps is not None:
+        card['our_spread'] = ps
+    elif xs is not None:
+        card['our_spread'] = xs
+    if pt is not None:
+        card['our_total'] = pt
+    elif xt is not None:
+        card['our_total'] = xt
+    eh = _to_float_safe(card.get('stored_expected_home'))
+    ea = _to_float_safe(card.get('stored_expected_away'))
+    if eh is not None:
+        card['v2_expected_home'] = eh
+        card['expected_home_score'] = eh
+    if ea is not None:
+        card['v2_expected_away'] = ea
+        card['expected_away_score'] = ea
+    card['_spread_faded'] = True
+    card['_mlb_spread_faded'] = True
+    card['_xsharp_spread_faded'] = True
+    card['_ou_faded'] = True
+    card['_picks_locked'] = True
+    return True
+
+
+def _hydrate_stored_lock_markets_batch(conn, sport, games) -> None:
+    if not games:
+        return
+    _ensure_predictions_prob_columns()
+    gids = [g.get('game_id') for g in games if isinstance(g, dict) and g.get('game_id')]
+    if not gids:
+        return
+    by_id = {}
+    for i in range(0, len(gids), 400):
+        chunk = gids[i:i + 400]
+        marks = ','.join('?' * len(chunk))
+        rows = conn.execute(
+            "SELECT game_id, expected_home_score, expected_away_score, "
+            "lock_xs_spread, lock_xs_total, lock_pl_spread, lock_pl_total "
+            f"FROM predictions WHERE sport = ? AND game_id IN ({marks})",
+            (sport, *chunk),
+        ).fetchall()
+        for row in rows:
+            gid = _lock_row_get(row, 'game_id')
+            if gid:
+                by_id[gid] = row
+    for g in games:
+        row = by_id.get(g.get('game_id'))
+        if row:
+            _copy_stored_lock_markets(g, row)
+
+
+def _backfill_prediction_markets(cursor, sport, pred) -> bool:
+    if pred is None or pred.get('home_score') is not None:
+        return False
+    game_id = pred.get('game_id')
+    if not game_id:
+        return False
+    xs = _to_float_safe(pred.get('xgb_spread'))
+    xt = _to_float_safe(pred.get('xgb_total'))
+    ps = _to_float_safe(pred.get('our_spread'))
+    if ps is None:
+        try:
+            ps = _to_float_safe(_best_pl_spread(pred))
+        except Exception:
+            ps = None
+    if ps is None:
+        ps = xs
+    pt = _to_float_safe(pred.get('our_total'))
+    if pt is None:
+        pt = xt
+    eh = _to_float_safe(pred.get('v2_expected_home'))
+    if eh is None:
+        eh = _to_float_safe(pred.get('expected_home_score'))
+    ea = _to_float_safe(pred.get('v2_expected_away'))
+    if ea is None:
+        ea = _to_float_safe(pred.get('expected_away_score'))
+    if all(v is None for v in (xs, xt, ps, pt, eh, ea)):
+        return False
+    row = cursor.execute(
+        "SELECT id, expected_home_score, expected_away_score, "
+        "lock_xs_spread, lock_xs_total, lock_pl_spread, lock_pl_total "
+        "FROM predictions WHERE game_id = ? AND sport = ?",
+        (game_id, sport),
+    ).fetchone()
+    if not row:
+        return False
+    updates = []
+    params = []
+    for col, val in (
+        ('expected_home_score', eh),
+        ('expected_away_score', ea),
+        ('lock_xs_spread', xs),
+        ('lock_xs_total', xt),
+        ('lock_pl_spread', ps),
+        ('lock_pl_total', pt),
+    ):
+        if val is None:
+            continue
+        if _to_float_safe(_lock_row_get(row, col)) is None:
+            updates.append(f'{col} = ?')
+            params.append(val)
+    if not updates:
+        return False
+    params.append(_lock_row_get(row, 'id'))
+    cursor.execute(f"UPDATE predictions SET {', '.join(updates)} WHERE id = ?", params)
+    return True
+
 
 
 # Run on every startup — creates tables if missing, no-op if they exist
@@ -8734,6 +8916,15 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     except Exception:
         pass
 
+    try:
+        _lk_conn = get_db_connection()
+        _hydrate_stored_lock_markets_batch(
+            _lk_conn, sport, [g for _, g in all_games_with_dates]
+        )
+        _lk_conn.close()
+    except Exception as _lk_e:
+        logger.debug(f"[{sport}] lock-market hydrate failed: {_lk_e}")
+
     for game_date, game in all_games_with_dates:
         # Only build cards inside the picks display window (see _PICKS_DISPLAY_WINDOW);
         # full history is served by the results page.
@@ -8910,6 +9101,9 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             
             # Add predictions to game dict
             game_dict = dict(game)
+            if _has_published_ml:
+                game_dict['_picks_locked'] = True
+            _has_published_markets = _card_has_published_markets(game_dict)
             for _k in (
                 'market_spread',
                 'market_total',
@@ -8993,6 +9187,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             game_dict['xgb_away_score'] = None
             game_dict['xgb_spread'] = None
             game_dict['xgb_total'] = None
+            _apply_stored_markets_to_card(game_dict)
             # Puck-line (NHL) or raw-spread (other sports) display fields
             game_dict['puck_line_fav_prob'] = None
             game_dict['puck_line_dog_prob'] = None
@@ -9069,7 +9264,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     except Exception as _ve:
                         logger.debug(f"VegasScorePredictor error: {_ve}")
 
-            if game_dict.get('home_score') is None and not _fast_cold_build:
+            if game_dict.get('home_score') is None and not _fast_cold_build and not _has_published_markets:
                 try:
                     if _xgb_model_page:
                         result = _xgb_model_page.predict(
@@ -9087,7 +9282,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             if game_dict.get('home_score') is None and not _fast_cold_build:
                 # ── MLB: pitching-enhanced prediction (upcoming games only
                 #    so we do not retroactively rewrite picks for completed games) ─
-                if sport == 'MLB':
+                if sport == 'MLB' and not _has_published_ml:
                     try:
                         from mlb_runs_model import get_or_train_mlb_model as _get_mlb_model
                         import math as _math
@@ -9675,6 +9870,23 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             _start_background_book_refresh(sport, predictions)
     except Exception as _bk_build:
         logger.debug(f"[{sport}] book refresh before predictions cache store: {_bk_build}")
+
+    try:
+        _bf_conn = get_db_connection()
+        _bf_cur = _bf_conn.cursor()
+        _bf_n = 0
+        for _bf_pred in predictions:
+            try:
+                if _backfill_prediction_markets(_bf_cur, sport, _bf_pred):
+                    _bf_n += 1
+            except Exception:
+                pass
+        if _bf_n:
+            _bf_conn.commit()
+            logger.info(f"Locked {_bf_n} {sport} spread/total snapshots")
+        _bf_conn.close()
+    except Exception as _bf_e:
+        logger.debug(f"[{sport}] market lock backfill failed: {_bf_e}")
 
     predictions = _filter_exhibition_predictions(predictions)
     _trim_cache(_PREDICTIONS_CACHE, cache_ttl, max_entries=50)
@@ -18240,6 +18452,13 @@ def sport_predictions(sport, filter_date=None):
         return "Sport not found", 404
     if sport == 'SOCCER' and not SOCCER_ENABLED:
         return "Soccer predictions are temporarily hidden while data loads.", 404
+    if sport == 'CFL':
+        try:
+            from cfl_live import render_cfl_picks
+            return render_cfl_picks()
+        except Exception as _cfl_e:
+            logger.exception('CFL picks failed: %s', _cfl_e)
+            return "CFL picks are unavailable.", 503
     if sport == 'SOCCER' and not filter_date:
         _soc_q_league = (request.args.get('league') or '').strip()
         if 'region' not in request.args and not _soc_q_league:
@@ -18717,6 +18936,14 @@ def sport_results(sport):
             return "Sport not found", 404
         if sport == 'SOCCER' and not SOCCER_ENABLED:
             return "Soccer results are temporarily hidden while data loads.", 404
+        if sport == 'CFL':
+            try:
+                from cfl_live import render_cfl_results
+                view = (request.args.get('view') or '').strip().lower()
+                return render_cfl_results(view=view)
+            except Exception as _cfl_e:
+                logger.exception('CFL results failed: %s', _cfl_e)
+                return "CFL results are unavailable.", 503
         if sport == 'SOCCER':
             _soc_q_league = (request.args.get('league') or '').strip()
             if 'region' not in request.args and not _soc_q_league and not (request.args.get('view') or '').strip():

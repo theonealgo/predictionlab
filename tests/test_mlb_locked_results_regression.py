@@ -49,8 +49,8 @@ def test_mlb_efficiency_does_not_use_faded_spread_pick():
 def test_mlb_run_line_1_5_is_a_bet():
     picked = pick_spread_side(1.5, home="BAL", away="TB")
     assert picked["action"] == "BET"
-    assert picked["side"] == "AWAY"
-    assert picked["line"] == 1.5
+    assert picked["side"] == "HOME"
+    assert picked["line"] == -1.5
 
 
 def test_mlb_ou_face_pct_matches_wl():
@@ -123,7 +123,7 @@ def test_mlb_efficiency_counts_all_h2h_games_not_only_run_line_bets():
         )
     daily = {"2026-08-21": {"games": games}}
     N._grade_efficiency_ml_from_spread("MLB", daily)
-    tally = N.compute_daily_model_tally(daily, "2026-08-21")
+    tally = N._tally_model_counts_from_games(games, sport="MLB")
     assert tally["efficiency"]["total"] == 15
     assert tally["ensemble"]["total"] == 15
 

@@ -3,18 +3,18 @@ from collections import defaultdict
 from unittest.mock import MagicMock
 
 
-def test_mlb_favorite_fades_to_plus_1_5_other_side():
+def test_mlb_favorite_is_minus_1_5():
     import NHL77FINAL as N
 
     assert N._mlb_run_line_from_home_spread(1.5, "LAD", "MIL") == (
-        "AWAY",
-        "MIL",
-        1.5,
-    )
-    assert N._mlb_run_line_from_home_spread(-2.0, "LAD", "MIL") == (
         "HOME",
         "LAD",
-        1.5,
+        -1.5,
+    )
+    assert N._mlb_run_line_from_home_spread(-2.0, "LAD", "MIL") == (
+        "AWAY",
+        "MIL",
+        -1.5,
     )
     assert N._mlb_run_line_from_home_spread(0.4, "LAD", "MIL") is None
     assert N._mlb_run_line_from_home_spread(-0.5, "LAD", "MIL") is None
@@ -73,8 +73,8 @@ def test_skip_heavy_does_not_leak_first_spread(monkeypatch):
     games = daily["2026-06-01"]["games"]
     sides = {g.get("spread_pick") for g in games if g.get("spread_pick")}
     assert sides == {"HOME", "AWAY"}, f"expected both sides after leak fix, got {sides}"
-    assert games[0]["spread_pick"] == "HOME"
-    assert games[1]["spread_pick"] == "AWAY"
+    assert games[0]["spread_pick"] == "AWAY"
+    assert games[1]["spread_pick"] == "HOME"
     home_n = sum(1 for g in games if g.get("spread_pick") == "HOME")
     away_n = sum(1 for g in games if g.get("spread_pick") == "AWAY")
     assert home_n >= 10 and away_n >= 10
@@ -117,11 +117,11 @@ def test_displayed_correct_matches_score_grade(monkeypatch):
 
     N._compute_spread_total_for_daily("MLB", daily, skip_efficiency=True)
     g = daily["2026-08-16"]["games"][0]
-    assert g["spread_pick"] == "HOME"
-    assert g["spread_pick_label"] == "Los Angeles Dodgers +1.5"
-    assert g["spread_correct"] is False
-    assert g["pl_spread_correct"] is False
-    assert N._mlb_grade_minus_1_5("HOME", 2, 6) is False
+    assert g["spread_pick"] == "AWAY"
+    assert g["spread_pick_label"] == "Milwaukee Brewers -1.5"
+    assert g["spread_correct"] is True
+    assert g["pl_spread_correct"] is True
+    assert N.grade_spread_cover("AWAY", 2, 6, line=-1.5) is True
 
 
 def test_pickem_is_no_bet_not_forced(monkeypatch):
@@ -165,23 +165,12 @@ def test_pickem_is_no_bet_not_forced(monkeypatch):
     assert stats.get("pl_spread_graded", 0) == 0
 
 
-def _load_run_line_check():
-    import importlib.util
-    from pathlib import Path
-
-    helper = Path(__file__).resolve().parent / "mlb_run_line_check.py"
-    spec = importlib.util.spec_from_file_location("mlb_run_line_check", helper)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def test_unify_checker_helpers():
-    mod = _load_run_line_check()
-    fail_forced_bet_all_games = mod.fail_forced_bet_all_games
-    fail_last_night_not_subset_of_last7 = mod.fail_last_night_not_subset_of_last7
-    fail_season_label_xsharp_spread = mod.fail_season_label_xsharp_spread
-
+    from tests.mlb_run_line_check import (
+        fail_forced_bet_all_games,
+        fail_last_night_not_subset_of_last7,
+        fail_season_label_xsharp_spread,
+    )
 
     assert fail_last_night_not_subset_of_last7(["a", "b"], ["a", "b", "c"]) == []
     assert fail_last_night_not_subset_of_last7(["a", "z"], ["a", "b"]) == ["z"]
@@ -196,10 +185,7 @@ def test_unify_checker_helpers():
 
 
 def test_all_same_side_checker_helper():
-    mod = _load_run_line_check()
-    fail_all_same_side = mod.fail_all_same_side
-    fail_grade_mismatch = mod.fail_grade_mismatch
-
+    from tests.mlb_run_line_check import fail_all_same_side, fail_grade_mismatch
 
     picks = [{"side": "AWAY", "ok": True, "home_score": 2, "away_score": 6}] * 12
     assert fail_all_same_side(picks, min_n=10)

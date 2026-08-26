@@ -1,0 +1,264 @@
+/* CFL isolation only — Pick Confidence: 6 boxes, one row, no horizontal slider.
+   3 matchup cards per desktop row (same as other team sports). Golf excluded.
+   Content-height cards (no equal-height stretch). */
+html body[data-sandbox-sport="cfl"] .games-grid,
+html body[data-sport="cfl"] .games-grid,
+html body.research-site[data-sandbox-sport="cfl"] .date-section:not(.chart-mode) .games-grid,
+html body.research-site[data-sport="cfl"] .date-section:not(.chart-mode) .games-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  align-items: start !important;
+  justify-items: stretch !important;
+  width: 100% !important;
+}
+@media (max-width: 1100px) {
+  html body[data-sandbox-sport="cfl"] .games-grid,
+  html body[data-sport="cfl"] .games-grid,
+  html body.research-site[data-sandbox-sport="cfl"] .date-section:not(.chart-mode) .games-grid,
+  html body.research-site[data-sport="cfl"] .date-section:not(.chart-mode) .games-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 768px) {
+  html body[data-sandbox-sport="cfl"] .games-grid,
+  html body[data-sport="cfl"] .games-grid,
+  html body.research-site[data-sandbox-sport="cfl"] .date-section:not(.chart-mode) .games-grid,
+  html body.research-site[data-sport="cfl"] .date-section:not(.chart-mode) .games-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+html body[data-sandbox-sport="cfl"] .date-section.chart-mode .games-grid,
+html body[data-sport="cfl"] .date-section.chart-mode .games-grid {
+  display: none !important;
+}
+
+html body[data-sandbox-sport="cfl"] .game-card-stack,
+html body[data-sport="cfl"] .game-card-stack,
+html body[data-sandbox-sport="cfl"] .games-grid > .game-card-stack,
+html body[data-sport="cfl"] .games-grid > .game-card-stack {
+  min-width: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  align-self: start !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+html body[data-sandbox-sport="cfl"] .game-card-stack > .game-card,
+html body[data-sport="cfl"] .game-card-stack > .game-card,
+html body[data-sandbox-sport="cfl"] .game-card-stack > .pick-card,
+html body[data-sport="cfl"] .game-card-stack > .pick-card {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html body[data-sandbox-sport="cfl"] .pick-conf-bar,
+html body[data-sport="cfl"] .pick-conf-bar {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  max-width: 100% !important;
+}
+
+html body[data-sandbox-sport="cfl"] .pick-conf-grid,
+html body[data-sport="cfl"] .pick-conf-grid {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  align-items: stretch !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+html body[data-sport="cfl"] .daily-tally-grid,
+html body[data-sandbox-sport="cfl"] .daily-tally-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+
+html body[data-sport="cfl"] .game-card[data-league="CFL"] .odds-pricing-section,
+html body[data-sandbox-sport="cfl"] .game-card[data-league="CFL"] .odds-pricing-section {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 10px 12px 12px;
+  background: #f8fafc;
+}
+
+html body[data-sport="cfl"] .pc-box.correct .pc-side,
+html body[data-sandbox-sport="cfl"] .pc-box.correct .pc-side {
+  color: #15803d;
+}
+html body[data-sport="cfl"] .pc-box.wrong .pc-side,
+html body[data-sandbox-sport="cfl"] .pc-box.wrong .pc-side {
+  color: #b91c1c;
+}
+html body[data-sport="cfl"] .pick-ok,
+html body[data-sandbox-sport="cfl"] .pick-ok { color: #15803d; }
+html body[data-sport="cfl"] .pick-no,
+html body[data-sandbox-sport="cfl"] .pick-no { color: #b91c1c; }
+
+.cfl-result-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.cfl-result-chip {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-width: 100px;
+}
+.cfl-result-chip .lbl {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  font-weight: 700;
+}
+.cfl-result-chip .val {
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: #0f172a;
+  margin-top: 2px;
+}
+.cfl-no-pick {
+  padding: 0 14px 14px;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+.game-card[data-league="CFL"] .card-hero {
+  padding: 14px 14px 10px;
+}
+.game-card[data-league="CFL"] .card-hero-meta-line {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+.game-card[data-league="CFL"] .teams-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.game-card[data-league="CFL"] .team-col {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+.game-card[data-league="CFL"] .final-score {
+  font-size: 1.35em;
+  font-weight: 800;
+  color: #0f172a;
+}
+.game-card[data-league="CFL"] .final-score.score-winner {
+  color: #00c076;
+}
+
+html body[data-sport="cfl"] .pl-analytics-title,
+html body[data-sandbox-sport="cfl"] .pl-analytics-title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  color: #0f172a;
+  text-align: center;
+}
+html body[data-sport="cfl"] .pl-analytics-title + .pl-analytics-grid,
+html body[data-sandbox-sport="cfl"] .pl-analytics-title + .pl-analytics-grid {
+  margin-bottom: 16px;
+}
+html body[data-sport="cfl"] .pl-analytics-grid,
+html body[data-sandbox-sport="cfl"] .pl-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+html body[data-sport="cfl"] .pl-analytics-card,
+html body[data-sandbox-sport="cfl"] .pl-analytics-card {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+html body[data-sport="cfl"] .pl-analytics-k,
+html body[data-sandbox-sport="cfl"] .pl-analytics-k {
+  font-size: 0.75rem;
+  color: #475569;
+  margin-bottom: 4px;
+}
+html body[data-sport="cfl"] .pl-analytics-name,
+html body[data-sandbox-sport="cfl"] .pl-analytics-name {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+html body[data-sport="cfl"] .pl-analytics-v,
+html body[data-sandbox-sport="cfl"] .pl-analytics-v {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+html body[data-sport="cfl"] .pl-analytics-v.muted,
+html body[data-sandbox-sport="cfl"] .pl-analytics-v.muted {
+  color: #94a3b8;
+}
+html body[data-sport="cfl"] .pl-analytics-sub,
+html body[data-sandbox-sport="cfl"] .pl-analytics-sub {
+  font-size: 0.8rem;
+  color: #475569;
+  margin-top: 4px;
+}
+@media (max-width: 720px) {
+  html body[data-sport="cfl"] .pl-analytics-grid,
+  html body[data-sandbox-sport="cfl"] .pl-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+html body[data-sport="cfl"] .cfl-results-share,
+html body[data-sandbox-sport="cfl"] .cfl-results-share {
+  display: block;
+  max-width: 540px;
+  margin: 28px auto 40px;
+  padding: 0 12px;
+  text-align: center;
+}
+html body[data-sport="cfl"] .cfl-results-share figcaption,
+html body[data-sandbox-sport="cfl"] .cfl-results-share figcaption {
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+html body[data-sport="cfl"] .cfl-results-share-img,
+html body[data-sandbox-sport="cfl"] .cfl-results-share-img {
+  display: block;
+  width: min(100%, 540px);
+  height: auto;
+  aspect-ratio: 9 / 16;
+  margin: 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 520px) {
+  html body[data-sandbox-sport="cfl"] .pick-conf-grid,
+  html body[data-sport="cfl"] .pick-conf-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    min-width: 0 !important;
+  }
+}
