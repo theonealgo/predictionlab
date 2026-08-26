@@ -65,7 +65,7 @@
     letter-spacing: .18em;
 }
 .pl2-nav { display: flex; align-items: center; gap: 26px; margin-left: auto; }
-/* Keep the plain Pricing link and the button triggers on the same baseline. */
+/* Keep dropdown triggers on the same baseline. */
 .pl2-nav > a,
 .pl2-nav-trigger {
     display: inline-flex;
@@ -81,8 +81,7 @@
 }
 .pl2-nav a:hover { color: var(--pl-ink); }
 /* Nav dropdowns: Picks (sports) / Models (tools) / Results — click to open. */
-/* inline-flex + center so the trigger button sits on the SAME line as the
-   plain Pricing link (block wrapper put it in a taller line box, ~1.7px low). */
+/* inline-flex + center so dropdown triggers share one baseline. */
 .pl2-navdrop { position: relative; display: inline-flex; align-items: center; }
 .pl2-nav-trigger {
     border: none;
@@ -343,10 +342,18 @@ body.research-site p,
 body.research-site li { color: #3e403c; }
 body.research-site a { text-underline-offset: 3px; }
 
-body.research-site :is(.card,.legal-card,.pricing-card,.result-card,.prediction-card,.model-card,.game-card,.prop-card,.stat-card,.sport-card,.feature-card) {
+body.research-site :is(.card,.legal-card,.pricing-card,.result-card,.prediction-card,.model-card,.prop-card,.stat-card,.sport-card,.feature-card) {
     border: 1px solid var(--pl-line);
     border-radius: 4px;
     box-shadow: none;
+}
+/* Picks matchup cards keep signed-off MLB/NBA chrome (shadow + rounded tile). */
+body.research-site .game-card.pick-card,
+body.research-site .game-card-stack .game-card.pick-card {
+    border: 1px solid #E2E8F0;
+    border-radius: 16px;
+    box-shadow: 0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06);
+    overflow: hidden;
 }
 body.research-site :is(button,.btn,.button,[class*="btn-"],input,select,textarea) { border-radius: 2px; }
 body.research-site :is(.btn-primary,.primary-btn,.cta-button,.signup-btn,.submit-btn) {
@@ -388,13 +395,20 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
 
 .site-directory-footer {
     position: relative;
-    z-index: 2;
+    z-index: 20;
     padding: 72px 24px 24px;
     background: #0b0b0a;
+    background-color: #0b0b0a;
     color: #f6f6f2;
     border-top: 1px solid rgba(199,255,46,.35);
+    isolation: isolate;
+    content-visibility: visible;
 }
-.site-directory-footer .directory-shell { width: min(100%, 1280px); margin: 0 auto; }
+.site-directory-footer .directory-shell {
+    width: min(100%, 1280px);
+    margin: 0 auto;
+    background-color: #0b0b0a;
+}
 .site-directory-footer .directory-label,
 .site-directory-footer h5,
 .site-directory-footer .directory-sub,
@@ -422,7 +436,7 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
     line-height: .95;
     letter-spacing: 0;
 }
-.site-directory-footer .directory-sub { color: #a8aba4; font-size: 12px; }
+.site-directory-footer .directory-sub { color: #c8cbc4; font-size: 12px; }
 .site-directory-footer .directory-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0,1fr));
@@ -435,8 +449,9 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
 .site-directory-footer h5,
 .site-directory-footer .footer-heading {
     margin: 0 0 18px;
-    color: #b7b9b3;
-    font-size: 10px;
+    color: #d6d8d2;
+    font-size: 12px;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 2px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -444,8 +459,8 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
 .site-directory-footer .directory-grid a {
     display: block;
     padding: 6px 0;
-    color: #b7b9b3;
-    font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #d6d8d2;
+    font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
     text-decoration: none;
 }
 .site-directory-footer .directory-grid a:hover { color: var(--pl-neon); }
@@ -456,8 +471,8 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
     flex-wrap: wrap;
     gap: 24px;
     padding-top: 22px;
-    color: #a8aba4;
-    font-size: 10px;
+    color: #c8cbc4;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .8px;
 }
@@ -469,7 +484,7 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
     min-height: 44px;
     padding: 10px 14px;
     margin-left: 4px;
-    color: #c5c7c1;
+    color: #d6d8d2;
     text-decoration: none;
 }
 .site-directory-footer .directory-bottom a:hover { color: var(--pl-neon); }

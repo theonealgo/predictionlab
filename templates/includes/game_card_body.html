@@ -2,8 +2,8 @@
 {% from 'includes/score_macros.html' import fmt_half, fmt_labeled_proj, team_short, fmt_spread_line %}
 {% set away_id = card.away_team_id if card.away_team_id is defined else card.away %}
 {% set home_id = card.home_team_id if card.home_team_id is defined else card.home %}
-{% set bk_away = card.book_away_moneyline if card.book_away_moneyline is defined and card.book_away_moneyline else none %}
-{% set bk_home = card.book_home_moneyline if card.book_home_moneyline is defined and card.book_home_moneyline else none %}
+{% set bk_away = (card.book_away_moneyline if card.book_away_moneyline is defined and card.book_away_moneyline else none) or (card.away_odds if sport == 'SOCCER' and card.away_odds is defined and card.away_odds else none) or (card.away_moneyline if sport == 'SOCCER' and card.away_moneyline is defined and card.away_moneyline else none) %}
+{% set bk_home = (card.book_home_moneyline if card.book_home_moneyline is defined and card.book_home_moneyline else none) or (card.home_odds if sport == 'SOCCER' and card.home_odds is defined and card.home_odds else none) or (card.home_moneyline if sport == 'SOCCER' and card.home_moneyline is defined and card.home_moneyline else none) %}
 {% set pl_away = card.pl_model_away_ml if card.pl_model_away_ml is defined else none %}
 {% set pl_home = card.pl_model_home_ml if card.pl_model_home_ml is defined else none %}
 {% set _disp_bs = card.disp_book_spread if card.disp_book_spread is defined else none %}
@@ -92,23 +92,17 @@
             </tr>
         </tbody>
     </table>
-    {% if _pl_ah is not none or _xs_ah is not none %}
     <div class="proj-score-box">
         <div class="proj-score-title">Projected Score</div>
-        {% if _pl_ah is not none %}
         <div class="proj-row">
-            <span class="proj-model pl">Prediction Lab Odds</span>
-            <span class="proj-val">{{ fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) }}</span>
+            <span class="proj-model pl">Prediction Lab</span>
+            <span class="proj-val">{% if _pl_ah is not none and _pl_hh is not none %}{{ fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) }}{% else %}—{% endif %}</span>
         </div>
-        {% endif %}
-        {% if _xs_ah is not none %}
         <div class="proj-row">
             <span class="proj-model xs">XSharp</span>
-            <span class="proj-val">{{ fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) }}</span>
+            <span class="proj-val">{% if _xs_ah is not none and _xs_hh is not none %}{{ fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) }}{% else %}—{% endif %}</span>
         </div>
-        {% endif %}
     </div>
-    {% endif %}
 </div>
 {% endif %}
 
@@ -140,10 +134,20 @@
         <span class="sf-label">Total pick</span>
         <span class="sf-val">{% if card.total_pick_label %}{{ card.total_pick_label }}{% elif card.total_pick_reason is defined and card.total_pick_reason %}{{ card.total_pick_reason }}{% else %}—{% endif %}{% if card.total_correct is not none %} <span class="{{ 'pick-ok' if card.total_correct else 'pick-no' }}">{{ '✅' if card.total_correct else '❌' }}</span>{% endif %}</span>
     </div>
+    {% if sport == 'SOCCER' %}
+    <div class="sf-item">
+        <span class="sf-label">PL Expected Goals</span>
+        <span class="sf-val">{% if card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face %}{{ card.soccer_pl_expected_face }}{% else %}—{% endif %}</span>
+        {% if not (card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face) %}
+        <button type="button" class="pl-info-btn" data-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" data-pl-info-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" title="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-label="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-expanded="false" aria-haspopup="true">ⓘ</button>
+        {% endif %}
+    </div>
+    {% else %}
     <div class="sf-item">
         <span class="sf-label">H2H Last 10</span>
-        <span class="sf-val">{% if card.our_total is defined and card.our_total is not none %}{{ fmt_half(card.our_total) }}{% if card.our_total_games %} ({{ card.our_total_games }} games){% endif %}{% else %}—{% endif %}</span>
+        <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games %} ({{ card.h2h_last10_games }} games){% endif %}{% elif card.our_total is defined and card.our_total is not none %}{{ fmt_half(card.our_total) }}{% if card.our_total_games %} ({{ card.our_total_games }} games){% endif %}{% else %}—{% endif %}</span>
     </div>
+    {% endif %}
     <div class="sf-item">
         <span class="sf-label">Actual total</span>
         <span class="sf-val">{{ actual_total }}</span>
@@ -171,7 +175,11 @@
 {% set _details_id = card_details_id if card_details_id is defined else ('card-details-' ~ loop.index0 if loop is defined else 'card-details') %}
 
 <header class="pick-card-header">
+    {% if sport == 'SOCCER' and card.league is defined and card.league %}
+    <span class="league-badge">{{ card.league }}</span>
+    {% else %}
     <span class="league-badge">{{ sport_info.icon if sport_info is defined else '' }} {{ sport_info.name if sport_info is defined else sport }}</span>
+    {% endif %}
     <span class="game-time">{% if is_final %}FINAL{% elif card.game_time is defined and card.game_time is not none %}{{ card.game_time }}{% else %}Upcoming{% endif %}</span>
 </header>
 
@@ -280,23 +288,17 @@
                 </tr>
             </tbody>
         </table>
-        {% if _pl_ah is not none or _xs_ah is not none %}
         <div class="proj-score-box">
             <div class="proj-score-title">Projected Score</div>
-            {% if _pl_ah is not none %}
             <div class="proj-row">
                 <span class="proj-model pl">Prediction Lab</span>
-                <span class="proj-val">{{ fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) }}</span>
+                <span class="proj-val">{% if _pl_ah is not none and _pl_hh is not none %}{{ fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) }}{% else %}—{% endif %}</span>
             </div>
-            {% endif %}
-            {% if _xs_ah is not none %}
             <div class="proj-row">
                 <span class="proj-model xs">XSharp</span>
-                <span class="proj-val">{{ fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) }}</span>
+                <span class="proj-val">{% if _xs_ah is not none and _xs_hh is not none %}{{ fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) }}{% else %}—{% endif %}</span>
             </div>
-            {% endif %}
         </div>
-        {% endif %}
     </div>
     {% endif %}
 
@@ -320,16 +322,24 @@
     </div>
 
     <div class="odds-extras-footer">
-        {% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}
+        {% if sport == 'SOCCER' %}
+        <div class="sf-item">
+            <span class="sf-label">PL Expected Goals</span>
+            <span class="sf-val">{% if card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face %}{{ card.soccer_pl_expected_face }}{% else %}—{% endif %}</span>
+            {% if not (card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face) %}
+            <button type="button" class="pl-info-btn" data-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" data-pl-info-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" title="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-label="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-expanded="false" aria-haspopup="true">ⓘ</button>
+            {% endif %}
+        </div>
+        {% elif sport == 'WNBA' or (card.h2h_last10_total is defined and card.h2h_last10_total is not none) %}
         <div class="sf-item">
             <span class="sf-label">H2H Last 10</span>
-            <span class="sf-val">{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}</span>
+            <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% else %}—{% endif %}</span>
         </div>
         {% endif %}
         {% if card.ml_ev is defined and card.ml_ev is not none %}
         <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
         {% endif %}
-        {% if card.total_ev is defined and card.total_ev is not none %}
+        {% if sport != 'SOCCER' and card.total_ev is defined and card.total_ev is not none %}
         <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if card.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.total_ev) }}%</span></div>
         {% endif %}
         {% if card.best_ev_pick is defined and card.best_ev_pick %}
