@@ -5841,8 +5841,7 @@ SPORTS = {
     'CFL':    {'name': 'CFL', 'icon': '🏈', 'color': '#b45309'},
 }
 SOCCER_ENABLED = True
-# UFC never completed the sport merge — keep engine files, do not serve as a live product.
-_LIVE_HIDDEN_SPORTS = frozenset({'UFC'})
+_LIVE_HIDDEN_SPORTS = frozenset()
 
 # ── SEO-friendly URL slugs ─────────────────────────────────────────────────────
 SPORT_SEO_SLUGS = {
@@ -5856,6 +5855,7 @@ SPORT_SEO_SLUGS = {
     'WNBA': 'wnba-picks',
     'SOCCER': 'soccer-picks',
     'TENNIS': 'tennis-picks',
+    'UFC':    'ufc-picks',
     'GOLF':   'golf-picks',
     'CFL':    'cfl-picks',
 }
@@ -15982,7 +15982,7 @@ _SPORT_MIN_LIVE_DATES = {
 }
 _LANDING_SPORT_ORDER = [
     'NHL', 'NBA', 'NCAAB', 'NCAAW', 'MLB', 'SOCCER', 'NFL', 'NCAAF', 'WNBA',
-    'TENNIS', 'GOLF', 'CFL',
+    'TENNIS', 'UFC', 'GOLF', 'CFL',
 ]
 _LANDING_SPORT_SHORT = {
     'NCAAB': 'NCAAB',
@@ -15990,6 +15990,7 @@ _LANDING_SPORT_SHORT = {
     'NCAAF': 'NCAAF',
     'SOCCER': 'Soccer',
     'TENNIS': 'Tennis',
+    'UFC': 'UFC',
     'GOLF': 'Golf',
     'CFL': 'CFL',
 }
@@ -22560,7 +22561,9 @@ _INDIVIDUAL_SPORT_LOADERS = {}
 if _tennis_sport:
     _INDIVIDUAL_SPORT_LOADERS[_tennis_sport.SPORT] = _tennis_sport.load_upcoming_games
 
-# UFC engine stays imported for isolation/merge later; do not serve live routes.
+if _ufc_sport:
+    _INDIVIDUAL_SPORT_LOADERS[_ufc_sport.SPORT] = _ufc_sport.load_upcoming_games
+
 if _golf_sport:
     _INDIVIDUAL_SPORT_LOADERS[_golf_sport.SPORT] = _golf_sport.load_upcoming_games
 
@@ -22573,6 +22576,9 @@ _SPORT_RESULTS_RENDERERS = {}
 
 if _tennis_sport:
     _SPORT_RESULTS_RENDERERS['TENNIS'] = _tennis_sport.render_sport_results_page
+
+if _ufc_sport:
+    _SPORT_RESULTS_RENDERERS['UFC'] = _ufc_sport.render_sport_results_page
 
 if _golf_sport:
     _SPORT_RESULTS_RENDERERS['GOLF'] = _golf_sport.render_sport_results_page

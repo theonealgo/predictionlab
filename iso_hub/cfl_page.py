@@ -7,12 +7,27 @@ Presentation reuses NFL/MLB live pick-page chrome (pl2-header, research-theme.cs
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
-CFL_ISO = Path.home() / "Documents/Personal/cfl"
+
+def _resolve_cfl_iso() -> Path:
+    """Isolation folder on dev machine; bundled engines/cfl on Render."""
+    here = Path(__file__).resolve().parent.parent
+    for cand in (
+        Path(os.environ.get("CFL_ENGINE_ROOT", "")).expanduser(),
+        Path.home() / "Documents/Personal/cfl",
+        here / "engines" / "cfl",
+    ):
+        if cand.is_dir() and (cand / "engine" / "render.py").is_file():
+            return cand
+    return here / "engines" / "cfl"
+
+
+CFL_ISO = _resolve_cfl_iso()
 _RENDER = None
 _PIPE = None
 _FETCH = None
