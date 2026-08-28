@@ -7,7 +7,6 @@
  *   markets: ["moneyline","spread","totals"],  // omit spread/totals for ML-only
  *   showRunLineConfidence: true|false,         // default true for mlb
  *   showBooks: true|false                      // omit to auto-detect from cards
- *   hasTotalEv: true|false                     // omit to auto-detect; false hides column
  * }
  */
 var PICKS_CHART_CFG = (function () {
@@ -21,22 +20,17 @@ var PICKS_CHART_CFG = (function () {
       ? c.showRunLineConfidence
       : sport === "mlb";
   var showBooks = typeof c.showBooks === "boolean" ? c.showBooks : null;
-  var isPremium = c.isPremium !== false;
-  var hasTotalEv = typeof c.hasTotalEv === "boolean" ? c.hasTotalEv : null;
   return {
     sport: sport,
     markets: markets,
     showRunLineConfidence: showRl,
     showBooks: showBooks,
-    isPremium: isPremium,
-    hasTotalEv: hasTotalEv,
   };
 })();
 var PICKS_CHART_MARKET = "moneyline";
 /** @deprecated alias — older MLB inject / inline callers */
 var MLB_PICKS_CHART_MARKET = PICKS_CHART_MARKET;
 var PICKS_CHART_SHOW_BOOKS = true;
-var PICKS_CHART_SHOW_TOTAL_EV = true;
 var PICKS_CHART_MODEL_ATTRS = [
   ["data-m-grinder2", "Grinder2"],
   ["data-m-takedown", "Takedown"],
@@ -45,12 +39,6 @@ var PICKS_CHART_MODEL_ATTRS = [
   ["data-m-efficiency", "Efficiency"],
   ["data-m-consensus", "Sharp Cons."],
 ];
-if (PICKS_CHART_CFG.sport === "wnba") {
-  // WNBA does not publish Grinder2 / Takedown — do not clone empty/N/A columns.
-  PICKS_CHART_MODEL_ATTRS = PICKS_CHART_MODEL_ATTRS.filter(function (pair) {
-    return pair[1] !== "Grinder2" && pair[1] !== "Takedown";
-  });
-}
 var MLB_PICKS_MODEL_ATTRS = PICKS_CHART_MODEL_ATTRS;
 
 function _pcEsc(s) {
@@ -99,18 +87,6 @@ function _pcDetectBooksOnStacks(stacks) {
     if (_pcHasRealBooksVal(ml)) found = true;
     if (_pcHasRealBooksVal(_pcBooksSpread(st))) found = true;
     if (_pcHasRealBooksVal(_pcBooksTotal(st))) found = true;
-  });
-  return found;
-}
-function _pcDetectTotalEvOnStacks(stacks) {
-  if (PICKS_CHART_CFG.hasTotalEv === false) return false;
-  if (PICKS_CHART_CFG.hasTotalEv === true) return true;
-  if (PICKS_CHART_CFG.isPremium === false) return true;
-  let found = false;
-  stacks.forEach(function (st) {
-    if (found) return;
-    const v = (st.getAttribute("data-total-ev") || "").trim();
-    if (v && v !== "—" && v !== "-" && v !== "N/A") found = true;
   });
   return found;
 }
@@ -193,7 +169,7 @@ function _pcHydrateStack(st) {
     }
     if (chipH2h && chipH2h !== "—" && chipH2h !== "-" && chipH2h !== "–" && chipH2h.toLowerCase() !== "n/a") {
       st.setAttribute("data-h2h", chipH2h);
-    } else if (PICKS_CHART_CFG.sport === "soccer" || PICKS_CHART_CFG.sport === "cfl") {
+    } else if (PICKS_CHART_CFG.sport === "soccer") {
       st.setAttribute("data-h2h", "N/A");
     }
   }
@@ -285,8 +261,6 @@ function _pcTotalEvTxt(st) {
     const txt = (val && val.textContent ? val.textContent : "").trim();
     if (txt) return _pcFmtPctSigned(txt);
   }
-  // CFL: no book O/U on this row — blank cell, not a column of dashes.
-  if (PICKS_CHART_CFG.sport === "cfl") return "";
   return "—";
 }
 function _mlbPcTotalEvTxt(st) {
@@ -674,8 +648,8 @@ function _pcH2hL10(st) {
     }
     return best;
   }
-  // Soccer/CFL: first meetings / no DB history must read N/A, not an em-dash.
-  if (PICKS_CHART_CFG.sport === "soccer" || PICKS_CHART_CFG.sport === "cfl") {
+  // Soccer: first meetings / no DB history must read N/A, not an em-dash.
+  if (PICKS_CHART_CFG.sport === "soccer") {
     return "N/A";
   }
   return _pcTextAttr(st, "data-h2h");
@@ -702,11 +676,7 @@ function _pcEnsureMarketTabs() {
   bar.setAttribute("aria-label", "Pick market");
   const labels = {
     moneyline: "Moneyline",
-    spread: _pcIsMlbRunLine()
-      ? "Spread / Run Line"
-      : PICKS_CHART_CFG.sport === "nhl"
-        ? "Puck Line"
-        : "Spread",
+    spread: "Spread",
     totals: "Totals",
   };
   markets.forEach(function (key, idx) {
@@ -873,18 +843,11 @@ function _pcTotalsRow(st, hasProj) {
   const totDisp =
     tot === "—" ? "—" : tot.toLowerCase().indexOf("o/u") >= 0 ? tot : "O/U " + tot;
   const h2h = _pcH2hL10(st);
-  const locked = PICKS_CHART_CFG.isPremium === false;
-  const plProj = locked
-    ? "🔒"
-    : hasProj
-      ? _pcFormatProjStackedHtml(_pcPlProjDisplay(st))
-      : "—";
+  const plProj = hasProj
+    ? _pcFormatProjStackedHtml(_pcPlProjDisplay(st))
+    : "—";
   const xsCell = _pcXsProjCell(st);
-  const xsProj = locked ? "🔒" : _pcFormatProjStackedHtml(xsCell.text);
-  const tev =
-    locked && PICKS_CHART_CFG.sport !== "cfl"
-      ? "🔒"
-      : _pcTotalEvTxt(st);
+  const xsProj = _pcFormatProjStackedHtml(xsCell.text);
   return (
     "<tr>" +
     '<td class="mu-col"><span class="mu-away">' +
@@ -905,7 +868,6 @@ function _pcTotalsRow(st, hasProj) {
     '<td class="proj-col proj-cell">' +
     xsProj +
     "</td>" +
-    (PICKS_CHART_SHOW_TOTAL_EV ? '<td class="num">' + tev + "</td>" : "") +
     "</tr>"
   );
 }
@@ -951,26 +913,6 @@ function _pcEnsureStacksInGrid(section) {
   });
 }
 
-function _pcChartLockedHtml(marketLabel) {
-  return (
-    '<div class="picks-chart-locked" data-chart-locked="1">' +
-    '<div class="picks-chart-locked-blur" aria-hidden="true">' +
-    '<table class="picks-chart-table"><thead><tr>' +
-    '<th class="mu-col">Matchup</th><th class="ctr">Time</th><th class="num">Locked</th><th class="num">Locked</th><th class="num">Locked</th>' +
-    "</tr></thead><tbody>" +
-    '<tr><td class="mu-col"><span class="mu-away">Away</span><span class="mu-home">Home</span></td><td class="ctr">—</td><td class="num">•••</td><td class="num">•••</td><td class="num">•••</td></tr>' +
-    '<tr><td class="mu-col"><span class="mu-away">Away</span><span class="mu-home">Home</span></td><td class="ctr">—</td><td class="num">•••</td><td class="num">•••</td><td class="num">•••</td></tr>' +
-    "</tbody></table></div>" +
-    '<div class="picks-chart-locked-cta"><div class="lock-box">' +
-    "<strong>🔒 " +
-    _pcEsc(marketLabel) +
-    " chart is premium</strong>" +
-    "<p>Log in or join premium to unlock spread and totals picks.</p>" +
-    '<a href="/plans">Join Premium</a>' +
-    "</div></div></div>"
-  );
-}
-
 function buildChartTable(section) {
   if (!section) return;
   _pcEnsureStacksInGrid(section);
@@ -995,14 +937,6 @@ function buildChartTable(section) {
     }
   });
   PICKS_CHART_SHOW_BOOKS = _pcDetectBooksOnStacks(stacks);
-  PICKS_CHART_SHOW_TOTAL_EV = _pcDetectTotalEvOnStacks(stacks);
-
-  if (PICKS_CHART_CFG.isPremium === false && PICKS_CHART_MARKET === "spread") {
-    wrap.innerHTML =
-      '<div class="picks-chart-market-label">Spread</div>' +
-      _pcChartLockedHtml("Spread");
-    return;
-  }
 
   const EDGE_TIP =
     "Difference between our win probability and the market's implied probability.";
@@ -1041,8 +975,7 @@ function buildChartTable(section) {
       (PICKS_CHART_SHOW_BOOKS ? '<th class="num">Books total</th>' : "") +
       '<th class="ctr">H2H L10</th>' +
       '<th class="proj-col">Prediction Lab total</th>' +
-      '<th class="proj-col">XSharp total</th>' +
-      (PICKS_CHART_SHOW_TOTAL_EV ? _pcInfoTh("Total EV", TOTAL_EV_TIP) : "");
+      '<th class="proj-col">XSharp total</th>';
   } else {
     label = "Moneyline";
     head =
