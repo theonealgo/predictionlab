@@ -75,7 +75,11 @@ def fail_season_label_xsharp_spread(label: str | None) -> bool:
 
 
 def fail_forced_bet_all_games(rows: list, *, min_n: int = 10, pickem_share: float = 0.25) -> bool:
-    """True (fail) if every game has a spread pick while many are pick'ems."""
+    """True (fail) if pick'ems are forced BET without thin_edge (always-publish marker).
+
+    Product publishes |our_spread|<1.5 as thin-edge bets with lower EV. That is
+    allowed when ``thin_edge`` / reason marks them. Fail only unmarked forced bets.
+    """
     usable = [r for r in rows if r.get("our_spread") is not None]
     if len(usable) < min_n:
         return False
@@ -88,5 +92,13 @@ def fail_forced_bet_all_games(rows: list, *, min_n: int = 10, pickem_share: floa
             continue
     if len(pickems) < max(2, int(len(usable) * pickem_share)):
         return False
-    forced = [r for r in pickems if r.get("side") in ("HOME", "AWAY") or r.get("action") == "BET"]
-    return len(forced) == len(pickems) and len(pickems) > 0
+    forced_unmarked = [
+        r
+        for r in pickems
+        if (
+            (r.get("side") in ("HOME", "AWAY") or r.get("action") == "BET")
+            and not r.get("thin_edge")
+            and "thin" not in str(r.get("reason") or "").lower()
+        )
+    ]
+    return len(forced_unmarked) == len(pickems) and len(pickems) > 0

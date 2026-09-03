@@ -418,16 +418,6 @@ body.has-join-premium-bar { padding-bottom: 58px; }
     transition: background .15s;
 }
 .tv-menu-btn:hover { background: #f1f5f9; }
-.tv-menu-auth {
-  margin: 0;
-}
-.tv-menu-auth-form { margin: 0; }
-.tv-menu-auth button.tv-menu-btn {
-  font: inherit;
-  color: inherit;
-  width: 100%;
-}
-
 .tv-menu-label { flex: 1; font-size: 0.95rem; font-weight: 700; color: #0f172a; }
 .tv-menu-arrow { color: #94a3b8; font-size: 1rem; }
 .tv-sub-link {

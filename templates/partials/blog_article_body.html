@@ -1,0 +1,118 @@
+{# Shared article body for /blog archive expanders and /blog/<slug> pages.
+   Expects `post` with coerce_sections() applied (sections.intro, models, …).
+   Optional `in_place` (true on archive cards). #}
+{% set s = post.sections or {} %}
+{% set gi = s.game_info or {} %}
+{% set pitch = s.pitchers or {} %}
+{% set mk = s.markets or {} %}
+
+{% if s.intro %}
+  {% for paragraph in s.intro %}
+  <p>{{ paragraph }}</p>
+  {% endfor %}
+{% elif post.body %}
+  {% for paragraph in post.body %}
+  <p>{{ paragraph }}</p>
+  {% endfor %}
+{% endif %}
+
+{% if gi.away or gi.home or gi.date or gi.venue %}
+<h2>Game information</h2>
+<table class="info-table">
+  <tbody>
+    {% if gi.date %}<tr><th>Date</th><td>{{ gi.date }}{% if gi.time %} · {{ gi.time }}{% endif %}</td></tr>{% endif %}
+    {% if gi.venue %}<tr><th>Venue</th><td>{{ gi.venue }}</td></tr>{% endif %}
+    {% if gi.away %}<tr><th>Away</th><td>{{ gi.away }}{% if gi.away_record %} ({{ gi.away_record }}){% endif %}</td></tr>{% endif %}
+    {% if gi.home %}<tr><th>Home</th><td>{{ gi.home }}{% if gi.home_record %} ({{ gi.home_record }}){% endif %}</td></tr>{% endif %}
+    {% if gi.status %}<tr><th>Status</th><td>{{ gi.status }}</td></tr>{% endif %}
+  </tbody>
+</table>
+{% endif %}
+
+{% set pa = pitch.away or {} %}
+{% set ph = pitch.home or {} %}
+{% if pa.name or ph.name or pa.hand or ph.hand %}
+<h2>Pitchers</h2>
+<table class="info-table">
+  <tbody>
+    {% if pa.name or pa.hand %}
+    <tr><th>Away</th><td>{{ pa.name or '—' }}{% if pa.hand %} ({{ pa.hand }}){% endif %}</td></tr>
+    {% endif %}
+    {% if ph.name or ph.hand %}
+    <tr><th>Home</th><td>{{ ph.name or '—' }}{% if ph.hand %} ({{ ph.hand }}){% endif %}</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if s.models %}
+<h2>Model moneyline</h2>
+<table class="model-table">
+  <thead>
+    <tr><th>Model</th><th>Side</th><th>Prob</th></tr>
+  </thead>
+  <tbody>
+    {% for m in s.models %}
+    <tr>
+      <td>{{ m.name }}</td>
+      <td>{{ m.side or '—' }}</td>
+      <td>{% if m.side_pct is defined and m.side_pct is not none %}{{ '%.1f'|format(m.side_pct|float) }}%{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if s.consensus and s.consensus.side %}
+<p><strong>{{ s.consensus.name or 'Sharp Consensus' }}:</strong>
+  {{ s.consensus.side }}{% if s.consensus.side_pct is defined and s.consensus.side_pct is not none %} ({{ '%.1f'|format(s.consensus.side_pct|float) }}%){% endif %}</p>
+{% endif %}
+
+{% if mk %}
+<h2>Markets &amp; projections</h2>
+<table class="info-table">
+  <tbody>
+    {% if mk.pl_proj %}<tr><th>Prediction Lab proj</th><td>{{ mk.pl_proj }}</td></tr>{% endif %}
+    {% if mk.xs_proj %}<tr><th>XSharp proj</th><td>{{ mk.xs_proj }}</td></tr>{% endif %}
+    {% if mk.pl_total %}<tr><th>PL total</th><td>{{ mk.pl_total }}</td></tr>{% endif %}
+    {% if mk.xs_total %}<tr><th>XSharp total</th><td>{{ mk.xs_total }}</td></tr>{% endif %}
+    {% if mk.xs_run_line %}<tr><th>XSharp run line</th><td>{{ mk.xs_run_line }}</td></tr>{% endif %}
+    {% if mk.h2h_total %}<tr><th>H2H</th><td>{{ mk.h2h_total }}</td></tr>{% elif mk.h2h %}<tr><th>H2H</th><td>{{ mk.h2h }}</td></tr>{% endif %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if s.why %}
+<h2>Why the models split</h2>
+{% for paragraph in s.why %}
+<p>{{ paragraph }}</p>
+{% endfor %}
+{% endif %}
+
+{% if s.takeaway %}
+<h2>Takeaway</h2>
+<p>{{ s.takeaway }}</p>
+{% endif %}
+
+{% if s.disclaimer %}
+<div class="disclaimer">{{ s.disclaimer }}</div>
+{% endif %}
+
+{% if post.news_items %}
+<div class="news-list">
+  <h3>Related coverage</h3>
+  {% for item in post.news_items %}
+    {% if item.url and item.source != 'Google Trends' and 'trends.google' not in (item.url or '') %}
+    <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.sport }}: {{ item.topic }}</a>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if post.related %}
+<ul class="related">
+  {% for item in post.related %}
+  <li><a href="{{ item.url }}">{{ item.title }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}

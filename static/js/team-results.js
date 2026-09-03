@@ -1,88 +1,6 @@
 const DEFAULT_ORDER = [
   "Grinder2", "Takedown", "Edge", "XSharp", "Sharp Consensus", "Efficiency",
 ];
-const WNBA_ORDER = ["Edge", "XSharp", "Sharp Consensus", "Efficiency"];
-const WNBA_ML_NAMES = new Set(WNBA_ORDER);
-
-function isWnbaSport() {
-  return String(window.TEAM_SPORT || "").toLowerCase() === "wnba";
-}
-
-function wnbaModelSample(m) {
-  const n = Number(m && m.n) || 0;
-  if (n > 0) return n;
-  const rec = String((m && m.record) || "");
-  const parts = rec.split(/[-–]/).filter((p) => /^\d+$/.test(String(p).trim()));
-  return parts.length >= 2 ? Number(parts[0]) + Number(parts[1]) : 0;
-}
-
-function wnbaBestMlModel(models) {
-  let best = null;
-  for (const name of WNBA_ORDER) {
-    const m = (models && models[name]) || null;
-    if (!m) continue;
-    const n = wnbaModelSample(m);
-    if (n <= 0) continue;
-    let pct = m.pct;
-    if (pct == null) {
-      const rec = String(m.record || "");
-      const parts = rec.split(/[-–]/).filter((p) => /^\d+$/.test(String(p).trim()));
-      if (parts.length >= 2) pct = Math.round((1000 * Number(parts[0])) / n) / 10;
-    }
-    if (pct == null || Number.isNaN(Number(pct))) continue;
-    const cand = {
-      name,
-      pct: Number(pct),
-      n,
-      record: m.record || `${m.w || 0}-${m.l || 0}`,
-      w: m.w,
-      l: m.l,
-    };
-    if (!best || cand.pct > best.pct || (cand.pct === best.pct && cand.n >= best.n)) {
-      best = cand;
-    }
-  }
-  return best;
-}
-
-function wnbaHasPick(m) {
-  const pick = m && m.pick;
-  if (pick == null) return false;
-  const s = String(pick).trim();
-  return s && s !== "—" && s !== "-" && s !== "–" && s.toLowerCase() !== "n/a";
-}
-
-function wnbaPrimaryFace(c, bestName) {
-  const models = (c && c.models) || {};
-  const m = bestName ? models[bestName] : null;
-  if (wnbaHasPick(m)) {
-    return { name: bestName, pick: m.pick, prob: m.prob, correct: m.correct };
-  }
-  return { name: bestName || "", pick: "—", prob: null, correct: null };
-}
-
-function isCflSport() {
-  return String(window.TEAM_SPORT || "").toLowerCase() === "cfl";
-}
-function sportModelOrder(order, marketKey) {
-  const sport = String(window.TEAM_SPORT || "").toLowerCase();
-  const base = order && order.length ? order : DEFAULT_ORDER;
-  if (sport === "cfl" && marketKey && marketKey !== "moneyline") {
-    return ["Prediction Lab"];
-  }
-  if (sport === "wnba") {
-    // Spread/Totals are face ATS/O-U (Prediction Lab / XSharp) — never
-    // rewrite those labels to the four moneyline names.
-    if (marketKey && marketKey !== "moneyline") {
-      const face = base.filter((n) => n !== "Grinder2" && n !== "Takedown");
-      return face.length ? face : ["Prediction Lab"];
-    }
-    const allow = new Set(WNBA_ORDER);
-    const filtered = base.filter((n) => allow.has(n));
-    return filtered.length ? filtered : WNBA_ORDER.slice();
-  }
-  return base;
-}
 const MARKET_ORDER = ["moneyline", "spread", "totals"];
 const MARKET_LABELS = {
   moneyline: "Moneyline",
@@ -90,36 +8,6 @@ const MARKET_LABELS = {
   totals: "Totals (O/U)",
 };
 const WINDOW_KEYS = ["last_night", "last_7", "last_30", "season"];
-function isMlb() {
-  return String(window.TEAM_SPORT || "").toLowerCase() === "mlb";
-}
-function mlbScore(c) {
-  if (c.home_score == null && c.away_score == null) return "—";
-  return esc(c.away_score) + "–" + esc(c.home_score);
-}
-function countTag(block) {
-  if (!block) return "";
-  const w = Number(block.w || 0);
-  const l = Number(block.l || 0);
-  const graded = Number(block.graded != null ? block.graded : w + l);
-  const events = Number(block.events != null ? block.events : (block.games || graded));
-  const pushes = Number(block.pushes || 0);
-  const sub = block.date
-    ? String(block.date)
-    : (block.date_from && block.date_to ? `${block.date_from} → ${block.date_to}` : "");
-  const bits = [];
-  if (events) bits.push(events + (events === 1 ? " decision" : " decisions"));
-  bits.push(graded + " graded");
-  if (pushes) bits.push(pushes + (pushes === 1 ? " push" : " pushes"));
-  if (sub) bits.push(sub);
-  return bits.join(" · ");
-}
-function h2hText(c) {
-  const raw = c && (c.h2h10 || c.h2h_l10);
-  const s = raw == null ? "" : String(raw).trim();
-  if (!s || s === "—" || s === "-" || s === "–" || s.toLowerCase() === "n/a") return "N/A";
-  return s;
-}
 const API = (window.TEAM_API_BASE || window.SOCCER_API_BASE || "/api").replace(
   /\/$/,
   ""
@@ -131,7 +19,6 @@ let STATE = {
   active: "moneyline",
   league: "ALL",
   mlOnly: false,
-  mlFaceModel: "",
 };
 
 function teamName(c, side) {
@@ -154,7 +41,7 @@ function displayLeague(lg) {
 }
 
 function modelCompact(models, order) {
-  const names = sportModelOrder(order);
+  const names = order && order.length ? order : DEFAULT_ORDER;
   return names.map((name) => {
     const m = models && models[name];
     if (!m) return `<span class="model-chip muted">${esc(name)} —</span>`;
@@ -172,18 +59,16 @@ function resultMark(correct, push) {
   return '<span class="muted">—</span>';
 }
 
-function mlCardHtml(c, order, faceMeta) {
-  const primary = faceMeta || { pick: c.face_pick, prob: c.face_prob, correct: c.correct, name: "" };
+function mlCardHtml(c, order) {
   let badge = `<span class="pill">Final</span>`;
-  if (primary.correct === true) badge = `<span class="pill ok-pill">Correct</span>`;
-  if (primary.correct === false) badge = `<span class="pill bad-pill">Wrong</span>`;
-  const score = c.away_score != null
-    ? `<div class="score">${esc(c.away_score)} – ${esc(c.home_score)}</div>` : "";
-  const faceName = primary.name || (isWnbaSport() ? "Pick" : "Edge");
-  const face = primary.pick && primary.pick !== "—"
-    ? `<div class="face">${esc(faceName)}: <strong>${esc(primary.pick)}</strong> · ${primary.prob != null ? primary.prob + "%" : "—"}</div>`
+  if (c.correct === true) badge = `<span class="pill ok-pill">Correct</span>`;
+  if (c.correct === false) badge = `<span class="pill bad-pill">Wrong</span>`;
+  const score = c.home_score != null
+    ? `<div class="score">${isMlb() ? mlbScore(c) : (esc(c.home_score) + " – " + esc(c.away_score))}</div>` : "";
+  const face = c.face_pick
+    ? `<div class="face">Edge: <strong>${esc(c.face_pick)}</strong> · ${c.face_prob != null ? c.face_prob + "%" : "—"}</div>`
     : `<div class="face muted">${esc(c.note || "")}</div>`;
-  const grid = sportModelOrder(order).map((name) => {
+  const grid = (order || DEFAULT_ORDER).map((name) => {
     const m = c.models && c.models[name];
     if (!m) return `<div class="model-mini"><b>${esc(name)}</b><span>—</span></div>`;
     let mark = "";
@@ -191,7 +76,7 @@ function mlCardHtml(c, order, faceMeta) {
     if (m.correct === false) mark = " <span class='no'>✗</span>";
     return `<div class="model-mini"><b>${esc(name)}</b><span>${esc(m.pick)}${mark}</span><span class="prob">${m.prob != null ? m.prob + "%" : "—"}</span></div>`;
   }).join("");
-  return `<article class="game-card ${primary.correct === true ? "is-correct" : ""} ${primary.correct === false ? "is-wrong" : ""}">
+  return `<article class="game-card ${c.correct === true ? "is-correct" : ""} ${c.correct === false ? "is-wrong" : ""}">
     <div class="game-top"><div>
       <div class="league">${esc(displayLeague(c.league))}</div>
       <div class="match">${esc(teamName(c, "away"))} <span class="at">@</span> ${esc(teamName(c, "home"))}</div>
@@ -202,16 +87,15 @@ function mlCardHtml(c, order, faceMeta) {
   </article>`;
 }
 
-function mlRowHtml(c, order, faceMeta) {
-  const primary = faceMeta || { pick: c.face_pick, prob: c.face_prob, correct: c.correct };
+function mlRowHtml(c, order) {
   return `<tr>
     <td>${esc(c.game_date)}</td>
     <td>${esc(displayLeague(c.league))}</td>
     <td>${esc(teamName(c, "away"))} @ ${esc(teamName(c, "home"))}</td>
-    <td>${c.away_score != null ? esc(c.away_score) + "–" + esc(c.home_score) : "—"}</td>
-    <td>${esc(primary.pick || "—")}</td>
-    <td>${primary.prob != null ? primary.prob + "%" : "—"}</td>
-    <td>${resultMark(primary.correct)}</td>
+    <td>${isMlb() ? mlbScore(c) : (c.home_score != null ? esc(c.home_score) + "–" + esc(c.away_score) : "—")}</td>
+    <td>${esc(c.face_pick || "—")}</td>
+    <td>${c.face_prob != null ? c.face_prob + "%" : "—"}</td>
+    <td>${resultMark(c.correct)}</td>
     <td class="mono-models">${modelCompact(c.models, order)}</td>
   </tr>`;
 }
@@ -222,8 +106,8 @@ function souCardHtml(c, marketKey) {
   if (row.push) badge = `<span class="pill">Push</span>`;
   else if (row.correct === true) badge = `<span class="pill ok-pill">Correct</span>`;
   else if (row.correct === false) badge = `<span class="pill bad-pill">Wrong</span>`;
-  const score = c.away_score != null
-    ? `<div class="score">${esc(c.away_score)} – ${esc(c.home_score)}</div>` : "";
+  const score = c.home_score != null
+    ? `<div class="score">${isMlb() ? mlbScore(c) : (esc(c.home_score) + " – " + esc(c.away_score))}</div>` : "";
   const label = marketKey === "spread" ? "Spread" : "Total";
   return `<article class="game-card ${row.correct === true ? "is-correct" : ""} ${row.correct === false ? "is-wrong" : ""}">
     <div class="game-top"><div>
@@ -232,13 +116,48 @@ function souCardHtml(c, marketKey) {
       <div class="date">${esc(c.game_date)}</div>
     </div><div class="game-right">${badge}${score}</div></div>
     <div class="face">${esc(label)}: <strong>${esc(row.pick || "—")}</strong></div>
+    ${marketKey === "totals" && isSoccer() ? `<div class="face">H2H L10: <strong>${esc(h2hText(c))}</strong></div>` : ""}
   </article>`;
+}
+
+function isSoccer() {
+  return String(window.TEAM_SPORT || "").toLowerCase() === "soccer";
+}
+function isMlb() {
+  return String(window.TEAM_SPORT || "").toLowerCase() === "mlb";
+}
+function mlbScore(c) {
+  if (c.home_score == null) return "—";
+  return esc(c.away_score) + "–" + esc(c.home_score);
+}
+function countTag(block) {
+  if (!block) return "";
+  const w = Number(block.w || 0);
+  const l = Number(block.l || 0);
+  const graded = Number(block.graded != null ? block.graded : w + l);
+  const events = Number(block.events != null ? block.events : (block.games || graded));
+  const pushes = Number(block.pushes || 0);
+  const sub = block.date
+    ? String(block.date)
+    : (block.date_from && block.date_to ? `${block.date_from} → ${block.date_to}` : "");
+  const bits = [];
+  if (events) bits.push(events + (events === 1 ? " decision" : " decisions"));
+  bits.push(graded + " graded");
+  if (pushes) bits.push(pushes + (pushes === 1 ? " push" : " pushes"));
+  if (sub) bits.push(sub);
+  return bits.join(" · ");
+}
+
+function h2hText(c) {
+  const raw = c && (c.h2h10 || c.h2h_l10);
+  const s = raw == null ? "" : String(raw).trim();
+  if (!s || s === "—" || s === "-" || s === "–" || s.toLowerCase() === "n/a") return "N/A";
+  return s;
 }
 
 function souRowHtml(c, marketKey) {
   const row = c[marketKey] || {};
-  const score = c.home_score != null || c.away_score != null
-    ? esc(c.away_score) + "–" + esc(c.home_score) : "—";
+  const score = c.home_score != null ? esc(c.away_score) + "–" + esc(c.home_score) : "—";
   const match = `${esc(teamName(c, "away"))} @ ${esc(teamName(c, "home"))}`;
   if (isMlb() && marketKey === "spread") {
     return `<tr data-game-id="${esc(c.game_id || "")}">
@@ -273,11 +192,15 @@ function souRowHtml(c, marketKey) {
       <td>${resultMark(row.correct, row.push || row.grade === "PUSH")}</td>
     </tr>`;
   }
+  const h2hCell = (marketKey === "totals" && isSoccer())
+    ? `<td class="h2h-cell">${esc(h2hText(c))}</td>`
+    : "";
   return `<tr>
     <td>${esc(c.game_date)}</td>
     <td>${esc(displayLeague(c.league))}</td>
     <td>${match}</td>
-    <td>${score}</td>
+    <td>${c.home_score != null ? esc(c.home_score) + "–" + esc(c.away_score) : "—"}</td>
+    ${h2hCell}
     <td>${esc(row.pick || "—")}</td>
     <td>${resultMark(row.correct, row.push)}</td>
   </tr>`;
@@ -346,29 +269,12 @@ function analyticsHtml(analytics) {
   </section>`;
 }
 
-function tallyBlock(title, block, order, marketKey) {
+function tallyBlock(title, block, order) {
   if (!block) return "";
   const models = block.models || {};
-  const sport = String(window.TEAM_SPORT || "").toLowerCase();
-  const incoming = (order && order.length)
+  let names = (order && order.length)
     ? order
     : (Object.keys(models).length ? Object.keys(models) : DEFAULT_ORDER);
-  let names = sportModelOrder(incoming, marketKey);
-  if (sport === "wnba" && marketKey && marketKey !== "moneyline") {
-    // Keep honest face tiles only. Empty Edge/XSharp/SC/Efficiency boxes
-    // are moneyline models and must not clone onto ATS / O/U.
-    names = names.filter((n) => {
-      if (n === "Grinder2" || n === "Takedown") return false;
-      if (!WNBA_ML_NAMES.has(n)) return true;
-      const m = models[n] || {};
-      return (Number(m.n) || 0) > 0;
-    });
-    if (!names.length) {
-      if (models["Prediction Lab"]) names = ["Prediction Lab"];
-      else if (models.XSharp && (Number(models.XSharp.n) || 0) > 0) names = ["XSharp"];
-      else names = ["Prediction Lab"];
-    }
-  }
   // Season face tallies often only have one model — don't spam empty 0-0 cards.
   const isSeason = /season/i.test(title || "") || /season/i.test(block.label || "");
   if (isSeason) {
@@ -415,25 +321,16 @@ function tallyBlock(title, block, order, marketKey) {
       cls = show >= 52 ? "ok" : show < 40 ? "bad" : "";
       acc = `<div class="acc ${cls}">${show}%</div>`;
     }
-    let emptyNote = "";
-    if (!n) {
-      if (sport === "wnba" && marketKey === "totals") emptyNote = " · no O/U data";
-      else if (sport === "wnba" && marketKey === "spread") emptyNote = " · no spread data";
-      else emptyNote = " · no picks";
-    }
     return `<div class="tally-card">
       <div class="mlabel">${esc(label)}</div>
       ${acc}
-      <div class="rec">${esc(rec)}${emptyNote}${u ? " · " + esc(u) : ""}${n ? ` · ${n} graded` : ""}</div>
+      <div class="rec">${esc(rec)}${n ? "" : " · no picks"}${u ? " · " + esc(u) : ""}${n ? ` · ${Number(m.graded != null ? m.graded : n)} graded` : ""}</div>
     </div>`;
   }).join("");
-  const sub = block.date
-    ? esc(block.date)
-    : (block.date_from && block.date_to ? `${esc(block.date_from)} → ${esc(block.date_to)}` : "");
   const readyNote = block.ready === false && block.reason
     ? `<p class="note">${esc(block.reason)}</p>` : "";
   return `<section class="tally">
-    <h2>${esc(title)} <span class="tag">(${esc(countTag(block) || ((block.games || 0) + " games" + (sub ? " · " + sub : "")))})</span></h2>
+    <h2>${esc(title)} <span class="tag">(${esc(countTag(block))})</span></h2>
     ${readyNote}
     <div class="tally-grid">${cards}</div>
   </section>`;
@@ -450,6 +347,21 @@ function setActiveTab(market) {
   renderActiveMarket();
 }
 
+function sandboxSport() {
+  return String(
+    (document.body && document.body.getAttribute("data-sandbox-sport")) ||
+      window.TEAM_SPORT ||
+      ""
+  ).toLowerCase();
+}
+
+function isWnbaResults() {
+  return (
+    sandboxSport() === "wnba" ||
+    /\/wnba(?:-results|\/results)?/i.test(location.pathname || "")
+  );
+}
+
 function renderActiveMarket() {
   const wrap = document.getElementById("tallies");
   const markets = STATE.markets || {};
@@ -459,7 +371,7 @@ function renderActiveMarket() {
   // Spread/Totals: face model(s) only — never reuse full moneyline model order.
   // Season face can be XSharp (O/U) while Last Night/Last 7 stay Prediction Lab.
   const baseOrder = key === "moneyline"
-    ? sportModelOrder((market && market.model_order) || DEFAULT_ORDER)
+    ? ((market && market.model_order) || DEFAULT_ORDER)
     : ((market && market.model_order) || ["Prediction Lab"]);
   const tallies = (market && market.tallies) || {};
   const finals = (market && market.finals) || [];
@@ -468,12 +380,13 @@ function renderActiveMarket() {
   const cards = document.getElementById("finals");
   const sum = document.getElementById("summary");
 
-  // Always wipe previous market DOM so ML tallies never linger on Spread/Totals ads.
+  // Wipe tallies only — #ssr-finals lives outside #tallies so first-paint games survive.
   wrap.innerHTML = "";
   head.innerHTML = "";
   body.innerHTML = "";
   cards.innerHTML = "";
   sum.textContent = "";
+  const ssrFinals = document.getElementById("ssr-finals");
 
   if (!market) {
     wrap.hidden = true;
@@ -483,7 +396,6 @@ function renderActiveMarket() {
   }
 
   const faceOrderFor = (block) => {
-    if (isCflSport() && key !== "moneyline") return ["Prediction Lab"];
     if (key === "moneyline") return baseOrder;
     const models = (block && block.models) || {};
     const fromBlock = (block && Array.isArray(block.model_order) && block.model_order.length)
@@ -497,32 +409,30 @@ function renderActiveMarket() {
     return baseOrder.filter((n) => n === "Prediction Lab" || n === "Edge" || n === "XSharp");
   };
 
-  const windowBlocks = WINDOW_KEYS.map((wk) => {
+  const windowKeys =
+    isWnbaResults() ? ["last_night", "last_7", "season"] : WINDOW_KEYS;
+  const windowBlocks = windowKeys.map((wk) => {
     const block = tallies[wk];
     if (!block) return "";
-    return tallyBlock(block.label || wk, block, faceOrderFor(block), key);
+    return tallyBlock(block.label || wk, block, faceOrderFor(block));
   }).filter(Boolean);
 
   wrap.hidden = false;
-  const analyticsBlock = key === "moneyline" ? analyticsHtml(STATE.analytics) : "";
+  // WNBA chart: Last Night / Last 7 / Season only. Best Performing + Efficiency
+  // is a second stacked box that shrink-wraps inside #tallies (the "tiny" chart).
+  const analyticsBlock =
+    key === "moneyline" && !isWnbaResults()
+      ? analyticsHtml(STATE.analytics)
+      : "";
   wrap.innerHTML =
     `<div class="bet-type-banner" data-market="${esc(key)}">${esc(label.toUpperCase())}</div>` +
     analyticsBlock +
     windowBlocks.join("");
 
   const season = tallies.season || {};
-  let face = (season.models && (
+  const face = (season.models && (
     season.models["Prediction Lab"] || season.models.Edge || Object.values(season.models)[0]
   )) || {};
-  let faceModelName = "";
-  if (key === "moneyline" && isWnbaSport()) {
-    const best = wnbaBestMlModel(season.models || {}) ||
-      (STATE.mlFaceModel ? { name: STATE.mlFaceModel, ...(season.models || {})[STATE.mlFaceModel] } : null);
-    if (best && best.name) {
-      faceModelName = best.name;
-      if (best.pct != null || best.record) face = best;
-    }
-  }
   const seasonPct = face.pct != null ? `${face.pct}%` : (season.pct != null ? `${season.pct}%` : "—");
   const seasonRec = face.record || season.record || "—";
   sum.hidden = false;
@@ -533,28 +443,44 @@ function renderActiveMarket() {
   sum.textContent = `${label} · Season ${seasonPct} (${seasonRec}) · ${shown} records shown · ${uniqueN} unique games` +
     (ungraded ? ` · ${ungraded} ungraded` : "");
 
-  document.getElementById("finals-wrap").hidden = false;
-  document.getElementById("games-heading").textContent = `${label} records`;
-  document.getElementById("game-count").textContent = `(${shown})`;
+  const finalsWrap = document.getElementById("finals-wrap");
+  const useSsrMl = !!(ssrFinals && key === "moneyline");
+  if (finalsWrap) finalsWrap.hidden = useSsrMl;
+  if (!useSsrMl) {
+    if (finalsWrap) finalsWrap.hidden = false;
+    document.getElementById("games-heading").textContent = `${label} records`;
+    document.getElementById("game-count").textContent = `(${shown})`;
+  }
 
   if (key === "moneyline") {
-    // MLB keeps Edge pick. WNBA grades the best published ML model.
-    const pickCol = (isWnbaSport() && faceModelName) ? `${faceModelName} pick` : "Edge pick";
-    head.innerHTML = `<tr>
+    // Same MLB Moneyline chart columns (Edge pick + Models). ML-only sports keep League.
+    const mlHead = `<tr>
       <th>Date</th><th>League</th><th>Match</th><th>Score</th>
-      <th>${esc(pickCol)}</th><th>%</th><th>Result</th><th>Models</th>
+      <th>Edge pick</th><th>%</th><th>Result</th><th>Models</th>
     </tr>`;
-    body.innerHTML = finals.map((c) => {
-      const faceMeta = (isWnbaSport() && faceModelName) ? wnbaPrimaryFace(c, faceModelName) : null;
-      return mlRowHtml(c, baseOrder, faceMeta);
-    }).join("") ||
+    const mlRows = finals.map((c) => mlRowHtml(c, baseOrder)).join("") ||
       '<tr><td colspan="8" class="muted">No finals for this league.</td></tr>';
-    cards.innerHTML = finals.map((c) => {
-      const faceMeta = (isWnbaSport() && faceModelName) ? wnbaPrimaryFace(c, faceModelName) : null;
-      return mlCardHtml(c, baseOrder, faceMeta);
-    }).join("");
+    // Prefer #ssr-finals (sits above consensus; survives #tallies wipe).
+    if (useSsrMl) {
+      const ssrTable = ssrFinals.querySelector("table.results-table");
+      const ssrHead = ssrTable && ssrTable.querySelector("thead");
+      const ssrBody = ssrTable && ssrTable.querySelector("tbody");
+      if (ssrHead) ssrHead.innerHTML = mlHead;
+      if (ssrBody) ssrBody.innerHTML = mlRows;
+      const title = ssrFinals.querySelector(".sec-title");
+      if (title) {
+        title.innerHTML = `Moneyline games <span class="tag">(${shown})</span>`;
+      }
+      ssrFinals.hidden = false;
+      ssrFinals.removeAttribute("hidden");
+    } else {
+      head.innerHTML = mlHead;
+      body.innerHTML = mlRows;
+    }
+    cards.innerHTML = finals.map((c) => mlCardHtml(c, baseOrder)).join("");
   } else {
     const pickLabel = key === "spread" ? "Spread pick" : "O/U pick";
+    const soccerTotals = key === "totals" && isSoccer();
     const mlbSou = isMlb();
     if (mlbSou && key === "spread") {
       head.innerHTML = `<tr>
@@ -570,16 +496,33 @@ function renderActiveMarket() {
       <th>XSharp total</th><th>XSharp projected score</th>
       <th>Total EV</th><th>Published pick</th><th>Result</th>
     </tr>`;
+    } else if (soccerTotals) {
+      head.innerHTML = `<tr>
+      <th>Date</th><th>League</th><th>Match</th><th>Score</th>
+      <th>H2H L10</th><th>${esc(pickLabel)}</th><th>Result</th>
+    </tr>`;
     } else {
       head.innerHTML = `<tr>
       <th>Date</th><th>League</th><th>Match</th><th>Score</th>
       <th>${esc(pickLabel)}</th><th>Result</th>
     </tr>`;
     }
-    const emptyCols = (mlbSou && key === "totals") ? 13 : (mlbSou && key === "spread") ? 9 : 6;
+    const emptyCols = (mlbSou && key === "totals") ? 13 : (mlbSou && key === "spread") ? 9 : (soccerTotals ? 7 : 6);
     body.innerHTML = finals.map((c) => souRowHtml(c, key)).join("") ||
       `<tr><td colspan="${emptyCols}" class="muted">No records for this market on the current slate.</td></tr>`;
     cards.innerHTML = finals.map((c) => souCardHtml(c, key)).join("");
+  }
+
+  // Chart: keep the table, hide the card-grid dump (sports-chrome forces display:grid).
+  if (cards) {
+    cards.hidden = true;
+    cards.setAttribute("hidden", "");
+    cards.setAttribute("aria-hidden", "true");
+  }
+  // Non-ML markets: hide moneyline SSR so Spread/Totals CSR table is the only list.
+  if (ssrFinals && key !== "moneyline") {
+    ssrFinals.hidden = true;
+    ssrFinals.setAttribute("hidden", "");
   }
 }
 
@@ -623,11 +566,68 @@ function normalizeMarkets(data) {
   return markets;
 }
 
-async function populateLeagues(preferred, fallbackNames) {
+function collectLiveLeagueNames(data) {
+  const live = new Set();
+  const add = (name) => {
+    const n = String(name || "").trim();
+    if (!n || /^all\b/i.test(n) || n.toLowerCase() === "soccer") return;
+    // Skip ESPN stage labels that are not real competitions
+    if (
+      /^(regular season|group stage|league phase|first round|second round|third round|quarterfinals|preliminary|club friendly)$/i.test(
+        n
+      )
+    ) {
+      return;
+    }
+    live.add(n);
+  };
+  // Live = unfinished near-term slate, or finals within the last few calendar days.
+  // Do NOT fall back to leagues_on_slate built from Season history (that marked EPL Live in August).
+  (data && data.upcoming ? data.upcoming : []).forEach((u) => add(u && u.league));
+  const todayStr = String((data && data.today) || "").slice(0, 10);
+  let todayMs = Date.parse(todayStr + "T12:00:00");
+  if (!Number.isFinite(todayMs)) todayMs = Date.now();
+  const maxAgeMs = 3 * 24 * 60 * 60 * 1000;
+  (data && data.finals ? data.finals : []).forEach((f) => {
+    const d = String((f && f.game_date) || "").slice(0, 10);
+    const ms = Date.parse(d + "T12:00:00");
+    if (!Number.isFinite(ms)) return;
+    const age = todayMs - ms;
+    if (age >= 0 && age <= maxAgeMs) add(f && f.league);
+  });
+  // Prefer API's honest live slate when present (upcoming + recent finals only).
+  const slate = (data && data.leagues_on_slate) || [];
+  if (Array.isArray(slate) && slate.length) {
+    slate.forEach(add);
+  }
+  return [...live].sort((a, b) => a.localeCompare(b));
+}
+
+function renderLiveLeaguesNote(liveNames) {
+  const el = document.getElementById("soccer-live-leagues");
+  if (!el) return;
+  if (!liveNames.length) {
+    el.hidden = false;
+    el.classList.add("muted");
+    el.innerHTML = "No leagues with upcoming games on today’s slate.";
+    return;
+  }
+  const shown = liveNames.slice(0, 12);
+  const more = liveNames.length - shown.length;
+  el.hidden = false;
+  el.classList.remove("muted");
+  el.innerHTML =
+    "<strong>Currently live:</strong> " +
+    esc(shown.join(", ")) +
+    (more > 0 ? esc(` (+${more} more)`) : "");
+}
+
+async function populateLeagues(preferred, fallbackNames, liveNames) {
   const sel = document.getElementById("league");
   if (!sel || window.TEAM_HIDE_LEAGUE) return;
   const current = preferred || sel.value || "ALL";
   let opts = [];
+  const liveSet = new Set(liveNames || []);
   try {
     const lr = await (await fetch(`${API}/leagues`)).json();
     if (lr.ok && Array.isArray(lr.leagues)) {
@@ -643,8 +643,19 @@ async function populateLeagues(preferred, fallbackNames) {
     seen.add(n);
     return true;
   });
+  // Put live leagues first so the dropdown surfaces what’s on the slate.
+  if (liveSet.size) {
+    const liveFirst = opts.filter((n) => liveSet.has(n));
+    const rest = opts.filter((n) => !liveSet.has(n));
+    opts = liveFirst.concat(rest);
+  }
   sel.innerHTML = ['<option value="ALL">All Leagues</option>']
-    .concat(opts.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`))
+    .concat(
+      opts.map((l) => {
+        const mark = liveSet.has(l) ? " · Live" : "";
+        return `<option value="${esc(l)}">${esc(l)}${mark}</option>`;
+      })
+    )
     .join("");
   sel.value = current;
   if (![...sel.options].some((o) => o.value === sel.value)) sel.value = "ALL";
@@ -665,14 +676,18 @@ async function loadResults() {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "Failed");
 
+    const liveNames = collectLiveLeagueNames(data);
+    renderLiveLeaguesNote(liveNames);
+
     if (!window.TEAM_HIDE_LEAGUE && Array.isArray(data.all_leagues) && data.all_leagues.length) {
       const names = data.all_leagues.map((x) => (typeof x === "string" ? x : x.name));
-      await populateLeagues(league, names);
+      await populateLeagues(league, names, liveNames);
+    } else if (!window.TEAM_HIDE_LEAGUE) {
+      await populateLeagues(league, null, liveNames);
     }
 
     STATE.league = league;
     STATE.mlOnly = !!(data.ml_only || (data.analytics && data.analytics.ml_only));
-    STATE.mlFaceModel = data.ml_face_model || (data.markets && data.markets.moneyline && data.markets.moneyline.face_model) || "";
     STATE.markets = normalizeMarkets(data);
     STATE.analytics = data.analytics || null;
     document.getElementById("market-tabs").hidden = false;

@@ -22,7 +22,7 @@ TOTAL_EDGE_SPORTS: dict[str, dict[str, str]] = {
     "mlb": {"label": "MLB", "picks_path": "/mlb-picks"},
     "soccer": {"label": "Soccer", "picks_path": "/soccer-picks"},
     "wnba": {"label": "WNBA", "picks_path": "/wnba-picks"},
-    # CFL: Total Edge removed (no books feed — edge vs book is meaningless).
+    "cfl": {"label": "CFL", "picks_path": ""},  # schedule from cfl_page; no invented totals
 }
 
 LEAN_DOC = (
@@ -279,7 +279,6 @@ def render_total_edge_into_chrome(chrome_html: str, sport: str, fragment: str) -
         count=1,
         flags=re.I | re.S,
     )
-    # Replace first .container inner HTML (same approach as CFL)
     start = re.search(r'<div class="container\b[^"]*"[^>]*>', html, flags=re.I)
     if start:
         i = start.end()
@@ -307,7 +306,6 @@ def render_total_edge_into_chrome(chrome_html: str, sport: str, fragment: str) -
             count=1,
             flags=re.I,
         )
-    # Purge leftover pick cards / grids outside replaced container
     html = re.sub(r'<div class="date-header\b[^"]*"[^>]*>[\s\S]*?</div>', "", html, flags=re.I)
     html = re.sub(
         r'<div class="games-grid\b[^"]*"[^>]*>[\s\S]*?</div>',

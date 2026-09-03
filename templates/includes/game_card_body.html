@@ -134,6 +134,10 @@
         <span class="sf-label">Total pick</span>
         <span class="sf-val">{% if card.total_pick_label %}{{ card.total_pick_label }}{% elif card.total_pick_reason is defined and card.total_pick_reason %}{{ card.total_pick_reason }}{% else %}—{% endif %}{% if card.total_correct is not none %} <span class="{{ 'pick-ok' if card.total_correct else 'pick-no' }}">{{ '✅' if card.total_correct else '❌' }}</span>{% endif %}</span>
     </div>
+    <div class="sf-item">
+        <span class="sf-label">H2H Last 10</span>
+        <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games %} ({{ card.h2h_last10_games }} games){% endif %}{% elif card.our_total is defined and card.our_total is not none %}{{ fmt_half(card.our_total) }}{% if card.our_total_games %} ({{ card.our_total_games }} games){% endif %}{% else %}—{% endif %}</span>
+    </div>
     {% if sport == 'SOCCER' %}
     <div class="sf-item">
         <span class="sf-label">PL Expected Goals</span>
@@ -141,11 +145,6 @@
         {% if not (card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face) %}
         <button type="button" class="pl-info-btn" data-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" data-pl-info-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" title="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-label="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-expanded="false" aria-haspopup="true">ⓘ</button>
         {% endif %}
-    </div>
-    {% else %}
-    <div class="sf-item">
-        <span class="sf-label">H2H Last 10</span>
-        <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games %} ({{ card.h2h_last10_games }} games){% endif %}{% elif card.our_total is defined and card.our_total is not none %}{{ fmt_half(card.our_total) }}{% if card.our_total_games %} ({{ card.our_total_games }} games){% endif %}{% else %}—{% endif %}</span>
     </div>
     {% endif %}
     <div class="sf-item">
@@ -235,6 +234,7 @@
 {% endif %}
 
 <div class="lines-strip">
+    {% if sport != 'TENNIS' %}
     <div class="line-chip">
         <div class="line-chip-label">{{ _book_spread_lbl }}</div>
         <div class="line-chip-val">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</div>
@@ -243,6 +243,7 @@
         <div class="line-chip-label">Books total</div>
         <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% else %}—{% endif %}</div>
     </div>
+    {% endif %}
     {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
     {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
     {% if _edge is not none %}
@@ -254,14 +255,14 @@
 </div>
 
 <footer class="card-footer">
-    <button type="button" class="view-details-btn" aria-expanded="false" aria-controls="{{ _details_id }}" onclick="togglePickDetails(this)">
-        View Details <span class="chevron">▾</span>
+    <button type="button" class="view-details-btn" aria-expanded="true" aria-controls="{{ _details_id }}" onclick="togglePickDetails(this)">
+        Less details <span class="chevron">▾</span>
     </button>
 </footer>
 
-<div class="card-details" id="{{ _details_id }}" hidden>
+<div class="card-details" id="{{ _details_id }}">
     {% if is_premium %}
-    {% if _show_odds_tbl %}
+    {% if _show_odds_tbl and sport != 'TENNIS' %}
     <div class="odds-pricing-section">
         <div class="odds-pricing-title">Odds &amp; Lines</div>
         <table class="odds-pricing-table">
@@ -309,8 +310,9 @@
             <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %}">
                 <div class="pc-name">{{ m.name }}</div>
                 {% if m.prob is not none %}
-                <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
-                <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}</div>
+                {% set _prob = m.prob|float %}
+                <div class="pc-val">{% if _prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - _prob) }}{% endif %}%</div>
+                <div class="pc-side {% if _prob >= 50 %}home{% else %}away{% endif %}">{% if _prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}</div>
                 {% else %}
                 {% set _na_reason = m.reason if (m.reason is defined and m.reason) else (m.name ~ ' rating is not available for ' ~ (sport_info.name if (sport_info is defined and sport_info) else sport) ~ ' yet') %}
                 <div class="pc-val" style="color:#64748b;" title="{{ _na_reason }}">N/A</div>
@@ -322,6 +324,12 @@
     </div>
 
     <div class="odds-extras-footer">
+        {% if sport != 'TENNIS' and sport != 'UFC' and sport != 'GOLF' %}
+        <div class="sf-item">
+            <span class="sf-label">H2H Last 10</span>
+            <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% else %}—{% endif %}</span>
+        </div>
+        {% endif %}
         {% if sport == 'SOCCER' %}
         <div class="sf-item">
             <span class="sf-label">PL Expected Goals</span>
@@ -329,11 +337,6 @@
             {% if not (card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face) %}
             <button type="button" class="pl-info-btn" data-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" data-pl-info-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" title="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-label="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-expanded="false" aria-haspopup="true">ⓘ</button>
             {% endif %}
-        </div>
-        {% elif sport == 'WNBA' or (card.h2h_last10_total is defined and card.h2h_last10_total is not none) %}
-        <div class="sf-item">
-            <span class="sf-label">H2H Last 10</span>
-            <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% else %}—{% endif %}</span>
         </div>
         {% endif %}
         {% if card.ml_ev is defined and card.ml_ev is not none %}

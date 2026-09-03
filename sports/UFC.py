@@ -47,6 +47,23 @@ def load_upcoming_games():
     )
 
 
+def _apply_ufc_results_overlay(html: str) -> str:
+    """Hub-parity isolation cards + consensus on live chrome (keep header/footer)."""
+    if not html or not isinstance(html, str) or "<" not in html:
+        return html
+    try:
+        from ufc_live import apply_ufc_isolation_html
+
+        return apply_ufc_isolation_html(html, which="results")
+    except Exception as e:
+        try:
+            m = main()
+            m.logger.exception("UFC results isolation overlay failed: %s", e)
+        except Exception:
+            pass
+        return html
+
+
 def render_sport_results_page(sport: str, *, season_start_dt=None):
     """Render /ufc-results — individual-sport pipeline."""
     m = main()
@@ -78,11 +95,10 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
                 and (_time.time() - cached_ts) < cache_ttl
                 and m._results_page_html_usable(cached_html)
             ):
-                return cached_html
+                return _apply_ufc_results_overlay(cached_html)
             stale_html, _ = m._stale_page_cache_get(m._SPORT_RESULTS_CACHE, cache_key, cache_ttl)
             if stale_html and m._results_page_html_usable(stale_html):
-                return stale_html
-
+                return _apply_ufc_results_overlay(stale_html)
     # ── Season snapshot ─────────────────────────────────────────────────
     snapshot_raw = m._load_sport_season_snapshot(sport)
     snapshot_stats = m._stats_from_season_snapshot(snapshot_raw)
@@ -130,10 +146,15 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
     _indiv_daily = build_graded_daily_results(sport, season_start_dt, season_end_dt)
 
     if not completed_games and not _indiv_daily:
-        return m._results_fallback_page(
+        stub = m._results_fallback_page(
             sport,
             f"No {m.SPORTS[sport]['name']} results data available yet.",
         )
+        # Isolation graded fights still render when ESPN/DB is empty (403 / cold).
+        overlaid = _apply_ufc_results_overlay(stub)
+        if overlaid and "ufc-isolation-overlay" in overlaid and len(overlaid) > len(stub) + 1000:
+            return overlaid
+        return stub
 
     # ── Process games into daily results ────────────────────────────────
     if _indiv_daily:
@@ -285,7 +306,7 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
         league_db_total=None,
     )
 
-    # ── Cache rendered HTML ─────────────────────────────────────────────
+    # ── Cache rendered HTML (pre-overlay so cache stays template-only) ──
     if (
         not m._results_date_query_active()
         and m._daily_results_game_count(daily_results)
@@ -294,4 +315,4 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
         m._trim_cache(m._SPORT_RESULTS_CACHE, m._SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
         m._SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
 
-    return rendered
+    return _apply_ufc_results_overlay(rendered)

@@ -1001,6 +1001,14 @@ _CONSENSUS_BUCKETS_SMART = (
     "3/6 split",
 )
 
+# MLB: honest pregame majority only (no mirror 2/6·1/6 rows; no fabricated 3/6 W-L).
+_CONSENSUS_BUCKETS_MLB = (
+    "6/6 unanimous",
+    "5/6 — one dissent",
+    "4/6 — two dissent",
+    "3/6 split",
+)
+
 
 def _fold_agree_n(agree_n: int) -> int:
     n = int(agree_n or 0)
@@ -1038,13 +1046,18 @@ def _consensus_bucket_label_smart(agree_n: int) -> str:
     return "3/6 split"
 
 
-def _consensus_record_cell(items: list[dict[str, Any]]) -> str:
-    w = sum(1 for i in items if i.get("grade") == "WIN")
-    l = sum(1 for i in items if i.get("grade") == "LOSS")
-    p = sum(1 for i in items if i.get("grade") == "PUSH")
+def _consensus_record_cell(
+    items: list[dict[str, Any]],
+    *,
+    empty_label: str | None = None,
+) -> str:
+    graded = [i for i in items if i.get("grade") in ("WIN", "LOSS", "PUSH")]
+    w = sum(1 for i in graded if i.get("grade") == "WIN")
+    l = sum(1 for i in graded if i.get("grade") == "LOSS")
+    p = sum(1 for i in graded if i.get("grade") == "PUSH")
     decided = w + l
     if decided == 0 and p == 0:
-        return "—"
+        return empty_label or "—"
     rec = f"{w}-{l}" + (f"-{p}" if p else "")
     if decided == 0:
         return rec
@@ -1052,8 +1065,18 @@ def _consensus_record_cell(items: list[dict[str, Any]]) -> str:
     return f"{rec} <span style='color:#64748b'>({pct:.0f}%)</span>"
 
 
-def _consensus_agreements_from_finals(finals: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Majority-side ML W-L when all 6 named models have a locked pick."""
+def _consensus_agreements_from_finals(
+    finals: list[dict[str, Any]],
+    *,
+    sport: str = "",
+) -> list[dict[str, Any]]:
+    """Majority-side ML W-L when all 6 named models have a locked pick.
+
+    MLB: true 3–3 splits are recorded but NOT graded (no Sharp Consensus /
+    hindsight resolver). CFL keeps prior Sharp Consensus tie-break.
+    """
+    sport_l = (sport or "").strip().lower()
+    mlb_honest_ties = sport_l == "mlb"
     out: list[dict[str, Any]] = []
     for g in finals or []:
         models = g.get("models") or {}
@@ -1071,8 +1094,24 @@ def _consensus_agreements_from_finals(finals: list[dict[str, Any]]) -> list[dict
         # Map majority key back to original casing
         maj_key = counts.most_common(1)[0][0]
         majority = next((s for s in sides if s.lower() == maj_key), sides[0])
-        if len(counts) >= 2 and counts.most_common(2)[0][1] == counts.most_common(2)[1][1]:
+        is_tie = (
+            len(counts) >= 2
+            and counts.most_common(2)[0][1] == counts.most_common(2)[1][1]
+        )
+        if is_tie:
             top_n = 3
+            if mlb_honest_ties:
+                # Pregame 3–3: no predetermined independent resolver → no bet.
+                dk = str(g.get("game_date") or "")[:10]
+                out.append(
+                    {
+                        "agree_n": 3,
+                        "grade": "NO_BET",
+                        "game_date": dk,
+                        "is_three_three": True,
+                    }
+                )
+                continue
             sc = (models.get("Sharp Consensus") or {}).get("pick") or majority
             majority = str(sc)
         hs, aa = g.get("home_score"), g.get("away_score")
@@ -1106,12 +1145,24 @@ def build_consensus_records_html(
     sport: str = "",
 ) -> str:
     """HTML for Consensus Based Betting Records. Empty string if <6-model data."""
-    agreements = _consensus_agreements_from_finals(finals)
+    sport_l = (sport or "").strip().lower()
+    agreements = _consensus_agreements_from_finals(finals, sport=sport_l)
     if not agreements:
         return ""
-    smart = (sport or "").strip().lower() == "cfl"
-    labels = _CONSENSUS_BUCKETS_SMART if smart else _CONSENSUS_BUCKETS
-    label_fn = _consensus_bucket_label_smart if smart else _consensus_bucket_label
+    smart = sport_l == "cfl"
+    mlb = sport_l == "mlb"
+    if mlb:
+        labels = _CONSENSUS_BUCKETS_MLB
+        label_fn = _consensus_bucket_label_smart
+        fold = True
+    elif smart:
+        labels = _CONSENSUS_BUCKETS_SMART
+        label_fn = _consensus_bucket_label_smart
+        fold = True
+    else:
+        labels = _CONSENSUS_BUCKETS
+        label_fn = _consensus_bucket_label
+        fold = False
     now = datetime.now(ZoneInfo("America/New_York"))
     yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     today = now.strftime("%Y-%m-%d")
@@ -1137,7 +1188,7 @@ def build_consensus_records_html(
         buckets = {b: [] for b in labels}
         for a in items:
             n = int(a.get("agree_n") or 0)
-            if smart:
+            if fold:
                 n = _fold_agree_n(n)
             label = label_fn(n)
             buckets.setdefault(label, []).append(a)
@@ -1146,12 +1197,13 @@ def build_consensus_records_html(
     ln_b, d7_b, d30_b = by_bucket(ln), by_bucket(d7), by_bucket(d30)
     rows_html = []
     for label in labels:
+        empty = "No qualifying games" if (mlb and label == "3/6 split") else None
         rows_html.append(
             "<tr>"
             f'<td class="bucket">{label}</td>'
-            f"<td>{_consensus_record_cell(ln_b.get(label, []))}</td>"
-            f"<td>{_consensus_record_cell(d7_b.get(label, []))}</td>"
-            f"<td>{_consensus_record_cell(d30_b.get(label, []))}</td>"
+            f"<td>{_consensus_record_cell(ln_b.get(label, []), empty_label=empty)}</td>"
+            f"<td>{_consensus_record_cell(d7_b.get(label, []), empty_label=empty)}</td>"
+            f"<td>{_consensus_record_cell(d30_b.get(label, []), empty_label=empty)}</td>"
             "</tr>"
         )
     ln_hdr = f"Last night ({ln_key})" if ln_key else "Last night"
@@ -1160,7 +1212,14 @@ def build_consensus_records_html(
         "4/6 and 2/6 are the same games. 3/6 is the only split. "
         "Graded only when a pre-game pick was locked."
         if smart
-        else "Moneyline record when model sides agree. Graded only when a pre-game pick was locked."
+        else (
+            "Moneyline on the pregame majority among the six live models "
+            "(6/6 unanimous, 5/6 one dissent, 4/6 two dissent). "
+            "True 3–3 splits are listed but not graded — no hindsight and no "
+            "Sharp Consensus tie-break. Graded only when a pre-game pick was locked."
+            if mlb
+            else "Moneyline record when model sides agree. Graded only when a pre-game pick was locked."
+        )
     )
     return f"""
     <div class="pl-consensus-records" id="pl-consensus-records">

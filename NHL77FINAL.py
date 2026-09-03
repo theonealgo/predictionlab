@@ -5726,6 +5726,22 @@ def enforce_canonical_domain():
         full_path = request.full_path[:-1] if request.full_path.endswith('?') else request.full_path
     return redirect(f"https://{target_host}{full_path}", code=301)
 
+def in_season_sports_map(today=None):
+    """Map of sport code -> currently in-season (for header/burger green)."""
+    today = today or datetime.now()
+    out = {}
+    for sp in (
+        'NBA', 'NFL', 'MLB', 'NHL', 'SOCCER', 'NCAAB', 'NCAAF',
+        'NCAAW', 'WNBA', 'CFL', 'TENNIS', 'UFC', 'GOLF',
+    ):
+        try:
+            _, live = get_season_status(sp, today=today)
+            out[sp] = bool(live)
+        except Exception:
+            out[sp] = sp in ('SOCCER', 'TENNIS', 'UFC', 'GOLF', 'MLB', 'NCAAF', 'CFL')
+    return out
+
+
 @app.context_processor
 def inject_globals():
     """Make global template variables available in every template automatically."""
@@ -5763,6 +5779,7 @@ def inject_globals():
         'is_premium': _is_premium,
         'wnba_enabled': _wnba_live,
         'team_logo_url': team_logo_url,
+        'in_season_sports': in_season_sports_map(),
     }
 
 @app.after_request
@@ -9399,7 +9416,7 @@ def _mlb_spread_pick_mod():
 
 
 def pick_spread_side(our_spread, home=None, away=None):
-    """Product MLB run-line pick: HOME +1.5 / AWAY +1.5 / NO BET."""
+    """Product MLB run-line pick: HOME/AWAY −1.5 (thin |xs|<1.5 still BET)."""
     return _mlb_spread_pick_mod().pick_spread_side(our_spread, home=home, away=away)
 
 
@@ -9411,10 +9428,10 @@ def grade_spread_cover(side, home_score, away_score, line=None):
 
 
 def _mlb_run_line_from_home_spread(xs, home, away):
-    """Home-centric PL our_spread → (HOME|AWAY, team, +1.5). NO BET → None.
+    """Home-centric PL our_spread → (HOME|AWAY, team, −1.5). Missing xs → None.
 
-    Positive xs = home favored. Favorite −1.5 when |our_spread| >= 1.5, then
-    fade to the other side of the same run line (+1.5). Pick'em → no side.
+    Positive xs = home favored. Always publish favorite −1.5 when xs is set
+    (thin |xs|<1.5 still publishes with lower EV).
     """
     picked = pick_spread_side(xs, home=home, away=away)
     if picked.get('action') != 'BET' or picked.get('side') not in ('HOME', 'AWAY'):
@@ -9422,7 +9439,7 @@ def _mlb_run_line_from_home_spread(xs, home, away):
     team = home if picked['side'] == 'HOME' else away
     if team is None:
         return None
-    return (picked['side'], team, picked.get('line', 1.5))
+    return (picked['side'], team, picked.get('line', -1.5))
 
 
 def _mlb_grade_minus_1_5(side, home_score, away_score, line=None):
@@ -11400,7 +11417,24 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             _our_sp  = _to_float_safe(_pred.get('our_spread'))
             _mkt_sp  = _to_float_safe(_pred.get('market_spread'))
             _spread_ev = None
-            if _pick_p is not None and _mkt_sp is not None and _our_sp is not None:
+            _thin_rl = False
+            if sport == 'MLB' and _our_sp is not None:
+                # MLB run line is ±1.5. Always publish; thin |our_spread|<1.5 → lower EV.
+                _mkt_rl = abs(_mkt_sp) if _mkt_sp is not None else 1.5
+                _sp_edge = abs(_our_sp) - _mkt_rl
+                _thin_rl = abs(_our_sp) < 1.5
+                if _thin_rl:
+                    _sp_edge = min(_sp_edge, -0.75)
+                _sp_cover_p = 0.5 * (1.0 + _math_ev.erf(_sp_edge / (_SPREAD_SIGMA * _math_ev.sqrt(2))))
+                _spread_ev = calculate_ev(_sp_cover_p, -110)
+                try:
+                    from mlb_spread_pick import haircut_spread_ev
+                    _spread_ev = haircut_spread_ev(_spread_ev, thin_edge=_thin_rl)
+                except Exception:
+                    if _thin_rl and _spread_ev is not None:
+                        _spread_ev = round(float(_spread_ev) * 0.35, 1)
+                _pred['spread_thin_edge'] = _thin_rl
+            elif _pick_p is not None and _mkt_sp is not None and _our_sp is not None:
                 _sp_edge    = abs(_our_sp) - abs(_mkt_sp)
                 _sp_cover_p = 0.5 * (1.0 + _math_ev.erf(_sp_edge / (_SPREAD_SIGMA * _math_ev.sqrt(2))))
                 _spread_ev  = calculate_ev(_sp_cover_p, -110)
@@ -12343,8 +12377,9 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                     # DO NOT change this logic unless the user explicitly says:
                     # "UNLOCK MLB"
                     # Changes to other sports must NOT modify MLB behavior.
-                    # Run-line: favorite −1.5 then other side +1.5. NO BET stays
-                    # NO BET. Do not invert again. Do not change Moneyline.
+                    # Run-line: always publish favorite −1.5 when our_spread exists.
+                    # |our_spread| < 1.5 → thin_edge (lower EV). Missing our_spread → NO BET.
+                    # Do not change Moneyline.
                     # ============================================================
                     run_line = 1.5
                     g['market_spread_label'] = "Run Line ±1.5"
@@ -12358,6 +12393,7 @@ def _compute_spread_total_for_daily(sport, daily_results, *, skip_efficiency=Fal
                         _pl_sp, hs, as_, home=h, away=a,
                     )
                     g['spread_pick_reason'] = _applied.get('reason')
+                    g['spread_thin_edge'] = bool(_applied.get('thin_edge'))
                     if _applied.get('action') != 'BET':
                         g['spread_pick_label'] = None
                         g['pl_spread_correct'] = None
@@ -13823,7 +13859,7 @@ BASE_TEMPLATE = """
     {% include "partials/site_directory_footer.html" %}
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'Golf',h:'/golf-picks'},{l:'CFL',h:'/cfl-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Golf',h:'/golf-results'},{l:'CFL',h:'/cfl-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'},{l:'Edge Performance',h:'/edge-performance'},{l:'Picks CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'What Are AI Picks',h:'/what-are-ai-sports-betting-picks'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'CFL',h:'/cfl-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'},{l:'Soccer',h:'/soccer-results'},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'CFL',h:'/cfl-results'},{l:'Tennis',h:'/tennis-results'},{l:'UFC',h:'/ufc-results'},{l:'Golf',h:'/golf-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'},{l:'Edge Performance',h:'/edge-performance'},{l:'Picks CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'What Are AI Picks',h:'/what-are-ai-sports-betting-picks'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
 function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
@@ -18862,10 +18898,7 @@ def picks_export_csv():
 
 @app.route('/results/export.csv')
 def results_export_csv():
-    if not current_user.is_authenticated:
-        return redirect(url_for('auth.login_page', next=request.path))
-    if not is_premium_user():
-        return redirect('/plans')
+    # Results CSV is public (no login) — graded outcomes are open tracking data.
     sport = (request.args.get('sport') or '').strip().upper() or None
     date_from = (request.args.get('from') or '').strip() or None
     date_to = (request.args.get('to') or '').strip() or None
@@ -18886,10 +18919,9 @@ def results_export_csv():
         query = f'''
             SELECT g.game_date, g.sport, g.home_team_id, g.away_team_id,
                    g.home_score, g.away_score,
-                   p.win_probability, p.elo_home_prob, p.xgboost_home_prob,
-                   p.glicko2_home_prob, p.trueskill_home_prob,
+                   p.win_probability,
                    bl.spread AS market_spread, bl.total AS market_total,
-                   bl.home_ml, bl.away_ml
+                   bl.home_moneyline AS home_ml, bl.away_moneyline AS away_ml
             FROM games g
             LEFT JOIN predictions p ON (
                 p.sport = g.sport AND (
@@ -19879,6 +19911,28 @@ def golf_results_alias():
     qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
     return redirect('/golf-results' + (f'?{qs}' if qs else ''), code=302)
 
+@app.route('/tennis')
+@app.route('/tennis/')
+def tennis_shortcut():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/tennis-picks' + (f'?{qs}' if qs else ''), code=301)
+
+@app.route('/tennis/results')
+def tennis_results_alias():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/tennis-results' + (f'?{qs}' if qs else ''), code=302)
+
+@app.route('/tennis/api/picks')
+def tennis_api_picks():
+    """Chart API for team-results.js (signed-off isolation payload)."""
+    try:
+        from tennis_live import tennis_chart_payload
+        payload = tennis_chart_payload()
+        return jsonify(payload)
+    except Exception as e:
+        logger.exception('tennis_api_picks failed: %s', e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route('/cfl')
 @app.route('/cfl/')
 def cfl_shortcut():
@@ -19903,6 +19957,41 @@ def cfl_share_jpg():
     except Exception as e:
         logger.exception('cfl_share_jpg failed: %s', e)
         return 'Share image unavailable', 404
+
+
+@app.route('/ufc/share.jpg')
+@app.route('/ufc-picks/share.jpg')
+def ufc_share_jpg():
+    """Locked hub UFC share JPEG (same bytes as :5081 /ufc/share.jpg)."""
+    try:
+        from ufc_live import build_ufc_share_jpeg_bytes
+        data = build_ufc_share_jpeg_bytes()
+        if not data:
+            return 'Share image unavailable', 404
+        resp = app.response_class(data, mimetype='image/jpeg')
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        logger.exception('ufc_share_jpg failed: %s', e)
+        return 'Share image unavailable', 404
+
+
+@app.route('/tennis/share.jpg')
+@app.route('/tennis-picks/share.jpg')
+def tennis_share_jpg():
+    """Isolation tennis share JPEG (same contract as :5081 /tennis/share.jpg)."""
+    try:
+        from tennis_live import build_tennis_share_jpeg_bytes
+        data = build_tennis_share_jpeg_bytes()
+        if not data:
+            return 'Share image unavailable', 404
+        resp = app.response_class(data, mimetype='image/jpeg')
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        logger.exception('tennis_share_jpg failed: %s', e)
+        return 'Share image unavailable', 404
+
 
 @app.route('/cfl/results-share.jpg')
 def cfl_results_share_jpg():
@@ -20017,6 +20106,13 @@ def model_vs_sportsbooks_page():
 def faq_page():
     log_site_visit('/faq')
     return render_template('faq.html')
+
+@app.route('/affiliate')
+@app.route('/affiliate-program')
+@app.route('/creator-partnership')
+def affiliate_page():
+    log_site_visit('/affiliate')
+    return render_template('affiliate.html')
 
 @app.route('/sport/SOCCER/predictions/<league_slug>')
 def soccer_predictions_league(league_slug):
@@ -20375,6 +20471,11 @@ def _render_mlb_results_chart_page():
     """Sandbox-parity Cards|Chart chart view for /mlb-results?view=chart."""
     from mlb_results_ui import markets_from_live_html, render_mlb_results_chart_page
 
+    market = ""
+    try:
+        market = (request.args.get("market") or "").strip().lower()
+    except Exception:
+        market = ""
     cards = _mlb_results_cards_html_for_chart()
     payload = None
     if cards and len(cards) > 500:
@@ -20382,7 +20483,7 @@ def _render_mlb_results_chart_page():
             payload = markets_from_live_html(cards, 'mlb')
         except Exception as e:
             logger.exception('MLB chart payload failed: %s', e)
-    return render_mlb_results_chart_page(payload=payload)
+    return render_mlb_results_chart_page(payload=payload, market=market)
 
 
 def _soccer_results_cards_html_for_chart():
@@ -20481,6 +20582,19 @@ def _apply_soccer_results_html_fixups(html):
         return out
     except Exception as _soc_res_e:
         logger.exception("Soccer results UI fixup failed: %s", _soc_res_e)
+        return html
+
+
+def _apply_ufc_picks_html_fixups(html):
+    """Replace July stub UFC cards (flat 50%) with Personal/ufc isolation cards."""
+    if not html or not isinstance(html, str) or '<' not in html:
+        return html
+    try:
+        from ufc_live import apply_ufc_isolation_html
+
+        return apply_ufc_isolation_html(html, which="picks")
+    except Exception as _ufc_iso_e:
+        logger.exception("UFC isolation overlay failed: %s", _ufc_iso_e)
         return html
 
 
@@ -20611,13 +20725,27 @@ def _apply_mlb_results_html_fixups(html):
     """Publish-layer MLB results analytics / efficiency fill. Keeps live chrome."""
     if not html or not isinstance(html, str):
         return html
+    want = "moneyline"
+    try:
+        from flask import has_request_context, request
+
+        if has_request_context():
+            want = (request.args.get("market") or "moneyline").strip().lower()
+    except Exception:
+        want = "moneyline"
+    if want not in ("moneyline", "spread", "totals"):
+        want = "moneyline"
     _has_fixup_marker = "<!-- mlb-results-ui-fixup -->" in html
     _has_analytics = 'class="pl-mlb-analytics"' in html or "class='pl-mlb-analytics'" in html
     _has_consensus = (
         'pl-consensus-records' in html
         or 'Consensus Based Betting Records' in html
     )
-    if _has_fixup_marker and _has_analytics and _has_consensus:
+    # Early return only when the requested market panel is already the visible one.
+    _active_ok = bool(
+        re.search(rf'<div data-market-panel="{re.escape(want)}">', html or "")
+    )
+    if _has_fixup_marker and _has_analytics and _has_consensus and _active_ok:
         return html
     try:
         if 'class="pl-mlb-analytics"' in html or "class='pl-mlb-analytics'" in html:
@@ -20631,7 +20759,7 @@ def _apply_mlb_results_html_fixups(html):
             )
         html = html.replace("<!-- mlb-results-ui-fixup -->", "")
         from mlb_ui_fixup import apply_mlb_results_fixups
-        out = apply_mlb_results_fixups(html)
+        out = apply_mlb_results_fixups(html, market=want)
         if out and "<!-- mlb-results-ui-fixup -->" not in out:
             if re.search(r"</body\s*>", out, flags=re.I):
                 out = re.sub(
@@ -20659,6 +20787,9 @@ def sport_predictions(sport, filter_date=None):
     if sport == 'GOLF':
         from golf_live import render_golf_picks
         return _inject_sport_blog_hub(render_golf_picks(request.args.get('event')), 'GOLF')
+    if sport == 'TENNIS':
+        from tennis_live import render_tennis_picks
+        return _inject_sport_blog_hub(render_tennis_picks(), 'TENNIS')
     if sport == 'CFL':
         from cfl_live import render_cfl_picks
         return render_cfl_picks()
@@ -20693,6 +20824,8 @@ def sport_predictions(sport, filter_date=None):
                     return _apply_wnba_picks_html_fixups(cached_html)
                 if sport == 'SOCCER':
                     return _apply_soccer_picks_html_fixups(cached_html, filter_date)
+                if sport == 'UFC':
+                    return _apply_ufc_picks_html_fixups(cached_html)
                 if sport == 'NFL':
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
@@ -20708,6 +20841,8 @@ def sport_predictions(sport, filter_date=None):
                     return _apply_wnba_picks_html_fixups(cached_html)
                 if sport == 'SOCCER':
                     return _apply_soccer_picks_html_fixups(cached_html, filter_date)
+                if sport == 'UFC':
+                    return _apply_ufc_picks_html_fixups(cached_html)
                 if sport == 'NFL':
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
@@ -21189,6 +21324,8 @@ def sport_predictions(sport, filter_date=None):
         rendered = _apply_wnba_picks_html_fixups(rendered)
     elif sport == 'SOCCER':
         rendered = _apply_soccer_picks_html_fixups(rendered, filter_date)
+    elif sport == 'UFC':
+        rendered = _apply_ufc_picks_html_fixups(rendered)
     elif sport == 'NFL':
         rendered = _apply_nfl_picks_html_fixups(rendered)
         rendered = _inject_sport_blog_hub(rendered, sport, filter_date)
@@ -21231,6 +21368,10 @@ def sport_results(sport):
         if sport == 'GOLF':
             from golf_live import render_golf_results
             return render_golf_results(request.args.get('event'))
+        if sport == 'TENNIS':
+            from tennis_live import render_tennis_results
+            view = (request.args.get('view') or 'normal').strip().lower()
+            return render_tennis_results(view=view)
         if sport == 'CFL':
             from cfl_live import render_cfl_results
             view = (request.args.get('view') or 'normal').strip().lower()
@@ -23040,7 +23181,7 @@ DOWNLOADS_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="dl-allrow">
             <a class="dl-all" href="/results/export.csv">⬇ Download ALL sports (combined results CSV)</a>
         </div>
-        <p class="dl-note">CSV downloads require a premium account. Files reflect completed, graded games.</p>
+        <p class="dl-note">Results CSV is free. Picks CSV downloads require a premium account. Files reflect completed, graded games.</p>
     </div>
 """)
 

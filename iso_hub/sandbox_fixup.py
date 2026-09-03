@@ -3551,17 +3551,34 @@ def inject_tennis_card_grid(html: str) -> str:
     if not html:
         return html
     # Always (re)assert multi-column grid after structure repair.
+    # Pick Confidence must be 3×2 — 6-up inside a 3-col card is unreadable.
     css = """
 <style id="tennis-mlb-grid-fix">
 /* Tennis: multi-column grid, content-height cards (no equal-height stretch). */
 body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) > .games-grid,
-body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) .games-grid {
+body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) .games-grid,
+body[data-sandbox-sport="tennis"] .games-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
-  gap: 16px !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
   align-items: start !important;
-  justify-content: center !important;
+  justify-content: stretch !important;
   width: 100% !important;
+  margin-bottom: 22px !important;
+}
+@media (max-width: 1100px) {
+  body[data-sandbox-sport="tennis"] .games-grid,
+  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) > .games-grid,
+  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) .games-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 700px) {
+  body[data-sandbox-sport="tennis"] .games-grid,
+  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) > .games-grid,
+  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) .games-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 body[data-sandbox-sport="tennis"] .date-section.chart-mode > .games-grid,
 body[data-sandbox-sport="tennis"] .date-section.chart-mode .games-grid {
@@ -3574,7 +3591,7 @@ body[data-sandbox-sport="tennis"] .date-section.chart-mode .chart-table-wrap {
 body[data-sandbox-sport="tennis"] .date-section .games-grid > .game-card-stack,
 body[data-sandbox-sport="tennis"] .games-grid > .game-card-stack {
   width: 100% !important;
-  max-width: 420px !important;
+  max-width: none !important;
   min-height: 0 !important;
   height: auto !important;
   display: flex !important;
@@ -3589,6 +3606,24 @@ body[data-sandbox-sport="tennis"] .game-card-stack > .pick-card {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+}
+body[data-sandbox-sport="tennis"] .tennis-models.pick-conf-grid,
+body[data-sandbox-sport="tennis"] .pick-conf-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+}
+body[data-sandbox-sport="tennis"] .pc-box {
+  padding: 6px 7px !important;
+  min-width: 0 !important;
+}
+body[data-sandbox-sport="tennis"] .pc-name { font-size: 0.68rem !important; }
+body[data-sandbox-sport="tennis"] .pc-val { font-size: 0.92rem !important; }
+body[data-sandbox-sport="tennis"] .pc-side {
+  font-size: 0.72rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 </style>
 """

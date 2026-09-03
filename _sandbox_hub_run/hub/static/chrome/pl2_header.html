@@ -1,0 +1,123 @@
+<header class="pl2-header">
+    <button type="button" class="pl2-burger" id="navHamburger" onclick="if(window.tvToggle){tvToggle();return false;}if(window.tvOpen){tvOpen();return false;}" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+        <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav">
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Picks</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/mlb/" class="in-season">MLB</a>
+                <a href="/nba-picks">NBA</a>
+                <a href="/nhl-picks">NHL</a>
+                <a href="/nfl-picks" class="in-season">NFL</a>
+                <a href="/soccer/" class="in-season">Soccer</a>
+                <a href="/ncaab-picks">NCAAB</a>
+                <a href="/ncaaf-picks" class="in-season">NCAAF</a>
+                <a href="/ncaaw-picks">NCAAW</a>
+                <a href="/wnba/" class="in-season">WNBA</a>
+                <a href="/cfl/" class="in-season">CFL</a>
+                <a href="/tennis/" class="in-season">Tennis</a>
+                <a href="/ufc/" class="in-season">UFC</a>
+                <a href="/golf/" class="in-season">Golf</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Models</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/mlb/performance">Model Performance</a>
+                <a href="/mlb/models">Models</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Results</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/mlb/results" class="in-season">MLB</a>
+                <a href="/nba-results">NBA</a>
+                <a href="/nhl-results">NHL</a>
+                <a href="/nfl-results" class="in-season">NFL</a>
+                <a href="/soccer/results" class="in-season">Soccer</a>
+                <a href="/ncaab-results">NCAAB</a>
+                <a href="/ncaaf-results" class="in-season">NCAAF</a>
+                <a href="/ncaaw-results">NCAAW</a>
+                <a href="/wnba/results" class="in-season">WNBA</a>
+                <a href="/cfl/results" class="in-season">CFL</a>
+                <a href="/tennis/results" class="in-season">Tennis</a>
+                <a href="/ufc/results" class="in-season">UFC</a>
+                <a href="/golf/results" class="in-season">Golf</a>
+            </div>
+        </div>
+        <a href="/blog">Blog</a>
+        <a href="/plans">Pricing</a>
+    </nav>
+    <div class="pl2-header-actions">
+        <a class="pl2-search" href="/search" onclick="if(window.openSrch){openSrch();return false;}" aria-label="Search" title="Search teams, leagues, props">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </a>
+        <div class="pl2-account">
+            <button class="pl2-account-button" type="button" aria-label="Account menu" aria-expanded="false" aria-controls="pl2AccountMenu">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21a8 8 0 0 1 16 0"></path>
+                </svg>
+            </button>
+            <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
+                <a href="/login">Login</a>
+                <a href="/signup">Sign Up</a>
+            </div>
+        </div>
+    </div>
+</header>
+<script>
+(function () {
+    var account = document.querySelector('.pl2-account');
+    if (account) {
+        var button = account.querySelector('.pl2-account-button');
+        var menu = account.querySelector('.pl2-account-menu');
+        if (button && menu) {
+            function closeAccountMenu() {
+                menu.hidden = true;
+                button.setAttribute('aria-expanded', 'false');
+            }
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+                var opening = menu.hidden;
+                menu.hidden = !opening;
+                button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+            });
+            document.addEventListener('click', function (event) {
+                if (!account.contains(event.target)) closeAccountMenu();
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') closeAccountMenu();
+            });
+        }
+    }
+    var drops = Array.prototype.slice.call(document.querySelectorAll('.pl2-navdrop'));
+    function closeAll(except) {
+        drops.forEach(function (d) {
+            if (d === except) return;
+            var m = d.querySelector('.pl2-nav-menu');
+            var b = d.querySelector('.pl2-nav-trigger');
+            if (m) m.hidden = true;
+            if (b) b.setAttribute('aria-expanded', 'false');
+        });
+    }
+    drops.forEach(function (d) {
+        var b = d.querySelector('.pl2-nav-trigger');
+        var m = d.querySelector('.pl2-nav-menu');
+        if (!b || !m) return;
+        b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var opening = m.hidden;
+            closeAll(d);
+            m.hidden = !opening;
+            b.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        });
+    });
+    document.addEventListener('click', function () { closeAll(null); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAll(null);
+    });
+})();
+</script>

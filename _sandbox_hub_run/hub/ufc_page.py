@@ -160,20 +160,93 @@ def _replace_container(html: str, body: str) -> str:
 
 
 def _ufc_chrome_cleanup(html: str, which: str = "picks") -> str:
-    from sandbox_fixup import (
-        fix_share_social_assets,
-        inject_sport_subnav,
-        strip_sandbox_dev_notes,
+    from sandbox_fixup import apply_sport_fixups
+
+    # Drop chart assets from the chrome shell (may target a different slate),
+    # then re-apply UFC fixups + Moneyline picks Chart on the isolation cards.
+    html = re.sub(r"<script>\s*window\.PICKS_CHART\s*=[\s\S]*?</script>", "", html, flags=re.I)
+    html = re.sub(r'<link[^>]+picks-chart\.css[^>]*>', "", html, flags=re.I)
+    html = re.sub(r'<script[^>]+picks-chart\.js[^>]*>\s*</script>', "", html, flags=re.I)
+    html = re.sub(
+        r'<style id="picks-chart-scaffold">[\s\S]*?</style>', "", html, flags=re.I
+    )
+    html = re.sub(
+        r"<!-- MLB picks Cards/Chart UI signed off[^>]*-->", "", html, flags=re.I
+    )
+    return apply_sport_fixups(html, "ufc", which=which)
+
+
+def _ufc_picks_writeup() -> str:
+    """MLB-style SEO intro (title + paragraph + Predictions heading). No IP/vendor notes."""
+    return (
+        '<div class="header">'
+        '<h1 id="pageHeading">🥊 UFC AI Picks, Predictions and Fight Probabilities</h1>'
+        "</div>\n"
+        "<!-- SEO text block -->\n"
+        '<div class="sport-picks-writeup" style="margin-bottom:16px;padding:14px 16px;'
+        "background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);"
+        'border-radius:10px;font-size:0.85em;color:#475569;line-height:1.7;">\n'
+        "Our UFC picks today are generated using a specialized AI prediction system that "
+        "analyzes fighter performance, striking, grappling, takedown ability, recent form, "
+        "and matchup dynamics. By evaluating advanced UFC statistics, fight styles, opponent "
+        "quality, and key performance metrics, our model identifies high-value opportunities "
+        "across UFC moneyline, method of victory, round, and fight outcome predictions.\n"
+        "</div>\n"
+        '<h2 class="sport-predictions-heading" style="color:#0f172a;font-size:1.2rem;'
+        'margin:0 0 12px;">📊 UFC Predictions</h2>\n'
     )
 
-    html = strip_sandbox_dev_notes(html)
-    # Strip only — do not inject a second Picks/Results bar above pl2-header.
-    html = inject_sport_subnav(html, "ufc", which=which)
-    html = fix_share_social_assets(html)
-    return html
+
+def _ufc_section_tabs(which: str) -> str:
+    """Mirror MLB in-page tabs: 📊 Predictions | 🎯 Results."""
+    pa = "active" if which == "picks" else ""
+    ra = "active" if which == "results" else ""
+    return (
+        '<div class="section-tabs" role="navigation" aria-label="Sport pages">'
+        f'<a href="/ufc/" class="tab {pa}">📊 Predictions</a>'
+        f'<a href="/ufc/results" class="tab {ra}">🎯 Results</a>'
+        "</div>"
+        "<style>.section-tabs{display:flex;gap:8px;margin:12px 0 18px;flex-wrap:wrap}"
+        ".section-tabs .tab{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;"
+        "border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:.85rem;"
+        "text-decoration:none}.section-tabs .tab.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}"
+        "</style>"
+    )
+
+
+def _with_section_tabs(frag: str, which: str) -> str:
+    """In-page Predictions|Results at top of content (footer mega-menu does not count)."""
+    tabs = _ufc_section_tabs(which)
+    if which == "picks":
+        return f"{_ufc_picks_writeup()}{tabs}\n{frag}"
+    return f"{tabs}\n{frag}"
+
+
+def _esc(s: Any) -> str:
+    return (
+        str(s if s is not None else "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def build_ufc_performance_html() -> str:
+    """Best Performing + Efficiency + Last Night / Last 7 / Season for cards views."""
+    try:
+        from share_chrome import build_ml_sport_performance_html
+        from team_tabbed_results import build_ufc_payload
+
+        return build_ml_sport_performance_html(build_ufc_payload(), sport="ufc")
+    except Exception as e:
+        print(f"[ufc_page] performance payload failed: {e}", flush=True)
+        return ""
 
 
 def render_ufc_with_chrome(chrome_html: str, which: str = "picks") -> tuple[str, dict[str, Any]]:
+    from shared_chrome import ensure_canonical_chrome
+
     render = _render_mod(reload=True)
     if which == "results":
         frag, meta = render.build_results_fragment(refresh=False)
@@ -182,6 +255,31 @@ def render_ufc_with_chrome(chrome_html: str, which: str = "picks") -> tuple[str,
         frag, meta = render.build_cards_fragment(which="picks", refresh=False)
         title = "UFC Picks | Prediction Lab"
 
+    frag = _with_section_tabs(frag, which)
+    # Results keep Best Performing / LN-L7-Season (chart-parity). Picks match MLB: no tallies.
+    if which == "results":
+        perf = build_ufc_performance_html()
+        if perf:
+            frag = re.sub(
+                r'<section\b[^>]*\bclass="[^"]*\btally-wrap\b[^"]*"[^>]*>[\s\S]*?</section>',
+                "",
+                frag,
+                count=1,
+                flags=re.I,
+            )
+            if "section-tabs" in frag:
+                frag = re.sub(
+                    r'(</div>\s*<style>\.section-tabs[\s\S]*?</style>)',
+                    r"\1\n" + perf,
+                    frag,
+                    count=1,
+                    flags=re.I,
+                )
+            else:
+                frag = perf + frag
+
+    from mlb_page_template import apply_mlb_picks_template
+
     if not chrome_html or "<body" not in chrome_html.lower():
         page = (
             "<!doctype html><html><head><meta charset='utf-8'/>"
@@ -189,10 +287,14 @@ def render_ufc_with_chrome(chrome_html: str, which: str = "picks") -> tuple[str,
             f"<title>{title}</title>"
             '<link rel="stylesheet" href="/static/css/research-theme.css"/>'
             '<link rel="stylesheet" href="/static/css/picks-nav-overrides.css"/>'
-            "</head><body>"
+            '<link rel="stylesheet" href="/static/css/team-results.css"/>'
+            "</head><body class='research-site' data-theme='light' "
+            "data-sandbox-sport='ufc' data-sandbox-sports-chrome='1'>"
             f'<div class="container">{frag}</div></body></html>'
         )
         page = _ufc_chrome_cleanup(page, which)
+        page = ensure_canonical_chrome(page, "ufc", which=which)
+        page = apply_mlb_picks_template(page, sport="ufc", which=which)
         return page, meta
 
     html = chrome_html
@@ -208,9 +310,29 @@ def render_ufc_with_chrome(chrome_html: str, which: str = "picks") -> tuple[str,
     html = _point_static_to_hub(html)
     html = html.replace("/ufc-picks", "/ufc/")
     html = html.replace("/ufc-results", "/ufc/results")
+    # Scope any leftover body-link CSS so frozen pl2-header cannot be restyled
+    if "ufc-chrome-isolate" not in html:
+        html = html.replace(
+            "</head>",
+            "<style id=\"ufc-chrome-isolate\">"
+            "header.pl2-header, header.pl2-header a, header.pl2-header a:hover{"
+            "color:inherit}"
+            "</style></head>",
+            1,
+        )
     html = _ufc_chrome_cleanup(html, which)
+    html = ensure_canonical_chrome(html, "ufc", which=which)
+    html = apply_mlb_picks_template(html, sport="ufc", which=which)
     return html, meta
 
 
 def build_ufc_pick_page(which: str = "picks", *, refresh: bool = False) -> tuple[str, dict[str, Any]]:
+    _ = refresh
     return render_ufc_with_chrome("", which=which)
+
+
+def ufc_tally_payload() -> dict[str, Any]:
+    """Chart / API tallies from walk-forward graded isolation results."""
+    render = _render_mod(reload=True)
+    cards = render.list_graded_results(limit=500)
+    return render.window_tally_records(cards)

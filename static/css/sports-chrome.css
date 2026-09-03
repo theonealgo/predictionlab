@@ -1,0 +1,395 @@
+/**
+ * Shared sports chrome — MLB gold-standard layout for all sandbox team sports.
+ * Golf is the only intentional layout exception (individual sport board).
+ * Do not invent per-sport layout CSS; sport content may differ, chrome must not.
+ */
+
+:root {
+  --pl-chrome-max: 1400px;
+  --pl-card-min: 320px;
+  --pl-card-max: 420px;
+  --pl-gap: 16px;
+  --pl-ink: #0c1e3a;
+  --pl-muted: #64748b;
+  --pl-line: #dbe3ee;
+  --pl-soft: #f8fafc;
+  --pl-card-min-h: 420px;
+  --pl-tally-min-h: 96px;
+  --pl-logo: 52px; /* MLB matchup-row logo size */
+}
+
+/* MLB picks: 3 cards per row; stacks fill the cell */
+body.research-site[data-sandbox-sport="mlb"],
+body[data-sandbox-sport="mlb"] {
+  --pl-card-min: 320px;
+  --pl-card-max: none;
+}
+
+body.research-site[data-sandbox-sport="mlb"] .date-section:not(.chart-mode) .games-grid,
+body[data-sandbox-sport="mlb"] .date-section:not(.chart-mode) .games-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  align-items: start !important;
+  width: 100% !important;
+}
+
+/* Never let auto-fill + tiny min create paper-thin columns on results */
+body.research-site[data-sandbox-sport="mlb"] .games-grid > .game-card,
+body[data-sandbox-sport="mlb"] .games-grid > .game-card,
+body.research-site[data-sandbox-sport="mlb"] .games-grid > .game-card-stack,
+body[data-sandbox-sport="mlb"] .games-grid > .game-card-stack {
+  max-width: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+body.research-site[data-sandbox-sport="mlb"] .game-card-stack,
+body[data-sandbox-sport="mlb"] .game-card-stack {
+  max-width: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
+/* Moneyline Accuracy model cards stay a 6-up row — not game-card .model-mini grids */
+body.research-site[data-sandbox-sport="mlb"] .model-grid:has(> .model-card),
+body[data-sandbox-sport="mlb"] .model-grid:has(> .model-card) {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  align-items: start !important;
+}
+
+body.research-site[data-sandbox-sport="mlb"] .model-grid:has(> .model-card) > .model-card,
+body[data-sandbox-sport="mlb"] .model-grid:has(> .model-card) > .model-card {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+@media (max-width: 1100px) {
+  body.research-site[data-sandbox-sport="mlb"] .date-section:not(.chart-mode) .games-grid,
+  body[data-sandbox-sport="mlb"] .date-section:not(.chart-mode) .games-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  body.research-site[data-sandbox-sport="mlb"] .model-grid:has(> .model-card),
+  body[data-sandbox-sport="mlb"] .model-grid:has(> .model-card) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  body.research-site[data-sandbox-sport="mlb"] .date-section:not(.chart-mode) .games-grid,
+  body[data-sandbox-sport="mlb"] .date-section:not(.chart-mode) .games-grid {
+    grid-template-columns: 1fr !important;
+  }
+  body.research-site[data-sandbox-sport="mlb"] .model-grid:has(> .model-card),
+  body[data-sandbox-sport="mlb"] .model-grid:has(> .model-card) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ── Page shell ─────────────────────────────────────────── */
+body.research-site .container,
+body.research-site .games-grid,
+body.research-site .results-grid {
+  max-width: var(--pl-chrome-max);
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+body.research-site .container {
+  padding-left: 16px;
+  padding-right: 16px;
+  width: 100%;
+}
+
+/* Match live MLB results: white page, 1400px content, no cream inset box. */
+body.research-site[data-sandbox-sports-chrome="1"],
+body.research-site[data-sandbox-sport] {
+  background-color: #fff !important;
+  background-image: none !important;
+}
+body.research-site[data-sandbox-sports-chrome="1"] > .container,
+body.research-site[data-sandbox-sport] > .container {
+  width: 100% !important;
+  max-width: 1400px !important;
+  min-height: 0 !important;
+  margin: 0 auto !important;
+  padding: 16px 24px 48px !important;
+  background: #fff !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Drop mini sport-only headers when frozen pl2-header is present */
+body.research-site:has(header.pl2-header[data-sandbox-chrome="frozen"]) header.top {
+  display: none !important;
+}
+
+/* ── Cards | Chart (results) ────────────────────────────── */
+.pl-view-toggle {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 18px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.pl-view-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--pl-line);
+  background: #fff;
+  color: var(--pl-ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-decoration: none;
+  line-height: 1.2;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+.pl-view-btn.active {
+  background: var(--pl-ink);
+  color: #fff;
+  border-color: var(--pl-ink);
+}
+
+/* ── Picks Cards | Chart ────────────────────────────────── */
+.picks-view-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: var(--pl-chrome-max);
+  margin: 0 auto 12px;
+  padding: 0 4px;
+}
+.pv-toggle {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+.pv-btn {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font-size: 0.8em;
+  font-weight: 700;
+  padding: 6px 14px;
+  cursor: pointer;
+  min-height: 34px;
+}
+.pv-btn.active {
+  background: var(--pl-ink);
+  color: #fff;
+}
+
+/* ── Pick / results card grid (content-height; do not stretch empty) ── */
+.games-grid,
+.results-grid,
+#finals.cards,
+.cards#finals,
+section#finals-wrap .cards {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(var(--pl-card-min), 1fr)) !important;
+  gap: var(--pl-gap) !important;
+  margin-bottom: 22px !important;
+  align-items: start !important;
+  justify-content: center;
+  width: 100%;
+}
+
+.game-card-stack {
+  min-width: 0 !important;
+  max-width: var(--pl-card-max) !important;
+  width: 100% !important;
+  justify-self: stretch !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: auto;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0 !important;
+}
+
+.game-card-stack > .game-card,
+.game-card-stack > .pick-card,
+.game-card.pick-card,
+article.game-card {
+  flex: 0 0 auto;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* Reserve logo space — reduce layout shift on image load */
+.game-card img.team-logo,
+.game-card .team-logo,
+.pick-card img.team-logo,
+.pick-card .team-logo,
+.game-card-stack img[class*="logo"],
+.teams-split img,
+.team-row img {
+  width: var(--pl-logo) !important;
+  height: var(--pl-logo) !important;
+  min-width: var(--pl-logo);
+  min-height: var(--pl-logo);
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ── Performance / statistics / tally cards ─────────────── */
+.daily-tally-grid,
+.pl-analytics-grid,
+.tally-grid,
+.statrow {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  gap: 12px !important;
+  align-items: stretch !important;
+}
+
+.daily-tally-card,
+.pl-analytics-card,
+.tally-card,
+.statrow .stat {
+  height: 100%;
+  min-height: var(--pl-tally-min-h);
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.daily-tally,
+.tally-wrap,
+.pl-mlb-analytics,
+section.pl-analytics,
+.pl-sport-analytics {
+  max-width: var(--pl-chrome-max);
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 18px;
+}
+
+.pl-analytics-title,
+.daily-tally-head h2,
+.sec-title {
+  color: var(--pl-ink);
+  font-weight: 800;
+}
+
+/* ── Results tables ─────────────────────────────────────── */
+.table-wrap,
+.chart-table-wrap {
+  max-width: var(--pl-chrome-max);
+  margin-left: auto;
+  margin-right: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+}
+.picks-chart-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+}
+
+.results-table th,
+.picks-chart-table th,
+.results-table td,
+.picks-chart-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.results-table th,
+.picks-chart-table th,
+body.research-site .results-table th,
+body.research-site .picks-chart-table th {
+  background: #eef2f7;
+  font-weight: 800;
+  color: #475569;
+}
+
+/* ── Market tabs ────────────────────────────────────────── */
+.market-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  max-width: var(--pl-chrome-max);
+}
+.market-tab {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--pl-line);
+  background: #fff;
+  color: var(--pl-ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  min-height: 36px;
+}
+.market-tab.active {
+  background: var(--pl-ink);
+  color: #fff;
+  border-color: var(--pl-ink);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+  :root {
+    --pl-card-min: 280px;
+    --pl-card-min-h: 380px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --pl-card-min: 100%;
+    --pl-card-max: 100%;
+    --pl-card-min-h: 0;
+    --pl-gap: 12px;
+  }
+  .games-grid,
+  .results-grid,
+  #finals.cards,
+  .cards#finals {
+    grid-template-columns: 1fr !important;
+  }
+  .game-card-stack {
+    max-width: 100% !important;
+  }
+  body.research-site .container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

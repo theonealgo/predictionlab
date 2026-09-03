@@ -1,16 +1,9 @@
 """Canonical MLB run-line pick + grade. Isolation source of truth.
 
-# ============================================================
-# MLB LOCK — DO NOT MODIFY
-# MLB was previously fixed and verified.
-# DO NOT change this logic unless the user explicitly says:
-# "UNLOCK MLB"
-# Changes to other sports must NOT modify MLB behavior.
-# ============================================================
-
 Home-centric our_spread: positive = home favored (projected home − away).
-NO BET when there is no real run-line edge (pick'em / |our_spread| < 1.5).
-Publish the favorite −1.5. Do not fade to the dog +1.5.
+Publish the favorite −1.5 whenever our_spread is available.
+When ``|our_spread| < 1.5`` still publish (thin edge) with ``thin_edge=True``
+so callers can apply lower EV — do not leave Published pick blank.
 
 Do not import Efficiency / ML / totals / IP-gate from here.
 """
@@ -20,6 +13,8 @@ from typing import Any
 
 RUN_LINE = 1.5
 MIN_ABS_SPREAD = 1.5
+# Cover-prob / EV haircut for thin publishes (|our_spread| < 1.5).
+THIN_EDGE_EV_FACTOR = 0.35
 
 
 def _as_float(value: Any) -> float | None:
@@ -37,10 +32,11 @@ def pick_spread_side(
     home: str | None = None,
     away: str | None = None,
 ) -> dict[str, Any]:
-    """Select HOME −1.5, AWAY −1.5, or NO BET from stored PL our_spread.
+    """Select HOME −1.5 or AWAY −1.5 from stored PL our_spread.
 
-    Favorite −1.5 when ``|our_spread| >= 1.5``. NO BET stays NO BET.
-    ``home`` / ``away`` are optional labels only (not used for the decision).
+    Always BET when our_spread is numeric. Thin edges (|xs| < 1.5) still
+    publish the model favorite −1.5 and set ``thin_edge=True`` for lower EV.
+    Missing our_spread → NO BET (no side to publish).
     """
     del home, away
     xs = _as_float(our_spread)
@@ -49,21 +45,21 @@ def pick_spread_side(
             "action": "NO BET",
             "side": None,
             "line": None,
+            "thin_edge": False,
             "reason": "model score unavailable",
         }
-    if abs(xs) < MIN_ABS_SPREAD:
-        return {
-            "action": "NO BET",
-            "side": None,
-            "line": None,
-            "reason": "pick'em — no run-line edge",
-        }
-    side = "HOME" if xs >= MIN_ABS_SPREAD else "AWAY"
+    thin = abs(xs) < MIN_ABS_SPREAD
+    side = "HOME" if xs >= 0 else "AWAY"
     return {
         "action": "BET",
         "side": side,
         "line": -RUN_LINE,
-        "reason": "away -1.5" if side == "AWAY" else "home -1.5",
+        "thin_edge": thin,
+        "reason": (
+            "thin edge — lower EV"
+            if thin
+            else ("away -1.5" if side == "AWAY" else "home -1.5")
+        ),
     }
 
 
@@ -130,6 +126,19 @@ def apply_spread_pick_and_grade(
     }
 
 
+def haircut_spread_ev(ev: Any, *, thin_edge: bool) -> float | None:
+    """Apply lower EV for thin-edge publishes."""
+    if ev is None:
+        return None
+    try:
+        val = float(ev)
+    except (TypeError, ValueError):
+        return None
+    if not thin_edge:
+        return round(val, 1)
+    return round(val * THIN_EDGE_EV_FACTOR, 1)
+
+
 def tally_spread_windows(games: list[dict[str, Any]]) -> dict[str, Any]:
     """Grade a list of stored games with the unified pick/grade.
 
@@ -176,6 +185,7 @@ def tally_spread_windows(games: list[dict[str, Any]]) -> dict[str, Any]:
             "record": f"{w}-{l}",
             "game_ids": ids,
             "no_bet": sum(1 for r in rows if pred(r) and r["action"] == "NO BET"),
+            "thin_edge": sum(1 for r in rows if pred(r) and r.get("thin_edge")),
             "rows": [r for r in rows if pred(r)],
         }
 

@@ -3,7 +3,7 @@
 {{ name|string }}
 {%- endmacro %}
 {% macro fmt_half(v) -%}
-{%- if v is not none -%}
+{%- if v is defined and v is not none -%}
 {%- set x = (v|float * 2)|round(0, 'common') / 2 -%}
 {%- if x == (x|int) -%}{{ x|int }}{%- else -%}{{ "%.1f"|format(x) }}{%- endif -%}
 {%- endif -%}
@@ -32,7 +32,7 @@
 {%- endmacro %}
 
 {% macro fmt_spread_line(spread, home, away, force_run_line=false) -%}
-{%- if spread is none -%}—
+{%- if spread is undefined or spread is none -%}—
 {%- else -%}
 {%- set raw = spread|float -%}
 {%- if force_run_line -%}

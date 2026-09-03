@@ -1,0 +1,72 @@
+<div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+<div class="tv-drawer" id="tvDrawer">
+  <div class="tv-drawer-header">
+    <div class="tv-header-btns"><button type="button" class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+    <button type="button" class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+  </div>
+  <div class="tv-panels">
+    <div class="tv-panel visible" id="tvMain">
+      <div class="tv-menu-list">
+        <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+      </div>
+    </div>
+    <div class="tv-panel hidden-right" id="tvSub"></div>
+  </div>
+</div>
+<script id="sandbox-tv-menus">
+var TV_MENUS={
+  picks:{title:'Picks & Predictions',items:[
+    {l:'MLB',h:'/mlb/',live:1},{l:'NBA',h:'/nba-picks'},{l:'NHL',h:'/nhl-picks'},
+    {l:'NFL',h:'/nfl-picks',live:1},{l:'Soccer',h:'/soccer/',live:1},{l:'NCAAB',h:'/ncaab-picks'},
+    {l:'NCAAF',h:'/ncaaf-picks',live:1},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba/',live:1},
+    {l:'CFL',h:'/cfl/',live:1},{l:'Tennis',h:'/tennis/',live:1},{l:'UFC',h:'/ufc/',live:1},
+    {l:'Golf',h:'/golf/',live:1}
+  ]},
+  results:{title:'Results & Tracking',items:[
+    {l:'MLB',h:'/mlb/results',live:1},{l:'NBA',h:'/nba-results'},{l:'NHL',h:'/nhl-results'},
+    {l:'NFL',h:'/nfl-results',live:1},{l:'Soccer',h:'/soccer/results',live:1},{l:'NCAAB',h:'/ncaab-results'},
+    {l:'NCAAF',h:'/ncaaf-results',live:1},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba/results',live:1},
+    {l:'CFL',h:'/cfl/results',live:1},{l:'Tennis',h:'/tennis/results',live:1},{l:'UFC',h:'/ufc/results',live:1},
+    {l:'Golf',h:'/golf/results',live:1}
+  ]}
+};
+function tvOpen(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';
+  if(h)h.setAttribute('aria-expanded','true');
+}
+function tvToggle(){
+  var d=document.getElementById('tvDrawer');
+  if(d&&d.classList.contains('open')){tvClose();}else{tvOpen();}
+}
+function tvClose(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';
+  if(h)h.setAttribute('aria-expanded','false');
+  var m=document.getElementById('tvMain'),s=document.getElementById('tvSub'),b=document.getElementById('tvBackBtn'),t=document.getElementById('tvDrawerTitle');
+  if(m){m.className='tv-panel visible';}
+  if(s){s.className='tv-panel hidden-right';s.innerHTML='';}
+  if(b)b.style.display='none';
+  if(t)t.textContent='Menu';
+}
+function tvSub(key){
+  var menu=TV_MENUS[key],main=document.getElementById('tvMain'),sub=document.getElementById('tvSub'),back=document.getElementById('tvBackBtn'),title=document.getElementById('tvDrawerTitle');
+  if(!menu||!main||!sub)return;
+  var html='';
+  menu.items.forEach(function(item){html+='<a href="'+item.h+'" class="tv-sub-link'+(item.live?' in-season':'')+'">'+item.l+'</a>';});
+  sub.innerHTML=html;
+  if(title)title.textContent=menu.title;
+  if(back)back.style.display='inline-flex';
+  main.className='tv-panel hidden-left';
+  sub.className='tv-panel visible';
+}
+function tvBack(){
+  var main=document.getElementById('tvMain'),sub=document.getElementById('tvSub'),back=document.getElementById('tvBackBtn'),title=document.getElementById('tvDrawerTitle');
+  if(main)main.className='tv-panel visible';
+  if(sub){sub.className='tv-panel hidden-right';}
+  if(back)back.style.display='none';
+  if(title)title.textContent='Menu';
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')tvClose();});
+</script>

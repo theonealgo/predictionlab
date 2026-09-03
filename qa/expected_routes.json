@@ -40,12 +40,12 @@
     {"path": "/llms.txt",                            "expected_status": [200],       "label": "LLMs.txt"},
     {"path": "/ai.txt",                              "expected_status": [200],       "label": "AI.txt"},
     {"path": "/api/sports",                          "expected_status": [200],       "label": "Sports API"},
-    {"path": "/api/search?q=nba",                   "expected_status": [200, 302],  "label": "Search API"}
+    {"path": "/api/search?q=nba",                   "expected_status": [200, 302],  "label": "Search API"},
+    {"path": "/results/export.csv",                 "expected_status": [200],       "label": "Results CSV (public)"}
   ],
   "protected": [
     {"path": "/player-props",             "expected_status": [302], "label": "Player Props (needs login)"},
     {"path": "/picks/export.csv",         "expected_status": [302], "label": "Picks CSV (needs login)"},
-    {"path": "/results/export.csv",       "expected_status": [302], "label": "Results CSV (needs login)"},
     {"path": "/performance/audit.csv",    "expected_status": [302], "label": "Audit CSV (needs login)"}
   ],
   "should_404": [

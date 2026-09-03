@@ -866,7 +866,7 @@
                     data-xs-proj="{% if pred.xs_proj_away_pts is not none and pred.xs_proj_home_pts is not none %}{{ fmt_half(pred.xs_proj_away_pts) }}–{{ fmt_half(pred.xs_proj_home_pts) }}{% endif %}"
                     {% endif %}
                     data-result="{{ _chart_result }}">
-                <div class="game-card pick-card" data-league="{{ pred.league if pred.league else 'Other' }}">
+                <div class="game-card pick-card is-expanded" data-league="{{ pred.league if pred.league else 'Other' }}">
                     {% set _force_rl = (sport == 'MLB') %}
                     {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
                     {% set card = pred %}
@@ -878,6 +878,14 @@
                     {% set home_score = pred.home_score %}
                     {% set show_pick_arrow = (not is_final) and _odds_pass %}
                     {% set card_details_id = 'card-details-' ~ date ~ '-' ~ loop.index0 %}
+                    {% if sport == 'WNBA' or sport == 'TENNIS' %}
+                    {% set conf_models = [
+                        {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
+                        {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.efficiency_prob if (pred.efficiency_prob is defined and pred.efficiency_prob is not none) else (pred.disp_ml_prob if pred.disp_ml_prob is defined else none), 'key': 'efficiency'},
+                        {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
+                    ] %}
+                    {% else %}
                     {% set conf_models = [
                         {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
                         {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
@@ -886,6 +894,7 @@
                         {'name': 'Efficiency', 'prob': pred.efficiency_prob if (pred.efficiency_prob is defined and pred.efficiency_prob is not none) else (none if sport == 'SOCCER' else (pred.disp_ml_prob if pred.disp_ml_prob is defined else none)), 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
+                    {% endif %}
                     {% include 'includes/game_card_body.html' %}
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
                     <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
@@ -1159,7 +1168,7 @@
         return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
     }
     const sportIcon = '{{ sport_info.icon }}';
-    const sportName = '{{ sport_info.name }}';
+    const sportName = {{ sport_info.name|tojson }};
     function showDate(date) {
         document.querySelectorAll('.date-section').forEach(s=>{
             s.classList.remove('visible');
@@ -1185,15 +1194,20 @@
         if (!btn) return;
         const panelId = btn.getAttribute('aria-controls');
         const panel = panelId ? document.getElementById(panelId) : null;
-        const card = btn.closest('.pick-card');
+        const card = btn.closest('.pick-card') || btn.closest('.game-card') || btn.closest('.game-card-stack');
         if (!panel) return;
-        const expanded = card && card.classList.toggle('is-expanded');
-        if (expanded) {
+        const willOpen = card
+            ? !card.classList.contains('is-expanded')
+            : panel.hasAttribute('hidden');
+        if (card) card.classList.toggle('is-expanded', willOpen);
+        if (willOpen) {
             panel.removeAttribute('hidden');
             btn.setAttribute('aria-expanded', 'true');
+            btn.innerHTML = 'Less details <span class="chevron">▾</span>';
         } else {
             panel.setAttribute('hidden', '');
             btn.setAttribute('aria-expanded', 'false');
+            btn.innerHTML = 'View Details <span class="chevron">▾</span>';
         }
     }
     function renderDateBubbles() {

@@ -16,9 +16,21 @@ def test_mlb_favorite_is_minus_1_5():
         "MIL",
         -1.5,
     )
-    assert N._mlb_run_line_from_home_spread(0.4, "LAD", "MIL") is None
-    assert N._mlb_run_line_from_home_spread(-0.5, "LAD", "MIL") is None
-    assert N._mlb_run_line_from_home_spread(0.0, "LAD", "MIL") is None
+    assert N._mlb_run_line_from_home_spread(0.4, "LAD", "MIL") == (
+        "HOME",
+        "LAD",
+        -1.5,
+    )
+    assert N._mlb_run_line_from_home_spread(-0.5, "LAD", "MIL") == (
+        "AWAY",
+        "MIL",
+        -1.5,
+    )
+    assert N._mlb_run_line_from_home_spread(0.0, "LAD", "MIL") == (
+        "HOME",
+        "LAD",
+        -1.5,
+    )
     assert N._mlb_run_line_from_home_spread(None, "LAD", "MIL") is None
 
 
@@ -124,7 +136,8 @@ def test_displayed_correct_matches_score_grade(monkeypatch):
     assert N.grade_spread_cover("AWAY", 2, 6, line=-1.5) is True
 
 
-def test_pickem_is_no_bet_not_forced(monkeypatch):
+def test_pickem_publishes_thin_edge(monkeypatch):
+    """|our_spread|<1.5 still publishes favorite −1.5 (thin_edge / lower EV)."""
     import NHL77FINAL as N
 
     monkeypatch.setattr(N, "_apply_fades_to_daily_results", lambda *a, **k: None)
@@ -159,10 +172,11 @@ def test_pickem_is_no_bet_not_forced(monkeypatch):
     }
     stats = N._compute_spread_total_for_daily("MLB", daily, skip_efficiency=True)
     g = daily["2026-08-16"]["games"][0]
-    assert g.get("spread_pick") in (None, "")
-    assert g.get("spread_correct") is None
-    assert stats.get("spread_graded", 0) == 0
-    assert stats.get("pl_spread_graded", 0) == 0
+    assert g.get("spread_pick_label") == "Los Angeles Dodgers -1.5"
+    assert g.get("spread_thin_edge") is True
+    assert g.get("pl_spread_correct") is False
+    assert stats.get("spread_graded", 0) == 1
+    assert stats.get("pl_spread_graded", 0) == 1
 
 
 def test_unify_checker_helpers():
@@ -177,9 +191,11 @@ def test_unify_checker_helpers():
     assert fail_season_label_xsharp_spread("XSharp")
     assert fail_season_label_xsharp_spread("XSharp run line")
     assert not fail_season_label_xsharp_spread("Prediction Lab")
-    pickems = [{"our_spread": 0.4, "side": "HOME", "action": "BET"}] * 8
+    pickems = [{"our_spread": 0.4, "side": "HOME", "action": "BET", "thin_edge": True}] * 8
     edges = [{"our_spread": 2.5, "side": "AWAY", "action": "BET"}] * 4
-    assert fail_forced_bet_all_games(pickems + edges)
+    assert not fail_forced_bet_all_games(pickems + edges)
+    unmarked = [{"our_spread": 0.4, "side": "HOME", "action": "BET"}] * 8 + edges
+    assert fail_forced_bet_all_games(unmarked)
     honest = [{"our_spread": 0.4, "side": None, "action": "NO BET"}] * 8 + edges
     assert not fail_forced_bet_all_games(honest)
 

@@ -630,6 +630,112 @@ def flip_mlb_model_spread_display(html: str) -> str:
     return parts[0] + "".join(_patch_stack(p) for p in parts[1:])
 
 
+def rewrite_mlb_edge_chip_to_consensus(html: str) -> str:
+    """Replace picks-card Edge chip (market 0.0%) with model consensus n/6 · pct%.
+
+    Tip: Edge calculated using Model Consensus.
+    """
+    if not html or "edge-chip" not in html:
+        return html
+
+    tip = html_lib.escape("Edge calculated using Model Consensus.", quote=True)
+
+    def _pct(stack: str) -> float | None:
+        for pat in (
+            r'\bdata-m-consensus="([^"]*)"',
+            r'\bdata-conf="([^"]*)"',
+        ):
+            m = re.search(pat, stack, re.I)
+            if not m:
+                continue
+            try:
+                v = float(str(m.group(1)).strip().replace("%", ""))
+                if v <= 1.5:
+                    v *= 100.0
+                return round(v, 1)
+            except ValueError:
+                continue
+        return None
+
+    def _agree_n(stack: str) -> int | None:
+        sides = re.findall(
+            r'<div class="pc-side\s+(home|away)[^"]*"',
+            stack,
+            re.I,
+        )
+        if len(sides) >= 3:
+            home_n = sum(1 for s in sides if s.lower() == "home")
+            away_n = len(sides) - home_n
+            return max(home_n, away_n)
+        pick_m = re.search(r'\bdata-pick="([^"]*)"', stack, re.I)
+        home_m = re.search(r'\bdata-home="([^"]*)"', stack, re.I)
+        away_m = re.search(r'\bdata-away="([^"]*)"', stack, re.I)
+        if not pick_m or not home_m or not away_m:
+            return None
+        pick = (pick_m.group(1) or "").strip().lower()
+        home = (home_m.group(1) or "").strip().lower()
+        away = (away_m.group(1) or "").strip().lower()
+        if not ((home and pick in home) or (away and pick in away)):
+            return None
+        keys = (
+            "data-m-grinder2",
+            "data-m-takedown",
+            "data-m-edge",
+            "data-m-xsharp",
+            "data-m-efficiency",
+            "data-m-consensus",
+        )
+        n = 0
+        found = 0
+        for k in keys:
+            m = re.search(rf'\b{k}="([^"]*)"', stack, re.I)
+            if not m:
+                continue
+            try:
+                v = float(str(m.group(1)).strip().replace("%", ""))
+            except ValueError:
+                continue
+            if v <= 1.5:
+                v *= 100.0
+            found += 1
+            if v >= 50.0:
+                n += 1
+        return n if found >= 3 else None
+
+    def _patch_stack(stack: str) -> str:
+        if "edge-chip" not in stack:
+            return stack
+        agree = _agree_n(stack)
+        pct = _pct(stack)
+        if agree is None or pct is None:
+            val = "—"
+        else:
+            val = f"{int(agree)}/6 · {pct:g}%"
+        label = (
+            "Edge "
+            '<button type="button" class="h2h-info-btn pct-info-btn edge-cons-info" '
+            f'data-tip="{tip}" aria-label="What is Edge?" '
+            'aria-expanded="false" aria-haspopup="true">i</button>'
+        )
+        return re.sub(
+            r'(<div class="line-chip edge-chip[^"]*"\s*>\s*)'
+            r'<div class="line-chip-label">\s*Edge\s*</div>\s*'
+            r'<div class="line-chip-val">[^<]*</div>',
+            rf'\1<div class="line-chip-label">{label}</div>'
+            rf'<div class="line-chip-val">{html_lib.escape(val)}</div>',
+            stack,
+            count=1,
+            flags=re.I,
+        )
+
+    parts = re.split(r'(?=<div class="game-card-stack\b)', html)
+    if len(parts) <= 1:
+        parts = re.split(r'(?=<div class="game-card\b)', html)
+    if len(parts) <= 1:
+        return html
+    return parts[0] + "".join(_patch_stack(p) for p in parts[1:])
+
+
 def inject_mlb_run_line_confidence(html: str) -> str:
     """Add user-facing Run Line Confidence chips on MLB pick cards (sandbox only).
 
@@ -810,13 +916,92 @@ def apply_mlb_picks_fixups(html: str) -> str:
     html = flip_mlb_model_spread_display(html)
     html = enrich_mlb_chart_data_attrs(html)
     html = inject_mlb_run_line_confidence(html)
+    html = rewrite_mlb_edge_chip_to_consensus(html)
+    # Owner requirement: prediction cards stay expanded (Odds & Lines + Pick Confidence).
+    html = open_all_pick_details_html(html)
     return html
 
 
-def apply_mlb_results_fixups(html: str) -> str:
+def open_all_pick_details_html(html: str) -> str:
+    """Server-side: expand all pick/result card details (do not rely on JS alone)."""
+    if not html or "card-details" not in html:
+        return html
+    # Remove hidden= / hidden attribute anywhere on card-details tags
+    def _unhide_details(m: re.Match[str]) -> str:
+        tag = m.group(0)
+        tag = re.sub(r"\s*\bhidden\b(?:=(['\"][^'\"]*['\"]))?", "", tag, flags=re.I)
+        return tag
+
+    html = re.sub(
+        r"<div\b[^>]*\bclass=\"[^\"]*\bcard-details\b[^\"]*\"[^>]*>",
+        _unhide_details,
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"(<(?:button|a)\b[^>]*\bview-details-btn\b[^>]*\baria-expanded=\")false(\")",
+        r"\1true\2",
+        html,
+        flags=re.I,
+    )
+    # Cover "View Details" and "View details" / chevron variants.
+    html = re.sub(
+        r"(<(?:button|a)\b[^>]*\bview-details-btn\b[^>]*>)\s*View\s+Details\s*",
+        r"\1Less details ",
+        html,
+        flags=re.I,
+    )
+
+    def _expand_tag(m: re.Match[str]) -> str:
+        tag = m.group(0)
+        if "is-expanded" in tag:
+            return tag
+        return re.sub(
+            r'\bclass="([^"]*)"',
+            lambda cm: f'class="{cm.group(1)} is-expanded"',
+            tag,
+            count=1,
+        )
+
+    # Expand stacks and individual cards so the first card cannot stay closed.
+    html = re.sub(
+        r'<div\b[^>]*\bclass="[^"]*\b(?:game-card-stack|game-card|pick-card)\b[^"]*"[^>]*>',
+        _expand_tag,
+        html,
+        flags=re.I,
+    )
+    # CSS insurance if live JS re-collapses
+    if 'id="mlb-open-pick-details"' not in html:
+        css = (
+            '<style id="mlb-open-pick-details">'
+            ".card-details[hidden]{display:none!important;}"
+            ".game-card-stack.is-expanded .card-details:not([hidden]),"
+            ".game-card.is-expanded .card-details:not([hidden]),"
+            ".pick-card.is-expanded .card-details:not([hidden]){display:block!important;}"
+            ".view-details-btn[aria-expanded='true'] .chevron{transform:rotate(-180deg);}"
+            "</style>"
+        )
+        if re.search(r"</head>", html, re.I):
+            html = re.sub(r"</head>", css + "</head>", html, count=1, flags=re.I)
+        else:
+            html = css + html
+    return html
+
+
+def apply_mlb_results_fixups(html: str, market: str | None = None) -> str:
     """MLB results publish layer: season efficiency fill + analytics cards + Cards|Chart."""
     if not html:
         return html
+    if not market:
+        try:
+            from flask import has_request_context, request
+
+            if has_request_context():
+                market = (request.args.get("market") or "").strip().lower()
+        except Exception:
+            market = None
+    if market not in ("moneyline", "spread", "totals"):
+        market = "moneyline"
     html = ensure_pl2_header_css(html)
     try:
         from mlb_results_ui import (
@@ -828,15 +1013,113 @@ def apply_mlb_results_fixups(html: str) -> str:
         html = strip_inert_results_market_toggle(html)
         html = inject_mlb_results_view_toggle(html, active="normal")
         try:
-            import sys
+            import re
+            from datetime import datetime
             from pathlib import Path
+            from zoneinfo import ZoneInfo
 
-            _iso_hub = Path(__file__).resolve().parent / "iso_hub"
-            if str(_iso_hub) not in sys.path:
-                sys.path.insert(0, str(_iso_hub))
-            from team_tabbed_results import inject_consensus_records_html
+            # Staging sign-off: mlb_consensus_hub (+ mlb_three_way_consensus).
+            # Same live+frozen merge as hub/_ensure_mlb_results_consensus.
+            # Do not replace iso_hub/team_tabbed_results.py.
+            from mlb_consensus_hub import (
+                _dedupe_finals_by_game,
+                _extract_raw_mlb_finals_from_html,
+                _merge_consensus_finals,
+                inject_consensus_records_html,
+            )
 
-            html = inject_consensus_records_html(html, sport="mlb")
+            def _frozen_results_snapshot() -> str:
+                sandbox = Path("/Users/nimamesghali/Sports Sandbox")
+                candidates = (
+                    sandbox
+                    / "mlb_FROZEN_SIGNED_OFF_20260828"
+                    / "mlb-results.snapshot.html",
+                    sandbox
+                    / "independent_sports"
+                    / "_archives"
+                    / "mlb_DONE_20260828"
+                    / "mlb-results.snapshot.html",
+                    sandbox
+                    / "mlb_DONE_premerge_20260828"
+                    / "mlb-results.snapshot.html",
+                )
+                for path in candidates:
+                    try:
+                        if path.is_file() and path.stat().st_size > 100_000:
+                            return path.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
+                return ""
+
+            live_finals = _extract_raw_mlb_finals_from_html(html, limit=800) or []
+            snap = _frozen_results_snapshot()
+            snap_finals = (
+                _extract_raw_mlb_finals_from_html(snap, limit=800) if snap else []
+            ) or []
+            # Live first as primary; frozen fills older dates — date+matchup dedupe.
+            finals = _dedupe_finals_by_game(
+                _merge_consensus_finals(live_finals, snap_finals)
+            )
+
+            ln_key = None
+            m_ln = re.search(
+                r"Last Night'?s MLB Results\s*[—\-]\s*(\d{4}-\d{2}-\d{2})",
+                html or "",
+                flags=re.I,
+            )
+            if m_ln:
+                ln_key = m_ln.group(1)
+            today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+            if ln_key:
+                ln_n = sum(
+                    1
+                    for g in finals
+                    if str(g.get("game_date") or "")[:10] == ln_key
+                )
+                if ln_n == 0:
+                    past = sorted(
+                        {
+                            str(g.get("game_date") or "")[:10]
+                            for g in finals
+                            if str(g.get("game_date") or "")[:10]
+                            and str(g.get("game_date") or "")[:10] < today
+                        }
+                    )
+                    if past:
+                        ln_key = past[-1]
+            elif finals:
+                past = sorted(
+                    {
+                        str(g.get("game_date") or "")[:10]
+                        for g in finals
+                        if str(g.get("game_date") or "")[:10]
+                        and str(g.get("game_date") or "")[:10] < today
+                    }
+                )
+                ln_key = past[-1] if past else None
+
+            html = inject_consensus_records_html(
+                html,
+                sport="mlb",
+                finals=finals,
+                last_night_key=ln_key,
+                market=market,
+                mlb_frozen_only=False,
+            )
+            if "cons-split-info" in html or "ⓘ" in html:
+                html = re.sub(
+                    r'<details class="cons-split-info">[\s\S]*?</details>',
+                    "",
+                    html,
+                    flags=re.I,
+                )
+                html = html.replace("ⓘ", "")
+            print(
+                f"[mlb_ui_fixup] consensus live+frozen "
+                f"market={market} last_night={ln_key} finals={len(finals)} "
+                f"snap={len(snap_finals)} live={len(live_finals)}",
+                flush=True,
+            )
         except Exception as e:
             print(f"[mlb_ui_fixup] consensus inject: {e}", flush=True)
         return html
