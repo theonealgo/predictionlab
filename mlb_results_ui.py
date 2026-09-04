@@ -1867,23 +1867,27 @@ def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
 
 
 def fix_mlb_results_display(html: str) -> str:
-    """Fill blank Season Efficiency + inject results analytics (sandbox signed-off)."""
+    """Fill blank Season Efficiency + inject results analytics (signed-off)."""
     if not html:
         return html
     html = strip_inert_results_market_toggle(html)
     if "Moneyline Accuracy by Model" not in html:
         return html
     try:
-        # Drop prior analytics so Season sample unification always re-applies.
-        if 'class="pl-mlb-analytics"' in html or "class='pl-mlb-analytics'" in html:
-            html = re.sub(
-                r'<section class="pl-mlb-analytics"[\s\S]*?</section>\s*'
-                r'(?:<style>[\s\S]*?\.pl-mlb-analytics[\s\S]*?</style>\s*)?',
-                '',
-                html,
-                count=1,
-                flags=re.I,
-            )
+        import sys
+        from pathlib import Path
+
+        _iso = Path(__file__).resolve().parent / "iso_hub"
+        if str(_iso) not in sys.path:
+            sys.path.insert(0, str(_iso))
+        from team_tabbed_results import (
+            enrich_mlb_tally_units_html,
+            inject_mlb_results_analytics_html,
+            patch_mlb_season_efficiency_html,
+            strip_mlb_analytics_sections,
+        )
+
+        html = strip_mlb_analytics_sections(html)
         html = patch_mlb_season_efficiency_html(html)
         html = enrich_mlb_tally_units_html(html)
         payload = markets_from_live_html(html, "mlb")

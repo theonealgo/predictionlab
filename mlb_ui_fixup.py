@@ -789,6 +789,110 @@ def inject_mlb_run_line_confidence(html: str) -> str:
     return parts[0] + "".join(_patch_stack(p) for p in parts[1:])
 
 
+_MLB_BODY = 'body.sport-mlb,body[data-sport="MLB"],body[data-sport="mlb"]'
+
+
+def strip_mlb_picks_chart_total_ev(html: str) -> str:
+    """Remove Total EV column from MLB picks chart (inline template JS)."""
+    if not html or "picksChartMarket" not in html:
+        return html
+    html = re.sub(r"\+_infoTh\('Total EV',\s*TOTAL_EV_TIP\);", "", html, flags=re.I)
+    html = re.sub(r'\+_pcInfoTh\("Total EV",\s*TOTAL_EV_TIP\);', "", html, flags=re.I)
+    html = re.sub(
+        r"const TOTAL_EV_TIP\s*=\s*MLB_CHART[\s\S]*?Not moneyline Edge\.';\s*",
+        "",
+        html,
+        count=1,
+    )
+    html = re.sub(
+        r"const tev = IS_PREMIUM \? _esc\(_totalEvTxt\(st\)\) : '🔒';\s*",
+        "",
+        html,
+    )
+    html = re.sub(r'<td class="num">\'\+tev\+\'</td>', "", html)
+    html = re.sub(
+        r'<td class="num">\'\s*\+\s*_pcTotalEvTxt\(st\)\s*\+\s*\'</td>',
+        "",
+        html,
+        flags=re.I,
+    )
+    return html
+
+
+def ensure_mlb_pick_conf_no_scroll(html: str) -> str:
+    """MLB picks: 3 cards/row; pick-conf 6-up inside each card (signed-off layout)."""
+    if not html or 'id="mlb-pick-conf-no-scroll"' in html:
+        return html
+    b = _MLB_BODY
+    css = (
+        '<style id="mlb-pick-conf-no-scroll">'
+        f"{b}{{--pl-card-min:320px!important;--pl-card-max:none!important;}}"
+        f"{b} .pick-conf-bar{{overflow-x:hidden!important;max-width:100%!important;}}"
+        f"{b} .pick-conf-grid{{display:grid!important;"
+        "grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:4px!important;"
+        "min-width:0!important;width:100%!important;}}"
+        f"{b} .pc-box{{min-width:0!important;width:100%!important;box-sizing:border-box!important;}}"
+        f"{b} .games-grid{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;}}"
+        f"{b} .games-grid>.game-card-stack{{max-width:none!important;width:100%!important;"
+        "min-width:0!important;margin:0!important;}}"
+        "@media(max-width:1100px){"
+        f"{b} .games-grid{{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}"
+        "@media(max-width:700px){"
+        f"{b} .games-grid{{grid-template-columns:1fr!important;}}"
+        f"{b} .pick-conf-grid{{grid-template-columns:repeat(3,minmax(0,1fr))!important;}}"
+        "</style>"
+    )
+    if re.search(r"</body\s*>", html, re.I):
+        return re.sub(r"</body\s*>", css + "</body>", html, count=1, flags=re.I)
+    return html + css
+
+
+def _shorten_mlb_results_pc_sides(html: str) -> str:
+    if not html or "pc-side" not in html:
+        return html
+
+    def _repl(m: re.Match[str]) -> str:
+        body = m.group(2)
+        mark = "✅" if "✅" in body else ("❌" if "❌" in body else "")
+        if not mark:
+            return m.group(0)
+        return f"{m.group(1)}{mark}{m.group(3)}"
+
+    return re.sub(
+        r'(<div class="pc-side[^"]*"[^>]*>)([^<]*)(</div>)',
+        _repl,
+        html,
+        flags=re.I,
+    )
+
+
+def ensure_mlb_results_card_layout(html: str) -> str:
+    """MLB results cards: 3-up grid, pick-conf 3×2, tallies 3-col."""
+    if not html:
+        return html
+    html = _shorten_mlb_results_pc_sides(html)
+    if 'id="mlb-results-card-layout"' in html:
+        return html
+    b = _MLB_BODY
+    css = (
+        '<style id="mlb-results-card-layout">'
+        f"{b} .games-grid,{b} .results-grid{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;}}"
+        f"{b} .games-grid>.game-card,{b} .games-grid>.game-card-stack{{width:100%!important;"
+        "min-width:0!important;overflow:hidden!important;}}"
+        f"{b} .pick-conf-grid{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;}}"
+        f"{b} .daily-tally-grid{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;}}"
+        f"{b} .model-grid:has(>.model-card){{display:grid!important;"
+        "grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:10px!important;}}"
+        "</style>"
+    )
+    if re.search(r"</body\s*>", html, re.I):
+        return re.sub(r"</body\s*>", css + "</body>", html, count=1, flags=re.I)
+    return html + css
+
 
 def apply_mlb_picks_fixups(html: str) -> str:
     """Signed-off MLB picks publish layer (no chrome swap).
@@ -810,6 +914,8 @@ def apply_mlb_picks_fixups(html: str) -> str:
     html = flip_mlb_model_spread_display(html)
     html = enrich_mlb_chart_data_attrs(html)
     html = inject_mlb_run_line_confidence(html)
+    html = strip_mlb_picks_chart_total_ev(html)
+    html = ensure_mlb_pick_conf_no_scroll(html)
     return html
 
 
@@ -825,6 +931,7 @@ def apply_mlb_results_fixups(html: str) -> str:
             strip_inert_results_market_toggle,
         )
         html = fix_mlb_results_display(html)
+        html = ensure_mlb_results_card_layout(html)
         html = strip_inert_results_market_toggle(html)
         html = inject_mlb_results_view_toggle(html, active="normal")
         try:

@@ -7,15 +7,19 @@
         <div class="pl2-navdrop">
             <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Picks</button>
             <div class="pl2-nav-menu" hidden>
-                <a href="/nba-picks">NBA</a>
-                <a href="/nfl-picks">NFL</a>
-                <a href="/mlb-picks">MLB</a>
-                <a href="/nhl-picks">NHL</a>
-                {% if soccer_enabled|default(false) %}<a href="/soccer-picks">Soccer</a>{% endif %}
-                <a href="/ncaab-picks">NCAAB</a>
-                <a href="/ncaaf-picks">NCAAF</a>
-                <a href="/ncaaw-picks">NCAAW</a>
-                <a href="/wnba-picks">WNBA</a>
+                <a href="/nba-picks"{% if in_season_sports.get('NBA') %} class="in-season"{% endif %}>NBA</a>
+                <a href="/nfl-picks"{% if in_season_sports.get('NFL') %} class="in-season"{% endif %}>NFL</a>
+                <a href="/mlb-picks"{% if in_season_sports.get('MLB')|default(true) %} class="in-season"{% endif %}>MLB</a>
+                <a href="/nhl-picks"{% if in_season_sports.get('NHL') %} class="in-season"{% endif %}>NHL</a>
+                {% if soccer_enabled|default(false) %}<a href="/soccer-picks"{% if in_season_sports.get('SOCCER')|default(true) %} class="in-season"{% endif %}>Soccer</a>{% endif %}
+                <a href="/ncaab-picks"{% if in_season_sports.get('NCAAB') %} class="in-season"{% endif %}>NCAAB</a>
+                <a href="/ncaaf-picks"{% if in_season_sports.get('NCAAF')|default(true) %} class="in-season"{% endif %}>NCAAF</a>
+                <a href="/ncaaw-picks"{% if in_season_sports.get('NCAAW') %} class="in-season"{% endif %}>NCAAW</a>
+                <a href="/wnba-picks"{% if in_season_sports.get('WNBA') %} class="in-season"{% endif %}>WNBA</a>
+                <a href="/cfl-picks"{% if in_season_sports.get('CFL')|default(true) %} class="in-season"{% endif %}>CFL</a>
+                <a href="/tennis-picks"{% if in_season_sports.get('TENNIS')|default(true) %} class="in-season"{% endif %}>Tennis</a>
+                <a href="/ufc-picks"{% if in_season_sports.get('UFC')|default(true) %} class="in-season"{% endif %}>UFC</a>
+                <a href="/golf-picks"{% if in_season_sports.get('GOLF')|default(true) %} class="in-season"{% endif %}>Golf</a>
             </div>
         </div>
         <div class="pl2-navdrop">

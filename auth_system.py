@@ -2041,6 +2041,7 @@ def _welcome_after_premium_grant(
 # ─── Lifecycle emails (payment failed / cancel / renewal / expired) ───────────
 
 _LIFECYCLE_KIND_PAYMENT_FAILED = 'payment_failed'
+_LIFECYCLE_KIND_PAYMENT_ACTION_REQUIRED = 'payment_action_required'
 _LIFECYCLE_KIND_CANCEL_CONFIRM = 'cancel_confirm'
 _LIFECYCLE_KIND_RENEWAL_NOTICE = 'renewal_notice'
 _LIFECYCLE_KIND_EXPIRED_WINBACK = 'expired_winback'
@@ -2250,38 +2251,133 @@ def _resolve_lifecycle_recipient(*, customer_id=None, email=None, metadata=None,
     return user_id, _normalize_email(resolved_email), name
 
 
-def _build_payment_failed_email_content(*, first_name, site_url='https://predictionlab.io', support_email=None):
+def _build_payment_failed_email_content(
+    *, first_name, hosted_invoice_url=None,
+    site_url='https://predictionlab.io', support_email=None,
+):
     site = (site_url or 'https://predictionlab.io').rstrip('/')
     portal_hint = f'{site}/plans'
     support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    pay_url = (hosted_invoice_url or '').strip()
     lead = (
         "We could not process your latest PredictionLab Premium payment. "
-        "Update your payment method so your access stays uninterrupted."
+        "Complete it below so your access stays uninterrupted."
     )
-    sections = [{
-        'heading': 'What to do',
-        'body_html': (
+    if pay_url:
+        # Hosted invoice page lets the customer pay AND complete any 3D Secure
+        # authentication the bank requires — the card usually does not need to change.
+        what_to_do = (
+            "Use the button below to open your secure Stripe payment page. "
+            "There you can confirm the payment (including any bank verification / "
+            "3D&nbsp;Secure step) or update your card if needed."
+        )
+        cta_label = 'Complete payment'
+        cta_url = pay_url
+    else:
+        what_to_do = (
             "Log in, open <strong>Manage Subscription</strong> from your account menu, "
             "and update your card. Stripe usually retries failed payments automatically."
-        ),
-    }]
+        )
+        cta_label = 'Manage Subscription'
+        cta_url = portal_hint
+    sections = [{'heading': 'What to do', 'body_html': what_to_do}]
     html_body = _build_branded_lifecycle_email_html(
         title='Payment unsuccessful',
         first_name=first_name,
         lead_html=lead,
         body_sections=sections,
-        cta_label='Manage Subscription',
-        cta_url=portal_hint,
+        cta_label=cta_label,
+        cta_url=cta_url,
         site_url=site,
         support_email=support,
     )
-    text_body = (
-        f'Hi {first_name or "there"},\n\n'
-        f'We could not process your latest PredictionLab Premium payment.\n'
-        f'Update your payment method via Manage Subscription ({portal_hint}) '
-        f'after you log in, or email {support}.\n'
-    )
+    if pay_url:
+        text_body = (
+            f'Hi {first_name or "there"},\n\n'
+            f'We could not process your latest PredictionLab Premium payment.\n'
+            f'Complete it on your secure Stripe page (you can confirm any bank '
+            f'verification / 3D Secure step or update your card there):\n'
+            f'{pay_url}\n\n'
+            f'You can also manage billing at {portal_hint} after you log in, '
+            f'or email {support}.\n'
+        )
+    else:
+        text_body = (
+            f'Hi {first_name or "there"},\n\n'
+            f'We could not process your latest PredictionLab Premium payment.\n'
+            f'Update your payment method via Manage Subscription ({portal_hint}) '
+            f'after you log in, or email {support}.\n'
+        )
     return 'Action needed: PredictionLab payment unsuccessful', text_body, html_body
+
+
+def _build_payment_action_required_email_content(
+    *, first_name, hosted_invoice_url=None,
+    site_url='https://predictionlab.io', support_email=None,
+):
+    """Off-session recurring payment needs 3D Secure / bank authentication.
+
+    The card was not declined for funds — the bank is asking the cardholder to
+    verify. Since the charge happens while the customer is away, Stripe cannot
+    show that challenge at charge time, so we email a direct link to the Stripe
+    hosted invoice page where they can complete it. This is Stripe's recommended
+    recovery flow for ``invoice.payment_action_required``.
+    """
+    site = (site_url or 'https://predictionlab.io').rstrip('/')
+    portal_hint = f'{site}/plans'
+    support = (support_email or _billing_support_email() or _DEFAULT_SUPPORT_EMAIL).strip()
+    pay_url = (hosted_invoice_url or '').strip()
+    lead = (
+        "Your bank needs you to verify your latest PredictionLab Premium payment. "
+        "Your card was not declined — this is a quick one-time security check "
+        "(3D&nbsp;Secure). Confirm it now to keep your access."
+    )
+    if pay_url:
+        what_to_do = (
+            "Tap the button below to open your secure Stripe page and approve the "
+            "payment with your bank. It usually takes under a minute and you will "
+            "not need to change your card."
+        )
+        cta_label = 'Confirm payment'
+        cta_url = pay_url
+    else:
+        what_to_do = (
+            "Log in, open <strong>Manage Subscription</strong> from your account menu, "
+            "and complete the pending payment. Your bank may ask you to verify it."
+        )
+        cta_label = 'Manage Subscription'
+        cta_url = portal_hint
+    sections = [{'heading': 'Confirm your payment', 'body_html': what_to_do}]
+    html_body = _build_branded_lifecycle_email_html(
+        title='Confirm your payment',
+        first_name=first_name,
+        lead_html=lead,
+        body_sections=sections,
+        cta_label=cta_label,
+        cta_url=cta_url,
+        site_url=site,
+        support_email=support,
+    )
+    if pay_url:
+        text_body = (
+            f'Hi {first_name or "there"},\n\n'
+            f'Your bank needs you to verify your latest PredictionLab Premium '
+            f'payment (a quick 3D Secure security check). Your card was not '
+            f'declined.\n'
+            f'Confirm it on your secure Stripe page:\n'
+            f'{pay_url}\n\n'
+            f'You can also manage billing at {portal_hint} after you log in, '
+            f'or email {support}.\n'
+        )
+    else:
+        text_body = (
+            f'Hi {first_name or "there"},\n\n'
+            f'Your bank needs you to verify your latest PredictionLab Premium '
+            f'payment (a quick 3D Secure security check).\n'
+            f'Log in and open Manage Subscription ({portal_hint}) to complete it, '
+            f'or email {support}.\n'
+        )
+    return 'Action needed: confirm your PredictionLab payment', text_body, html_body
 
 
 def _build_cancel_confirm_email_content(
@@ -2476,7 +2572,10 @@ def _maybe_send_payment_failed_from_invoice(invoice, *, event_id=None, stripe_mo
             )
             return True
         first = _first_name_for_email(name, resolved_email)
-        subject, text_body, html_body = _build_payment_failed_email_content(first_name=first)
+        hosted_invoice_url = _obj_get(invoice, 'hosted_invoice_url')
+        subject, text_body, html_body = _build_payment_failed_email_content(
+            first_name=first, hosted_invoice_url=hosted_invoice_url,
+        )
         return _maybe_send_lifecycle_email(
             kind=_LIFECYCLE_KIND_PAYMENT_FAILED,
             idem_key=f'payment_failed:{invoice_id}',
@@ -2490,6 +2589,52 @@ def _maybe_send_payment_failed_from_invoice(invoice, *, event_id=None, stripe_mo
         )
     except Exception as e:
         logger.warning("[lifecycle] payment_failed hook failed (non-fatal): %s", e)
+        return True
+
+
+def _maybe_send_payment_action_required_from_invoice(invoice, *, event_id=None, stripe_mod=None):
+    """invoice.payment_action_required → 3D Secure / authentication email. Never raises.
+
+    Fired when an off-session recurring charge needs the cardholder to complete
+    bank authentication. We point the customer at the Stripe hosted invoice page
+    so they can finish the 3D Secure step and keep their subscription active.
+    """
+    try:
+        if not invoice:
+            return True
+        invoice_id = _stripe_id(_obj_get(invoice, 'id')) or event_id
+        customer_id = _stripe_id(_obj_get(invoice, 'customer'))
+        email = (
+            _obj_get(invoice, 'customer_email')
+            or _obj_get(invoice, 'email')
+        )
+        user_id, resolved_email, name = _resolve_lifecycle_recipient(
+            customer_id=customer_id, email=email, stripe_mod=stripe_mod,
+        )
+        if not resolved_email:
+            logger.info(
+                "[lifecycle] payment_action_required skipped no_email customer=%s inv=%s",
+                customer_id, invoice_id,
+            )
+            return True
+        first = _first_name_for_email(name, resolved_email)
+        hosted_invoice_url = _obj_get(invoice, 'hosted_invoice_url')
+        subject, text_body, html_body = _build_payment_action_required_email_content(
+            first_name=first, hosted_invoice_url=hosted_invoice_url,
+        )
+        return _maybe_send_lifecycle_email(
+            kind=_LIFECYCLE_KIND_PAYMENT_ACTION_REQUIRED,
+            idem_key=f'payment_action_required:{invoice_id}',
+            to_email=resolved_email,
+            first_name=first,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    except Exception as e:
+        logger.warning("[lifecycle] payment_action_required hook failed (non-fatal): %s", e)
         return True
 
 
@@ -3597,7 +3742,16 @@ def checkout(plan):
             'success_url': request.url_root.rstrip('/') + '/checkout/success?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url': request.url_root.rstrip('/') + '/plans',
             'metadata': {'plan': plan},
-            'subscription_data': {'metadata': {'plan': plan}},
+            'subscription_data': {
+                'metadata': {'plan': plan},
+                # Save the card authenticated during Checkout as the subscription's
+                # default so recurring off-session charges reuse that mandate. This
+                # maximizes issuer SCA exemptions and reduces repeat 3D Secure
+                # challenges on weekly renewals.
+                'payment_settings': {
+                    'save_default_payment_method': 'on_subscription',
+                },
+            },
         }
         # Reuse Stripe customer when known (avoids a second cus_ for same email).
         # Otherwise pre-fill email if logged in. Never set both customer + customer_email.
@@ -4332,6 +4486,7 @@ def stripe_webhook():
                 'invoice.payment_succeeded',
                 'invoice.paid',
                 'invoice.payment_failed',
+                'invoice.payment_action_required',
                 'invoice.upcoming',
                 'customer.subscription.created',
                 'customer.subscription.updated',
@@ -4373,6 +4528,16 @@ def stripe_webhook():
                 # Email only — premium stays via past_due sync on subscription events.
                 applied = bool(
                     _maybe_send_payment_failed_from_invoice(
+                        data_obj, event_id=event_id, stripe_mod=stripe,
+                    )
+                )
+
+            elif etype == 'invoice.payment_action_required':
+                # Off-session recurring charge needs 3D Secure / bank authentication.
+                # Email the customer a direct link to the hosted invoice page so they
+                # can complete authentication (Stripe's recommended recovery flow).
+                applied = bool(
+                    _maybe_send_payment_action_required_from_invoice(
                         data_obj, event_id=event_id, stripe_mod=stripe,
                     )
                 )

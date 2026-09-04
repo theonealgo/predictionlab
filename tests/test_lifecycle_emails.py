@@ -129,6 +129,36 @@ class LifecycleEmailHelpersTest(unittest.TestCase):
             ))
             self.assertEqual(send.call_count, 1)
 
+    def test_payment_failed_email_includes_hosted_invoice_link(self):
+        url = 'https://invoice.stripe.com/i/acct_1/test_hosted_pay'
+        subject, text, html = auth._build_payment_failed_email_content(
+            first_name='Ada', hosted_invoice_url=url,
+        )
+        self.assertIn('unsuccessful', subject.lower())
+        self.assertIn(url, text)
+        self.assertIn(url, html)
+        self.assertIn('Complete payment', html)
+
+    def test_payment_action_required_builder_branded(self):
+        url = 'https://invoice.stripe.com/i/acct_1/test_hosted_auth'
+        subject, text, html = auth._build_payment_action_required_email_content(
+            first_name='Ada', hosted_invoice_url=url,
+        )
+        self.assertIn('confirm', subject.lower())
+        self.assertIn('Ada', text)
+        self.assertIn(url, text)
+        self.assertIn(url, html)
+        self.assertIn('PredictionLab', html)
+        self.assertIn('#00529B', html)
+        # Never leaks a raw PAN / card brand.
+        self.assertNotRegex(html, r'\b\d{12,19}\b')
+        self.assertNotIn('visa', html.lower())
+        # HTML injection via name is escaped.
+        _, _, nasty = auth._build_payment_action_required_email_content(
+            first_name='<script>x</script>', hosted_invoice_url=url,
+        )
+        self.assertNotIn('<script>', nasty)
+
     def test_cancel_confirm_skips_when_not_canceling(self):
         with mock.patch.object(auth, '_smtp_send_html_email', return_value=True) as send:
             ok = auth._maybe_send_cancel_confirm_from_subscription({
@@ -217,6 +247,36 @@ class LifecycleWebhookTest(unittest.TestCase):
         self.assertEqual(send.call_count, 1)
         subject = (send.call_args.kwargs or {}).get('subject') or ''
         self.assertIn('unsuccessful', subject.lower())
+
+    def test_payment_action_required_webhook_sends_once(self):
+        hosted = 'https://invoice.stripe.com/i/acct_1/test_hosted_auth_wh'
+        event = {
+            'id': 'evt_action_req_1',
+            'object': 'event',
+            'type': 'invoice.payment_action_required',
+            'data': {
+                'object': {
+                    'id': 'in_action_req_1',
+                    'customer': 'cus_life_1',
+                    'customer_email': 'life@example.com',
+                    'hosted_invoice_url': hosted,
+                    'billing_reason': 'subscription_cycle',
+                }
+            },
+        }
+        with mock.patch.object(auth, '_smtp_send_html_email', return_value=True) as send:
+            r1 = self._post_event(event)
+            r2 = self._post_event(event)
+            r3 = self._post_event({**event, 'id': 'evt_action_req_2'})
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r3.status_code, 200)
+        # Same invoice id → one send even across event ids
+        self.assertEqual(send.call_count, 1)
+        kwargs = send.call_args.kwargs or {}
+        self.assertIn('confirm', (kwargs.get('subject') or '').lower())
+        self.assertIn(hosted, kwargs.get('html_body') or '')
+        self.assertIn(hosted, kwargs.get('text_body') or '')
 
     def test_invoice_upcoming_renewal_notice(self):
         period_end = int((datetime.now() + timedelta(days=3)).timestamp())

@@ -5726,6 +5726,22 @@ def enforce_canonical_domain():
         full_path = request.full_path[:-1] if request.full_path.endswith('?') else request.full_path
     return redirect(f"https://{target_host}{full_path}", code=301)
 
+def in_season_sports_map(today=None):
+    """Map of sport code -> currently in-season (for header/burger green)."""
+    today = today or datetime.now()
+    out = {}
+    for sp in (
+        'NBA', 'NFL', 'MLB', 'NHL', 'SOCCER', 'NCAAB', 'NCAAF',
+        'NCAAW', 'WNBA', 'CFL', 'TENNIS', 'UFC', 'GOLF',
+    ):
+        try:
+            _, live = get_season_status(sp, today=today)
+            out[sp] = bool(live)
+        except Exception:
+            out[sp] = sp in ('SOCCER', 'TENNIS', 'UFC', 'GOLF', 'MLB', 'NCAAF', 'CFL')
+    return out
+
+
 @app.context_processor
 def inject_globals():
     """Make global template variables available in every template automatically."""
@@ -5763,6 +5779,7 @@ def inject_globals():
         'is_premium': _is_premium,
         'wnba_enabled': _wnba_live,
         'team_logo_url': team_logo_url,
+        'in_season_sports': in_season_sports_map(),
     }
 
 @app.after_request
@@ -13823,10 +13840,10 @@ BASE_TEMPLATE = """
     {% include "partials/site_directory_footer.html" %}
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'Golf',h:'/golf-picks'},{l:'CFL',h:'/cfl-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Golf',h:'/golf-results'},{l:'CFL',h:'/cfl-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'},{l:'Edge Performance',h:'/edge-performance'},{l:'Picks CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'What Are AI Picks',h:'/what-are-ai-sports-betting-picks'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'{% if in_season_sports.get('NBA') %},live:1{% endif %}},{l:'MLB',h:'/mlb-picks'{% if in_season_sports.get('MLB')|default(true) %},live:1{% endif %}},{l:'NHL',h:'/nhl-picks'{% if in_season_sports.get('NHL') %},live:1{% endif %}},{l:'NFL',h:'/nfl-picks'{% if in_season_sports.get('NFL') %},live:1{% endif %}}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'{% if in_season_sports.get('SOCCER')|default(true) %},live:1{% endif %}}{% endif %},{l:'NCAAB',h:'/ncaab-picks'{% if in_season_sports.get('NCAAB') %},live:1{% endif %}},{l:'NCAAF',h:'/ncaaf-picks'{% if in_season_sports.get('NCAAF')|default(true) %},live:1{% endif %}},{l:'NCAAW',h:'/ncaaw-picks'{% if in_season_sports.get('NCAAW') %},live:1{% endif %}},{l:'WNBA',h:'/wnba-picks'{% if in_season_sports.get('WNBA') %},live:1{% endif %}},{l:'Tennis',h:'/tennis-picks'{% if in_season_sports.get('TENNIS')|default(true) %},live:1{% endif %}},{l:'Golf',h:'/golf-picks'{% if in_season_sports.get('GOLF')|default(true) %},live:1{% endif %}},{l:'CFL',h:'/cfl-picks'{% if in_season_sports.get('CFL')|default(true) %},live:1{% endif %}},{l:'UFC',h:'/ufc-picks'{% if in_season_sports.get('UFC')|default(true) %},live:1{% endif %}}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Golf',h:'/golf-results'},{l:'CFL',h:'/cfl-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'},{l:'Edge Performance',h:'/edge-performance'},{l:'Picks CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'What Are AI Picks',h:'/what-are-ai-sports-betting-picks'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
-function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'')+(item.live?' in-season':'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
 function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
 function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
@@ -19879,6 +19896,87 @@ def golf_results_alias():
     qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
     return redirect('/golf-results' + (f'?{qs}' if qs else ''), code=302)
 
+@app.route('/tennis')
+@app.route('/tennis/')
+def tennis_shortcut():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/tennis-picks' + (f'?{qs}' if qs else ''), code=301)
+
+@app.route('/tennis/results')
+def tennis_results_alias():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/tennis-results' + (f'?{qs}' if qs else ''), code=302)
+
+@app.route('/tennis/api/picks')
+def tennis_api_picks():
+    try:
+        from tennis_live import tennis_chart_payload
+        return jsonify(tennis_chart_payload())
+    except Exception as e:
+        logger.exception('tennis_api_picks failed: %s', e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route('/tennis/share.jpg')
+@app.route('/tennis-picks/share.jpg')
+def tennis_share_jpg():
+    try:
+        from tennis_live import build_tennis_share_jpeg_bytes
+        data = build_tennis_share_jpeg_bytes()
+        if not data:
+            return 'Share image unavailable', 404
+        resp = app.response_class(data, mimetype='image/jpeg')
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        logger.exception('tennis_share_jpg failed: %s', e)
+        return 'Share image unavailable', 404
+
+@app.route('/ufc')
+@app.route('/ufc/')
+def ufc_shortcut():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/ufc-picks' + (f'?{qs}' if qs else ''), code=301)
+
+@app.route('/ufc/results')
+def ufc_results_sandbox_alias():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/ufc-results' + (f'?{qs}' if qs else ''), code=302)
+
+@app.route('/ufc/api/picks')
+def ufc_api_picks():
+    try:
+        from ufc_live import build_ufc_chart_api_payload
+        return jsonify(build_ufc_chart_api_payload())
+    except Exception as e:
+        logger.exception('ufc_api_picks failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/ufc/api/results')
+def ufc_api_results():
+    try:
+        from ufc_live import build_ufc_chart_api_payload
+        payload = build_ufc_chart_api_payload()
+        tallies = (payload or {}).get('tallies') if isinstance(payload, dict) else {}
+        return jsonify({'ok': True, 'tallies': tallies})
+    except Exception as e:
+        logger.exception('ufc_api_results failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/ufc/share.jpg')
+@app.route('/ufc-picks/share.jpg')
+def ufc_share_jpg():
+    try:
+        from ufc_live import build_ufc_share_jpeg_bytes
+        data = build_ufc_share_jpeg_bytes()
+        if not data:
+            return 'Share image unavailable', 404
+        resp = app.response_class(data, mimetype='image/jpeg')
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        logger.exception('ufc_share_jpg failed: %s', e)
+        return 'Share image unavailable', 404
+
 @app.route('/cfl')
 @app.route('/cfl/')
 def cfl_shortcut():
@@ -20659,6 +20757,12 @@ def sport_predictions(sport, filter_date=None):
     if sport == 'GOLF':
         from golf_live import render_golf_picks
         return _inject_sport_blog_hub(render_golf_picks(request.args.get('event')), 'GOLF')
+    if sport == 'TENNIS':
+        from tennis_live import render_tennis_picks
+        return _inject_sport_blog_hub(render_tennis_picks(), 'TENNIS')
+    if sport == 'UFC':
+        from ufc_live import render_ufc_picks
+        return _inject_sport_blog_hub(render_ufc_picks(), 'UFC')
     if sport == 'CFL':
         from cfl_live import render_cfl_picks
         return render_cfl_picks()
@@ -21231,6 +21335,14 @@ def sport_results(sport):
         if sport == 'GOLF':
             from golf_live import render_golf_results
             return render_golf_results(request.args.get('event'))
+        if sport == 'TENNIS':
+            from tennis_live import render_tennis_results
+            view = (request.args.get('view') or 'normal').strip().lower()
+            return render_tennis_results(view=view)
+        if sport == 'UFC':
+            from ufc_live import render_ufc_results
+            view = (request.args.get('view') or 'normal').strip().lower()
+            return render_ufc_results(view=view)
         if sport == 'CFL':
             from cfl_live import render_cfl_results
             view = (request.args.get('view') or 'normal').strip().lower()
