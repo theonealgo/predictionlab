@@ -19879,6 +19879,87 @@ def golf_results_alias():
     qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
     return redirect('/golf-results' + (f'?{qs}' if qs else ''), code=302)
 
+@app.route('/tennis')
+@app.route('/tennis/')
+def tennis_shortcut():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/tennis-picks' + (f'?{qs}' if qs else ''), code=301)
+
+@app.route('/tennis/results')
+def tennis_results_alias():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/tennis-results' + (f'?{qs}' if qs else ''), code=302)
+
+@app.route('/tennis/api/picks')
+def tennis_api_picks():
+    try:
+        from tennis_live import tennis_chart_payload
+        return jsonify(tennis_chart_payload())
+    except Exception as e:
+        logger.exception('tennis_api_picks failed: %s', e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route('/tennis/share.jpg')
+@app.route('/tennis-picks/share.jpg')
+def tennis_share_jpg():
+    try:
+        from tennis_live import build_tennis_share_jpeg_bytes
+        data = build_tennis_share_jpeg_bytes()
+        if not data:
+            return 'Share image unavailable', 404
+        resp = app.response_class(data, mimetype='image/jpeg')
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        logger.exception('tennis_share_jpg failed: %s', e)
+        return 'Share image unavailable', 404
+
+@app.route('/ufc')
+@app.route('/ufc/')
+def ufc_shortcut():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/ufc-picks' + (f'?{qs}' if qs else ''), code=301)
+
+@app.route('/ufc/results')
+def ufc_results_sandbox_alias():
+    qs = request.query_string.decode('utf-8', errors='ignore') if request.query_string else ''
+    return redirect('/ufc-results' + (f'?{qs}' if qs else ''), code=302)
+
+@app.route('/ufc/api/picks')
+def ufc_api_picks():
+    try:
+        from ufc_live import build_ufc_chart_api_payload
+        return jsonify(build_ufc_chart_api_payload())
+    except Exception as e:
+        logger.exception('ufc_api_picks failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/ufc/api/results')
+def ufc_api_results():
+    try:
+        from ufc_live import build_ufc_chart_api_payload
+        payload = build_ufc_chart_api_payload()
+        tallies = (payload or {}).get('tallies') if isinstance(payload, dict) else {}
+        return jsonify({'ok': True, 'tallies': tallies})
+    except Exception as e:
+        logger.exception('ufc_api_results failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/ufc/share.jpg')
+@app.route('/ufc-picks/share.jpg')
+def ufc_share_jpg():
+    try:
+        from ufc_live import build_ufc_share_jpeg_bytes
+        data = build_ufc_share_jpeg_bytes()
+        if not data:
+            return 'Share image unavailable', 404
+        resp = app.response_class(data, mimetype='image/jpeg')
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as e:
+        logger.exception('ufc_share_jpg failed: %s', e)
+        return 'Share image unavailable', 404
+
 @app.route('/cfl')
 @app.route('/cfl/')
 def cfl_shortcut():
@@ -20659,6 +20740,12 @@ def sport_predictions(sport, filter_date=None):
     if sport == 'GOLF':
         from golf_live import render_golf_picks
         return _inject_sport_blog_hub(render_golf_picks(request.args.get('event')), 'GOLF')
+    if sport == 'TENNIS':
+        from tennis_live import render_tennis_picks
+        return _inject_sport_blog_hub(render_tennis_picks(), 'TENNIS')
+    if sport == 'UFC':
+        from ufc_live import render_ufc_picks
+        return _inject_sport_blog_hub(render_ufc_picks(), 'UFC')
     if sport == 'CFL':
         from cfl_live import render_cfl_picks
         return render_cfl_picks()
@@ -21231,6 +21318,14 @@ def sport_results(sport):
         if sport == 'GOLF':
             from golf_live import render_golf_results
             return render_golf_results(request.args.get('event'))
+        if sport == 'TENNIS':
+            from tennis_live import render_tennis_results
+            view = (request.args.get('view') or 'normal').strip().lower()
+            return render_tennis_results(view=view)
+        if sport == 'UFC':
+            from ufc_live import render_ufc_results
+            view = (request.args.get('view') or 'normal').strip().lower()
+            return render_ufc_results(view=view)
         if sport == 'CFL':
             from cfl_live import render_cfl_results
             view = (request.args.get('view') or 'normal').strip().lower()
