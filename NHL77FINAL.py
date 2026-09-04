@@ -21403,6 +21403,15 @@ def sport_results(sport):
             from ufc_live import render_ufc_results
             view = (request.args.get('view') or 'normal').strip().lower()
             return render_ufc_results(view=view)
+        if sport == 'MLB':
+            try:
+                from mlb_live import render_mlb_results
+                view = (request.args.get('view') or 'normal').strip().lower()
+                _mlb_snap = render_mlb_results(view=view)
+                if _mlb_snap and 'Consensus Based Betting Records' in _mlb_snap:
+                    return _mlb_snap
+            except Exception as _mlb_res_snap_e:
+                logger.exception('MLB locked results snapshot failed: %s', _mlb_res_snap_e)
         if sport == 'CFL':
             from cfl_live import render_cfl_results
             view = (request.args.get('view') or 'normal').strip().lower()

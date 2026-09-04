@@ -1,4 +1,4 @@
-"""Serve the working local MLB picks HTML when live rebuild is empty."""
+"""Serve the working :5052 MLB picks and results HTML."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,14 +11,32 @@ def _rewrite_local_urls(html: str) -> str:
         return html
     html = html.replace("http%3A//127.0.0.1%3A5052/mlb-picks", "https%3A//predictionlab.io/mlb-picks")
     html = html.replace("http://127.0.0.1:5052/mlb-picks", "https://predictionlab.io/mlb-picks")
+    html = html.replace("http%3A//127.0.0.1%3A5052/mlb-results", "https%3A//predictionlab.io/mlb-results")
+    html = html.replace("http://127.0.0.1:5052/mlb-results", "https://predictionlab.io/mlb-results")
+    html = html.replace("http://127.0.0.1:5052", "https://predictionlab.io")
     return html
 
 
-def render_mlb_picks() -> str:
-    path = _PAGES / "picks.html"
+def _read_page(name: str) -> str:
+    path = _PAGES / name
     if not path.is_file():
-        raise RuntimeError(f"MLB picks snapshot missing: {path}")
-    html = path.read_text(encoding="utf-8", errors="replace")
+        raise RuntimeError(f"MLB snapshot missing: {path}")
+    return _rewrite_local_urls(path.read_text(encoding="utf-8", errors="replace"))
+
+
+def render_mlb_picks() -> str:
+    html = _read_page("picks.html")
     if "game-card-stack" not in html:
         raise RuntimeError("MLB picks snapshot has no game cards")
-    return _rewrite_local_urls(html)
+    return html
+
+
+def render_mlb_results(*, view: str = "normal") -> str:
+    view = (view or "normal").strip().lower()
+    name = "results_chart.html" if view in ("chart", "tabs", "markets", "tabbed") else "results.html"
+    html = _read_page(name)
+    if "Consensus Based Betting Records" not in html:
+        raise RuntimeError("MLB results snapshot is missing consensus charts")
+    if "Books · Prediction Lab · XSharp — Run Line" not in html:
+        raise RuntimeError("MLB results snapshot is missing the run-line consensus chart")
+    return html
