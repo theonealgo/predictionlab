@@ -2201,6 +2201,40 @@ def _scores_from_spread_total(spread, total):
     return home, away
 
 
+_PICK_TEMPLATE_FLOAT_KEYS = (
+    'ensemble_prob', 'elo_prob', 'xgb_prob', 'glicko2_prob', 'trueskill_prob',
+    'efficiency_prob', 'disp_ml_prob', 'home_moneyline', 'away_moneyline',
+    'book_home_moneyline', 'book_away_moneyline', 'pl_model_home_ml',
+    'pl_model_away_ml', 'home_score', 'away_score', 'edge_pct', 'face_edge_pct',
+    'total_ev', 'disp_book_spread', 'disp_pl_spread', 'disp_xs_spread',
+    'disp_book_total', 'disp_pl_total', 'disp_xs_total',
+    'pl_proj_home_pts', 'pl_proj_away_pts', 'xs_proj_home_pts', 'xs_proj_away_pts',
+    'h2h_last10_total',
+)
+
+
+def _coerce_pick_template_numbers(pred):
+    """SQLite/JSON slates often store percents and moneylines as strings.
+
+    The picks template compares those values (`>= 50`, `>= -150`). A string
+    vs int comparison raises TypeError in Jinja/Python 3 and trips the
+    /mlb-picks fallback stub after a Render restart with no warm cache.
+    """
+    if not isinstance(pred, dict):
+        return
+    for k in _PICK_TEMPLATE_FLOAT_KEYS:
+        if k not in pred or pred[k] is None or pred[k] == '':
+            continue
+        v = pred[k]
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, (int, float)):
+            continue
+        coerced = _safe_float(v, default=None)
+        if coerced is not None:
+            pred[k] = coerced
+
+
 def _safe_float(value, default=None):
     """Coerce DB/model values to float; reject corrupt bytes and NaN."""
     if value is None:
@@ -9955,7 +9989,10 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     _start_background_book_refresh(sport, unlocked)
                 except Exception as _bk_cache:
                     logger.debug(f"[{sport}] book hydrate on predictions cache hit: {_bk_cache}")
-                _apply_mlb_spread_fade_batch(sport, unlocked)
+                try:
+                    _apply_mlb_spread_fade_batch(sport, unlocked)
+                except Exception:
+                    pass
             return out
 
     # Request-path cold miss: never block ~60–90s on a full v2/XGB rebuild.
@@ -9990,7 +10027,10 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     _start_background_book_refresh(sport, unlocked)
                 except Exception as _bk_cold:
                     logger.debug(f"[{sport}] book hydrate on cold-recovered slate: {_bk_cold}")
-                _apply_mlb_spread_fade_batch(sport, unlocked)
+                try:
+                    _apply_mlb_spread_fade_batch(sport, unlocked)
+                except Exception:
+                    pass
             return out
         with _PREDICTIONS_REFRESH_LOCK:
             _already_refreshing = sport in _PREDICTIONS_REFRESH_INFLIGHT
@@ -20864,6 +20904,8 @@ def sport_predictions(sport, filter_date=None):
             }
 
     for pred in predictions:
+        if not isinstance(pred, dict):
+            continue
         for _k in (
             'market_spread',
             'market_total',
@@ -20920,6 +20962,7 @@ def sport_predictions(sport, filter_date=None):
                     pred[_k] = []
                 else:
                     pred[_k] = None
+        _coerce_pick_template_numbers(pred)
 
     soccer_leagues = None
     selected_league = None
@@ -21286,6 +21329,15 @@ def sport_predictions(sport, filter_date=None):
 
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
+        if sport == 'MLB':
+            try:
+                _safe_ctx = dict(_render_ctx)
+                _safe_ctx['grouped_predictions'] = {}
+                _safe_ctx['sorted_dates'] = []
+                _safe_ctx['predictions'] = []
+                return _render_espn_picks_page(**_safe_ctx)
+            except Exception:
+                logger.exception('MLB empty-slate render also failed')
         return _predictions_fallback_page(sport, filter_date=filter_date)
     if sport == 'MLB':
         rendered = _apply_mlb_picks_html_fixups(rendered)
