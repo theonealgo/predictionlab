@@ -5726,6 +5726,22 @@ def enforce_canonical_domain():
         full_path = request.full_path[:-1] if request.full_path.endswith('?') else request.full_path
     return redirect(f"https://{target_host}{full_path}", code=301)
 
+def in_season_sports_map(today=None):
+    """Map of sport code -> currently in-season (for header/burger green)."""
+    today = today or datetime.now()
+    out = {}
+    for sp in (
+        'NBA', 'NFL', 'MLB', 'NHL', 'SOCCER', 'NCAAB', 'NCAAF',
+        'NCAAW', 'WNBA', 'CFL', 'TENNIS', 'UFC', 'GOLF',
+    ):
+        try:
+            _, live = get_season_status(sp, today=today)
+            out[sp] = bool(live)
+        except Exception:
+            out[sp] = sp in ('SOCCER', 'TENNIS', 'UFC', 'GOLF', 'MLB', 'NCAAF', 'CFL')
+    return out
+
+
 @app.context_processor
 def inject_globals():
     """Make global template variables available in every template automatically."""
@@ -5763,6 +5779,7 @@ def inject_globals():
         'is_premium': _is_premium,
         'wnba_enabled': _wnba_live,
         'team_logo_url': team_logo_url,
+        'in_season_sports': in_season_sports_map(),
     }
 
 @app.after_request
@@ -13823,10 +13840,10 @@ BASE_TEMPLATE = """
     {% include "partials/site_directory_footer.html" %}
     
     <script>
-var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'Golf',h:'/golf-picks'},{l:'CFL',h:'/cfl-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Golf',h:'/golf-results'},{l:'CFL',h:'/cfl-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'},{l:'Edge Performance',h:'/edge-performance'},{l:'Picks CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'What Are AI Picks',h:'/what-are-ai-sports-betting-picks'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
+var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'{% if in_season_sports.get('NBA') %},live:1{% endif %}},{l:'MLB',h:'/mlb-picks'{% if in_season_sports.get('MLB')|default(true) %},live:1{% endif %}},{l:'NHL',h:'/nhl-picks'{% if in_season_sports.get('NHL') %},live:1{% endif %}},{l:'NFL',h:'/nfl-picks'{% if in_season_sports.get('NFL') %},live:1{% endif %}}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'{% if in_season_sports.get('SOCCER')|default(true) %},live:1{% endif %}}{% endif %},{l:'NCAAB',h:'/ncaab-picks'{% if in_season_sports.get('NCAAB') %},live:1{% endif %}},{l:'NCAAF',h:'/ncaaf-picks'{% if in_season_sports.get('NCAAF')|default(true) %},live:1{% endif %}},{l:'NCAAW',h:'/ncaaw-picks'{% if in_season_sports.get('NCAAW') %},live:1{% endif %}},{l:'WNBA',h:'/wnba-picks'{% if in_season_sports.get('WNBA') %},live:1{% endif %}},{l:'Tennis',h:'/tennis-picks'{% if in_season_sports.get('TENNIS')|default(true) %},live:1{% endif %}},{l:'Golf',h:'/golf-picks'{% if in_season_sports.get('GOLF')|default(true) %},live:1{% endif %}},{l:'CFL',h:'/cfl-picks'{% if in_season_sports.get('CFL')|default(true) %},live:1{% endif %}},{l:'UFC',h:'/ufc-picks'{% if in_season_sports.get('UFC')|default(true) %},live:1{% endif %}}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Golf',h:'/golf-results'},{l:'CFL',h:'/cfl-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'},{l:'Edge Performance',h:'/edge-performance'},{l:'Picks CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'What Are AI Picks',h:'/what-are-ai-sports-betting-picks'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
-function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'')+(item.live?' in-season':'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
 function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
 function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}

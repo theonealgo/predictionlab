@@ -117,6 +117,20 @@
     text-transform: uppercase;
 }
 .pl2-nav-menu a:hover { background: var(--pl-neon); }
+.pl2-nav-menu a.in-season {
+    color: #16a34a;
+    font-weight: 700;
+}
+.pl2-nav-menu a.in-season:hover {
+    color: #15803d;
+}
+.tv-sub-link.in-season {
+    color: #16a34a;
+    font-weight: 700;
+}
+.tv-sub-link.in-season:hover {
+    color: #15803d;
+}
 .pl2-header-actions { display: flex; align-items: center; gap: 20px; }
 .pl2-search {
     width: 34px;
@@ -304,6 +318,8 @@ body.research-site .tv-drawer-title { color: var(--pl-ink); }
 body.research-site .tv-menu-btn:hover,
 body.research-site .tv-sub-link:hover,
 body.research-site .tv-menu-btn.active-section { background: var(--pl-soft); color: var(--pl-ink); }
+body.research-site .tv-sub-link.in-season { color: #16a34a; font-weight: 700; }
+body.research-site .tv-sub-link.in-season:hover { color: #15803d; }
 body.research-site .tv-premium-cta,
 body.research-site .srch-filter.active { background: var(--pl-neon); color: var(--pl-ink); }
 
