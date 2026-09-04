@@ -9002,6 +9002,7 @@ def _persist_predictions_to_disk(cache_key, entry):
 def _predictions_cache_key_aliases(sport):
     """Current + prior slate keys so a version bump does not cold-start the site."""
     return (
+        f"{sport}_upcoming_predictions_v9",
         f"{sport}_upcoming_predictions_v8",
         f"{sport}_upcoming_predictions_v7",
         f"{sport}_upcoming_predictions_v6",
@@ -9018,7 +9019,7 @@ def _promote_predictions_cache_aliases():
             sports.add(key.split('_upcoming_predictions_v', 1)[0])
         for sport in sports:
             keys = _predictions_cache_key_aliases(sport)
-            current = keys[0]
+            current = keys[0]  # v9
             if _PREDICTIONS_CACHE.get(current, {}).get('data'):
                 continue
             for alias in keys[1:]:
@@ -20803,6 +20804,14 @@ def sport_predictions(sport, filter_date=None):
     if sport == 'UFC':
         from ufc_live import render_ufc_picks
         return _inject_sport_blog_hub(render_ufc_picks(), 'UFC')
+    if sport == 'MLB':
+        try:
+            from mlb_live import render_mlb_picks
+            _mlb_snap = render_mlb_picks()
+            if _mlb_snap and 'game-card-stack' in _mlb_snap:
+                return _mlb_snap
+        except Exception as _mlb_snap_e:
+            logger.exception('MLB locked picks snapshot failed: %s', _mlb_snap_e)
     if sport == 'CFL':
         from cfl_live import render_cfl_picks
         return render_cfl_picks()
@@ -21331,13 +21340,12 @@ def sport_predictions(sport, filter_date=None):
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
         if sport == 'MLB':
             try:
-                _safe_ctx = dict(_render_ctx)
-                _safe_ctx['grouped_predictions'] = {}
-                _safe_ctx['sorted_dates'] = []
-                _safe_ctx['predictions'] = []
-                return _render_espn_picks_page(**_safe_ctx)
+                from mlb_live import render_mlb_picks
+                _mlb_snap = render_mlb_picks()
+                if _mlb_snap and 'game-card-stack' in _mlb_snap:
+                    return _mlb_snap
             except Exception:
-                logger.exception('MLB empty-slate render also failed')
+                logger.exception('MLB snapshot after render failure also failed')
         return _predictions_fallback_page(sport, filter_date=filter_date)
     if sport == 'MLB':
         rendered = _apply_mlb_picks_html_fixups(rendered)
