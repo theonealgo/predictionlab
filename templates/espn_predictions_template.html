@@ -806,13 +806,14 @@
                 {% set away_wins = is_final and pred.away_score > pred.home_score %}
                 {% set home_picked = pred.predicted_winner == pred.home_team_id %}
                 {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
-                {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
+                {% set _odds_pass = (_picked_ml is none) or ((_picked_ml|float) >= -150) %}
                 {# ===== SECTION: Chart View + Copy All (per-pick data for JS) ===== #}
                 {# Chart Pick follows Sharp Consensus (ensemble) so it never contradicts the model columns. #}
                 {% set _cons = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
                 {% if _cons is not none %}
-                {% set _chart_pick = team_short(pred.home_team_id) if _cons >= 50 else team_short(pred.away_team_id) %}
-                {% set _chart_conf = _cons if _cons >= 50 else 100 - _cons %}
+                {% set _cons_n = _cons|float %}
+                {% set _chart_pick = team_short(pred.home_team_id) if _cons_n >= 50 else team_short(pred.away_team_id) %}
+                {% set _chart_conf = _cons_n if _cons_n >= 50 else 100 - _cons_n %}
                 {% else %}
                 {% set _chart_pick = team_short(pred.predicted_winner) %}
                 {% set _chart_conf = none %}

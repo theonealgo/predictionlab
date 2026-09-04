@@ -118,18 +118,18 @@
 }
 .pl2-nav-menu a:hover { background: var(--pl-neon); }
 .pl2-nav-menu a.in-season {
-    color: #16a34a;
+    color: #16a34a !important;
     font-weight: 700;
 }
 .pl2-nav-menu a.in-season:hover {
-    color: #15803d;
+    color: #15803d !important;
 }
 .tv-sub-link.in-season {
-    color: #16a34a;
+    color: #16a34a !important;
     font-weight: 700;
 }
 .tv-sub-link.in-season:hover {
-    color: #15803d;
+    color: #15803d !important;
 }
 .pl2-header-actions { display: flex; align-items: center; gap: 20px; }
 .pl2-search {
