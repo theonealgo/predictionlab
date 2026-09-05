@@ -1756,6 +1756,12 @@ def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = ""
         html = strip_soccer_h2h_labels(html)
     except Exception:
         pass
+    try:
+        from mlb_consensus_hub import inject_consensus_records_html
+
+        html = inject_consensus_records_html(html, sport="soccer")
+    except Exception as e:
+        print(f"[soccer_ui_fixup] consensus inject: {e}", flush=True)
     return html
 
 
@@ -1800,4 +1806,13 @@ def render_soccer_results_chart_page(
             html = inject_ssr_chart_bootstrap(html, payload, "soccer")
         except Exception as e:
             print(f"[soccer_ui_fixup] chart SSR bootstrap: {e}", flush=True)
-    return apply_soccer_info_tooltips(html, kind="results")
+    html = apply_soccer_info_tooltips(html, kind="results")
+    try:
+        from mlb_consensus_hub import inject_consensus_records_html
+
+        html = inject_consensus_records_html(
+            html, sport="soccer", chart_view=True, fallback_html=cards_html
+        )
+    except Exception as e:
+        print(f"[soccer_ui_fixup] chart consensus inject: {e}", flush=True)
+    return html
