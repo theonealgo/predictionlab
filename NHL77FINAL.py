@@ -17123,7 +17123,10 @@ def healthz():
 
 
 _LANDING_PAGE_CACHE = {'ts': 0, 'html': None}
-_LANDING_PAGE_TTL = 120  # seconds — homepage is identical for all anonymous visitors
+_LANDING_PAGE_TTL = 300  # seconds — homepage is identical for all anonymous visitors
+_BLOG_PAGE_CACHE = {'ts': 0, 'html': None}
+_BLOG_PAGE_TTL = 120
+_BLOG_DISK_PURGED = False
 
 @app.route('/', methods=['GET', 'HEAD'])
 def landing_page():
@@ -23439,7 +23442,7 @@ def _blog_article_url(post: dict) -> str:
 
 
 def _blog_template_posts():
-    posts = _get_blog_posts(include_generated=True)
+    posts = _get_blog_posts(include_generated=False)
     out = []
     for p in posts:
         if str(p.get('status') or 'published').lower() != 'published':
@@ -23675,8 +23678,13 @@ def _purge_google_trends_from_blog_disk() -> int:
 
 
 def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
-    # Unavoidable on every blog assemble: rewrite Render disk if Trends remain.
-    purged = _purge_google_trends_from_blog_disk()
+    # Purge Trends spam at most once per process — every-request rewrite
+    # blocked the only Render worker and took /blog down with the homepage.
+    global _BLOG_DISK_PURGED
+    purged = 0
+    if not _BLOG_DISK_PURGED:
+        purged = _purge_google_trends_from_blog_disk()
+        _BLOG_DISK_PURGED = True
     posts = [p for p in _load_blog_posts_from_json()
              if not _is_google_trends_blog_spam(p) and not _is_hidden_live_sport_blog_post(p)]
     if include_generated and _BLOG_GAME_DAY_AUTO_PUBLISH:
@@ -24535,15 +24543,26 @@ def downloads_page():
 
 @app.route('/blog')
 def blog_archive_page():
-    # First hit after Manual Deploy rewrites Render's on-disk blog_posts.json
-    # if any Google Trends / Betting Angle spam is still present.
-    _purge_google_trends_from_blog_disk()
-    posts = _blog_template_posts()
+    # Soro embed must always render. Post assembly can fail or run long —
+    # never let that take down the paid blog feed.
+    try:
+        _anon = not (getattr(current_user, 'is_authenticated', False) and current_user.is_authenticated)
+    except Exception:
+        _anon = True
+    if _anon:
+        _cached = _BLOG_PAGE_CACHE.get('html')
+        if _cached and (_time.time() - _BLOG_PAGE_CACHE.get('ts', 0)) < _BLOG_PAGE_TTL:
+            return _cached
+    posts = []
+    try:
+        posts = _blog_template_posts()
+    except Exception as _blog_e:
+        logger.exception('blog posts failed: %s', _blog_e)
     page_description = (
         "Game-day previews with Prediction Lab model probabilities and market context. "
         "Updated when a sport has a live slate. Predictions are model outputs, not guarantees."
     )
-    return render_template_string(
+    html = render_template_string(
         BLOG_ARCHIVE_TEMPLATE,
         posts=posts,
         site_domain=_SITE_DOMAIN,
@@ -24551,6 +24570,10 @@ def blog_archive_page():
         page_title='Prediction Lab Blog | predictionlab.io',
         page_description=page_description,
     )
+    if _anon and isinstance(html, str) and html and 'soro-blog' in html:
+        _BLOG_PAGE_CACHE['ts'] = _time.time()
+        _BLOG_PAGE_CACHE['html'] = html
+    return html
 
 
 def _match_blog_post(posts: list, slug: str):
@@ -24759,7 +24782,7 @@ def _build_landing_preview_context():
     todays_picks = build_todays_top_picks()
     blog_posts = [
         {**post, 'display_date': _blog_display_date(post)}
-        for post in _get_blog_posts(include_generated=True, todays_picks=todays_picks)
+        for post in _get_blog_posts(include_generated=False)
     ]
     latest_blog_post = blog_posts[0] if blog_posts else None
     preview_units = [

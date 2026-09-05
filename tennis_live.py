@@ -15,6 +15,23 @@ def _rewrite_hub_paths(html: str) -> str:
     html = html.replace('href="/tennis/"', 'href="/tennis-picks"')
     html = html.replace("href='/tennis/'", "href='/tennis-picks'")
     html = re.sub(r'href=(["\'])/tennis/\1', r"href=\1/tennis-picks\1", html)
+    for host in (
+        "http://127.0.0.1:5081",
+        "http://127.0.0.1:5052",
+        "http://127.0.0.1:5152",
+        "http://localhost:5081",
+        "http://localhost:5052",
+        "http://localhost",
+    ):
+        html = html.replace(host, "https://predictionlab.io")
+    html = html.replace("http%3A//127.0.0.1%3A5081", "https%3A//predictionlab.io")
+    html = html.replace("http%3A//127.0.0.1%3A5052", "https%3A//predictionlab.io")
+    html = html.replace("http%3A//127.0.0.1%3A5152", "https%3A//predictionlab.io")
+    html = html.replace("http%3A%2F%2F127.0.0.1%3A5081", "https%3A%2F%2Fpredictionlab.io")
+    html = html.replace("http%3A%2F%2F127.0.0.1%3A5052", "https%3A%2F%2Fpredictionlab.io")
+    html = html.replace("https://predictionlab.io/tennis/\"", "https://predictionlab.io/tennis-picks\"")
+    html = html.replace("https%3A//predictionlab.io/tennis/\"", "https%3A//predictionlab.io/tennis-picks\"")
+    html = html.replace("https%3A%2F%2Fpredictionlab.io%2Ftennis%2F", "https%3A%2F%2Fpredictionlab.io%2Ftennis-picks")
     return html
 
 
