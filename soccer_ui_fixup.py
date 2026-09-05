@@ -1597,6 +1597,34 @@ def enrich_soccer_chart_model_attrs(html: str) -> str:
     return "".join(_patch(p) if "data-pick-card" in p[:80] else p for p in parts)
 
 
+def open_soccer_cards(html: str) -> str:
+    """Keep the live soccer cards; just expand View Details so models show."""
+    if not html:
+        return html
+    html = re.sub(
+        r'class="game-card pick-card(?! is-expanded)',
+        'class="game-card pick-card is-expanded',
+        html,
+    )
+    html = re.sub(
+        r'(<div class="card-details"[^>]*?)\s+hidden\b',
+        r"\1",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(class="view-details-btn"[^>]*aria-expanded=")false(")',
+        r"\1true\2",
+        html,
+    )
+    html = re.sub(
+        r'(<button type="button" class="view-details-btn"[^>]*>)\s*View [Dd]etails',
+        r"\1Less details",
+        html,
+    )
+    return html
+
+
 def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") -> str:
     """Publish-layer soccer picks: chart attrs, PL Expected Goals, hide empty Total EV."""
     if not html:
@@ -1623,6 +1651,7 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") 
         html = strip_soccer_empty_total_ev(html)
     html = apply_soccer_info_tooltips(html, kind="picks")
     html = ensure_soccer_league_dropdown(html, kind="picks", league=league, region=region)
+    html = open_soccer_cards(html)
     try:
         from soccer_pl_xg import strip_soccer_h2h_labels
 
@@ -1762,7 +1791,7 @@ def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = ""
         html = inject_consensus_records_html(html, sport="soccer")
     except Exception as e:
         print(f"[soccer_ui_fixup] consensus inject: {e}", flush=True)
-    return html
+    return open_soccer_cards(html)
 
 
 def render_soccer_results_chart_page(
