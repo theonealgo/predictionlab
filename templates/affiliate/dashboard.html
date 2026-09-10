@@ -38,19 +38,36 @@
   {% endif %}
 
   <div class="aff-section">
-    <h2>Summary</h2>
+    <h2>Performance</h2>
     <div class="aff-stat-grid">
       <div class="aff-stat"><div class="v">{{ stats.clicks }}</div><div class="l">Total clicks</div></div>
       <div class="aff-stat"><div class="v">{{ stats.signups }}</div><div class="l">Signups</div></div>
       <div class="aff-stat"><div class="v">{{ stats.customers }}</div><div class="l">Paying customers</div></div>
       <div class="aff-stat"><div class="v">{{ stats.conversion_rate }}%</div><div class="l">Conversion rate</div></div>
       <div class="aff-stat"><div class="v">{{ money(stats.revenue_cents) }}</div><div class="l">Revenue generated</div></div>
-      <div class="aff-stat"><div class="v">{{ money(stats.earned_cents) }}</div><div class="l">Commissions earned</div></div>
-      <div class="aff-stat"><div class="v">{{ money(stats.pending_cents) }}</div><div class="l">Pending</div></div>
-      <div class="aff-stat"><div class="v">{{ money(stats.payable_cents) }}</div><div class="l">Payable</div></div>
-      <div class="aff-stat"><div class="v">{{ money(stats.paid_cents) }}</div><div class="l">Paid</div></div>
     </div>
-    <p class="aff-note">Commission rate: {{ commission_pct }}%. Commissions become payable {{ hold_days }} days after they're earned.</p>
+  </div>
+
+  <div class="aff-section">
+    <h2>Commission balances</h2>
+    {# Withdrawable balance is ALWAYS and ONLY the payable amount. #}
+    <div style="background:linear-gradient(135deg,#00305c,#00529B);color:#fff;border-radius:14px;padding:20px 22px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:0.78rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85;">Payable balance (withdrawable now)</div>
+        <div style="font-size:2rem;font-weight:800;">{{ money(stats.payable_cents) }}</div>
+      </div>
+      <div style="text-align:right;font-size:0.85rem;opacity:0.9;max-width:280px;">
+        Only your <strong>payable</strong> balance can be withdrawn. Pending commissions are not yet available.
+      </div>
+    </div>
+    <div class="aff-stat-grid">
+      <div class="aff-stat"><div class="v">{{ money(stats.earned_cents) }}</div><div class="l">Total earned</div></div>
+      <div class="aff-stat"><div class="v" style="color:#92400e;">{{ money(stats.pending_cents) }}</div><div class="l">Pending (not yet available)</div></div>
+      <div class="aff-stat"><div class="v" style="color:#1e40af;">{{ money(stats.payable_cents) }}</div><div class="l">Payable (withdrawable)</div></div>
+      <div class="aff-stat"><div class="v" style="color:#166534;">{{ money(stats.paid_cents) }}</div><div class="l">Paid</div></div>
+      <div class="aff-stat"><div class="v" style="color:#991b1b;">{{ money(stats.reversed_cents) }}</div><div class="l">Reversed</div></div>
+    </div>
+    <p class="aff-note">Commission rate: {{ commission_pct }}%. Newly earned commissions are <strong>pending</strong> and become <strong>payable</strong> {{ hold_days }} days later (to cover refunds/chargebacks). "Total earned" = pending + payable + paid (it does not include reversed commissions).</p>
   </div>
 
   <div class="aff-section">
@@ -76,7 +93,19 @@
     <h2>Promote PredictionLab</h2>
     <p class="aff-note" style="margin-bottom:12px;">Ready-to-use copy. Please keep claims honest — no guaranteed winnings or income.</p>
 
-    <h3>About PredictionLab</h3>
+    <h3>Referral link</h3>
+    <div class="aff-linkbox">
+      <input id="promoLink2" type="text" readonly value="{{ link }}">
+      <button class="aff-copy-btn" type="button" onclick="affCopy('promoLink2', this)">Copy link</button>
+    </div>
+    <h3>Affiliate code</h3>
+    <div class="aff-linkbox">
+      <input id="promoCode2" type="text" readonly value="{{ aff.affiliate_code }}">
+      <button class="aff-copy-btn" type="button" onclick="affCopy('promoCode2', this)">Copy code</button>
+    </div>
+    <p class="aff-note" style="margin:10px 0 4px;">Use your referral link whenever possible. You can also share your affiliate code with people who sign up without clicking your referral link — they can enter it at <code>/affiliate/code</code> or during signup/checkout.</p>
+
+    <h3 style="margin-top:18px;">About PredictionLab</h3>
     <div class="aff-promo"><span class="txt" id="promoAbout">PredictionLab delivers data-driven AI sports predictions and daily picks across the NBA, NFL, MLB, NHL, soccer and more — with transparent, tracked results.</span>
       <div style="margin-top:8px;"><button class="aff-copy-btn" type="button" onclick="affCopy('promoAbout', this)">Copy</button></div>
     </div>

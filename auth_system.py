@@ -830,6 +830,18 @@ def signup_submit():
     if user:
         login_user(user, remember=True)
         _set_session_token(user.id)
+        # Optional affiliate promo code entered at signup (secondary attribution).
+        # Server-authoritative; never overwrites an existing referral-link attribution.
+        _aff_code = (request.form.get('affiliate_code') or '').strip()
+        if _aff_code:
+            try:
+                import affiliate_system
+                affiliate_system.apply_code(
+                    _aff_code, user_id=user.id,
+                    visitor_id=request.cookies.get('pl_aff_vid'),
+                )
+            except Exception as _aff_e:
+                logger.warning("[affiliate] signup code apply skipped: %s", _aff_e)
 
     return redirect('/')
 
@@ -3758,6 +3770,11 @@ def checkout(plan):
         # metadata only — does not change any billing behavior.
         try:
             import affiliate_system
+            # Secondary attribution: honor an affiliate promo code passed to
+            # checkout (?code=CODE) when the visitor didn't click a referral link.
+            _aff_code = (request.args.get('code') or request.form.get('affiliate_code') or '').strip()
+            if _aff_code:
+                affiliate_system.apply_code_request(_aff_code)
             _aff_meta = affiliate_system.checkout_metadata(
                 current_user if current_user.is_authenticated else None
             )

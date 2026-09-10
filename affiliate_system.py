@@ -226,6 +226,12 @@ def _ensure_affiliate_tables():
         ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_payout_aff ON affiliate_payouts(affiliate_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_payout_status ON affiliate_payouts(status)')
+        # DB-level guard against duplicate open payouts (race-safe): at most one
+        # requested/processing payout per affiliate.
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_payout_open_unique "
+            "ON affiliate_payouts(affiliate_id) WHERE status IN ('requested','processing')"
+        )
 
         conn.execute('''
             CREATE TABLE IF NOT EXISTS affiliate_audit (
@@ -579,6 +585,96 @@ def _set_visitor_cookie(response):
     return response
 
 
+def _ensure_visitor_id():
+    """Return the current first-party visitor id, minting one (set via
+    after_request) if the visitor has none yet."""
+    vid = getattr(g, '_aff_set_visitor', None) or request.cookies.get(_VISITOR_COOKIE)
+    if not vid:
+        vid = uuid.uuid4().hex
+        g._aff_set_visitor = vid
+    return vid
+
+
+def apply_code(code, *, user_id=None, visitor_id=None):
+    """Attribute a customer via an affiliate's promotional code (secondary path).
+
+    Server-authoritative. Safe attribution rules (mirrors referral-link rules but
+    is strictly non-overwriting — the referral link is the primary mechanism):
+
+    * The code must belong to an APPROVED affiliate.
+    * Self-referral (affiliate applying their own code) is blocked.
+    * Existing paying customers are never retro-attributed.
+    * If the visitor/user already has a valid affiliate attribution (from a
+      referral link or an earlier code), it is NOT overwritten — a code can
+      never steal attribution from another affiliate.
+
+    Returns (ok: bool, reason: str). Never raises.
+    """
+    try:
+        aff = _affiliate_by_code(code)
+        if not aff or aff['status'] != _A_APPROVED:
+            return False, 'invalid'
+        # Self-referral guard.
+        if user_id and aff['user_id'] and aff['user_id'] == user_id:
+            _audit(aff['id'], 'self_referral_code_blocked', f'user_id={user_id}')
+            return False, 'self'
+        conn = _get_db()
+        try:
+            # Existing paying customer → no retro-attribution.
+            if user_id and _user_is_existing_customer(user_id, conn):
+                _audit(aff['id'], 'existing_customer_code_skip', f'user_id={user_id}')
+                return False, 'existing_customer'
+            # Do not overwrite an existing valid attribution (link or code).
+            existing = None
+            if user_id:
+                existing = conn.execute(
+                    'SELECT * FROM affiliate_attributions WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+                    (user_id,),
+                ).fetchone()
+            if not existing and visitor_id:
+                existing = conn.execute(
+                    "SELECT * FROM affiliate_attributions WHERE visitor_id = ? "
+                    "AND status != 'void' ORDER BY id DESC LIMIT 1",
+                    (visitor_id,),
+                ).fetchone()
+            if existing:
+                if existing['affiliate_id'] == aff['id']:
+                    return True, 'already'          # idempotent no-op for same affiliate
+                _audit(aff['id'], 'code_no_overwrite',
+                       f'existing_aff={existing["affiliate_id"]} user_id={user_id}')
+                return False, 'already_attributed'  # never steal another affiliate's referral
+
+            if user_id:
+                conn.execute(
+                    'INSERT INTO affiliate_attributions '
+                    '(affiliate_id, visitor_id, user_id, status, attributed_at, signed_up_at) '
+                    'VALUES (?,?,?,?,?,?)',
+                    (aff['id'], visitor_id, user_id, 'signed_up', _now_iso(), _now_iso()),
+                )
+            else:
+                conn.execute(
+                    'INSERT INTO affiliate_attributions '
+                    '(affiliate_id, visitor_id, status, attributed_at) VALUES (?,?,?,?)',
+                    (aff['id'], visitor_id, _A_PENDING, _now_iso()),
+                )
+            conn.commit()
+            _audit(aff['id'], 'code_applied', f'user_id={user_id} visitor={bool(visitor_id)}')
+            return True, 'ok'
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning('[affiliate] apply_code failed (non-fatal): %s', e)
+        return False, 'error'
+
+
+def apply_code_request(code):
+    """Apply a code in the context of the current request (mints visitor cookie,
+    uses the logged-in user if present). Returns (ok, reason)."""
+    uid = getattr(current_user, 'id', None) if current_user.is_authenticated else None
+    vid = _ensure_visitor_id()
+    return apply_code(code, user_id=uid, visitor_id=vid)
+
+
 def checkout_metadata(user=None):
     """Return Stripe Checkout metadata carrying affiliate attribution.
 
@@ -588,7 +684,9 @@ def checkout_metadata(user=None):
     """
     meta = {}
     try:
-        visitor_id = request.cookies.get(_VISITOR_COOKIE)
+        # Include a visitor id minted earlier in this same request (e.g. a code
+        # applied at checkout) so brand-new visitors are still attributed.
+        visitor_id = getattr(g, '_aff_set_visitor', None) or request.cookies.get(_VISITOR_COOKIE)
         conn = _get_db()
         try:
             attr = None
@@ -943,11 +1041,15 @@ def _affiliate_stats(affiliate_id, conn=None):
             "SELECT COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions "
             "WHERE affiliate_id = ? AND status = ?", (affiliate_id, _C_PAID),
         ).fetchone()['s']
+        reversed_ = conn.execute(
+            "SELECT COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions "
+            "WHERE affiliate_id = ? AND status = ?", (affiliate_id, _C_REVERSED),
+        ).fetchone()['s']
         conv_rate = (customers / clicks * 100.0) if clicks else 0.0
         return {
             'clicks': clicks, 'signups': signups, 'customers': customers,
             'revenue_cents': rev, 'earned_cents': earned, 'pending_cents': pending,
-            'payable_cents': payable, 'paid_cents': paid,
+            'payable_cents': payable, 'paid_cents': paid, 'reversed_cents': reversed_,
             'conversion_rate': round(conv_rate, 1),
         }
     finally:
@@ -1076,6 +1178,33 @@ def affiliate_terms():
         cookie_days=AFFILIATE_COOKIE_DAYS,
         hold_days=AFFILIATE_HOLD_DAYS,
     )
+
+
+@affiliate_bp.route('/affiliate/code', methods=['GET', 'POST'])
+def affiliate_code_entry():
+    """Secondary attribution: let a visitor enter an affiliate's promotion code
+    when they did not click a referral link. Server-authoritative."""
+    result = None
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        code = _normalize_code(request.form.get('code'))
+        ok, reason = apply_code_request(code)
+        msgs = {
+            'ok': ('success', f'Code {code} applied — your next subscription will support this creator.'),
+            'already': ('success', f'Code {code} is already applied.'),
+            'invalid': ('error', 'That affiliate code is not valid.'),
+            'self': ('error', 'You cannot use your own affiliate code.'),
+            'existing_customer': ('error', 'Affiliate codes apply to new subscriptions only.'),
+            'already_attributed': ('error', 'You already have a referral applied, so this code was not used.'),
+            'error': ('error', 'Could not apply that code. Please try again.'),
+        }
+        cat, msg = msgs.get(reason, ('error', 'Could not apply that code.'))
+        flash(msg, cat)
+        if ok:
+            return redirect('/plans')
+        result = reason
+    return render_template('affiliate/code.html', csrf_token=_csrf_token(), result=result)
 
 
 @affiliate_bp.route('/affiliate/apply', methods=['GET', 'POST'])
@@ -1292,10 +1421,16 @@ def affiliate_request_payout():
             flash(f'You need at least {_money(AFFILIATE_MIN_PAYOUT_CENTS)} payable to request a payout.', 'error')
             return redirect(url_for('affiliate.affiliate_payouts'))
         currency = payable_rows[0]['currency'] if payable_rows else 'usd'
-        cur = conn.execute(
-            'INSERT INTO affiliate_payouts (affiliate_id, amount_cents, currency, status) VALUES (?,?,?,?)',
-            (aff['id'], total, currency, 'requested'),
-        )
+        try:
+            cur = conn.execute(
+                'INSERT INTO affiliate_payouts (affiliate_id, amount_cents, currency, status) VALUES (?,?,?,?)',
+                (aff['id'], total, currency, 'requested'),
+            )
+        except sqlite3.IntegrityError:
+            # Race: another concurrent request already opened a payout.
+            conn.rollback()
+            flash('You already have a payout in progress.', 'error')
+            return redirect(url_for('affiliate.affiliate_payouts'))
         payout_id = cur.lastrowid
         conn.execute(
             'UPDATE affiliate_commissions SET payout_id = ? WHERE affiliate_id = ? AND status = ? AND payout_id IS NULL',

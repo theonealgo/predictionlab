@@ -6,6 +6,7 @@
   <div class="aff-section">
     <h2>Join the PredictionLab Affiliate Program</h2>
     <p style="color:#475569;line-height:1.6;">Earn {{ commission_pct }}% recurring commission on qualifying paid subscriptions you refer. Fill out the short application below — we'll review and email you once approved.</p>
+    <div class="aff-alert info">You're applying with your PredictionLab account <strong>{{ current_user.email }}</strong>. An existing PredictionLab account is required to join the affiliate program — your affiliate profile is tied to this account.</div>
 
     {% if error %}<div class="aff-alert error">{{ error }}</div>{% endif %}
 

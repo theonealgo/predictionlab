@@ -17,6 +17,9 @@
         <a class="aff-btn aff-btn-ghost" href="/affiliate/dashboard">Affiliate login</a>
       {% endif %}
     </div>
+    {% if not my_affiliate %}
+    <p style="margin:14px auto 0;font-size:0.9rem;color:rgba(255,255,255,0.85);max-width:520px;">A free PredictionLab account is required to join. You'll sign in (or create an account) before applying.</p>
+    {% endif %}
   </div>
 
   <div class="aff-stat-grid">

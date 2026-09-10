@@ -295,6 +295,129 @@ class CommissionTest(AffiliateBase):
         self.assertEqual(attr['locked'], 1)
 
 
+class CouponTest(AffiliateBase):
+    def test_valid_code_applies_attribution(self):
+        aid = self._mkaffiliate('JOSH')
+        uid = self._mkuser('c1@example.com')
+        ok, reason = aff.apply_code('JOSH', user_id=uid)
+        self.assertTrue(ok)
+        conn = auth._get_db()
+        row = conn.execute('SELECT * FROM affiliate_attributions WHERE user_id=?', (uid,)).fetchone()
+        conn.close()
+        self.assertIsNotNone(row)
+        self.assertEqual(row['affiliate_id'], aid)
+        self.assertEqual(row['status'], 'signed_up')
+
+    def test_invalid_code_rejected(self):
+        uid = self._mkuser('c2@example.com')
+        ok, reason = aff.apply_code('NOPE', user_id=uid)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'invalid')
+        conn = auth._get_db()
+        n = conn.execute('SELECT COUNT(*) c FROM affiliate_attributions').fetchone()['c']
+        conn.close()
+        self.assertEqual(n, 0)
+
+    def test_unapproved_code_rejected(self):
+        self._mkaffiliate('PEND', status='pending')
+        uid = self._mkuser('c2b@example.com')
+        ok, reason = aff.apply_code('PEND', user_id=uid)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'invalid')
+
+    def test_code_attribution_new_customer_via_visitor(self):
+        aid = self._mkaffiliate('JOSH')
+        ok, reason = aff.apply_code('JOSH', visitor_id='visX')
+        self.assertTrue(ok)
+        conn = auth._get_db()
+        row = conn.execute("SELECT * FROM affiliate_attributions WHERE visitor_id='visX'").fetchone()
+        conn.close()
+        self.assertEqual(row['affiliate_id'], aid)
+        self.assertEqual(row['status'], 'pending')
+
+    def test_code_does_not_overwrite_existing_referral(self):
+        a1 = self._mkaffiliate('AONE')
+        a2 = self._mkaffiliate('ATWO')
+        uid = self._mkuser('c3@example.com')
+        # Existing referral-link attribution to AONE.
+        conn = auth._get_db()
+        conn.execute('INSERT INTO affiliate_attributions (affiliate_id, user_id, status) VALUES (?,?,?)',
+                     (a1, uid, 'signed_up'))
+        conn.commit()
+        conn.close()
+        ok, reason = aff.apply_code('ATWO', user_id=uid)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'already_attributed')
+        conn = auth._get_db()
+        row = conn.execute('SELECT * FROM affiliate_attributions WHERE user_id=?', (uid,)).fetchone()
+        conn.close()
+        self.assertEqual(row['affiliate_id'], a1)  # unchanged — no hijack
+
+    def test_code_no_retro_attribution_existing_customer(self):
+        self._mkaffiliate('JOSH')
+        uid = self._mkuser('paying@example.com', is_premium=1, sub='sub_pre')
+        ok, reason = aff.apply_code('JOSH', user_id=uid)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'existing_customer')
+
+    def test_self_referral_code_blocked(self):
+        auid = self._mkuser('affself@example.com')
+        self._mkaffiliate('OWN', user_id=auid)
+        ok, reason = aff.apply_code('OWN', user_id=auid)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'self')
+
+    def test_code_attributed_subscription_generates_commission(self):
+        self._mkaffiliate('JOSH')
+        uid = self._mkuser('buyer2@example.com', customer='cus_j2')
+        ok, _ = aff.apply_code('JOSH', user_id=uid)
+        self.assertTrue(ok)
+        # Link the attribution to the customer so the webhook resolves it.
+        conn = auth._get_db()
+        conn.execute('UPDATE affiliate_attributions SET stripe_customer_id=? WHERE user_id=?', ('cus_j2', uid))
+        conn.commit()
+        conn.close()
+        self._post_event(self._invoice_event('invoice.paid', 'in_code1', customer='cus_j2', code=None))
+        conn = auth._get_db()
+        c = conn.execute("SELECT * FROM affiliate_commissions WHERE stripe_invoice_id='in_code1'").fetchone()
+        conn.close()
+        self.assertIsNotNone(c)
+        self.assertEqual(c['commission_cents'], 199)
+
+    def test_code_commission_duplicate_webhook_idempotent(self):
+        self._mkaffiliate('JOSH')
+        e = self._invoice_event('invoice.paid', 'in_code_dup', code='JOSH')
+        self._post_event(e)
+        self._post_event({**e, 'id': 'evt_code_dup2'})
+        conn = auth._get_db()
+        n = conn.execute("SELECT COUNT(*) c FROM affiliate_commissions WHERE stripe_invoice_id='in_code_dup'").fetchone()['c']
+        conn.close()
+        self.assertEqual(n, 1)
+
+    def test_refund_reverses_code_attributed_commission(self):
+        self._mkaffiliate('JOSH')
+        self._post_event(self._invoice_event('invoice.paid', 'in_code_r', code='JOSH', charge='ch_cr', pi='pi_cr'))
+        refund = {'id': 'evt_cr', 'object': 'event', 'type': 'charge.refunded',
+                  'data': {'object': {'id': 'ch_cr', 'payment_intent': 'pi_cr', 'invoice': 'in_code_r',
+                                      'amount_refunded': 1999}}}
+        self._post_event(refund)
+        conn = auth._get_db()
+        c = conn.execute("SELECT * FROM affiliate_commissions WHERE stripe_invoice_id='in_code_r'").fetchone()
+        conn.close()
+        self.assertEqual(c['status'], 'reversed')
+
+    def test_dispute_funds_withdrawn_reverses_commission(self):
+        self._mkaffiliate('JOSH')
+        self._post_event(self._invoice_event('invoice.paid', 'in_fw', code='JOSH', charge='ch_fw', pi='pi_fw'))
+        ev = {'id': 'evt_fw', 'object': 'event', 'type': 'charge.dispute.funds_withdrawn',
+              'data': {'object': {'id': 'dp_fw', 'charge': 'ch_fw', 'payment_intent': 'pi_fw'}}}
+        self._post_event(ev)
+        conn = auth._get_db()
+        c = conn.execute("SELECT * FROM affiliate_commissions WHERE stripe_invoice_id='in_fw'").fetchone()
+        conn.close()
+        self.assertEqual(c['status'], 'reversed')
+
+
 class PayoutTest(AffiliateBase):
     def _add_payable(self, affiliate_id, cents):
         conn = auth._get_db()

@@ -11,10 +11,12 @@
 
   <div class="aff-section">
     <h2>Application</h2>
-    <p><strong>Website/channel:</strong> {{ aff.website_url or '—' }}<br>
+    <p><strong>Affiliate code:</strong> <code>{{ aff.affiliate_code }}</code><br>
+       <strong>Promotion code:</strong> <code>{{ aff.affiliate_code }}</code> (same as affiliate code)<br>
+       <strong>Referral URL:</strong> <code>{{ link }}</code><br>
+       <strong>Website/channel:</strong> {{ aff.website_url or '—' }}<br>
        <strong>Promo method:</strong> {{ aff.promo_method or '—' }}<br>
-       <strong>Commission rate:</strong> {{ '%.1f'|format((aff.commission_bps or 0)/100.0) }}%<br>
-       <strong>Referral link:</strong> <code>{{ link }}</code></p>
+       <strong>Commission rate:</strong> {{ '%.1f'|format((aff.commission_bps or 0)/100.0) }}%</p>
     {% if aff.application_note %}<p><strong>Notes:</strong><br>{{ aff.application_note }}</p>{% endif %}
     <form method="POST" action="/admin/affiliates/{{ aff.id }}/status" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -30,12 +32,14 @@
     <div class="aff-stat-grid">
       <div class="aff-stat"><div class="v">{{ stats.clicks }}</div><div class="l">Clicks</div></div>
       <div class="aff-stat"><div class="v">{{ stats.signups }}</div><div class="l">Signups</div></div>
-      <div class="aff-stat"><div class="v">{{ stats.customers }}</div><div class="l">Customers</div></div>
+      <div class="aff-stat"><div class="v">{{ stats.customers }}</div><div class="l">Paying customers</div></div>
       <div class="aff-stat"><div class="v">{{ stats.conversion_rate }}%</div><div class="l">Conversion</div></div>
       <div class="aff-stat"><div class="v">{{ money(stats.revenue_cents) }}</div><div class="l">Revenue</div></div>
-      <div class="aff-stat"><div class="v">{{ money(stats.earned_cents) }}</div><div class="l">Commissions</div></div>
-      <div class="aff-stat"><div class="v">{{ money(stats.payable_cents) }}</div><div class="l">Payable</div></div>
-      <div class="aff-stat"><div class="v">{{ money(stats.paid_cents) }}</div><div class="l">Paid</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.earned_cents) }}</div><div class="l">Total earned</div></div>
+      <div class="aff-stat"><div class="v" style="color:#92400e;">{{ money(stats.pending_cents) }}</div><div class="l">Pending</div></div>
+      <div class="aff-stat"><div class="v" style="color:#1e40af;">{{ money(stats.payable_cents) }}</div><div class="l">Payable</div></div>
+      <div class="aff-stat"><div class="v" style="color:#166534;">{{ money(stats.paid_cents) }}</div><div class="l">Paid</div></div>
+      <div class="aff-stat"><div class="v" style="color:#991b1b;">{{ money(stats.reversed_cents) }}</div><div class="l">Reversed</div></div>
     </div>
   </div>
 
