@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Referrals | PredictionLab Affiliate{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Referrals</h1>
+  {% set active = 'referrals' %}{% include "affiliate/_subnav.html" %}
+  <div class="aff-section">
+    <p class="aff-note" style="margin-bottom:12px;">Privacy-safe view of customers attributed to you. Personal customer details are never shown.</p>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr>
+          <th>Date</th><th>Referral</th><th>Status</th><th>Revenue</th><th>Commission</th>
+        </tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ (r.signed_up_at or r.attributed_at or '')[:10] }}</td>
+            <td>Customer #{{ r.user_id }}</td>
+            <td><span class="aff-badge {{ r.status }}">{{ r.status }}</span></td>
+            <td>{{ money(r.rev_cents) }}</td>
+            <td>{{ money(r.comm_cents) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:22px;">No referrals yet. Share your link to get started.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

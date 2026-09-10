@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Join the Affiliate Program | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap" style="max-width:720px;">
+  <div class="aff-section">
+    <h2>Join the PredictionLab Affiliate Program</h2>
+    <p style="color:#475569;line-height:1.6;">Earn {{ commission_pct }}% recurring commission on qualifying paid subscriptions you refer. Fill out the short application below — we'll review and email you once approved.</p>
+
+    {% if error %}<div class="aff-alert error">{{ error }}</div>{% endif %}
+
+    <form class="aff-form" method="POST" action="/affiliate/apply" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="name">Full name *</label>
+      <input id="name" name="name" type="text" required value="{{ form.name or '' }}" maxlength="120">
+
+      <label>Email</label>
+      <input type="email" value="{{ current_user.email }}" disabled>
+      <div class="hint">We'll use your PredictionLab account email for the affiliate program.</div>
+
+      <label for="code">Preferred affiliate code *</label>
+      <input id="code" name="code" type="text" required value="{{ form.code or '' }}" maxlength="32" placeholder="e.g. JOSH" style="text-transform:uppercase;">
+      <div class="hint">3–32 characters, letters/numbers plus - or _. This becomes your link: <code>predictionlab.io/?ref=YOURCODE</code></div>
+
+      <label for="website_url">Website / social media / channel</label>
+      <input id="website_url" name="website_url" type="text" value="{{ form.website_url or '' }}" maxlength="300" placeholder="https://...">
+
+      <label for="promo_method">Primary promotional method</label>
+      <select id="promo_method" name="promo_method">
+        {% set methods = ['', 'Website / Blog', 'YouTube', 'Instagram', 'TikTok', 'X / Twitter', 'Discord / Telegram', 'Email newsletter', 'Reddit / Forums', 'Paid ads', 'Other'] %}
+        {% for m in methods %}
+          <option value="{{ m }}" {% if form.promo_method == m %}selected{% endif %}>{{ m or 'Select…' }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="country">Country</label>
+      <input id="country" name="country" type="text" value="{{ form.country or '' }}" maxlength="80" placeholder="e.g. Canada">
+
+      <label for="application_note">How do you intend to promote PredictionLab?</label>
+      <textarea id="application_note" name="application_note" maxlength="2000" placeholder="Tell us about your audience and how you'll promote PredictionLab.">{{ form.application_note or '' }}</textarea>
+
+      <div class="aff-check">
+        <input id="agree_terms" name="agree_terms" type="checkbox">
+        <label for="agree_terms" style="margin:0;font-weight:600;">I agree to the <a href="/affiliate/terms" target="_blank">PredictionLab Affiliate Terms</a>, including the rules on qualifying transactions, attribution, refunds/chargebacks, and prohibited promotional methods.</label>
+      </div>
+
+      <button type="submit" class="aff-btn aff-btn-blue" style="width:100%;">Submit application</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

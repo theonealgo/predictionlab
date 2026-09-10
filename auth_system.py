@@ -3753,6 +3753,20 @@ def checkout(plan):
                 },
             },
         }
+        # Affiliate attribution: carry the referring affiliate through Checkout so
+        # the webhook can credit the commission (survives guest checkout). Additive
+        # metadata only — does not change any billing behavior.
+        try:
+            import affiliate_system
+            _aff_meta = affiliate_system.checkout_metadata(
+                current_user if current_user.is_authenticated else None
+            )
+            if _aff_meta:
+                session_kwargs['metadata'].update(_aff_meta)
+                session_kwargs['subscription_data']['metadata'].update(_aff_meta)
+        except Exception as _aff_e:
+            logger.warning("[affiliate] checkout metadata skipped: %s", _aff_e)
+
         # Reuse Stripe customer when known (avoids a second cus_ for same email).
         # Otherwise pre-fill email if logged in. Never set both customer + customer_email.
         if current_user.is_authenticated:
@@ -4410,6 +4424,15 @@ def _handle_invoice_payment_succeeded(
                 billing_reason or None, subscription_id,
             )
 
+        # Affiliate commission (idempotent per invoice). Never affects billing.
+        try:
+            import affiliate_system
+            affiliate_system.handle_invoice_paid(
+                invoice, event_id=event_id, stripe_mod=stripe_mod,
+            )
+        except Exception as _aff_e:
+            logger.warning("[affiliate] invoice commission hook failed: %s", _aff_e)
+
         return applied
     except Exception as e:
         logger.exception(
@@ -4643,6 +4666,42 @@ def stripe_webhook():
                     applied = True
                 else:
                     applied = False
+
+            elif etype in ('charge.refunded', 'charge.refund.updated'):
+                # Affiliate: reverse/adjust commission on refund. No billing impact.
+                try:
+                    import affiliate_system
+                    affiliate_system.handle_refund(
+                        data_obj, event_id=event_id, stripe_mod=stripe,
+                    )
+                except Exception as _aff_e:
+                    logger.warning("[affiliate] refund hook failed: %s", _aff_e)
+                applied = True
+
+            elif etype in (
+                'charge.dispute.created',
+                'charge.dispute.funds_withdrawn',
+            ):
+                # Affiliate: reverse commission on chargeback. No billing impact.
+                try:
+                    import affiliate_system
+                    affiliate_system.handle_dispute(
+                        data_obj, event_id=event_id, stripe_mod=stripe,
+                    )
+                except Exception as _aff_e:
+                    logger.warning("[affiliate] dispute hook failed: %s", _aff_e)
+                applied = True
+
+            elif etype in ('invoice.voided', 'invoice.marked_uncollectible'):
+                # Affiliate: reverse commission when an invoice is voided/uncollectible.
+                try:
+                    import affiliate_system
+                    affiliate_system.handle_invoice_uncollectible(
+                        data_obj, event_id=event_id, stripe_mod=stripe,
+                    )
+                except Exception as _aff_e:
+                    logger.warning("[affiliate] void hook failed: %s", _aff_e)
+                applied = True
 
             else:
                 logger.info("[stripe] Unhandled event type=%s (acked)", etype)

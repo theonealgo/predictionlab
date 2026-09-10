@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Affiliate Dashboard | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 4px;">Affiliate Dashboard</h1>
+  <p class="aff-note" style="margin:0 0 16px;">Signed in as {{ aff.email }} · Status:
+    <span class="aff-badge {{ aff.status }}">{{ aff.status }}</span>
+  </p>
+  {% set active = 'dashboard' %}{% include "affiliate/_subnav.html" %}
+
+  {% if aff.status == 'pending' %}
+    <div class="aff-alert info">Your application is <strong>under review</strong>. You'll be able to share your link and earn once approved. Your requested code is <strong>{{ aff.affiliate_code }}</strong>.</div>
+  {% elif aff.status == 'rejected' %}
+    <div class="aff-alert error">Your affiliate application was not approved. Please <a href="/contact">contact us</a> with any questions.</div>
+  {% elif aff.status == 'suspended' %}
+    <div class="aff-alert error">Your affiliate account is <strong>suspended</strong>. You will not accrue new commissions. Please <a href="/contact">contact us</a>.</div>
+  {% endif %}
+
+  {% if aff.status in ['approved','suspended'] %}
+  <div class="aff-section">
+    <h2>Your referral link</h2>
+    <div style="margin-bottom:10px;">
+      <div class="aff-note" style="margin-bottom:6px;">Affiliate code</div>
+      <div class="aff-linkbox">
+        <input id="affCode" type="text" readonly value="{{ aff.affiliate_code }}">
+        <button class="aff-copy-btn" type="button" onclick="affCopy('affCode', this)">Copy code</button>
+      </div>
+    </div>
+    <div>
+      <div class="aff-note" style="margin-bottom:6px;">Referral link</div>
+      <div class="aff-linkbox">
+        <input id="affLink" type="text" readonly value="{{ link }}">
+        <button class="aff-copy-btn" type="button" onclick="affCopy('affLink', this)">Copy link</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="aff-section">
+    <h2>Summary</h2>
+    <div class="aff-stat-grid">
+      <div class="aff-stat"><div class="v">{{ stats.clicks }}</div><div class="l">Total clicks</div></div>
+      <div class="aff-stat"><div class="v">{{ stats.signups }}</div><div class="l">Signups</div></div>
+      <div class="aff-stat"><div class="v">{{ stats.customers }}</div><div class="l">Paying customers</div></div>
+      <div class="aff-stat"><div class="v">{{ stats.conversion_rate }}%</div><div class="l">Conversion rate</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.revenue_cents) }}</div><div class="l">Revenue generated</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.earned_cents) }}</div><div class="l">Commissions earned</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.pending_cents) }}</div><div class="l">Pending</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.payable_cents) }}</div><div class="l">Payable</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.paid_cents) }}</div><div class="l">Paid</div></div>
+    </div>
+    <p class="aff-note">Commission rate: {{ commission_pct }}%. Commissions become payable {{ hold_days }} days after they're earned.</p>
+  </div>
+
+  <div class="aff-section">
+    <h2>Payouts</h2>
+    {% if open_payout %}
+      <div class="aff-alert info">You have a payout of <strong>{{ money(open_payout.amount_cents, open_payout.currency) }}</strong> in progress (status: {{ open_payout.status }}).</div>
+    {% else %}
+      <p>Payable balance: <strong>{{ money(stats.payable_cents) }}</strong> · Minimum payout: {{ min_payout }}</p>
+      {% if can_payout %}
+        <form method="POST" action="/affiliate/payouts/request" style="margin-top:10px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="aff-btn aff-btn-blue">Request payout ({{ money(stats.payable_cents) }})</button>
+        </form>
+      {% else %}
+        <p class="aff-note">You can request a payout once your payable balance reaches {{ min_payout }}.</p>
+      {% endif %}
+    {% endif %}
+    <p style="margin-top:10px;"><a href="/affiliate/payouts">View payout history →</a></p>
+  </div>
+
+  {% if aff.status == 'approved' %}
+  <div class="aff-section">
+    <h2>Promote PredictionLab</h2>
+    <p class="aff-note" style="margin-bottom:12px;">Ready-to-use copy. Please keep claims honest — no guaranteed winnings or income.</p>
+
+    <h3>About PredictionLab</h3>
+    <div class="aff-promo"><span class="txt" id="promoAbout">PredictionLab delivers data-driven AI sports predictions and daily picks across the NBA, NFL, MLB, NHL, soccer and more — with transparent, tracked results.</span>
+      <div style="margin-top:8px;"><button class="aff-copy-btn" type="button" onclick="affCopy('promoAbout', this)">Copy</button></div>
+    </div>
+
+    <h3>Suggested promo copy</h3>
+    <div class="aff-promo"><span class="txt" id="promoLong">I use PredictionLab for AI-powered sports picks — daily model predictions with transparent, tracked results across the major leagues. Check it out and try a week: {{ link }}</span>
+      <div style="margin-top:8px;"><button class="aff-copy-btn" type="button" onclick="affCopy('promoLong', this)">Copy</button></div>
+    </div>
+
+    <h3>Social media copy</h3>
+    <div class="aff-promo"><span class="txt" id="promoSocial">📊 AI sports predictions with receipts. Daily picks, transparent model results. Try PredictionLab 👉 {{ link }}</span>
+      <div style="margin-top:8px;"><button class="aff-copy-btn" type="button" onclick="affCopy('promoSocial', this)">Copy</button></div>
+    </div>
+
+    <h3>Your link &amp; code</h3>
+    <div class="aff-promo"><span class="txt" id="promoLink">{{ link }}</span>
+      <div style="margin-top:8px;"><button class="aff-copy-btn" type="button" onclick="affCopy('promoLink', this)">Copy link</button></div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

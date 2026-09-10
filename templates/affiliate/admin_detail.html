@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Admin · {{ aff.affiliate_code }} | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <p style="margin:0 0 8px;"><a href="/admin/affiliates">← All affiliates</a></p>
+  <h1 style="margin:0 0 4px;">{{ aff.affiliate_code }}
+    <span class="aff-badge {{ aff.status }}">{{ aff.status }}</span>
+  </h1>
+  <p class="aff-note">{{ aff.name }} · {{ aff.email }} · {{ aff.country or '—' }} · joined {{ (aff.created_at or '')[:10] }}</p>
+
+  <div class="aff-section">
+    <h2>Application</h2>
+    <p><strong>Website/channel:</strong> {{ aff.website_url or '—' }}<br>
+       <strong>Promo method:</strong> {{ aff.promo_method or '—' }}<br>
+       <strong>Commission rate:</strong> {{ '%.1f'|format((aff.commission_bps or 0)/100.0) }}%<br>
+       <strong>Referral link:</strong> <code>{{ link }}</code></p>
+    {% if aff.application_note %}<p><strong>Notes:</strong><br>{{ aff.application_note }}</p>{% endif %}
+    <form method="POST" action="/admin/affiliates/{{ aff.id }}/status" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="aff-btn aff-btn-blue" name="action" value="approve" style="padding:8px 16px;">Approve</button>
+      <button class="aff-btn aff-btn-blue" name="action" value="reject" style="padding:8px 16px;background:#991b1b;">Reject</button>
+      <button class="aff-btn aff-btn-blue" name="action" value="suspend" style="padding:8px 16px;background:#b45309;">Suspend</button>
+      <button class="aff-btn aff-btn-blue" name="action" value="reactivate" style="padding:8px 16px;background:#166534;">Reactivate</button>
+    </form>
+  </div>
+
+  <div class="aff-section">
+    <h2>Performance</h2>
+    <div class="aff-stat-grid">
+      <div class="aff-stat"><div class="v">{{ stats.clicks }}</div><div class="l">Clicks</div></div>
+      <div class="aff-stat"><div class="v">{{ stats.signups }}</div><div class="l">Signups</div></div>
+      <div class="aff-stat"><div class="v">{{ stats.customers }}</div><div class="l">Customers</div></div>
+      <div class="aff-stat"><div class="v">{{ stats.conversion_rate }}%</div><div class="l">Conversion</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.revenue_cents) }}</div><div class="l">Revenue</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.earned_cents) }}</div><div class="l">Commissions</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.payable_cents) }}</div><div class="l">Payable</div></div>
+      <div class="aff-stat"><div class="v">{{ money(stats.paid_cents) }}</div><div class="l">Paid</div></div>
+    </div>
+  </div>
+
+  <div class="aff-section">
+    <h2>Commissions</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Date</th><th>Invoice</th><th>Amount</th><th>Commission</th><th>Status</th><th>Adjust</th></tr></thead>
+        <tbody>
+          {% for c in commissions %}
+          <tr>
+            <td>{{ (c.created_at or '')[:10] }}</td>
+            <td class="aff-note">{{ c.stripe_invoice_id }}</td>
+            <td>{{ money(c.amount_gross_cents, c.currency) }}</td>
+            <td>{{ money(c.commission_cents, c.currency) }}</td>
+            <td><span class="aff-badge {{ c.status }}">{{ c.status }}</span></td>
+            <td>
+              <form method="POST" action="/admin/affiliates/commissions/{{ c.id }}/adjust" style="display:flex;gap:4px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <select name="action" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;">
+                  <option value="approve">→ payable</option>
+                  <option value="reverse">reverse</option>
+                  <option value="cancel">cancel</option>
+                </select>
+                <button class="aff-copy-btn" type="submit" style="padding:5px 10px;font-size:0.78rem;">Go</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:18px;">No commissions.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="aff-section">
+    <h2>Payouts</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>#</th><th>Requested</th><th>Amount</th><th>Status</th><th>Reference</th><th>Update</th></tr></thead>
+        <tbody>
+          {% for p in payouts %}
+          <tr>
+            <td>{{ p.id }}</td>
+            <td>{{ (p.requested_at or '')[:10] }}</td>
+            <td>{{ money(p.amount_cents, p.currency) }}</td>
+            <td><span class="aff-badge {{ p.status }}">{{ p.status }}</span></td>
+            <td>{{ p.reference or '—' }}</td>
+            <td>
+              <form method="POST" action="/admin/affiliates/payouts/{{ p.id }}/status" style="display:flex;gap:4px;flex-wrap:wrap;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="text" name="reference" placeholder="ref" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;width:90px;">
+                <select name="status" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;">
+                  <option value="processing">processing</option>
+                  <option value="paid">paid</option>
+                  <option value="failed">failed</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+                <button class="aff-copy-btn" type="submit" style="padding:5px 10px;font-size:0.78rem;">Go</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:18px;">No payouts.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="aff-section">
+    <h2>Recent clicks</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>When</th><th>Landing</th><th>Converted</th><th>Suspicious</th></tr></thead>
+        <tbody>
+          {% for c in clicks %}
+          <tr><td>{{ (c.created_at or '')[:16] }}</td><td class="aff-note">{{ c.landing_path }}</td><td>{{ 'Yes' if c.converted else '—' }}</td><td>{{ 'Yes' if c.is_suspicious else '—' }}</td></tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:18px;">No clicks.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
