@@ -21270,7 +21270,7 @@ def sport_predictions(sport, filter_date=None):
             # Stale-while-revalidate: serve last good HTML while models refresh.
             _stale_max = _SPORT_PREDICTIONS_PAGE_STALE_MAX.get(sport, 900)
             if _page_usable and _page_age is not None and _page_age < _stale_max:
-                if _page_age >= cache_ttl:
+                if _page_age >= cache_ttl and str(sport or '').upper() != 'NFL':
                     _start_background_predictions_refresh(sport)
                 if sport == 'MLB':
                     return _apply_mlb_picks_html_fixups(cached_html)
@@ -21286,10 +21286,6 @@ def sport_predictions(sport, filter_date=None):
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
-                    _start_background_predictions_refresh(sport)
-                except Exception:
-                    pass
-                try:
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(_any_nfl), sport, filter_date)
                 except Exception:
@@ -21297,12 +21293,7 @@ def sport_predictions(sport, filter_date=None):
     prediction_error = None
     if str(sport or '').upper() == 'NFL':
         predictions = _recover_cached_predictions('NFL') or []
-        if predictions:
-            try:
-                _start_background_predictions_refresh('NFL')
-            except Exception:
-                pass
-        else:
+        if not predictions:
             try:
                 predictions = get_upcoming_predictions(sport)
             except Exception as e:
@@ -21960,10 +21951,6 @@ def sport_results(sport):
 
         if sport == 'NFL':
             weekly_results = None
-            try:
-                _start_background_nfl_results_sync()
-            except Exception:
-                pass
 
             if weekly_results:
                 try:
