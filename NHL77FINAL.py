@@ -7964,6 +7964,40 @@ def _nfl_season_year(today=None) -> int:
 
 
 
+_NFL_RESULTS_SYNC_LOCK = threading.Lock()
+_NFL_RESULTS_SYNC_RUNNING = False
+
+
+def _start_background_nfl_results_sync():
+    """nfl_data_py + ESPN sync must not run on the request path (1 Render worker)."""
+    global _NFL_RESULTS_SYNC_RUNNING
+
+    def _run():
+        global _NFL_RESULTS_SYNC_RUNNING
+        try:
+            update_nfl_scores()
+            try:
+                update_espn_scores('NFL')
+            except Exception:
+                pass
+            calculate_nfl_weekly_performance()
+        except Exception as exc:
+            logger.debug('NFL background results sync failed: %s', exc)
+        finally:
+            with _NFL_RESULTS_SYNC_LOCK:
+                _NFL_RESULTS_SYNC_RUNNING = False
+
+    with _NFL_RESULTS_SYNC_LOCK:
+        if _NFL_RESULTS_SYNC_RUNNING:
+            return
+        _NFL_RESULTS_SYNC_RUNNING = True
+    try:
+        threading.Thread(target=_run, daemon=True, name='nfl-results-sync').start()
+    except Exception:
+        with _NFL_RESULTS_SYNC_LOCK:
+            _NFL_RESULTS_SYNC_RUNNING = False
+
+
 def update_nfl_scores():
     """
     Fetches and updates NFL scores for the current season.
@@ -21261,26 +21295,45 @@ def sport_predictions(sport, filter_date=None):
                 except Exception:
                     return _any_nfl
     prediction_error = None
-    try:
-        predictions = get_upcoming_predictions(sport)
-    except Exception as e:
-        import traceback as _tb_pred
-        logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
-        # Graceful degradation: a live build failure (transient upstream data/
-        # model hiccup, cold-start resource spike, ESPN timeout, etc.) must NOT
-        # blank the page. Serve the last good slate (memory or persistent disk)
-        # if we have one; only show the error banner when nothing is cached.
-        predictions = _recover_cached_predictions(sport) or []
+    if str(sport or '').upper() == 'NFL':
+        predictions = _recover_cached_predictions('NFL') or []
         if predictions:
-            logger.warning(
-                "%s predictions: build failed, serving last cached slate (%d games) instead of error banner.",
-                sport, len(predictions),
-            )
+            try:
+                _start_background_predictions_refresh('NFL')
+            except Exception:
+                pass
         else:
-            prediction_error = (
-                f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
-                "Please refresh in a minute."
-            )
+            try:
+                predictions = get_upcoming_predictions(sport)
+            except Exception as e:
+                import traceback as _tb_pred
+                logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
+                predictions = []
+                prediction_error = (
+                    f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
+                    "Please refresh in a minute."
+                )
+    else:
+        try:
+            predictions = get_upcoming_predictions(sport)
+        except Exception as e:
+            import traceback as _tb_pred
+            logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
+            # Graceful degradation: a live build failure (transient upstream data/
+            # model hiccup, cold-start resource spike, ESPN timeout, etc.) must NOT
+            # blank the page. Serve the last good slate (memory or persistent disk)
+            # if we have one; only show the error banner when nothing is cached.
+            predictions = _recover_cached_predictions(sport) or []
+            if predictions:
+                logger.warning(
+                    "%s predictions: build failed, serving last cached slate (%d games) instead of error banner.",
+                    sport, len(predictions),
+                )
+            else:
+                prediction_error = (
+                    f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
+                    "Please refresh in a minute."
+                )
     predictions = _filter_exhibition_predictions(predictions)
     if filter_date:
         _seen = {
@@ -21908,15 +21961,9 @@ def sport_results(sport):
         if sport == 'NFL':
             weekly_results = None
             try:
-                update_nfl_scores()
-                # Also sync from ESPN to catch playoff games nfl_data_py might miss
-                try:
-                    update_espn_scores('NFL')
-                except Exception:
-                    pass
-                weekly_results = calculate_nfl_weekly_performance()
-            except Exception as nfl_sync_err:
-                logger.exception(f"NFL sync/performance pipeline failed; falling back to DB-only render: {nfl_sync_err}")
+                _start_background_nfl_results_sync()
+            except Exception:
+                pass
 
             if weekly_results:
                 try:
