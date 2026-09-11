@@ -339,10 +339,8 @@ def _load_frozen_chrome() -> tuple[str, str]:
     global _FROZEN_HEADER, _FROZEN_FOOTER
     if _FROZEN_HEADER is None:
         _FROZEN_HEADER = (_CHROME_DIR / "pl2_header.html").read_text(encoding="utf-8")
-    if _FROZEN_FOOTER is None:
-        _FROZEN_FOOTER = (_CHROME_DIR / "site_directory_footer.html").read_text(
-            encoding="utf-8"
-        )
+    footer = (_CHROME_DIR / "site_directory_footer.html").read_text(encoding="utf-8")
+    _FROZEN_FOOTER = footer
     return _FROZEN_HEADER, _FROZEN_FOOTER
 
 

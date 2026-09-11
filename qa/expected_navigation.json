@@ -61,6 +61,7 @@
       "required": [
         "/plans",
         "/blog",
+        "/affiliate",
         "/faq",
         "/tutorial",
         "/contact",
@@ -74,6 +75,7 @@
   },
   "footer_required": [
     "/plans",
+    "/affiliate",
     "/privacy",
     "/terms",
     "/refund-policy",

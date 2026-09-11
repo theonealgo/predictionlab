@@ -532,7 +532,22 @@ body.has-join-premium-bar { padding-bottom: 58px; }
     .odds-pricing-section,
     .pick-conf-bar,
     .card-details,
-    .lines-strip { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .lines-strip,
+    .date-nav,
+    .date-bubbles,
+    .league-badges {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .odds-pricing-section::-webkit-scrollbar,
+    .pick-conf-bar::-webkit-scrollbar,
+    .card-details::-webkit-scrollbar,
+    .lines-strip::-webkit-scrollbar,
+    .date-nav::-webkit-scrollbar,
+    .date-bubbles::-webkit-scrollbar,
+    .league-badges::-webkit-scrollbar { display: none; }
     .odds-pricing-table { min-width: 320px; }
     /* Long team / matchup names wrap instead of clipping. */
     .team-name,

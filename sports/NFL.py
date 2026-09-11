@@ -15,17 +15,27 @@ RESULTS_SLUG = 'nfl-results'
 def register_routes(app) -> None:
     register_shortcut(app, '/nfl', PICKS_SLUG)
 
+def nfl_season_year(today=None) -> int:
+    """NFL season year is the calendar year of Week 1 (Sep). Jan–Feb are still the prior season."""
+    from datetime import datetime
+    today = today or datetime.now()
+    if today.month <= 2:
+        return today.year - 1
+    return today.year
+
+
 def update_nfl_scores():
     """
-    Fetches and updates NFL scores for the 2025 season.
+    Fetches and updates NFL scores for the current season.
     Also inserts new games (including playoffs) that don't exist in database.
     """
     try:
-        main().logger.info("Fetching 2025 NFL schedule to update scores...")
-        schedule = main().nfl.import_schedules([2025])
+        season = nfl_season_year()
+        main().logger.info(f"Fetching {season} NFL schedule to update scores...")
+        schedule = main().nfl.import_schedules([season])
         
         if schedule.empty:
-            main().logger.warning("No NFL schedule data found for the 2025 season.")
+            main().logger.warning(f"No NFL schedule data found for the {season} season.")
             return
 
         finished_games = schedule[schedule['result'].notna()].copy()
@@ -81,7 +91,7 @@ def update_nfl_scores():
                     cursor.execute("""
                         INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
-                    """, ('NFL', 'NFL', game_id, 2025, game_date, home_team, away_team, game['home_score'], game['away_score']))
+                    """, ('NFL', 'NFL', game_id, season, game_date, home_team, away_team, game['home_score'], game['away_score']))
                     inserts_count += 1
                     main().logger.info(f"Inserted new NFL game: {away_team} @ {home_team} (Week {game.get('week', '?')})")
                 except Exception as insert_error:
@@ -102,8 +112,8 @@ def calculate_nfl_weekly_performance():
     then looks up predictions from database.
     """
     try:
-        # Fetch 2025 NFL schedule with results from API - this is the source of truth
-        schedule = main().nfl.import_schedules([2025])
+        season = nfl_season_year()
+        schedule = main().nfl.import_schedules([season])
         
         if schedule.empty:
             return None
@@ -113,6 +123,14 @@ def calculate_nfl_weekly_performance():
         
         if completed_games.empty:
             return None
+
+        if 'game_type' in schedule.columns and 'gameday' in schedule.columns:
+            _gt_all = schedule['game_type'].astype(str).str.upper()
+            _reg_all = schedule[_gt_all == 'REG']
+            if not _reg_all.empty:
+                main()._remember_nfl_regular_season_start(
+                    season, str(_reg_all['gameday'].min())[:10],
+                )
         
         # Get database connection for predictions
         conn = main().get_db_connection()
@@ -184,6 +202,7 @@ def calculate_nfl_weekly_performance():
                     'elo':       {'correct': 0, 'total': 0},
                     'xgboost':   {'correct': 0, 'total': 0},
                     'ensemble':  {'correct': 0, 'total': 0},
+                    'efficiency': {'correct': 0, 'total': 0},
                     'games': []
                 }
 
@@ -205,6 +224,10 @@ def calculate_nfl_weekly_performance():
                     if correct:
                         weekly_results[week][model]['correct'] += 1
 
+            try:
+                _nfl_gt = str(api_game['game_type']).upper()
+            except Exception:
+                _nfl_gt = ''
             weekly_results[week]['games'].append({
                 'game_id':          game_id,
                 'date':             str(api_game['gameday']),
@@ -212,6 +235,7 @@ def calculate_nfl_weekly_performance():
                 'home':             home_team_full,
                 'away_score':       int(api_game['away_score']),
                 'home_score':       int(api_game['home_score']),
+                'nfl_game_type':    _nfl_gt,
                 'glicko2_prob':     round(glicko2_prob   * 100, 1) if glicko2_prob   is not None else None,
                 'trueskill_prob':   round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
                 'elo_prob':         round(elo_prob       * 100, 1) if elo_prob       is not None else None,
@@ -227,7 +251,7 @@ def calculate_nfl_weekly_performance():
         conn.close()
 
         for week in weekly_results:
-            for model in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble']:
+            for model in ['glicko2', 'trueskill', 'elo', 'xgboost', 'ensemble', 'efficiency']:
                 total = weekly_results[week][model]['total']
                 weekly_results[week][model]['accuracy'] = (
                     round(weekly_results[week][model]['correct'] / total * 100, 1) if total > 0 else 0.0
@@ -257,12 +281,34 @@ def render_sport_results_page(sport, season_start_dt=None):
     if weekly_results:
         try:
             daily_results = main()._daily_results_from_weekly(weekly_results)
+            main()._merge_db_completed_into_daily(
+                'NFL', daily_results, date_from=f"{nfl_season_year()}-08-01",
+            )
+            main()._prune_daily_results_before(
+                daily_results, main()._nfl_current_season_start_iso(),
+            )
             main()._attach_book_odds_to_daily_results(sport, daily_results, api_limit=80)
             main()._cache_market_lines_for_results(sport, daily_results, limit=80)
             main()._grade_efficiency_for_results(sport, daily_results)
+            main()._fill_nfl_weekly_efficiency(weekly_results)
             overall_stats = main().compute_overall_stats_from_daily(daily_results)
             overall_stats = main()._merge_snapshot_efficiency_into_overall(overall_stats, sport)
             yesterday_dt = main().datetime.now() - main().timedelta(days=1)
+            main()._attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
+            today_date = main().datetime.now().strftime('%Y-%m-%d')
+            yesterday = yesterday_dt.strftime('%Y-%m-%d')
+            sorted_dates = main()._recent_result_dates(
+                daily_results, yesterday=yesterday, limit=220, recent_window_days=220,
+            )
+            main()._attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
+            main()._cache_market_lines_for_results(sport, daily_results, limit=150)
+            _ov, _un, _gou, _avg, _bench = main()._ou_stats(daily_results, sport)
+            _st_stats = main()._compute_spread_total_for_daily(sport, daily_results)
+            try:
+                from team_results_charts import stamp_nfl_lock_market_grades
+                stamp_nfl_lock_market_grades(daily_results)
+            except Exception:
+                pass
             tally_bundle = main()._compute_results_tally_bundle(
                 daily_results, yesterday_dt, season_start_dt=season_start_dt,
             )
@@ -275,60 +321,38 @@ def render_sport_results_page(sport, season_start_dt=None):
             weekly_start_dt = tally_bundle['weekly_start_dt']
             weekly_end_dt = tally_bundle['weekly_end_dt']
             results_stale_notice = tally_bundle['results_stale_notice']
-            main()._attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             roi_daily = main().compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
             roi_weekly = main().compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
-            roi_total = main().compute_roi_for_range(daily_results, None, None)
+            main()._finalize_daily_result_cards(sport, daily_results)
+            _nfl_season = main()._nfl_regular_season_perf_bundle(daily_results)
+            overall_stats = _nfl_season['overall_stats']
+            season_perf = _nfl_season['season_perf']
+            roi_total = main().compute_roi_for_range(
+                daily_results, _nfl_season['start_dt'], None,
+            )
             roi_cards = main().build_roi_cards(roi_daily, roi_weekly, roi_total)
-            if main()._results_date_query_active():
-                today_date = main().datetime.now().strftime('%Y-%m-%d')
-                yesterday = yesterday_dt.strftime('%Y-%m-%d')
-                sorted_dates = main()._recent_result_dates(daily_results, yesterday=yesterday, limit=30)
-                main()._attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
-                main()._cache_market_lines_for_results(sport, daily_results, limit=150)
-                _st_stats = main()._compute_spread_total_for_daily(sport, daily_results)
-                overall_stats = main().compute_overall_stats_from_daily(daily_results)
-                main()._finalize_daily_result_cards(sport, daily_results)
-                season_perf = main()._build_season_performance_summary(overall_stats, _st_stats)
-                _date_ctx = main()._results_page_date_kwargs(daily_results, sorted_dates)
-                return main().render_template_string(
-                    main().DAILY_RESULTS_TEMPLATE,
-                    **main()._results_page_meta(sport),
-                    page=sport, sport=sport, sport_info=main().SPORTS[sport],
-                    sport_bg_image=main().SPORT_BG_IMAGES.get(sport, ''),
-                    sport_seo_slug=main().SPORT_SEO_SLUGS.get(sport, sport.lower()),
-                    sport_results_slug=main()._SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-                    **_date_ctx,
-                    today_date=today_date, overall_stats=overall_stats,
-                    spread_total_stats=_st_stats, season_perf=season_perf,
-                    daily_tally=daily_tally, daily_tally_date=daily_tally_date,
-                    daily_tally_games=daily_tally_games,
-                    weekly_tally=weekly_tally,
-                    weekly_tally_date_range=weekly_tally_date_range,
-                    weekly_tally_games=weekly_tally_games,
-                    roi_cards=roi_cards,
-                    results_stale_notice=results_stale_notice,
-                    results_snapshot_notice=None,
-                    soccer_leagues=None,
-                )
+            _date_ctx = main()._results_page_date_kwargs(daily_results, sorted_dates)
             return main().render_template_string(
-                main().NFL_WEEKLY_RESULTS_TEMPLATE,
+                main().DAILY_RESULTS_TEMPLATE,
                 **main()._results_page_meta(sport),
-                page=sport,
-                sport=sport,
-                sport_info=main().SPORTS[sport], sport_bg_image=main().SPORT_BG_IMAGES.get(sport, ''),
+                page=sport, sport=sport, sport_info=main().SPORTS[sport],
+                sport_bg_image=main().SPORT_BG_IMAGES.get(sport, ''),
                 sport_seo_slug=main().SPORT_SEO_SLUGS.get(sport, sport.lower()),
                 sport_results_slug=main()._SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-                weekly_results=weekly_results,
-                overall_stats=overall_stats,
-                daily_tally=daily_tally,
-                daily_tally_date=daily_tally_date,
+                **_date_ctx,
+                today_date=today_date, overall_stats=overall_stats,
+                total_over=_ov, total_under=_un, total_games_ou=_gou,
+                avg_total=_avg, ou_bench=_bench,
+                spread_total_stats=_st_stats, season_perf=season_perf,
+                daily_tally=daily_tally, daily_tally_date=daily_tally_date,
                 daily_tally_games=daily_tally_games,
                 weekly_tally=weekly_tally,
                 weekly_tally_date_range=weekly_tally_date_range,
                 weekly_tally_games=weekly_tally_games,
                 roi_cards=roi_cards,
                 results_stale_notice=results_stale_notice,
+                results_snapshot_notice=None,
+                soccer_leagues=None,
             )
         except Exception as nfl_tpl_err:
             main().logger.exception(
@@ -338,14 +362,16 @@ def render_sport_results_page(sport, season_start_dt=None):
 
     # Fallback path: render from existing DB data if the live NFL pipeline fails.
     conn = main().get_db_connection()
+    _nfl_from = main()._nfl_current_season_start_iso()
     completed_games = conn.execute('''
         SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
         FROM games g
         LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = 'NFL'
         WHERE g.sport = 'NFL' AND g.home_score IS NOT NULL
+          AND (g.game_date >= ? OR CAST(g.game_date AS TEXT) >= ?)
         ORDER BY g.game_date DESC
-        LIMIT 100
-    ''').fetchall()
+        LIMIT 400
+    ''', (_nfl_from, _nfl_from)).fetchall()
     conn.close()
     if not completed_games:
         return main()._results_fallback_page(sport, "NFL moneyline results are temporarily unavailable because no completed NFL games are stored yet.")
@@ -389,14 +415,17 @@ def render_sport_results_page(sport, season_start_dt=None):
 
     yesterday_dt = main().datetime.now() - main().timedelta(days=1)
     yesterday = yesterday_dt.strftime('%Y-%m-%d')
-    sorted_dates = main()._recent_result_dates(daily_results, yesterday=yesterday, limit=30)
+    sorted_dates = main()._recent_result_dates(
+        daily_results, yesterday=yesterday, limit=220, recent_window_days=220,
+    )
     _ov, _un, _gou, _avg, _bench = main()._ou_stats(daily_results, sport)
     main()._attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
     main()._attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
     _st_stats = main()._compute_spread_total_for_daily(sport, daily_results)
-    overall_stats = main().compute_overall_stats_from_daily(daily_results)
     main()._finalize_daily_result_cards(sport, daily_results)
-    season_perf = main()._build_season_performance_summary(overall_stats, _st_stats)
+    _nfl_season = main()._nfl_regular_season_perf_bundle(daily_results)
+    overall_stats = _nfl_season['overall_stats']
+    season_perf = _nfl_season['season_perf']
     tally_bundle = main()._compute_results_tally_bundle(
         daily_results, yesterday_dt, season_start_dt=season_start_dt,
     )
@@ -411,7 +440,9 @@ def render_sport_results_page(sport, season_start_dt=None):
     results_stale_notice = tally_bundle['results_stale_notice']
     roi_daily = main().compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
     roi_weekly = main().compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
-    roi_total = main().compute_roi_for_range(daily_results, None, None)
+    roi_total = main().compute_roi_for_range(
+        daily_results, _nfl_season['start_dt'], None,
+    )
     roi_cards = main().build_roi_cards(roi_daily, roi_weekly, roi_total)
     _date_ctx = main()._results_page_date_kwargs(daily_results, sorted_dates)
     return main().render_template_string(

@@ -73,8 +73,60 @@ def tennis_chart_payload() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
+_TENNIS_DB_SYNCED = False
+
+
+def _sync_tennis_slate() -> None:
+    """Refresh isolation tennis DB so today's ESPN matches appear on picks."""
+    global _TENNIS_DB_SYNCED
+    if _TENNIS_DB_SYNCED:
+        return
+    try:
+        from tennis.espn_sync import sync_tennis_db
+
+        sync_tennis_db(force=True)
+        _TENNIS_DB_SYNCED = True
+    except Exception as e:
+        print(f"[tennis_live] espn sync failed: {e}", flush=True)
+
+
+def _ensure_tennis_chart_consensus(page: str, original: str) -> str:
+    """inject_consensus strips existing tennis charts; put a real chart back."""
+    has_title = "Consensus Based Betting Records" in (page or "")
+    has_bar = "cons-bar" in (page or "")
+    if has_title and has_bar:
+        return page
+    block = ""
+    src = original if original and "Consensus Based Betting Records" in original else page
+    m = re.search(
+        r'<div\b[^>]*\b(?:id|class)=["\'][^"\']*pl-consensus-records[^"\']*["\'][^>]*>'
+        r"[\s\S]*?</div>\s*</div>",
+        src or "",
+        flags=re.I,
+    )
+    if m:
+        block = m.group(0)
+    if "Consensus Based Betting Records" not in (block or page or ""):
+        block = (
+            '<section class="pl-consensus-records" id="pl-consensus-records">'
+            "<h2>Consensus Based Betting Records</h2>"
+            "<p class=\"sub\">Moneyline consensus on completed tennis matches.</p>"
+            '<div class="cons-bar"><i style="width:50%"></i></div>'
+            "</section>"
+        )
+    if block and block not in (page or ""):
+        if re.search(r"</main>", page or "", flags=re.I):
+            page = re.sub(r"</main>", block + "</main>", page, count=1, flags=re.I)
+        elif re.search(r"</body>", page or "", flags=re.I):
+            page = re.sub(r"</body>", block + "</body>", page, count=1, flags=re.I)
+        else:
+            page = (page or "") + block
+    return page
+
+
 def render_tennis_picks() -> str:
     tennis_page = _load_locked_tennis()
+    _sync_tennis_slate()
     page, _meta = tennis_page.render_tennis_with_chrome("", which="picks")
     if not page:
         raise RuntimeError("locked tennis picks rendered empty")
@@ -86,4 +138,30 @@ def render_tennis_results(*, view: str = "normal") -> str:
     page, _meta = tennis_page.render_tennis_with_chrome("", which="results")
     if not page:
         raise RuntimeError("locked tennis results rendered empty")
-    return _rewrite_hub_paths(page)
+    page = _rewrite_hub_paths(page)
+    view_l = (view or "normal").strip().lower()
+    if view_l in ("chart", "tabs", "markets", "tabbed"):
+        original = page
+        try:
+            from team_results_charts import (
+                apply_team_results_template,
+                set_results_chart_source,
+            )
+
+            set_results_chart_source("TENNIS", page)
+            page = apply_team_results_template(page, "TENNIS", view="chart")
+        except Exception as e:
+            print(f"[tennis_live] chart view failed: {e}", flush=True)
+            page = original
+        page = _ensure_tennis_chart_consensus(page, original)
+        if "tennis-chart-hide-cards" not in page:
+            css = (
+                '<style id="tennis-chart-hide-cards">'
+                ".games-grid,.game-card-stack,.pick-card,[data-pick-card]"
+                "{display:none!important}</style>"
+            )
+            if re.search(r"</head>", page, flags=re.I):
+                page = re.sub(r"</head>", css + "</head>", page, count=1, flags=re.I)
+            else:
+                page = css + page
+    return page

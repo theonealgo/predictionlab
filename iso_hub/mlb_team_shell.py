@@ -147,8 +147,16 @@ def _retarget_chrome(html: str, sport: str, *, which: str) -> str:
     html = html.replace('data-sport="MLB"', f'data-sport="{sport}"', 1)
     html = html.replace('data-sport="CFL"', f'data-sport="{sport}"')
     html = _stamp_sport_body(html, sport)
-    html = html.replace("const sportName = 'MLB';", f"const sportName = '{label}';")
-    html = html.replace("const sportIcon = '⚾';", f"const sportIcon = '{icon}';")
+    html = re.sub(
+        r"const sportName\s*=\s*[^;]+;",
+        lambda _m: f"const sportName = {json.dumps(label)};",
+        html,
+    )
+    html = re.sub(
+        r"const sportIcon\s*=\s*[^;]+;",
+        lambda _m: f"const sportIcon = {json.dumps(icon, ensure_ascii=False)};",
+        html,
+    )
     html = html.replace('"sport":"mlb"', f'"sport":"{sport}"')
     html = html.replace('"showRunLineConfidence":true', '"showRunLineConfidence":false')
     html = html.replace("MLB Predictions Image", f"{label} Predictions Image")
@@ -719,7 +727,7 @@ def _cfl_cards(mode: str) -> tuple[list[dict[str, Any]], Any]:
         pass
     render._refresh_fade_flags()
     if mode == "results":
-        raw = render.list_graded_results(days=120, regular_season_only=True)
+        raw = render.list_graded_results(days=21, regular_season_only=True)
         attach = getattr(pipe, "attach_book_totals", None)
         if callable(attach):
             raw = attach(raw)
@@ -1316,7 +1324,7 @@ def render_team_sport(sport: str, *, which: str = "picks") -> tuple[str, dict[st
     html = _replace_all_dates_js(html, dates, today)
 
     if mode == "results":
-        raw = render.list_graded_results(days=120, regular_season_only=True)
+        raw = render.list_graded_results(days=21, regular_season_only=True)
         html = _replace_results_perf(html, _cfl_tally_html(render, raw))
         try:
             from team_tabbed_results import (

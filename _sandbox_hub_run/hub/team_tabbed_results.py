@@ -3044,6 +3044,123 @@ def _extract_finals_without_date_sections(html: str, *, limit: int = 400) -> lis
     return rows
 
 
+def _soccer_last_night_key_from_html(html: str) -> str:
+    m = re.search(
+        r"Last Night'?s Soccer Results\s*—\s*(\d{4}-\d{2}-\d{2})",
+        html or "",
+        flags=re.I,
+    )
+    return m.group(1) if m else ""
+
+
+def _soccer_selected_league_label(html: str) -> str:
+    m = re.search(
+        r'<select[^>]*\bid=["\']league["\'][^>]*>[\s\S]*?'
+        r'<option[^>]*\bselected\b[^>]*>(.*?)</option>',
+        html or "",
+        flags=re.I,
+    )
+    if not m:
+        return ""
+    name = re.sub(r"<[^>]+>", "", m.group(1) or "")
+    name = re.sub(r"\s*·\s*Live\s*$", "", name, flags=re.I)
+    name = re.sub(r"\s*\(\d+\)\s*$", "", name).strip()
+    if name.lower() in ("", "all", "all leagues", "soccer"):
+        return ""
+    return name
+
+
+def _soccer_league_slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+
+
+def _filter_soccer_chart_rows(
+    rows: list[dict[str, Any]], html: str
+) -> tuple[list[dict[str, Any]], str]:
+    """Keep chart rows on the selected league when Load results set one."""
+    label = _soccer_selected_league_label(html)
+    if not label:
+        return list(rows or []), "All leagues on this slate"
+    slug = _soccer_league_slug(label)
+    kept = []
+    for r in rows or []:
+        lg = str(r.get("league") or "").strip()
+        if not lg:
+            continue
+        if lg == label or _soccer_league_slug(lg) == slug:
+            kept.append(r)
+    return (kept if kept else list(rows or [])), label
+
+
+def _soccer_chart_source_block(
+    rows: list[dict[str, Any]],
+    *,
+    last_night_key: str | None,
+    league_label: str,
+) -> str:
+    """Visible list of games that produced the consensus tables."""
+    ln = str(last_night_key or "")[:10]
+    games_ln: list[str] = []
+    games_other: list[str] = []
+    dates: set[str] = set()
+    for r in rows or []:
+        away = str(r.get("away_team_id") or r.get("away") or "").strip()
+        home = str(r.get("home_team_id") or r.get("home") or "").strip()
+        dk = str(r.get("game_date") or "")[:10]
+        lg = str(r.get("league") or "").strip()
+        if not away and not home:
+            continue
+        bit = f"{away} at {home}"
+        if lg:
+            bit += f" · {lg}"
+        if dk:
+            bit += f" ({dk})"
+            dates.add(dk)
+        if ln and dk == ln:
+            games_ln.append(bit)
+        else:
+            games_other.append(bit)
+    seen: set[str] = set()
+    uniq_ln = []
+    for g in games_ln:
+        if g in seen:
+            continue
+        seen.add(g)
+        uniq_ln.append(g)
+    games_ln = uniq_ln
+    lis = "".join(f"<li>{html.escape(g)}</li>" for g in games_ln[:40])
+    more = (
+        f"<li>+{len(games_ln) - 40} more last-night games</li>"
+        if len(games_ln) > 40
+        else ""
+    )
+    if not lis:
+        lis = "<li>No last-night games found for this league — chart last-night column should be empty.</li>"
+    other_n = len({g for g in games_other})
+    date_txt = html.escape(ln or "unknown")
+    league_txt = html.escape(league_label or "All leagues on this slate")
+    return f"""
+<div id="soccer-chart-source" class="soccer-chart-source">
+  <style>
+    .soccer-chart-source{{max-width:1100px;margin:16px auto 8px;padding:12px 16px;
+      border:1px solid #dbe4ee;border-radius:10px;background:#f8fafc;color:#0f172a}}
+    .soccer-chart-source h3{{margin:0 0 8px;font-size:1rem}}
+    .soccer-chart-source p{{margin:0 0 6px;font-size:0.9rem;line-height:1.4}}
+    .soccer-chart-source ul{{margin:8px 0 0;padding-left:1.2rem;columns:2;gap:24px}}
+    .soccer-chart-source li{{margin:0 0 4px;font-size:0.86rem}}
+    @media (max-width:720px){{.soccer-chart-source ul{{columns:1}}}}
+  </style>
+  <h3>Where these chart records come from</h3>
+  <p><strong>League:</strong> {league_txt}</p>
+  <p><strong>Last night:</strong> {date_txt} — {len(games_ln)} game{"s" if len(games_ln) != 1 else ""} listed below</p>
+  <p>Past 7 / 30 day cells count graded games in this same league across those windows
+     ({other_n} additional game{"s" if other_n != 1 else ""} in the extract).</p>
+  <p><strong>Games in this chart (last night):</strong></p>
+  <ul>{lis}{more}</ul>
+</div>
+"""
+
+
 def inject_consensus_records_html(
     html: str,
     sport: str = "",
@@ -3075,6 +3192,12 @@ def inject_consensus_records_html(
         fallback_html=fallback_html,
         mlb_frozen_only=mlb_frozen_only,
     )
+    league_label = ""
+    if sport_l == "soccer":
+        ln_from_page = _soccer_last_night_key_from_html(html)
+        if ln_from_page:
+            last_night_key = last_night_key or ln_from_page
+        rows, league_label = _filter_soccer_chart_rows(rows, html)
     if sport_l == "wnba":
         if not rows:
             rows = _extract_finals_from_html(html, limit=500)
@@ -3123,6 +3246,27 @@ def inject_consensus_records_html(
                 totals_block = build_pl_xs_records_html(
                     rows, "totals", last_night_key=last_night_key
                 )
+        elif sport_l == "soccer":
+            try:
+                from mlb_three_way_consensus import build_three_way_records_html
+
+                spread_block = build_three_way_records_html(
+                    rows, "spread", last_night_key=last_night_key, skip_audit=True
+                )
+                totals_block = build_three_way_records_html(
+                    rows, "totals", last_night_key=last_night_key, skip_audit=True
+                )
+                if spread_block:
+                    spread_block = spread_block.replace("— Run Line", "— Spread")
+                    spread_block = spread_block.replace("run-line", "spread")
+            except Exception as e:
+                print(f"[hub] soccer three-way consensus: {e}", flush=True)
+                spread_block = build_pl_xs_records_html(
+                    rows, "spread", last_night_key=last_night_key, sport=sport_l
+                )
+                totals_block = build_pl_xs_records_html(
+                    rows, "totals", last_night_key=last_night_key, sport=sport_l
+                )
         else:
             spread_block = build_pl_xs_records_html(
                 rows, "spread", last_night_key=last_night_key, sport=sport_l
@@ -3131,14 +3275,27 @@ def inject_consensus_records_html(
                 rows, "totals", last_night_key=last_night_key, sport=sport_l
             )
         if block or spread_block or totals_block:
-            block = _wrap_results_markets(
-                sport_l,
-                block,
-                spread_block,
-                totals_block,
-                market or "moneyline",
-                chart_view=chart_view,
-            )
+            if sport_l == "soccer":
+                # Show both consensus families on the results page — do not tab-hide one.
+                src = _soccer_chart_source_block(
+                    rows, last_night_key=last_night_key, league_label=league_label
+                )
+                block = (
+                    src
+                    + '<div class="pl-results-markets pl-soccer-charts-stack" '
+                    'id="pl-results-markets" style="max-width:1100px;margin:16px auto 20px">'
+                    f"{block or ''}{spread_block or ''}{totals_block or ''}"
+                    "</div>"
+                )
+            else:
+                block = _wrap_results_markets(
+                    sport_l,
+                    block,
+                    spread_block,
+                    totals_block,
+                    market or "moneyline",
+                    chart_view=chart_view,
+                )
     rl30 = ""
     if sport_l == "mlb":
         try:
@@ -3154,6 +3311,8 @@ def inject_consensus_records_html(
     # Tennis/UFC: consensus betting sits above the cards / games table.
     if sport_l in ("tennis", "ufc"):
         return _insert_wnba_chart_consensus(html, combined)
+    if sport_l == "soccer":
+        return _insert_soccer_consensus(html, combined)
     return _insert_consensus_below_season(html, combined)
 
 
@@ -3217,6 +3376,25 @@ def _strip_all_results_market_wraps(html: str) -> str:
             break
         html = html.replace(block, "", 1)
     return html
+
+
+def _insert_soccer_consensus(html: str, block: str) -> str:
+    """Keep soccer charts outside .date-section — week nav hides non-visible dates."""
+    if not html or not block:
+        return html
+    # Always sit above the first date-section so Sep-2-visible / Aug-23-hidden
+    # cannot swallow Books/PL/XSharp + Totals.
+    m = re.search(r'<div id="date-\d{4}-\d{2}-\d{2}"', html, flags=re.I)
+    if m:
+        return html[: m.start()] + block + html[m.start() :]
+    m = re.search(
+        r'(<h2\b[^>]*>\s*Last Night\'?s Soccer Results[\s\S]*?</h2>)',
+        html,
+        flags=re.I,
+    )
+    if m:
+        return html[: m.end()] + block + html[m.end() :]
+    return _insert_consensus_below_season(html, block)
 
 
 def _insert_wnba_chart_consensus(html: str, block: str) -> str:

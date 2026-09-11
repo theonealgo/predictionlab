@@ -1088,10 +1088,25 @@ def create_app() -> Flask:
     @app.get("/soccer/results")
     @app.get("/soccer-results")
     def soccer_results():
-        # Keep league-dropdown + table UI (exception vs live chrome).
-        html = _soccer_results_page()
-        resp = Response(html, mimetype="text/html; charset=utf-8")
+        # Same completed isolation board as :5155 — do not rebuild soccer here.
+        from flask import request
+
+        path = "/soccer-results"
+        q = request.args.get("league")
+        if q:
+            path += f"?league={q}"
+        day = request.args.get("date")
+        if day:
+            path += ("&" if "?" in path else "?") + f"date={day}"
+        html, meta = _proxy_iso("soccer", path)
+        status = int(meta.get("status") or 200)
+        resp = Response(
+            html,
+            status=status if status >= 400 and not meta.get("ok") else 200,
+            mimetype="text/html; charset=utf-8",
+        )
         resp.headers["X-Sandbox-No-Login"] = "1"
+        resp.headers["X-Hub-Source"] = str(meta.get("source") or "")
         return resp
 
     @app.get("/soccer/performance")

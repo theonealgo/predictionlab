@@ -806,13 +806,14 @@
                 {% set away_wins = is_final and pred.away_score > pred.home_score %}
                 {% set home_picked = pred.predicted_winner == pred.home_team_id %}
                 {% set _picked_ml = pred.home_moneyline if home_picked else pred.away_moneyline %}
-                {% set _odds_pass = (_picked_ml is none) or (_picked_ml >= -150) %}
+                {% set _odds_pass = (_picked_ml is none) or ((_picked_ml|float) >= -150) %}
                 {# ===== SECTION: Chart View + Copy All (per-pick data for JS) ===== #}
                 {# Chart Pick follows Sharp Consensus (ensemble) so it never contradicts the model columns. #}
                 {% set _cons = pred.ensemble_prob if (pred.ensemble_prob is defined and pred.ensemble_prob is not none) else none %}
                 {% if _cons is not none %}
-                {% set _chart_pick = team_short(pred.home_team_id) if _cons >= 50 else team_short(pred.away_team_id) %}
-                {% set _chart_conf = _cons if _cons >= 50 else 100 - _cons %}
+                {% set _cons_n = _cons|float %}
+                {% set _chart_pick = team_short(pred.home_team_id) if _cons_n >= 50 else team_short(pred.away_team_id) %}
+                {% set _chart_conf = _cons_n if _cons_n >= 50 else 100 - _cons_n %}
                 {% else %}
                 {% set _chart_pick = team_short(pred.predicted_winner) %}
                 {% set _chart_conf = none %}
@@ -845,15 +846,15 @@
                     data-home="{{ team_short(pred.home_team_id) }}"
                     {% if sport == 'SOCCER' %}data-away-full="{{ pred.away_team_id }}" data-home-full="{{ pred.home_team_id }}" data-date="{{ date }}"{% endif %}
                     data-league="{{ pred.league if pred.league else '' }}"
-                    data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time is not none %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
+                    data-time="{% if pred.game_time is defined and pred.game_time %}{{ pred.game_time }}{% elif is_final %}FINAL{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
                     data-conf="{% if _chart_conf is not none %}{{ '%.1f'|format(_chart_conf) }}{% endif %}"
                     data-h2h="{{ _h2h_txt }}"{% if _h2h_reason %} data-h2h-reason="{{ _h2h_reason }}"{% endif %}{% if sport == 'SOCCER' %} data-plxg="{{ _plxg_txt }}"{% if _plxg_reason %} data-plxg-reason="{{ _plxg_reason }}"{% endif %}{% endif %}
                     data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
-                    data-books-spread="{% if sport != 'TENNIS' and pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
-                    data-books-total="{% if sport != 'TENNIS' and pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
-                    data-pl-spread="{% if sport != 'TENNIS' and pred.disp_pl_spread is not none %}{{ fmt_spread_line(pred.disp_pl_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
-                    data-xs-spread="{% if sport != 'TENNIS' and pred.disp_xs_spread is not none %}{{ fmt_spread_line(pred.disp_xs_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
+                    data-books-spread="{% if sport != 'TENNIS' and pred.disp_book_spread is defined and pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
+                    data-books-total="{% if sport != 'TENNIS' and pred.disp_book_total is defined and pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
+                    data-pl-spread="{% if sport != 'TENNIS' and pred.disp_pl_spread is defined and pred.disp_pl_spread is not none %}{{ fmt_spread_line(pred.disp_pl_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
+                    data-xs-spread="{% if sport != 'TENNIS' and pred.disp_xs_spread is defined and pred.disp_xs_spread is not none %}{{ fmt_spread_line(pred.disp_xs_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-total-ev="{% if sport != 'TENNIS' and sport != 'SOCCER' and pred.total_ev is defined and pred.total_ev is not none %}{{ '%.1f'|format(pred.total_ev) }}{% endif %}"
                     {% if is_premium|default(false) %}
                     data-m-grinder2="{% if pred.glicko2_prob is defined and pred.glicko2_prob is not none %}{{ pred.glicko2_prob }}{% endif %}"

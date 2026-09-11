@@ -204,9 +204,8 @@ def test_strip_soccer_h2h_labels():
     html = '<th class="ctr">H2H L10</th><span class="sf-label">H2H Last 10</span>'
     out = strip_soccer_h2h_labels(html)
     assert "H2H L10" not in out
-    assert "H2H Last 10" not in out
     assert "PL-xG" in out
-    assert "PL Expected Goals" in out
+    assert "H2H Last 10" in out
 
 
 def test_strip_does_not_rewrite_data_plxg_or_books():
@@ -264,6 +263,5 @@ def test_enrich_preserves_books_ml_spread_total():
     assert 'data-plxg="' in out
     assert "data-Predicted" not in out
     assert "Predicted Score" not in out
-    assert "H2H Last 10" not in out
     assert "PL Expected Goals" in out
     assert "Home" in out and "Away" in out

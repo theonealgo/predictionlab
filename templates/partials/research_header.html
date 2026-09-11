@@ -5,7 +5,7 @@
     </a>
     <nav class="pl2-nav">
         <div class="pl2-navdrop">
-            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Picks</button>
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Sports</button>
             <div class="pl2-nav-menu" hidden>
                 <a href="/nba-picks"{% if in_season_sports.get('NBA') %} class="in-season"{% endif %}>NBA</a>
                 <a href="/nfl-picks"{% if in_season_sports.get('NFL') %} class="in-season"{% endif %}>NFL</a>
@@ -35,19 +35,19 @@
             <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Results</button>
             <div class="pl2-nav-menu" hidden>
                 <a href="/all-sports-results">All Sports Results</a>
-                <a href="/nba-results"{% if in_season_sports.get('NBA') %} class="in-season"{% endif %}>NBA</a>
-                <a href="/nfl-results"{% if in_season_sports.get('NFL') %} class="in-season"{% endif %}>NFL</a>
-                <a href="/mlb-results"{% if in_season_sports.get('MLB')|default(true) %} class="in-season"{% endif %}>MLB</a>
-                <a href="/nhl-results"{% if in_season_sports.get('NHL') %} class="in-season"{% endif %}>NHL</a>
-                {% if soccer_enabled|default(false) %}<a href="/soccer-results"{% if in_season_sports.get('SOCCER')|default(true) %} class="in-season"{% endif %}>Soccer</a>{% endif %}
-                <a href="/ncaab-results"{% if in_season_sports.get('NCAAB') %} class="in-season"{% endif %}>NCAAB</a>
-                <a href="/ncaaf-results"{% if in_season_sports.get('NCAAF')|default(true) %} class="in-season"{% endif %}>NCAAF</a>
-                <a href="/ncaaw-results"{% if in_season_sports.get('NCAAW') %} class="in-season"{% endif %}>NCAAW</a>
-                <a href="/wnba-results"{% if in_season_sports.get('WNBA') %} class="in-season"{% endif %}>WNBA</a>
-                <a href="/cfl-results"{% if in_season_sports.get('CFL')|default(true) %} class="in-season"{% endif %}>CFL</a>
-                <a href="/tennis-results"{% if in_season_sports.get('TENNIS')|default(true) %} class="in-season"{% endif %}>Tennis</a>
-                <a href="/ufc-results"{% if in_season_sports.get('UFC')|default(true) %} class="in-season"{% endif %}>UFC</a>
-                <a href="/golf-results"{% if in_season_sports.get('GOLF')|default(true) %} class="in-season"{% endif %}>Golf</a>
+                <a href="/nba-results">NBA</a>
+                <a href="/nfl-results">NFL</a>
+                <a href="/mlb-results">MLB</a>
+                <a href="/nhl-results">NHL</a>
+                {% if soccer_enabled|default(false) %}<a href="/soccer-results">Soccer</a>{% endif %}
+                <a href="/ncaab-results">NCAAB</a>
+                <a href="/ncaaf-results">NCAAF</a>
+                <a href="/ncaaw-results">NCAAW</a>
+                <a href="/wnba-results">WNBA</a>
+                <a href="/cfl-results">CFL</a>
+                <a href="/tennis-results">Tennis</a>
+                <a href="/ufc-results">UFC</a>
+                <a href="/golf-results">Golf</a>
                 <a href="/daily-report">Daily Results</a>
                 <a href="/results/downloads">Download CSV</a>
             </div>
@@ -114,7 +114,7 @@
     });
 })();
 
-/* NAV DROPDOWNS: Picks / Models / Results open a menu on click. */
+/* NAV DROPDOWNS: Sports / Models / Results open a menu on click. */
 (function () {
     var drops = Array.prototype.slice.call(document.querySelectorAll('.pl2-navdrop'));
     if (!drops.length) return;

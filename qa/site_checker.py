@@ -13,7 +13,9 @@ Usage:
   python qa/site_checker.py --email          # full check + email report
   python qa/site_checker.py --screenshots    # include Playwright screenshots
   python qa/site_checker.py --quick --email  # quick check + email
-  python qa/site_checker.py --preflight      # server reachability only (~1s)
+    python qa/site_checker.py --preflight      # server reachability only (~1s)
+    python qa/site_checker.py --ship           # 5052 ship-parity + today's slates vs ESPN
+    python qa/site_checker.py --chrome         # open every Sports/Results/Blog/Affiliate URL; fail if dead or template gaps
 
 EMAIL SETUP (one-time):
   Edit qa/checker_email.py and fill in your Gmail address and App Password.
@@ -57,6 +59,7 @@ from audit_config import (
     CLUSTER_WARN_PCT, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO,
     EXPECTED_DASHBOARD_SPORTS, FORBIDDEN_CONTENT,
     FULL_MODE_AUDITORS, HISTORY_DIR, MODEL_DISPLAY_NAMES, MODEL_KEYS,
+    SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS,
     PREFLIGHT_TIMEOUT, QUICK_MODE_AUDITORS, REQUEST_TIMEOUT, SCREENSHOTS_DIR,
     SMTP_HOST, SMTP_PORT, SPORT_PICKS_SLUGS, SPORT_RESULTS_SLUGS, STALE_STRINGS,
     USER_AGENT, is_offseason,
@@ -131,7 +134,8 @@ def _make_session() -> requests.Session:
 
 HTTP_DEPENDENT_AUDITORS = frozenset({
     "routes", "content", "navigation", "cards", "models", "results", "csv",
-    "gamecounts", "screenshots", "seo", "consistency",
+    "gamecounts", "screenshots", "seo", "consistency", "ship", "soccer", "chrome",
+    "espn_slate",
 })
 
 
@@ -255,12 +259,17 @@ class RouteAuditor:
             err_kind = classify_request_error(detail)
             # Slow page on local dev = WARN; server down = FAIL (preflight should
             # catch that first, but classify consistently if it happens mid-audit).
-            if err_kind == "timeout" and kind == "public":
+            live = "127.0.0.1" not in self.base and "localhost" not in self.base
+            # Live hangs (NCAAF/NFL picks) feel like "the link opens nothing".
+            if err_kind == "timeout" and kind == "public" and not live:
                 sev = WARN
             else:
                 sev = FAIL
+            msg = _request_error_message(err_kind)
+            if err_kind == "timeout" and live:
+                msg = f"Won't open — timed out after {REQUEST_TIMEOUT}s (0 bytes)"
             return CheckResult(label=route["label"], status=sev,
-                               message=_request_error_message(err_kind),
+                               message=msg,
                                detail=detail[:200],
                                url=path, auditor=self.NAME)
         sev = WARN if kind == "should_404" else FAIL
@@ -321,11 +330,13 @@ class RouteAuditor:
                 self.r.add(cr)
 
         if timeout_warns:
+            live = "127.0.0.1" not in self.base and "localhost" not in self.base
             self.r.add(CheckResult(
-                label="Slow pages on local server",
-                status=WARN,
-                message=f"{len(timeout_warns)} page(s) exceeded the {REQUEST_TIMEOUT}s timeout "
-                        f"— normal on local dev, will be fast in production",
+                label="Slow pages on live site" if live else "Slow pages on local server",
+                status=FAIL if live else WARN,
+                message=f"{len(timeout_warns)} page(s) exceeded the {REQUEST_TIMEOUT}s timeout"
+                        + (" — live site is too slow" if live
+                           else " — normal on local dev"),
                 detail=", ".join(timeout_warns[:8]),
                 auditor=self.NAME))
 
@@ -480,6 +491,303 @@ class ContentAuditor:
                         url=path, auditor=self.NAME))
             except Exception:
                 pass
+
+        # Coin-flip / blank-Books picks and results charts that ignore the cards.
+        from chart_shape import (
+            card_blank_market_line_issues,
+            card_missing_model_value_issues,
+            h2h_gap_issues,
+            nba_last_season_gap_issues,
+            ncaaf_results_date_nav_issues,
+            mlb_xsharp_totals_issues,
+            nfl_chart_api_issues,
+            nfl_chart_not_mlb_issues,
+            nfl_chart_same_as_cards_issues,
+            nfl_chart_window_tally_issues,
+            nfl_missing_efficiency_issues,
+            nfl_spread_result_card_issues,
+            nfl_stale_season_perf_issues,
+            nfl_stale_season_week_issues,
+            nhl_chart_view_missing_issues,
+            picks_clock_issues,
+            picks_logo_issues,
+            picks_placeholder_issues,
+            results_math_issues,
+            six_model_chart_issues,
+            team_chart_template_issues,
+            team_picks_template_issues,
+            team_results_template_issues,
+            tennis_chart_same_as_cards_issues,
+        )
+        _skip_junk = {"mlb-picks", "tennis-picks", "ufc-picks"}
+        for slug in SPORT_PICKS_SLUGS:
+            if slug in _skip_junk:
+                continue
+            path = f"/{slug}"
+            html = self._fetch(path)
+            if not html or len(html) < 4000:
+                continue
+            if "game-card" not in html and "pick-card" not in html:
+                continue
+            junk = picks_placeholder_issues(html)
+            if junk:
+                self.r.add(CheckResult(
+                    label=f"Junk / placeholder picks: {slug}",
+                    status=FAIL,
+                    message="; ".join(junk),
+                    url=path, auditor=self.NAME))
+            clock = picks_clock_issues(html)
+            if clock:
+                self.r.add(CheckResult(
+                    label=f"Kickoff time: {slug}",
+                    status=FAIL,
+                    message="; ".join(clock),
+                    url=path, auditor=self.NAME))
+            logos = picks_logo_issues(html)
+            if logos:
+                self.r.add(CheckResult(
+                    label=f"Team logos: {slug}",
+                    status=FAIL,
+                    message="; ".join(logos),
+                    url=path, auditor=self.NAME))
+            if slug != "soccer-picks":
+                gaps = h2h_gap_issues(html)
+                if gaps:
+                    self.r.add(CheckResult(
+                        label=f"H2H Last 10 gaps: {slug}",
+                        status=FAIL,
+                        message="; ".join(gaps),
+                        url=path, auditor=self.NAME))
+            sport = slug.split("-")[0].upper()
+            if sport == "SOCCER":
+                sport = "Soccer"
+            if sport != "Soccer":
+                tpl = team_picks_template_issues(html, sport)
+                if tpl:
+                    self.r.add(CheckResult(
+                        label=f"{sport} picks template",
+                        status=FAIL,
+                        message="; ".join(tpl),
+                        url=path, auditor=self.NAME))
+            if slug in ("ncaaf-picks", "nfl-picks", "cfl-picks", "soccer-picks", "mlb-picks"):
+                miss = card_missing_model_value_issues(html, sport)
+                miss.extend(card_blank_market_line_issues(html, sport))
+                if miss:
+                    self.r.add(CheckResult(
+                        label=f"{sport} missing models/values",
+                        status=FAIL,
+                        message="; ".join(miss),
+                        url=path, auditor=self.NAME))
+            if slug == "soccer-picks":
+                league_sel = re.search(
+                    r'<select[^>]*\bid=["\']league["\'][^>]*>([\s\S]*?)</select>',
+                    html,
+                    flags=re.I,
+                )
+                league_opts = (
+                    len(re.findall(r"<option\b", league_sel.group(1), flags=re.I))
+                    if league_sel
+                    else 0
+                )
+                if league_opts < 40:
+                    self.r.add(CheckResult(
+                        label="Soccer picks league catalog",
+                        status=FAIL,
+                        message=(
+                            f"League dropdown only has {league_opts} option(s) "
+                            "— full catalog is missing"
+                        ),
+                        url=path, auditor=self.NAME))
+                live_n = len(re.findall(r'data-live="1"', html))
+                live_txt = len(re.findall(r"· Live", html))
+                if live_n >= 1 and live_txt < 1:
+                    self.r.add(CheckResult(
+                        label="Soccer picks live leagues green",
+                        status=FAIL,
+                        message=f"{live_n} live option(s) are not labeled · Live",
+                        url=path, auditor=self.NAME))
+                cards_n = html.count("data-pick-card")
+                plxg_n = html.count("PL Expected Goals")
+                if cards_n >= 3 and plxg_n > cards_n + 2:
+                    self.r.add(CheckResult(
+                        label="Soccer picks duplicate PL xG",
+                        status=FAIL,
+                        message=f"PL Expected Goals appears {plxg_n} times on {cards_n} cards",
+                        url=path, auditor=self.NAME))
+                if cards_n >= 3 and html.count("H2H Last 10") < 3:
+                    self.r.add(CheckResult(
+                        label="Soccer picks H2H Last 10",
+                        status=FAIL,
+                        message="Soccer cards are missing H2H Last 10",
+                        url=path, auditor=self.NAME))
+                dates = set(re.findall(r'id="date-(\d{4}-\d{2}-\d{2})"', html))
+                if len(dates) < 2:
+                    self.r.add(CheckResult(
+                        label="Soccer picks date nav",
+                        status=FAIL,
+                        message=(
+                            f"Soccer picks only has {len(dates) or 0} day(s) "
+                            "— All leagues must show more than Today"
+                        ),
+                        url=path, auditor=self.NAME))
+        mlb_cards = self._fetch("/mlb-results")
+        mlb_chart = self._fetch("/mlb-results?view=chart")
+        mlb_xs = mlb_xsharp_totals_issues(mlb_cards or "", mlb_chart or "")
+        if mlb_xs:
+            self.r.add(CheckResult(
+                label="MLB XSharp totals",
+                status=FAIL,
+                message="; ".join(mlb_xs),
+                url="/mlb-results?view=chart", auditor=self.NAME))
+        for slug in SPORT_RESULTS_SLUGS:
+            if slug in {"mlb-results", "tennis-results"}:
+                continue
+            path = f"/{slug}"
+            html = self._fetch(path)
+            sport_name = slug.split("-")[0].upper()
+            if html and sport_name != "SOCCER":
+                tpl = team_results_template_issues(html, sport_name)
+                if tpl:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} results template",
+                        status=FAIL,
+                        message="; ".join(tpl),
+                        url=path, auditor=self.NAME))
+            if slug.endswith("-results") and html and sport_name != "SOCCER":
+                chart_html_tpl = self._fetch(f"{path}?view=chart")
+                chart_tpl = team_chart_template_issues(chart_html_tpl or "", sport_name)
+                if chart_tpl:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} chart template",
+                        status=FAIL,
+                        message="; ".join(chart_tpl),
+                        url=f"{path}?view=chart", auditor=self.NAME))
+            if slug == "nfl-results" and html:
+                stale = nfl_stale_season_week_issues(html)
+                if stale:
+                    self.r.add(CheckResult(
+                        label="NFL results current week",
+                        status=FAIL,
+                        message="; ".join(stale),
+                        url=path, auditor=self.NAME))
+                stale_perf = nfl_stale_season_perf_issues(html)
+                if stale_perf:
+                    self.r.add(CheckResult(
+                        label="NFL Season Performance this season",
+                        status=FAIL,
+                        message="; ".join(stale_perf),
+                        url=path, auditor=self.NAME))
+                missing_eff = nfl_missing_efficiency_issues(html)
+                if missing_eff:
+                    self.r.add(CheckResult(
+                        label="NFL results Efficiency",
+                        status=FAIL,
+                        message="; ".join(missing_eff),
+                        url=path, auditor=self.NAME))
+                spread_cards = nfl_spread_result_card_issues(html)
+                if spread_cards:
+                    self.r.add(CheckResult(
+                        label="NFL spread result cards",
+                        status=FAIL,
+                        message="; ".join(spread_cards),
+                        url=path, auditor=self.NAME))
+                chart_html = self._fetch("/nfl-results?view=chart")
+                mlb_shape = nfl_chart_not_mlb_issues(chart_html or "")
+                if mlb_shape:
+                    self.r.add(CheckResult(
+                        label="NFL chart vs MLB template",
+                        status=FAIL,
+                        message="; ".join(mlb_shape),
+                        url="/nfl-results?view=chart", auditor=self.NAME))
+                same = nfl_chart_same_as_cards_issues(html, chart_html or "")
+                if same:
+                    self.r.add(CheckResult(
+                        label="NFL cards vs chart",
+                        status=FAIL,
+                        message="; ".join(same),
+                        url="/nfl-results?view=chart", auditor=self.NAME))
+                windows = nfl_chart_window_tally_issues(chart_html or "")
+                if windows:
+                    self.r.add(CheckResult(
+                        label="NFL chart Last Night / Last 7",
+                        status=FAIL,
+                        message="; ".join(windows),
+                        url="/nfl-results?view=chart", auditor=self.NAME))
+                api_html = self._fetch("/nfl/api/picks")
+                api_payload = None
+                if api_html:
+                    try:
+                        api_payload = json.loads(api_html)
+                    except Exception:
+                        api_payload = None
+                api = nfl_chart_api_issues(api_payload)
+                if api:
+                    self.r.add(CheckResult(
+                        label="NFL chart API",
+                        status=FAIL,
+                        message="; ".join(api),
+                        url="/nfl/api/picks", auditor=self.NAME))
+            if slug == "ncaaf-results" and html:
+                date_issues = ncaaf_results_date_nav_issues(html)
+                if date_issues:
+                    self.r.add(CheckResult(
+                        label="NCAAF results date nav",
+                        status=FAIL,
+                        message="; ".join(date_issues),
+                        url=path, auditor=self.NAME))
+            if not html or "Consensus Based Betting Records" not in html:
+                continue
+            sport_name = slug.split("-")[0].upper()
+            panel = six_model_chart_issues(html, sport_name)
+            if panel:
+                self.r.add(CheckResult(
+                    label=f"Results chart panel: {slug}",
+                    status=FAIL,
+                    message="; ".join(panel),
+                    url=path, auditor=self.NAME))
+            issues = results_math_issues(html)
+            if issues:
+                self.r.add(CheckResult(
+                    label=f"Results math vs cards: {slug}",
+                    status=FAIL,
+                    message="; ".join(issues),
+                    url=path, auditor=self.NAME))
+            if slug == "nba-results":
+                gaps = nba_last_season_gap_issues(html)
+                if gaps:
+                    self.r.add(CheckResult(
+                        label="NBA last-season results",
+                        status=FAIL,
+                        message="; ".join(gaps),
+                        url=path, auditor=self.NAME))
+            if slug == "wnba-results":
+                gaps = h2h_gap_issues(html)
+                if gaps or (html.count("data-pick-card") >= 3 and html.count("H2H Last 10") < 3):
+                    self.r.add(CheckResult(
+                        label="WNBA results H2H Last 10",
+                        status=FAIL,
+                        message="; ".join(gaps) if gaps else "WNBA results cards are missing H2H Last 10",
+                        url=path, auditor=self.NAME))
+
+        nhl_cards = self._fetch("/nhl-results")
+        nhl_chart = self._fetch("/nhl-results?view=chart")
+        nhl_issues = nhl_chart_view_missing_issues(nhl_chart, nhl_cards)
+        if nhl_issues:
+            self.r.add(CheckResult(
+                label="NHL results chart view",
+                status=FAIL,
+                message="; ".join(nhl_issues),
+                url="/nhl-results?view=chart", auditor=self.NAME))
+
+        ten_cards = self._fetch("/tennis-results")
+        ten_chart = self._fetch("/tennis-results?view=chart")
+        ten_issues = tennis_chart_same_as_cards_issues(ten_cards, ten_chart)
+        if ten_issues:
+            self.r.add(CheckResult(
+                label="Tennis results chart vs cards",
+                status=FAIL,
+                message="; ".join(ten_issues),
+                url="/tennis-results?view=chart", auditor=self.NAME))
 
         # Dashboard completeness — every expected sport must appear on the
         # homepage "Today's Picks by Sport" grid AND the all-sports-results page.
@@ -746,7 +1054,8 @@ class NavigationAuditor:
 
         # 5. Broken internal links (spot-check — key pages only)
         key_links = [
-            "/nba-picks", "/nhl-picks", "/mlb-picks", "/plans",
+            "/nba-picks", "/nhl-picks", "/mlb-picks", "/nfl-picks",
+            "/ncaaf-picks", "/plans", "/blog", "/affiliate",
             "/privacy", "/terms", "/refund-policy", "/faq", "/contact",
             "/daily-report", "/all-sports-results",
         ]
@@ -755,22 +1064,30 @@ class NavigationAuditor:
         for href in key_links:
             try:
                 resp = self.s.get(urljoin(self.base, href),
-                                  timeout=4, allow_redirects=True)
-                if resp.status_code == 404:
-                    broken.append(href)
+                                  timeout=max(REQUEST_TIMEOUT, 15),
+                                  allow_redirects=True)
                 checked += 1
-            except Exception:
-                pass
+                if resp.status_code >= 400:
+                    broken.append(f"{href} → HTTP {resp.status_code}")
+                elif len(resp.text or "") < 80 and "Page not found" in (resp.text or ""):
+                    broken.append(f"{href} → empty 404 body")
+            except Exception as exc:
+                checked += 1
+                kind = classify_request_error(str(exc))
+                if kind == "timeout":
+                    broken.append(f"{href} → timeout (won't open)")
+                else:
+                    broken.append(f"{href} → {kind}")
 
         if broken:
             self.r.add(CheckResult(
-                label="Broken internal links", status=FAIL,
-                message=f"{len(broken)} link(s) return 404",
-                detail=", ".join(broken), auditor=self.NAME))
+                label="Broken header/footer destinations", status=FAIL,
+                message=f"{len(broken)} linked page(s) 404, 5xx, or hang",
+                detail="; ".join(broken), auditor=self.NAME))
         else:
             self.r.add(CheckResult(
-                label="Internal link spot-check", status=PASS,
-                message=f"Checked {checked} key links — none returned 404",
+                label="Header/footer destinations", status=PASS,
+                message=f"Checked {checked} key links — all opened",
                 auditor=self.NAME))
 
 
@@ -2137,12 +2454,30 @@ def generate_txt_report(report: AuditReport) -> str:
         "",
     ]
 
+    ship_checks = [c for c in report.checks if c.auditor == "ship"]
+    if ship_checks:
+        lines += [
+            "── 5052 SHIP PARITY (cards · charts · chrome · previews · blog) ──",
+            "",
+        ]
+        for c in ship_checks:
+            icon = STATUS_ICON.get(c.status, " ")
+            lines.append(f"  {icon} [{c.status}] {c.label}")
+            lines.append(f"       {c.message}")
+            if c.detail:
+                lines.append(f"       Detail: {c.detail}")
+            if c.url:
+                lines.append(f"       URL: {c.url}")
+        lines.append("")
+
     # Group by auditor
     auditors: dict[str, list[CheckResult]] = {}
     for c in report.checks:
         auditors.setdefault(c.auditor or "general", []).append(c)
 
     for auditor_name, checks in auditors.items():
+        if auditor_name == "ship":
+            continue
         lines.append(f"── {auditor_name.upper()} AUDIT ──────────────────────────────")
         for c in checks:
             icon = STATUS_ICON.get(c.status, " ")
@@ -2469,6 +2804,26 @@ def send_email_report(report: AuditReport,
         print(f"  ❌ Email failed: {exc}")
 
 
+def _run_ship_parity(session, base: str, report: AuditReport):
+    from ship_parity import ShipParityAuditor
+    ShipParityAuditor(session, base, report, CheckResult).run()
+
+
+def _run_soccer_checker(session, base: str, report: AuditReport):
+    from soccer_checker import SoccerChecker
+    SoccerChecker(session, base, report, CheckResult).run()
+
+
+def _run_espn_slate_checker(session, base: str, report: AuditReport):
+    from espn_slate_checker import EspnSlateChecker
+    EspnSlateChecker(session, base, report, CheckResult).run()
+
+
+def _run_chrome_checker(session, base: str, report: AuditReport):
+    from chrome_checker import ChromeChecker
+    ChromeChecker(session, base, report, CheckResult).run()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN ORCHESTRATOR
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2483,17 +2838,29 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
 
     report = AuditReport(run_id=run_id, timestamp=ts, base_url=base)
 
+    live = "predictionlab.io" in base
+    mode = "ship" if getattr(args, "ship", False) else ("quick" if args.quick else "full")
     print(f"\n{'='*60}")
     print(f"  PredictionLab QA Audit")
+    print(f"  FETCHING LIVE HTTP PAGES — not local HTML folders")
     print(f"  Target: {base}")
-    print(f"  Mode: {'quick' if args.quick else 'full'}")
+    print(f"  Mode: {mode}")
+    if live:
+        print("  This is predictionlab.io (production)")
     print(f"  Run ID: {run_id}")
     print(f"{'='*60}\n")
 
     session = _make_session()
 
     # Determine which auditors to run
-    auditors_to_run = QUICK_MODE_AUDITORS if args.quick else FULL_MODE_AUDITORS
+    if getattr(args, "chrome", False):
+        auditors_to_run = CHROME_MODE_AUDITORS
+    elif getattr(args, "ship", False):
+        auditors_to_run = SHIP_MODE_AUDITORS
+    elif args.quick:
+        auditors_to_run = QUICK_MODE_AUDITORS
+    else:
+        auditors_to_run = FULL_MODE_AUDITORS
 
     print("  ▶ Preflight server check…")
     reachable, preflight_fail = preflight_server(session, base)
@@ -2530,6 +2897,10 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("csv",        lambda: CsvAuditor(session, base, report).run())
     run_auditor("seo",        lambda: SeoAuditor(session, base, report).run())
     run_auditor("consistency", lambda: CardConsistencyAuditor(session, base, report).run())
+    run_auditor("chrome", lambda: _run_chrome_checker(session, base, report))
+    run_auditor("ship", lambda: _run_ship_parity(session, base, report))
+    run_auditor("soccer", lambda: _run_soccer_checker(session, base, report))
+    run_auditor("espn_slate", lambda: _run_espn_slate_checker(session, base, report))
     # Schema auditor is static (DB schema + source scan), not HTTP-dependent —
     # it catches SQL column typos in auth-gated routes the HTTP checks can't reach.
     run_auditor("schema",     lambda: SchemaAuditor(report).run())
@@ -2642,6 +3013,10 @@ def main():
                         help="Run all auditors (default)")
     parser.add_argument("--quick",       action="store_true",
                         help="Quick mode: routes + content + nav only")
+    parser.add_argument("--ship",        action="store_true",
+                        help="5052 ship-parity only: cards, results charts, header/footer, previews, blog")
+    parser.add_argument("--chrome",      action="store_true",
+                        help="Open every Sports/Results/Blog/Affiliate URL and fail if 404/500/timeout")
     parser.add_argument("--url",         type=str, default=None,
                         help=f"Override base URL (default: {BASE_URL})")
     parser.add_argument("--preflight",   action="store_true",
@@ -2665,8 +3040,8 @@ def main():
             print(f"   {fail.detail[:200]}")
         sys.exit(1)
 
-    # If neither quick nor full, default to full
-    if not args.quick:
+    # If neither quick, ship, chrome, nor full, default to full
+    if not args.quick and not args.ship and not getattr(args, "chrome", False):
         args.full = True
 
     report = run_audit(args, base_url=target_url)

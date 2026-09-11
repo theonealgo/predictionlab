@@ -392,4 +392,16 @@ body.research-site .picks-chart-table th {
     padding-left: 12px;
     padding-right: 12px;
   }
+  .date-nav,
+  .date-bubbles,
+  .league-badges,
+  .odds-pricing-section {
+    scrollbar-width: none;
+  }
+  .date-nav::-webkit-scrollbar,
+  .date-bubbles::-webkit-scrollbar,
+  .league-badges::-webkit-scrollbar,
+  .odds-pricing-section::-webkit-scrollbar {
+    display: none;
+  }
 }

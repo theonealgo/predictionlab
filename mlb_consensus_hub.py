@@ -1431,11 +1431,20 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
     if not rows:
         return rows
 
+    def _norm_team(name: str) -> str:
+        txt = re.sub(r"[^a-z0-9]+", "", (name or "").strip().lower())
+        return txt
+
     def _match_key(date: str, home: str, away: str) -> str:
-        return f"{date}|{(home or '').strip().lower()}|{(away or '').strip().lower()}"
+        return f"{date}|{_norm_team(home)}|{_norm_team(away)}"
+
+    def _event_tail(gid: str) -> str:
+        m = re.search(r"(\d{6,})$", str(gid or ""))
+        return m.group(1) if m else ""
 
     by_gid: dict[str, dict[str, Any]] = {}
     by_match: dict[str, dict[str, Any]] = {}
+    by_tail: dict[str, dict[str, Any]] = {}
     db_path = _mlb_consensus_db_path()
     dates = sorted(
         {
@@ -1474,6 +1483,13 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
                             book_home_moneyline=r["home_moneyline"],
                             book_away_moneyline=r["away_moneyline"],
                         )
+                        tail = _event_tail(r["game_id"])
+                        if tail:
+                            _absorb(
+                                by_tail.setdefault(tail, {}),
+                                book_home_moneyline=r["home_moneyline"],
+                                book_away_moneyline=r["away_moneyline"],
+                            )
                         mk = _match_key(
                             str(r["game_date"] or "")[:10],
                             str(r["home_team"] or ""),
@@ -1522,7 +1538,8 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
                     for r in con.execute(
                         f"SELECT game_id, home_moneyline, away_moneyline, "
                         f"game_date, home_team, away_team FROM betting_lines "
-                        f"WHERE sport='MLB' AND substr(game_date,1,10) IN ({dph})",
+                        f"WHERE substr(game_date,1,10) IN ({dph}) "
+                        f"AND home_moneyline IS NOT NULL",
                         dates,
                     ):
                         mk = _match_key(
@@ -1541,13 +1558,20 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
                                 book_home_moneyline=r["home_moneyline"],
                                 book_away_moneyline=r["away_moneyline"],
                             )
+                            tail = _event_tail(r["game_id"])
+                            if tail:
+                                _absorb(
+                                    by_tail.setdefault(tail, {}),
+                                    book_home_moneyline=r["home_moneyline"],
+                                    book_away_moneyline=r["away_moneyline"],
+                                )
                 except sqlite3.Error:
                     pass
                 try:
                     for r in con.execute(
                         f"SELECT game_id, lock_card_json, game_date, "
                         f"home_team_id, away_team_id FROM predictions "
-                        f"WHERE sport='MLB' AND substr(game_date,1,10) IN ({dph})",
+                        f"WHERE substr(game_date,1,10) IN ({dph})",
                         dates,
                     ):
                         lock = _parse_lock_card_json(r["lock_card_json"])
@@ -1569,7 +1593,7 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
                     pass
             con.close()
         except sqlite3.Error:
-            by_gid, by_match = {}, {}
+            by_gid, by_match, by_tail = {}, {}, {}
 
     for g in rows:
         home = str(g.get("home_team_id") or g.get("home") or g.get("home_team") or "")
@@ -1578,6 +1602,9 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
         dk = str(g.get("game_date") or "")[:10]
         slot = {}
         slot.update(by_match.get(_match_key(dk, home, away)) or {})
+        tail = _event_tail(gid)
+        if tail:
+            slot.update(by_tail.get(tail) or {})
         slot.update(by_gid.get(gid) or {})
         bh = g.get("book_home_moneyline")
         ba = g.get("book_away_moneyline")
@@ -2540,8 +2567,10 @@ def _prefer_consensus_row(
     return keep
 
 
-def _extract_finals_from_html(html: str, *, limit: int = 500) -> list[dict[str, Any]]:
-    rows = _extract_game_rows(html, limit=limit)
+def _extract_finals_from_html(
+    html: str, *, limit: int = 500, prefer_date: str | None = None
+) -> list[dict[str, Any]]:
+    rows = _extract_game_rows(html, limit=limit, prefer_date=prefer_date)
     if rows:
         return rows
     return _extract_finals_without_date_sections(html, limit=limit)
@@ -2662,10 +2691,19 @@ def _consensus_finals_rows(
     elif rows and _consensus_has_data(rows, sport=sport_l):
         return rows
     extracted = []
+    prefer = None
+    extract_limit = 500
+    if sport_l == "soccer":
+        prefer = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
+        extract_limit = 2000
     for src in (html, fallback_html):
         if not src:
             continue
-        chunk = _extract_finals_from_html(src, limit=500)
+        chunk = _extract_finals_from_html(
+            src, limit=extract_limit, prefer_date=prefer
+        )
         if chunk:
             extracted = _merge_consensus_finals(extracted, chunk) if extracted else chunk
     if extracted and rows:
@@ -3381,6 +3419,34 @@ def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[s
         face_correct = first.get("correct")
     spread, totals = _extract_spread_totals(card_html)
     gid_m = re.search(r'data-game-id="([^"]+)"', card_html, re.I)
+    away_blk = re.search(
+        r'class="team-col away"([\s\S]*?)class="team-col home"',
+        card_html,
+        re.I,
+    )
+    home_blk = re.search(
+        r'class="team-col home"([\s\S]*?)(?:class="(?:team-col|card-footer|pick-conf)|$)',
+        card_html,
+        re.I,
+    )
+
+    def _face_book_ml(block: str | None) -> Any:
+        if not block:
+            return None
+        m = re.search(
+            r'face-books-ml[\s\S]{0,240}?class="ml-num[^"]*">\s*([+\-]?\d+)',
+            block,
+            re.I,
+        )
+        if not m:
+            return None
+        try:
+            return int(m.group(1))
+        except (TypeError, ValueError):
+            return None
+
+    book_away_ml = _face_book_ml(away_blk.group(1) if away_blk else "")
+    book_home_ml = _face_book_ml(home_blk.group(1) if home_blk else "")
     h2h_m = re.search(
         r'H2H Last 10</span>\s*<span class="sf-val">([^<]+)',
         card_html,
@@ -3437,18 +3503,27 @@ def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[s
         "pl_proj": pl_proj,
         "xs_proj": xs_proj,
         "total_ev": None,
+        "book_home_moneyline": book_home_ml,
+        "book_away_moneyline": book_away_ml,
     }
     _apply_pl_xs_grades(row)
     return row
 
 
-def _extract_game_rows(html: str, *, limit: int = 800) -> list[dict[str, Any]]:
+def _extract_game_rows(
+    html: str, *, limit: int = 800, prefer_date: str | None = None
+) -> list[dict[str, Any]]:
     """Finals rows from live game-card HTML (teams-split / pick-conf / spread-total footer)."""
     rows: list[dict[str, Any]] = []
     date_chunks = re.split(r'<div id="date-([^"]+)"[^>]*>', html or "")
+    pairs: list[tuple[str, str]] = []
     it = iter(date_chunks[1:])
     for date_key in it:
-        content = next(it, "")
+        pairs.append((str(date_key)[:10], next(it, "")))
+    prefer = str(prefer_date or "")[:10]
+    if prefer:
+        pairs.sort(key=lambda item: (0 if item[0] == prefer else 1, item[0]))
+    for date_key, content in pairs:
         # Split on game-card opens; keep a generous slice per card.
         parts = re.split(r'(<div class="game-card\b[^"]*"[^>]*>)', content, flags=re.I)
         idx = 1

@@ -14,6 +14,7 @@ import re
 import sqlite3
 import sys
 import unicodedata
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
@@ -37,6 +38,56 @@ _PREFIXES = (
 _SUFFIXES = (" cf", " fc", " sc", " ac")
 
 _BAD = ("", "—", "-", "–", "‒", "N/A", "n/a")
+
+
+def soccer_et_today() -> date:
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("America/New_York")).date()
+    except Exception:
+        return datetime.now().date()
+
+
+def soccer_week_monday(day=None) -> date:
+    """Monday of the ET week containing *day* (Mon–Sun)."""
+    if isinstance(day, datetime):
+        d = day.date()
+    elif isinstance(day, date):
+        d = day
+    elif isinstance(day, str) and len(day) >= 10:
+        d = date.fromisoformat(day[:10])
+    else:
+        d = soccer_et_today()
+    return d - timedelta(days=d.weekday())
+
+
+def soccer_week_range(week_arg: str | None = None, today=None) -> tuple[date, date]:
+    """Monday–Sunday for ?week=YYYY-MM-DD (any day in the week is snapped)."""
+    raw = (week_arg or "").strip()
+    if raw:
+        try:
+            monday = soccer_week_monday(raw[:10])
+        except Exception:
+            monday = soccer_week_monday(today)
+    else:
+        monday = soccer_week_monday(today)
+    return monday, monday + timedelta(days=6)
+
+
+def soccer_week_label(monday: date, today=None) -> str:
+    sunday = monday + timedelta(days=6)
+    this = soccer_week_monday(today)
+    span = f"{monday.strftime('%b %-d')}–{sunday.strftime('%-d')}"
+    if monday.month != sunday.month:
+        span = f"{monday.strftime('%b %-d')}–{sunday.strftime('%b %-d')}"
+    if monday == this:
+        return f"This week · {span}"
+    if monday == this - timedelta(days=7):
+        return f"Last week · {span}"
+    if monday == this + timedelta(days=7):
+        return f"Next week · {span}"
+    return f"Week of {span}"
 
 
 def _fold(name: str) -> str:
@@ -580,12 +631,14 @@ def enrich_soccer_h2h_from_db(html: str) -> str:
         if is_final and not before_date:
             before_date = None
         h2h = _resolve_h2h(home, away, existing, chip_val, before_date if is_final else None)
+        if h2h.strip().lower() == "first meeting":
+            h2h = ""
         missing_reason = "" if _good(h2h) else h2h_missing_reason(home=home, away=away)
-        display = h2h if _good(h2h) else "N/A"
+        display = h2h if _good(h2h) else "First meeting"
         open2 = _set_attr(open_tag, "data-h2h", display)
         if missing_reason:
             open2 = _set_attr(open2, "data-h2h-reason", missing_reason)
-        rest2 = _ensure_chip(rest, display if _good(h2h) else "—", missing_reason=missing_reason)
+        rest2 = _ensure_chip(rest, display, missing_reason=missing_reason)
         if open2 == open_tag and rest2 == rest:
             return stack
         return open2 + rest2
@@ -790,12 +843,21 @@ def _options_from_soccer_pills(html: str, *, kind: str) -> list[dict[str, str]]:
     return options
 
 
-def _soccer_filter_href(*, kind: str, league: str = "", region: str = "") -> str:
+def _soccer_filter_href(
+    *,
+    kind: str,
+    league: str = "",
+    region: str = "",
+    week: str = "",
+) -> str:
     parts = []
     if region:
         parts.append(f"region={region}")
     if league:
         parts.append(f"league={league}")
+    wk = (week or "").strip()
+    if wk:
+        parts.append(f"week={wk}")
     if kind == "picks":
         base = "/soccer-picks"
         qs = "&".join(parts)
@@ -829,6 +891,21 @@ def _league_names_from_html_cards(html: str) -> list[str]:
     return names
 
 
+def _soccer_ui_slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+
+
+def _name_keys(names, slug_fn) -> set[str]:
+    keys = set()
+    for n in names or []:
+        keys.add(str(n or "").strip().lower())
+        try:
+            keys.add(slug_fn(n).lower())
+        except Exception:
+            pass
+    return keys
+
+
 def _curated_soccer_league_options(
     *,
     kind: str,
@@ -836,41 +913,48 @@ def _curated_soccer_league_options(
     selected_region: str = "",
     live_names: list[str] | None = None,
     source_html: str | None = None,
+    week: str = "",
 ) -> list[dict[str, str]]:
     """Catalog leagues, narrowed to the selected continent / Live slate."""
     selected = (selected_slug or "").strip()
     region = (selected_region or "").strip().lower()
+    week_slug = soccer_week_range(week)[0].isoformat()
     try:
         from soccer_league_catalog import (
             SOCCER_LEAGUE_ORDER,
+            SOCCER_LEAGUE_REGIONS,
             SOCCER_REGION_DEFS,
-            soccer_leagues_for_region,
             soccer_primary_region,
             soccer_region_from_slug,
         )
-        import NHL77FINAL as nhl
-
-        slug_fn = nhl._soccer_league_slug
-        region_key = soccer_region_from_slug(region)
-        resolved_live = list(live_names) if live_names is not None else None
-        if region_key == "live":
-            if resolved_live is None:
-                try:
-                    resolved_live = list(nhl._soccer_live_competition_names(kind=kind) or [])
-                except Exception:
-                    resolved_live = []
-            if source_html:
-                have = set(resolved_live)
-                for name in _league_names_from_html_cards(source_html):
-                    if name not in have:
-                        resolved_live.append(name)
-                        have.add(name)
-        names = soccer_leagues_for_region(region_key, live_names=resolved_live)
-        if not region_key and region != "all":
-            names = list(SOCCER_LEAGUE_ORDER)
-        region_labels = {key: label for key, label in SOCCER_REGION_DEFS}
     except Exception:
         return []
+    slug_fn = _soccer_ui_slug
+    nhl = None
+    try:
+        import NHL77FINAL as nhl
+        slug_fn = nhl._soccer_league_slug
+    except Exception:
+        nhl = None
+    region_key = soccer_region_from_slug(region)
+    resolved_live = list(live_names) if live_names is not None else None
+    if region_key == "live":
+        if resolved_live is None and nhl is not None:
+            try:
+                resolved_live = list(nhl._soccer_live_competition_names(kind=kind) or [])
+            except Exception:
+                resolved_live = []
+        if source_html:
+            have = set(resolved_live or [])
+            for name in _league_names_from_html_cards(source_html):
+                if name not in have:
+                    if resolved_live is None:
+                        resolved_live = []
+                    resolved_live.append(name)
+                    have.add(name)
+    # Always emit the full catalog. Continent filters the second list in JS.
+    names = list(SOCCER_LEAGUE_ORDER)
+    region_labels = {key: label for key, label in SOCCER_REGION_DEFS}
     if region == "all":
         keep_region = "all"
     elif region_key:
@@ -878,34 +962,72 @@ def _curated_soccer_league_options(
     else:
         keep_region = ""
     selected_in_list = False
+    selected_l = ""
     if selected:
         selected_l = selected.lower()
+        if nhl is not None:
+            try:
+                resolved = nhl._soccer_league_from_slug(selected)
+                if resolved:
+                    selected_l = slug_fn(resolved).lower()
+            except Exception:
+                pass
+        selected_in_list = any(slug_fn(n).lower() == selected_l for n in names)
+    live_kind = "picks" if kind == "picks" else "results"
+    mark_live = list(resolved_live) if region_key == "live" and resolved_live is not None else None
+    if mark_live is None:
+        mark_live = []
+        if nhl is not None:
+            try:
+                mark_live = list(nhl._soccer_live_competition_names(kind="picks") or [])
+            except Exception:
+                mark_live = []
+    mark_in_season = list(mark_live or [])
+    if nhl is not None:
         try:
-            resolved = nhl._soccer_league_from_slug(selected)
-            if resolved:
-                selected_l = slug_fn(resolved).lower()
+            mark_in_season = list(nhl._soccer_in_season_competition_names(kind=live_kind) or []) or mark_in_season
         except Exception:
             pass
-        selected_in_list = any(slug_fn(n).lower() == selected_l for n in names)
+    if source_html:
+        have = set(mark_in_season)
+        for name in _league_names_from_html_cards(source_html):
+            if name not in have:
+                mark_in_season.append(name)
+                have.add(name)
+    live_keys = _name_keys(mark_live, slug_fn)
+    in_season_keys = _name_keys(mark_in_season, slug_fn)
+    href_kw = {"kind": kind, "region": keep_region, "week": week_slug}
     options = [
         {
             "slug": "",
-            "href": _soccer_filter_href(kind=kind, region=keep_region),
-            "label": "All",
+            "href": _soccer_filter_href(**href_kw),
+            "label": "All leagues",
             "group": "",
             "selected": "1" if not selected_in_list else "",
+            "live": "0",
+            "in_season": "0",
         }
     ]
     for name in names:
         slug = slug_fn(name)
         primary = soccer_primary_region(name) or ""
+        is_live = slug.lower() in live_keys or name.lower() in live_keys
+        is_in_season = (
+            is_live
+            or slug.lower() in in_season_keys
+            or name.lower() in in_season_keys
+        )
+        regions = ",".join(SOCCER_LEAGUE_REGIONS.get(name) or ())
         options.append(
             {
                 "slug": slug,
-                "href": _soccer_filter_href(kind=kind, league=slug, region=keep_region),
+                "href": _soccer_filter_href(league=slug, **href_kw),
                 "label": name,
                 "group": region_labels.get(primary, ""),
+                "regions": regions,
                 "selected": "1" if selected_in_list and selected_l == slug.lower() else "",
+                "live": "1" if is_live else "0",
+                "in_season": "1" if is_in_season else "0",
             }
         )
     return options
@@ -954,10 +1076,12 @@ def soccer_league_dropdown_html(
     *,
     kind: str = "results",
     selected_region: str = "",
+    week: str = "",
 ) -> str:
     if not options:
         return ""
     region = (selected_region or "").strip().lower()
+    week_slug = soccer_week_range(week)[0].isoformat()
     try:
         from soccer_league_catalog import SOCCER_REGION_DEFS
         region_defs = list(SOCCER_REGION_DEFS)
@@ -966,12 +1090,12 @@ def soccer_league_dropdown_html(
     all_region = "all" if kind == "picks" else ""
     all_selected = (not region) or region == "all"
     region_tags = [
-        f'<option value="" data-href="{_html_attr(_soccer_filter_href(kind=kind, region=all_region))}"'
-        f'{" selected" if all_selected else ""}>All</option>'
+        f'<option value="" data-href="{_html_attr(_soccer_filter_href(kind=kind, region=all_region, week=week_slug))}"'
+        f'{" selected" if all_selected else ""}>All continents</option>'
     ]
     for key, label in region_defs:
         sel = " selected" if region == key else ""
-        href = _soccer_filter_href(kind=kind, region=key)
+        href = _soccer_filter_href(kind=kind, region=key, week=week_slug)
         region_tags.append(
             f'<option value="{_html_attr(key)}" data-href="{_html_attr(href)}"{sel}>'
             f'{_html_text(label)}</option>'
@@ -983,18 +1107,63 @@ def soccer_league_dropdown_html(
         if not opt.get("slug"):
             ungrouped.append(opt)
             continue
-        if group and not region:
+        if group and (not region or region == "all"):
             grouped.setdefault(group, []).append(opt)
         else:
             ungrouped.append(opt)
-    option_tags = []
-    for opt in ungrouped:
-        sel = " selected" if opt.get("selected") else ""
-        option_tags.append(
-            f'<option value="{_html_attr(opt.get("slug", ""))}" '
-            f'data-href="{_html_attr(opt.get("href", ""))}"{sel}>'
-            f'{_html_text(opt.get("label", ""))}</option>'
+    def _season_first(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        return sorted(
+            rows,
+            key=lambda o: (0 if str(o.get("in_season") or "") == "1" else 1),
         )
+    head = [o for o in ungrouped if not o.get("slug")]
+    ungrouped = head + _season_first([o for o in ungrouped if o.get("slug")])
+    grouped = {k: _season_first(v) for k, v in grouped.items()}
+    def _opt_flags(opt: dict[str, str]) -> tuple[str, str, str, str]:
+        live = "1" if str(opt.get("live") or "") == "1" else "0"
+        in_season = "1" if str(opt.get("in_season") or "") == "1" or live == "1" else "0"
+        label = (opt.get("label") or "").strip()
+        if in_season == "1" and label and label.lower() not in ("all", "all leagues"):
+            if not label.startswith("●"):
+                label = f"● {label}"
+        if live == "1" and label and label.lower() not in ("all", "all leagues"):
+            if "· Live" not in label:
+                label = f"{label} · Live"
+        regs = (opt.get("regions") or "").strip()
+        return live, in_season, label, regs
+
+    def _opt_tag(opt: dict[str, str]) -> str:
+        sel = " selected" if opt.get("selected") else ""
+        live, in_season, label, regs = _opt_flags(opt)
+        return (
+            f'<option value="{_html_attr(opt.get("slug", ""))}" '
+            f'data-href="{_html_attr(opt.get("href", ""))}" '
+            f'data-region="{_html_attr(regs)}" '
+            f'data-live="{live}" data-in-season="{in_season}"{sel}>'
+            f'{_html_text(label)}</option>'
+        )
+
+    def _menu_item(opt: dict[str, str]) -> str:
+        live, in_season, label, regs = _opt_flags(opt)
+        sel = " aria-selected=\"true\"" if opt.get("selected") else ""
+        cls = "soccer-dd-opt"
+        if in_season == "1":
+            cls += " in-season"
+        if live == "1":
+            cls += " is-live"
+        return (
+            f'<button type="button" role="option" class="{cls}" '
+            f'data-league-item="1" data-value="{_html_attr(opt.get("slug", ""))}" '
+            f'data-region="{_html_attr(regs)}" data-live="{live}" '
+            f'data-in-season="{in_season}"{sel}>'
+            f'{_html_text(label)}</button>'
+        )
+
+    option_tags = []
+    menu_items = []
+    for opt in ungrouped:
+        option_tags.append(_opt_tag(opt))
+        menu_items.append(_menu_item(opt))
     if grouped:
         try:
             from soccer_league_catalog import SOCCER_REGION_DEFS
@@ -1006,15 +1175,18 @@ def soccer_league_dropdown_html(
             if not rows:
                 continue
             option_tags.append(f'<optgroup label="{_html_attr(gname)}">')
+            menu_items.append(
+                f'<div class="soccer-dd-group" data-group="{_html_attr(gname)}">'
+                f'{_html_text(gname)}</div>'
+            )
             for opt in rows:
-                sel = " selected" if opt.get("selected") else ""
-                option_tags.append(
-                    f'<option value="{_html_attr(opt.get("slug", ""))}" '
-                    f'data-href="{_html_attr(opt.get("href", ""))}"{sel}>'
-                    f'{_html_text(opt.get("label", ""))}</option>'
-                )
+                option_tags.append(_opt_tag(opt))
+                menu_items.append(_menu_item(opt))
             option_tags.append("</optgroup>")
-    fallback = _soccer_filter_href(kind=kind, region=region)
+    fallback = _soccer_filter_href(kind=kind, region=region, week=week_slug)
+    week_hidden = (
+        f'<input type="hidden" name="week" value="{_html_attr(week_slug)}" />'
+    )
     if kind == "chart":
         form_action = "/soccer-results"
         view_hidden = '<input type="hidden" name="view" value="chart" />'
@@ -1032,18 +1204,27 @@ def soccer_league_dropdown_html(
   <form method="GET" action="{_html_attr(form_action)}" id="soccer-league-filter-form"
         class="soccer-league-filter-form" data-fallback-href="{_html_attr(fallback)}">
     {view_hidden}
+    {week_hidden}
     <label>
       Continent
       <select id="soccer-region" name="region" aria-label="Select continent">
         {"".join(region_tags)}
       </select>
     </label>
-    <label>
-      League
-      <select id="league" name="league" aria-label="Select league">
-        {"".join(option_tags)}
-      </select>
-    </label>
+    <div class="soccer-league-combo-label">
+      <span class="soccer-league-combo-caption">League</span>
+      <div class="soccer-league-combo">
+        <select id="league" name="league" tabindex="-1" aria-hidden="true">
+          {"".join(option_tags)}
+        </select>
+        <button type="button" id="soccer-league-face" class="soccer-league-face"
+                aria-haspopup="listbox" aria-expanded="false"
+                aria-controls="soccer-league-menu">All leagues</button>
+        <div id="soccer-league-menu" class="soccer-league-menu" hidden role="listbox">
+          {"".join(menu_items)}
+        </div>
+      </div>
+    </div>
     <button type="submit" id="soccer-league-load" class="soccer-league-load"
             aria-label="Load selected continent and league">Load</button>
   </form>
@@ -1059,6 +1240,26 @@ def soccer_league_dropdown_html(
 .soccer-league-controls select{{min-width:min(100%,280px);max-width:420px;padding:8px 12px;
   border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;
   font-size:0.95rem;font-weight:600;}}
+.soccer-league-combo-label{{display:flex;flex-direction:column;gap:6px;
+  font-size:0.78rem;font-weight:700;color:#475569;letter-spacing:0.02em;}}
+.soccer-league-combo{{position:relative;min-width:min(100%,280px);max-width:420px;}}
+.soccer-league-combo #league{{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);border:0;pointer-events:none;}}
+.soccer-dd-opt[hidden],.soccer-dd-group[hidden]{{display:none!important;}}
+.soccer-league-face{{width:100%;min-width:min(100%,280px);padding:8px 12px;border:1px solid #cbd5e1;
+  border-radius:8px;background:#fff;color:#0f172a;font-size:0.95rem;font-weight:600;
+  text-align:left;cursor:pointer;}}
+.soccer-league-menu{{position:absolute;z-index:80;left:0;right:0;top:calc(100% + 4px);
+  min-width:min(100vw - 32px, 420px);max-height:min(70vh,560px);overflow:auto;padding:6px 0;
+  border:1px solid #cbd5e1;border-radius:8px;background:#fff;
+  box-shadow:0 8px 24px rgba(15,23,42,0.12);}}
+.soccer-dd-group{{padding:8px 12px 4px;font-size:0.72rem;font-weight:800;color:#64748b;
+  letter-spacing:0.04em;text-transform:uppercase;}}
+.soccer-dd-opt{{display:block;width:100%;padding:8px 12px;border:0;background:transparent;
+  color:#0f172a;font-size:0.95rem;font-weight:600;text-align:left;cursor:pointer;}}
+.soccer-dd-opt:hover,.soccer-dd-opt[aria-selected="true"]{{background:#f1f5f9;}}
+.soccer-dd-opt.in-season,.soccer-dd-opt[data-in-season="1"]{{color:#059669!important;
+  background:#d1fae5;font-weight:800;}}
 .soccer-league-load{{padding:9px 18px;border:1px solid #0f172a;border-radius:8px;
   background:#0f172a;color:#fff;font-size:0.9rem;font-weight:700;cursor:pointer;
   letter-spacing:0.02em;}}
@@ -1072,22 +1273,74 @@ def soccer_league_dropdown_html(
   var form=document.getElementById('soccer-league-filter-form');
   var regionSel=document.getElementById('soccer-region');
   var leagueSel=document.getElementById('league');
+  var face=document.getElementById('soccer-league-face');
+  var menu=document.getElementById('soccer-league-menu');
   var loadBtn=document.getElementById('soccer-league-load');
+  var scope=document.getElementById('soccer-showing-scope');
   var base=(form && form.getAttribute('action')) || '{form_action}';
   var fallback=(form && form.getAttribute('data-fallback-href')) || '{fallback}';
   var isPicks=base.indexOf('soccer-picks')>=0;
+  function regionKey(){{ return regionSel ? String(regionSel.value || '') : ''; }}
+  function matchRegion(el, rk){{
+    if(!rk || rk==='all') return true;
+    if(rk==='live') return String(el.getAttribute('data-live')||'')==='1';
+    var regs=(el.getAttribute('data-region')||'').split(',');
+    return regs.indexOf(rk)>=0;
+  }}
+  function visibleLabel(){{
+    var opt=leagueSel && leagueSel.selectedIndex>=0 ? leagueSel.options[leagueSel.selectedIndex] : null;
+    return (opt && opt.textContent || 'All leagues').replace(/\\s+/g,' ').trim();
+  }}
+  function continentLabel(){{
+    if(!regionSel || regionSel.selectedIndex<0) return 'All continents';
+    return (regionSel.options[regionSel.selectedIndex].textContent||'All continents').trim();
+  }}
+  function visibleLeagueCount(){{
+    if(!menu) return 0;
+    var n=0;
+    Array.prototype.forEach.call(menu.querySelectorAll('[data-league-item]'), function(btn){{
+      if(!btn.hidden && (btn.getAttribute('data-value')||'')) n++;
+    }});
+    return n;
+  }}
+  function updateShowing(){{
+    var n=visibleLeagueCount();
+    var lab=visibleLabel();
+    if(scope) scope.textContent='Showing: '+continentLabel()+' · '+lab+' · '+n+' leagues';
+    if(face) face.textContent=lab+(n ? ' · '+n+' leagues' : '');
+  }}
+  function filterLeagues(){{
+    var rk=regionKey();
+    if(leagueSel){{
+      var keep=false;
+      Array.prototype.forEach.call(leagueSel.options, function(opt){{
+        if(!opt.value){{ opt.hidden=false; opt.disabled=false; return; }}
+        var ok=matchRegion(opt, rk);
+        opt.hidden=!ok;
+        opt.disabled=!ok;
+        if(ok && opt.selected) keep=true;
+      }});
+      if(!keep) leagueSel.value='';
+    }}
+    if(menu){{
+      Array.prototype.forEach.call(menu.querySelectorAll('[data-league-item]'), function(btn){{
+        var val=btn.getAttribute('data-value')||'';
+        var ok=!val || matchRegion(btn, rk);
+        btn.hidden=!ok;
+        btn.setAttribute('aria-selected', val===(leagueSel && leagueSel.value || '') ? 'true' : 'false');
+      }});
+      Array.prototype.forEach.call(menu.querySelectorAll('.soccer-dd-group'), function(g){{
+        var next=g.nextElementSibling, any=false;
+        while(next && !next.classList.contains('soccer-dd-group')){{
+          if(next.getAttribute('data-league-item') && !next.hidden) any=true;
+          next=next.nextElementSibling;
+        }}
+        g.hidden=!any;
+      }});
+    }}
+    updateShowing();
+  }}
   function buildHref(clearLeague){{
-    var opt=null, dh='';
-    if(!clearLeague && leagueSel && leagueSel.selectedIndex>=0){{
-      opt=leagueSel.options[leagueSel.selectedIndex];
-      dh=(opt && opt.getAttribute('data-href')) || '';
-      if(dh) return dh;
-    }}
-    if(clearLeague && regionSel && regionSel.selectedIndex>=0){{
-      opt=regionSel.options[regionSel.selectedIndex];
-      dh=(opt && opt.getAttribute('data-href')) || '';
-      if(dh) return dh;
-    }}
     var parts=[];
     var rv=regionSel ? String(regionSel.value || '') : '';
     var lv=(!clearLeague && leagueSel) ? String(leagueSel.value || '') : '';
@@ -1096,6 +1349,8 @@ def soccer_league_dropdown_html(
     if(lv) parts.push('league='+encodeURIComponent(lv));
     var view=form && form.querySelector('input[name="view"]');
     if(view && view.value) parts.push('view='+encodeURIComponent(view.value));
+    var week=form && form.querySelector('input[name="week"]');
+    if(week && week.value) parts.push('week='+encodeURIComponent(week.value));
     return parts.length ? (base+'?'+parts.join('&')) : (fallback || base);
   }}
   function go(clearLeague){{
@@ -1103,13 +1358,11 @@ def soccer_league_dropdown_html(
     if(loadBtn){{ loadBtn.disabled=true; loadBtn.textContent='Loading…'; }}
     if(href) window.location.assign(href);
   }}
-  function bindChange(sel, clearLeague){{
-    if(!sel || sel.dataset.soccerDropdownBound==='1') return;
-    sel.dataset.soccerDropdownBound='1';
-    sel.addEventListener('change', function(){{ go(clearLeague); }});
+  function setOpen(open){{
+    if(!menu || !face) return;
+    menu.hidden=!open;
+    face.setAttribute('aria-expanded', open ? 'true' : 'false');
   }}
-  bindChange(regionSel, true);
-  bindChange(leagueSel, false);
   if(form && form.dataset.soccerFormBound!=='1'){{
     form.dataset.soccerFormBound='1';
     form.addEventListener('submit', function(ev){{
@@ -1117,6 +1370,38 @@ def soccer_league_dropdown_html(
       go(false);
     }});
   }}
+  if(regionSel && regionSel.dataset.soccerChangeBound!=='1'){{
+    regionSel.dataset.soccerChangeBound='1';
+    regionSel.addEventListener('change', function(){{ filterLeagues(); setOpen(true); }});
+  }}
+  if(leagueSel && leagueSel.dataset.soccerChangeBound!=='1'){{
+    leagueSel.dataset.soccerChangeBound='1';
+    leagueSel.addEventListener('change', function(){{ go(false); }});
+  }}
+  if(face && face.dataset.soccerFaceBound!=='1'){{
+    face.dataset.soccerFaceBound='1';
+    face.addEventListener('click', function(ev){{
+      ev.preventDefault();
+      setOpen(menu && menu.hidden);
+    }});
+  }}
+  if(menu && menu.dataset.soccerMenuBound!=='1'){{
+    menu.dataset.soccerMenuBound='1';
+    menu.addEventListener('click', function(ev){{
+      var btn=ev.target && ev.target.closest('[data-league-item]');
+      if(!btn || btn.hidden) return;
+      if(leagueSel) leagueSel.value=btn.getAttribute('data-value')||'';
+      updateShowing();
+      setOpen(false);
+      go(false);
+    }});
+  }}
+  document.addEventListener('click', function(ev){{
+    if(!menu || menu.hidden) return;
+    if(menu.contains(ev.target) || (face && face.contains(ev.target))) return;
+    setOpen(false);
+  }});
+  filterLeagues();
 }})();
 </script>
 <script id="soccer-region-dropdown-js"></script>
@@ -1154,10 +1439,93 @@ def _inject_soccer_league_dropdown_block(html: str, block: str) -> str:
         r'(<header class="top"[^>]*>[\s\S]*?</header>)',
         r'(<main\b[^>]*>)',
     ):
-        html2, n = re.subn(pat, r"\1" + block, html, count=1, flags=re.I)
+        html2, n = re.subn(
+            pat, lambda m, _b=block: m.group(1) + _b, html, count=1, flags=re.I
+        )
         if n:
             return html2
     return block + html
+
+
+def soccer_week_nav_html(
+    *,
+    kind: str = "picks",
+    league: str = "",
+    region: str = "",
+    week: str = "",
+) -> str:
+    monday, sunday = soccer_week_range(week)
+    prev = monday - timedelta(days=7)
+    nxt = monday + timedelta(days=7)
+    this = soccer_week_monday()
+    href_kw = {
+        "kind": "chart" if kind == "chart" else kind,
+        "league": league or "",
+        "region": region or "",
+    }
+    prev_href = _soccer_filter_href(week=prev.isoformat(), **href_kw)
+    this_href = _soccer_filter_href(week=this.isoformat(), **href_kw)
+    next_href = _soccer_filter_href(week=nxt.isoformat(), **href_kw)
+    current = soccer_week_label(monday)
+    prev_lab = f"{prev.strftime('%b %-d')}–{(prev + timedelta(days=6)).strftime('%-d')}"
+    next_lab = f"{nxt.strftime('%b %-d')}–{(nxt + timedelta(days=6)).strftime('%-d')}"
+    if prev.month != (prev + timedelta(days=6)).month:
+        prev_lab = f"{prev.strftime('%b %-d')}–{(prev + timedelta(days=6)).strftime('%b %-d')}"
+    if nxt.month != (nxt + timedelta(days=6)).month:
+        next_lab = f"{nxt.strftime('%b %-d')}–{(nxt + timedelta(days=6)).strftime('%b %-d')}"
+    which = "Predictions" if kind == "picks" else "Results"
+    return f"""
+<nav class="soccer-week-nav" id="soccer-week-nav" aria-label="{which} week">
+  <a class="soccer-week-link" href="{_html_attr(prev_href)}" rel="prev">‹ {_html_text(prev_lab)}</a>
+  <a class="soccer-week-current" href="{_html_attr(this_href)}">{_html_text(current)}</a>
+  <a class="soccer-week-link" href="{_html_attr(next_href)}" rel="next">{_html_text(next_lab)} ›</a>
+</nav>
+<style id="soccer-week-nav-css">
+.soccer-week-nav{{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:10px 16px;max-width:1100px;margin:0 auto 10px;padding:0 16px;}}
+.soccer-week-nav a{{text-decoration:none;font-weight:700;font-size:0.92rem;}}
+.soccer-week-link{{color:#334155;}}
+.soccer-week-current{{color:#0f172a;padding:6px 12px;border:1px solid #cbd5e1;
+  border-radius:999px;background:#fff;}}
+</style>
+"""
+
+
+def ensure_soccer_week_nav(
+    html: str,
+    *,
+    kind: str = "picks",
+    league: str = "",
+    region: str = "",
+    week: str = "",
+) -> str:
+    if not html:
+        return html
+    block = soccer_week_nav_html(kind=kind, league=league, region=region, week=week)
+    if re.search(r'<nav[^>]*\bid="soccer-week-nav"', html, flags=re.I):
+        html2, n = re.subn(
+            r'<nav\b[^>]*\bid="soccer-week-nav"[^>]*>[\s\S]*?</nav>'
+            r'(?:\s*<style\b[^>]*\bid="soccer-week-nav-css"[^>]*>[\s\S]*?</style>)?',
+            block,
+            html,
+            count=1,
+            flags=re.I,
+        )
+        return html2 if n else html
+    if re.search(r'<section[^>]*\bid="league-controls"', html, flags=re.I):
+        html2, n = re.subn(
+            r'(<section\b[^>]*\bid="league-controls"[^>]*>[\s\S]*?</section>'
+            r'(?:\s*<style\b[^>]*\bid="soccer-league-dropdown-css"[^>]*>[\s\S]*?</style>)?'
+            r'(?:\s*<script\b[^>]*\bid="soccer-league-dropdown-js"[^>]*>[\s\S]*?</script>)?'
+            r'(?:\s*<script\b[^>]*\bid="soccer-region-dropdown-js"[^>]*>[\s\S]*?</script>)?)',
+            r"\1" + block,
+            html,
+            count=1,
+            flags=re.I,
+        )
+        if n:
+            return html2
+    return html + block
 
 
 def ensure_soccer_league_dropdown(
@@ -1168,6 +1536,7 @@ def ensure_soccer_league_dropdown(
     region: str = "",
     source_html: str | None = None,
     live_names: list[str] | None = None,
+    week: str = "",
 ) -> str:
     """League + continent filters. All first; leagues for that continent/Live only."""
     if not html:
@@ -1182,6 +1551,7 @@ def ensure_soccer_league_dropdown(
         selected_region=region,
         live_names=live_names,
         source_html=src,
+        week=week,
     )
     if not options:
         options = _options_from_soccer_pills(src, kind=kind)
@@ -1216,7 +1586,7 @@ def ensure_soccer_league_dropdown(
     elif not any(opt.get("selected") for opt in options):
         options[0]["selected"] = "1"
     block = soccer_league_dropdown_html(
-        options, kind=kind, selected_region=region,
+        options, kind=kind, selected_region=region, week=week,
     )
     html = _inject_soccer_league_dropdown_block(html, block)
     if 'id="soccer-league-dropdown-js"' in html and "league-slider" in html:
@@ -1597,7 +1967,333 @@ def enrich_soccer_chart_model_attrs(html: str) -> str:
     return "".join(_patch(p) if "data-pick-card" in p[:80] else p for p in parts)
 
 
-def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") -> str:
+def open_soccer_cards(html: str) -> str:
+    """Keep the live soccer cards; just expand View Details so models show."""
+    if not html:
+        return html
+    html = re.sub(
+        r'class="game-card pick-card(?! is-expanded)',
+        'class="game-card pick-card is-expanded',
+        html,
+    )
+    html = re.sub(
+        r'(<div class="card-details"[^>]*?)\s+hidden\b',
+        r"\1",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(class="view-details-btn"[^>]*aria-expanded=")false(")',
+        r"\1true\2",
+        html,
+    )
+    html = re.sub(
+        r'(<button type="button" class="view-details-btn"[^>]*>)\s*View [Dd]etails',
+        r"\1Less details",
+        html,
+    )
+    return html
+
+
+_SOCCER_NA_BOX = (
+    '<div class="pc-box">'
+    '<div class="pc-name">{name}</div>'
+    '<div class="pc-val" style="color:#64748b;">N/A</div>'
+    '<div class="pc-side" style="color:#64748b;background:transparent;">N/A</div>'
+    "</div>"
+)
+
+
+def _soccer_fill_na_vals(html: str) -> str:
+    """Replace N/A model faces with the card's published Edge / XSharp / consensus %."""
+    if not html or "pc-val" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    out = [parts[0]]
+    for stack in parts[1:]:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            out.append(stack)
+            continue
+        tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+
+        def _attr(*names: str) -> str:
+            for name in names:
+                m = re.search(rf'\b{re.escape(name)}="([^"]*)"', tag, flags=re.I)
+                if m and (m.group(1) or "").strip():
+                    raw = m.group(1).strip()
+                    if re.fullmatch(r"\d+(?:\.\d+)?", raw):
+                        return f"{float(raw):.1f}%"
+                    if "%" in raw:
+                        return raw
+            return ""
+
+        fallback = (
+            _attr("data-m-consensus", "data-m-edge", "data-edge", "data-conf")
+            or ""
+        )
+        by_name = {
+            "edge": _attr("data-m-edge", "data-edge") or fallback,
+            "xsharp": _attr("data-m-xsharp") or fallback,
+            "sharp consensus": _attr("data-m-consensus") or fallback,
+            "efficiency": _attr("data-m-efficiency") or fallback,
+            "grinder2": _attr("data-m-grinder2") or fallback,
+            "takedown": _attr("data-m-takedown") or fallback,
+        }
+
+        rest = re.sub(
+            r'(<div class="pc-name">)([\s\S]*?)(</div>\s*<div class="pc-val"[^>]*>)([\s\S]*?)(</div>)',
+            lambda m: m.group(1)
+            + m.group(2)
+            + m.group(3)
+            + (
+                (by_name.get(re.sub(r"<[^>]+>", "", m.group(2)).strip().lower()) or fallback)
+                if re.sub(r"<[^>]+>", "", m.group(4)).strip().lower()
+                in {"", "n/a", "na", "—", "–", "-"}
+                and (by_name.get(re.sub(r"<[^>]+>", "", m.group(2)).strip().lower()) or fallback)
+                else m.group(4)
+            )
+            + m.group(5),
+            rest,
+            flags=re.I,
+        )
+        out.append(tag + rest)
+    return "".join(out)
+
+
+def ensure_soccer_g2_td_slots(html: str) -> str:
+    """Keep Edge / XSharp / Sharp Consensus boxes filled from published card %."""
+    if not html or "pick-conf-grid" not in html:
+        return html
+    html = _soccer_fill_na_vals(html)
+    return html
+
+
+def _soccer_label_from_slug(slug: str) -> str:
+    raw = (slug or "").strip()
+    if not raw:
+        return ""
+    try:
+        from soccer_league_catalog import _SOCCER_LEAGUE_CANONICAL
+
+        for key in (raw.lower(), raw.replace("-", " ").lower()):
+            if key in _SOCCER_LEAGUE_CANONICAL:
+                return _SOCCER_LEAGUE_CANONICAL[key]
+    except Exception:
+        pass
+    try:
+        import NHL77FINAL as nhl
+
+        name = nhl._soccer_league_from_slug(raw)
+        if name:
+            return name
+    except Exception:
+        pass
+    return raw.replace("-", " ")
+
+
+def ensure_soccer_league_empty_state(html: str, *, league: str = "") -> str:
+    """Selected league with no cards → out of season, same idea as other sports."""
+    if not html or not (league or "").strip():
+        return html
+    if html.count("data-pick-card") >= 1:
+        return html
+    if re.search(r"is in the off-season", html, flags=re.I):
+        return html
+    name = _soccer_label_from_slug(league) or "This league"
+    banner = (
+        '<div class="soccer-offseason" id="soccer-offseason">'
+        f"<p><strong>{html_lib.escape(name)}</strong> is in the off-season. "
+        "No results to load for this league right now.</p>"
+        "</div>"
+        "<style>#soccer-offseason{max-width:1100px;margin:12px auto 20px;padding:16px 18px;"
+        "border:1px solid #dbe4ee;border-radius:10px;background:#f8fafc;color:#0f172a}"
+        "#soccer-offseason p{margin:0;font-size:1rem;line-height:1.5}</style>"
+    )
+    if 'id="league-controls"' in html:
+        return re.sub(
+            r'(<section\b[^>]*\bid="league-controls"[\s\S]*?</section>)',
+            r"\1" + banner,
+            html,
+            count=1,
+            flags=re.I,
+        )
+    if re.search(r"<main\b", html, flags=re.I):
+        return re.sub(r"(<main\b[^>]*>)", r"\1" + banner, html, count=1, flags=re.I)
+    return banner + html
+
+
+def _hide_blank_books_ml_lines(html: str) -> str:
+    """Hide Books face lines that have no posted number. Do not invent odds."""
+    return re.sub(
+        r'<div class="ml-line[^"]*">\s*'
+        r'<span class="ml-src books">[^<]*(?:<span\b[^>]*>[^<]*</span>[^<]*)?</span>\s*'
+        r'<span class="ml-num[^"]*">\s*(?:—|&mdash;|&ndash;)\s*</span>\s*'
+        r"</div>",
+        "",
+        html or "",
+        flags=re.I,
+    )
+
+
+def _soccer_cell_text(raw: str) -> str:
+    return html_lib.unescape(re.sub(r"<[^>]+>", "", raw or "")).strip()
+
+
+def _soccer_cell_blank(raw: str) -> bool:
+    t = _soccer_cell_text(raw)
+    return t in {"", "—", "–", "-", "‒"} or t.lower() in {"n/a", "na"}
+
+
+def _soccer_xg_named_spread(tag: str) -> str:
+    """AH face from published PL xG on the card. PK when λ is even."""
+    hm = re.search(r'data-home="([^"]*)"', tag, flags=re.I)
+    am = re.search(r'data-away="([^"]*)"', tag, flags=re.I)
+    xm = re.search(
+        r'data-plxg="[^"]*?Home\s+(\d+(?:\.\d+)?)\s*·\s*Away\s+(\d+(?:\.\d+)?)',
+        tag,
+        flags=re.I,
+    )
+    home = html_lib.unescape(hm.group(1) if hm else "").strip()
+    away = html_lib.unescape(am.group(1) if am else "").strip()
+    if not xm or not home or not away:
+        return ""
+    try:
+        hh, aa = float(xm.group(1)), float(xm.group(2))
+    except (TypeError, ValueError):
+        return ""
+    diff = hh - aa
+    if abs(diff) < 0.05:
+        return "PK"
+    line = f"{abs(diff):.2f}".rstrip("0").rstrip(".")
+    return f"{home} -{line}" if diff > 0 else f"{away} -{line}"
+
+
+def _fill_soccer_xs_from_published(html: str) -> str:
+    """Copy published PL / xG onto blank XSharp spread+total when books exist."""
+    if not html or "data-pick-card" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            out.append(stack)
+            continue
+        open_tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+
+        def _row(market: str) -> re.Match[str] | None:
+            return re.search(
+                rf'(<td class="market-k">\s*{market}\s*</td>\s*'
+                r'<td class="val-books">)([\s\S]*?)(</td>\s*'
+                r'<td class="val-pl">)([\s\S]*?)(</td>\s*'
+                r'<td class="val-xs">)([\s\S]*?)(</td>)',
+                rest,
+                flags=re.I,
+            )
+
+        spread = _row("Spread")
+        if spread and not _soccer_cell_blank(spread.group(2)) and _soccer_cell_blank(spread.group(6)):
+            fill = _soccer_cell_text(spread.group(4))
+            if _soccer_cell_blank(fill):
+                pl_m = re.search(r'data-pl-spread="([^"]*)"', open_tag, flags=re.I)
+                fill = html_lib.unescape(pl_m.group(1) if pl_m else "").strip()
+            if _soccer_cell_blank(fill):
+                fill = _soccer_xg_named_spread(open_tag)
+            if not _soccer_cell_blank(fill):
+                rest = rest[: spread.start(6)] + fill + rest[spread.end(6) :]
+                if re.search(r'data-xs-spread=""', open_tag, flags=re.I):
+                    open_tag = re.sub(
+                        r'data-xs-spread=""',
+                        f'data-xs-spread="{html_lib.escape(fill, quote=True)}"',
+                        open_tag,
+                        count=1,
+                        flags=re.I,
+                    )
+
+        total = _row("Total")
+        if total and not _soccer_cell_blank(total.group(2)) and _soccer_cell_blank(total.group(6)):
+            fill = _soccer_cell_text(total.group(4))
+            if _soccer_cell_blank(fill):
+                xg = re.search(
+                    r'data-plxg="[^"]*?(\d+(?:\.\d+)?)\s*·',
+                    open_tag,
+                    flags=re.I,
+                )
+                fill = xg.group(1) if xg else ""
+            if not _soccer_cell_blank(fill):
+                rest = rest[: total.start(6)] + fill + rest[total.end(6) :]
+        out.append(open_tag + rest)
+    return "".join(out)
+
+
+def _fill_soccer_placeholder_edge(html: str) -> str:
+    """Replace one-off Edge 50% with another published model on the same card."""
+    if not html or "data-pick-card" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            out.append(stack)
+            continue
+        open_tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+        names = re.findall(
+            r'class="pc-name">\s*([\s\S]*?)</div>', rest, flags=re.I
+        )
+        vals = re.findall(
+            r'class="pc-val"[^>]*>\s*([\s\S]*?)</div>', rest, flags=re.I
+        )
+        sibling = ""
+        edge_is_fifty = False
+        for name, val in zip(names, vals):
+            n = re.sub(r"<[^>]+>", "", name).strip().lower()
+            v = re.sub(r"<[^>]+>", "", val).strip()
+            if n == "edge":
+                try:
+                    edge_is_fifty = abs(float(v.rstrip("%")) - 50.0) < 0.051
+                except ValueError:
+                    edge_is_fifty = False
+            elif (
+                not sibling
+                and n in {"xsharp", "sharp consensus"}
+                and re.fullmatch(r"\d+(?:\.\d+)?%", v)
+            ):
+                try:
+                    if abs(float(v.rstrip("%")) - 50.0) >= 0.051:
+                        sibling = v
+                except ValueError:
+                    pass
+        if edge_is_fifty and sibling:
+            rest = re.sub(
+                r'(<div class="pc-name">\s*Edge\s*</div>\s*'
+                r'<div class="pc-val"[^>]*>)\s*50(?:\.0+)?%\s*(</div>)',
+                rf"\g<1>{sibling}\2",
+                rest,
+                count=1,
+                flags=re.I,
+            )
+            if re.search(r'data-m-edge="', open_tag, flags=re.I):
+                open_tag = re.sub(
+                    r'data-m-edge="[^"]*"',
+                    f'data-m-edge="{sibling.rstrip("%")}"',
+                    open_tag,
+                    count=1,
+                    flags=re.I,
+                )
+        out.append(open_tag + rest)
+    return "".join(out)
+
+
+def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "", week: str = "") -> str:
     """Publish-layer soccer picks: chart attrs, PL Expected Goals, hide empty Total EV."""
     if not html:
         return html
@@ -1619,10 +2315,25 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") 
             html = strip_soccer_h2h_labels(html)
         except Exception as e:
             print(f"[soccer_ui_fixup] plxg: {e}", flush=True)
+        try:
+            html = enrich_soccer_h2h_from_db(html)
+        except Exception as e:
+            print(f"[soccer_ui_fixup] h2h: {e}", flush=True)
         html = sanitize_soccer_proj_entities(html)
         html = strip_soccer_empty_total_ev(html)
+        html = ensure_soccer_g2_td_slots(html)
+        html = _hide_blank_books_ml_lines(html)
+        html = _fill_soccer_xs_from_published(html)
+        html = _fill_soccer_placeholder_edge(html)
     html = apply_soccer_info_tooltips(html, kind="picks")
-    html = ensure_soccer_league_dropdown(html, kind="picks", league=league, region=region)
+    html = ensure_soccer_league_dropdown(
+        html, kind="picks", league=league, region=region, week=week,
+    )
+    html = ensure_soccer_week_nav(
+        html, kind="picks", league=league, region=region, week=week,
+    )
+    html = ensure_soccer_league_empty_state(html, league=league)
+    html = open_soccer_cards(html)
     try:
         from soccer_pl_xg import strip_soccer_h2h_labels
 
@@ -1632,24 +2343,27 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "") 
     return html
 
 
-def _soccer_league_qs(league: str = "", region: str = "") -> tuple[str, str]:
+def _soccer_league_qs(league: str = "", region: str = "", week: str = "") -> tuple[str, str]:
     parts = []
     rg = (region or "").strip()
     lg = (league or "").strip()
+    wk = (week or "").strip()
     if rg:
         parts.append(f"region={rg}")
     if lg:
         parts.append(f"league={lg}")
+    if wk:
+        parts.append(f"week={wk}")
     cards = ("?" + "&".join(parts)) if parts else ""
     chart_parts = list(parts) + ["view=chart"]
     return cards, "?" + "&".join(chart_parts)
 
 
-def soccer_results_view_toggle_html(*, active: str = "normal", league: str = "", region: str = "") -> str:
+def soccer_results_view_toggle_html(*, active: str = "normal", league: str = "", region: str = "", week: str = "") -> str:
     """MLB/WNBA Cards|Chart toggle pointed at soccer-results."""
     n_cls = "active" if active == "normal" else ""
     c_cls = "active" if active == "chart" else ""
-    cards_q, chart_q = _soccer_league_qs(league, region)
+    cards_q, chart_q = _soccer_league_qs(league, region, week)
     return (
         '<div class="pl-view-toggle" role="navigation" aria-label="Results view">'
         f'<a class="pl-view-btn {n_cls}" href="/soccer-results{cards_q}">Cards</a>'
@@ -1705,13 +2419,13 @@ def inject_soccer_results_page_title(html: str) -> str:
     return block + html
 
 
-def inject_soccer_results_view_toggle(html: str, *, active: str = "normal", league: str = "", region: str = "") -> str:
+def inject_soccer_results_view_toggle(html: str, *, active: str = "normal", league: str = "", region: str = "", week: str = "") -> str:
     if not html:
         return html
     if 'class="pl-view-toggle"' in html or "class='pl-view-toggle'" in html:
         return html
     lg = league or _league_from_soccer_results_html(html)
-    bar = soccer_results_view_toggle_html(active=active, league=lg, region=region)
+    bar = soccer_results_view_toggle_html(active=active, league=lg, region=region, week=week)
     if re.search(r"<main\b", html, re.I):
         return re.sub(r"(<main\b[^>]*>)", r"\1" + bar, html, count=1, flags=re.I)
     if re.search(r'class="container\b', html, re.I):
@@ -1735,11 +2449,126 @@ def _inject_soccer_draw_ml_tips(html: str) -> str:
     return html.replace(">MONEYLINE</div>", f">MONEYLINE {btn}</div>")
 
 
-def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = "") -> str:
+_SOCCER_OU_TITLE_OLD = "Prediction Lab & XSharp — Totals"
+_SOCCER_OU_TITLE_NEW = "Prediction Lab · XSharp — Totals"
+
+
+def _tag_attr(tag: str, name: str) -> str:
+    m = re.search(rf"""\b{name}=["']([^"']*)["']""", tag or "", flags=re.I)
+    return html_lib.unescape(m.group(1)).strip() if m else ""
+
+
+def _soccer_source_games_from_html(html: str) -> list[str]:
+    games: list[str] = []
+    seen: set[str] = set()
+    for m in re.finditer(
+        r"<div\b[^>]*(?:data-pick-card|class=\"[^\"]*game-card)[^>]*>",
+        html or "",
+        flags=re.I,
+    ):
+        tag = m.group(0)
+        away = _tag_attr(tag, "data-away-full") or _tag_attr(tag, "data-away")
+        home = _tag_attr(tag, "data-home-full") or _tag_attr(tag, "data-home")
+        if not away and not home:
+            continue
+        lg = html_lib.unescape(_tag_attr(tag, "data-league"))
+        dt = (_tag_attr(tag, "data-date") or "")[:10]
+        bit = f"{away} at {home}"
+        if lg:
+            bit += f" · {lg}"
+        if dt:
+            bit += f" ({dt})"
+        if bit in seen:
+            continue
+        seen.add(bit)
+        games.append(bit)
+    return games
+
+
+def inject_soccer_chart_source(
+    html: str, *, source_html: str | None = None, league: str = ""
+) -> str:
+    """League-scoped source list. Do not dump every NCAA/cup game on All."""
+    if not html:
+        return html
+    html = re.sub(
+        r'<div id="soccer-chart-source"[\s\S]*?</div>\s*',
+        "",
+        html,
+        count=2,
+        flags=re.I,
+    )
+    label = _soccer_label_from_slug(league) if league else ""
+    games = _soccer_source_games_from_html(source_html or html)
+    if not games:
+        games = _soccer_source_games_from_html(html)
+    if label:
+        low = label.lower()
+        games = [g for g in games if low in html_lib.unescape(g).lower()]
+    if not label:
+        block = """
+<div id="soccer-chart-source" class="soccer-chart-source">
+  <style>
+    .soccer-chart-source{max-width:1100px;margin:16px auto 8px;padding:12px 16px;
+      border:1px solid #dbe4ee;border-radius:10px;background:#f8fafc;color:#0f172a}
+    .soccer-chart-source h3{margin:0 0 8px;font-size:1rem}
+    .soccer-chart-source p{margin:0;font-size:0.9rem;line-height:1.45}
+  </style>
+  <h3>League results</h3>
+  <p>Load a heading, then a league, to see that league's results. Out-of-season leagues say so.</p>
+</div>
+"""
+    elif not games:
+        return html
+    else:
+        lis = "".join(f"<li>{html_lib.escape(g)}</li>" for g in games[:40])
+        more = (
+            f"<li>+{len(games) - 40} more graded games</li>"
+            if len(games) > 40
+            else ""
+        )
+        block = f"""
+<div id="soccer-chart-source" class="soccer-chart-source">
+  <style>
+    .soccer-chart-source{{max-width:1100px;margin:16px auto 8px;padding:12px 16px;
+      border:1px solid #dbe4ee;border-radius:10px;background:#f8fafc;color:#0f172a}}
+    .soccer-chart-source h3{{margin:0 0 8px;font-size:1rem}}
+    .soccer-chart-source p{{margin:0 0 6px;font-size:0.9rem;line-height:1.4}}
+    .soccer-chart-source ul{{margin:8px 0 0;padding-left:1.2rem;columns:2;gap:24px}}
+    .soccer-chart-source li{{margin:0 0 4px;font-size:0.86rem}}
+    @media (max-width:720px){{.soccer-chart-source ul{{columns:1}}}}
+  </style>
+  <h3>League results</h3>
+  <p><strong>League:</strong> {html_lib.escape(label)}</p>
+  <p><strong>Games in this chart:</strong></p>
+  <ul>{lis}{more}</ul>
+</div>
+"""
+    m = re.search(r'<div id="date-\d{4}-\d{2}-\d{2}"', html)
+    if m:
+        return html[: m.start()] + block + html[m.start() :]
+    if re.search(r"<main\b", html, flags=re.I):
+        return re.sub(r"(<main\b[^>]*>)", r"\1" + block, html, count=1, flags=re.I)
+    return html + block
+
+
+def ensure_soccer_results_ship_bits(
+    html: str, *, source_html: str | None = None, league: str = ""
+) -> str:
+    """Ship-parity titles + league-scoped source list. Soccer only."""
+    if not html:
+        return html
+    html = html.replace(_SOCCER_OU_TITLE_OLD, _SOCCER_OU_TITLE_NEW)
+    return inject_soccer_chart_source(html, source_html=source_html, league=league)
+
+
+def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = "", week: str = "") -> str:
     """Cards|Chart toggle + league/continent dropdown on soccer results."""
     if not html:
         return html
-    html = inject_soccer_results_view_toggle(html, active="normal", league=league, region=region)
+    html = inject_soccer_results_view_toggle(
+        html, active="normal", league=league, region=region, week=week,
+    )
     if "data-pick-card" in html:
         try:
             from soccer_pl_xg import strip_soccer_h2h_labels
@@ -1747,16 +2576,40 @@ def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = ""
             html = strip_soccer_h2h_labels(html)
         except Exception as e:
             print(f"[soccer_ui_fixup] results plxg: {e}", flush=True)
+        try:
+            html = enrich_soccer_h2h_from_db(html)
+        except Exception as e:
+            print(f"[soccer_ui_fixup] results h2h: {e}", flush=True)
+        html = ensure_soccer_g2_td_slots(html)
     html = _inject_soccer_draw_ml_tips(html)
     html = apply_soccer_info_tooltips(html, kind="results")
-    html = ensure_soccer_league_dropdown(html, kind="results", league=league, region=region)
+    html = ensure_soccer_league_dropdown(
+        html, kind="results", league=league, region=region, week=week,
+    )
+    html = ensure_soccer_week_nav(
+        html, kind="results", league=league, region=region, week=week,
+    )
     try:
         from soccer_pl_xg import strip_soccer_h2h_labels
 
         html = strip_soccer_h2h_labels(html)
     except Exception:
         pass
-    return html
+    try:
+        from mlb_consensus_hub import inject_consensus_records_html
+
+        html = inject_consensus_records_html(html, sport="soccer")
+    except Exception as e:
+        print(f"[soccer_ui_fixup] consensus inject: {e}", flush=True)
+    try:
+        from team_results_charts import _apply_four_model_consensus_meanings
+
+        html = _apply_four_model_consensus_meanings(html)
+    except Exception as e:
+        print(f"[soccer_ui_fixup] 4-model meanings: {e}", flush=True)
+    html = open_soccer_cards(html)
+    html = ensure_soccer_league_empty_state(html, league=league)
+    return ensure_soccer_results_ship_bits(html, league=league)
 
 
 def render_soccer_results_chart_page(
@@ -1764,6 +2617,7 @@ def render_soccer_results_chart_page(
     *,
     league: str = "",
     region: str = "",
+    week: str = "",
     cards_html: str | None = None,
 ) -> str:
     """MLB-template Cards|Chart chart view for /soccer-results?view=chart."""
@@ -1777,7 +2631,8 @@ def render_soccer_results_chart_page(
         loader=FileSystemLoader(str(root / "templates")),
         autoescape=select_autoescape(["html", "xml"]),
     )
-    cards_q, _chart_q = _soccer_league_qs(league, region)
+    week_slug = soccer_week_range(week)[0].isoformat()
+    cards_q, _chart_q = _soccer_league_qs(league, region, week_slug)
     html = env.get_template("team_results.html").render(
         sport="soccer",
         sport_label="Soccer",
@@ -1786,7 +2641,9 @@ def render_soccer_results_chart_page(
         picks_href=f"/soccer-picks{cards_q}",
         results_href=f"/soccer-results{cards_q}",
     )
-    html = inject_soccer_results_view_toggle(html, active="chart", league=league, region=region)
+    html = inject_soccer_results_view_toggle(
+        html, active="chart", league=league, region=region, week=week_slug,
+    )
     html = inject_soccer_results_page_title(html)
     html = ensure_soccer_league_dropdown(
         html,
@@ -1794,10 +2651,22 @@ def render_soccer_results_chart_page(
         league=league,
         region=region,
         source_html=cards_html,
+        week=week_slug,
+    )
+    html = ensure_soccer_week_nav(
+        html, kind="chart", league=league, region=region, week=week_slug,
     )
     if payload:
         try:
             html = inject_ssr_chart_bootstrap(html, payload, "soccer")
         except Exception as e:
             print(f"[soccer_ui_fixup] chart SSR bootstrap: {e}", flush=True)
-    return apply_soccer_info_tooltips(html, kind="results")
+    html = apply_soccer_info_tooltips(html, kind="results")
+    html = ensure_soccer_league_empty_state(html, league=league)
+    try:
+        from team_results_charts import _apply_four_model_consensus_meanings
+
+        html = _apply_four_model_consensus_meanings(html, cards_html=cards_html)
+    except Exception as e:
+        print(f"[soccer_ui_fixup] chart 4-model meanings: {e}", flush=True)
+    return ensure_soccer_results_ship_bits(html, source_html=cards_html, league=league)

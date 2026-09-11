@@ -4,29 +4,40 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ sport_label }} Results | Prediction Lab</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" />
   <link rel="stylesheet" href="/static/css/research-theme.css" />
+  <link rel="stylesheet" href="/static/css/picks-nav-overrides.css" />
+  <link rel="stylesheet" href="/static/css/sports-chrome.css" />
   <link rel="stylesheet" href="/static/css/team-results.css" />
 </head>
 <body class="research-site">
   {%- set picks_href = picks_href|default('/' ~ sport ~ '/') -%}
   {%- set results_href = results_href|default('/' ~ sport ~ '/results') -%}
 
-  <header class="pl-header">
-    <a class="pl-brand" href="/">PL / <span>Prediction Lab</span></a>
-    <nav class="pl-nav" aria-label="{{ sport_label }}">
+  <header class="pl2-header">
+    <button type="button" class="pl2-burger" id="navHamburger" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+      <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav" aria-label="{{ sport_label }}">
       <a href="{{ picks_href }}">Picks</a>
       <a class="active" href="{{ results_href }}">Results</a>
-      <a href="/">Hub</a>
     </nav>
-  </header>
-
-  <header class="top">
-    <div class="brand">{{ sport_label }} Results</div>
-    <p class="sub">Track graded results by market — Moneyline, Spread, and Totals (O/U). Each market has its own Last Night, Last 7, and Season record.</p>
+    <div class="pl2-header-actions"></div>
   </header>
 
   <main>
-    <section class="controls" id="league-controls">
+    <div class="container">
+    {% set _results_emoji = {'mlb': '⚾', 'soccer': '⚽', 'wnba': '🏀', 'cfl': '🏈', 'ufc': '🥊', 'tennis': '🎾'}.get(sport, '📊') %}
+    <h1 class="page-title" id="pageHeading">{{ _results_emoji }} {{ sport_label }} Results, Performance and Model Accuracy</h1>
+    <div class="sport-results-writeup">
+      {% if sport in ('ufc', 'tennis') %}
+      Track graded {{ sport_label }} results — moneyline performance across Last Night, Last 7, and Season records after events are final.
+      {% else %}
+      Track graded {{ sport_label }} results by market — Moneyline, Spread, and Totals (O/U). Each market has its own Last Night, Last 7, and Season record.
+      {% endif %}
+    </div>
+    <section class="controls" id="league-controls"{% if not show_league %} hidden{% endif %}>
       <label{% if not show_league %} hidden{% endif %}>
         League
         <select id="league">
@@ -35,15 +46,19 @@
       </label>
       <button id="run" type="button"{% if not show_league %} hidden{% endif %}>Load results</button>
       <span id="status" class="status"></span>
+      {% if show_league and sport == 'soccer' %}
+      <p class="soccer-live-leagues" id="soccer-live-leagues" hidden></p>
+      {% endif %}
     </section>
 
     <nav class="market-tabs" id="market-tabs" aria-label="Bet type" hidden>
       <button type="button" class="market-tab active" data-market="moneyline">Moneyline</button>
-      <button type="button" class="market-tab" data-market="spread">Spread</button>
+      <button type="button" class="market-tab" data-market="spread">{% if sport == 'mlb' %}Spread / Run Line{% else %}Spread{% endif %}</button>
       <button type="button" class="market-tab" data-market="totals">Totals (O/U)</button>
     </nav>
 
     <div id="tallies" class="tally-wrap" hidden></div>
+    <div id="pl-consensus-slot"></div>
     <p id="summary" class="note" hidden></p>
 
     <section id="finals-wrap" hidden>
@@ -54,21 +69,21 @@
           <tbody id="results-body"></tbody>
         </table>
       </div>
-      <div id="finals" class="cards" style="margin-top:1.5rem"></div>
+      <div id="finals" class="cards games-grid" style="margin-top:1.5rem"></div>
     </section>
+    </div>
   </main>
 
-  <footer class="site-directory-footer">
-    <div class="directory-shell">
-      <span class="directory-label">Knowledge Directory</span>
-      <span class="directory-wordmark">PREDICTION LAB</span>
-    </div>
-  </footer>
+  {% include "partials/site_directory_footer.html" %}
 
   <script>
-    window.SOCCER_API_BASE = {{ api_base|tojson }};
+    window.TEAM_API_BASE = {{ api_base|tojson }};
+    window.TEAM_SPORT = {{ sport|tojson }};
+    {%- if sport == 'soccer' %}
+    window.SOCCER_API_BASE = window.TEAM_API_BASE;
+    {%- endif %}
     window.TEAM_HIDE_LEAGUE = {{ (not show_league)|tojson }};
   </script>
-  <script src="/static/js/team-results.js"></script>
+  <script src="/static/js/team-results.js?v=mlb-games-5"></script>
 </body>
 </html>

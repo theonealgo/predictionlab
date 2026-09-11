@@ -384,32 +384,16 @@ def _chip_html(face: str, *, missing_reason: str = "") -> str:
 
 
 def strip_soccer_h2h_labels(html: str) -> str:
-    """Soccer HTML must never contain H2H Last 10 / H2H L10.
-
-    Heading/label text only. Never rewrite ``data-plxg`` or other attributes —
-    a global ``PLxG`` substring replace used to turn ``data-plxg="…"`` into
-    ``data-Predicted Score="…"`` and drop following book attributes.
-    """
+    """Chart column header only. Card H2H Last 10 stays on picks/results cards."""
     if not html:
         return html
     html = _H2H_TH_RE.sub(r"\1PL-xG\2", html)
-    html = _H2H_LABEL_RE.sub("PL Expected Goals", html)
     html = re.sub(
         r"(<th[^>]*>)\s*H2H\s*(?:Last\s*10|L10)\s*(</th>)",
         r"\1PL-xG\2",
         html,
         flags=re.I,
     )
-    html = re.sub(
-        r'(<span\b[^>]*\bclass="[^"]*\bsf-label\b[^"]*"[^>]*>)\s*'
-        r"H2H\s*(?:Last\s*10|L10)\s*(</span>)",
-        r"\1PL Expected Goals\2",
-        html,
-        flags=re.I,
-    )
-    # Inline chart JS still had `H2H L10` in head= strings after chip relabel.
-    html = re.sub(r"H2H\s*Last\s*10", "PL Expected Goals", html, flags=re.I)
-    html = re.sub(r"H2H\s*L10", "PL-xG", html, flags=re.I)
     return html
 
 
@@ -455,7 +439,7 @@ def enrich_soccer_plxg_html(html: str) -> str:
     chip_re = re.compile(
         r'<div\b[^>]*\bclass="[^"]*\bsf-item\b[^"]*"[^>]*>\s*'
         r'<span\b[^>]*\bclass="[^"]*\bsf-label\b[^"]*"[^>]*>\s*'
-        r'(?:H2H\s*Last\s*10|PL\s*Expected\s*Goals)\s*</span>\s*'
+        r'PL\s*Expected\s*Goals\s*</span>\s*'
         r'<span\b[^>]*\bclass="[^"]*\bsf-val\b[^"]*"[^>]*>\s*([^<]*?)\s*</span>'
         r'(?:\s*<button\b[^>]*\bpl-info-btn\b[^>]*>\s*ⓘ\s*</button>)?'
         r'\s*</div>',
@@ -511,10 +495,16 @@ def enrich_soccer_plxg_html(html: str) -> str:
             xg = league_avg_prediction()
         face = format_plxg_face(xg)
         open2 = _set_attr(open_tag, "data-plxg", face)
-        open2 = _drop_attr(open2, "data-h2h")
-        open2 = _drop_attr(open2, "data-h2h-reason")
         open2 = _drop_attr(open2, "data-plxg-reason")
         rest2 = _ensure_chip(rest, face, missing_reason="")
+        # One PL Expected Goals block per card — keep the first.
+        seen = {"n": 0}
+
+        def _one_plxg(m: re.Match[str]) -> str:
+            seen["n"] += 1
+            return m.group(0) if seen["n"] == 1 else ""
+
+        rest2 = chip_re.sub(_one_plxg, rest2)
         return open2 + rest2
 
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)

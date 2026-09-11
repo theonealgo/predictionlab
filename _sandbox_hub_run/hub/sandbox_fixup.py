@@ -2379,6 +2379,191 @@ def enrich_soccer_h2h_from_db(html: str) -> str:
     return out
 
 
+def enrich_soccer_books_from_db(html: str) -> str:
+    """Fill empty Books spread / ML cells from isolation betting_lines (same date + teams).
+
+    Display-only. Does not invent lines or reuse a prior meeting's number.
+    """
+    if not html or "data-pick-card" not in html and "val-books" not in html:
+        return html
+    try:
+        import sqlite3
+        from pathlib import Path
+    except Exception:
+        return html
+
+    db_path = Path.home() / "Documents/Personal/soccer/data/sandbox_results.db"
+    if not db_path.is_file():
+        return html
+
+    def _norm(name: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+    def _fmt_ml(v: Any) -> str:
+        try:
+            n = int(round(float(v)))
+        except (TypeError, ValueError):
+            return ""
+        if n == 0:
+            return ""
+        return f"+{n}" if n > 0 else str(n)
+
+    def _fav_spread(home: str, away: str, home_spread: float) -> str:
+        if home_spread <= 0:
+            return f"{home} {home_spread:g}"
+        return f"{away} {-home_spread:g}"
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        rows = conn.execute(
+            "SELECT game_date, home_team, away_team, spread, total, "
+            "home_moneyline, away_moneyline FROM betting_lines "
+            "WHERE game_date >= '2026-08-01'"
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        print(f"[sandbox_fixup] soccer books db: {e}", flush=True)
+        return html
+
+    by_key: dict[tuple[str, str, str], tuple[Any, Any, Any, Any]] = {}
+    for game_date, home, away, spread, total, hml, aml in rows:
+        dk = str(game_date or "")[:10]
+        if not dk:
+            continue
+        by_key[(dk, _norm(home), _norm(away))] = (spread, total, hml, aml)
+
+    if not by_key:
+        return html
+
+    empty = {"", "—", "-", "–", "‒", "N/A", "n/a"}
+
+    def _lookup(day: str, home: str, away: str):
+        return by_key.get((day, _norm(home), _norm(away))) or by_key.get(
+            (day, _norm(away), _norm(home))
+        )
+
+    def _fill_spread_cell(chunk: str, text: str) -> str:
+        if not text:
+            return chunk
+
+        def _repl(m: re.Match[str]) -> str:
+            cur = (m.group(2) or "").strip()
+            if cur not in empty:
+                return m.group(0)
+            return f"{m.group(1)}{text}{m.group(3)}"
+
+        return re.sub(
+            r'(<td class="market-k">Spread</td>\s*<td class="val-books">)([^<]*)(</td>)',
+            _repl,
+            chunk,
+            count=1,
+            flags=re.I,
+        )
+
+    def _fill_face_ml(chunk: str, away_ml: str, home_ml: str) -> str:
+        if not away_ml and not home_ml:
+            return chunk
+        vals = [away_ml, home_ml]
+        idx = {"n": 0}
+
+        def _repl(m: re.Match[str]) -> str:
+            i = idx["n"]
+            idx["n"] += 1
+            cur = (m.group(2) or "").strip()
+            nxt = vals[i] if i < 2 else ""
+            if cur not in empty or not nxt:
+                return m.group(0)
+            return f"{m.group(1)}{nxt}{m.group(3)}"
+
+        return re.sub(
+            r'(<div class="ml-line face-books-ml">[\s\S]*?<span class="ml-num[^"]*">)([^<]*)(</span>)',
+            _repl,
+            chunk,
+            flags=re.I,
+        )
+
+    def _patch_card(card: str, day: str) -> str:
+        home_m = re.search(r'\bdata-home="([^"]*)"', card)
+        away_m = re.search(r'\bdata-away="([^"]*)"', card)
+        home = (home_m.group(1) if home_m else "").strip()
+        away = (away_m.group(1) if away_m else "").strip()
+        if not home or not away:
+            names = re.findall(
+                r'<div\b[^>]*\bclass="[^"]*\bteam-name\b[^"]*"[^>]*>\s*([^<]+)',
+                card,
+                flags=re.I,
+            )
+            if len(names) >= 2:
+                away = away or names[0].strip()
+                home = home or names[1].strip()
+        hit = _lookup(day, home, away)
+        if not hit:
+            return card
+        spread, _total, hml, aml = hit
+        out = card
+        if spread is not None:
+            try:
+                txt = _fav_spread(home, away, float(spread))
+            except (TypeError, ValueError):
+                txt = ""
+            if txt:
+                out = _fill_spread_cell(out, txt)
+                open_m = re.match(r"(<div\b[^>]*>)", out)
+                if open_m and re.search(r'data-books-spread=""', open_m.group(1)):
+                    out = (
+                        open_m.group(1).replace(
+                            'data-books-spread=""',
+                            f'data-books-spread="{txt.replace(chr(34), "")}"',
+                            1,
+                        )
+                        + out[open_m.end() :]
+                    )
+        away_s = _fmt_ml(aml)
+        home_s = _fmt_ml(hml)
+        return _fill_face_ml(out, away_s, home_s)
+
+    parts = re.split(r'(<div class="date-section\b[^"]*"[^>]*>)', html, flags=re.I)
+    if len(parts) <= 1:
+        # Results often use a last-night date in the heading.
+        day_m = re.search(r"20\d{2}-\d{2}-\d{2}", html)
+        day = day_m.group(0) if day_m else ""
+        if not day:
+            return html
+        chunks = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+        if len(chunks) > 1:
+            return chunks[0] + "".join(_patch_card(c, day) for c in chunks[1:])
+        chunks = re.split(
+            r'(?=<div\b[^>]*\bclass="[^"]*\bgame-card\b)', html, flags=re.I
+        )
+        if len(chunks) > 1:
+            return chunks[0] + "".join(_patch_card(c, day) for c in chunks[1:])
+        return html
+
+    out: list[str] = [parts[0]]
+    i = 1
+    while i < len(parts):
+        open_tag = parts[i]
+        body = parts[i + 1] if i + 1 < len(parts) else ""
+        day_m = re.search(r"id=\"date-(\d{4}-\d{2}-\d{2})\"", open_tag) or re.search(
+            r"20\d{2}-\d{2}-\d{2}", open_tag + body[:400]
+        )
+        day = day_m.group(1) if day_m and day_m.lastindex else (day_m.group(0) if day_m else "")
+        if day:
+            chunks = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', body, flags=re.I)
+            if len(chunks) > 1:
+                body = chunks[0] + "".join(_patch_card(c, day) for c in chunks[1:])
+            else:
+                chunks = re.split(
+                    r'(?=<div\b[^>]*\bclass="[^"]*\bgame-card\b)', body, flags=re.I
+                )
+                if len(chunks) > 1:
+                    body = chunks[0] + "".join(_patch_card(c, day) for c in chunks[1:])
+        out.append(open_tag)
+        out.append(body)
+        i += 2
+    return "".join(out)
+
+
 def _flip_spread_side_text(text: str, home: str, away: str) -> str:
     """Invert favorite↔dog spread display. 'Orioles -1.5' → 'Angels -1.5'.
 
@@ -3544,6 +3729,21 @@ def apply_sport_fixups(html: str, sport: str, which: str = "picks") -> str:
             html = strip_auth_chrome(html)
         except Exception:
             pass
+        if sport == "soccer":
+            html = replace_soccer_league_pills_with_dropdown(html, which=which)
+            if which == "results":
+                html = align_soccer_cards_league_dropdown(html)
+            html = inject_soccer_card_grid(html)
+            html = enrich_soccer_books_from_db(html)
+            html = ensure_soccer_league_load_js(html)
+            try:
+                from site_chrome import ensure_locked_site_chrome
+
+                html = ensure_locked_site_chrome(html)
+            except Exception as e:
+                print(f"[sandbox_fixup] soccer locked chrome: {e}", flush=True)
+        # Soccer results: add the two consensus charts only — do not rebuild the board.
+        html = _inject_consensus_if_results(html, sport, which)
         return html
     # Always: unlock paywall stubs, strip isolation banners / duplicate Picks|Results bars
     html = unlock_premium_card_details(html)
@@ -3585,14 +3785,14 @@ def apply_sport_fixups(html: str, sport: str, which: str = "picks") -> str:
             html = ensure_sport_picks_writeup(html, "soccer")
             html = strip_duplicate_soccer_predictions_heading(html)
             # League pills → results-style dropdown + currently-live note.
-            html = replace_soccer_league_pills_with_dropdown(html)
+            html = replace_soccer_league_pills_with_dropdown(html, which=which)
             # Restore Pick Confidence before grid inject (also runs inside inject).
             html = restore_pick_confidence_css(html)
             # Live soccer HTML can leave cards left-stacked; force shared multi-col grid.
             html = inject_soccer_card_grid(html)
         if sport == "soccer" and which == "results":
             # Live cards results still ship league pills — convert to dropdown (no picks-grid CSS).
-            html = replace_soccer_league_pills_with_dropdown(html)
+            html = replace_soccer_league_pills_with_dropdown(html, which=which)
             # Cards league list must match Chart (All + audit leagues), not curated pills-only.
             html = align_soccer_cards_league_dropdown(html)
             html = gate_soccer_flat_unit_tracking(html)
@@ -4392,6 +4592,7 @@ def align_soccer_cards_league_dropdown(html: str) -> str:
     live_names: set[str] = set()
     selected_slug = ""
     selected_name = ""
+    live_names.update(_soccer_last_night_league_names(html))
     for om in re.finditer(r"<option\b([^>]*)>(.*?)</option>", body, flags=re.I | re.S):
         attrs, inner = om.group(1) or "", om.group(2) or ""
         label = re.sub(r"<[^>]+>", "", inner)
@@ -4528,7 +4729,109 @@ def fix_soccer_cards_efficiency_season(html: str) -> str:
         return html
 
 
-def replace_soccer_league_pills_with_dropdown(html: str) -> str:
+SOCCER_LEAGUE_LOAD_JS = """
+(function(){
+  function hrefFor(sel){
+    if(!sel) return '';
+    var opt=sel.options[sel.selectedIndex];
+    var href=opt && opt.getAttribute('data-href');
+    if(href) return href;
+    var v=(sel.value||'').trim();
+    var results=/\\/soccer\\/results|soccer-results/.test(location.pathname);
+    if(!v || v.toUpperCase()==='ALL') return results ? '/soccer/results' : '/soccer/';
+    return (results ? '/soccer/results?league=' : '/soccer/?league=') + encodeURIComponent(v);
+  }
+  function markLive(sel){
+    var box=document.getElementById('league-controls');
+    if(!box||!sel) return;
+    var opt=sel.options[sel.selectedIndex];
+    var live=opt && opt.getAttribute('data-live')==='1';
+    box.classList.toggle('is-live-selected', !!live);
+  }
+  function go(sel){
+    var href=hrefFor(sel || document.getElementById('league'));
+    if(href) location.assign(href);
+  }
+  if(!window.__soccerLeagueLoadBound){
+    window.__soccerLeagueLoadBound=true;
+    document.addEventListener('click', function(e){
+      var btn=e.target && e.target.closest && e.target.closest('#soccer-league-load');
+      if(!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      go(document.getElementById('league'));
+    }, true);
+  }
+  var sel=document.getElementById('league');
+  if(sel) markLive(sel);
+})();
+"""
+
+
+def _soccer_last_night_date(html: str) -> str:
+    m = re.search(
+        r"Last Night'?s Soccer Results\s*—\s*(\d{4}-\d{2}-\d{2})",
+        html or "",
+        flags=re.I,
+    )
+    return m.group(1) if m else ""
+
+
+def _soccer_date_section_block(html: str, date: str) -> str:
+    if not html or not date:
+        return ""
+    m = re.search(rf'<div id="date-{re.escape(date)}"', html, flags=re.I)
+    if not m:
+        return ""
+    rest = html[m.start() :]
+    nxt = re.search(r'<div id="date-\d{4}-\d{2}-\d{2}"', rest[10:], flags=re.I)
+    return rest[: nxt.start() + 10] if nxt else rest[:180000]
+
+
+def _soccer_last_night_league_names(html: str) -> set[str]:
+    """Leagues with a card on the Last Night slate — those are the live/active ones."""
+    if not html:
+        return set()
+    date = _soccer_last_night_date(html)
+    names: set[str] = set()
+    block = _soccer_date_section_block(html, date) if date else ""
+    if block:
+        for name in re.findall(r'data-league="([^"]+)"', block):
+            name = (name or "").strip()
+            if name:
+                names.add(name)
+        if names:
+            return names
+    # Picks pages: any card on the current slate is "live".
+    if "data-pick-card" in html or 'class="pick-card' in html:
+        for m in re.finditer(r'data-league="([^"]+)"', html):
+            name = (m.group(1) or "").strip()
+            if name:
+                names.add(name)
+    return names
+
+
+def ensure_soccer_league_load_js(html: str) -> str:
+    """Always bind Load via document click — isolation pages can miss the first bind."""
+    if not html or 'id="soccer-league-load"' not in html:
+        return html
+    html = re.sub(
+        r'<script id="soccer-league-dropdown-js">[\s\S]*?</script>',
+        f'<script id="soccer-league-dropdown-js">{SOCCER_LEAGUE_LOAD_JS}</script>',
+        html,
+        count=1,
+        flags=re.I,
+    )
+    if 'id="soccer-league-dropdown-js"' not in html:
+        html = html.replace(
+            "</body>",
+            f'<script id="soccer-league-dropdown-js">{SOCCER_LEAGUE_LOAD_JS}</script></body>',
+            1,
+        )
+    return html
+
+
+def replace_soccer_league_pills_with_dropdown(html: str, *, which: str = "") -> str:
     """Replace soccer league-pill slider with a results-style <select> + live note.
 
     Uses a balanced </div> walk — the slider contains nested ``.league-badges`` divs;
@@ -4596,6 +4899,10 @@ def replace_soccer_league_pills_with_dropdown(html: str) -> str:
     # If builder didn't mark live pills (common on results HTML), omit the note —
     # chart/CSR pages fill #soccer-live-leagues from upcoming via JS instead.
 
+    is_results = (which or "").lower() == "results" or (
+        "Soccer Results, Performance" in html and "data-pick-card" not in html
+    )
+    load_label = "Load results" if is_results else "Load"
     controls = f"""
 <section class="controls soccer-league-controls" id="league-controls" aria-label="League filter">
   <label>
@@ -4604,6 +4911,7 @@ def replace_soccer_league_pills_with_dropdown(html: str) -> str:
       {"".join(options)}
     </select>
   </label>
+  <button type="button" id="soccer-league-load" class="soccer-league-load">{_html_text(load_label)}</button>
   {live_line}
 </section>
 <style id="soccer-league-dropdown-css">
@@ -4614,25 +4922,21 @@ def replace_soccer_league_pills_with_dropdown(html: str) -> str:
 .soccer-league-controls select{{min-width:min(100%,320px);max-width:420px;padding:8px 12px;
   border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;
   font-size:0.95rem;font-weight:600;}}
+.soccer-league-load{{padding:8px 16px;border:0;border-radius:8px;background:#84cc16;
+  color:#14532d;font-weight:800;font-size:0.92rem;cursor:pointer;}}
 .soccer-live-leagues{{margin:0;flex:1 1 220px;font-size:0.86rem;line-height:1.35;color:#0f172a;}}
 .soccer-live-leagues strong{{color:#059669;}}
 .soccer-live-leagues.muted{{color:#64748b;}}
+.soccer-league-controls option[data-live="1"]{{color:#059669;font-weight:700;}}
+.soccer-league-controls.is-live-selected select{{color:#059669;font-weight:700;border-color:#059669;}}
 /* Hide legacy pill slider when dropdown is present */
 .league-slider{{display:none!important;}}
+a.league-pill,.league-pill{{display:none!important;}}
 /* Avoid empty 58vh box if markup ever orphans content outside .container */
 body.research-site[data-sandbox-sport="soccer"] > .container{{min-height:0;}}
 </style>
 <script id="soccer-league-dropdown-js">
-(function(){{
-  var sel=document.getElementById('league');
-  if(!sel||sel.dataset.soccerDropdownBound==='1') return;
-  sel.dataset.soccerDropdownBound='1';
-  sel.addEventListener('change', function(){{
-    var opt=sel.options[sel.selectedIndex];
-    var href=(opt && opt.getAttribute('data-href')) || '/soccer/';
-    if(href) window.location.href=href;
-  }});
-}})();
+{SOCCER_LEAGUE_LOAD_JS}
 </script>
 """
 
@@ -4720,8 +5024,8 @@ def _soccer_selected_league_name(html: str) -> str:
     )
     if m:
         name = re.sub(r"<[^>]+>", "", m.group(1) or "")
+        name = re.sub(r"\s*·\s*Live\s*$", "", name, flags=re.I)
         name = re.sub(r"\s*\(\d+\)\s*$", "", name).strip()
-        name = re.sub(r"\s*·\s*Live\s*$", "", name, flags=re.I).strip()
         if name and name.lower() not in ("all leagues", "all", "soccer"):
             return name
     m = re.search(
@@ -5076,7 +5380,7 @@ html body.research-site[data-sandbox-sport="soccer"] .date-section:not(.chart-mo
 html body[data-sandbox-sport="soccer"] .date-section:not(.chart-mode) .games-grid,
 html body[data-sandbox-sport="soccer"] .games-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 16px !important;
   align-items: start !important;
   justify-content: center !important;
@@ -5095,7 +5399,9 @@ html body[data-sandbox-sport="soccer"] .games-grid > .slate-league-heading {
   display: none !important;
 }
 html body[data-sandbox-sport="soccer"] .date-section .games-grid > .game-card-stack,
-html body[data-sandbox-sport="soccer"] .games-grid > .game-card-stack {
+html body[data-sandbox-sport="soccer"] .games-grid > .game-card-stack,
+html body[data-sandbox-sport="soccer"] .games-grid > .game-card,
+html body[data-sandbox-sport="soccer"] .games-grid > .pick-card {
   width: 100% !important;
   max-width: none !important;
   min-width: 0 !important;
@@ -5192,12 +5498,19 @@ html body[data-sandbox-sport="soccer"] .pc-val {
   flex: 0 0 auto !important;
   min-height: 24px !important;
 }
+@media (max-width: 1020px) {
+  html body[data-sandbox-sport="soccer"] .date-section:not(.chart-mode) .games-grid,
+  html body[data-sandbox-sport="soccer"] .games-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
 @media (max-width: 640px) {
   html body[data-sandbox-sport="soccer"] .date-section:not(.chart-mode) .games-grid,
   html body[data-sandbox-sport="soccer"] .games-grid {
     grid-template-columns: 1fr !important;
   }
-  html body[data-sandbox-sport="soccer"] .games-grid > .game-card-stack {
+  html body[data-sandbox-sport="soccer"] .games-grid > .game-card-stack,
+  html body[data-sandbox-sport="soccer"] .games-grid > .game-card {
     max-width: 100% !important;
     min-height: 0 !important;
   }

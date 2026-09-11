@@ -141,6 +141,49 @@ def _has_proj_model_row(html: str, model_cls: str, label: str) -> bool:
     )
 
 
+def _fill_blank_proj_val(html: str, model_cls: str, label: str, scoreline: str) -> str:
+    """Replace an existing Projected Score dash with the real model scoreline."""
+    if not html or not scoreline:
+        return html
+    esc = (
+        scoreline.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+    def _patch_row(m: re.Match[str]) -> str:
+        block = m.group(0)
+        model_m = re.search(
+            r'<span\b[^>]*\bclass="([^"]*\bproj-model\b[^"]*)"[^>]*>([^<]*)</span>',
+            block,
+            flags=re.I,
+        )
+        if not model_m:
+            return block
+        cls = (model_m.group(1) or "").lower()
+        lab = (model_m.group(2) or "").strip()
+        if model_cls.lower() not in cls and lab.lower() != label.lower():
+            return block
+        val_m = re.search(
+            r'(<span\b[^>]*\bclass="[^"]*\bproj-val\b[^"]*"[^>]*>)([^<]*)(</span>)',
+            block,
+            flags=re.I,
+        )
+        if not val_m:
+            return block
+        val = (val_m.group(2) or "").strip().replace("&mdash;", "—").replace("&ndash;", "–")
+        if val and val not in ("—", "–", "-", "N/A", "n/a"):
+            return block
+        return block[: val_m.start()] + val_m.group(1) + esc + val_m.group(3) + block[val_m.end() :]
+
+    return re.sub(
+        r'<div\b[^>]*\bclass="[^"]*\bproj-row\b[^"]*"[^>]*>[\s\S]*?</div>',
+        _patch_row,
+        html,
+        flags=re.I,
+    )
+
+
 def _inject_projected_score_rows(rest: str, pl_proj: str, xs_proj: str) -> str:
     """Fill missing View Details PL/XSharp projected-score rows.
 
@@ -150,6 +193,10 @@ def _inject_projected_score_rows(rest: str, pl_proj: str, xs_proj: str) -> str:
     if not rest or (not pl_proj and not xs_proj):
         return rest
     rest2 = rest
+    if pl_proj:
+        rest2 = _fill_blank_proj_val(rest2, "pl", "Prediction Lab", pl_proj)
+    if xs_proj:
+        rest2 = _fill_blank_proj_val(rest2, "xs", "XSharp", xs_proj)
     missing_pl = bool(pl_proj) and not _has_proj_model_row(rest2, "pl", "Prediction Lab")
     missing_xs = bool(xs_proj) and not _has_proj_model_row(rest2, "xs", "XSharp")
     if not missing_pl and not missing_xs:
@@ -423,8 +470,10 @@ def enrich_mlb_chart_data_attrs(html: str) -> str:
                 away = _round_half(xt - home)
                 xs_proj = _labeled(away, home)
 
-        # Last resort: scale PL split to XSharp (or books) total when XS line missing
-        if not xs_proj:
+        # Last resort: scale PL split to XSharp (or books) total when XS line missing.
+        # Never invent an MLB XSharp face from PL/books — that is a different model.
+        is_mlb = bool(re.search(r'\bdata-sport="MLB"', open_tag, flags=re.I))
+        if not xs_proj and not is_mlb:
             T = _parse_total(xs_tot) or _parse_total(books_tot)
             nums = re.findall(r"(\d+(?:\.\d+)?)", pl_proj or "")
             if T is not None and len(nums) >= 2:

@@ -80,7 +80,7 @@ def test_soccer_league_slug_filters_to_one_league(nhl):
     assert any(lg['name'] == 'English Premier League' and lg['active'] for lg in leagues_ui[1:])
 
 
-def test_soccer_picks_bare_url_defaults_to_live(nhl, monkeypatch):
+def test_soccer_picks_bare_url_defaults_to_all(nhl, monkeypatch):
     monkeypatch.setattr(nhl, 'log_site_visit', lambda *_a, **_k: None)
     monkeypatch.setattr(nhl, 'is_premium_user', lambda: False)
 
@@ -91,7 +91,7 @@ def test_soccer_picks_bare_url_defaults_to_live(nhl, monkeypatch):
     with nhl.app.test_request_context('/soccer-picks'):
         out = nhl.sport_predictions('SOCCER')
     assert getattr(out, 'status_code', None) == 302
-    assert '/soccer-picks?region=live' in (out.headers.get('Location') or '')
+    assert '/soccer-picks?region=all' in (out.headers.get('Location') or '')
 
 
 def test_soccer_catalog_books_skipped_without_league(nhl):
@@ -132,7 +132,7 @@ def test_soccer_picks_page_passes_multi_date_sorted_dates(nhl, monkeypatch):
 
     monkeypatch.setattr(N, 'current_user', _User(), raising=False)
 
-    with N.app.test_request_context('/soccer-picks?league=english-premier-league'):
+    with N.app.test_request_context('/soccer-picks?league=english-premier-league&week=2026-06-01'):
         out = N.sport_predictions('SOCCER')
 
     assert out == 'ok'
@@ -492,3 +492,138 @@ def test_soccer_results_proj_score_not_model_unavailable(nhl):
     # Same raw number, opposite convention — PL must not reuse the book sign.
     assert g.get('disp_book_spread') == pytest.approx(-0.5)
     assert g.get('disp_pl_spread') == pytest.approx(0.5)
+
+
+def test_soccer_picks_region_all_keeps_this_week_dates(nhl, monkeypatch):
+    from datetime import datetime, timedelta
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    next_week = (datetime.now() + timedelta(days=8)).strftime("%Y-%m-%d")
+    preds = [
+        {
+            "home_team_id": "Arsenal",
+            "away_team_id": "Chelsea",
+            "game_date": today,
+            "league": "English Premier League",
+            "home_score": None,
+            "ensemble_prob": 58.0,
+            "elo_prob": 57.0,
+        },
+        {
+            "home_team_id": "Real Madrid",
+            "away_team_id": "Barcelona",
+            "game_date": tomorrow,
+            "league": "Spanish LaLiga",
+            "home_score": None,
+            "ensemble_prob": 54.0,
+            "elo_prob": 53.0,
+        },
+        {
+            "home_team_id": "Bayern",
+            "away_team_id": "Dortmund",
+            "game_date": next_week,
+            "league": "German Bundesliga",
+            "home_score": None,
+            "ensemble_prob": 55.0,
+            "elo_prob": 54.0,
+        },
+        {
+            "home_team_id": "Milan",
+            "away_team_id": "Inter",
+            "game_date": today,
+            "league": "Italian Serie A",
+            "home_score": 2,
+            "away_score": 1,
+            "ensemble_prob": 52.0,
+            "elo_prob": 51.0,
+        },
+    ]
+    captured = {}
+
+    def _fake_render(**kwargs):
+        captured.update(kwargs)
+        return "ok"
+
+    monkeypatch.setattr(nhl, "get_upcoming_predictions", lambda *_a, **_k: preds)
+    monkeypatch.setattr(nhl, "_refresh_books_on_predictions", lambda *_a, **_k: None)
+    monkeypatch.setattr(nhl, "_enrich_thin_soccer_predictions", lambda *_a, **_k: 0)
+    monkeypatch.setattr(nhl, "_overlay_soccer_catalog_books", lambda *_a, **_k: 0)
+    monkeypatch.setattr(nhl, "_render_espn_picks_page", _fake_render)
+    monkeypatch.setattr(nhl, "log_site_visit", lambda *_a, **_k: None)
+    monkeypatch.setattr(nhl, "is_premium_user", lambda: False)
+
+    class _User:
+        is_authenticated = True
+
+    monkeypatch.setattr(nhl, "current_user", _User(), raising=False)
+    with nhl.app.test_request_context("/soccer-picks?region=all"):
+        out = nhl.sport_predictions("SOCCER")
+    assert out == "ok"
+    assert today in captured["sorted_dates"]
+    if tomorrow[:10] <= nhl._soccer_request_week_bounds()[1]:
+        assert tomorrow in captured["sorted_dates"]
+    assert next_week not in captured["sorted_dates"]
+    leagues = {p.get("league") for gs in captured["grouped_predictions"].values() for p in gs}
+    assert "Italian Serie A" not in leagues
+
+
+def test_soccer_dropdown_marks_live_and_in_season():
+    from soccer_ui_fixup import soccer_league_dropdown_html
+
+    html = soccer_league_dropdown_html(
+        [
+            {"slug": "", "href": "/soccer-picks?region=all", "label": "All", "group": "", "selected": "1", "live": "0"},
+            {
+                "slug": "english-premier-league",
+                "href": "/soccer-picks?league=english-premier-league",
+                "label": "English Premier League",
+                "group": "Europe",
+                "regions": "top,europe",
+                "selected": "",
+                "live": "1",
+                "in_season": "1",
+            },
+            {
+                "slug": "spanish-laliga",
+                "href": "/soccer-picks?league=spanish-laliga",
+                "label": "Spanish LaLiga",
+                "group": "Europe",
+                "regions": "top,europe",
+                "selected": "",
+                "live": "0",
+                "in_season": "1",
+            },
+            {
+                "slug": "south-african-premiership",
+                "href": "/soccer-picks?league=south-african-premiership",
+                "label": "South African Premiership",
+                "group": "Africa",
+                "regions": "africa",
+                "selected": "",
+                "live": "0",
+                "in_season": "1",
+            },
+        ],
+        kind="picks",
+        selected_region="all",
+        week="2026-09-07",
+    )
+    assert "· Live" in html
+    assert "● English Premier League · Live" in html
+    assert "Spanish LaLiga · Live" not in html
+    assert "● Spanish LaLiga" in html
+    assert 'data-in-season="1"' in html
+    assert "Currently live:" not in html
+    assert 'data-live="1"' in html
+    assert "soccer-league-native" not in html
+    assert "addEventListener('change'" in html
+    assert "filterLeagues" in html
+    assert "go(true)" not in html
+    assert 'data-region="africa"' in html
+    assert "soccer-dd-opt in-season" in html
+    assert ".soccer-dd-opt.in-season" in html
+    assert "#059669" in html
+    assert "All continents" in html
+    assert 'name="week"' in html
+    assert "2026-09-07" in html

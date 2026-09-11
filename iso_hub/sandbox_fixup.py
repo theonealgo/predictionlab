@@ -299,9 +299,15 @@ def strip_sandbox_dev_notes(html: str) -> str:
     html = re.sub(r"\bThe Odds API\b", "", html, flags=re.I)
     html = re.sub(r"Elo\s*\+\s*market\s*blend", "", html, flags=re.I)
     html = re.sub(r"Prob\s*source", "", html, flags=re.I)
-    # Forbidden isolation event names (AGENTS rule 9) — never show to users
-    html = re.sub(r"\bSandbox Open\b", "ATP Tour", html, flags=re.I)
-    html = re.sub(r"\bSandbox\s+Open\b", "ATP Tour", html, flags=re.I)
+    # Forbidden isolation event names (AGENTS rule 9) — never show to users.
+    # Golf demo boards are PGA; tennis isolation used the same stub name.
+    _tour = (
+        "PGA Tour"
+        if re.search(r"golf-board|data-sport=\"golf\"|data-sandbox-sport=\"golf\"|/golf-picks", html, flags=re.I)
+        else "ATP Tour"
+    )
+    html = re.sub(r"\bSandbox Open\b", _tour, html, flags=re.I)
+    html = re.sub(r"\bSandbox\s+Open\b", _tour, html, flags=re.I)
     # Analysis panels that dump source=/market=/elo= internals
     html = re.sub(
         r'<div\b[^>]*\bid=["\']analysis-ufc-\d+["\'][^>]*>[\s\S]*?</div>',

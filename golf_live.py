@@ -4,6 +4,7 @@ Golf only — do not import CFL or other isolation sports from here.
 """
 from __future__ import annotations
 
+import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -13,6 +14,19 @@ ROOT = Path(__file__).resolve().parent
 ISO_HUB = ROOT / "iso_hub"
 if str(ISO_HUB) not in sys.path:
     sys.path.insert(0, str(ISO_HUB))
+
+
+def _iso_golf_page():
+    """Load iso_hub/golf_page.py by path so hub's golf_page cannot win."""
+    cached = sys.modules.get("iso_hub_golf_page")
+    if cached is not None:
+        return cached
+    path = ISO_HUB / "golf_page.py"
+    spec = importlib.util.spec_from_file_location("iso_hub_golf_page", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    sys.modules["iso_hub_golf_page"] = mod
+    return mod
 
 
 def _nav_ctx() -> dict[str, Any]:
@@ -52,6 +66,8 @@ def _strip_vendor_labels(html: str) -> str:
     html = re.sub(r"\bisolation\b", "", html, flags=re.I)
     html = html.replace('data-sandbox-sport="golf"', 'data-sport="golf"')
     html = html.replace('id="sandbox-unlock-details"', 'id="pl-unlock-details"')
+    html = re.sub(r"\bSandbox Open\b", "PGA Tour", html, flags=re.I)
+    html = re.sub(r"\bATP Tour \(demo\)", "PGA Tour", html, flags=re.I)
     return html
 
 
@@ -87,14 +103,10 @@ def _inject_chrome_into_page(html: str) -> str:
 
 
 def render_golf_picks(event_id: str | None = None) -> str:
-    from golf_page import render_golf_board_html
-
-    page, _meta = render_golf_board_html(event_id)
+    page, _meta = _iso_golf_page().render_golf_board_html(event_id)
     return _strip_vendor_labels(_inject_chrome_into_page(page))
 
 
 def render_golf_results(event_id: str | None = None) -> str:
-    from golf_page import render_golf_results_html
-
-    page, _meta = render_golf_results_html(event_id)
+    page, _meta = _iso_golf_page().render_golf_results_html(event_id)
     return _strip_vendor_labels(_inject_chrome_into_page(page))

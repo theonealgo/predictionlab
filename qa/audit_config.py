@@ -19,7 +19,8 @@ HISTORY_DIR.mkdir(exist_ok=True)
 SCREENSHOTS_DIR.mkdir(exist_ok=True)
 
 # ── Target site ────────────────────────────────────────────────────────────
-BASE_URL = os.environ.get("AUDIT_BASE_URL", "http://127.0.0.1:5001")
+# Always audit the live site unless the operator overrides the URL.
+BASE_URL = os.environ.get("AUDIT_BASE_URL", "https://predictionlab.io")
 
 # ── Email — load from checker_email.py, then override with env vars ────────
 def _load_email_config():
@@ -63,7 +64,7 @@ USER_AGENT        = "PredictionLab-QA/1.0 (internal audit bot)"
 SPORT_PICKS_SLUGS = [
     "nba-picks", "nhl-picks", "nfl-picks", "mlb-picks",
     "ncaab-picks", "ncaaf-picks", "ncaaw-picks", "wnba-picks", "soccer-picks",
-    "tennis-picks", "ufc-picks", "golf-picks",
+    "tennis-picks", "ufc-picks", "golf-picks", "cfl-picks",
 ]
 SPORT_RESULTS_SLUGS = [s.replace("-picks", "-results") for s in SPORT_PICKS_SLUGS]
 
@@ -125,10 +126,12 @@ CLUSTER_RANGE_HIGH = 51.0
 CLUSTER_WARN_PCT   = 80        # warn if >80% of probs are in the clustering range
 
 # ── Quick mode — only run these auditors ─────────────────────────────────
-QUICK_MODE_AUDITORS = ["routes", "content", "navigation"]
+QUICK_MODE_AUDITORS = ["routes", "content", "navigation", "chrome", "ship", "soccer", "espn_slate"]
 FULL_MODE_AUDITORS  = ["routes", "content", "navigation", "cards", "models",
                        "results", "gamecounts", "csv", "props", "seo", "schema",
-                       "consistency"]
+                       "consistency", "chrome", "ship", "soccer", "espn_slate"]
+SHIP_MODE_AUDITORS  = ["chrome", "ship", "soccer", "espn_slate"]
+CHROME_MODE_AUDITORS = ["chrome"]
 
 # ── Season windows (mirrors NHL77FINAL._SEASON_WINDOWS) ──────────────────
 SEASON_WINDOWS = {

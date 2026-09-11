@@ -6,6 +6,8 @@ Slugs and numeric IDs come from sports.core.api.espn.com/v2/sports/soccer/league
 """
 from __future__ import annotations
 
+import re
+
 # (key, customer-facing label) — ESPN browse buckets, no vendor wording.
 SOCCER_REGION_DEFS = (
     ('top', 'Top Competitions'),
@@ -69,7 +71,7 @@ _LEAGUES: tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], ...] = (
      ('fifa world cup qualifying - conmebol', 'conmebol world cup qualifiers',
       'fifa.worldq.conmebol')),
     ('FIFA World Cup Qualifiers (CAF)', 'fifa.worldq.caf', '790',
-     ('top', 'internationals'),
+     ('top', 'internationals', 'africa'),
      ('fifa world cup qualifying - caf', 'caf world cup qualifiers',
       'fifa.worldq.caf')),
     ('FIFA World Cup Qualifiers (CONCACAF)', 'fifa.worldq.concacaf', '788',
@@ -179,9 +181,9 @@ _LEAGUES: tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], ...] = (
      ('internationals',),
      ('copa america femenina',)),
     ('Africa Cup of Nations Qualifying', 'caf.nations_qual', '8315',
-     ('internationals',), ()),
+     ('internationals', 'africa'), ()),
     ('African Nations Championship', 'caf.championship', '8365',
-     ('internationals',), ()),
+     ('internationals', 'africa'), ()),
     ('AFC Asian Cup Qualifiers', 'afc.cupq', '5662', ('internationals',), ()),
     ('SAFF Championship', 'afc.saff.championship', '18914', ('internationals',), ()),
     ('FIFA Intercontinental Cup', 'fifa.intercontinental_cup', '22902',
@@ -209,10 +211,10 @@ _LEAGUES: tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], ...] = (
      ('internationals',), ()),
     ('Copa América', 'conmebol.america', '780', ('internationals',),
      ('copa america',)),
-    ('Africa Cup of Nations', 'caf.nations', '3908', ('internationals',),
+    ('Africa Cup of Nations', 'caf.nations', '3908', ('internationals', 'africa'),
      ('afcon',)),
     ('Women\'s Africa Cup of Nations', 'caf.w.nations', '23523',
-     ('internationals',), ()),
+     ('internationals', 'africa'), ()),
     ('AFC Asian Cup', 'afc.asian.cup', '20219', ('internationals',), ()),
     ('ASEAN Championship', 'aff.championship', '5672', ('internationals',), ()),
     ('FIFA Club World Cup', 'fifa.cwc', '5501', ('internationals',), ()),
@@ -278,6 +280,170 @@ _LEAGUES: tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 _EXTRA_ENDPOINTS = {
     'AFC Champions League Two': 'afc.cup',
 }
+
+# ESPN soccer scoreboard browse headings — do not drop from the picker.
+ESPN_BROWSE_HEADINGS = (
+    'Top Competitions',
+    'USA, Mexico & CONCACAF',
+    'Europe',
+    'Internationals',
+    'South America',
+    'Asia',
+    'Africa',
+)
+
+# ESPN soccer scoreboard league names (unique). Checker fails if any are missing
+# from the All-continents dropdown. Aliases above map these onto catalog names.
+ESPN_BROWSE_LEAGUES = (
+    'AFC Asian Cup',
+    'AFC Asian Cup Qualifiers',
+    'AFC Champions League Elite',
+    'ASEAN Championship',
+    'Africa Cup of Nations',
+    'Africa Cup of Nations Qualifying',
+    'African Nations Championship',
+    'Argentine Liga Profesional de Fútbol',
+    'Argentine Nacional B',
+    'Argentine Primera B',
+    'Australian A-League Men',
+    'Australian A-League Women',
+    'Austrian Bundesliga',
+    'Belgian Pro League',
+    'Bolivian Liga Profesional',
+    'Brazilian Campeonato Carioca',
+    'Brazilian Campeonato Gaucho',
+    'Brazilian Campeonato Mineiro',
+    'Brazilian Campeonato Paulista',
+    'Brazilian Serie A',
+    'Brazilian Serie B',
+    'CAF Champions League',
+    'CAF Confederation Cup',
+    'Chilean Primera División',
+    'Chinese Super League',
+    'Colombian Primera A',
+    'Concacaf Central American Cup',
+    'Concacaf Champions Cup',
+    'Concacaf Gold Cup',
+    'Concacaf Nations League',
+    'Concacaf W Champions Cup',
+    'Concacaf W Championship',
+    'Concacaf W Gold Cup',
+    'CONMEBOL Libertadores',
+    'CONMEBOL Sudamericana',
+    'Copa América',
+    'Copa América Femenina',
+    'Copa Argentina',
+    'Copa Chile',
+    'Copa Colombia',
+    'Copa do Brasil',
+    'Coppa Italia',
+    'Costa Rican Primera Division',
+    'Coupe de France',
+    'Danish Superliga',
+    'Dutch Eredivisie',
+    'Dutch KNVB Beker',
+    'Dutch KNVB Beker Vrouwen',
+    'Dutch Keuken Kampioen Divisie',
+    'Dutch Vrouwen Eredivisie',
+    'English Carabao Cup',
+    'English EFL Trophy',
+    'English FA Cup',
+    'English League Championship',
+    'English League One',
+    'English League Two',
+    'English National League',
+    'English Premier League',
+    'English Women\'s FA Cup',
+    'English Women\'s Super League',
+    'FIFA Club World Cup',
+    'FIFA Intercontinental Cup',
+    'FIFA Under-17 Women\'s World Cup',
+    'FIFA Under-17 World Cup',
+    'FIFA Under-20 World Cup',
+    'FIFA Women\'s World Cup',
+    'FIFA Women\'s World Cup Qualifying - UEFA',
+    'FIFA World Cup',
+    'FIFA World Cup Qualifying - AFC',
+    'FIFA World Cup Qualifying - CAF',
+    'FIFA World Cup Qualifying - CONMEBOL',
+    'FIFA World Cup Qualifying - Concacaf',
+    'FIFA World Cup Qualifying - OFC',
+    'FIFA World Cup Qualifying - UEFA',
+    'French Ligue 1',
+    'French Ligue 2',
+    'French Première Ligue',
+    'German 2. Bundesliga',
+    'German Bundesliga',
+    'German Cup',
+    'Greek Super League',
+    'Guatemalan Liga Nacional',
+    'Honduran Liga Nacional',
+    'Indian Super League',
+    'International Friendly',
+    'Italian Serie A',
+    'Italian Serie B',
+    'Japanese J.League',
+    'Leagues Cup',
+    'Liga AUF Uruguaya',
+    'LigaPro Ecuador',
+    'MLS',
+    'Men\'s Olympic Soccer Tournament',
+    'Mexican Liga BBVA MX',
+    'Mexican Liga de Expansión MX',
+    'NCAA Men\'s Soccer',
+    'NCAA Women\'s Soccer',
+    'NWSL',
+    'NWSL Challenge Cup',
+    'Northern Super League',
+    'Norwegian Eliteserien',
+    'Paraguayan Primera División',
+    'Peruvian Liga 1',
+    'Pinatar Cup',
+    'Portuguese Primeira Liga',
+    'Russian Premier League',
+    'SAFF Championship',
+    'Salvadoran Primera Division',
+    'Saudi Pro League',
+    'Scottish Championship',
+    'Scottish Cup',
+    'Scottish League Challenge Cup',
+    'Scottish League Cup',
+    'Scottish Premiership',
+    'SheBelieves Cup',
+    'South African Premiership',
+    'Spanish Copa de la Reina',
+    'Spanish Copa del Rey',
+    'Spanish LALIGA',
+    'Spanish LALIGA 2',
+    'Spanish Liga F',
+    'Swedish Allsvenskan',
+    'Taca de Portugal',
+    'Turkish Super Lig',
+    'U.S. Open Cup',
+    'UEFA Champions League',
+    'UEFA Champions League Qualifying',
+    'UEFA Conference League',
+    'UEFA Conference League Qualifying',
+    'UEFA Europa League',
+    'UEFA Europa League Qualifying',
+    'UEFA European Championship',
+    'UEFA European Championship Qualifying',
+    'UEFA European Under-19 Championship',
+    'UEFA European Under-21 Championship',
+    'UEFA European Under-21 Championship Qualifying',
+    'UEFA Nations League',
+    'UEFA Women\'s Champions League',
+    'UEFA Women\'s European Championship',
+    'UEFA Women\'s Nations League',
+    'USL Championship',
+    'USL Cup',
+    'USL League One',
+    'USL Super League',
+    'Venezuelan Primera División',
+    'Women\'s Africa Cup of Nations',
+    'Women\'s International Friendly',
+    'Women\'s Olympic Soccer Tournament',
+)
 
 SOCCER_LEAGUE_ORDER = [row[0] for row in _LEAGUES]
 
@@ -380,6 +546,86 @@ def soccer_league_in_region(
             return True
         return league_name in set(live_names)
     return key in (SOCCER_LEAGUE_REGIONS.get(league_name) or ())
+
+
+def _clean_league_option_label(raw: str) -> str:
+    text = re.sub(r"<[^>]+>", "", raw or "")
+    text = (
+        text.replace("&amp;", "&")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
+    )
+    text = re.sub(r"\s*·\s*Live\s*$", "", text, flags=re.I)
+    text = re.sub(r"^●\s*", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def soccer_league_option_labels(html: str) -> list[str]:
+    """Customer-facing league names from the soccer <select id=league>."""
+    sel = re.search(
+        r'<select[^>]*\bid=["\']league["\'][^>]*>([\s\S]*?)</select>',
+        html or "",
+        flags=re.I,
+    )
+    if not sel:
+        return []
+    out: list[str] = []
+    for m in re.finditer(r"<option\b[^>]*>([\s\S]*?)</option>", sel.group(1), flags=re.I):
+        label = _clean_league_option_label(m.group(1))
+        if not label or label.lower() in ("all", "all leagues"):
+            continue
+        out.append(label)
+    return out
+
+
+def missing_espn_browse_leagues(html_or_labels) -> list[str]:
+    """ESPN browse names whose catalog league is not in the dropdown."""
+    if isinstance(html_or_labels, str):
+        labels = soccer_league_option_labels(html_or_labels)
+    else:
+        labels = [str(x or "") for x in (html_or_labels or [])]
+    mapped = set()
+    for lab in labels:
+        clean = _clean_league_option_label(lab)
+        canon = _SOCCER_LEAGUE_CANONICAL.get(clean.lower())
+        if canon:
+            mapped.add(canon)
+    missing: list[str] = []
+    for espn_name in ESPN_BROWSE_LEAGUES:
+        canon = _SOCCER_LEAGUE_CANONICAL.get(espn_name.lower())
+        if not canon or canon not in mapped:
+            missing.append(espn_name)
+    return missing
+
+
+def soccer_heading_labels(html: str) -> list[str]:
+    """Continent / ESPN browse headings from the region select + optgroups."""
+    html = html or ""
+    labels: list[str] = []
+    region = re.search(
+        r'<select[^>]*\bid=["\']soccer-region["\'][^>]*>([\s\S]*?)</select>',
+        html,
+        flags=re.I,
+    )
+    if region:
+        for m in re.finditer(
+            r"<option\b[^>]*>([\s\S]*?)</option>", region.group(1), flags=re.I
+        ):
+            lab = _clean_league_option_label(m.group(1))
+            if lab and lab.lower() not in ("all", "all continents"):
+                labels.append(lab)
+    for m in re.finditer(r'<optgroup\b[^>]*label="([^"]+)"', html, flags=re.I):
+        lab = _clean_league_option_label(m.group(1).replace("&amp;", "&"))
+        if lab:
+            labels.append(lab)
+    return labels
+
+
+def missing_espn_browse_headings(html: str) -> list[str]:
+    """Continent / heading labels ESPN shows that the picker dropped."""
+    have = {lab.lower() for lab in soccer_heading_labels(html)}
+    return [h for h in ESPN_BROWSE_HEADINGS if h.lower() not in have]
 
 
 def soccer_espn_slug(league_name: str | None) -> str | None:

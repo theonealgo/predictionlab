@@ -298,11 +298,14 @@ def list_espn_tournaments(*, days_back: int = 28, days_forward: int = 42) -> lis
 
 
 def _default_event_id(tournaments: list[dict[str, Any]]) -> str | None:
-    """Picks default: live, else this week's event."""
+    """Picks default: live, else this week, else the last completed tournament."""
     for want in (_PHASE_LIVE, _PHASE_WEEK):
         for t in tournaments:
             if t.get("phase") == want:
                 return t["id"]
+    for t in tournaments:
+        if t.get("phase") == _PHASE_DONE:
+            return t["id"]
     return tournaments[0]["id"] if tournaments else None
 
 
@@ -682,7 +685,7 @@ def build_ranked_board(
                         "source": "sandbox-db",
                     }
                 )
-            event_name = "Sandbox Open (demo)"
+            event_name = "PGA Tour"
             source = "sandbox-db"
 
     return {

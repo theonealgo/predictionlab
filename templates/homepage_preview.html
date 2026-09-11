@@ -219,6 +219,11 @@
         display: block; padding: 9px 11px; color: var(--pl-ink); text-decoration: none;
         font: 800 .66rem/1 var(--pl-mono); letter-spacing: .08em; text-transform: uppercase;
     }
+    .pl2-nav-menu a.in-season {
+        color: #16a34a;
+        font-weight: 700;
+    }
+    .pl2-nav-menu a.in-season:hover { color: #15803d; }
     .pl2-nav-menu a:hover { background: var(--pl-accent); }
     .pl2-header-actions { display: flex; align-items: center; gap: 20px; margin-left: 8px; }
     .pl2-account { position: relative; }
@@ -492,7 +497,7 @@
     .pl2-unit span { display: block; margin-top: 4px; font: 800 .6rem var(--pl-mono); letter-spacing: .14em; color: var(--pl-faint); text-transform: uppercase; }
     .pl2-tape-note { margin-top: 26px; display: block; }
 
-    /* AI model results */
+    /* Results charts */
     .pl2-models { display: grid; grid-template-columns: 1fr 1fr; gap: 0 56px; border-top: 1px solid var(--pl-line-dark); margin-top: 30px; }
     .pl2-model { padding: 26px 0 22px; border-bottom: 1px solid var(--pl-line-dark); }
     .pl2-model-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -501,6 +506,11 @@
     .pl2-model-meta strong { font-size: 2rem; font-weight: 950; }
     .pl2-meter { height: 4px; background: var(--pl-line); margin-top: 12px; }
     .pl2-meter i { display: block; height: 100%; background: var(--pl-ink); }
+    .pl2-chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 28px; border-top: 1px solid var(--pl-line-dark); margin-top: 30px; padding-top: 28px; align-items: start; }
+    .pl2-chart-card { display: block; text-decoration: none; color: inherit; border: 1px solid var(--pl-line-dark); background: var(--pl-panel); overflow: hidden; }
+    .pl2-chart-card img { display: block; width: 100%; height: auto; object-fit: contain; background: #fff; }
+    .pl2-chart-card span { display: block; padding: 12px 14px 14px; font: 800 .72rem var(--pl-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--pl-faint); }
+    .pl2-chart-card b { display: block; padding: 0 14px 16px; font-size: 1.05rem; font-weight: 900; color: var(--pl-ink); }
     .pl2-fineprint {
         margin-top: 34px; display: flex; justify-content: space-between; gap: 20px; align-items: center;
         border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 18px 20px;
@@ -657,15 +667,17 @@
 
     @media (max-width: 980px) {
         .pl2-page { overflow-x: hidden; }
+        .pl2-horizon,
+        .pl2-breadcrumb { display: none !important; }
         .pl2-sec-top { flex-wrap: wrap; }
         .pl2-sec-link { margin-top: 10px; }
         .pl2-shell {
-            width: calc(100% - 80px);
-            margin-left: 64px;
+            width: calc(100% - 32px);
+            margin-left: 16px;
             margin-right: 16px;
         }
         .pl2-nav { display: none; }
-        .pl2-hero-grid, .pl2-models, .pl2-intel, .pl2-plans, .pl2-faq-grid { grid-template-columns: 1fr; }
+        .pl2-hero-grid, .pl2-models, .pl2-chart-grid, .pl2-intel, .pl2-plans, .pl2-faq-grid { grid-template-columns: 1fr; }
         .pl2-live-board { grid-template-columns: 1fr 1fr; }
         .pl2-h1-side { display: none; }
         .pl2-hero > .pl2-shell { padding-left: 0; }
@@ -683,7 +695,6 @@
             margin-left: 16px;
             margin-right: 16px;
         }
-        .pl2-breadcrumb { display: none; }
         .pl2-sports, .pl2-units, .pl2-steps, .pl2-gloss, .pl2-footer-grid { grid-template-columns: 1fr; }
         .pl2-live-board { grid-template-columns: 1fr; }
         .pl2-sec { padding: 56px 0 50px; }
@@ -917,29 +928,21 @@
                     <div class="pl2-sec-top">
                         <div>
                             <span class="pl2-mono">05. Performance</span>
-                            <h2>AI Model Results</h2>
+                            <h2>Results Charts</h2>
                         </div>
                         <a class="pl2-sec-link" href="/all-sports-results">Full Results Archive →</a>
                     </div>
-                    <div class="pl2-models">
-                        {% for item in weekly_banner_messages %}
-                        <article class="pl2-model">
-                            <div class="pl2-model-top">
-                                <span class="pl2-mono">{{ item.label }}</span>
-                                <span class="pl2-chip ghost">{% if 'XSharp' in item.label %}Premium{% else %}Free{% endif %}</span>
-                            </div>
-                            <h3>{% if 'Grinder2' in item.label %}Grinder²{% elif 'XSharp' in item.label %}XSharp{% elif 'Consensus' in item.label %}Consensus{% else %}Edge{% endif %}</h3>
-                            <div class="pl2-model-meta">
-                                <span class="pl2-mono">Hit rate</span>
-                                <strong>{{ item.pct }}</strong>
-                            </div>
-                            <div class="pl2-meter"><i style="width:{{ item.pct.replace('%','') }}%"></i></div>
-                            <div class="pl2-model-meta" style="margin-top:9px;">
-                                <span class="pl2-mono">{{ item.record }}</span>
-                                <span class="pl2-mono">Tracked record</span>
-                            </div>
-                        </article>
-                        {% endfor %}
+                    <div class="pl2-chart-grid">
+                        <a class="pl2-chart-card" href="/mlb-results?view=chart">
+                            <img src="/static/img/home-charts/consensus.png" alt="Consensus Based Betting Records chart">
+                            <span>Moneyline</span>
+                            <b>Consensus Based Betting Records</b>
+                        </a>
+                        <a class="pl2-chart-card" href="/mlb-results?view=chart">
+                            <img src="/static/img/home-charts/pl-vs-books.png" alt="PL vs Sportsbook chart">
+                            <span>Books vs models</span>
+                            <b>PL vs Sportsbook</b>
+                        </a>
                     </div>
                     <div class="pl2-fineprint">
                         <span>All results are logged in real time, timestamped, and publicly verifiable. No picks removed retroactively. Confidence buckets and sample sizes shown on the full performance page.</span>

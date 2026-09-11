@@ -316,6 +316,61 @@ def _ensure_mlb_copy_all_markets(html: str) -> str:
     return html + script
 
 
+def _open_cfl_cards(html: str) -> str:
+    """Match the expanded team-sport template so models are visible."""
+    if not html:
+        return html
+    html = re.sub(
+        r'class="game-card pick-card(?! is-expanded)',
+        'class="game-card pick-card is-expanded',
+        html,
+    )
+    html = re.sub(
+        r'(<div class="card-details"[^>]*?)\s+hidden\b',
+        r"\1",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(class="view-details-btn"[^>]*aria-expanded=")false(")',
+        r"\1true\2",
+        html,
+    )
+    html = re.sub(
+        r'(<button type="button" class="view-details-btn"[^>]*>)\s*View [Dd]etails',
+        r"\1Less details",
+        html,
+    )
+    return html
+
+
+def _strip_cfl_empty_books(html: str) -> str:
+    """Drop book spread / book odds chips when we have no number."""
+    if not html:
+        return html
+    html = re.sub(
+        r'<div class="line-chip">\s*'
+        r'<div class="line-chip-label">\s*Books[^<]*</div>\s*'
+        r'<div class="line-chip-val">\s*(?:—|&mdash;|&ndash;|N/A)?\s*</div>\s*'
+        r"</div>",
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'<div class="ml-line[^"]*">\s*'
+        r'<span class="ml-src books">\s*Books\s*</span>\s*'
+        r'<span class="ml-num[^"]*">\s*(?:—|&mdash;|&ndash;|N/A)\s*</span>\s*'
+        r"</div>",
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(r'\sdata-books-spread="[^"]*"', "", html, flags=re.I)
+    html = re.sub(r'\sdata-books-total="[^"]*"', "", html, flags=re.I)
+    return html
+
+
 def render_cfl_picks() -> str:
     from mlb_team_shell import render_team_sport
     from sandbox_fixup import unlock_premium_card_details
@@ -329,15 +384,27 @@ def render_cfl_picks() -> str:
     html = unlock_premium_card_details(html)
     html = _ensure_mlb_copy_all_markets(html)
     html = _strip_mlb_content_from_cfl(html)
+    html = _open_cfl_cards(html)
+    html = _strip_cfl_empty_books(html)
     if not premium:
         html = _gate_cfl_paid_markets(html)
+    html = re.sub(r"const sportName\s*=\s*[^;]+;", 'const sportName = "CFL";', html)
+    html = re.sub(r"const sportIcon\s*=\s*[^;]+;", 'const sportIcon = "🏈";', html)
     return _strip_vendor_labels(_rewrite_iso_hrefs(html))
+
+
+_CFL_RESULTS_PAGE_CACHE: dict = {}
+_CFL_RESULTS_PAGE_TTL = 180
 
 
 def render_cfl_results(*, view: str = "normal") -> str:
     view = (view or "normal").strip().lower()
     if view in ("chart", "tabs", "markets", "tabbed"):
         return _render_cfl_results_chart()
+    now = __import__("time").time()
+    hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+    if isinstance(hit, dict) and hit.get("html") and (now - hit.get("ts", 0)) < _CFL_RESULTS_PAGE_TTL:
+        return hit["html"]
 
     from mlb_team_shell import render_team_sport
     from sandbox_fixup import apply_sport_fixups
@@ -347,41 +414,27 @@ def render_cfl_results(*, view: str = "normal") -> str:
         raise RuntimeError(f"cfl mlb shell results failed: {meta}")
     html = _strip_mlb_content_from_cfl(html)
     html = apply_sport_fixups(html, "cfl", which="results")
-    try:
-        from flask import request
-        from team_tabbed_results import (
-            apply_cfl_cards_market_tabs,
-            build_cfl_payload,
-            inject_consensus_records_html,
-        )
-
-        payload = build_cfl_payload()
-        try:
-            html = inject_consensus_records_html(
-                html,
-                sport="cfl",
-                finals=(payload or {}).get("finals"),
-                last_night_key=((payload or {}).get("tallies") or {})
-                .get("last_night", {})
-                .get("date"),
-            )
-        except TypeError:
-            html = inject_consensus_records_html(html, sport="cfl")
-        html = apply_cfl_cards_market_tabs(
-            html,
-            payload,
-            market=(request.args.get("market") or "moneyline"),
-        )
-    except Exception:
-        pass
+    # Consensus/tabs already applied inside render_team_sport. A second
+    # build_cfl_payload() hangs the worker and shadows local ufc_live.
     close = (html or "").lower().find("</html>")
     if close >= 0:
         html = html[: close + len("</html>")]
-    return _strip_vendor_labels(_rewrite_iso_hrefs(_strip_mlb_content_from_cfl(html)))
+    html = _strip_vendor_labels(_rewrite_iso_hrefs(_strip_mlb_content_from_cfl(html)))
+    _CFL_RESULTS_PAGE_CACHE["cards"] = {"ts": now, "html": html}
+    return html
 
 
 def _render_cfl_results_chart() -> str:
     from mlb_team_shell import render_team_sport
+
+    try:
+        from team_results_charts import set_results_chart_source
+
+        hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+        if isinstance(hit, dict) and hit.get("html"):
+            set_results_chart_source("CFL", hit["html"])
+    except Exception:
+        pass
 
     html, meta = render_team_sport("cfl", which="chart")
     if meta.get("ok") and html:

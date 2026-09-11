@@ -61,35 +61,7 @@
     </div>
   </main>
 
-  <footer class="site-directory-footer">
-    <div class="directory-shell">
-      <span class="directory-label">Knowledge Directory</span>
-      <span class="directory-wordmark">PREDICTION LAB</span>
-      <div class="directory-sub">AI-powered sports betting picks. Daily. Transparent. Data-driven.</div>
-      <div class="directory-grid">
-        <div>
-          <div class="footer-heading">AI Picks by Sport</div>
-          <a href="/mlb-picks">MLB AI Picks</a>
-          <a href="/soccer-picks">Soccer AI Picks</a>
-          <a href="/wnba-picks">WNBA AI Picks</a>
-          <a href="/cfl-picks">CFL AI Picks</a>
-          <a href="/golf-picks">Golf AI Picks</a>
-        </div>
-        <div>
-          <div class="footer-heading">Results</div>
-          <a href="/mlb-results">MLB Results</a>
-          <a href="/soccer-results">Soccer Results</a>
-          <a href="/wnba-results">WNBA Results</a>
-          <a href="/cfl-results">CFL Results</a>
-          <a href="/golf-results">Golf Results</a>
-        </div>
-      </div>
-      <div class="directory-bottom">
-        <span>&copy; 2026 Prediction Lab. All rights reserved.</span>
-        <span>For entertainment purposes. Bet responsibly.</span>
-      </div>
-    </div>
-  </footer>
+  {% include "partials/site_directory_footer.html" %}
 
   <script>
     window.TEAM_API_BASE = {{ api_base|tojson }};

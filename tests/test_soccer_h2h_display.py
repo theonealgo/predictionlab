@@ -84,13 +84,16 @@ def test_enrich_unknown_clubs_show_plxg_or_info():
     )
     out = enrich_soccer_plxg_html(bare)
     assert "PL Expected Goals" in out
-    assert "H2H Last 10" not in out
     assert "Home" in out
     assert "—" not in re.search(r'class="sf-val">([^<]*)</span>', out).group(1)
     full = apply_soccer_picks_fixups(bare)
     assert "PL Expected Goals" in full
-    assert "H2H Last 10" not in full
-    assert "H2H L10" not in full
+    assert full.count("PL Expected Goals") == 1
+    assert 'data-h2h="First meeting"' in full
+    assert re.search(
+        r'H2H Last 10</span>\s*<span class="sf-val">\s*First meeting',
+        full,
+    )
 
 
 def test_enrich_fills_plxg_when_form_exists():
@@ -108,4 +111,4 @@ def test_enrich_fills_plxg_when_form_exists():
     out = enrich_soccer_plxg_html(bare)
     assert "PL Expected Goals" in out
     assert "data-plxg=" in out
-    assert "H2H Last 10" not in out
+    assert out.count("PL Expected Goals") == 1

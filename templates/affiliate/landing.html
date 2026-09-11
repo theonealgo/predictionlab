@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}PredictionLab Affiliate Program — Earn Recurring Commissions{% endblock %}
+{% block head_meta %}
+<meta name="description" content="Promote PredictionLab and earn recurring commissions on the subscribers you refer. {{ commission_pct }}% recurring commission, {{ cookie_days }}-day referral tracking.">
+{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <div class="aff-hero">
+    <h1>Promote PredictionLab. Earn recurring commissions.</h1>
+    <p>Earn <strong>{{ commission_pct }}%</strong> of qualifying paid subscription revenue from every subscriber you refer — and keep earning as long as they stay subscribed.</p>
+    <div class="aff-cta-row">
+      {% if my_affiliate %}
+        <a class="aff-btn aff-btn-primary" href="/affiliate/dashboard">Go to your dashboard</a>
+      {% else %}
+        <a class="aff-btn aff-btn-primary" href="/affiliate/apply">Join the Affiliate Program</a>
+        <a class="aff-btn aff-btn-ghost" href="/affiliate/dashboard">Affiliate login</a>
+      {% endif %}
+    </div>
+    {% if not my_affiliate %}
+    <p style="margin:14px auto 0;font-size:0.9rem;color:rgba(255,255,255,0.85);max-width:520px;">A free PredictionLab account is required to join. You'll sign in (or create an account) before applying.</p>
+    {% endif %}
+  </div>
+
+  <div class="aff-stat-grid">
+    <div class="aff-stat"><div class="v">{{ commission_pct }}%</div><div class="l">Recurring commission</div></div>
+    <div class="aff-stat"><div class="v">{{ cookie_days }} days</div><div class="l">Referral tracking</div></div>
+    <div class="aff-stat"><div class="v">{{ min_payout }}</div><div class="l">Minimum payout</div></div>
+    <div class="aff-stat"><div class="v">Recurring</div><div class="l">Ongoing earnings</div></div>
+  </div>
+
+  <div class="aff-section">
+    <h2>The program at a glance</h2>
+    <p style="color:#475569;line-height:1.7;">PredictionLab is a data-driven AI sports prediction product with daily picks across the NBA, NFL, MLB, NHL, soccer and more. As an affiliate, you share your unique referral link, and when someone you refer subscribes to a paid plan, you earn a commission on their qualifying subscription payments — including recurring renewals while they remain subscribed. Commissions are based on qualifying paid subscriptions and are subject to PredictionLab's affiliate terms.</p>
+  </div>
+
+  <div class="aff-section">
+    <h2>How it works</h2>
+    <div class="aff-steps">
+      <div class="aff-step"><div class="num">1</div><h4>Apply</h4><p>Create your account and submit a short application with your promotion channels.</p></div>
+      <div class="aff-step"><div class="num">2</div><h4>Get approved</h4><p>Once approved, you get a unique affiliate code and referral link, e.g. <code>{{ 'predictionlab.io/?ref=YOURCODE' }}</code>.</p></div>
+      <div class="aff-step"><div class="num">3</div><h4>Share</h4><p>Promote your link on your site, social channels, newsletter, or community.</p></div>
+      <div class="aff-step"><div class="num">4</div><h4>Earn</h4><p>Earn {{ commission_pct }}% on qualifying paid subscriptions, tracked automatically in your dashboard.</p></div>
+    </div>
+  </div>
+
+  <div class="aff-section">
+    <h2>Program terms</h2>
+    <ul class="aff-terms-list">
+      <li><span>Commission</span><strong>{{ commission_pct }}% of qualifying paid subscription revenue</strong></li>
+      <li><span>Recurring</span><strong>Earn on future qualifying payments while the subscription continues</strong></li>
+      <li><span>Referral attribution window</span><strong>{{ cookie_days }} days (last valid click wins)</strong></li>
+      <li><span>Holding period</span><strong>{{ hold_days }} days before a commission becomes payable</strong></li>
+      <li><span>Minimum payout</span><strong>{{ min_payout }} accrued before you can request a payout</strong></li>
+      <li><span>Attribution</span><strong>Server-side, first-party cookie + account association</strong></li>
+    </ul>
+    <p class="aff-note" style="margin-top:14px;">Commissions are calculated on qualifying successful subscription payments. If a payment is refunded or charged back, the associated commission is reversed or adjusted. We do not offer lifetime commissions — you earn while the referred subscription remains active and qualifying.</p>
+  </div>
+
+  <div class="aff-section">
+    <h2>Referral tracking &amp; attribution</h2>
+    <p style="color:#475569;line-height:1.7;">When a visitor arrives via your link (<code>/?ref=YOURCODE</code>), we record the click and store the attribution server-side against a first-party cookie — not just in the browser. The attribution follows the visitor as they browse and through the secure Stripe checkout. When they create an account and subscribe, the sale is attributed to you. The last valid affiliate click within the {{ cookie_days }}-day window wins; once a customer has converted, their attribution is locked so it can't be overwritten. Customers who already subscribed before clicking your link are not retro-attributed.</p>
+  </div>
+
+  <div class="aff-section">
+    <h2>Your affiliate dashboard</h2>
+    <p style="color:#475569;line-height:1.7;">Approved affiliates get a full dashboard: total clicks, signups, paying customers, conversion rate, revenue generated, and commissions (pending, payable, and paid). You'll find your referral link with one-click copy, performance reporting, a privacy-safe referrals table, a commissions ledger, payout tracking, and ready-to-use promotional copy.</p>
+  </div>
+
+  <div class="aff-section aff-faq">
+    <h2>FAQ</h2>
+    <details><summary>How much can I earn?</summary><p>You earn {{ commission_pct }}% of qualifying paid subscription revenue from customers you refer, including recurring renewals while their subscription stays active and qualifying.</p></details>
+    <details><summary>When do I get paid?</summary><p>Commissions become payable after a {{ hold_days }}-day holding period (to account for refunds/chargebacks). Once your payable balance reaches {{ min_payout }}, you can request a payout from your dashboard.</p></details>
+    <details><summary>How long is a referral tracked?</summary><p>The referral attribution window is {{ cookie_days }} days from the last valid click. Attribution is stored server-side and survives checkout.</p></details>
+    <details><summary>What happens on refunds or chargebacks?</summary><p>The related commission is automatically reversed or adjusted so affiliates aren't credited for revenue that was returned.</p></details>
+    <details><summary>Can I refer myself?</summary><p>No. Self-referrals are detected and rejected, and abusive patterns are flagged for review.</p></details>
+    <details><summary>Do you guarantee winnings or income?</summary><p>No. PredictionLab is a sports prediction and research product. We make no guarantees of winnings or income — please promote honestly.</p></details>
+  </div>
+
+  <div class="aff-hero" style="margin-top:22px;">
+    <h1 style="font-size:1.7rem;">Ready to start earning?</h1>
+    <p>Join the PredictionLab affiliate program today.</p>
+    <div class="aff-cta-row">
+      {% if my_affiliate %}
+        <a class="aff-btn aff-btn-primary" href="/affiliate/dashboard">Go to your dashboard</a>
+      {% else %}
+        <a class="aff-btn aff-btn-primary" href="/affiliate/apply">Join the Affiliate Program</a>
+      {% endif %}
+      <a class="aff-btn aff-btn-ghost" href="/affiliate/terms">Read the affiliate terms</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

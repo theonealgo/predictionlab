@@ -10,10 +10,48 @@ from __future__ import annotations
 import html as html_lib
 import re
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
 from mlb_ui_fixup import dedupe_game_card_stacks, enrich_mlb_chart_data_attrs
+
+_WNBA_ESPN_TTL = 900.0
+_WNBA_ESPN_CACHE: dict[str, tuple[float, Any]] = {}
+_WNBA_LOGO_ABBR = {
+    "Atlanta Dream": "atl",
+    "Chicago Sky": "chi",
+    "Connecticut Sun": "conn",
+    "Dallas Wings": "dal",
+    "Golden State Valkyries": "gsv",
+    "Indiana Fever": "ind",
+    "Las Vegas Aces": "lv",
+    "Los Angeles Sparks": "la",
+    "Minnesota Lynx": "min",
+    "New York Liberty": "ny",
+    "Phoenix Mercury": "phx",
+    "Portland Fire": "por",
+    "Seattle Storm": "sea",
+    "Toronto Tempo": "tor",
+    "Washington Mystics": "wsh",
+}
+_WNBA_ESPN_SLUG = {
+    "Atlanta Dream": "atl",
+    "Chicago Sky": "chi",
+    "Connecticut Sun": "con",
+    "Dallas Wings": "dal",
+    "Golden State Valkyries": "gs",
+    "Indiana Fever": "ind",
+    "Las Vegas Aces": "lv",
+    "Los Angeles Sparks": "la",
+    "Minnesota Lynx": "min",
+    "New York Liberty": "ny",
+    "Phoenix Mercury": "phx",
+    "Portland Fire": "por",
+    "Seattle Storm": "sea",
+    "Toronto Tempo": "tor",
+    "Washington Mystics": "wsh",
+}
 
 
 def _wnba_h2h_db_paths() -> list[Path]:
@@ -220,6 +258,297 @@ def enrich_wnba_h2h_from_db(html: str) -> str:
             except Exception:
                 pass
     return html
+
+
+def _wnba_team_key(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+
+def _wnba_logo_url(team_name: str) -> str:
+    abbr = _WNBA_LOGO_ABBR.get((team_name or "").strip())
+    if not abbr:
+        return ""
+    return f"https://a.espncdn.com/i/teamlogos/wnba/500/{abbr}.png"
+
+
+def _wnba_espn_json(url: str) -> dict[str, Any]:
+    now = time.time()
+    hit = _WNBA_ESPN_CACHE.get(url)
+    if hit and (now - hit[0]) < _WNBA_ESPN_TTL:
+        return hit[1] if isinstance(hit[1], dict) else {}
+    try:
+        import requests
+    except Exception:
+        return {}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        r = requests.get(url, timeout=8, headers=headers)
+        if getattr(r, "status_code", None) == 403 and "site.api.espn.com" in url:
+            alt = url.replace("://site.api.espn.com", "://site.web.api.espn.com", 1)
+            r = requests.get(alt, timeout=8, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+    except Exception:
+        data = {}
+    if isinstance(data, dict) and data:
+        _WNBA_ESPN_CACHE[url] = (now, data)
+    return data if isinstance(data, dict) else {}
+
+
+def _wnba_page_dates(html: str) -> list[str]:
+    dates = set(re.findall(r'"startDate"\s*:\s*"(\d{4}-\d{2}-\d{2})', html or ""))
+    dates.update(re.findall(r"📅\s*(\d{4}-\d{2}-\d{2})", html or ""))
+    return sorted(d for d in dates if d)
+
+
+def _wnba_format_et_clock(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+        local = dt.astimezone(ZoneInfo("America/New_York"))
+        return f"{local.strftime('%I:%M %p').lstrip('0')} ET"
+    except Exception:
+        return ""
+
+
+def _wnba_espn_clocks(html: str) -> dict[tuple[str, str], str]:
+    dates = _wnba_page_dates(html)
+    if dates:
+        start = dates[0].replace("-", "")
+        end = dates[-1].replace("-", "")
+        q = f"dates={start}-{end}&limit=100"
+    else:
+        q = "limit=80"
+    data = _wnba_espn_json(
+        f"https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?{q}"
+    )
+    out: dict[tuple[str, str], str] = {}
+    for ev in data.get("events") or []:
+        if not isinstance(ev, dict):
+            continue
+        clock = _wnba_format_et_clock(str(ev.get("date") or ""))
+        if not clock:
+            continue
+        comps = (ev.get("competitions") or [{}])[0] or {}
+        home = away = ""
+        ordered: list[str] = []
+        for c in comps.get("competitors") or []:
+            if not isinstance(c, dict):
+                continue
+            team = c.get("team") or {}
+            name = (team.get("displayName") or team.get("name") or "").strip()
+            if not name:
+                continue
+            ordered.append(name)
+            if str(c.get("homeAway") or "") == "home":
+                home = name
+            elif str(c.get("homeAway") or "") == "away":
+                away = name
+        if (not home or not away) and len(ordered) == 2:
+            home, away = ordered[0], ordered[1]
+        if not home or not away:
+            continue
+        out[(_wnba_team_key(away), _wnba_team_key(home))] = clock
+    return out
+
+
+def _wnba_espn_score_val(raw: Any) -> float | None:
+    if isinstance(raw, dict):
+        raw = raw.get("value", raw.get("displayValue"))
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _wnba_espn_h2h_from_events(events: list[Any], home: str, away: str) -> str:
+    want = {_wnba_team_key(home), _wnba_team_key(away)}
+    if len(want) < 2:
+        return ""
+    rows: list[tuple[str, float]] = []
+    for ev in events or []:
+        if not isinstance(ev, dict):
+            continue
+        comps = (ev.get("competitions") or [{}])[0] or {}
+        status = (comps.get("status") or {}).get("type") or {}
+        if not status.get("completed"):
+            continue
+        sides: list[tuple[str, float]] = []
+        for c in comps.get("competitors") or []:
+            if not isinstance(c, dict):
+                continue
+            team = c.get("team") or {}
+            name = (team.get("displayName") or team.get("name") or "").strip()
+            score = _wnba_espn_score_val(c.get("score"))
+            if name and score is not None:
+                sides.append((name, score))
+        if len(sides) != 2:
+            continue
+        if {_wnba_team_key(n) for n, _ in sides} != want:
+            continue
+        rows.append((str(ev.get("date") or ""), sides[0][1] + sides[1][1]))
+    rows.sort(key=lambda r: r[0], reverse=True)
+    totals = [tot for _dt, tot in rows[:10]]
+    if not totals:
+        return ""
+    g = len(totals)
+    games = "1 game" if g == 1 else f"{g} games"
+    return f"{_fmt_h2h_half(sum(totals) / g)} ({games})"
+
+
+def _wnba_espn_h2h_text(home: str, away: str) -> str:
+    slugs = []
+    for name in (home, away):
+        slug = _WNBA_ESPN_SLUG.get((name or "").strip())
+        if slug and slug not in slugs:
+            slugs.append(slug)
+    slugs.sort(key=lambda s: 0 if s in {"por", "tor"} else 1)
+    for slug in slugs:
+        data = _wnba_espn_json(
+            f"https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/teams/{slug}/schedule"
+        )
+        val = _wnba_espn_h2h_from_events(list(data.get("events") or []), home, away)
+        if _good_h2h(val):
+            return val
+    return ""
+
+
+def _wnba_set_attr(tag: str, name: str, value: str) -> str:
+    if not value:
+        return tag
+    esc = (
+        value.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+    )
+    if re.search(rf'\b{name}="[^"]*"', tag, flags=re.I):
+        return re.sub(
+            rf'\b{name}="[^"]*"',
+            f'{name}="{esc}"',
+            tag,
+            count=1,
+            flags=re.I,
+        )
+    return tag[:-1] + f' {name}="{esc}">'
+
+
+def _wnba_patch_h2h_chips(rest: str, h2h: str) -> str:
+    if not _good_h2h(h2h):
+        return rest
+    esc = html_lib.escape(h2h)
+    rest = re.sub(
+        r'(H2H Last 10</span>\s*<span class="sf-val">)([\s\S]*?)(</span>)',
+        rf"\g<1>{esc}\3",
+        rest,
+        count=1,
+        flags=re.I,
+    )
+    rest = re.sub(
+        r'(<div class="line-chip h2h-face-chip">\s*'
+        r'<div class="line-chip-label">H2H Last 10</div>\s*'
+        r'<div class="line-chip-val">)([\s\S]*?)(</div>)',
+        rf"\g<1>{esc}\3",
+        rest,
+        count=1,
+        flags=re.I,
+    )
+    return rest
+
+
+def _wnba_patch_logos(rest: str) -> str:
+    def _slot(m: re.Match[str]) -> str:
+        block = m.group(0)
+        name_m = re.search(r'class="team-name">([^<]+)', block)
+        name = (name_m.group(1) if name_m else "").strip()
+        url = _wnba_logo_url(name)
+        if not url:
+            return block
+        src_m = re.search(r'(<img class="team-logo"[^>]*src=")([^"]*)(")', block, flags=re.I)
+        if not src_m:
+            return block
+        cur = src_m.group(2)
+        if "pl-logo" in cur.lower() or not cur.strip():
+            return block[: src_m.start()] + src_m.group(1) + url + src_m.group(3) + block[src_m.end() :]
+        return block
+
+    return re.sub(
+        r'<div class="team-slot[^"]*">[\s\S]*?(?=<div class="(?:model-tag|win-pct))',
+        _slot,
+        rest,
+        flags=re.I,
+    )
+
+
+def fill_wnba_card_gaps(html: str) -> str:
+    """Fill Upcoming clocks, Fire/Tempo logos, and ESPN H2H when the DB is short."""
+    if not html or "data-pick-card" not in html:
+        return html
+    clocks: dict[tuple[str, str], str] = {}
+    try:
+        clocks = _wnba_espn_clocks(html)
+    except Exception:
+        clocks = {}
+    h2h_cache: dict[tuple[str, str], str] = {}
+
+    def _h2h_lookup(home: str, away: str) -> str:
+        key = (home, away)
+        if key in h2h_cache:
+            return h2h_cache[key]
+        try:
+            val = _wnba_espn_h2h_text(home, away)
+        except Exception:
+            val = ""
+        h2h_cache[key] = val
+        h2h_cache[(away, home)] = val
+        return val
+
+    def _attr(open_tag: str, *names: str) -> str:
+        for name in names:
+            m = re.search(rf'\b{name}="([^"]*)"', open_tag, flags=re.I)
+            if m:
+                return html_lib.unescape((m.group(1) or "").strip())
+        return ""
+
+    def _patch_stack(stack: str) -> str:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            return stack
+        open_tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+        home = _attr(open_tag, "data-home-full", "data-home")
+        away = _attr(open_tag, "data-away-full", "data-away")
+        clock = clocks.get((_wnba_team_key(away), _wnba_team_key(home)), "")
+        if clock:
+            open_tag = _wnba_set_attr(open_tag, "data-time", clock)
+            rest = re.sub(
+                r'(class="game-time">)(?:Upcoming|TBD|TBA|—|–|-)?(</span>)',
+                rf"\g<1>{html_lib.escape(clock)}\2",
+                rest,
+                count=1,
+                flags=re.I,
+            )
+        rest = _wnba_patch_logos(rest)
+        existing = html_lib.unescape(_attr(open_tag, "data-h2h"))
+        if not _good_h2h(existing) and home and away:
+            espn_h2h = _h2h_lookup(home, away)
+            if _good_h2h(espn_h2h):
+                open_tag = _wnba_set_attr(open_tag, "data-h2h", espn_h2h)
+                rest = _wnba_patch_h2h_chips(rest, espn_h2h)
+        return open_tag + rest
+
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) <= 1:
+        return html
+    return parts[0] + "".join(_patch_stack(p) for p in parts[1:])
 
 
 def _balanced_div_at(html: str, start: int) -> tuple[str, int]:
@@ -527,8 +856,295 @@ def inject_wnba_results_view_toggle(html: str, *, active: str = "normal") -> str
     return bar + html
 
 
+def _parse_american_ml(raw: str) -> int | None:
+    text = (raw or "").replace("\u2212", "-").replace(",", "").strip()
+    m = re.search(r"([+-]?\d+)", text)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _american_implied(odds: int) -> float:
+    if odds < 0:
+        return abs(odds) / (abs(odds) + 100.0)
+    return 100.0 / (odds + 100.0)
+
+
+def _deveig_pair(away_ml: int, home_ml: int) -> tuple[float, float]:
+    a, h = _american_implied(away_ml), _american_implied(home_ml)
+    tot = a + h
+    if tot <= 0:
+        return 50.0, 50.0
+    return round(100.0 * a / tot, 1), round(100.0 * h / tot, 1)
+
+
+def _is_coinflip_pct(raw: str) -> bool:
+    text = (raw or "").replace("%", "").strip()
+    try:
+        return abs(float(text) - 50.0) < 0.05
+    except ValueError:
+        return False
+
+
+def _home_margin_from_side_line(text: str, home: str, away: str) -> float | None:
+    raw = re.sub(r"\s+", " ", (text or "")).strip()
+    m = re.match(r"(.+?)\s+([+-]\d+(?:\.\d+)?)\s*$", raw)
+    if not m:
+        return None
+    team, line = m.group(1).strip(), float(m.group(2))
+    if _wnba_names_match(team, home):
+        return -line
+    if _wnba_names_match(team, away):
+        return line
+    return None
+
+
+def _home_margin_from_proj(text: str, home: str, away: str) -> float | None:
+    m = _WNBA_PROJ_RE.search(text or "")
+    if not m:
+        return None
+    n1, p1, n2, p2 = m.group(1).strip(), float(m.group(2)), m.group(3).strip(), float(m.group(4))
+    if _wnba_names_match(n2, home) or _wnba_names_match(n1, away):
+        return p2 - p1
+    if _wnba_names_match(n1, home) or _wnba_names_match(n2, away):
+        return p1 - p2
+    return None
+
+
+def _wnba_winpct_from_margin(margin: float) -> float:
+    try:
+        from sports.team_efficiency_attach import spread_to_home_prob_pct
+
+        return float(spread_to_home_prob_pct(margin, "WNBA"))
+    except Exception:
+        return round(50.0 + 50.0 * max(-1.0, min(1.0, margin / 16.0)), 1)
+
+
+def _fmt_pct(pct: float) -> str:
+    return f"{pct:.1f}"
+
+
+def _favorite_of(home: str, away: str, home_pct: float) -> tuple[str, str, float]:
+    if home_pct >= 50.0:
+        return home, "home", home_pct
+    return away, "away", round(100.0 - home_pct, 1)
+
+
+def _set_attr(tag: str, name: str, value: str) -> str:
+    if re.search(rf'\b{re.escape(name)}="', tag):
+        return re.sub(
+            rf'({re.escape(name)}=")[^"]*(")',
+            rf"\g<1>{value}\g<2>",
+            tag,
+            count=1,
+        )
+    return tag[:-1] + f' {name}="{value}">'
+
+
+def _rewrite_pc_box(box: str, pct: float, side: str, team: str) -> str:
+    box = re.sub(
+        r'(<div class="pc-val"[^>]*>)[^<]*(</div>)',
+        rf"\g<1>{_fmt_pct(pct)}%\g<2>",
+        box,
+        count=1,
+    )
+    box = re.sub(
+        r'(<div class="pc-side)[^"]*("[^>]*>)[^<]*(</div>)',
+        rf"\g<1> {side}\g<2>{team}\g<3>",
+        box,
+        count=1,
+    )
+    return box
+
+
+def fill_wnba_placeholder_probs(html: str) -> str:
+    """Replace coin-flip 50% face / Pick Confidence with lines already on the card.
+
+    Sharp Consensus = Prediction Lab moneyline (devig).
+    Edge = PL projected margin. XSharp = XSharp spread/proj.
+    Efficiency = PL spread (published 4th model — do not leave it off the grid).
+    """
+    if not html or "data-pick-card" not in html:
+        return html
+    parts: list[str] = []
+    pos = 0
+    while True:
+        m = re.search(r'<div class="game-card-stack"', html[pos:], flags=re.I)
+        if not m:
+            parts.append(html[pos:])
+            break
+        abs_start = pos + m.start()
+        stack, end = _balanced_div_at(html, abs_start)
+        if end < 0:
+            parts.append(html[pos:])
+            break
+        parts.append(html[pos:abs_start])
+        parts.append(_fill_one_wnba_stack(stack))
+        pos = end
+    return "".join(parts)
+
+
+def _fill_one_wnba_stack(stack: str) -> str:
+    away_m = re.search(r'data-away="([^"]*)"', stack)
+    home_m = re.search(r'data-home="([^"]*)"', stack)
+    if not away_m or not home_m:
+        return stack
+    away, home = away_m.group(1).strip(), home_m.group(1).strip()
+    face_pcts = re.findall(
+        r'<div class="matchup-row">[\s\S]*?<div class="win-pct">([\d.]+)',
+        stack,
+    )
+    pc_vals = re.findall(r'class="pc-val"[^>]*>\s*([^<]+)', stack)
+    stuck = (not face_pcts or all(_is_coinflip_pct(v) for v in face_pcts[:2])) and (
+        not pc_vals or all(_is_coinflip_pct(v) for v in pc_vals)
+    )
+    if not stuck:
+        return stack
+
+    pl_mls = re.findall(
+        r'class="ml-src pl">\s*Prediction Lab\s*</span>\s*'
+        r'<span class="ml-num[^"]*">\s*([^<]+)',
+        stack,
+        flags=re.I,
+    )
+    sc_away = sc_home = None
+    if len(pl_mls) >= 2:
+        a_ml, h_ml = _parse_american_ml(pl_mls[0]), _parse_american_ml(pl_mls[1])
+        if a_ml is not None and h_ml is not None:
+            sc_away, sc_home = _deveig_pair(a_ml, h_ml)
+    pl_spread = ""
+    sm = re.search(r'data-pl-spread="([^"]*)"', stack)
+    if sm:
+        pl_spread = sm.group(1)
+    xs_spread = ""
+    xm = re.search(r'data-xs-spread="([^"]*)"', stack)
+    if xm:
+        xs_spread = xm.group(1)
+    pl_proj = ""
+    pm = re.search(r'data-pl-proj="([^"]*)"', stack)
+    if pm:
+        pl_proj = pm.group(1)
+    xs_proj = ""
+    xpm = re.search(r'data-xs-proj="([^"]*)"', stack)
+    if xpm:
+        xs_proj = xpm.group(1)
+
+    edge_home = None
+    mg = _home_margin_from_proj(pl_proj, home, away)
+    if mg is not None:
+        edge_home = _wnba_winpct_from_margin(mg)
+    xs_home = None
+    mg = _home_margin_from_side_line(xs_spread, home, away)
+    if mg is None:
+        mg = _home_margin_from_proj(xs_proj, home, away)
+    if mg is not None:
+        xs_home = _wnba_winpct_from_margin(mg)
+    eff_home = None
+    mg = _home_margin_from_side_line(pl_spread, home, away)
+    if mg is not None:
+        eff_home = _wnba_winpct_from_margin(mg)
+
+    if sc_home is None:
+        sc_home = edge_home if edge_home is not None else eff_home
+        if sc_home is not None:
+            sc_away = round(100.0 - sc_home, 1)
+    if sc_home is None:
+        return stack
+    if sc_away is None:
+        sc_away = round(100.0 - sc_home, 1)
+    if edge_home is None:
+        edge_home = sc_home
+    if xs_home is None:
+        xs_home = sc_home
+    if eff_home is None:
+        eff_home = sc_home
+
+    models = {
+        "Edge": edge_home,
+        "XSharp": xs_home,
+        "Sharp Consensus": sc_home,
+        "Efficiency": eff_home,
+    }
+
+    # Face = Sharp Consensus (PL moneyline), both sides.
+    row_m = re.search(
+        r'(<div class="matchup-row">)([\s\S]*?)(</div>\s*<div class="lines-strip")',
+        stack,
+    )
+    if row_m:
+        row = row_m.group(2)
+        seen = {"n": 0}
+
+        def _wp(m: re.Match[str]) -> str:
+            seen["n"] += 1
+            pct = sc_away if seen["n"] == 1 else sc_home
+            return f"{m.group(1)}{_fmt_pct(pct)}"
+
+        row = re.sub(r'(<div class="win-pct">)[\d.]+', _wp, row, count=2)
+        slot_i = {"n": 0}
+
+        def _fav(m: re.Match[str]) -> str:
+            slot_i["n"] += 1
+            fav = (slot_i["n"] == 1 and sc_away >= 50.0) or (
+                slot_i["n"] == 2 and sc_home >= 50.0
+            )
+            return f'class="team-slot{" favored" if fav else ""}"'
+
+        row = re.sub(r'class="team-slot[^"]*"', _fav, row, count=2)
+        stack = stack[: row_m.start(2)] + row + stack[row_m.end(2) :]
+
+    def _pc_repl(m: re.Match[str]) -> str:
+        box = m.group(0)
+        name_m = re.search(r'class="pc-name">([^<]+)', box)
+        name = (name_m.group(1) if name_m else "").strip()
+        if name not in models:
+            return box
+        team, side, pct = _favorite_of(home, away, models[name])
+        return _rewrite_pc_box(box, pct, side, team)
+
+    stack = re.sub(
+        r'<div class="pc-box[^"]*">[\s\S]*?</div>\s*</div>',
+        _pc_repl,
+        stack,
+    )
+    if "Efficiency" not in stack:
+        team, side, pct = _favorite_of(home, away, eff_home)
+        extra = (
+            f'<div class="pc-box ">'
+            f'<div class="pc-name">Efficiency</div>'
+            f'<div class="pc-val">{_fmt_pct(pct)}%</div>'
+            f'<div class="pc-side {side}">{team}</div>'
+            f"</div>"
+        )
+        stack = re.sub(
+            r'(<div class="pc-box consensus">[\s\S]*?</div>\s*</div>)',
+            r"\1" + extra,
+            stack,
+            count=1,
+        )
+
+    def _conf_of(home_pct: float) -> str:
+        return _fmt_pct(home_pct if home_pct >= 50.0 else 100.0 - home_pct)
+
+    open_end = stack.find(">")
+    if open_end > 0:
+        tag = stack[: open_end + 1]
+        sc_team, _, sc_pct = _favorite_of(home, away, sc_home)
+        tag = _set_attr(tag, "data-conf", _fmt_pct(sc_pct))
+        tag = _set_attr(tag, "data-pick", sc_team)
+        tag = _set_attr(tag, "data-m-edge", _conf_of(models["Edge"]))
+        tag = _set_attr(tag, "data-m-xsharp", _conf_of(models["XSharp"]))
+        tag = _set_attr(tag, "data-m-consensus", _fmt_pct(sc_pct))
+        tag = _set_attr(tag, "data-m-efficiency", _conf_of(models["Efficiency"]))
+        stack = tag + stack[open_end + 1 :]
+    return stack
+
+
 def apply_wnba_picks_fixups(html: str) -> str:
-    """Chart attrs + H2H L10 enrich + hide empty Grinder2/Takedown boxes."""
+    """Chart attrs + H2H L10 enrich + real face % + hide empty Grinder2/Takedown boxes."""
     if not html or "data-pick-card" not in html:
         return html
     try:
@@ -538,6 +1154,14 @@ def apply_wnba_picks_fixups(html: str) -> str:
     html = enrich_mlb_chart_data_attrs(html)
     try:
         html = enrich_wnba_h2h_from_db(html)
+    except Exception:
+        pass
+    try:
+        html = fill_wnba_placeholder_probs(html)
+    except Exception:
+        pass
+    try:
+        html = fill_wnba_card_gaps(html)
     except Exception:
         pass
     html = hide_unavailable_model_boxes(html)
@@ -696,6 +1320,49 @@ def wnba_published_ml_from_html(html: str) -> dict[str, dict[str, Any]]:
     return out
 
 
+_WNBA_PROJ_RE = re.compile(
+    r"(.+?)\s+(\d+(?:\.\d+)?)\s*[–-]\s*(.+?)\s+(\d+(?:\.\d+)?)"
+)
+
+
+def _wnba_names_match(a: str, b: str) -> bool:
+    sa = re.sub(r"[^a-z0-9]+", "", (a or "").lower())
+    sb = re.sub(r"[^a-z0-9]+", "", (b or "").lower())
+    if not sa or not sb:
+        return False
+    return sa == sb or sa in sb or sb in sa
+
+
+def _fill_wnba_final_from_pl_proj(row: dict[str, Any]) -> None:
+    """When ML boxes are N/A, grade the published PL projected score."""
+    if not isinstance(row, dict):
+        return
+    models = row.get("models") if isinstance(row.get("models"), dict) else {}
+    if any(_wnba_has_pick(m) for m in models.values()):
+        return
+    proj = str(row.get("pl_proj") or "")
+    m = _WNBA_PROJ_RE.search(proj)
+    if not m:
+        return
+    away_n, away_p, home_n, home_p = m.group(1).strip(), float(m.group(2)), m.group(3).strip(), float(m.group(4))
+    pick = home_n if home_p >= away_p else away_n
+    total = home_p + away_p
+    prob = round(100.0 * max(home_p, away_p) / total, 1) if total else None
+    hs, aws = row.get("home_score"), row.get("away_score")
+    correct = None
+    if hs is not None and aws is not None:
+        winner = row.get("home_team_id") if float(hs) > float(aws) else row.get("away_team_id")
+        if _wnba_names_match(pick, str(winner or "")):
+            correct = True
+        elif _wnba_names_match(pick, str(row.get("home_team_id") or "")) or _wnba_names_match(
+            pick, str(row.get("away_team_id") or "")
+        ):
+            correct = False
+    models = dict(models)
+    models["Prediction Lab"] = {"pick": pick, "prob": prob, "correct": correct}
+    row["models"] = models
+
+
 def apply_wnba_best_ml_face(payload: dict[str, Any] | None) -> dict[str, Any]:
     """Point chart moneyline face (pick / % / Correct-Wrong) at the best model."""
     if not payload:
@@ -704,22 +1371,22 @@ def apply_wnba_best_ml_face(payload: dict[str, Any] | None) -> dict[str, Any]:
     ml = markets.get("moneyline") or {}
     season = ((ml.get("tallies") or payload.get("tallies") or {}).get("season") or {})
     best = wnba_best_ml_model(season.get("models") or {})
-    if not best:
-        return payload
-    name = best["name"]
+    name = (best or {}).get("name") or "Prediction Lab"
     payload["ml_face_model"] = name
     ml["face_model"] = name
     finals = list(ml.get("finals") or payload.get("finals") or [])
     for row in finals:
+        _fill_wnba_final_from_pl_proj(row)
         models = row.get("models") or {}
         face = models.get(name)
+        if not _wnba_has_pick(face):
+            face = next((models[k] for k in models if _wnba_has_pick(models[k])), None)
         if _wnba_has_pick(face):
             row["face_pick"] = face.get("pick")
             row["face_prob"] = face.get("prob")
             row["correct"] = face.get("correct")
-            row["face_model"] = name
+            row["face_model"] = face.get("name") or name
         else:
-            # Do not keep Edge as the graded face when it is not the winner.
             row["face_pick"] = "—"
             row["face_prob"] = None
             row["correct"] = None
@@ -728,6 +1395,7 @@ def apply_wnba_best_ml_face(payload: dict[str, Any] | None) -> dict[str, Any]:
         ml["finals"] = finals
     if "finals" in payload:
         payload["finals"] = finals
+    ml["ungraded"] = sum(1 for f in finals if f.get("correct") is None)
     markets["moneyline"] = ml
     payload["markets"] = markets
     return payload
