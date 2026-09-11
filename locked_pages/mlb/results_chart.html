@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MLB Results | Prediction Lab</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="/static/css/research-theme.css" />
+  <link rel="stylesheet" href="/static/css/picks-nav-overrides.css" />
+  <link rel="stylesheet" href="/static/css/sports-chrome.css" />
+  <link rel="stylesheet" href="/static/css/team-results.css" />
+</head>
+<body data-ssr-chart="1" data-market="moneyline" class="research-site"><header class="pl2-header">
+    <button type="button" class="pl2-burger" id="navHamburger" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+      <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav" aria-label="MLB">
+      <a href="/mlb-picks">Picks</a>
+      <a class="active" href="/mlb-results">Results</a>
+    </nav>
+    <div class="pl2-header-actions"></div>
+  </header>
+
+  <main><div class="pl-view-toggle" role="navigation" aria-label="Results view"><a class="pl-view-btn " href="/mlb-results">Cards</a><a class="pl-view-btn active" href="/mlb-results?view=chart">Chart</a></div><style>.pl-view-toggle{display:flex;gap:8px;margin:12px 16px 18px;flex-wrap:wrap}.pl-view-btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:.85rem;text-decoration:none}.pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
+    <div class="container">
+    <section class="controls" id="league-controls" hidden>
+      <label hidden>
+        League
+        <select id="league">
+          <option value="ALL" selected>All Leagues</option>
+        </select>
+      </label>
+      <button id="run" type="button" hidden>Load results</button>
+      <span id="status" class="status"></span>
+    </section>
+
+    <nav class="market-tabs" id="market-tabs" aria-label="Bet type" >
+      <button type="button" class="market-tab active" data-market="moneyline">Moneyline</button>
+      <button type="button" class="market-tab" data-market="spread">Spread / Run Line</button>
+      <button type="button" class="market-tab" data-market="totals">Totals (O/U)</button>
+    </nav>
+
+    <div id="tallies" class="tally-wrap" ><section class="tally pl-analytics"><h2>Best Performing Model</h2><div class="tally-grid"><div class="tally-card"><div class="mlabel">Today</div><div class="rec"><b>XSharp</b></div><div class="acc ok">77.8%</div><div class="rec">7-2</div></div><div class="tally-card"><div class="mlabel">Last 7</div><div class="rec"><b>XSharp</b></div><div class="acc ok">47.4%</div><div class="rec">46-51</div></div><div class="tally-card"><div class="mlabel">Season</div><div class="rec"><b>Efficiency Season</b></div><div class="acc ok">52.1%</div><div class="rec">416-383</div></div></div></section><section class="tally"><h2>Last Night <span class="tag">(9 games)</span></h2><div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Grinder2</div><div class="daily-acc acc">33.3%</div><div class="daily-rec rec">3-6</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Takedown</div><div class="daily-acc acc">33.3%</div><div class="daily-rec rec">3-6</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Edge</div><div class="daily-acc acc">55.6%</div><div class="daily-rec rec">5-4</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">XSharp</div><div class="daily-acc acc">77.8%</div><div class="daily-rec rec">7-2</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Sharp Consensus</div><div class="daily-acc acc">55.6%</div><div class="daily-rec rec">5-4</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Efficiency</div><div class="daily-acc acc">77.8%</div><div class="daily-rec rec">7-2</div></div></div></section><section class="tally"><h2>Last 7 <span class="tag">(97 games)</span></h2><div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Grinder2</div><div class="daily-acc acc">39.2%</div><div class="daily-rec rec">38-59</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Takedown</div><div class="daily-acc acc">39.2%</div><div class="daily-rec rec">38-59</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Edge</div><div class="daily-acc acc">45.4%</div><div class="daily-rec rec">44-53</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">XSharp</div><div class="daily-acc acc">47.4%</div><div class="daily-rec rec">46-51</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Sharp Consensus</div><div class="daily-acc acc">46.4%</div><div class="daily-rec rec">45-52</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Efficiency</div><div class="daily-acc acc">45.4%</div><div class="daily-rec rec">44-53</div></div></div></section><section class="tally"><h2>Season <span class="tag">(799 games)</span></h2><div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Grinder2</div><div class="daily-acc acc">50.6%</div><div class="daily-rec rec">404-395</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Takedown</div><div class="daily-acc acc">50.4%</div><div class="daily-rec rec">403-396</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Edge</div><div class="daily-acc acc">51.2%</div><div class="daily-rec rec">409-390</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">XSharp</div><div class="daily-acc acc">51.7%</div><div class="daily-rec rec">413-386</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Sharp Consensus</div><div class="daily-acc acc">51.4%</div><div class="daily-rec rec">411-388</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Efficiency</div><div class="daily-acc acc">48.3%</div><div class="daily-rec rec">84-90</div></div></div></section></div>
+    <div class="pl-results-markets" id="pl-results-markets">
+      <nav class="picks-market-tabs pl-results-market-tabs" aria-label="Results market">
+        <a class="market-tab active" href="/mlb-results?view=chart&market=moneyline" data-market="moneyline" role="tab" aria-selected="true">Moneyline</a><a class="market-tab" href="/mlb-results?view=chart&market=spread" data-market="spread" role="tab" aria-selected="false">Run Line</a><a class="market-tab" href="/mlb-results?view=chart&market=totals" data-market="totals" role="tab" aria-selected="false">Totals</a>
+      </nav>
+      <div data-market-panel="moneyline">
+    <div class="pl-consensus-records" id="pl-consensus-records">
+      <h2>Consensus Based Betting Records</h2>
+      <p class="sub">Moneyline on the pregame majority among the 6 live models. Each row is one dissent combination (model(s) that broke from the majority). 0-0 means that combination had no graded games in the window. Even splits are omitted.</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left">Agreement</th>
+              <th>Last night (2026-09-03)</th>
+              <th>Past 7 days</th>
+              <th>Past 30 days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="bucket">6/6 unanimous</td><td>3-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td><td>10-16 <span style='color:#D93025;font-weight:700'>(38%)</span><div class='cons-bar' aria-hidden='true'><i style='width:38%;background:#D93025'></i></div></td><td>64-57 <span style='color:#ca8a04;font-weight:700'>(53%)</span><div class='cons-bar' aria-hidden='true'><i style='width:53%;background:#ca8a04'></i></div></td></tr><tr><td class="bucket">5/6 — all but Edge</td><td>0-0</td><td>7-12 <span style='color:#D93025;font-weight:700'>(37%)</span><div class='cons-bar' aria-hidden='true'><i style='width:37%;background:#D93025'></i></div></td><td>26-25 <span style='color:#ca8a04;font-weight:700'>(51%)</span><div class='cons-bar' aria-hidden='true'><i style='width:51%;background:#ca8a04'></i></div></td></tr><tr><td class="bucket">5/6 — all but Efficiency</td><td>0-0</td><td>6-7 <span style='color:#D93025;font-weight:700'>(46%)</span><div class='cons-bar' aria-hidden='true'><i style='width:46%;background:#D93025'></i></div></td><td>19-17 <span style='color:#ca8a04;font-weight:700'>(53%)</span><div class='cons-bar' aria-hidden='true'><i style='width:53%;background:#ca8a04'></i></div></td></tr><tr><td class="bucket">5/6 — all but XSharp</td><td>0-1 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td><td>3-3 <span style='color:#ca8a04;font-weight:700'>(50%)</span><div class='cons-bar' aria-hidden='true'><i style='width:50%;background:#ca8a04'></i></div></td><td>10-4 <span style='color:#00C076;font-weight:700'>(71%)</span><div class='cons-bar' aria-hidden='true'><i style='width:71%;background:#00C076'></i></div></td></tr><tr><td class="bucket">5/6 — all but Grinder2</td><td>0-0</td><td>0-0</td><td>2-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td></tr><tr><td class="bucket">5/6 — all but Takedown</td><td>0-0</td><td>0-0</td><td>1-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td></tr><tr><td class="bucket">4/6 — all but Edge and Efficiency</td><td>0-2 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td><td>7-8 <span style='color:#D93025;font-weight:700'>(47%)</span><div class='cons-bar' aria-hidden='true'><i style='width:47%;background:#D93025'></i></div></td><td>16-27 <span style='color:#D93025;font-weight:700'>(37%)</span><div class='cons-bar' aria-hidden='true'><i style='width:37%;background:#D93025'></i></div></td></tr><tr><td class="bucket">4/6 — all but Grinder2 and Takedown</td><td>0-0</td><td>0-0</td><td>12-5 <span style='color:#00C076;font-weight:700'>(71%)</span><div class='cons-bar' aria-hidden='true'><i style='width:71%;background:#00C076'></i></div></td></tr><tr><td class="bucket">4/6 — all but XSharp and Sharp Consensus</td><td>0-1 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td><td>1-7 <span style='color:#D93025;font-weight:700'>(12%)</span><div class='cons-bar' aria-hidden='true'><i style='width:12%;background:#D93025'></i></div></td><td>8-8 <span style='color:#ca8a04;font-weight:700'>(50%)</span><div class='cons-bar' aria-hidden='true'><i style='width:50%;background:#ca8a04'></i></div></td></tr><tr><td class="bucket">4/6 — all but XSharp and Efficiency</td><td>0-1 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td><td>1-2 <span style='color:#D93025;font-weight:700'>(33%)</span><div class='cons-bar' aria-hidden='true'><i style='width:33%;background:#D93025'></i></div></td><td>5-8 <span style='color:#D93025;font-weight:700'>(38%)</span><div class='cons-bar' aria-hidden='true'><i style='width:38%;background:#D93025'></i></div></td></tr><tr><td class="bucket">4/6 — all but Edge and XSharp</td><td>0-0</td><td>2-1 <span style='color:#00C076;font-weight:700'>(67%)</span><div class='cons-bar' aria-hidden='true'><i style='width:67%;background:#00C076'></i></div></td><td>5-3 <span style='color:#00C076;font-weight:700'>(62%)</span><div class='cons-bar' aria-hidden='true'><i style='width:62%;background:#00C076'></i></div></td></tr><tr><td class="bucket">4/6 — all but Grinder2 and Edge</td><td>0-0</td><td>0-0</td><td>1-2 <span style='color:#D93025;font-weight:700'>(33%)</span><div class='cons-bar' aria-hidden='true'><i style='width:33%;background:#D93025'></i></div></td></tr><tr><td class="bucket">4/6 — all but Grinder2 and Efficiency</td><td>0-0</td><td>0-0</td><td>0-1 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td></tr><tr><td class="bucket">4/6 — all but Takedown and Edge</td><td>0-0</td><td>0-0</td><td>1-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <style>
+        .pl-consensus-records,.cfl-consensus{background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:14px;padding:18px;margin:16px 0 20px;max-width:1100px;margin-left:auto;margin-right:auto}
+        .pl-consensus-records h2,.cfl-consensus h2{margin:0 0 6px;font-size:1.15rem;color:#0f172a;text-align:center}
+        .pl-consensus-records .sub{margin:0 0 14px;color:#64748b;font-size:.88rem;text-align:center;max-width:46rem;margin-left:auto;margin-right:auto}
+        .pl-consensus-records table{width:100%;border-collapse:collapse;font-size:.9rem}
+        .pl-consensus-records th,.pl-consensus-records td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:center}
+        .pl-consensus-records th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+        .pl-consensus-records td.bucket{text-align:left;font-weight:700;color:#0f172a}
+        .pl-consensus-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;max-width:7.5rem;overflow:hidden}.pl-consensus-records .cons-bar i{display:block;height:100%;border-radius:99px}.pl-consensus-records .cons-split-note{margin-top:4px;font-size:.72rem;font-weight:500;color:#64748b;line-height:1.35;text-align:left}
+      </style>
+    </div>
+    
+    <div class="pl-consensus-records pl-books-pl-records" id="pl-books-pl-records">
+      <h2>PL vs Sportsbook</h2>
+      <p class="sub">Compares the Prediction Lab favorite with the sportsbook favorite. Books favorite is derived from American sportsbook odds. PL favorite is derived from Prediction Lab moneyline odds, with the projected-score lean used as the fallback when necessary.</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left">Signal</th>
+              <th>Last night (2026-09-03)</th>
+              <th>Past 7 days</th>
+              <th>Past 30 days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="signal">Books favorite</td><td>4-5 <span style='color:#D93025;font-weight:700'>(44%)</span><div class='cons-bar' aria-hidden='true'><i style='width:44%;background:#D93025'></i></div></td><td>52-43 <span style='color:#ca8a04;font-weight:700'>(55%)</span><div class='cons-bar' aria-hidden='true'><i style='width:55%;background:#ca8a04'></i></div></td><td>123-103 <span style='color:#ca8a04;font-weight:700'>(54%)</span><div class='cons-bar' aria-hidden='true'><i style='width:54%;background:#ca8a04'></i></div></td></tr><tr><td class="signal">PL favorite</td><td>5-4 <span style='color:#00C076;font-weight:700'>(56%)</span><div class='cons-bar' aria-hidden='true'><i style='width:56%;background:#00C076'></i></div></td><td>42-53 <span style='color:#D93025;font-weight:700'>(44%)</span><div class='cons-bar' aria-hidden='true'><i style='width:44%;background:#D93025'></i></div></td><td>201-150 <span style='color:#00C076;font-weight:700'>(57%)</span><div class='cons-bar' aria-hidden='true'><i style='width:57%;background:#00C076'></i></div></td></tr><tr><td class="signal">PL vs Books disagree</td><td>3-2 <span style='color:#00C076;font-weight:700'>(60%)</span><div class='cons-bar' aria-hidden='true'><i style='width:60%;background:#00C076'></i></div></td><td>12-22 <span style='color:#D93025;font-weight:700'>(35%)</span><div class='cons-bar' aria-hidden='true'><i style='width:35%;background:#D93025'></i></div></td><td>33-37 <span style='color:#D93025;font-weight:700'>(47%)</span><div class='cons-bar' aria-hidden='true'><i style='width:47%;background:#D93025'></i></div></td></tr><tr><td class="signal">PL and Books agree</td><td>2-2 <span style='color:#ca8a04;font-weight:700'>(50%)</span><div class='cons-bar' aria-hidden='true'><i style='width:50%;background:#ca8a04'></i></div></td><td>30-31 <span style='color:#D93025;font-weight:700'>(49%)</span><div class='cons-bar' aria-hidden='true'><i style='width:49%;background:#D93025'></i></div></td><td>86-70 <span style='color:#00C076;font-weight:700'>(55%)</span><div class='cons-bar' aria-hidden='true'><i style='width:55%;background:#00C076'></i></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <style>
+        .pl-books-pl-records{background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:14px;padding:18px;margin:16px 0 20px;max-width:1100px;margin-left:auto;margin-right:auto}
+        .pl-books-pl-records h2{margin:0 0 6px;font-size:1.15rem;color:#0f172a;text-align:center}
+        .pl-books-pl-records .sub{margin:0 0 14px;color:#64748b;font-size:.88rem;text-align:center;max-width:46rem;margin-left:auto;margin-right:auto}
+        .pl-books-pl-records table{width:100%;border-collapse:collapse;font-size:.9rem}
+        .pl-books-pl-records th,.pl-books-pl-records td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:center}
+        .pl-books-pl-records th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+        .pl-books-pl-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;max-width:7.5rem;overflow:hidden}.pl-books-pl-records .cons-bar i{display:block;height:100%;border-radius:99px}.pl-books-pl-records td.signal{text-align:left;font-weight:700;color:#0f172a}
+      </style>
+    </div>
+    </div><div data-market-panel="spread" hidden>
+    <div class="pl-consensus-records pl-three-way-records" id="pl-spread-three-way">
+      <h2>Books · Prediction Lab · XSharp — Run Line</h2>
+      <p class="sub">Books / Prediction Lab / XSharp each pick a run-line side (−1.5). Pair rows are inclusive. Exact 2/3 = those two agree and the third differs; exact 1/3 = the lone disagreeing voice. <strong>All 3 disagree</strong> = all three present and not unanimous (graded on the Books side). Table is withheld if the pre-render accuracy checker fails.</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left">Agreement</th>
+              <th>Last night (2026-09-03)</th>
+              <th>Past 7 days</th>
+              <th>Past 30 days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="bucket">PL = Books</td><td>3-3 <span style='color:#ca8a04;font-weight:700'>(50%)</span><div class='cons-bar' aria-hidden='true'><i style='width:50%;background:#ca8a04'></i></div></td><td>24-40 <span style='color:#D93025;font-weight:700'>(38%)</span><div class='cons-bar' aria-hidden='true'><i style='width:38%;background:#D93025'></i></div></td><td>104-130 <span style='color:#D93025;font-weight:700'>(44%)</span><div class='cons-bar' aria-hidden='true'><i style='width:44%;background:#D93025'></i></div></td></tr><tr><td class="bucket">PL = XSharp</td><td>5-4 <span style='color:#00C076;font-weight:700'>(56%)</span><div class='cons-bar' aria-hidden='true'><i style='width:56%;background:#00C076'></i></div></td><td>30-65 <span style='color:#D93025;font-weight:700'>(32%)</span><div class='cons-bar' aria-hidden='true'><i style='width:32%;background:#D93025'></i></div></td><td>144-207 <span style='color:#D93025;font-weight:700'>(41%)</span><div class='cons-bar' aria-hidden='true'><i style='width:41%;background:#D93025'></i></div></td></tr><tr><td class="bucket">Books = XSharp</td><td>3-3 <span style='color:#ca8a04;font-weight:700'>(50%)</span><div class='cons-bar' aria-hidden='true'><i style='width:50%;background:#ca8a04'></i></div></td><td>24-40 <span style='color:#D93025;font-weight:700'>(38%)</span><div class='cons-bar' aria-hidden='true'><i style='width:38%;background:#D93025'></i></div></td><td>104-130 <span style='color:#D93025;font-weight:700'>(44%)</span><div class='cons-bar' aria-hidden='true'><i style='width:44%;background:#D93025'></i></div></td></tr><tr><td class="bucket">All 3 agree</td><td>3-3 <span style='color:#ca8a04;font-weight:700'>(50%)</span><div class='cons-bar' aria-hidden='true'><i style='width:50%;background:#ca8a04'></i></div></td><td>24-40 <span style='color:#D93025;font-weight:700'>(38%)</span><div class='cons-bar' aria-hidden='true'><i style='width:38%;background:#D93025'></i></div></td><td>104-130 <span style='color:#D93025;font-weight:700'>(44%)</span><div class='cons-bar' aria-hidden='true'><i style='width:44%;background:#D93025'></i></div></td></tr><tr><td class="bucket">All 3 disagree</td><td>0-3 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td><td>16-15 <span style='color:#ca8a04;font-weight:700'>(52%)</span><div class='cons-bar' aria-hidden='true'><i style='width:52%;background:#ca8a04'></i></div></td><td>43-74 <span style='color:#D93025;font-weight:700'>(37%)</span><div class='cons-bar' aria-hidden='true'><i style='width:37%;background:#D93025'></i></div></td></tr><tr><td class="bucket">2/3 — PL + XSharp</td><td>2-1 <span style='color:#00C076;font-weight:700'>(67%)</span><div class='cons-bar' aria-hidden='true'><i style='width:67%;background:#00C076'></i></div></td><td>6-25 <span style='color:#D93025;font-weight:700'>(19%)</span><div class='cons-bar' aria-hidden='true'><i style='width:19%;background:#D93025'></i></div></td><td>40-77 <span style='color:#D93025;font-weight:700'>(34%)</span><div class='cons-bar' aria-hidden='true'><i style='width:34%;background:#D93025'></i></div></td></tr><tr><td class="bucket">1/3 — Books only</td><td>0-3 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td><td>16-15 <span style='color:#ca8a04;font-weight:700'>(52%)</span><div class='cons-bar' aria-hidden='true'><i style='width:52%;background:#ca8a04'></i></div></td><td>43-74 <span style='color:#D93025;font-weight:700'>(37%)</span><div class='cons-bar' aria-hidden='true'><i style='width:37%;background:#D93025'></i></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <style>
+        .pl-three-way-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;max-width:7.5rem;overflow:hidden}
+        .pl-three-way-records .cons-bar i{display:block;height:100%;border-radius:99px}
+        .pl-three-way-records .sub-list{margin:6px 0 10px;padding-left:1.2rem;color:#64748b;font-size:.82rem;line-height:1.45}
+        .pl-three-way-records .sub-list li{margin:2px 0}
+      </style>
+    </div>
+    </div><div data-market-panel="totals" hidden>
+    <div class="pl-consensus-records pl-three-way-records" id="pl-totals-three-way">
+      <h2>Prediction Lab · XSharp — Totals (vs book line)</h2>
+      <p class="sub">Prediction Lab (PL) and XSharp are compared against the book’s Over/Under line.</p><ul class="sub-list"><li><strong>3/3</strong> = PL and XSharp agree with the same side of the book line</li><li><strong>2/3</strong> = only one leans; the other sits on the book line (line counted as the third outcome)</li><li><strong>1/3</strong> = opposite disagreement (each graded on its own side)</li></ul><ul class="sub-list"><li>PL = Prediction Lab’s published Over/Under pick</li><li>XSharp = Over if its projected total is above the book line; Under if below</li><li>Books = the book’s total line only — it is not a third pick</li></ul><p class="sub">0-0 = none in that window; 0-0-N = pushes only.</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left">Agreement</th>
+              <th>Last night (2026-09-03)</th>
+              <th>Past 7 days</th>
+              <th>Past 30 days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="bucket">3/3 — PL = XSharp</td><td>5-3 <span style='color:#00C076;font-weight:700'>(62%)</span><div class='cons-bar' aria-hidden='true'><i style='width:62%;background:#00C076'></i></div></td><td>53-23-6 <span style='color:#00C076;font-weight:700'>(70%)</span><div class='cons-bar' aria-hidden='true'><i style='width:70%;background:#00C076'></i></div></td><td>172-114-13 <span style='color:#00C076;font-weight:700'>(60%)</span><div class='cons-bar' aria-hidden='true'><i style='width:60%;background:#00C076'></i></div></td></tr><tr><td class="bucket">2/3 — vs book line</td><td>1-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td><td>7-5 <span style='color:#00C076;font-weight:700'>(58%)</span><div class='cons-bar' aria-hidden='true'><i style='width:58%;background:#00C076'></i></div></td><td>26-23 <span style='color:#ca8a04;font-weight:700'>(53%)</span><div class='cons-bar' aria-hidden='true'><i style='width:53%;background:#ca8a04'></i></div></td></tr><tr><td class="bucket">1/3 — PL only</td><td>0-0</td><td>0-0</td><td>2-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td></tr><tr><td class="bucket">1/3 — XSharp only</td><td>0-0</td><td>0-0</td><td>0-2 <span style='color:#D93025;font-weight:700'>(0%)</span><div class='cons-bar' aria-hidden='true'><i style='width:4%;background:#D93025'></i></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <style>
+        .pl-three-way-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;max-width:7.5rem;overflow:hidden}
+        .pl-three-way-records .cons-bar i{display:block;height:100%;border-radius:99px}
+        .pl-three-way-records .sub-list{margin:6px 0 10px;padding-left:1.2rem;color:#64748b;font-size:.82rem;line-height:1.45}
+        .pl-three-way-records .sub-list li{margin:2px 0}
+      </style>
+    </div>
+    </div>
+      
+<script>
+(function(){
+  var root=document.getElementById('pl-results-markets');
+  if(!root||root.dataset.consSwitchBound==='1') return;
+  root.dataset.consSwitchBound='1';
+  function showConsMarket(market){
+    if(!market) return;
+    root.querySelectorAll('.market-tab[data-market]').forEach(function(b){
+      var on=b.getAttribute('data-market')===market;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on?'true':'false');
+    });
+    root.querySelectorAll('[data-market-panel]').forEach(function(p){
+      if(p.getAttribute('data-market-panel')===market) p.removeAttribute('hidden');
+      else p.setAttribute('hidden','');
+    });
+  }
+  root.addEventListener('click', function(ev){
+    var tab=ev.target.closest('.market-tab[data-market]');
+    if(!tab||!root.contains(tab)) return;
+    ev.preventDefault();
+    var market=tab.getAttribute('data-market');
+    showConsMarket(market);
+    var chartBtn=document.querySelector('#market-tabs .market-tab[data-market="'+market+'"]');
+    if(chartBtn){ chartBtn.click(); }
+  });
+  window.__plShowConsensusMarket=showConsMarket;
+})();
+</script>
+
+      <style>
+        .pl-results-markets{max-width:1100px;margin:16px auto 20px}
+        .pl-results-markets .pl-consensus-records{margin:0 auto}
+        .pl-results-market-tabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 0 12px;width:100%}
+        .pl-results-market-tabs .market-tab{border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:.8rem;padding:7px 14px;border-radius:999px;cursor:pointer;text-decoration:none}
+        .pl-results-market-tabs .market-tab.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}
+        .pl-results-markets [data-market-panel][hidden]{display:none!important}
+        .pl-plxs-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;max-width:7.5rem;overflow:hidden}
+        .pl-plxs-records .cons-bar i{display:block;height:100%;border-radius:99px}
+        .pl-plxs-records .cons-read{margin:12px 0 0;color:#334155;font-size:.88rem;text-align:center;max-width:46rem;margin-left:auto;margin-right:auto;line-height:1.45}
+      </style>
+    </div>
+    
+    <section id="ssr-finals" data-ssr-market="moneyline"><h2 class="sec-title">Moneyline games <span class="tag">(40)</span></h2><div class="table-wrap"><table class="results-table"><thead><tr><th>Date</th><th>League</th><th>Match</th><th>Score</th><th>Edge pick</th><th>%</th><th>Result</th><th>Models</th></tr></thead><tbody><tr><td>2026-09-03</td><td>MLB</td><td>St. Louis Cardinals @ Los Angeles Dodgers</td><td>2–3</td><td>Los Angeles Dodgers</td><td>52.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>Athletics @ Seattle Mariners</td><td>7–4</td><td>Seattle Mariners</td><td>50.0%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>Tampa Bay Rays @ Texas Rangers</td><td>0–6</td><td>Tampa Bay Rays</td><td>53.8%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>Miami Marlins @ Kansas City Royals</td><td>3–7</td><td>Kansas City Royals</td><td>51.8%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>Milwaukee Brewers @ Chicago Cubs</td><td>1–2</td><td>Milwaukee Brewers</td><td>51.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>Boston Red Sox @ Baltimore Orioles</td><td>6–5</td><td>Baltimore Orioles</td><td>53.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>Chicago White Sox @ Houston Astros</td><td>2–6</td><td>Houston Astros</td><td>50.1%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>Toronto Blue Jays @ Cleveland Guardians</td><td>6–3</td><td>Toronto Blue Jays</td><td>53.8%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-03</td><td>MLB</td><td>San Francisco Giants @ Pittsburgh Pirates</td><td>2–5</td><td>Pittsburgh Pirates</td><td>53.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>St. Louis Cardinals @ Los Angeles Dodgers</td><td>8–6</td><td>St. Louis Cardinals</td><td>51.9%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>New York Yankees @ Los Angeles Angels</td><td>6–3</td><td>New York Yankees</td><td>51.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Milwaukee Brewers @ Chicago Cubs</td><td>9–5</td><td>Milwaukee Brewers</td><td>52.9%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Detroit Tigers @ Minnesota Twins</td><td>11–6</td><td>Detroit Tigers</td><td>52.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Chicago White Sox @ Houston Astros</td><td>0–2</td><td>Chicago White Sox</td><td>51.1%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Miami Marlins @ Kansas City Royals</td><td>9–6</td><td>Kansas City Royals</td><td>54.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Toronto Blue Jays @ Cleveland Guardians</td><td>11–0</td><td>Toronto Blue Jays</td><td>52.9%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>San Francisco Giants @ Pittsburgh Pirates</td><td>5–4</td><td>Pittsburgh Pirates</td><td>51.1%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>New York Mets @ Tampa Bay Rays</td><td>10–4</td><td>Tampa Bay Rays</td><td>52.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Seattle Mariners @ Boston Red Sox</td><td>8–3</td><td>Boston Red Sox</td><td>52.0%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Philadelphia Phillies @ Arizona Diamondbacks</td><td>0–1</td><td>Philadelphia Phillies</td><td>50.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Baltimore Orioles @ Colorado Rockies</td><td>5–6</td><td>Baltimore Orioles</td><td>53.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Athletics @ Texas Rangers</td><td>9–2</td><td>Texas Rangers</td><td>50.1%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>Atlanta Braves @ Washington Nationals</td><td>9–0</td><td>Washington Nationals</td><td>50.0%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-02</td><td>MLB</td><td>San Diego Padres @ Cincinnati Reds</td><td>3–7</td><td>Cincinnati Reds</td><td>51.9%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>St. Louis Cardinals @ Los Angeles Dodgers</td><td>13–8</td><td>St. Louis Cardinals</td><td>52.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Philadelphia Phillies @ Arizona Diamondbacks</td><td>7–1</td><td>Philadelphia Phillies</td><td>51.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>New York Yankees @ Los Angeles Angels</td><td>7–3</td><td>New York Yankees</td><td>52.9%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Baltimore Orioles @ Colorado Rockies</td><td>2–4</td><td>Baltimore Orioles</td><td>52.0%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Chicago White Sox @ Houston Astros</td><td>5–1</td><td>Chicago White Sox</td><td>51.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Athletics @ Texas Rangers</td><td>5–8</td><td>Athletics</td><td>51.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Milwaukee Brewers @ Chicago Cubs</td><td>9–4</td><td>Milwaukee Brewers</td><td>54.9%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Detroit Tigers @ Minnesota Twins</td><td>2–15</td><td>Minnesota Twins</td><td>50.1%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Miami Marlins @ Kansas City Royals</td><td>6–3</td><td>Kansas City Royals</td><td>51.1%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Seattle Mariners @ Boston Red Sox</td><td>9–6</td><td>Boston Red Sox</td><td>50.0%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Atlanta Braves @ Washington Nationals</td><td>5–9</td><td>Atlanta Braves</td><td>51.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>San Francisco Giants @ Pittsburgh Pirates</td><td>12–13</td><td>San Francisco Giants</td><td>51.0%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>San Diego Padres @ Cincinnati Reds</td><td>3–4</td><td>Cincinnati Reds</td><td>52.0%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>Toronto Blue Jays @ Cleveland Guardians</td><td>1–6</td><td>Toronto Blue Jays</td><td>51.0%</td><td>Wrong</td><td class="mono-models">Edge</td></tr><tr><td>2026-09-01</td><td>MLB</td><td>New York Mets @ Tampa Bay Rays</td><td>2–6</td><td>Tampa Bay Rays</td><td>54.9%</td><td>Correct</td><td class="mono-models">Edge</td></tr><tr><td>2026-08-31</td><td>MLB</td><td>Philadelphia Phillies @ Arizona Diamondbacks</td><td>2–1</td><td>Arizona Diamondbacks</td><td>50.9%</td><td>Wrong</td><td class="mono-models">Edge</td></tr></tbody></table></div></section><p id="summary" class="note" hidden></p>
+
+    <section id="finals-wrap">
+      <h2 class="sec-title"><span id="games-heading">Games</span> <span id="game-count" class="tag"></span></h2>
+      <div class="table-wrap">
+        <table class="results-table" id="results-table">
+          <thead id="results-head"></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <div id="finals" class="cards games-grid" style="margin-top:1.5rem" hidden aria-hidden="true"></div>
+    </section>
+    </div>
+  </main>
+
+  <footer class="site-directory-footer">
+    <div class="directory-shell">
+        <span class="directory-label">Knowledge Directory</span>
+        <span class="directory-wordmark">PREDICTIONLABS.IO</span>
+        <div class="directory-sub">AI-powered sports betting picks. Daily. Transparent. Data-driven.</div>
+        <div class="directory-grid">
+            <div>
+                <div class="footer-heading">AI Picks by Sport</div>
+                <a href="/mlb-picks">MLB AI Picks</a>
+                <a href="/nba-picks">NBA AI Picks</a>
+                <a href="/nhl-picks">NHL AI Picks</a>
+                <a href="/nfl-picks">NFL AI Picks</a>
+                <a href="/soccer-picks">Soccer AI Picks</a>
+                <a href="/ncaab-picks">NCAAB AI Picks</a>
+                <a href="/ncaaf-picks">NCAAF AI Picks</a>
+                <a href="/ncaaw-picks">NCAAW AI Picks</a>
+                <a href="/wnba-picks">WNBA AI Picks</a>
+            </div>
+            <div>
+                <div class="footer-heading">Research Tools</div>
+                <a href="/performance" rel="nofollow">Model Performance</a>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/daily-report">Daily Results Report</a>
+                <a href="/player-props" rel="nofollow">Player Props</a>
+                <a href="/results/downloads">Data Downloads</a>
+            </div>
+            <div>
+                <div class="footer-heading">Access</div>
+                <a href="/ai-sports-betting-picks-today">Free Picks</a>
+                <a href="/plans">Premium Edge — $4.99/wk</a>
+                <a href="/plans">Monthly Plan — $19.99</a>
+                <a href="/plans">Yearly Plan — $149.99</a>
+                <a href="/login">Sign In</a>
+                <a href="/signup">Create Account</a>
+            </div>
+            <div>
+                <div class="footer-heading">Company</div>
+                <a href="/blog">Daily Blog</a>
+                <a href="/affiliate">Affiliate Program</a>
+                <a href="/faq">FAQ</a>
+                <a href="/tutorial">Tutorial</a>
+                <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
+                <a href="/contact">Contact</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/refund-policy">Refund Policy</a>
+                <a href="/responsible-gaming">Responsible Gaming</a>
+            </div>
+        </div>
+        <div class="directory-bottom">
+            <span>&copy; 2026 Prediction Lab. All rights reserved.</span>
+            <span>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.tiktok.com/@predictionlab" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://reddit.com/r/sportsbetting" target="_blank" rel="noopener">Reddit</a>
+            </span>
+            <span>For entertainment purposes. Bet responsibly.</span>
+        </div>
+    </div>
+</footer>
+
+  <script>
+    window.TEAM_API_BASE = "/mlb/api";
+    window.TEAM_HIDE_LEAGUE = true;
+    window.TEAM_SPORT = "mlb";
+  </script>
+  <script src="/static/js/team-results.js?v=mlb-games-5"></script>
+</body>
+</html>

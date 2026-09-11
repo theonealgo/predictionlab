@@ -2314,6 +2314,40 @@ def _scores_from_spread_total(spread, total):
     return home, away
 
 
+_PICK_TEMPLATE_FLOAT_KEYS = (
+    'ensemble_prob', 'elo_prob', 'xgb_prob', 'glicko2_prob', 'trueskill_prob',
+    'efficiency_prob', 'disp_ml_prob', 'home_moneyline', 'away_moneyline',
+    'book_home_moneyline', 'book_away_moneyline', 'pl_model_home_ml',
+    'pl_model_away_ml', 'home_score', 'away_score', 'edge_pct', 'face_edge_pct',
+    'total_ev', 'disp_book_spread', 'disp_pl_spread', 'disp_xs_spread',
+    'disp_book_total', 'disp_pl_total', 'disp_xs_total',
+    'pl_proj_home_pts', 'pl_proj_away_pts', 'xs_proj_home_pts', 'xs_proj_away_pts',
+    'h2h_last10_total',
+)
+
+
+def _coerce_pick_template_numbers(pred):
+    """SQLite/JSON slates often store percents and moneylines as strings.
+
+    The picks template compares those values (`>= 50`, `>= -150`). A string
+    vs int comparison raises TypeError in Jinja/Python 3 and trips the
+    /mlb-picks fallback stub after a Render restart with no warm cache.
+    """
+    if not isinstance(pred, dict):
+        return
+    for k in _PICK_TEMPLATE_FLOAT_KEYS:
+        if k not in pred or pred[k] is None or pred[k] == '':
+            continue
+        v = pred[k]
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, (int, float)):
+            continue
+        coerced = _safe_float(v, default=None)
+        if coerced is not None:
+            pred[k] = coerced
+
+
 def _safe_float(value, default=None):
     """Coerce DB/model values to float; reject corrupt bytes and NaN."""
     if value is None:
@@ -9998,6 +10032,7 @@ def _persist_predictions_to_disk(cache_key, entry):
 def _predictions_cache_key_aliases(sport):
     """Current + prior slate keys so a version bump does not cold-start the site."""
     return (
+        f"{sport}_upcoming_predictions_v9",
         f"{sport}_upcoming_predictions_v8",
         f"{sport}_upcoming_predictions_v7",
         f"{sport}_upcoming_predictions_v6",
@@ -10014,7 +10049,7 @@ def _promote_predictions_cache_aliases():
             sports.add(key.split('_upcoming_predictions_v', 1)[0])
         for sport in sports:
             keys = _predictions_cache_key_aliases(sport)
-            current = keys[0]
+            current = keys[0]  # v9
             if _PREDICTIONS_CACHE.get(current, {}).get('data'):
                 continue
             for alias in keys[1:]:
@@ -11013,7 +11048,10 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     _start_background_book_refresh(sport, unlocked)
                 except Exception as _bk_cache:
                     logger.debug(f"[{sport}] book hydrate on predictions cache hit: {_bk_cache}")
-                _apply_mlb_spread_fade_batch(sport, unlocked)
+                try:
+                    _apply_mlb_spread_fade_batch(sport, unlocked)
+                except Exception:
+                    pass
             return out
 
     # Request-path cold miss: never block ~60–90s on a full v2/XGB rebuild.
@@ -11050,7 +11088,10 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     _start_background_book_refresh(sport, unlocked)
                 except Exception as _bk_cold:
                     logger.debug(f"[{sport}] book hydrate on cold-recovered slate: {_bk_cold}")
-                _apply_mlb_spread_fade_batch(sport, unlocked)
+                try:
+                    _apply_mlb_spread_fade_batch(sport, unlocked)
+                except Exception:
+                    pass
             return out
         with _PREDICTIONS_REFRESH_LOCK:
             _already_refreshing = sport in _PREDICTIONS_REFRESH_INFLIGHT
@@ -15099,7 +15140,7 @@ BASE_TEMPLATE = """
 var TV_MENUS={picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'}{% if soccer_enabled %},{l:'Soccer',h:'/soccer-picks'}{% endif %},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'CFL',h:'/cfl-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Daily Results',h:'/daily-report'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'},{l:'Soccer',h:'/soccer-results'},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'CFL',h:'/cfl-results'},{l:'Tennis',h:'/tennis-results'},{l:'UFC',h:'/ufc-results'},{l:'Golf',h:'/golf-results'},{l:'Daily Results',h:'/daily-report'},{l:'Historical Performance',h:'/performance'},{l:'Download CSV',h:'/results/downloads'},{l:'Edge Performance',h:'/edge-performance'},{l:'Picks CSV',h:'/picks/export.csv'}]},community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},company:{title:'Company',items:[{l:'Join Premium',h:'/plans',cls:'highlight'},{l:'Plans & Pricing',h:'/plans'},{l:'Blog',h:'/blog'},{l:'FAQ',h:'/faq'},{l:'Tutorial',h:'/tutorial'},{l:'What Are AI Picks',h:'/what-are-ai-sports-betting-picks'},{l:'Contact',h:'/contact'},{l:'Privacy',h:'/privacy'},{l:'Terms',h:'/terms'},{l:'Refund Policy',h:'/refund-policy'},{l:'Responsible Gaming',h:'/responsible-gaming'}]}};
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');setTimeout(function(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';},280);}
-function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){var ext=item.ext?' target="_blank" rel="noopener"':'';var cls='tv-sub-link'+(item.cls?' '+item.cls:'')+(item.live?' in-season':'');var extIcon=item.ext?' <span class="ext">&#8599;</span>':'';html+='<a href="'+item.h+'" class="'+cls+'"'+ext+'>'+item.l+extIcon+'</a>';});document.getElementById('tvSub').innerHTML=html;document.getElementById('tvDrawerTitle').textContent=menu.title;document.getElementById('tvBackBtn').style.display='';document.getElementById('tvMain').className='tv-panel hidden-left';document.getElementById('tvSub').className='tv-panel visible';}
 function tvBack(){document.getElementById('tvMain').className='tv-panel visible';document.getElementById('tvSub').className='tv-panel hidden-right';document.getElementById('tvBackBtn').style.display='none';document.getElementById('tvDrawerTitle').textContent='Menu';}
 function tvToggleMore(btn){var el=document.getElementById('tvMoreItems');var open=el.style.display==='block';el.style.display=open?'none':'block';var arrow=btn.querySelector('.tv-more-arrow');if(arrow)arrow.style.transform=open?'':'rotate(90deg)';}
 function toggleAcctMenu(e){e.stopPropagation();document.getElementById('acctMenu').classList.toggle('open');}
@@ -18340,7 +18381,10 @@ def healthz():
 
 
 _LANDING_PAGE_CACHE = {'ts': 0, 'html': None}
-_LANDING_PAGE_TTL = 120  # seconds — homepage is identical for all anonymous visitors
+_LANDING_PAGE_TTL = 300  # seconds — homepage is identical for all anonymous visitors
+_BLOG_PAGE_CACHE = {'ts': 0, 'html': None}
+_BLOG_PAGE_TTL = 120
+_BLOG_DISK_PURGED = False
 
 @app.route('/', methods=['GET', 'HEAD'])
 def landing_page():
@@ -21599,6 +21643,26 @@ def _picks_page_html_usable(sport: str, html: str) -> bool:
     return True
 
 
+def _cached_usable_picks_html(sport, filter_date=None):
+    """Last good rendered picks HTML (memory). Prefer this over the black stub."""
+    prefix = f"pred_page::v28::{sport}::{filter_date or 'all'}::"
+    best_html = None
+    best_ts = -1.0
+    for key, entry in list(_SPORT_PREDICTIONS_PAGE_CACHE.items()):
+        if not isinstance(key, str) or not key.startswith(prefix):
+            continue
+        if not isinstance(entry, dict):
+            continue
+        html = entry.get('html')
+        ts = entry.get('ts')
+        if ts is None or not _picks_page_html_usable(sport, html):
+            continue
+        if float(ts) > best_ts:
+            best_ts = float(ts)
+            best_html = html
+    return best_html
+
+
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
     cached = _cached_usable_picks_html(sport, filter_date)
@@ -22288,6 +22352,8 @@ def sport_predictions(sport, filter_date=None):
             }
 
     for pred in predictions:
+        if not isinstance(pred, dict):
+            continue
         for _k in (
             'market_spread',
             'market_total',
@@ -22355,6 +22421,7 @@ def sport_predictions(sport, filter_date=None):
                     pred[_k] = []
                 else:
                     pred[_k] = None
+        _coerce_pick_template_numbers(pred)
 
     soccer_leagues = None
     selected_league = None
@@ -22737,6 +22804,14 @@ def sport_predictions(sport, filter_date=None):
 
     except Exception as _pred_render_err:
         logger.exception(f"Predictions render fallback for {sport} ({filter_date}): {_pred_render_err}")
+        if sport == 'MLB':
+            try:
+                from mlb_live import render_mlb_picks
+                _mlb_snap = render_mlb_picks()
+                if _mlb_snap and 'game-card-stack' in _mlb_snap:
+                    return _mlb_snap
+            except Exception:
+                logger.exception('MLB snapshot after render failure also failed')
         return _predictions_fallback_page(sport, filter_date=filter_date)
     if sport == 'MLB':
         rendered = _apply_mlb_picks_html_fixups(rendered)
@@ -22747,8 +22822,11 @@ def sport_predictions(sport, filter_date=None):
     elif sport == 'UFC':
         rendered = _apply_ufc_picks_html_fixups(rendered)
     elif sport == 'NFL':
-        rendered = _apply_nfl_picks_html_fixups(rendered)
-        rendered = _inject_sport_blog_hub(rendered, sport, filter_date)
+        try:
+            rendered = _apply_nfl_picks_html_fixups(rendered)
+            rendered = _inject_sport_blog_hub(rendered, sport, filter_date)
+        except Exception as _nfl_fix_e:
+            logger.exception('NFL picks fixup failed; keeping rendered cards: %s', _nfl_fix_e)
     else:
         rendered = _apply_matchup_chart_data_attrs(rendered, sport)
         rendered = _inject_sport_blog_hub(rendered, sport, filter_date)
@@ -22774,6 +22852,44 @@ def sport_predictions(sport, filter_date=None):
         _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180), max_entries=50)
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
+
+
+def _nfl_results_cards_html_for_chart():
+    """Cards HTML used to build NFL chart payload (never view=chart)."""
+    cache_key = 'NFL_daily_results_html_v3'
+    cached = _SPORT_RESULTS_CACHE.get(cache_key)
+    if isinstance(cached, dict):
+        html = cached.get('html')
+        if html and len(html) > 500:
+            return html
+    try:
+        with app.test_request_context('/nfl-results'):
+            return sport_results('NFL')
+    except Exception as e:
+        logger.exception('NFL cards HTML for chart failed: %s', e)
+        return ''
+
+
+def _render_nfl_results_chart_page():
+    """MLB team-results template for /nfl-results?view=chart."""
+    from mlb_results_ui import markets_from_live_html
+    from team_results_charts import render_nfl_results_chart_page, set_results_chart_source
+
+    market = ""
+    try:
+        market = (request.args.get("market") or "").strip().lower()
+    except Exception:
+        market = ""
+    cards = _nfl_results_cards_html_for_chart()
+    payload = None
+    if cards and len(cards) > 500:
+        try:
+            set_results_chart_source('NFL', cards)
+            payload = markets_from_live_html(cards, 'nfl')
+        except Exception as e:
+            logger.exception('NFL chart payload failed: %s', e)
+    return render_nfl_results_chart_page(payload=payload, market=market)
+
 
 def sport_results(sport):
     """Show model performance results for a sport"""
@@ -23053,7 +23169,7 @@ def sport_results(sport):
                 results_snapshot_notice=None,
                 soccer_leagues=None
             )
-        
+
         if sport == 'NHL':
             cache_key = f'{sport}_moneyline_results_html_v4'
             cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300)
@@ -24968,7 +25084,7 @@ def _blog_article_url(post: dict) -> str:
 
 
 def _blog_template_posts():
-    posts = _get_blog_posts(include_generated=True)
+    posts = _get_blog_posts(include_generated=False)
     out = []
     for p in posts:
         if str(p.get('status') or 'published').lower() != 'published':
@@ -25204,8 +25320,13 @@ def _purge_google_trends_from_blog_disk() -> int:
 
 
 def _get_blog_posts(include_generated=True, todays_picks=None) -> list[dict]:
-    # Unavoidable on every blog assemble: rewrite Render disk if Trends remain.
-    purged = _purge_google_trends_from_blog_disk()
+    # Purge Trends spam at most once per process — every-request rewrite
+    # blocked the only Render worker and took /blog down with the homepage.
+    global _BLOG_DISK_PURGED
+    purged = 0
+    if not _BLOG_DISK_PURGED:
+        purged = _purge_google_trends_from_blog_disk()
+        _BLOG_DISK_PURGED = True
     posts = [p for p in _load_blog_posts_from_json()
              if not _is_google_trends_blog_spam(p) and not _is_hidden_live_sport_blog_post(p)]
     if include_generated and _BLOG_GAME_DAY_AUTO_PUBLISH:
@@ -26064,15 +26185,26 @@ def downloads_page():
 
 @app.route('/blog')
 def blog_archive_page():
-    # First hit after Manual Deploy rewrites Render's on-disk blog_posts.json
-    # if any Google Trends / Betting Angle spam is still present.
-    _purge_google_trends_from_blog_disk()
-    posts = _blog_template_posts()
+    # Soro embed must always render. Post assembly can fail or run long —
+    # never let that take down the paid blog feed.
+    try:
+        _anon = not (getattr(current_user, 'is_authenticated', False) and current_user.is_authenticated)
+    except Exception:
+        _anon = True
+    if _anon:
+        _cached = _BLOG_PAGE_CACHE.get('html')
+        if _cached and (_time.time() - _BLOG_PAGE_CACHE.get('ts', 0)) < _BLOG_PAGE_TTL:
+            return _cached
+    posts = []
+    try:
+        posts = _blog_template_posts()
+    except Exception as _blog_e:
+        logger.exception('blog posts failed: %s', _blog_e)
     page_description = (
         "Game-day previews with Prediction Lab model probabilities and market context. "
         "Updated when a sport has a live slate. Predictions are model outputs, not guarantees."
     )
-    return render_template_string(
+    html = render_template_string(
         BLOG_ARCHIVE_TEMPLATE,
         posts=posts,
         site_domain=_SITE_DOMAIN,
@@ -26080,6 +26212,10 @@ def blog_archive_page():
         page_title='Prediction Lab Blog | predictionlab.io',
         page_description=page_description,
     )
+    if _anon and isinstance(html, str) and html and 'soro-blog' in html:
+        _BLOG_PAGE_CACHE['ts'] = _time.time()
+        _BLOG_PAGE_CACHE['html'] = html
+    return html
 
 
 def _match_blog_post(posts: list, slug: str):
@@ -26288,7 +26424,7 @@ def _build_landing_preview_context():
     todays_picks = build_todays_top_picks()
     blog_posts = [
         {**post, 'display_date': _blog_display_date(post)}
-        for post in _get_blog_posts(include_generated=True, todays_picks=todays_picks)
+        for post in _get_blog_posts(include_generated=False)
     ]
     latest_blog_post = blog_posts[0] if blog_posts else None
     preview_units = [

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UFC Results | Prediction Lab</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Oswald:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="/static/css/research-theme.css" />
+  <link rel="stylesheet" href="/static/css/picks-nav-overrides.css" />
+  <link rel="stylesheet" href="/static/css/sports-chrome.css" />
+  <link rel="stylesheet" href="/static/css/team-results.css" />
+<link rel="stylesheet" href="/static/css/mlb-pick-cards.css?v=pc16" />
+<style id="sandbox-unlock-details">.odds-pricing-locked,.premium-lock,.locked-details,.join-premium-bar,.premium-upsell-strip,.premium-protected-gate,.paywall-overlay{display:none!important;}.card-details[hidden]{display:none!important;}.card-details:not([hidden]){display:block!important;}.pick-card.is-expanded .card-details:not([hidden]),.game-card.is-expanded .card-details:not([hidden]),.game-card-stack.is-expanded .card-details:not([hidden]){display:block!important;}.view-details-btn{cursor:pointer;pointer-events:auto;}</style><style id="ufc-chart-width">body[data-sandbox-sport='ufc'] main,body[data-sandbox-sport='ufc'] .top,body[data-sandbox-sport='ufc'] .tally-wrap,body[data-sandbox-sport='ufc'] #ssr-finals,body[data-sandbox-sport='ufc'] .pl-consensus-records,body[data-sandbox-sport='ufc'] .table-wrap,body[data-sandbox-sport='ufc'] .results-table{max-width:1200px!important;width:100%!important;margin-left:auto!important;margin-right:auto!important;}body[data-sandbox-sport='ufc'] .sub{max-width:52rem!important;}body[data-sandbox-sport='ufc'] .tally-grid,body[data-sandbox-sport='ufc'] .daily-tally-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))!important;gap:12px!important;width:100%!important;}body[data-sandbox-sport='ufc'] .tally-card,body[data-sandbox-sport='ufc'] .daily-tally-card{padding:16px 14px!important;min-height:88px!important;}body[data-sandbox-sport='ufc'] .tally-card .rec,body[data-sandbox-sport='ufc'] .daily-tally-card .rec,body[data-sandbox-sport='ufc'] .daily-tally-card .acc{font-size:1.25rem!important;font-weight:800!important;}</style>
+<style id="share-social-chrome">
+.share-strip{max-width:1200px;margin:0 auto 10px;padding:10px 16px;display:flex;align-items:center;
+justify-content:center;gap:10px;flex-wrap:wrap;background:rgba(244,247,249,0.7);
+border:1px solid rgba(15,23,42,0.1);border-radius:12px;}
+.share-strip-label{font-size:0.82em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
+.share-icons{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.share-icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+border-radius:999px;border:1px solid rgba(15,23,42,0.14);background:#fff;}
+.share-icon img{width:16px;height:16px;display:block;}
+.share-icon:hover{border-color:#00529B;background:rgba(0,82,155,0.08);}
+.social-export-wrap{max-width:960px;margin:24px auto 0;padding:0 8px;}
+.social-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+flex-wrap:wrap;margin-bottom:10px;}
+.social-export-title{font-size:0.9em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
+.social-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.social-export-btn{border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;
+padding:6px 12px;font-size:0.76em;font-weight:800;cursor:pointer;text-decoration:none;}
+.social-export-btn.primary{background:#00529B;color:#fff;}
+.social-image-link{display:block;width:min(100%,min(420px,90vw));margin:0 auto;aspect-ratio:9/16;
+border-radius:14px;overflow:hidden;border:1px solid rgba(15,23,42,0.14);
+box-shadow:0 6px 18px rgba(15,23,42,0.08);background:#fff;}
+.social-image-link img{display:block;width:100%;height:100%;object-fit:cover;}
+</style>
+</head>
+<body data-ssr-chart="1" class="research-site" data-sandbox-sports-chrome="1" data-sandbox-sport="ufc"><header class="pl2-header" data-sandbox-chrome="frozen">
+    <button type="button" class="pl2-burger" id="navHamburger" onclick="if(window.tvToggle){tvToggle();return false;}if(window.tvOpen){tvOpen();return false;}" aria-label="Open menu" aria-expanded="false"><i></i></button>
+    <a class="pl2-brand" href="/">
+        <span>PL /</span><b>PREDICTION LAB</b>
+    </a>
+    <nav class="pl2-nav">
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Picks</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/mlb/" class="in-season">MLB</a>
+                <a href="/nba-picks">NBA</a>
+                <a href="/nhl-picks">NHL</a>
+                <a href="/cfl/" class="in-season">NFL</a>
+                <a href="/soccer/" class="in-season">Soccer</a>
+                <a href="/ncaab-picks">NCAAB</a>
+                <a href="/ncaaf-picks" class="in-season">NCAAF</a>
+                <a href="/ncaaw-picks">NCAAW</a>
+                <a href="/wnba/" class="in-season">WNBA</a>
+                <a href="/cfl/" class="in-season">CFL</a>
+                <a href="/tennis/" class="in-season">Tennis</a>
+                <a href="/ufc/" class="in-season">UFC</a>
+                <a href="/golf/" class="in-season">Golf</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Models</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/mlb/performance">Model Performance</a>
+                <a href="/mlb/models">Models</a>
+            </div>
+        </div>
+        <div class="pl2-navdrop">
+            <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Results</button>
+            <div class="pl2-nav-menu" hidden>
+                <a href="/mlb/results" class="in-season">MLB</a>
+                <a href="/nba-results">NBA</a>
+                <a href="/nhl-results">NHL</a>
+                <a href="/cfl/results" class="in-season">NFL</a>
+                <a href="/soccer/results" class="in-season">Soccer</a>
+                <a href="/ncaab-results">NCAAB</a>
+                <a href="/ncaaf-results" class="in-season">NCAAF</a>
+                <a href="/ncaaw-results">NCAAW</a>
+                <a href="/wnba/results" class="in-season">WNBA</a>
+                <a href="/cfl/results" class="in-season">CFL</a>
+                <a href="/tennis/results" class="in-season">Tennis</a>
+                <a href="/ufc/results" class="in-season">UFC</a>
+                <a href="/golf/results" class="in-season">Golf</a>
+            </div>
+        </div>
+        <a href="/blog">Blog</a>
+        <a href="/plans">Pricing</a>
+    </nav>
+    <div class="pl2-header-actions">
+        <a class="pl2-search" href="/search" onclick="if(window.openSrch){openSrch();return false;}" aria-label="Search" title="Search teams, leagues, props">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </a>
+        <div class="pl2-account">
+            <button class="pl2-account-button" type="button" aria-label="Account menu" aria-expanded="false" aria-controls="pl2AccountMenu">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21a8 8 0 0 1 16 0"></path>
+                </svg>
+            </button>
+            <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
+                <a href="/login">Login</a>
+                <a href="/signup">Sign Up</a>
+            </div>
+        </div>
+    </div>
+</header>
+<script>
+(function () {
+    var account = document.querySelector('.pl2-account');
+    if (account) {
+        var button = account.querySelector('.pl2-account-button');
+        var menu = account.querySelector('.pl2-account-menu');
+        if (button && menu) {
+            function closeAccountMenu() {
+                menu.hidden = true;
+                button.setAttribute('aria-expanded', 'false');
+            }
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+                var opening = menu.hidden;
+                menu.hidden = !opening;
+                button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+            });
+            document.addEventListener('click', function (event) {
+                if (!account.contains(event.target)) closeAccountMenu();
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') closeAccountMenu();
+            });
+        }
+    }
+    var drops = Array.prototype.slice.call(document.querySelectorAll('.pl2-navdrop'));
+    function closeAll(except) {
+        drops.forEach(function (d) {
+            if (d === except) return;
+            var m = d.querySelector('.pl2-nav-menu');
+            var b = d.querySelector('.pl2-nav-trigger');
+            if (m) m.hidden = true;
+            if (b) b.setAttribute('aria-expanded', 'false');
+        });
+    }
+    drops.forEach(function (d) {
+        var b = d.querySelector('.pl2-nav-trigger');
+        var m = d.querySelector('.pl2-nav-menu');
+        if (!b || !m) return;
+        b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var opening = m.hidden;
+            closeAll(d);
+            m.hidden = !opening;
+            b.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        });
+    });
+    document.addEventListener('click', function () { closeAll(null); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAll(null);
+    });
+})();
+</script>
+
+
+  <main><div class="pl-view-toggle" role="navigation" aria-label="Results view"><a class="pl-view-btn " href="/ufc/results">Cards</a><a class="pl-view-btn active" href="/ufc/results?view=chart">Chart</a></div><style>.pl-view-toggle{display:flex;gap:8px;margin:12px 0 18px;flex-wrap:wrap;justify-content:flex-start;width:100%}.pl-view-btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:.85rem;text-decoration:none}.pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
+    <div class="container">
+    
+    <h1 class="page-title" id="pageHeading">🥊 UFC Results, Performance and Model Accuracy</h1>
+    <div class="sport-results-writeup">
+      
+      Track graded UFC results — moneyline performance across Last Night, Last 7, and Season records after events are final.
+      
+    </div>
+    <section class="controls" id="league-controls" hidden>
+      <label hidden>
+        League
+        <select id="league">
+          <option value="ALL" selected>All Leagues</option>
+        </select>
+      </label>
+      <button id="run" type="button" hidden>Load results</button>
+      <span id="status" class="status"></span>
+      
+    </section>
+
+    <nav class="market-tabs" id="market-tabs" aria-label="Bet type" hidden>
+      <button type="button" class="market-tab active" data-market="moneyline">Moneyline</button>
+    </nav>
+
+    <div id="tallies" class="tally-wrap" ><section class="tally pl-analytics"><h2>Best Performing Model</h2><div class="tally-grid"><div class="tally-card"><div class="mlabel">Today</div><div class="rec"><b>Grinder2</b></div><div class="acc ok">80.0%</div><div class="rec">4-1</div></div><div class="tally-card"><div class="mlabel">Last 7</div><div class="rec"><b>Grinder2</b></div><div class="acc ok">77.8%</div><div class="rec">14-4</div></div><div class="tally-card"><div class="mlabel">Season</div><div class="rec"><b>Efficiency</b></div><div class="acc ok">76.3%</div><div class="rec">290-90</div></div></div></section><section class="tally"><h2>Last Night <span class="tag">(5 games)</span></h2><div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Grinder2</div><div class="daily-acc acc">80.0%</div><div class="daily-rec rec">4-1</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Takedown</div><div class="daily-acc acc">80.0%</div><div class="daily-rec rec">4-1</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Edge</div><div class="daily-acc acc">80.0%</div><div class="daily-rec rec">4-1</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">XSharp</div><div class="daily-acc acc">80.0%</div><div class="daily-rec rec">4-1</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Sharp Consensus</div><div class="daily-acc acc">80.0%</div><div class="daily-rec rec">4-1</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Efficiency</div><div class="daily-acc acc">80.0%</div><div class="daily-rec rec">4-1</div></div></div></section><section class="tally"><h2>Last 7 <span class="tag">(18 games)</span></h2><div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Grinder2</div><div class="daily-acc acc">77.8%</div><div class="daily-rec rec">14-4</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Takedown</div><div class="daily-acc acc">77.8%</div><div class="daily-rec rec">14-4</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Edge</div><div class="daily-acc acc">77.8%</div><div class="daily-rec rec">14-4</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">XSharp</div><div class="daily-acc acc">72.2%</div><div class="daily-rec rec">13-5</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Sharp Consensus</div><div class="daily-acc acc">77.8%</div><div class="daily-rec rec">14-4</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Efficiency</div><div class="daily-acc acc">77.8%</div><div class="daily-rec rec">14-4</div></div></div></section><section class="tally"><h2>Season <span class="tag">(380 games)</span></h2><div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Grinder2</div><div class="daily-acc acc">74.2%</div><div class="daily-rec rec">282-98</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Takedown</div><div class="daily-acc acc">74.7%</div><div class="daily-rec rec">284-96</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Edge</div><div class="daily-acc acc">75.8%</div><div class="daily-rec rec">288-92</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">XSharp</div><div class="daily-acc acc">74.2%</div><div class="daily-rec rec">282-98</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Sharp Consensus</div><div class="daily-acc acc">74.7%</div><div class="daily-rec rec">284-96</div></div><div class="daily-tally-card tally-card"><div class="daily-model mlabel">Efficiency</div><div class="daily-acc acc">76.3%</div><div class="daily-rec rec">290-90</div></div></div></section></div>
+    
+    
+    <div class="pl-consensus-records" id="pl-consensus-records">
+      <h2>Consensus Based Betting Records</h2>
+      <p class="sub">Moneyline on the pregame majority among the 6 live models. Each row is one dissent combination (model(s) that broke from the majority). 0-0 means that combination had no graded games in the window. Even splits are omitted.</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left">Agreement</th>
+              <th>Last night (2026-09-01)</th>
+              <th>Past 7 days</th>
+              <th>Past 30 days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="bucket">6/6 unanimous</td><td>4-1 <span style='color:#00C076;font-weight:700'>(80%)</span><div class='cons-bar' aria-hidden='true'><i style='width:80%;background:#00C076'></i></div></td><td>13-4 <span style='color:#00C076;font-weight:700'>(76%)</span><div class='cons-bar' aria-hidden='true'><i style='width:76%;background:#00C076'></i></div></td><td>43-14 <span style='color:#00C076;font-weight:700'>(75%)</span><div class='cons-bar' aria-hidden='true'><i style='width:75%;background:#00C076'></i></div></td></tr><tr><td class="bucket">5/6 — all but Efficiency</td><td>0-0</td><td>0-0</td><td>3-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td></tr><tr><td class="bucket">5/6 — all but XSharp</td><td>0-0</td><td>1-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td><td>1-0 <span style='color:#00C076;font-weight:700'>(100%)</span><div class='cons-bar' aria-hidden='true'><i style='width:100%;background:#00C076'></i></div></td></tr><tr><td class="bucket">4/6 — all but Edge and Efficiency</td><td>0-0</td><td>0-0</td><td>2-2 <span style='color:#ca8a04;font-weight:700'>(50%)</span><div class='cons-bar' aria-hidden='true'><i style='width:50%;background:#ca8a04'></i></div></td></tr><tr><td class="bucket">4/6 — all but Grinder2 and XSharp</td><td>0-0</td><td>0-0</td><td>3-1 <span style='color:#00C076;font-weight:700'>(75%)</span><div class='cons-bar' aria-hidden='true'><i style='width:75%;background:#00C076'></i></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <style>
+        .pl-consensus-records,.cfl-consensus{background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:14px;padding:18px;margin:16px 0 20px;max-width:1100px;margin-left:auto;margin-right:auto}
+        .pl-consensus-records h2,.cfl-consensus h2{margin:0 0 6px;font-size:1.15rem;color:#0f172a;text-align:center}
+        .pl-consensus-records .sub{margin:0 0 14px;color:#64748b;font-size:.88rem;text-align:center;max-width:46rem;margin-left:auto;margin-right:auto}
+        .pl-consensus-records table{width:100%;border-collapse:collapse;font-size:.9rem}
+        .pl-consensus-records th,.pl-consensus-records td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:center}
+        .pl-consensus-records th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+        .pl-consensus-records td.bucket{text-align:left;font-weight:700;color:#0f172a}
+        .pl-consensus-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;max-width:7.5rem;overflow:hidden}.pl-consensus-records .cons-bar i{display:block;height:100%;border-radius:99px}
+      </style>
+    </div>
+    <section id="ssr-finals"><h2 class="sec-title">Moneyline games <span class="tag">(40)</span></h2><div class="table-wrap"><table class="results-table"><thead><tr><th>Date</th><th>League</th><th>Match</th><th>Score</th><th>Edge pick</th><th>%</th><th>Result</th><th>Models</th></tr></thead><tbody><tr><td>2026-09-01</td><td>UFC</td><td>Adam Livingston @ Hunter Smith</td><td>L–W</td><td>Adam Livingston</td><td>57.6%</td><td>Correct</td><td class="mono-models">Grinder2 Adam Livingston ✓ Takedown Adam Livingston ✓ Edge Adam Livingston ✓ XSharp Adam Livingston ✓ Sharp Consensus Adam Livingston ✓ Efficiency Adam Livingston ✓</td></tr><tr><td>2026-09-01</td><td>UFC</td><td>Charlie Cleveland @ Gabriel Lourenço</td><td>L–L</td><td>Gabriel Lourenço</td><td>61.8%</td><td>Wrong</td><td class="mono-models">Grinder2 Gabriel Lourenço ✗ Takedown Gabriel Lourenço ✗ Edge Gabriel Lourenço ✗ XSharp Gabriel Lourenço ✗ Sharp Consensus Gabriel Lourenço ✗ Efficiency Gabriel Lourenço ✗</td></tr><tr><td>2026-09-01</td><td>UFC</td><td>Silvestre Sanchez @ Liam McCracken</td><td>L–W</td><td>Silvestre Sanchez</td><td>59.3%</td><td>Correct</td><td class="mono-models">Grinder2 Silvestre Sanchez ✓ Takedown Silvestre Sanchez ✓ Edge Silvestre Sanchez ✓ XSharp Silvestre Sanchez ✓ Sharp Consensus Silvestre Sanchez ✓ Efficiency Silvestre Sanchez ✓</td></tr><tr><td>2026-09-01</td><td>UFC</td><td>Modestino Rodrigues @ Brandon Holmes</td><td>L–W</td><td>Modestino Rodrigues</td><td>61.8%</td><td>Correct</td><td class="mono-models">Grinder2 Modestino Rodrigues ✓ Takedown Modestino Rodrigues ✓ Edge Modestino Rodrigues ✓ XSharp Modestino Rodrigues ✓ Sharp Consensus Modestino Rodrigues ✓ Efficiency Modestino Rodrigues ✓</td></tr><tr><td>2026-09-01</td><td>UFC</td><td>Adam Darby @ Patrick Rivera</td><td>L–W</td><td>Adam Darby</td><td>64.0%</td><td>Correct</td><td class="mono-models">Grinder2 Adam Darby ✓ Takedown Adam Darby ✓ Edge Adam Darby ✓ XSharp Adam Darby ✓ Sharp Consensus Adam Darby ✓ Efficiency Adam Darby ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Levi Rodrigues Jr. @ Liu Ce</td><td>W–L</td><td>Liu Ce</td><td>58.9%</td><td>Correct</td><td class="mono-models">Grinder2 Liu Ce ✓ Takedown Liu Ce ✓ Edge Liu Ce ✓ XSharp Liu Ce ✓ Sharp Consensus Liu Ce ✓ Efficiency Liu Ce ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Nilson Rojas @ Bilal Hasan</td><td>W–L</td><td>Bilal Hasan</td><td>59.9%</td><td>Correct</td><td class="mono-models">Grinder2 Bilal Hasan ✓ Takedown Bilal Hasan ✓ Edge Bilal Hasan ✓ XSharp Bilal Hasan ✓ Sharp Consensus Bilal Hasan ✓ Efficiency Bilal Hasan ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Kai Asakura @ Aoriqileng</td><td>L–W</td><td>Kai Asakura</td><td>64.6%</td><td>Correct</td><td class="mono-models">Grinder2 Kai Asakura ✓ Takedown Kai Asakura ✓ Edge Kai Asakura ✓ XSharp Kai Asakura ✓ Sharp Consensus Kai Asakura ✓ Efficiency Kai Asakura ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Sumudaerji @ Alex Perez</td><td>L–W</td><td>Sumudaerji</td><td>53.4%</td><td>Correct</td><td class="mono-models">Grinder2 Sumudaerji ✓ Takedown Sumudaerji ✓ Edge Sumudaerji ✓ XSharp Alex Perez ✗ Sharp Consensus Sumudaerji ✓ Efficiency Sumudaerji ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Denise Gomes @ Yan Xiaonan</td><td>L–W</td><td>Denise Gomes</td><td>54.5%</td><td>Correct</td><td class="mono-models">Grinder2 Denise Gomes ✓ Takedown Denise Gomes ✓ Edge Denise Gomes ✓ XSharp Denise Gomes ✓ Sharp Consensus Denise Gomes ✓ Efficiency Denise Gomes ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Song Yadong @ Umar Nurmagomedov</td><td>L–W</td><td>Umar Nurmagomedov</td><td>66.5%</td><td>Wrong</td><td class="mono-models">Grinder2 Umar Nurmagomedov ✗ Takedown Umar Nurmagomedov ✗ Edge Umar Nurmagomedov ✗ XSharp Umar Nurmagomedov ✗ Sharp Consensus Umar Nurmagomedov ✗ Efficiency Umar Nurmagomedov ✗</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Cameron Nelson @ Ding Meng</td><td>L–L</td><td>Cameron Nelson</td><td>62.3%</td><td>Wrong</td><td class="mono-models">Grinder2 Cameron Nelson ✗ Takedown Cameron Nelson ✗ Edge Cameron Nelson ✗ XSharp Cameron Nelson ✗ Sharp Consensus Cameron Nelson ✗ Efficiency Cameron Nelson ✗</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Hector Santiago @ Lawrence Lui</td><td>L–W</td><td>Hector Santiago</td><td>54.7%</td><td>Correct</td><td class="mono-models">Grinder2 Hector Santiago ✓ Takedown Hector Santiago ✓ Edge Hector Santiago ✓ XSharp Hector Santiago ✓ Sharp Consensus Hector Santiago ✓ Efficiency Hector Santiago ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Francesco Nuzzi @ Xiao Long</td><td>L–W</td><td>Francesco Nuzzi</td><td>65.8%</td><td>Correct</td><td class="mono-models">Grinder2 Francesco Nuzzi ✓ Takedown Francesco Nuzzi ✓ Edge Francesco Nuzzi ✓ XSharp Francesco Nuzzi ✓ Sharp Consensus Francesco Nuzzi ✓ Efficiency Francesco Nuzzi ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Julia Polastri @ Jingnan Xiong</td><td>L–W</td><td>Jingnan Xiong</td><td>58.2%</td><td>Wrong</td><td class="mono-models">Grinder2 Jingnan Xiong ✗ Takedown Jingnan Xiong ✗ Edge Jingnan Xiong ✗ XSharp Jingnan Xiong ✗ Sharp Consensus Jingnan Xiong ✗ Efficiency Jingnan Xiong ✗</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Andre Lima @ Namsrai Batbayar</td><td>L–W</td><td>Andre Lima</td><td>54.8%</td><td>Correct</td><td class="mono-models">Grinder2 Andre Lima ✓ Takedown Andre Lima ✓ Edge Andre Lima ✓ XSharp Andre Lima ✓ Sharp Consensus Andre Lima ✓ Efficiency Andre Lima ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Sean Woodson @ Jack Jenkins</td><td>L–W</td><td>Sean Woodson</td><td>59.9%</td><td>Correct</td><td class="mono-models">Grinder2 Sean Woodson ✓ Takedown Sean Woodson ✓ Edge Sean Woodson ✓ XSharp Sean Woodson ✓ Sharp Consensus Sean Woodson ✓ Efficiency Sean Woodson ✓</td></tr><tr><td>2026-08-29</td><td>UFC</td><td>Kevin Borjas @ Rei Tsuruya</td><td>W–L</td><td>Rei Tsuruya</td><td>71.9%</td><td>Correct</td><td class="mono-models">Grinder2 Rei Tsuruya ✓ Takedown Rei Tsuruya ✓ Edge Rei Tsuruya ✓ XSharp Rei Tsuruya ✓ Sharp Consensus Rei Tsuruya ✓ Efficiency Rei Tsuruya ✓</td></tr><tr><td>2026-08-25</td><td>UFC</td><td>Nick Galanti @ Carlos Petruzzella</td><td>L–W</td><td>Nick Galanti</td><td>50.6%</td><td>Correct</td><td class="mono-models">Grinder2 Carlos Petruzzella ✗ Takedown Carlos Petruzzella ✗ Edge Nick Galanti ✓ XSharp Carlos Petruzzella ✗ Sharp Consensus Nick Galanti ✓ Efficiency Nick Galanti ✓</td></tr><tr><td>2026-08-25</td><td>UFC</td><td>Alexis Miranda @ Ronald Humphrey</td><td>W–L</td><td>Ronald Humphrey</td><td>70.3%</td><td>Correct</td><td class="mono-models">Grinder2 Ronald Humphrey ✓ Takedown Ronald Humphrey ✓ Edge Ronald Humphrey ✓ XSharp Ronald Humphrey ✓ Sharp Consensus Ronald Humphrey ✓ Efficiency Ronald Humphrey ✓</td></tr><tr><td>2026-08-25</td><td>UFC</td><td>Sean Clancy Jr. @ Gary Balletto</td><td>L–W</td><td>Sean Clancy Jr.</td><td>71.5%</td><td>Correct</td><td class="mono-models">Grinder2 Sean Clancy Jr. ✓ Takedown Sean Clancy Jr. ✓ Edge Sean Clancy Jr. ✓ XSharp Sean Clancy Jr. ✓ Sharp Consensus Sean Clancy Jr. ✓ Efficiency Sean Clancy Jr. ✓</td></tr><tr><td>2026-08-25</td><td>UFC</td><td>Guilherme Uriel @ Mario Piazzon</td><td>L–W</td><td>Mario Piazzon</td><td>54.9%</td><td>Wrong</td><td class="mono-models">Grinder2 Mario Piazzon ✗ Takedown Mario Piazzon ✗ Edge Mario Piazzon ✗ XSharp Mario Piazzon ✗ Sharp Consensus Mario Piazzon ✗ Efficiency Mario Piazzon ✗</td></tr><tr><td>2026-08-25</td><td>UFC</td><td>Alex Apodaca @ Bella Mir</td><td>L–W</td><td>Bella Mir</td><td>50.0%</td><td>Wrong</td><td class="mono-models">Grinder2 Bella Mir ✗ Takedown Bella Mir ✗ Edge Alex Apodaca ✓ XSharp Bella Mir ✗ Sharp Consensus Bella Mir ✗ Efficiency Alex Apodaca ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Terrance Chatman @ Anthony Wint</td><td>W–L</td><td>Anthony Wint</td><td>73.6%</td><td>Correct</td><td class="mono-models">Grinder2 Anthony Wint ✓ Takedown Anthony Wint ✓ Edge Anthony Wint ✓ XSharp Anthony Wint ✓ Sharp Consensus Anthony Wint ✓ Efficiency Anthony Wint ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Mason Jones @ MarQuel Mederos</td><td>W–L</td><td>MarQuel Mederos</td><td>50.9%</td><td>Correct</td><td class="mono-models">Grinder2 MarQuel Mederos ✓ Takedown MarQuel Mederos ✓ Edge Mason Jones ✗ XSharp MarQuel Mederos ✓ Sharp Consensus MarQuel Mederos ✓ Efficiency Mason Jones ✗</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Vitor Petrino @ Serghei Spivac</td><td>L–W</td><td>Vitor Petrino</td><td>63.3%</td><td>Correct</td><td class="mono-models">Grinder2 Vitor Petrino ✓ Takedown Vitor Petrino ✓ Edge Vitor Petrino ✓ XSharp Vitor Petrino ✓ Sharp Consensus Vitor Petrino ✓ Efficiency Vitor Petrino ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Roman Dolidze @ Reinier de Ridder</td><td>W–L</td><td>Reinier de Ridder</td><td>60.8%</td><td>Correct</td><td class="mono-models">Grinder2 Reinier de Ridder ✓ Takedown Reinier de Ridder ✓ Edge Reinier de Ridder ✓ XSharp Reinier de Ridder ✓ Sharp Consensus Reinier de Ridder ✓ Efficiency Reinier de Ridder ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Jeisla Chaves @ Carli Judice</td><td>W–L</td><td>Jeisla Chaves</td><td>59.6%</td><td>Wrong</td><td class="mono-models">Grinder2 Jeisla Chaves ✗ Takedown Jeisla Chaves ✗ Edge Jeisla Chaves ✗ XSharp Jeisla Chaves ✗ Sharp Consensus Jeisla Chaves ✗ Efficiency Jeisla Chaves ✗</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Gregory Rodrigues @ Anthony Hernandez</td><td>L–W</td><td>Gregory Rodrigues</td><td>52.3%</td><td>Correct</td><td class="mono-models">Grinder2 Anthony Hernandez ✗ Takedown Gregory Rodrigues ✓ Edge Gregory Rodrigues ✓ XSharp Anthony Hernandez ✗ Sharp Consensus Gregory Rodrigues ✓ Efficiency Gregory Rodrigues ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Lerryan Douglas @ Jamall Emmers</td><td>W–L</td><td>Jamall Emmers</td><td>51.6%</td><td>Correct</td><td class="mono-models">Grinder2 Jamall Emmers ✓ Takedown Jamall Emmers ✓ Edge Jamall Emmers ✓ XSharp Jamall Emmers ✓ Sharp Consensus Jamall Emmers ✓ Efficiency Lerryan Douglas ✗</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Ryan Kuse @ Marcio Barbosa</td><td>W–L</td><td>Marcio Barbosa</td><td>64.1%</td><td>Correct</td><td class="mono-models">Grinder2 Marcio Barbosa ✓ Takedown Marcio Barbosa ✓ Edge Marcio Barbosa ✓ XSharp Marcio Barbosa ✓ Sharp Consensus Marcio Barbosa ✓ Efficiency Marcio Barbosa ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Nasrat Haqparast @ Chris Padilla</td><td>W–L</td><td>Chris Padilla</td><td>51.7%</td><td>Correct</td><td class="mono-models">Grinder2 Chris Padilla ✓ Takedown Chris Padilla ✓ Edge Chris Padilla ✓ XSharp Chris Padilla ✓ Sharp Consensus Chris Padilla ✓ Efficiency Nasrat Haqparast ✗</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Stan Dorsainvil @ Gauge Young</td><td>L–W</td><td>Stan Dorsainvil</td><td>70.1%</td><td>Correct</td><td class="mono-models">Grinder2 Stan Dorsainvil ✓ Takedown Stan Dorsainvil ✓ Edge Stan Dorsainvil ✓ XSharp Stan Dorsainvil ✓ Sharp Consensus Stan Dorsainvil ✓ Efficiency Stan Dorsainvil ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Elise Reed @ Shanelle Dyer</td><td>W–L</td><td>Shanelle Dyer</td><td>75.7%</td><td>Correct</td><td class="mono-models">Grinder2 Shanelle Dyer ✓ Takedown Shanelle Dyer ✓ Edge Shanelle Dyer ✓ XSharp Shanelle Dyer ✓ Sharp Consensus Shanelle Dyer ✓ Efficiency Shanelle Dyer ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Jackson McVey @ Wes Schultz</td><td>L–W</td><td>Jackson McVey</td><td>59.9%</td><td>Correct</td><td class="mono-models">Grinder2 Jackson McVey ✓ Takedown Jackson McVey ✓ Edge Jackson McVey ✓ XSharp Jackson McVey ✓ Sharp Consensus Jackson McVey ✓ Efficiency Jackson McVey ✓</td></tr><tr><td>2026-08-22</td><td>UFC</td><td>Shamil Gaziev @ Kennedy Nzechukwu</td><td>L–W</td><td>Shamil Gaziev</td><td>62.9%</td><td>Correct</td><td class="mono-models">Grinder2 Shamil Gaziev ✓ Takedown Shamil Gaziev ✓ Edge Shamil Gaziev ✓ XSharp Shamil Gaziev ✓ Sharp Consensus Shamil Gaziev ✓ Efficiency Shamil Gaziev ✓</td></tr><tr><td>2026-08-18</td><td>UFC</td><td>Kaik Brito @ Namo Fazil</td><td>L–W</td><td>Namo Fazil</td><td>55.5%</td><td>Wrong</td><td class="mono-models">Grinder2 Namo Fazil ✗ Takedown Namo Fazil ✗ Edge Namo Fazil ✗ XSharp Namo Fazil ✗ Sharp Consensus Namo Fazil ✗ Efficiency Namo Fazil ✗</td></tr><tr><td>2026-08-18</td><td>UFC</td><td>Trent Miller @ Douglas Rodrigues</td><td>L–W</td><td>Douglas Rodrigues</td><td>50.7%</td><td>Wrong</td><td class="mono-models">Grinder2 Douglas Rodrigues ✗ Takedown Douglas Rodrigues ✗ Edge Trent Miller ✓ XSharp Douglas Rodrigues ✗ Sharp Consensus Douglas Rodrigues ✗ Efficiency Trent Miller ✓</td></tr><tr><td>2026-08-18</td><td>UFC</td><td>Logan Paxton @ Cristian Perez</td><td>L–L</td><td>Logan Paxton</td><td>54.2%</td><td>Wrong</td><td class="mono-models">Grinder2 Logan Paxton ✗ Takedown Logan Paxton ✗ Edge Logan Paxton ✗ XSharp Logan Paxton ✗ Sharp Consensus Logan Paxton ✗ Efficiency Logan Paxton ✗</td></tr><tr><td>2026-08-18</td><td>UFC</td><td>Mahamed Aly @ Alik Lorenz</td><td>W–L</td><td>Alik Lorenz</td><td>57.4%</td><td>Correct</td><td class="mono-models">Grinder2 Alik Lorenz ✓ Takedown Alik Lorenz ✓ Edge Alik Lorenz ✓ XSharp Alik Lorenz ✓ Sharp Consensus Alik Lorenz ✓ Efficiency Alik Lorenz ✓</td></tr></tbody></table></div></section>
+    <div id="pl-consensus-slot"></div>
+    <p id="summary" class="note" hidden></p>
+
+    <section id="finals-wrap">
+      <h2 class="sec-title"><span id="games-heading">Games</span> <span id="game-count" class="tag"></span></h2>
+      <div class="table-wrap">
+        <table class="results-table" id="results-table">
+          <thead id="results-head"></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <div id="finals" class="cards games-grid" style="margin-top:1.5rem" hidden aria-hidden="true"></div>
+    </section>
+    </div>
+  </main>
+
+  <div class="social-export-wrap"><div class="social-export-head"><div class="social-export-title">UFC Predictions Image</div><div class="social-export-actions"><a class="social-export-btn" href="/ufc/share.jpg" download="predictionlab-picks.jpg">Download image</a><a class="social-export-btn primary" href="/ufc/share.jpg" target="_blank" rel="nofollow noopener">Open fullscreen</a></div></div><a class="social-image-link" href="/ufc/share.jpg" target="_blank" rel="nofollow noopener"><img src="/ufc/share.jpg" alt="UFC predictions"></a></div>
+
+<div class="share-strip">
+  <span class="share-strip-label">Share on social media</span>
+  <div class="share-icons">
+    <a class="share-icon" href="https://x.com/intent/post?url=http%3A%2F%2F127.0.0.1%3A5081%2Fufc%2Fresults%3Fview%3Dchart" target="_blank" rel="noopener" aria-label="Share on X"><img src="/static/icons/social/x.svg" alt="X"></a>
+    <a class="share-icon" href="https://www.facebook.com/sharer/sharer.php?u=http%3A%2F%2F127.0.0.1%3A5081%2Fufc%2Fresults%3Fview%3Dchart" target="_blank" rel="noopener" aria-label="Share on Facebook"><img src="/static/icons/social/facebook.svg" alt="Facebook"></a>
+    <a class="share-icon" href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener" aria-label="Instagram"><img src="/static/icons/social/instagram.svg" alt="Instagram"></a>
+    <a class="share-icon" href="https://predictionlab.io" target="_blank" rel="noopener" aria-label="TikTok"><img src="/static/icons/social/tiktok.svg" alt="TikTok"></a>
+    <a class="share-icon" href="https://www.linkedin.com/sharing/share-offsite/?url=http%3A%2F%2F127.0.0.1%3A5081%2Fufc%2Fresults%3Fview%3Dchart" target="_blank" rel="noopener" aria-label="Share on LinkedIn"><img src="/static/icons/social/linkedin.svg" alt="LinkedIn"></a>
+    <a class="share-icon" href="https://www.reddit.com/submit?url=http%3A%2F%2F127.0.0.1%3A5081%2Fufc%2Fresults%3Fview%3Dchart" target="_blank" rel="noopener" aria-label="Share on Reddit"><img src="/static/icons/social/reddit.svg" alt="Reddit"></a>
+    <a class="share-icon" href="https://www.tumblr.com/widgets/share/tool?canonicalUrl=http%3A%2F%2F127.0.0.1%3A5081%2Fufc%2Fresults%3Fview%3Dchart" target="_blank" rel="noopener" aria-label="Share on Tumblr"><img src="/static/icons/social/tumblr.svg" alt="Tumblr"></a>
+    <a class="share-icon" href="https://api.whatsapp.com/send?text=http%3A%2F%2F127.0.0.1%3A5081%2Fufc%2Fresults%3Fview%3Dchart" target="_blank" rel="noopener" aria-label="Share on WhatsApp"><img src="/static/icons/social/whatsapp.svg" alt="WhatsApp"></a>
+    <a class="share-icon" href="https://telegram.me/share/url?url=http%3A%2F%2F127.0.0.1%3A5081%2Fufc%2Fresults%3Fview%3Dchart" target="_blank" rel="noopener" aria-label="Share on Telegram"><img src="/static/icons/social/telegram.svg" alt="Telegram"></a>
+  </div>
+</div>
+
+<footer class="site-directory-footer">
+    <div class="directory-shell">
+        <span class="directory-label">Knowledge Directory</span>
+        <span class="directory-wordmark">PREDICTIONLABS.IO</span>
+        <div class="directory-sub">AI-powered sports betting picks. Daily. Transparent. Data-driven.</div>
+        <div class="directory-grid">
+            <div>
+                <div class="footer-heading">AI Picks by Sport</div>
+                <a href="/mlb-picks">MLB AI Picks</a>
+                <a href="/nba-picks">NBA AI Picks</a>
+                <a href="/nhl-picks">NHL AI Picks</a>
+                <a href="/nfl-picks">NFL AI Picks</a>
+                <a href="/soccer-picks">Soccer AI Picks</a>
+                <a href="/ncaab-picks">NCAAB AI Picks</a>
+                <a href="/ncaaf-picks">NCAAF AI Picks</a>
+                <a href="/ncaaw-picks">NCAAW AI Picks</a>
+                <a href="/wnba-picks">WNBA AI Picks</a>
+            </div>
+            <div>
+                <div class="footer-heading">Research Tools</div>
+                <a href="/performance" rel="nofollow">Model Performance</a>
+                <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                <a href="/all-sports-results">All Sports Results</a>
+                <a href="/daily-report">Daily Results Report</a>
+                <a href="/player-props" rel="nofollow">Player Props</a>
+                <a href="/results/downloads">Data Downloads</a>
+            </div>
+            <div>
+                <div class="footer-heading">Access</div>
+                <a href="/ai-sports-betting-picks-today">Free Picks</a>
+                <a href="/plans">Premium Edge — $4.99/wk</a>
+                <a href="/plans">Monthly Plan — $19.99</a>
+                <a href="/plans">Yearly Plan — $149.99</a>
+                <a href="/login">Sign In</a>
+                <a href="/signup">Create Account</a>
+            </div>
+            <div>
+                <div class="footer-heading">Company</div>
+                <a href="/blog">Daily Blog</a>
+                <a href="/affiliate">Affiliate Program</a>
+                <a href="/faq">FAQ</a>
+                <a href="/tutorial">Tutorial</a>
+                <a href="/what-are-ai-sports-betting-picks">What Are AI Picks</a>
+                <a href="/contact">Contact</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/refund-policy">Refund Policy</a>
+                <a href="/responsible-gaming">Responsible Gaming</a>
+            </div>
+        </div>
+        <div class="directory-bottom">
+            <span>&copy; 2026 Prediction Lab. All rights reserved.</span>
+            <span>
+                <a href="https://x.com/predictionlab_io" target="_blank" rel="noopener">X</a>
+                <a href="https://instagram.com/predictionlab.io" target="_blank" rel="noopener">Instagram</a>
+                <a href="https://www.tiktok.com/@predictionlab" target="_blank" rel="noopener">TikTok</a>
+                <a href="https://reddit.com/r/sportsbetting" target="_blank" rel="noopener">Reddit</a>
+            </span>
+            <span>For entertainment purposes. Bet responsibly.</span>
+        </div>
+    </div>
+</footer>
+
+
+
+
+  <script>
+    window.TEAM_API_BASE = "/ufc/api";
+    window.TEAM_SPORT = "ufc";
+    window.TEAM_HIDE_LEAGUE = true;
+  </script>
+  <script src="/static/js/team-results.js?v=mlb-games-5"></script>
+<div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+<div class="tv-drawer" id="tvDrawer">
+  <div class="tv-drawer-header">
+    <div class="tv-header-btns"><button type="button" class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+    <button type="button" class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+  </div>
+  <div class="tv-panels">
+    <div class="tv-panel visible" id="tvMain">
+      <div class="tv-menu-list">
+        <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+      </div>
+    </div>
+    <div class="tv-panel hidden-right" id="tvSub"></div>
+  </div>
+</div>
+<script id="sandbox-tv-menus">
+var TV_MENUS={
+  picks:{title:'Picks & Predictions',items:[
+    {l:'MLB',h:'/mlb/',live:1},{l:'NBA',h:'/nba-picks'},{l:'NHL',h:'/nhl-picks'},
+    {l:'NFL',h:'/nfl-picks',live:1},{l:'Soccer',h:'/soccer/',live:1},{l:'NCAAB',h:'/ncaab-picks'},
+    {l:'NCAAF',h:'/ncaaf-picks',live:1},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba/',live:1},
+    {l:'CFL',h:'/cfl/',live:1},{l:'Tennis',h:'/tennis/',live:1},{l:'UFC',h:'/ufc/',live:1},
+    {l:'Golf',h:'/golf/',live:1}
+  ]},
+  results:{title:'Results & Tracking',items:[
+    {l:'MLB',h:'/mlb/results',live:1},{l:'NBA',h:'/nba-results'},{l:'NHL',h:'/nhl-results'},
+    {l:'NFL',h:'/nfl-results',live:1},{l:'Soccer',h:'/soccer/results',live:1},{l:'NCAAB',h:'/ncaab-results'},
+    {l:'NCAAF',h:'/ncaaf-results',live:1},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba/results',live:1},
+    {l:'CFL',h:'/cfl/results',live:1},{l:'Tennis',h:'/tennis/results',live:1},{l:'UFC',h:'/ufc/results',live:1},
+    {l:'Golf',h:'/golf/results',live:1}
+  ]}
+};
+function tvOpen(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';
+  if(h)h.setAttribute('aria-expanded','true');
+}
+function tvToggle(){
+  var d=document.getElementById('tvDrawer');
+  if(d&&d.classList.contains('open')){tvClose();}else{tvOpen();}
+}
+function tvClose(){
+  var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');
+  if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';
+  if(h)h.setAttribute('aria-expanded','false');
+  var m=document.getElementById('tvMain'),s=document.getElementById('tvSub'),b=document.getElementById('tvBackBtn'),t=document.getElementById('tvDrawerTitle');
+  if(m){m.className='tv-panel visible';}
+  if(s){s.className='tv-panel hidden-right';s.innerHTML='';}
+  if(b)b.style.display='none';
+  if(t)t.textContent='Menu';
+}
+function tvSub(key){
+  var menu=TV_MENUS[key],main=document.getElementById('tvMain'),sub=document.getElementById('tvSub'),back=document.getElementById('tvBackBtn'),title=document.getElementById('tvDrawerTitle');
+  if(!menu||!main||!sub)return;
+  var html='';
+  menu.items.forEach(function(item){html+='<a href="'+item.h+'" class="tv-sub-link'+(item.live?' in-season':'')+'">'+item.l+'</a>';});
+  sub.innerHTML=html;
+  if(title)title.textContent=menu.title;
+  if(back)back.style.display='inline-flex';
+  main.className='tv-panel hidden-left';
+  sub.className='tv-panel visible';
+}
+function tvBack(){
+  var main=document.getElementById('tvMain'),sub=document.getElementById('tvSub'),back=document.getElementById('tvBackBtn'),title=document.getElementById('tvDrawerTitle');
+  if(main)main.className='tv-panel visible';
+  if(sub){sub.className='tv-panel hidden-right';}
+  if(back)back.style.display='none';
+  if(title)title.textContent='Menu';
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')tvClose();});
+</script>
+
+
+<script id="sandbox-toggle-pick-details">
+function _sandboxDetailsEl(btn){
+  if(!btn) return null;
+  var id=btn.getAttribute('aria-controls');
+  var el=id?document.getElementById(id):null;
+  if(el) return el;
+  var stack=btn.closest('.game-card-stack,.game-card,.pick-card');
+  el=stack?stack.querySelector('.card-details'):null;
+  if(el) return el;
+  var foot=btn.closest('.card-footer');
+  return foot&&foot.parentNode?foot.parentNode.querySelector('.card-details'):null;
+}
+function _sandboxLabelDetailsBtn(btn, open){
+  if(!btn) return;
+  var chev=btn.querySelector('.chevron');
+  var chevHtml=chev?chev.outerHTML:' <span class="chevron">▾</span>';
+  btn.innerHTML=(open?'Less details':'View Details')+' '+chevHtml;
+}
+function _sandboxForcePickDetails(btn, open){
+  var el=_sandboxDetailsEl(btn);
+  if(!el) return;
+  var card=btn.closest('.pick-card,.game-card,.game-card-stack');
+  if(open){
+    el.removeAttribute('hidden'); el.hidden=false;
+    el.style.removeProperty('display');
+    btn.setAttribute('aria-expanded','true');
+    if(card) card.classList.add('is-expanded');
+  } else {
+    el.setAttribute('hidden',''); el.hidden=true;
+    btn.setAttribute('aria-expanded','false');
+    if(card) card.classList.remove('is-expanded');
+  }
+  _sandboxLabelDetailsBtn(btn, open);
+}
+function togglePickDetails(btn){
+  if(!btn) return;
+  var el=_sandboxDetailsEl(btn);
+  if(!el) return;
+  var isOpen=!(el.hasAttribute('hidden') || el.hidden===true);
+  _sandboxForcePickDetails(btn, !isOpen);
+}
+function _sandboxOpenAllPickDetails(){
+  document.querySelectorAll('.view-details-btn').forEach(function(btn){
+    _sandboxForcePickDetails(btn, true);
+  });
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', _sandboxOpenAllPickDetails);
+} else {
+  _sandboxOpenAllPickDetails();
+}
+setTimeout(_sandboxOpenAllPickDetails, 50);
+setTimeout(_sandboxOpenAllPickDetails, 400);
+document.addEventListener('pointerdown', function(e){
+  var t=e.target;
+  if(!t || !t.closest) return;
+  var btn=t.closest('.view-details-btn');
+  if(!btn) return;
+  btn.setAttribute('data-want-open', btn.getAttribute('aria-expanded')==='true' ? '0' : '1');
+}, true);
+document.addEventListener('click', function(e){
+  var t=e.target;
+  if(!t || !t.closest) return;
+  var btn=t.closest('.view-details-btn');
+  if(!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+  var want=btn.getAttribute('data-want-open')!=='0';
+  setTimeout(function(){ _sandboxForcePickDetails(btn, want); }, 0);
+}, true);
+</script>
+</body>
+</html>
