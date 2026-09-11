@@ -20730,8 +20730,37 @@ def _picks_page_html_usable(sport: str, html: str) -> bool:
     return True
 
 
+def _cached_usable_picks_html(sport, filter_date=None):
+    """Last good rendered picks HTML (memory). Prefer this over the black stub."""
+    prefix = f"pred_page::v28::{sport}::{filter_date or 'all'}::"
+    best_html = None
+    best_ts = -1.0
+    for key, entry in list(_SPORT_PREDICTIONS_PAGE_CACHE.items()):
+        if not isinstance(key, str) or not key.startswith(prefix):
+            continue
+        if not isinstance(entry, dict):
+            continue
+        html = entry.get('html')
+        ts = entry.get('ts')
+        if ts is None or not _picks_page_html_usable(sport, html):
+            continue
+        if float(ts) > best_ts:
+            best_ts = float(ts)
+            best_html = html
+    return best_html
+
+
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
+    cached = _cached_usable_picks_html(sport, filter_date)
+    if cached:
+        if str(sport or '').upper() == 'NFL':
+            try:
+                return _inject_sport_blog_hub(
+                    _apply_nfl_picks_html_fixups(cached), sport, filter_date)
+            except Exception:
+                return cached
+        return cached
     sport_info = SPORTS.get(sport, {'name': sport, 'icon': '🏆'})
     safe_title = f"{sport_info['name']} Predictions | predictionlab.io"
     if filter_date:
@@ -21168,11 +21197,21 @@ def sport_predictions(sport, filter_date=None):
     cache_key = None
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
-    if not current_user.is_authenticated:
+    _nfl_use_page_cache = str(sport or '').upper() == 'NFL'
+    _cache_who = 'anon'
+    if _nfl_use_page_cache:
+        try:
+            if current_user.is_authenticated and is_premium_user():
+                _cache_who = 'prem'
+        except Exception:
+            _cache_who = 'anon'
+    if (not current_user.is_authenticated) or _nfl_use_page_cache:
         cache_key = (
             f"pred_page::v28::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
         )
+        if _nfl_use_page_cache:
+            cache_key = f"{cache_key}::{_cache_who}"
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
         cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
@@ -21209,6 +21248,18 @@ def sport_predictions(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
+        if _nfl_use_page_cache:
+            _any_nfl = _cached_usable_picks_html(sport, filter_date)
+            if _any_nfl:
+                try:
+                    _start_background_predictions_refresh(sport)
+                except Exception:
+                    pass
+                try:
+                    return _inject_sport_blog_hub(
+                        _apply_nfl_picks_html_fixups(_any_nfl), sport, filter_date)
+                except Exception:
+                    return _any_nfl
     prediction_error = None
     try:
         predictions = get_upcoming_predictions(sport)
@@ -21698,8 +21749,11 @@ def sport_predictions(sport, filter_date=None):
     elif sport == 'SOCCER':
         rendered = _apply_soccer_picks_html_fixups(rendered, filter_date)
     elif sport == 'NFL':
-        rendered = _apply_nfl_picks_html_fixups(rendered)
-        rendered = _inject_sport_blog_hub(rendered, sport, filter_date)
+        try:
+            rendered = _apply_nfl_picks_html_fixups(rendered)
+            rendered = _inject_sport_blog_hub(rendered, sport, filter_date)
+        except Exception as _nfl_fix_e:
+            logger.exception('NFL picks fixup failed; keeping rendered cards: %s', _nfl_fix_e)
     else:
         rendered = _apply_matchup_chart_data_attrs(rendered, sport)
         rendered = _inject_sport_blog_hub(rendered, sport, filter_date)
