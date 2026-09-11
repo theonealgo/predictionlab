@@ -9,6 +9,24 @@
   </p>
   {% set active = 'dashboard' %}{% include "affiliate/_subnav.html" %}
 
+  {% if needs_terms %}
+    <div class="aff-alert error" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span>Our affiliate terms were updated. Please review and accept them to keep earning.</span>
+      <form method="POST" action="/affiliate/accept-terms" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <a href="/affiliate/terms" target="_blank" style="margin-right:8px;">Read terms</a>
+        <button type="submit" class="aff-btn aff-btn-blue" style="padding:8px 16px;">Accept updated terms</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {% if needs_onboarding %}
+    <div class="aff-alert info" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span>👋 New here? Take the 2-minute onboarding to learn how links, commissions, and payouts work.</span>
+      <a href="/affiliate/onboarding" class="aff-btn aff-btn-blue" style="padding:8px 16px;">Start onboarding</a>
+    </div>
+  {% endif %}
+
   {% if aff.status == 'pending' %}
     <div class="aff-alert info">Your application is <strong>under review</strong>. You'll be able to share your link and earn once approved. Your requested code is <strong>{{ aff.affiliate_code }}</strong>.</div>
   {% elif aff.status == 'rejected' %}

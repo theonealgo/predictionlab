@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Admin · Affiliate Reports | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Affiliate Reports</h1>
+  {% set active = 'reports' %}{% include "affiliate/_admin_subnav.html" %}
+
+  <div class="aff-stat-grid">
+    <div class="aff-stat"><div class="v">{{ total_affiliates }}</div><div class="l">Total affiliates</div></div>
+    <div class="aff-stat"><div class="v">{{ active }}</div><div class="l">Active</div></div>
+    <div class="aff-stat"><div class="v">{{ pending }}</div><div class="l">Pending</div></div>
+    <div class="aff-stat"><div class="v">{{ prospects }}</div><div class="l">Partner prospects</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.clicks }}</div><div class="l">Clicks</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.signups }}</div><div class="l">Signups</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.customers }}</div><div class="l">Paid customers</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.revenue_cents) }}</div><div class="l">Affiliate revenue</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.earned_cents) }}</div><div class="l">Commissions</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.payable_cents) }}</div><div class="l">Payable</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.paid_cents) }}</div><div class="l">Paid</div></div>
+  </div>
+
+  <div class="aff-section">
+    <form method="GET" action="/admin/affiliates/reports" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
+      <div><label class="aff-note">Range</label><br>
+        <select name="range" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;">
+          {% for k, lbl in ranges %}<option value="{{ k }}" {% if rng==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+        </select></div>
+      <div><label class="aff-note">From</label><br><input type="date" name="from" value="{{ date_from }}" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"></div>
+      <div><label class="aff-note">To</label><br><input type="date" name="to" value="{{ date_to }}" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"></div>
+      <div><label class="aff-note">Rank by</label><br>
+        <select name="rank" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;">
+          <option value="revenue_cents" {% if rank_by=='revenue_cents' %}selected{% endif %}>Revenue</option>
+          <option value="customers" {% if rank_by=='customers' %}selected{% endif %}>Paid customers</option>
+          <option value="conversion_rate" {% if rank_by=='conversion_rate' %}selected{% endif %}>Conversion rate</option>
+          <option value="recurring_revenue_cents" {% if rank_by=='recurring_revenue_cents' %}selected{% endif %}>Recurring revenue</option>
+          <option value="retention" {% if rank_by=='retention' %}selected{% endif %}>Retention</option>
+          <option value="earned_cents" {% if rank_by=='earned_cents' %}selected{% endif %}>Commission</option>
+          <option value="clicks" {% if rank_by=='clicks' %}selected{% endif %}>Clicks</option>
+        </select></div>
+      <button class="aff-btn aff-btn-blue" type="submit" style="padding:9px 18px;">Apply</button>
+    </form>
+    <p class="aff-note" style="margin-top:8px;">Ranking avoids clicks-only ordering — pick a revenue/customer metric to find real performers.</p>
+  </div>
+
+  <div class="aff-section">
+    <h2>Affiliate leaderboard</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Affiliate</th><th>Quality</th><th>Clicks</th><th>Signups</th><th>Customers</th><th>Conv.</th><th>Revenue</th><th>Recurring</th><th>Commission</th><th>Payable</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><a href="/admin/affiliates/{{ r.a.id }}"><strong>{{ r.a.affiliate_code }}</strong></a></td>
+            <td><span class="aff-badge {{ 'approved' if r.tier=='high' else ('requested' if r.tier=='medium' else 'pending') }}">{{ r.score }}</span></td>
+            <td>{{ r.s.clicks }}</td>
+            <td>{{ r.s.signups }}</td>
+            <td>{{ r.s.customers }}</td>
+            <td>{{ r.s.conversion_rate }}%</td>
+            <td>{{ money(r.s.revenue_cents) }}</td>
+            <td>{{ money(r.s.recurring_revenue_cents) }}</td>
+            <td>{{ money(r.s.earned_cents) }}</td>
+            <td>{{ money(r.s.payable_cents) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:20px;">No data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

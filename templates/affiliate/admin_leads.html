@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Admin · Partner Leads | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Partner Leads (CRM)</h1>
+  {% set active = 'leads' %}{% include "affiliate/_admin_subnav.html" %}
+
+  <div class="aff-section">
+    <h2>Add a prospect</h2>
+    <form class="aff-form" method="POST" action="/admin/affiliates/leads" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div><label>Name / brand</label><input name="name" maxlength="160"></div>
+      <div><label>Contact name</label><input name="contact_name" maxlength="160"></div>
+      <div><label>Email</label><input name="email" maxlength="200"></div>
+      <div><label>Platform</label><input name="platform" maxlength="80" placeholder="YouTube, TikTok…"></div>
+      <div><label>Website</label><input name="website_url" maxlength="300"></div>
+      <div><label>Social URL</label><input name="social_url" maxlength="300"></div>
+      <div><label>Country</label><input name="country" maxlength="80"></div>
+      <div><label>Sports / category</label><input name="sports" maxlength="160"></div>
+      <div><label>Audience size</label><input name="audience_size" maxlength="12"></div>
+      <div><label>Source</label><input name="source" maxlength="120" placeholder="e.g. YouTube search, referral"></div>
+      <div><label>Next follow-up</label><input name="next_follow_up" maxlength="40" placeholder="YYYY-MM-DD"></div>
+      <div><label>Status</label>
+        <select name="status">{% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select></div>
+      <div style="grid-column:1/3;"><label>Audience description</label><textarea name="audience_description" maxlength="1000"></textarea></div>
+      <div style="grid-column:1/3;"><label>Notes</label><textarea name="notes" maxlength="2000"></textarea></div>
+      <div style="grid-column:1/3;"><button type="submit" class="aff-btn aff-btn-blue" style="margin-top:10px;">Add lead</button></div>
+    </form>
+  </div>
+
+  <div class="aff-section">
+    <h2>Leads</h2>
+    <form method="GET" action="/admin/affiliates/leads" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search name/email/URL" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;">
+      <select name="status" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;">
+        <option value="">All statuses</option>
+        {% for s in statuses %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+      <button class="aff-btn aff-btn-blue" type="submit" style="padding:9px 18px;">Filter</button>
+    </form>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Name</th><th>Platform</th><th>Country</th><th>Sports</th><th>Audience</th><th>Status</th><th>Next follow-up</th><th></th></tr></thead>
+        <tbody>
+          {% for l in leads %}
+          <tr>
+            <td><a href="/admin/affiliates/leads/{{ l.id }}"><strong>{{ l.name or l.email or ('Lead #' ~ l.id) }}</strong></a><br><span class="aff-note">{{ l.email }}</span></td>
+            <td>{{ l.platform or '—' }}</td>
+            <td>{{ l.country or '—' }}</td>
+            <td>{{ l.sports or '—' }}</td>
+            <td>{{ '{:,}'.format(l.audience_size) if l.audience_size else '—' }}</td>
+            <td><span class="aff-badge {{ l.status }}">{{ l.status }}</span></td>
+            <td>{{ l.next_follow_up or '—' }}</td>
+            <td><a href="/admin/affiliates/leads/{{ l.id }}">Open</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px;">No leads yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

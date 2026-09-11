@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Link Builder | PredictionLab Affiliate{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap" style="max-width:760px;">
+  <h1 style="margin:0 0 12px;">Referral Link Builder</h1>
+  {% set active = 'links' %}{% include "affiliate/_subnav.html" %}
+
+  <div class="aff-section">
+    <p class="aff-note" style="margin-bottom:10px;">Build a referral link for any page, with an optional campaign tag to track performance. Campaign tags never change who gets credited — they only help you see which promotions work.</p>
+    <form class="aff-form" method="POST" action="/affiliate/links">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="destination">Destination page</label>
+      <select id="destination" name="destination">
+        {% for path, label in destinations %}<option value="{{ path }}">{{ label }} ({{ path }})</option>{% endfor %}
+      </select>
+      <label for="campaign">Campaign name (optional)</label>
+      <input id="campaign" name="campaign" maxlength="60" placeholder="e.g. MLB Opening Week, YouTube video">
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:12px;">Build link</button>
+    </form>
+
+    {% if built %}
+    <h3 style="margin-top:18px;">Your link</h3>
+    <div class="aff-linkbox"><input id="builtLink" type="text" readonly value="{{ built }}"><button class="aff-copy-btn" type="button" onclick="affCopy('builtLink', this)">Copy</button></div>
+    {% endif %}
+
+    <h3 style="margin-top:18px;">Base link</h3>
+    <div class="aff-linkbox"><input id="baseLink" type="text" readonly value="{{ base_link }}"><button class="aff-copy-btn" type="button" onclick="affCopy('baseLink', this)">Copy</button></div>
+  </div>
+</div>
+{% endblock %}

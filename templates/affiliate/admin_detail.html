@@ -28,6 +28,55 @@
   </div>
 
   <div class="aff-section">
+    <h2>Quality &amp; risk</h2>
+    <p><strong>Quality score:</strong>
+      <span class="aff-badge {{ 'approved' if tier=='high' else ('requested' if tier=='medium' else 'pending') }}">{{ score }} / 100 · {{ tier|upper }}</span>
+      &nbsp; {{ reasons|join(' + ') }}</p>
+    {% if flags %}
+      <div class="aff-alert error" style="margin-top:8px;"><strong>Review recommended:</strong>
+        <ul style="margin:6px 0 0 18px;">{% for f in flags %}<li>{{ f }}</li>{% endfor %}</ul>
+      </div>
+    {% else %}
+      <p class="aff-note">No quality flags.</p>
+    {% endif %}
+  </div>
+
+  <div class="aff-section">
+    <h2>Ledger</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Earned</th><th>Pending</th><th>Payable</th><th>Paid</th><th>Reversed</th><th>Cancelled</th><th>Current balance</th></tr></thead>
+        <tbody><tr>
+          <td>{{ money(ledger.earned) }}</td>
+          <td style="color:#92400e;">{{ money(ledger.pending) }}</td>
+          <td style="color:#1e40af;">{{ money(ledger.payable) }}</td>
+          <td style="color:#166534;">{{ money(ledger.paid) }}</td>
+          <td style="color:#991b1b;">{{ money(ledger.reversed) }}</td>
+          <td>{{ money(ledger.cancelled) }}</td>
+          <td><strong>{{ money(ledger.current) }}</strong></td>
+        </tr></tbody>
+      </table>
+    </div>
+    <p class="aff-note" style="margin-top:8px;">Current balance = pending + payable (owed, not yet paid). Earned excludes reversed/cancelled. All values integer cents; browser cannot alter them.</p>
+  </div>
+
+  {% if campaigns %}
+  <div class="aff-section">
+    <h2>Campaign performance</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Campaign</th><th>Clicks</th><th>Customers</th><th>Conv.</th><th>Revenue</th><th>Commission</th></tr></thead>
+        <tbody>
+          {% for c in campaigns %}
+          <tr><td>{{ c.campaign }}</td><td>{{ c.clicks }}</td><td>{{ c.customers }}</td><td>{{ c.conversion_rate }}%</td><td>{{ money(c.revenue_cents) }}</td><td>{{ money(c.commission_cents) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="aff-section">
     <h2>Performance</h2>
     <div class="aff-stat-grid">
       <div class="aff-stat"><div class="v">{{ stats.clicks }}</div><div class="l">Clicks</div></div>
@@ -125,6 +174,29 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  <div class="aff-section">
+    <h2>Terms acceptances</h2>
+    {% for t in term_accepts %}
+      <div class="aff-note">{{ (t.accepted_at or '')[:16] }} — accepted version <strong>{{ t.version }}</strong></div>
+    {% else %}
+      <p class="aff-note">No recorded acceptances.</p>
+    {% endfor %}
+  </div>
+
+  <div class="aff-section">
+    <h2>Internal notes <span class="aff-note">(admin-only — never shown to the affiliate)</span></h2>
+    <form method="POST" action="/admin/affiliates/{{ aff.id }}/note" style="margin-bottom:12px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <textarea name="body" maxlength="2000" placeholder="Contact history, special arrangements, issues, follow-ups…" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;min-height:70px;"></textarea>
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:8px;">Add internal note</button>
+    </form>
+    {% for n in notes %}
+      <div class="aff-promo"><div class="aff-note">{{ (n.created_at or '')[:16] }} · {{ n.author }}</div><div style="margin-top:4px;color:#334155;white-space:pre-wrap;">{{ n.body }}</div></div>
+    {% else %}
+      <p class="aff-note">No internal notes yet.</p>
+    {% endfor %}
   </div>
 </div>
 {% endblock %}

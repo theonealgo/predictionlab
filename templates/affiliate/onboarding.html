@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Affiliate Onboarding | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 6px;">Welcome — let's get you set up</h1>
+  <p class="aff-note" style="margin:0 0 16px;">8 quick steps. You can skip and return anytime.</p>
+  {% set active = 'dashboard' %}{% include "affiliate/_subnav.html" %}
+
+  <div class="aff-section">
+    <div class="aff-steps">
+      <div class="aff-step"><div class="num">1</div><h4>Your affiliate link</h4><p><code>{{ link }}</code></p></div>
+      <div class="aff-step"><div class="num">2</div><h4>Your promo code</h4><p><code>{{ aff.affiliate_code }}</code> — for people who don't click your link.</p></div>
+      <div class="aff-step"><div class="num">3</div><h4>How attribution works</h4><p>Last valid click within {{ cookie_days }} days wins; it survives checkout and locks on conversion.</p></div>
+      <div class="aff-step"><div class="num">4</div><h4>How commissions work</h4><p>{{ commission_pct }}% of qualifying paid subscriptions, including recurring renewals.</p></div>
+      <div class="aff-step"><div class="num">5</div><h4>How payouts work</h4><p>Commissions become payable after {{ hold_days }} days; request a payout at {{ min_payout }}.</p></div>
+      <div class="aff-step"><div class="num">6</div><h4>How to promote</h4><p>Share your link/code honestly. See ready-made copy under <a href="/affiliate/assets">Assets</a>.</p></div>
+      <div class="aff-step"><div class="num">7</div><h4>Marketing assets</h4><p>Grab banners, descriptions, and social copy in the <a href="/affiliate/assets">asset library</a>.</p></div>
+      <div class="aff-step"><div class="num">8</div><h4>Affiliate terms</h4><p>Review the <a href="/affiliate/terms" target="_blank">program terms</a> anytime.</p></div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+      <a href="/affiliate/academy" class="aff-btn aff-btn-ghost" style="color:#00529B;border-color:#00529B;">Open the Affiliate Academy</a>
+      <form method="POST" action="/affiliate/onboarding/complete" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="aff-btn aff-btn-blue">Finish onboarding</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

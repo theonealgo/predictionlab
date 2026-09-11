@@ -34,11 +34,45 @@
         {% endfor %}
       </select>
 
+      <label for="primary_platform">Primary platform</label>
+      <select id="primary_platform" name="primary_platform">
+        {% set plats = ['', 'Website / Blog', 'YouTube', 'TikTok', 'Instagram', 'X / Twitter', 'Facebook', 'Discord / Telegram', 'Email newsletter', 'Other'] %}
+        {% for p in plats %}<option value="{{ p }}" {% if form.primary_platform == p %}selected{% endif %}>{{ p or 'Select…' }}</option>{% endfor %}
+      </select>
+
+      <label>Channel links (add the ones you use)</label>
+      <input name="youtube_url" type="text" value="{{ form.youtube_url or '' }}" maxlength="300" placeholder="YouTube URL">
+      <input name="tiktok_url" type="text" value="{{ form.tiktok_url or '' }}" maxlength="300" placeholder="TikTok URL">
+      <input name="instagram_url" type="text" value="{{ form.instagram_url or '' }}" maxlength="300" placeholder="Instagram URL">
+      <input name="x_url" type="text" value="{{ form.x_url or '' }}" maxlength="300" placeholder="X / Twitter URL">
+      <input name="facebook_url" type="text" value="{{ form.facebook_url or '' }}" maxlength="300" placeholder="Facebook URL">
+      <input name="discord_url" type="text" value="{{ form.discord_url or '' }}" maxlength="300" placeholder="Discord / Telegram URL">
+      <input name="newsletter_url" type="text" value="{{ form.newsletter_url or '' }}" maxlength="300" placeholder="Newsletter URL">
+      <input name="other_url" type="text" value="{{ form.other_url or '' }}" maxlength="300" placeholder="Other URL">
+
+      <label for="audience_size">Approximate audience size</label>
+      <input id="audience_size" name="audience_size" type="text" value="{{ form.audience_size or '' }}" maxlength="12" placeholder="e.g. 25000">
+
       <label for="country">Country</label>
       <input id="country" name="country" type="text" value="{{ form.country or '' }}" maxlength="80" placeholder="e.g. Canada">
 
+      <label for="primary_countries">Primary audience countries</label>
+      <input id="primary_countries" name="primary_countries" type="text" value="{{ form.primary_countries or '' }}" maxlength="160" placeholder="e.g. US, Canada, UK">
+
+      <label for="sports">Sports you cover</label>
+      <input id="sports" name="sports" type="text" value="{{ form.sports or '' }}" maxlength="160" placeholder="e.g. NFL, NBA, MLB, soccer">
+
+      <label for="audience_description">Describe your audience</label>
+      <textarea id="audience_description" name="audience_description" maxlength="1000" placeholder="Who follows you and what are they interested in?">{{ form.audience_description or '' }}</textarea>
+
+      <div class="aff-check"><input id="existing_sports_audience" name="existing_sports_audience" type="checkbox" {% if form.existing_sports_audience %}checked{% endif %}><label for="existing_sports_audience" style="margin:0;font-weight:600;">I have an existing sports / sports-analysis audience</label></div>
+      <div class="aff-check"><input id="paid_ads" name="paid_ads" type="checkbox" {% if form.paid_ads %}checked{% endif %}><label for="paid_ads" style="margin:0;font-weight:600;">I may use paid advertising</label></div>
+
+      <label for="why_promote">Why do you want to promote PredictionLab?</label>
+      <textarea id="why_promote" name="why_promote" maxlength="1000" placeholder="Tell us why PredictionLab fits your audience.">{{ form.why_promote or '' }}</textarea>
+
       <label for="application_note">How do you intend to promote PredictionLab?</label>
-      <textarea id="application_note" name="application_note" maxlength="2000" placeholder="Tell us about your audience and how you'll promote PredictionLab.">{{ form.application_note or '' }}</textarea>
+      <textarea id="application_note" name="application_note" maxlength="2000" placeholder="Tell us about your promotional methods.">{{ form.application_note or '' }}</textarea>
 
       <div class="aff-check">
         <input id="agree_terms" name="agree_terms" type="checkbox">

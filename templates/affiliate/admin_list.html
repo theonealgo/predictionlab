@@ -4,11 +4,13 @@
 {% block content %}
 <div class="aff-wrap">
   <h1 style="margin:0 0 12px;">Affiliate Management</h1>
+  {% set active = 'affiliates' %}{% include "affiliate/_admin_subnav.html" %}
 
   <div class="aff-stat-grid">
     <div class="aff-stat"><div class="v">{{ totals.affiliates }}</div><div class="l">Affiliates</div></div>
     <div class="aff-stat"><div class="v">{{ totals.active }}</div><div class="l">Active</div></div>
     <div class="aff-stat"><div class="v">{{ totals.pending }}</div><div class="l">Pending</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.prospects }}</div><div class="l">Partner prospects</div></div>
     <div class="aff-stat"><div class="v">{{ totals.clicks }}</div><div class="l">Clicks</div></div>
     <div class="aff-stat"><div class="v">{{ totals.customers }}</div><div class="l">Referred customers</div></div>
     <div class="aff-stat"><div class="v">{{ money(totals.revenue) }}</div><div class="l">Attributed revenue</div></div>

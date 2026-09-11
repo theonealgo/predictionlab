@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Affiliate Profile | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Your Affiliate Profile</h1>
+  {% set active = 'profile' %}{% include "affiliate/_subnav.html" %}
+
+  <div class="aff-section">
+    <h2>Program details (managed by PredictionLab)</h2>
+    <p><strong>Affiliate code:</strong> <code>{{ aff.affiliate_code }}</code> &middot;
+       <strong>Status:</strong> <span class="aff-badge {{ aff.status }}">{{ aff.status }}</span> &middot;
+       <strong>Commission:</strong> {{ '%.1f'|format((aff.commission_bps or 1000)/100.0) }}% &middot;
+       <strong>Joined:</strong> {{ (aff.created_at or '')[:10] }}</p>
+    <p class="aff-note">Your code, status, commission rate, balances, and payout records are managed by PredictionLab and can't be edited here.</p>
+  </div>
+
+  <div class="aff-section">
+    <h2>Editable profile</h2>
+    <form class="aff-form" method="POST" action="/affiliate/profile">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Display name</label>
+      <input name="name" value="{{ aff.name or '' }}" maxlength="120">
+      <label>Primary platform</label>
+      <input name="primary_platform" value="{{ aff.primary_platform or '' }}" maxlength="80" placeholder="YouTube, TikTok, Website…">
+      <label>Website</label>
+      <input name="website_url" value="{{ aff.website_url or '' }}" maxlength="300">
+      <label>YouTube</label><input name="youtube_url" value="{{ aff.youtube_url or '' }}" maxlength="300">
+      <label>TikTok</label><input name="tiktok_url" value="{{ aff.tiktok_url or '' }}" maxlength="300">
+      <label>Instagram</label><input name="instagram_url" value="{{ aff.instagram_url or '' }}" maxlength="300">
+      <label>X / Twitter</label><input name="x_url" value="{{ aff.x_url or '' }}" maxlength="300">
+      <label>Facebook</label><input name="facebook_url" value="{{ aff.facebook_url or '' }}" maxlength="300">
+      <label>Discord / Telegram</label><input name="discord_url" value="{{ aff.discord_url or '' }}" maxlength="300">
+      <label>Newsletter</label><input name="newsletter_url" value="{{ aff.newsletter_url or '' }}" maxlength="300">
+      <label>Other</label><input name="other_url" value="{{ aff.other_url or '' }}" maxlength="300">
+      <label>Country</label><input name="country" value="{{ aff.country or '' }}" maxlength="80">
+      <label>Primary audience countries</label><input name="primary_countries" value="{{ aff.primary_countries or '' }}" maxlength="160">
+      <label>Sports covered</label><input name="sports" value="{{ aff.sports or '' }}" maxlength="160">
+      <label>Audience size</label><input name="audience_size" value="{{ aff.audience_size or '' }}" maxlength="12">
+      <label>Promotional methods</label><input name="promo_method" value="{{ aff.promo_method or '' }}" maxlength="120">
+      <label>Audience description</label><textarea name="audience_description" maxlength="1000">{{ aff.audience_description or '' }}</textarea>
+      <label>Why you promote PredictionLab</label><textarea name="why_promote" maxlength="1000">{{ aff.why_promote or '' }}</textarea>
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:14px;">Save profile</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

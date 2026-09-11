@@ -31,7 +31,9 @@ breaks existing billing if it is absent.
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import logging
 import os
 import re
@@ -41,7 +43,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from flask import (
-    Blueprint, abort, current_app, flash, g, redirect, render_template,
+    Blueprint, Response, abort, current_app, flash, g, redirect, render_template,
     request, session, url_for,
 )
 from flask_login import current_user, login_required
@@ -88,6 +90,61 @@ _A_SUSPENDED = 'suspended'
 
 _VALID_CODE_RE = re.compile(r'^[A-Z0-9][A-Z0-9_-]{2,31}$')
 _RESERVED_CODES = {'ADMIN', 'AFFILIATE', 'PREDICTIONLAB', 'PL', 'API', 'WWW', 'NULL', 'NONE'}
+
+# Self-referral: earning commission on your OWN subscription. Self-PROMOTION to
+# your own audience is always allowed; this flag only governs whether an affiliate
+# may attribute + earn on their own account. Default off (protected); flip to
+# allow via env if the business decides creators may earn on their own plan.
+AFFILIATE_ALLOW_SELF_REFERRAL = os.environ.get('AFFILIATE_ALLOW_SELF_REFERRAL', '0') in ('1', 'true', 'yes')
+
+# Optional campaign bonus (architected but inactive unless configured by admin).
+# Base commission stays 10%; a per-campaign-brief bonus can add on top when > 0.
+AFFILIATE_BONUS_ENABLED = os.environ.get('AFFILIATE_BONUS_ENABLED', '0') in ('1', 'true', 'yes')
+
+# Current affiliate terms version (bump to require re-acceptance).
+AFFILIATE_TERMS_VERSION = os.environ.get('AFFILIATE_TERMS_VERSION', '2026-09-11')
+
+# Partner lifecycle stages (superset compatible with the application statuses).
+_LIFECYCLE_STAGES = ['prospect', 'contacted', 'interested', 'applied',
+                     'approved', 'active', 'inactive', 'suspended']
+
+# Partner-lead CRM statuses.
+_LEAD_STATUSES = ['prospect', 'contacted', 'interested', 'application_sent',
+                  'applied', 'approved', 'rejected', 'not_interested',
+                  'follow_up', 'converted']
+
+# Quality-score weights (configurable). Deliberately NOT click-weighted so raw
+# click volume cannot inflate the score — paying customers/conversion dominate.
+_QUALITY_WEIGHTS = {
+    'paying_customers': 34,   # up to +34 (>= 20 paying customers)
+    'conversion_rate': 26,    # up to +26 (>= 8% click->customer)
+    'revenue': 20,            # up to +20 (>= $1,000 net revenue)
+    'retention': 14,          # up to +14 (recurring invoices per customer)
+    'refund_penalty': 24,     # up to -24 (high refund/reversal rate)
+    'relevance': 12,          # up to +12 (sports audience / relevant platform)
+}
+
+# Promotion catalog (subscription plans) — reused from the site's pricing.
+_PROMO_CATALOG = [
+    {'plan': 'Weekly', 'price': '$4.99 / week', 'path': '/plans',
+     'blurb': 'Full model edge — spreads, totals, projected scores — billed weekly.'},
+    {'plan': 'Monthly', 'price': '$19.99 / month', 'path': '/plans',
+     'blurb': 'Everything in Premium, billed monthly. Most popular for regular bettors.'},
+    {'plan': 'Yearly', 'price': '$149.99 / year', 'path': '/plans',
+     'blurb': 'Best value — full-season access to every model and sport.'},
+]
+
+# Destination pages the link builder can target.
+_LINK_DESTINATIONS = [
+    ('/', 'Home'),
+    ('/plans', 'Plans & Pricing'),
+    ('/ai-sports-betting-picks-today', 'Free Picks Today'),
+    ('/mlb-picks', 'MLB Picks'), ('/nba-picks', 'NBA Picks'),
+    ('/nfl-picks', 'NFL Picks'), ('/nhl-picks', 'NHL Picks'),
+    ('/soccer-picks', 'Soccer Picks'), ('/performance', 'Model Performance'),
+]
+
+_CAMPAIGN_SLUG_RE = re.compile(r'[^a-z0-9]+')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -243,6 +300,179 @@ def _ensure_affiliate_tables():
             )
         ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_audit_aff ON affiliate_audit(affiliate_id)')
+
+        # ── Extended affiliate profile / application fields (idempotent migrations) ──
+        for col_sql in (
+            "ALTER TABLE affiliates ADD COLUMN primary_platform TEXT",
+            "ALTER TABLE affiliates ADD COLUMN youtube_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN tiktok_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN instagram_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN x_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN facebook_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN discord_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN newsletter_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN other_url TEXT",
+            "ALTER TABLE affiliates ADD COLUMN audience_size INTEGER",
+            "ALTER TABLE affiliates ADD COLUMN primary_countries TEXT",
+            "ALTER TABLE affiliates ADD COLUMN sports TEXT",
+            "ALTER TABLE affiliates ADD COLUMN audience_description TEXT",
+            "ALTER TABLE affiliates ADD COLUMN paid_ads INTEGER DEFAULT 0",
+            "ALTER TABLE affiliates ADD COLUMN existing_sports_audience INTEGER DEFAULT 0",
+            "ALTER TABLE affiliates ADD COLUMN why_promote TEXT",
+            "ALTER TABLE affiliates ADD COLUMN lifecycle TEXT",
+            "ALTER TABLE affiliates ADD COLUMN onboarding_done_at TEXT",
+            "ALTER TABLE affiliates ADD COLUMN bonus_bps INTEGER DEFAULT 0",
+            # campaign tag captured on the click/attribution that led to a commission
+            "ALTER TABLE affiliate_clicks ADD COLUMN campaign TEXT",
+            "ALTER TABLE affiliate_attributions ADD COLUMN campaign TEXT",
+            "ALTER TABLE affiliate_commissions ADD COLUMN campaign TEXT",
+            "ALTER TABLE affiliate_commissions ADD COLUMN bonus_bps INTEGER DEFAULT 0",
+        ):
+            try:
+                conn.execute(col_sql)
+            except Exception:
+                pass  # column already exists
+
+        # ── Partner leads / CRM ──
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                contact_name TEXT,
+                email TEXT,
+                website_url TEXT,
+                social_url TEXT,
+                platform TEXT,
+                country TEXT,
+                sports TEXT,
+                audience_size INTEGER,
+                audience_description TEXT,
+                notes TEXT,
+                status TEXT NOT NULL DEFAULT 'prospect',
+                source TEXT,
+                assigned_admin TEXT,
+                last_contacted TEXT,
+                next_follow_up TEXT,
+                converted_affiliate_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_lead_status ON affiliate_leads(status)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_lead_email ON affiliate_leads(email)')
+
+        # ── Affiliate-owned campaigns (link builder + campaign tracking) ──
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_campaigns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                affiliate_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                destination_path TEXT DEFAULT '/',
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_aff_slug ON affiliate_campaigns(affiliate_id, slug)')
+
+        # ── Admin campaign briefs (visible to affiliates) ──
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_campaign_briefs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                key_points TEXT,
+                cta TEXT,
+                destination_url TEXT,
+                promo_code TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_brief_active ON affiliate_campaign_briefs(active)')
+
+        # ── Marketing assets ──
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                asset_type TEXT,
+                body TEXT,
+                image_url TEXT,
+                destination_url TEXT,
+                sports TEXT,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_asset_active ON affiliate_assets(active)')
+
+        # ── Affiliate Academy modules + per-affiliate progress ──
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_academy_modules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT UNIQUE,
+                title TEXT NOT NULL,
+                body TEXT,
+                video_url TEXT,
+                sort_order INTEGER DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_academy_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                affiliate_id INTEGER NOT NULL,
+                module_id INTEGER NOT NULL,
+                started_at TEXT,
+                completed_at TEXT
+            )
+        ''')
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_progress_uniq ON affiliate_academy_progress(affiliate_id, module_id)')
+
+        # ── Terms versions + acceptances (lightweight contracting) ──
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_terms_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version TEXT UNIQUE NOT NULL,
+                body TEXT,
+                requires_reaccept INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_terms_acceptances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                affiliate_id INTEGER NOT NULL,
+                version TEXT NOT NULL,
+                accepted_at TEXT DEFAULT (datetime('now')),
+                ip_hash TEXT,
+                user_id INTEGER
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_accept_aff ON affiliate_terms_acceptances(affiliate_id)')
+
+        # ── Internal admin notes (never shown to affiliates) ──
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS affiliate_admin_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                affiliate_id INTEGER,
+                lead_id INTEGER,
+                author TEXT,
+                body TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_note_aff ON affiliate_admin_notes(affiliate_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_note_lead ON affiliate_admin_notes(lead_id)')
+
+        # Performance indexes for date-filtered reporting.
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_comm_created ON affiliate_commissions(created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_comm_aff_created ON affiliate_commissions(affiliate_id, created_at)')
+
         conn.commit()
     finally:
         conn.close()
@@ -417,7 +647,15 @@ def _user_is_existing_customer(user_id, conn):
 # Referral attribution (request lifecycle)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _record_click(conn, affiliate_id, visitor_id, suspicious=False):
+def _clean_campaign(raw):
+    """Normalize a campaign tag to a short slug (utm_campaign value)."""
+    if not raw:
+        return None
+    slug = _CAMPAIGN_SLUG_RE.sub('-', str(raw).strip().lower()).strip('-')
+    return slug[:60] or None
+
+
+def _record_click(conn, affiliate_id, visitor_id, suspicious=False, campaign=None):
     """Insert a click unless the same visitor+affiliate clicked very recently."""
     try:
         cutoff = (datetime.now(timezone.utc) - timedelta(minutes=_CLICK_DEDUPE_MINUTES))
@@ -431,22 +669,22 @@ def _record_click(conn, affiliate_id, visitor_id, suspicious=False):
             return
         conn.execute(
             'INSERT INTO affiliate_clicks '
-            '(affiliate_id, visitor_id, landing_path, referrer, ip_hash, user_agent, is_suspicious) '
-            'VALUES (?,?,?,?,?,?,?)',
+            '(affiliate_id, visitor_id, landing_path, referrer, ip_hash, user_agent, is_suspicious, campaign) '
+            'VALUES (?,?,?,?,?,?,?,?)',
             (
                 affiliate_id, visitor_id,
                 (request.path or '/')[:300],
                 (request.referrer or '')[:300] or None,
                 _hash_ip(request.remote_addr),
                 (request.headers.get('User-Agent') or '')[:300] or None,
-                1 if suspicious else 0,
+                1 if suspicious else 0, campaign,
             ),
         )
     except Exception as e:
         logger.warning('[affiliate] click record failed: %s', e)
 
 
-def _upsert_visitor_attribution(conn, affiliate_id, visitor_id):
+def _upsert_visitor_attribution(conn, affiliate_id, visitor_id, campaign=None):
     """Last-click-wins within the window, but never overwrite a locked
     (already-converted) attribution for that visitor."""
     row = conn.execute(
@@ -458,21 +696,24 @@ def _upsert_visitor_attribution(conn, affiliate_id, visitor_id):
     if row is None:
         conn.execute(
             'INSERT INTO affiliate_attributions '
-            '(affiliate_id, visitor_id, status, attributed_at) VALUES (?,?,?,?)',
-            (affiliate_id, visitor_id, _A_PENDING, now),
+            '(affiliate_id, visitor_id, status, attributed_at, campaign) VALUES (?,?,?,?,?)',
+            (affiliate_id, visitor_id, _A_PENDING, now, campaign),
         )
         return
     if row['locked'] or row['status'] == 'converted':
         return  # converted attribution is sticky
     if row['affiliate_id'] != affiliate_id or not row['user_id']:
         conn.execute(
-            'UPDATE affiliate_attributions SET affiliate_id = ?, attributed_at = ? WHERE id = ?',
-            (affiliate_id, now, row['id']),
+            'UPDATE affiliate_attributions SET affiliate_id = ?, attributed_at = ?, '
+            'campaign = COALESCE(?, campaign) WHERE id = ?',
+            (affiliate_id, now, campaign, row['id']),
         )
 
 
 def _capture_ref():
-    """before_request: capture ?ref=CODE, validate, record click + attribution."""
+    """before_request: capture ?ref=CODE (+ optional ?utm_campaign=), validate,
+    record click + attribution. Campaign attribution never changes which affiliate
+    is credited — it only tags the click/attribution for reporting."""
     try:
         code = request.args.get('ref')
         if not code:
@@ -480,29 +721,32 @@ def _capture_ref():
         aff = _affiliate_by_code(code)
         if not aff or aff['status'] != _A_APPROVED:
             return  # only approved affiliates earn attribution
+        campaign = _clean_campaign(request.args.get('utm_campaign') or request.args.get('campaign'))
         # Ensure a first-party visitor id (opaque; attribution stored server-side).
         visitor_id = request.cookies.get(_VISITOR_COOKIE)
         if not visitor_id:
             visitor_id = uuid.uuid4().hex
             g._aff_set_visitor = visitor_id  # after_request sets the cookie
         # Self-referral guard: affiliate clicking their own link while logged in.
-        suspicious = False
+        # Self-promotion is always fine; this only concerns earning on your OWN plan.
+        is_self = False
         try:
             if (current_user.is_authenticated and aff['user_id']
                     and current_user.id == aff['user_id']):
-                suspicious = True
+                is_self = True
         except Exception:
             pass
+        block_self = is_self and not AFFILIATE_ALLOW_SELF_REFERRAL
         conn = _get_db()
         try:
-            _record_click(conn, aff['id'], visitor_id, suspicious=suspicious)
-            if not suspicious:
-                _upsert_visitor_attribution(conn, aff['id'], visitor_id)
+            _record_click(conn, aff['id'], visitor_id, suspicious=block_self, campaign=campaign)
+            if not block_self:
+                _upsert_visitor_attribution(conn, aff['id'], visitor_id, campaign=campaign)
             conn.commit()
         finally:
             conn.close()
-        if suspicious:
-            _audit(aff['id'], 'self_click', f'user_id={getattr(current_user, "id", None)}')
+        if is_self:
+            _audit(aff['id'], 'self_click', f'user_id={getattr(current_user, "id", None)} blocked={block_self}')
     except Exception as e:
         logger.warning('[affiliate] capture_ref failed: %s', e)
 
@@ -545,8 +789,10 @@ def _associate_user():
             if not aff or aff['status'] != _A_APPROVED:
                 session[_LINKED_SESSION_KEY] = current_user.id
                 return
-            # Self-referral: don't let an affiliate attribute their own account.
-            if aff['user_id'] and aff['user_id'] == current_user.id:
+            # Self-referral: don't let an affiliate attribute their own account
+            # (unless explicitly allowed). Self-promotion to an audience is fine.
+            if (aff['user_id'] and aff['user_id'] == current_user.id
+                    and not AFFILIATE_ALLOW_SELF_REFERRAL):
                 _audit(aff['id'], 'self_referral_blocked', f'user_id={current_user.id}')
                 session[_LINKED_SESSION_KEY] = current_user.id
                 return
@@ -614,8 +860,9 @@ def apply_code(code, *, user_id=None, visitor_id=None):
         aff = _affiliate_by_code(code)
         if not aff or aff['status'] != _A_APPROVED:
             return False, 'invalid'
-        # Self-referral guard.
-        if user_id and aff['user_id'] and aff['user_id'] == user_id:
+        # Self-referral guard (unless explicitly allowed).
+        if (user_id and aff['user_id'] and aff['user_id'] == user_id
+                and not AFFILIATE_ALLOW_SELF_REFERRAL):
             _audit(aff['id'], 'self_referral_code_blocked', f'user_id={user_id}')
             return False, 'self'
         conn = _get_db()
@@ -806,26 +1053,31 @@ def handle_invoice_paid(invoice, *, event_id=None, stripe_mod=None):
             if aff['status'] != _A_APPROVED:
                 _audit(aff['id'], 'commission_skipped_status', f'status={aff["status"]} invoice={invoice_id}')
                 return
-            # Self-referral guard at conversion time too.
-            if aff['user_id'] and user_id and aff['user_id'] == user_id:
+            # Self-referral guard at conversion time too (unless explicitly allowed).
+            if (aff['user_id'] and user_id and aff['user_id'] == user_id
+                    and not AFFILIATE_ALLOW_SELF_REFERRAL):
                 _audit(aff['id'], 'self_referral_commission_blocked', f'invoice={invoice_id}')
                 return
 
             rate_bps = int(aff['commission_bps'] or AFFILIATE_COMMISSION_BPS)
-            commission_cents = (amount_paid * rate_bps) // 10000  # integer math only
+            # Optional additive campaign bonus — inactive unless enabled AND set.
+            bonus_bps = int(aff['bonus_bps'] or 0) if AFFILIATE_BONUS_ENABLED else 0
+            effective_bps = rate_bps + bonus_bps
+            commission_cents = (amount_paid * effective_bps) // 10000  # integer math only
+            campaign = attr['campaign'] if (attr and 'campaign' in attr.keys()) else None
 
             conn.execute(
                 'INSERT INTO affiliate_commissions '
                 '(affiliate_id, attribution_id, user_id, stripe_customer_id, '
                 ' stripe_subscription_id, stripe_invoice_id, stripe_payment_intent_id, '
                 ' stripe_charge_id, source_event_id, amount_gross_cents, currency, '
-                ' commission_bps, commission_cents, status, billing_reason, eligible_at) '
-                'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                ' commission_bps, bonus_bps, commission_cents, status, billing_reason, campaign, eligible_at) '
+                'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (
                     aff['id'], (attr['id'] if attr else None), user_id, customer_id,
                     subscription_id, invoice_id, payment_intent_id, charge_id,
-                    event_id, amount_paid, currency, rate_bps, commission_cents,
-                    _C_PENDING, billing_reason, _iso_plus_days(AFFILIATE_HOLD_DAYS),
+                    event_id, amount_paid, currency, rate_bps, bonus_bps, commission_cents,
+                    _C_PENDING, billing_reason, campaign, _iso_plus_days(AFFILIATE_HOLD_DAYS),
                 ),
             )
 
@@ -977,15 +1229,23 @@ def _mature_commissions(affiliate_id=None):
     (called on dashboard/admin loads and before payout requests); no cron needed."""
     try:
         conn = _get_db()
+        matured = []  # (affiliate_id, newly_payable_cents)
         try:
             now = _now_iso()
+            base = (
+                'SELECT affiliate_id, COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions '
+                'WHERE status = ? AND eligible_at IS NOT NULL AND eligible_at <= ?'
+            )
             if affiliate_id:
+                matured = conn.execute(base + ' AND affiliate_id = ? GROUP BY affiliate_id',
+                                       (_C_PENDING, now, affiliate_id)).fetchall()
                 conn.execute(
                     'UPDATE affiliate_commissions SET status = ? WHERE status = ? '
                     'AND eligible_at IS NOT NULL AND eligible_at <= ? AND affiliate_id = ?',
                     (_C_PAYABLE, _C_PENDING, now, affiliate_id),
                 )
             else:
+                matured = conn.execute(base + ' GROUP BY affiliate_id', (_C_PENDING, now)).fetchall()
                 conn.execute(
                     'UPDATE affiliate_commissions SET status = ? WHERE status = ? '
                     'AND eligible_at IS NOT NULL AND eligible_at <= ?',
@@ -994,6 +1254,13 @@ def _mature_commissions(affiliate_id=None):
             conn.commit()
         finally:
             conn.close()
+        # Best-effort "commission became payable" emails (one per affiliate/batch).
+        for row in matured:
+            if row['s'] and row['s'] > 0:
+                try:
+                    _notify_commission_payable(row['affiliate_id'], row['s'])
+                except Exception:
+                    pass
     except Exception as e:
         logger.warning('[affiliate] mature_commissions failed: %s', e)
 
@@ -1099,6 +1366,34 @@ def _notify_application_received(aff):
         _send_email(adm, 'New affiliate application',
                     f"New affiliate application from {aff['email']} "
                     f"(requested code {aff['affiliate_code']}). Review: {AFFILIATE_SITE_URL}/admin/affiliates")
+
+
+def _notify_commission_payable(affiliate_id, cents):
+    aff = _affiliate_by_id(affiliate_id)
+    if not aff:
+        return
+    _send_email(
+        aff['email'], 'Commission now payable — PredictionLab Affiliate',
+        f"Hi {aff['name'] or 'there'},\n\n{_money(cents)} of your PredictionLab commission has "
+        f"cleared the holding period and is now payable. Once your payable balance reaches "
+        f"{_money(AFFILIATE_MIN_PAYOUT_CENTS)}, you can request a payout from your dashboard.\n\n— PredictionLab",
+    )
+
+
+def _notify_all_active_affiliates(subject, body):
+    """Broadcast to approved affiliates (used for new campaigns/assets/terms)."""
+    try:
+        conn = _get_db()
+        try:
+            rows = conn.execute(
+                "SELECT email, name FROM affiliates WHERE status = 'approved' AND email IS NOT NULL"
+            ).fetchall()
+        finally:
+            conn.close()
+        for r in rows:
+            _send_email(r['email'], subject, body)
+    except Exception as e:
+        logger.warning('[affiliate] broadcast failed: %s', e)
 
 
 def _notify_status(aff, status):
@@ -1223,6 +1518,11 @@ def affiliate_apply():
     if request.method == 'POST':
         if not _check_csrf():
             abort(400)
+        try:
+            _aud = (request.form.get('audience_size') or '').replace(',', '').strip()
+            audience_size = int(_aud) if _aud else None
+        except ValueError:
+            audience_size = None
         form = {
             'name': (request.form.get('name') or '').strip()[:120],
             'code': _normalize_code(request.form.get('code'))[:32],
@@ -1230,7 +1530,22 @@ def affiliate_apply():
             'website_url': (request.form.get('website_url') or '').strip()[:300],
             'promo_method': (request.form.get('promo_method') or '').strip()[:120],
             'application_note': (request.form.get('application_note') or '').strip()[:2000],
+            'primary_platform': (request.form.get('primary_platform') or '').strip()[:80],
+            'youtube_url': (request.form.get('youtube_url') or '').strip()[:300],
+            'tiktok_url': (request.form.get('tiktok_url') or '').strip()[:300],
+            'instagram_url': (request.form.get('instagram_url') or '').strip()[:300],
+            'x_url': (request.form.get('x_url') or '').strip()[:300],
+            'facebook_url': (request.form.get('facebook_url') or '').strip()[:300],
+            'discord_url': (request.form.get('discord_url') or '').strip()[:300],
+            'newsletter_url': (request.form.get('newsletter_url') or '').strip()[:300],
+            'other_url': (request.form.get('other_url') or '').strip()[:300],
+            'primary_countries': (request.form.get('primary_countries') or '').strip()[:160],
+            'sports': (request.form.get('sports') or '').strip()[:160],
+            'audience_description': (request.form.get('audience_description') or '').strip()[:1000],
+            'why_promote': (request.form.get('why_promote') or '').strip()[:1000],
         }
+        paid_ads = 1 if request.form.get('paid_ads') == 'on' else 0
+        existing_sports = 1 if request.form.get('existing_sports_audience') == 'on' else 0
         agree = request.form.get('agree_terms') == 'on'
         if not form['name']:
             error = 'Please enter your name.'
@@ -1246,17 +1561,28 @@ def affiliate_apply():
                 else:
                     conn.execute(
                         'INSERT INTO affiliates (user_id, affiliate_code, status, name, email, '
-                        'country, website_url, promo_method, application_note, commission_bps, agreed_terms_at) '
-                        'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                        'country, website_url, promo_method, application_note, commission_bps, agreed_terms_at, '
+                        'primary_platform, youtube_url, tiktok_url, instagram_url, x_url, facebook_url, '
+                        'discord_url, newsletter_url, other_url, audience_size, primary_countries, sports, '
+                        'audience_description, why_promote, paid_ads, existing_sports_audience, lifecycle) '
+                        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             current_user.id, form['code'], _A_PENDING, form['name'],
                             current_user.email, form['country'], form['website_url'],
                             form['promo_method'], form['application_note'],
                             AFFILIATE_COMMISSION_BPS, _now_iso(),
+                            form['primary_platform'], form['youtube_url'], form['tiktok_url'],
+                            form['instagram_url'], form['x_url'], form['facebook_url'],
+                            form['discord_url'], form['newsletter_url'], form['other_url'],
+                            audience_size, form['primary_countries'], form['sports'],
+                            form['audience_description'], form['why_promote'], paid_ads,
+                            existing_sports, 'applied',
                         ),
                     )
-                    conn.commit()
                     aff = _affiliate_by_user(current_user.id, conn=conn)
+                    # Record acceptance of the current terms version at apply time.
+                    _record_terms_acceptance(aff['id'], current_user.id, conn)
+                    conn.commit()
             finally:
                 conn.close()
             if not error:
@@ -1297,6 +1623,8 @@ def affiliate_dashboard():
     link = referral_link(aff['affiliate_code'])
     can_payout = (aff['status'] == _A_APPROVED
                   and stats['payable_cents'] >= AFFILIATE_MIN_PAYOUT_CENTS)
+    needs_terms = _affiliate_needs_terms(aff['id'])
+    needs_onboarding = (aff['status'] == _A_APPROVED and not aff['onboarding_done_at'])
     conn = _get_db()
     try:
         open_payout = conn.execute(
@@ -1315,6 +1643,7 @@ def affiliate_dashboard():
         hold_days=AFFILIATE_HOLD_DAYS,
         csrf_token=_csrf_token(),
         site_url=AFFILIATE_SITE_URL,
+        needs_terms=needs_terms, needs_onboarding=needs_onboarding,
     )
 
 
@@ -1487,6 +1816,7 @@ def admin_affiliates():
             'commissions': conn.execute("SELECT COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions WHERE status IN (?,?,?)", (_C_PENDING,_C_PAYABLE,_C_PAID)).fetchone()['s'],
             'paid': conn.execute("SELECT COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions WHERE status=?", (_C_PAID,)).fetchone()['s'],
             'payable': conn.execute("SELECT COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions WHERE status=? AND payout_id IS NULL", (_C_PAYABLE,)).fetchone()['s'],
+            'prospects': conn.execute("SELECT COUNT(*) c FROM affiliate_leads WHERE status NOT IN ('converted','rejected','not_interested')").fetchone()['c'],
         }
         open_payouts = conn.execute(
             "SELECT p.*, a.affiliate_code FROM affiliate_payouts p JOIN affiliates a ON a.id=p.affiliate_id "
@@ -1534,12 +1864,26 @@ def admin_affiliate_detail(affiliate_id):
             'SELECT * FROM affiliate_attributions WHERE affiliate_id = ? AND user_id IS NOT NULL ORDER BY id DESC LIMIT 200',
             (affiliate_id,),
         ).fetchall()
+        notes = conn.execute(
+            'SELECT * FROM affiliate_admin_notes WHERE affiliate_id = ? ORDER BY id DESC LIMIT 100',
+            (affiliate_id,),
+        ).fetchall()
+        term_accepts = conn.execute(
+            'SELECT * FROM affiliate_terms_acceptances WHERE affiliate_id = ? ORDER BY id DESC LIMIT 20',
+            (affiliate_id,),
+        ).fetchall()
+        score, tier, reasons, _s = _quality_score(affiliate_id, conn=conn)
+        flags = _fraud_flags(affiliate_id, conn=conn)
+        ledger = _ledger(affiliate_id, conn=conn)
+        campaigns = _campaign_stats(affiliate_id, conn=conn)
     finally:
         conn.close()
     return render_template(
         'affiliate/admin_detail.html', aff=aff, stats=stats, commissions=commissions,
         payouts=payouts, clicks=clicks, referrals=referrals, money=_money,
         link=referral_link(aff['affiliate_code']), csrf_token=_csrf_token(),
+        notes=notes, term_accepts=term_accepts, score=score, tier=tier, reasons=reasons,
+        flags=flags, ledger=ledger, campaigns=campaigns,
     )
 
 
@@ -1674,6 +2018,1066 @@ def admin_payout_status(payout_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Reporting / analytics (date-filtered), quality scoring, ledger
+# ══════════════════════════════════════════════════════════════════════════════
+
+_DATE_RANGES = [('today', 'Today'), ('7d', '7 days'), ('30d', '30 days'),
+                ('90d', '90 days'), ('ytd', 'This year'), ('all', 'All time'),
+                ('custom', 'Custom')]
+
+
+def _date_bounds(range_key=None, custom_from=None, custom_to=None):
+    """Return (start_iso, end_iso) for a range key. None means unbounded."""
+    now = datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None)
+    rk = (range_key or 'all').lower()
+    start = end = None
+    if rk == 'today':
+        start = now.replace(hour=0, minute=0, second=0)
+    elif rk == '7d':
+        start = now - timedelta(days=7)
+    elif rk == '30d':
+        start = now - timedelta(days=30)
+    elif rk == '90d':
+        start = now - timedelta(days=90)
+    elif rk in ('ytd', 'year'):
+        start = now.replace(month=1, day=1, hour=0, minute=0, second=0)
+    elif rk == 'custom':
+        try:
+            start = datetime.fromisoformat(custom_from) if custom_from else None
+        except Exception:
+            start = None
+        try:
+            end = datetime.fromisoformat(custom_to) if custom_to else None
+        except Exception:
+            end = None
+    return (start.isoformat(sep=' ') if start else None,
+            end.isoformat(sep=' ') if end else None)
+
+
+def _range_clause(col, start, end):
+    frag, params = '', []
+    if start:
+        frag += f' AND {col} >= ?'
+        params.append(start)
+    if end:
+        frag += f' AND {col} <= ?'
+        params.append(end)
+    return frag, params
+
+
+def _affiliate_stats_ranged(affiliate_id, start=None, end=None, conn=None):
+    """Extended, optionally date-filtered performance for one affiliate."""
+    own = conn is None
+    conn = conn or _get_db()
+    try:
+        cf, cp = _range_clause('created_at', start, end)
+        clicks_row = conn.execute(
+            'SELECT COUNT(*) c, COUNT(DISTINCT visitor_id) u FROM affiliate_clicks '
+            'WHERE affiliate_id = ?' + cf, [affiliate_id] + cp,
+        ).fetchone()
+        clicks, unique_visitors = clicks_row['c'], clicks_row['u']
+        af, ap = _range_clause('attributed_at', start, end)
+        signups = conn.execute(
+            'SELECT COUNT(*) c FROM affiliate_attributions WHERE affiliate_id = ? '
+            'AND user_id IS NOT NULL' + af, [affiliate_id] + ap,
+        ).fetchone()['c']
+        customers = conn.execute(
+            "SELECT COUNT(DISTINCT COALESCE(user_id, stripe_customer_id)) c "
+            "FROM affiliate_attributions WHERE affiliate_id = ? AND status = 'converted'" + af,
+            [affiliate_id] + ap,
+        ).fetchone()['c']
+
+        def comm_sum(where, params):
+            return conn.execute(
+                'SELECT COALESCE(SUM(commission_cents),0) s, COUNT(*) n FROM affiliate_commissions '
+                'WHERE affiliate_id = ?' + cf + where, [affiliate_id] + cp + params,
+            ).fetchone()
+        revenue = conn.execute(
+            'SELECT COALESCE(SUM(amount_gross_cents - amount_refunded_cents),0) s '
+            'FROM affiliate_commissions WHERE affiliate_id = ? AND status != ?' + cf,
+            [affiliate_id, _C_REVERSED] + cp,
+        ).fetchone()['s']
+        earned = comm_sum(' AND status IN (?,?,?)', [_C_PENDING, _C_PAYABLE, _C_PAID])
+        pending = comm_sum(' AND status = ?', [_C_PENDING])['s']
+        payable = conn.execute(
+            'SELECT COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions '
+            'WHERE affiliate_id = ? AND status = ? AND payout_id IS NULL' + cf,
+            [affiliate_id, _C_PAYABLE] + cp,
+        ).fetchone()['s']
+        paid = comm_sum(' AND status = ?', [_C_PAID])['s']
+        reversed_ = comm_sum(' AND status = ?', [_C_REVERSED])
+        refunds = conn.execute(
+            'SELECT COALESCE(SUM(amount_refunded_cents),0) s FROM affiliate_commissions '
+            'WHERE affiliate_id = ?' + cf, [affiliate_id] + cp,
+        ).fetchone()['s']
+        recurring = conn.execute(
+            "SELECT COALESCE(SUM(amount_gross_cents - amount_refunded_cents),0) s "
+            "FROM affiliate_commissions WHERE affiliate_id = ? AND billing_reason = 'subscription_cycle' "
+            "AND status != ?" + cf, [affiliate_id, _C_REVERSED] + cp,
+        ).fetchone()['s']
+        comm_count = earned['n']
+        # Retention proxy: paying invoices per paying customer (>=2 => renewals).
+        retention = round(comm_count / customers, 2) if customers else 0.0
+        conv = round(customers / clicks * 100.0, 1) if clicks else 0.0
+        return {
+            'clicks': clicks, 'unique_visitors': unique_visitors, 'signups': signups,
+            'customers': customers, 'conversion_rate': conv, 'revenue_cents': revenue,
+            'earned_cents': earned['s'], 'pending_cents': pending, 'payable_cents': payable,
+            'paid_cents': paid, 'reversed_cents': reversed_['s'], 'refunds_cents': refunds,
+            'recurring_revenue_cents': recurring, 'commission_count': comm_count,
+            'retention': retention,
+        }
+    finally:
+        if own:
+            conn.close()
+
+
+def _quality_score(affiliate_id, conn=None):
+    """Deterministic 0–100 partner-quality score. Click volume is intentionally
+    NOT a positive factor — paying customers / conversion / revenue dominate, so a
+    partner with many clicks and no customers cannot outrank a converting one."""
+    own = conn is None
+    conn = conn or _get_db()
+    try:
+        s = _affiliate_stats_ranged(affiliate_id, conn=conn)
+        aff = _affiliate_by_id(affiliate_id, conn=conn)
+        W = _QUALITY_WEIGHTS
+        score = 0.0
+        score += min(s['customers'] / 20.0, 1.0) * W['paying_customers']
+        score += min(s['conversion_rate'] / 8.0, 1.0) * W['conversion_rate']
+        score += min(s['revenue_cents'] / 100000.0, 1.0) * W['revenue']
+        renewals = max(s['retention'] - 1.0, 0.0)
+        score += min(renewals / 3.0, 1.0) * W['retention']
+        gross = s['revenue_cents'] + s['refunds_cents']
+        refund_rate = (s['refunds_cents'] / gross) if gross else 0.0
+        score -= min(refund_rate, 1.0) * W['refund_penalty']
+        rel = 0.0
+        sports = (aff['sports'] or '') if aff else ''
+        plat = ((aff['primary_platform'] or aff['promo_method'] or '') if aff else '').lower()
+        if sports.strip():
+            rel += 0.6
+        if any(k in plat for k in ('youtube', 'tiktok', 'instagram', 'newsletter', 'blog', 'website', 'discord', 'x ', 'twitter')):
+            rel += 0.4
+        score += min(rel, 1.0) * W['relevance']
+        score = int(max(0, min(100, round(score))))
+        tier = 'high' if score >= 70 else ('medium' if score >= 40 else 'low')
+        reasons = []
+        if s['customers']:
+            reasons.append(f"{s['customers']} paying customer(s)")
+        if s['conversion_rate'] >= 2:
+            reasons.append(f"{s['conversion_rate']:.1f}% conversion")
+        if s['revenue_cents'] >= 5000:
+            reasons.append(f"{_money(s['revenue_cents'])} net revenue")
+        if renewals >= 1:
+            reasons.append('recurring renewals')
+        if refund_rate >= 0.2:
+            reasons.append('elevated refund rate')
+        if not reasons:
+            reasons.append('limited performance data yet')
+        return score, tier, reasons, s
+    finally:
+        if own:
+            conn.close()
+
+
+def _recommendation(aff, conn=None):
+    """Priority recommendation for an applicant/partner. Uses performance when it
+    exists, else profile signals (sports relevance, audience, geography, platform)."""
+    own = conn is None
+    conn = conn or _get_db()
+    try:
+        pscore, _tier, preasons, _s = _quality_score(aff['id'], conn=conn)
+        prof = 0
+        why = []
+        if (aff['sports'] or '').strip():
+            prof += 25
+            why.append('sports-relevant audience')
+        if aff['existing_sports_audience']:
+            prof += 20
+            why.append('existing sports-analysis audience')
+        aud = aff['audience_size'] or 0
+        if aud >= 100000:
+            prof += 25
+            why.append('large audience')
+        elif aud >= 10000:
+            prof += 15
+            why.append('solid audience')
+        elif aud >= 1000:
+            prof += 8
+        countries = (aff['primary_countries'] or '').lower()
+        if any(c in countries for c in ('us', 'usa', 'united states', 'canada', 'north america', 'uk', 'united kingdom')):
+            prof += 15
+            why.append('North American / UK traffic')
+        plat = (aff['primary_platform'] or aff['promo_method'] or '').lower()
+        if any(k in plat for k in ('youtube', 'tiktok', 'instagram', 'newsletter', 'website', 'blog')):
+            prof += 10
+            why.append(f'{plat} platform')
+        combined = max(pscore, min(prof, 100))
+        priority = 'high' if combined >= 70 else ('medium' if combined >= 40 else 'low')
+        reasons = preasons if pscore >= 40 else (why or preasons)
+        return priority, combined, reasons
+    finally:
+        if own:
+            conn.close()
+
+
+def _fraud_flags(affiliate_id, conn=None):
+    """Return a list of 'review recommended' quality flags (never auto-ban)."""
+    own = conn is None
+    conn = conn or _get_db()
+    try:
+        s = _affiliate_stats_ranged(affiliate_id, conn=conn)
+        flags = []
+        if s['clicks'] >= 200 and s['customers'] == 0:
+            flags.append(f"{s['clicks']} clicks with zero paying customers")
+        if s['clicks'] >= 20 and s['conversion_rate'] >= 60:
+            flags.append(f"Unusually high conversion rate ({s['conversion_rate']:.0f}%)")
+        selfc = conn.execute(
+            "SELECT COUNT(*) c FROM affiliate_audit WHERE affiliate_id = ? AND kind LIKE 'self_%'",
+            (affiliate_id,),
+        ).fetchone()['c']
+        if selfc >= 3:
+            flags.append(f'Repeated self-referral attempts ({selfc})')
+        gross = s['revenue_cents'] + s['refunds_cents']
+        if gross > 0 and (s['refunds_cents'] / gross) >= 0.3:
+            flags.append(f"High refund/reversal rate ({s['refunds_cents']/gross*100:.0f}%)")
+        rapid = conn.execute(
+            'SELECT visitor_id, COUNT(*) c FROM affiliate_clicks WHERE affiliate_id = ? '
+            'GROUP BY visitor_id ORDER BY c DESC LIMIT 1', (affiliate_id,),
+        ).fetchone()
+        if rapid and rapid['c'] >= 25:
+            flags.append(f'Many repeated clicks from a single visitor ({rapid["c"]})')
+        return flags
+    finally:
+        if own:
+            conn.close()
+
+
+def _ledger(affiliate_id, conn=None):
+    """Auditable balance rollup for one affiliate (integer cents)."""
+    own = conn is None
+    conn = conn or _get_db()
+    try:
+        def s(status):
+            return conn.execute(
+                'SELECT COALESCE(SUM(commission_cents),0) s FROM affiliate_commissions '
+                'WHERE affiliate_id = ? AND status = ?', (affiliate_id, status),
+            ).fetchone()['s']
+        pending, payable, paid = s(_C_PENDING), s(_C_PAYABLE), s(_C_PAID)
+        reversed_, cancelled = s(_C_REVERSED), s(_C_CANCELLED)
+        earned = pending + payable + paid
+        entries = conn.execute(
+            'SELECT * FROM affiliate_commissions WHERE affiliate_id = ? ORDER BY id DESC LIMIT 1000',
+            (affiliate_id,),
+        ).fetchall()
+        return {
+            'earned': earned, 'pending': pending, 'payable': payable, 'paid': paid,
+            'reversed': reversed_, 'cancelled': cancelled,
+            'current': pending + payable,  # owed but not yet paid out
+            'entries': entries,
+        }
+    finally:
+        if own:
+            conn.close()
+
+
+def _campaign_stats(affiliate_id, conn=None):
+    """Per-campaign performance for one affiliate (clicks + conversions)."""
+    own = conn is None
+    conn = conn or _get_db()
+    try:
+        rows = {}
+        for r in conn.execute(
+            'SELECT COALESCE(campaign, "(none)") k, COUNT(*) c FROM affiliate_clicks '
+            'WHERE affiliate_id = ? GROUP BY k', (affiliate_id,),
+        ):
+            rows.setdefault(r['k'], {'campaign': r['k'], 'clicks': 0, 'customers': 0,
+                                     'revenue_cents': 0, 'commission_cents': 0})['clicks'] = r['c']
+        for r in conn.execute(
+            "SELECT COALESCE(campaign, '(none)') k, COUNT(*) cust, "
+            "COALESCE(SUM(amount_gross_cents - amount_refunded_cents),0) rev, "
+            "COALESCE(SUM(commission_cents),0) comm FROM affiliate_commissions "
+            "WHERE affiliate_id = ? AND status != ? GROUP BY k",
+            (affiliate_id, _C_REVERSED),
+        ):
+            d = rows.setdefault(r['k'], {'campaign': r['k'], 'clicks': 0, 'customers': 0,
+                                         'revenue_cents': 0, 'commission_cents': 0})
+            d['customers'] = r['cust']
+            d['revenue_cents'] = r['rev']
+            d['commission_cents'] = r['comm']
+        out = list(rows.values())
+        for d in out:
+            d['conversion_rate'] = round(d['customers'] / d['clicks'] * 100.0, 1) if d['clicks'] else 0.0
+        out.sort(key=lambda d: (d['commission_cents'], d['customers']), reverse=True)
+        return out
+    finally:
+        if own:
+            conn.close()
+
+
+# ─── Terms versioning / acceptance ────────────────────────────────────────────
+
+def _affiliate_needs_terms(affiliate_id, conn=None):
+    own = conn is None
+    conn = conn or _get_db()
+    try:
+        row = conn.execute(
+            'SELECT requires_reaccept FROM affiliate_terms_versions WHERE version = ?',
+            (AFFILIATE_TERMS_VERSION,),
+        ).fetchone()
+        if not row or not row['requires_reaccept']:
+            return False
+        acc = conn.execute(
+            'SELECT 1 FROM affiliate_terms_acceptances WHERE affiliate_id = ? AND version = ? LIMIT 1',
+            (affiliate_id, AFFILIATE_TERMS_VERSION),
+        ).fetchone()
+        return acc is None
+    finally:
+        if own:
+            conn.close()
+
+
+def _record_terms_acceptance(affiliate_id, user_id, conn):
+    try:
+        ip = request.remote_addr
+    except Exception:
+        ip = None
+    conn.execute(
+        'INSERT INTO affiliate_terms_acceptances (affiliate_id, version, ip_hash, user_id) '
+        'VALUES (?,?,?,?)',
+        (affiliate_id, AFFILIATE_TERMS_VERSION, _hash_ip(ip), user_id),
+    )
+
+
+def _seed_defaults():
+    """Seed the current terms version + a starter Academy (idempotent)."""
+    try:
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT OR IGNORE INTO affiliate_terms_versions (version, body, requires_reaccept) '
+                'VALUES (?,?,0)',
+                (AFFILIATE_TERMS_VERSION, 'See /affiliate/terms for the full program terms.'),
+            )
+            modules = [
+                ('getting-started', 'Getting Started', 'Welcome to the PredictionLab affiliate program. Grab your referral link and code from your dashboard and share them with your audience.'),
+                ('understanding-predictionlab', 'Understanding PredictionLab', 'PredictionLab publishes data-driven AI sports predictions with transparent, tracked results across the major leagues.'),
+                ('choosing-your-audience', 'Choosing Your Audience', 'Sports bettors and sports-analysis fans convert best. Focus on audiences interested in data-driven picks.'),
+                ('how-referral-links-work', 'How Referral Links Work', 'Your link /?ref=CODE sets a first-party, server-side attribution that lasts 30 days and survives checkout.'),
+                ('how-promo-codes-work', 'How Promo Codes Work', 'Your code works when someone signs up without clicking your link. It never overrides an existing referral.'),
+                ('effective-content', 'How to Create Effective Content', 'Show real results, explain the edge, and be transparent. Honest content converts and retains.'),
+                ('promote-responsibly', 'Promoting Sports Predictions Responsibly', 'Never guarantee winnings or income. Follow local advertising and disclosure rules. Bet responsibly.'),
+                ('understanding-your-dashboard', 'Understanding Your Dashboard', 'Track clicks, signups, paying customers, conversion, and your commission balances.'),
+                ('understanding-commissions', 'Understanding Commissions', 'You earn 10% of qualifying paid subscription revenue, including recurring renewals, after a 30-day hold.'),
+                ('how-payouts-work', 'How Payouts Work', 'Once your payable balance reaches $100 you can request a payout, which an admin processes.'),
+            ]
+            for i, (slug, title, body) in enumerate(modules):
+                conn.execute(
+                    'INSERT OR IGNORE INTO affiliate_academy_modules (slug, title, body, sort_order, active) '
+                    'VALUES (?,?,?,?,1)', (slug, title, body, i),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning('[affiliate] seed defaults failed: %s', e)
+
+
+def _to_csv(header, rows):
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(header)
+    for r in rows:
+        w.writerow(r)
+    return buf.getvalue()
+
+
+def build_referral_link(code, destination='/', campaign=None):
+    """Compose a referral URL with optional destination + campaign tag."""
+    dest = destination or '/'
+    if not dest.startswith('/'):
+        dest = '/' + dest
+    sep = '&' if '?' in dest else '?'
+    url = f'{AFFILIATE_SITE_URL}{dest}{sep}ref={code}'
+    camp = _clean_campaign(campaign)
+    if camp:
+        url += f'&utm_campaign={camp}'
+    return url
+
+
+# Fields an affiliate may edit on their own profile (never commission/status/balance).
+_EDITABLE_PROFILE_FIELDS = (
+    'name', 'website_url', 'primary_platform', 'youtube_url', 'tiktok_url',
+    'instagram_url', 'x_url', 'facebook_url', 'discord_url', 'newsletter_url',
+    'other_url', 'country', 'primary_countries', 'sports', 'audience_description',
+    'promo_method', 'why_promote',
+)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Affiliate-facing routes (authenticated; own data only)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@affiliate_bp.route('/affiliate/profile', methods=['GET', 'POST'])
+@login_required
+def affiliate_profile():
+    aff = _current_affiliate()
+    if not aff:
+        return redirect(url_for('affiliate.affiliate_apply'))
+    error = None
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        vals = {}
+        for f in _EDITABLE_PROFILE_FIELDS:
+            vals[f] = (request.form.get(f) or '').strip()[:2000]
+        try:
+            aud = request.form.get('audience_size', '').strip().replace(',', '')
+            audience_size = int(aud) if aud else None
+        except ValueError:
+            audience_size = None
+        sets = ', '.join(f'{f} = ?' for f in _EDITABLE_PROFILE_FIELDS)
+        params = [vals[f] for f in _EDITABLE_PROFILE_FIELDS]
+        conn = _get_db()
+        try:
+            conn.execute(
+                f'UPDATE affiliates SET {sets}, audience_size = ? WHERE id = ?',
+                params + [audience_size, aff['id']],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        flash('Profile updated.', 'success')
+        return redirect(url_for('affiliate.affiliate_profile'))
+    return render_template('affiliate/profile.html', aff=aff, csrf_token=_csrf_token(),
+                           link=referral_link(aff['affiliate_code']))
+
+
+@affiliate_bp.route('/affiliate/onboarding')
+@login_required
+def affiliate_onboarding():
+    aff = _current_affiliate()
+    if not aff:
+        return redirect(url_for('affiliate.affiliate_apply'))
+    return render_template('affiliate/onboarding.html', aff=aff, csrf_token=_csrf_token(),
+                           link=referral_link(aff['affiliate_code']),
+                           commission_pct=(aff['commission_bps'] or AFFILIATE_COMMISSION_BPS) / 100.0,
+                           min_payout=_money(AFFILIATE_MIN_PAYOUT_CENTS),
+                           hold_days=AFFILIATE_HOLD_DAYS, cookie_days=AFFILIATE_COOKIE_DAYS)
+
+
+@affiliate_bp.route('/affiliate/onboarding/complete', methods=['POST'])
+@login_required
+def affiliate_onboarding_complete():
+    aff = _current_affiliate()
+    if not aff:
+        abort(403)
+    if not _check_csrf():
+        abort(400)
+    conn = _get_db()
+    try:
+        conn.execute('UPDATE affiliates SET onboarding_done_at = COALESCE(onboarding_done_at, ?) WHERE id = ?',
+                     (_now_iso(), aff['id']))
+        conn.commit()
+    finally:
+        conn.close()
+    flash('Onboarding complete — welcome aboard!', 'success')
+    return redirect(url_for('affiliate.affiliate_dashboard'))
+
+
+@affiliate_bp.route('/affiliate/academy')
+@login_required
+def affiliate_academy():
+    aff = _current_affiliate()
+    if not aff:
+        return redirect(url_for('affiliate.affiliate_apply'))
+    conn = _get_db()
+    try:
+        modules = conn.execute(
+            'SELECT * FROM affiliate_academy_modules WHERE active = 1 ORDER BY sort_order, id'
+        ).fetchall()
+        prog = {r['module_id']: r for r in conn.execute(
+            'SELECT * FROM affiliate_academy_progress WHERE affiliate_id = ?', (aff['id'],))}
+    finally:
+        conn.close()
+    done = sum(1 for m in modules if prog.get(m['id']) and prog[m['id']]['completed_at'])
+    return render_template('affiliate/academy.html', aff=aff, modules=modules, prog=prog,
+                           done=done, total=len(modules))
+
+
+@affiliate_bp.route('/affiliate/academy/<slug>', methods=['GET', 'POST'])
+@login_required
+def affiliate_academy_module(slug):
+    aff = _current_affiliate()
+    if not aff:
+        return redirect(url_for('affiliate.affiliate_apply'))
+    conn = _get_db()
+    try:
+        mod = conn.execute(
+            'SELECT * FROM affiliate_academy_modules WHERE slug = ? AND active = 1', (slug,)
+        ).fetchone()
+        if not mod:
+            abort(404)
+        # Mark started (idempotent).
+        conn.execute(
+            'INSERT OR IGNORE INTO affiliate_academy_progress (affiliate_id, module_id, started_at) '
+            'VALUES (?,?,?)', (aff['id'], mod['id'], _now_iso()))
+        if request.method == 'POST':
+            if not _check_csrf():
+                abort(400)
+            conn.execute(
+                'UPDATE affiliate_academy_progress SET completed_at = COALESCE(completed_at, ?) '
+                'WHERE affiliate_id = ? AND module_id = ?', (_now_iso(), aff['id'], mod['id']))
+            conn.commit()
+            flash('Module marked complete.', 'success')
+            return redirect(url_for('affiliate.affiliate_academy'))
+        conn.commit()
+    finally:
+        conn.close()
+    return render_template('affiliate/academy_module.html', aff=aff, mod=mod, csrf_token=_csrf_token())
+
+
+@affiliate_bp.route('/affiliate/assets')
+@login_required
+def affiliate_assets():
+    aff = _current_affiliate()
+    if not aff:
+        return redirect(url_for('affiliate.affiliate_apply'))
+    conn = _get_db()
+    try:
+        assets = conn.execute(
+            'SELECT * FROM affiliate_assets WHERE active = 1 ORDER BY id DESC'
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template('affiliate/assets.html', aff=aff, assets=assets,
+                           link=referral_link(aff['affiliate_code']),
+                           catalog=_PROMO_CATALOG, site_url=AFFILIATE_SITE_URL)
+
+
+@affiliate_bp.route('/affiliate/links', methods=['GET', 'POST'])
+@login_required
+def affiliate_links():
+    aff = _current_affiliate()
+    if not aff:
+        return redirect(url_for('affiliate.affiliate_apply'))
+    built = None
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        dest = (request.form.get('destination') or '/').strip()
+        valid_dests = {d for d, _ in _LINK_DESTINATIONS}
+        if dest not in valid_dests:
+            dest = '/'
+        campaign = _clean_campaign(request.form.get('campaign'))
+        built = build_referral_link(aff['affiliate_code'], dest, campaign)
+        if campaign:
+            # Persist the campaign so it appears in campaign reporting (idempotent).
+            conn = _get_db()
+            try:
+                conn.execute(
+                    'INSERT OR IGNORE INTO affiliate_campaigns (affiliate_id, name, slug, destination_path) '
+                    'VALUES (?,?,?,?)',
+                    (aff['id'], request.form.get('campaign', campaign)[:80], campaign, dest))
+                conn.commit()
+            finally:
+                conn.close()
+    return render_template('affiliate/links.html', aff=aff, csrf_token=_csrf_token(),
+                           destinations=_LINK_DESTINATIONS, built=built,
+                           base_link=referral_link(aff['affiliate_code']))
+
+
+@affiliate_bp.route('/affiliate/campaigns')
+@login_required
+def affiliate_campaigns_view():
+    aff = _current_affiliate()
+    if not aff:
+        return redirect(url_for('affiliate.affiliate_apply'))
+    stats = _campaign_stats(aff['id'])
+    conn = _get_db()
+    try:
+        campaigns = conn.execute(
+            'SELECT * FROM affiliate_campaigns WHERE affiliate_id = ? ORDER BY id DESC', (aff['id'],)
+        ).fetchall()
+        briefs = conn.execute(
+            'SELECT * FROM affiliate_campaign_briefs WHERE active = 1 ORDER BY id DESC'
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template('affiliate/campaigns.html', aff=aff, stats=stats, campaigns=campaigns,
+                           briefs=briefs, money=_money)
+
+
+@affiliate_bp.route('/affiliate/accept-terms', methods=['POST'])
+@login_required
+def affiliate_accept_terms():
+    aff = _current_affiliate()
+    if not aff:
+        abort(403)
+    if not _check_csrf():
+        abort(400)
+    conn = _get_db()
+    try:
+        _record_terms_acceptance(aff['id'], current_user.id, conn)
+        conn.commit()
+    finally:
+        conn.close()
+    flash('Thanks — updated affiliate terms accepted.', 'success')
+    return redirect(url_for('affiliate.affiliate_dashboard'))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Admin routes (existing admin authorization; internal data)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _admin_only():
+    if not current_user.is_authenticated:
+        abort(403)
+    if not _is_admin_user():
+        abort(403)
+
+
+@affiliate_bp.route('/admin/affiliates/leads', methods=['GET', 'POST'])
+@login_required
+def admin_leads():
+    _admin_only()
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        f = request.form
+        try:
+            aud = int((f.get('audience_size') or '').replace(',', '')) if f.get('audience_size') else None
+        except ValueError:
+            aud = None
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT INTO affiliate_leads (name, contact_name, email, website_url, social_url, '
+                'platform, country, sports, audience_size, audience_description, notes, status, source, '
+                'assigned_admin, next_follow_up) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (
+                    (f.get('name') or '').strip()[:160], (f.get('contact_name') or '').strip()[:160],
+                    (f.get('email') or '').strip()[:200], (f.get('website_url') or '').strip()[:300],
+                    (f.get('social_url') or '').strip()[:300], (f.get('platform') or '').strip()[:80],
+                    (f.get('country') or '').strip()[:80], (f.get('sports') or '').strip()[:160],
+                    aud, (f.get('audience_description') or '').strip()[:1000],
+                    (f.get('notes') or '').strip()[:2000],
+                    (f.get('status') or 'prospect').strip().lower(),
+                    (f.get('source') or '').strip()[:120], current_user.email,
+                    (f.get('next_follow_up') or '').strip()[:40],
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        flash('Lead added.', 'success')
+        return redirect(url_for('affiliate.admin_leads'))
+
+    status = (request.args.get('status') or '').strip().lower()
+    q = (request.args.get('q') or '').strip()
+    conn = _get_db()
+    try:
+        sql = 'SELECT * FROM affiliate_leads WHERE 1=1'
+        params = []
+        if status in _LEAD_STATUSES:
+            sql += ' AND status = ?'
+            params.append(status)
+        if q:
+            sql += ' AND (name LIKE ? OR email LIKE ? OR website_url LIKE ? OR social_url LIKE ?)'
+            like = f'%{q}%'
+            params += [like, like, like, like]
+        sql += ' ORDER BY id DESC LIMIT 500'
+        leads = conn.execute(sql, params).fetchall()
+        counts = {r['status']: r['c'] for r in conn.execute(
+            'SELECT status, COUNT(*) c FROM affiliate_leads GROUP BY status')}
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_leads.html', leads=leads, counts=counts,
+                           statuses=_LEAD_STATUSES, status=status, q=q, csrf_token=_csrf_token())
+
+
+@affiliate_bp.route('/admin/affiliates/leads/<int:lead_id>', methods=['GET', 'POST'])
+@login_required
+def admin_lead_detail(lead_id):
+    _admin_only()
+    conn = _get_db()
+    try:
+        lead = conn.execute('SELECT * FROM affiliate_leads WHERE id = ?', (lead_id,)).fetchone()
+        if not lead:
+            abort(404)
+        if request.method == 'POST':
+            if not _check_csrf():
+                abort(400)
+            f = request.form
+            conn.execute(
+                'UPDATE affiliate_leads SET status = ?, assigned_admin = ?, last_contacted = ?, '
+                'next_follow_up = ?, notes = ?, updated_at = ? WHERE id = ?',
+                (
+                    (f.get('status') or lead['status']).strip().lower(),
+                    (f.get('assigned_admin') or lead['assigned_admin'] or '').strip()[:160],
+                    (f.get('last_contacted') or lead['last_contacted'] or '').strip()[:40],
+                    (f.get('next_follow_up') or lead['next_follow_up'] or '').strip()[:40],
+                    (f.get('notes') or lead['notes'] or '').strip()[:2000],
+                    _now_iso(), lead_id,
+                ),
+            )
+            conn.commit()
+            flash('Lead updated.', 'success')
+            return redirect(url_for('affiliate.admin_lead_detail', lead_id=lead_id))
+        notes = conn.execute(
+            'SELECT * FROM affiliate_admin_notes WHERE lead_id = ? ORDER BY id DESC', (lead_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_lead_detail.html', lead=lead, notes=notes,
+                           statuses=_LEAD_STATUSES, csrf_token=_csrf_token())
+
+
+@affiliate_bp.route('/admin/affiliates/leads/<int:lead_id>/convert', methods=['POST'])
+@login_required
+def admin_lead_convert(lead_id):
+    _admin_only()
+    if not _check_csrf():
+        abort(400)
+    conn = _get_db()
+    try:
+        lead = conn.execute('SELECT * FROM affiliate_leads WHERE id = ?', (lead_id,)).fetchone()
+        if not lead:
+            abort(404)
+        linked = None
+        if lead['email']:
+            arow = conn.execute('SELECT id FROM affiliates WHERE lower(email) = ?',
+                                (lead['email'].strip().lower(),)).fetchone()
+            linked = arow['id'] if arow else None
+        conn.execute(
+            'UPDATE affiliate_leads SET status = ?, converted_affiliate_id = ?, updated_at = ? WHERE id = ?',
+            ('converted' if linked else 'applied', linked, _now_iso(), lead_id))
+        conn.commit()
+    finally:
+        conn.close()
+    if linked:
+        flash('Lead linked to existing affiliate and marked converted.', 'success')
+    else:
+        flash('Marked as applied. Ask them to apply at /affiliate/apply with their PredictionLab account; '
+              'it will auto-link by email when approved.', 'success')
+    return redirect(url_for('affiliate.admin_lead_detail', lead_id=lead_id))
+
+
+@affiliate_bp.route('/admin/affiliates/recommendations')
+@login_required
+def admin_recommendations():
+    _admin_only()
+    conn = _get_db()
+    try:
+        affs = conn.execute('SELECT * FROM affiliates ORDER BY id DESC LIMIT 500').fetchall()
+        rows = []
+        for a in affs:
+            priority, score, reasons = _recommendation(a, conn=conn)
+            rows.append({'a': a, 'priority': priority, 'score': score, 'reasons': reasons})
+        order = {'high': 0, 'medium': 1, 'low': 2}
+        rows.sort(key=lambda r: (order[r['priority']], -r['score']))
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_recommendations.html', rows=rows)
+
+
+@affiliate_bp.route('/admin/affiliates/reports')
+@login_required
+def admin_reports():
+    _admin_only()
+    _mature_commissions()
+    rng = request.args.get('range', '30d')
+    start, end = _date_bounds(rng, request.args.get('from'), request.args.get('to'))
+    rank_by = request.args.get('rank', 'revenue_cents')
+    valid_rank = {'revenue_cents', 'customers', 'conversion_rate', 'clicks',
+                  'earned_cents', 'recurring_revenue_cents', 'retention'}
+    if rank_by not in valid_rank:
+        rank_by = 'revenue_cents'
+    conn = _get_db()
+    try:
+        affs = conn.execute("SELECT * FROM affiliates ORDER BY id DESC LIMIT 500").fetchall()
+        rows = []
+        totals = {'clicks': 0, 'signups': 0, 'customers': 0, 'revenue_cents': 0,
+                  'earned_cents': 0, 'payable_cents': 0, 'paid_cents': 0}
+        for a in affs:
+            s = _affiliate_stats_ranged(a['id'], start, end, conn=conn)
+            score, tier, _r, _s = _quality_score(a['id'], conn=conn)
+            rows.append({'a': a, 's': s, 'score': score, 'tier': tier})
+            for k in totals:
+                totals[k] += s.get(k, 0)
+        rows.sort(key=lambda r: r['s'].get(rank_by, 0), reverse=True)
+        prospects = conn.execute("SELECT COUNT(*) c FROM affiliate_leads WHERE status NOT IN ('converted','rejected','not_interested')").fetchone()['c']
+        pending = conn.execute("SELECT COUNT(*) c FROM affiliates WHERE status='pending'").fetchone()['c']
+        active = conn.execute("SELECT COUNT(*) c FROM affiliates WHERE status='approved'").fetchone()['c']
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_reports.html', rows=rows, totals=totals, money=_money,
+                           ranges=_DATE_RANGES, rng=rng, rank_by=rank_by,
+                           date_from=request.args.get('from', ''), date_to=request.args.get('to', ''),
+                           prospects=prospects, pending=pending, active=active,
+                           total_affiliates=len(affs))
+
+
+@affiliate_bp.route('/admin/affiliates/export.csv')
+@login_required
+def admin_export_csv():
+    _admin_only()
+    _mature_commissions()
+    conn = _get_db()
+    try:
+        affs = conn.execute('SELECT * FROM affiliates ORDER BY id DESC').fetchall()
+        data = []
+        for a in affs:
+            s = _affiliate_stats_ranged(a['id'], conn=conn)
+            data.append([
+                a['name'], a['affiliate_code'], a['status'], s['clicks'], s['signups'],
+                s['customers'], f"{s['revenue_cents']/100:.2f}", f"{s['earned_cents']/100:.2f}",
+                f"{s['payable_cents']/100:.2f}", f"{s['paid_cents']/100:.2f}",
+            ])
+    finally:
+        conn.close()
+    csv_text = _to_csv(
+        ['name', 'code', 'status', 'clicks', 'signups', 'paid_customers', 'revenue',
+         'commissions_earned', 'payable', 'paid'], data)
+    return Response(csv_text, mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=affiliates.csv'})
+
+
+@affiliate_bp.route('/admin/affiliates/assets', methods=['GET', 'POST'])
+@login_required
+def admin_assets():
+    _admin_only()
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        f = request.form
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT INTO affiliate_assets (title, description, asset_type, body, image_url, '
+                'destination_url, sports, active) VALUES (?,?,?,?,?,?,?,1)',
+                (
+                    (f.get('title') or '').strip()[:200], (f.get('description') or '').strip()[:1000],
+                    (f.get('asset_type') or 'text').strip()[:40], (f.get('body') or '').strip()[:4000],
+                    (f.get('image_url') or '').strip()[:400], (f.get('destination_url') or '').strip()[:400],
+                    (f.get('sports') or '').strip()[:120],
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        try:
+            _notify_all_active_affiliates(
+                'New PredictionLab promotional asset',
+                f"A new marketing asset is available: {(f.get('title') or '').strip()}. "
+                f"Find it under Marketing Assets in your dashboard.\n\n— PredictionLab")
+        except Exception:
+            pass
+        flash('Asset created.', 'success')
+        return redirect(url_for('affiliate.admin_assets'))
+    conn = _get_db()
+    try:
+        assets = conn.execute('SELECT * FROM affiliate_assets ORDER BY id DESC').fetchall()
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_assets.html', assets=assets, csrf_token=_csrf_token())
+
+
+@affiliate_bp.route('/admin/affiliates/assets/<int:asset_id>/toggle', methods=['POST'])
+@login_required
+def admin_asset_toggle(asset_id):
+    _admin_only()
+    if not _check_csrf():
+        abort(400)
+    conn = _get_db()
+    try:
+        conn.execute('UPDATE affiliate_assets SET active = 1 - active WHERE id = ?', (asset_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('affiliate.admin_assets'))
+
+
+@affiliate_bp.route('/admin/affiliates/briefs', methods=['GET', 'POST'])
+@login_required
+def admin_briefs():
+    _admin_only()
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        f = request.form
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT INTO affiliate_campaign_briefs (title, description, key_points, cta, '
+                'destination_url, promo_code, start_date, end_date, active) VALUES (?,?,?,?,?,?,?,?,1)',
+                (
+                    (f.get('title') or '').strip()[:200], (f.get('description') or '').strip()[:2000],
+                    (f.get('key_points') or '').strip()[:2000], (f.get('cta') or '').strip()[:120],
+                    (f.get('destination_url') or '').strip()[:400],
+                    _normalize_code(f.get('promo_code'))[:32] or None,
+                    (f.get('start_date') or '').strip()[:40], (f.get('end_date') or '').strip()[:40],
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        try:
+            _notify_all_active_affiliates(
+                'New PredictionLab campaign available',
+                f"A new affiliate campaign is live: {(f.get('title') or '').strip()}. "
+                f"See it in your dashboard under Campaigns.\n\n— PredictionLab")
+        except Exception:
+            pass
+        flash('Campaign brief created.', 'success')
+        return redirect(url_for('affiliate.admin_briefs'))
+    conn = _get_db()
+    try:
+        briefs = conn.execute('SELECT * FROM affiliate_campaign_briefs ORDER BY id DESC').fetchall()
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_briefs.html', briefs=briefs, csrf_token=_csrf_token())
+
+
+@affiliate_bp.route('/admin/affiliates/briefs/<int:brief_id>/toggle', methods=['POST'])
+@login_required
+def admin_brief_toggle(brief_id):
+    _admin_only()
+    if not _check_csrf():
+        abort(400)
+    conn = _get_db()
+    try:
+        conn.execute('UPDATE affiliate_campaign_briefs SET active = 1 - active WHERE id = ?', (brief_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('affiliate.admin_briefs'))
+
+
+@affiliate_bp.route('/admin/affiliates/academy', methods=['GET', 'POST'])
+@login_required
+def admin_academy():
+    _admin_only()
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        f = request.form
+        slug = _CAMPAIGN_SLUG_RE.sub('-', (f.get('title') or '').strip().lower()).strip('-')[:60]
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT OR IGNORE INTO affiliate_academy_modules (slug, title, body, video_url, sort_order, active) '
+                'VALUES (?,?,?,?,?,1)',
+                (slug or uuid.uuid4().hex[:8], (f.get('title') or '').strip()[:200],
+                 (f.get('body') or '').strip()[:8000], (f.get('video_url') or '').strip()[:400],
+                 int(f.get('sort_order') or 100)))
+            conn.commit()
+        finally:
+            conn.close()
+        flash('Academy module saved.', 'success')
+        return redirect(url_for('affiliate.admin_academy'))
+    conn = _get_db()
+    try:
+        modules = conn.execute('SELECT * FROM affiliate_academy_modules ORDER BY sort_order, id').fetchall()
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_academy.html', modules=modules, csrf_token=_csrf_token())
+
+
+@affiliate_bp.route('/admin/affiliates/academy/<int:module_id>/toggle', methods=['POST'])
+@login_required
+def admin_academy_toggle(module_id):
+    _admin_only()
+    if not _check_csrf():
+        abort(400)
+    conn = _get_db()
+    try:
+        conn.execute('UPDATE affiliate_academy_modules SET active = 1 - active WHERE id = ?', (module_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('affiliate.admin_academy'))
+
+
+@affiliate_bp.route('/admin/affiliates/<int:affiliate_id>/note', methods=['POST'])
+@login_required
+def admin_affiliate_note(affiliate_id):
+    _admin_only()
+    if not _check_csrf():
+        abort(400)
+    body = (request.form.get('body') or '').strip()[:2000]
+    if body:
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT INTO affiliate_admin_notes (affiliate_id, author, body) VALUES (?,?,?)',
+                (affiliate_id, current_user.email, body))
+            conn.commit()
+        finally:
+            conn.close()
+        flash('Internal note added.', 'success')
+    return redirect(request.referrer or url_for('affiliate.admin_affiliate_detail', affiliate_id=affiliate_id))
+
+
+@affiliate_bp.route('/admin/affiliates/leads/<int:lead_id>/note', methods=['POST'])
+@login_required
+def admin_lead_note(lead_id):
+    _admin_only()
+    if not _check_csrf():
+        abort(400)
+    body = (request.form.get('body') or '').strip()[:2000]
+    if body:
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT INTO affiliate_admin_notes (lead_id, author, body) VALUES (?,?,?)',
+                (lead_id, current_user.email, body))
+            conn.commit()
+        finally:
+            conn.close()
+        flash('Note added.', 'success')
+    return redirect(url_for('affiliate.admin_lead_detail', lead_id=lead_id))
+
+
+@affiliate_bp.route('/admin/affiliates/terms', methods=['GET', 'POST'])
+@login_required
+def admin_terms():
+    _admin_only()
+    if request.method == 'POST':
+        if not _check_csrf():
+            abort(400)
+        # Flag the CURRENT terms version to require re-acceptance by all affiliates.
+        conn = _get_db()
+        try:
+            conn.execute(
+                'INSERT OR IGNORE INTO affiliate_terms_versions (version, body, requires_reaccept) VALUES (?,?,1)',
+                (AFFILIATE_TERMS_VERSION, 'Updated terms'))
+            conn.execute('UPDATE affiliate_terms_versions SET requires_reaccept = 1 WHERE version = ?',
+                         (AFFILIATE_TERMS_VERSION,))
+            conn.commit()
+        finally:
+            conn.close()
+        try:
+            _notify_all_active_affiliates(
+                'Updated PredictionLab affiliate terms — action needed',
+                f"Our affiliate terms were updated (version {AFFILIATE_TERMS_VERSION}). "
+                f"Please sign in and accept the updated terms from your dashboard.\n\n— PredictionLab")
+        except Exception:
+            pass
+        flash(f'Affiliates will be required to re-accept terms {AFFILIATE_TERMS_VERSION}.', 'success')
+        return redirect(url_for('affiliate.admin_terms'))
+    conn = _get_db()
+    try:
+        versions = conn.execute('SELECT * FROM affiliate_terms_versions ORDER BY id DESC').fetchall()
+        accept_counts = {r['version']: r['c'] for r in conn.execute(
+            'SELECT version, COUNT(*) c FROM affiliate_terms_acceptances GROUP BY version')}
+    finally:
+        conn.close()
+    return render_template('affiliate/admin_terms.html', versions=versions, accept_counts=accept_counts,
+                           current=AFFILIATE_TERMS_VERSION, csrf_token=_csrf_token())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # App wiring
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1682,6 +3086,7 @@ def init_affiliate(app, db_path):
     global _DB_PATH
     _DB_PATH = db_path
     _ensure_affiliate_tables()
+    _seed_defaults()
 
     @app.before_request
     def _affiliate_before():

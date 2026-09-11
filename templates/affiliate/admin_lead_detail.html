@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Admin · Lead {{ lead.name or lead.id }} | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap" style="max-width:820px;">
+  <p style="margin:0 0 8px;"><a href="/admin/affiliates/leads">← All leads</a></p>
+  <h1 style="margin:0 0 4px;">{{ lead.name or lead.email or ('Lead #' ~ lead.id) }}
+    <span class="aff-badge {{ lead.status }}">{{ lead.status }}</span></h1>
+  <p class="aff-note">{{ lead.email }} · {{ lead.platform or '—' }} · {{ lead.country or '—' }}</p>
+
+  <div class="aff-section">
+    <h2>Details</h2>
+    <p><strong>Website:</strong> {{ lead.website_url or '—' }}<br>
+       <strong>Social:</strong> {{ lead.social_url or '—' }}<br>
+       <strong>Sports:</strong> {{ lead.sports or '—' }}<br>
+       <strong>Audience:</strong> {{ '{:,}'.format(lead.audience_size) if lead.audience_size else '—' }}<br>
+       <strong>Source:</strong> {{ lead.source or '—' }}<br>
+       <strong>Added:</strong> {{ (lead.created_at or '')[:10] }}</p>
+    {% if lead.audience_description %}<p><strong>Audience description:</strong><br>{{ lead.audience_description }}</p>{% endif %}
+  </div>
+
+  <div class="aff-section">
+    <h2>Update</h2>
+    <form class="aff-form" method="POST" action="/admin/affiliates/leads/{{ lead.id }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Status</label>
+      <select name="status">{% for s in statuses %}<option value="{{ s }}" {% if lead.status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+      <label>Assigned admin</label><input name="assigned_admin" value="{{ lead.assigned_admin or '' }}" maxlength="160">
+      <label>Last contacted</label><input name="last_contacted" value="{{ lead.last_contacted or '' }}" maxlength="40" placeholder="YYYY-MM-DD">
+      <label>Next follow-up</label><input name="next_follow_up" value="{{ lead.next_follow_up or '' }}" maxlength="40" placeholder="YYYY-MM-DD">
+      <label>Notes</label><textarea name="notes" maxlength="2000">{{ lead.notes or '' }}</textarea>
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:10px;">Save</button>
+    </form>
+    <form method="POST" action="/admin/affiliates/leads/{{ lead.id }}/convert" style="margin-top:10px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="aff-btn aff-btn-ghost" style="color:#00529B;border-color:#00529B;">Mark converted / link affiliate</button>
+    </form>
+    {% if lead.converted_affiliate_id %}<p class="aff-note" style="margin-top:8px;">Linked to affiliate #{{ lead.converted_affiliate_id }} — <a href="/admin/affiliates/{{ lead.converted_affiliate_id }}">view</a></p>{% endif %}
+  </div>
+
+  <div class="aff-section">
+    <h2>Internal notes</h2>
+    <form method="POST" action="/admin/affiliates/leads/{{ lead.id }}/note" style="margin-bottom:12px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <textarea name="body" maxlength="2000" placeholder="Contact history, negotiations, follow-ups…" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;min-height:70px;"></textarea>
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:8px;">Add note</button>
+    </form>
+    {% for n in notes %}
+    <div class="aff-promo"><div class="aff-note">{{ (n.created_at or '')[:16] }} · {{ n.author }}</div><div style="margin-top:4px;color:#334155;white-space:pre-wrap;">{{ n.body }}</div></div>
+    {% else %}<p class="aff-note">No notes yet.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

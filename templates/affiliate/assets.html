@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Marketing Assets | PredictionLab Affiliate{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Marketing Assets</h1>
+  {% set active = 'assets' %}{% include "affiliate/_subnav.html" %}
+
+  <div class="aff-section">
+    <h2>Your links</h2>
+    <div class="aff-linkbox"><input id="aLink" type="text" readonly value="{{ link }}"><button class="aff-copy-btn" type="button" onclick="affCopy('aLink', this)">Copy link</button></div>
+    <div class="aff-linkbox" style="margin-top:8px;"><input id="aCode" type="text" readonly value="{{ aff.affiliate_code }}"><button class="aff-copy-btn" type="button" onclick="affCopy('aCode', this)">Copy code</button></div>
+  </div>
+
+  <div class="aff-section">
+    <h2>Promotion catalog</h2>
+    <p class="aff-note" style="margin-bottom:10px;">PredictionLab plans you can promote:</p>
+    <div class="aff-steps">
+      {% for c in catalog %}
+      <div class="aff-step"><h4>{{ c.plan }} — {{ c.price }}</h4><p>{{ c.blurb }}</p>
+        <a href="{{ site_url }}{{ c.path }}?ref={{ aff.affiliate_code }}" target="_blank" rel="noopener" style="font-weight:700;">Promote this plan →</a></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="aff-section">
+    <h2>Approved assets</h2>
+    {% for a in assets %}
+    <div class="aff-promo">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <strong>{{ a.title }}</strong>
+        <span class="aff-note">{{ a.asset_type }}{% if a.sports %} · {{ a.sports }}{% endif %}</span>
+      </div>
+      {% if a.description %}<div class="aff-note" style="margin:4px 0;">{{ a.description }}</div>{% endif %}
+      {% if a.image_url %}<div style="margin:8px 0;"><img src="{{ a.image_url }}" alt="{{ a.title }}" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0;"></div>{% endif %}
+      {% if a.body %}<div class="txt" id="asset{{ a.id }}">{{ a.body }}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="aff-copy-btn" type="button" onclick="affCopy('asset{{ a.id }}', this)">Copy text</button>
+          {% if a.destination_url %}<a class="aff-copy-btn" style="text-decoration:none;" href="{{ a.destination_url }}" target="_blank" rel="noopener">Open link</a>{% endif %}
+        </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="aff-note">No downloadable assets yet — use your link, code, and the promotion catalog above.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

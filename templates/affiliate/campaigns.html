@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Campaigns | PredictionLab Affiliate{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Campaigns</h1>
+  {% set active = 'campaigns' %}{% include "affiliate/_subnav.html" %}
+
+  {% if briefs %}
+  <div class="aff-section">
+    <h2>Active PredictionLab campaigns</h2>
+    {% for b in briefs %}
+    <div class="aff-promo">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <strong>{{ b.title }}</strong>
+        <span class="aff-note">{% if b.start_date %}{{ b.start_date }}{% endif %}{% if b.end_date %} – {{ b.end_date }}{% endif %}</span>
+      </div>
+      {% if b.description %}<div style="margin:6px 0;color:#334155;">{{ b.description }}</div>{% endif %}
+      {% if b.key_points %}<div class="aff-note" style="white-space:pre-wrap;">{{ b.key_points }}</div>{% endif %}
+      <div style="margin-top:8px;">
+        {% if b.cta %}<span class="aff-badge approved">{{ b.cta }}</span>{% endif %}
+        {% if b.destination_url %} <a href="{{ b.destination_url }}?ref={{ aff.affiliate_code }}" target="_blank" rel="noopener">Promote →</a>{% endif %}
+        {% if b.promo_code %} · code <code>{{ b.promo_code }}</code>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="aff-section">
+    <h2>Your campaign performance</h2>
+    <p class="aff-note" style="margin-bottom:10px;">Add a campaign tag with the <a href="/affiliate/links">link builder</a> to track each promotion separately.</p>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Campaign</th><th>Clicks</th><th>Customers</th><th>Conv.</th><th>Revenue</th><th>Commission</th></tr></thead>
+        <tbody>
+          {% for c in stats %}
+          <tr>
+            <td>{{ c.campaign }}</td>
+            <td>{{ c.clicks }}</td>
+            <td>{{ c.customers }}</td>
+            <td>{{ c.conversion_rate }}%</td>
+            <td>{{ money(c.revenue_cents) }}</td>
+            <td>{{ money(c.commission_cents) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px;">No campaign data yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
