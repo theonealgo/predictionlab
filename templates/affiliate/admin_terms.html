@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Admin · Affiliate Terms | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap" style="max-width:820px;">
+  <h1 style="margin:0 0 12px;">Affiliate Terms &amp; Agreements</h1>
+  {% set active = 'terms' %}{% include "affiliate/_admin_subnav.html" %}
+
+  <div class="aff-section">
+    <p>Current terms version: <strong>{{ current }}</strong>. Affiliates accept the current version at application. To roll out substantially changed terms, bump <code>AFFILIATE_TERMS_VERSION</code> and require re-acceptance below.</p>
+    <form method="POST" action="/admin/affiliates/terms" style="margin-top:10px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="aff-btn aff-btn-blue">Require all affiliates to re-accept {{ current }}</button>
+    </form>
+  </div>
+
+  <div class="aff-section">
+    <h2>Versions</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Version</th><th>Requires re-accept</th><th>Acceptances</th><th>Created</th></tr></thead>
+        <tbody>
+          {% for v in versions %}
+          <tr>
+            <td><strong>{{ v.version }}</strong></td>
+            <td>{{ 'Yes' if v.requires_reaccept else 'No' }}</td>
+            <td>{{ accept_counts.get(v.version, 0) }}</td>
+            <td>{{ (v.created_at or '')[:10] }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">No versions.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

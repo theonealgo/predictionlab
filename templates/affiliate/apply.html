@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Join the Affiliate Program | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap" style="max-width:720px;">
+  <div class="aff-section">
+    <h2>Join the PredictionLab Affiliate Program</h2>
+    <p style="color:#475569;line-height:1.6;">Earn {{ commission_pct }}% recurring commission on qualifying paid subscriptions you refer. Fill out the short application below — we'll review and email you once approved.</p>
+    <div class="aff-alert info">You're applying with your PredictionLab account <strong>{{ current_user.email }}</strong>. An existing PredictionLab account is required to join the affiliate program — your affiliate profile is tied to this account.</div>
+
+    {% if error %}<div class="aff-alert error">{{ error }}</div>{% endif %}
+
+    <form class="aff-form" method="POST" action="/affiliate/apply" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="name">Full name *</label>
+      <input id="name" name="name" type="text" required value="{{ form.name or '' }}" maxlength="120">
+
+      <label>Email</label>
+      <input type="email" value="{{ current_user.email }}" disabled>
+      <div class="hint">We'll use your PredictionLab account email for the affiliate program.</div>
+
+      <label for="code">Preferred affiliate code *</label>
+      <input id="code" name="code" type="text" required value="{{ form.code or '' }}" maxlength="32" placeholder="e.g. JOSH" style="text-transform:uppercase;">
+      <div class="hint">3–32 characters, letters/numbers plus - or _. This becomes your link: <code>predictionlab.io/?ref=YOURCODE</code></div>
+
+      <label for="website_url">Website / social media / channel</label>
+      <input id="website_url" name="website_url" type="text" value="{{ form.website_url or '' }}" maxlength="300" placeholder="https://...">
+
+      <label for="promo_method">Primary promotional method</label>
+      <select id="promo_method" name="promo_method">
+        {% set methods = ['', 'Website / Blog', 'YouTube', 'Instagram', 'TikTok', 'X / Twitter', 'Discord / Telegram', 'Email newsletter', 'Reddit / Forums', 'Paid ads', 'Other'] %}
+        {% for m in methods %}
+          <option value="{{ m }}" {% if form.promo_method == m %}selected{% endif %}>{{ m or 'Select…' }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="primary_platform">Primary platform</label>
+      <select id="primary_platform" name="primary_platform">
+        {% set plats = ['', 'Website / Blog', 'YouTube', 'TikTok', 'Instagram', 'X / Twitter', 'Facebook', 'Discord / Telegram', 'Email newsletter', 'Other'] %}
+        {% for p in plats %}<option value="{{ p }}" {% if form.primary_platform == p %}selected{% endif %}>{{ p or 'Select…' }}</option>{% endfor %}
+      </select>
+
+      <label>Channel links (add the ones you use)</label>
+      <input name="youtube_url" type="text" value="{{ form.youtube_url or '' }}" maxlength="300" placeholder="YouTube URL">
+      <input name="tiktok_url" type="text" value="{{ form.tiktok_url or '' }}" maxlength="300" placeholder="TikTok URL">
+      <input name="instagram_url" type="text" value="{{ form.instagram_url or '' }}" maxlength="300" placeholder="Instagram URL">
+      <input name="x_url" type="text" value="{{ form.x_url or '' }}" maxlength="300" placeholder="X / Twitter URL">
+      <input name="facebook_url" type="text" value="{{ form.facebook_url or '' }}" maxlength="300" placeholder="Facebook URL">
+      <input name="discord_url" type="text" value="{{ form.discord_url or '' }}" maxlength="300" placeholder="Discord / Telegram URL">
+      <input name="newsletter_url" type="text" value="{{ form.newsletter_url or '' }}" maxlength="300" placeholder="Newsletter URL">
+      <input name="other_url" type="text" value="{{ form.other_url or '' }}" maxlength="300" placeholder="Other URL">
+
+      <label for="audience_size">Approximate audience size</label>
+      <input id="audience_size" name="audience_size" type="text" value="{{ form.audience_size or '' }}" maxlength="12" placeholder="e.g. 25000">
+
+      <label for="country">Country</label>
+      <input id="country" name="country" type="text" value="{{ form.country or '' }}" maxlength="80" placeholder="e.g. Canada">
+
+      <label for="primary_countries">Primary audience countries</label>
+      <input id="primary_countries" name="primary_countries" type="text" value="{{ form.primary_countries or '' }}" maxlength="160" placeholder="e.g. US, Canada, UK">
+
+      <label for="sports">Sports you cover</label>
+      <input id="sports" name="sports" type="text" value="{{ form.sports or '' }}" maxlength="160" placeholder="e.g. NFL, NBA, MLB, soccer">
+
+      <label for="audience_description">Describe your audience</label>
+      <textarea id="audience_description" name="audience_description" maxlength="1000" placeholder="Who follows you and what are they interested in?">{{ form.audience_description or '' }}</textarea>
+
+      <div class="aff-check"><input id="existing_sports_audience" name="existing_sports_audience" type="checkbox" {% if form.existing_sports_audience %}checked{% endif %}><label for="existing_sports_audience" style="margin:0;font-weight:600;">I have an existing sports / sports-analysis audience</label></div>
+      <div class="aff-check"><input id="paid_ads" name="paid_ads" type="checkbox" {% if form.paid_ads %}checked{% endif %}><label for="paid_ads" style="margin:0;font-weight:600;">I may use paid advertising</label></div>
+
+      <label for="why_promote">Why do you want to promote PredictionLab?</label>
+      <textarea id="why_promote" name="why_promote" maxlength="1000" placeholder="Tell us why PredictionLab fits your audience.">{{ form.why_promote or '' }}</textarea>
+
+      <label for="application_note">How do you intend to promote PredictionLab?</label>
+      <textarea id="application_note" name="application_note" maxlength="2000" placeholder="Tell us about your promotional methods.">{{ form.application_note or '' }}</textarea>
+
+      <div class="aff-check">
+        <input id="agree_terms" name="agree_terms" type="checkbox">
+        <label for="agree_terms" style="margin:0;font-weight:600;">I agree to the <a href="/affiliate/terms" target="_blank">PredictionLab Affiliate Terms</a>, including the rules on qualifying transactions, attribution, refunds/chargebacks, and prohibited promotional methods.</label>
+      </div>
+
+      <button type="submit" class="aff-btn aff-btn-blue" style="width:100%;">Submit application</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Admin · Marketing Assets | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Marketing Assets</h1>
+  {% set active = 'assets' %}{% include "affiliate/_admin_subnav.html" %}
+
+  <div class="aff-section">
+    <h2>Create asset</h2>
+    <form class="aff-form" method="POST" action="/admin/affiliates/assets">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Title</label><input name="title" maxlength="200" required>
+      <label>Type</label>
+      <select name="asset_type"><option>text</option><option>banner</option><option>image</option><option>social</option><option>email</option><option>headline</option></select>
+      <label>Description</label><input name="description" maxlength="1000">
+      <label>Body / copy</label><textarea name="body" maxlength="4000" placeholder="Suggested copy, social post, email, headline…"></textarea>
+      <label>Image URL (optional)</label><input name="image_url" maxlength="400" placeholder="/static/… or https://…">
+      <label>Destination URL (optional)</label><input name="destination_url" maxlength="400">
+      <label>Sports / category (optional)</label><input name="sports" maxlength="120">
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:10px;">Create asset</button>
+    </form>
+  </div>
+
+  <div class="aff-section">
+    <h2>All assets</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Title</th><th>Type</th><th>Sports</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {% for a in assets %}
+          <tr>
+            <td><strong>{{ a.title }}</strong><br><span class="aff-note">{{ (a.body or a.description or '')[:80] }}</span></td>
+            <td>{{ a.asset_type }}</td>
+            <td>{{ a.sports or '—' }}</td>
+            <td><span class="aff-badge {{ 'approved' if a.active else 'suspended' }}">{{ 'Active' if a.active else 'Hidden' }}</span></td>
+            <td><form method="POST" action="/admin/affiliates/assets/{{ a.id }}/toggle"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="aff-copy-btn" type="submit" style="padding:6px 12px;font-size:0.8rem;">{{ 'Hide' if a.active else 'Show' }}</button></form></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px;">No assets yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Affiliate Academy | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 6px;">Affiliate Academy</h1>
+  <p class="aff-note" style="margin:0 0 12px;">{{ done }} of {{ total }} modules completed.</p>
+  {% set active = 'academy' %}{% include "affiliate/_subnav.html" %}
+  <div class="aff-section">
+    {% for m in modules %}
+      {% set p = prog.get(m.id) %}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #eef2f6;">
+        <div>
+          <a href="/affiliate/academy/{{ m.slug }}" style="font-weight:700;color:#0f172a;text-decoration:none;">{{ m.title }}</a>
+          <div class="aff-note">{{ (m.body or '')[:110] }}{% if (m.body or '')|length > 110 %}…{% endif %}</div>
+        </div>
+        <span class="aff-badge {{ 'paid' if (p and p.completed_at) else ('requested' if p else 'pending') }}">
+          {{ 'Completed' if (p and p.completed_at) else ('Started' if p else 'Not started') }}
+        </span>
+      </div>
+    {% else %}
+      <p class="aff-note">No modules yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

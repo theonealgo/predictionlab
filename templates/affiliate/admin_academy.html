@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Admin · Affiliate Academy | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Affiliate Academy</h1>
+  {% set active = 'academy' %}{% include "affiliate/_admin_subnav.html" %}
+
+  <div class="aff-section">
+    <h2>Add module</h2>
+    <form class="aff-form" method="POST" action="/admin/affiliates/academy">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Title</label><input name="title" maxlength="200" required>
+      <label>Body</label><textarea name="body" maxlength="8000"></textarea>
+      <label>Video URL (optional)</label><input name="video_url" maxlength="400">
+      <label>Sort order</label><input name="sort_order" maxlength="5" value="100">
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:10px;">Save module</button>
+    </form>
+  </div>
+
+  <div class="aff-section">
+    <h2>Modules</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>#</th><th>Title</th><th>Slug</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {% for m in modules %}
+          <tr>
+            <td>{{ m.sort_order }}</td>
+            <td><strong>{{ m.title }}</strong></td>
+            <td class="aff-note">{{ m.slug }}</td>
+            <td><span class="aff-badge {{ 'approved' if m.active else 'suspended' }}">{{ 'Active' if m.active else 'Hidden' }}</span></td>
+            <td><form method="POST" action="/admin/affiliates/academy/{{ m.id }}/toggle"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="aff-copy-btn" type="submit" style="padding:6px 12px;font-size:0.8rem;">{{ 'Hide' if m.active else 'Show' }}</button></form></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px;">No modules.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

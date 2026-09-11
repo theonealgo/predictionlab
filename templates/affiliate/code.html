@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Enter an Affiliate Code | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap" style="max-width:560px;">
+  <div class="aff-section">
+    <h2>Have an affiliate code?</h2>
+    <p style="color:#475569;line-height:1.6;">If a creator gave you their affiliate code, enter it below before you subscribe. The best way to support a creator is to use their referral link, but a code works too if you didn't click one.</p>
+    <form class="aff-form" method="POST" action="/affiliate/code" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="code">Affiliate code</label>
+      <input id="code" name="code" type="text" required placeholder="e.g. JOSH" style="text-transform:uppercase;">
+      <button type="submit" class="aff-btn aff-btn-blue" style="width:100%;margin-top:14px;">Apply code</button>
+    </form>
+    <p class="aff-note" style="margin-top:14px;">Codes apply to new subscriptions and won't override an existing referral. <a href="/plans">View plans →</a></p>
+  </div>
+</div>
+{% endblock %}

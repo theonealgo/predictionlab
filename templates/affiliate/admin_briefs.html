@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Admin · Campaign Briefs | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Campaign Briefs</h1>
+  {% set active = 'briefs' %}{% include "affiliate/_admin_subnav.html" %}
+
+  <div class="aff-section">
+    <h2>Create campaign brief</h2>
+    <form class="aff-form" method="POST" action="/admin/affiliates/briefs">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Title</label><input name="title" maxlength="200" required placeholder="e.g. MLB Season">
+      <label>Description</label><textarea name="description" maxlength="2000" placeholder="Promote PredictionLab's MLB predictions…"></textarea>
+      <label>Key points (one per line)</label><textarea name="key_points" maxlength="2000" placeholder="Data-driven predictions&#10;Free picks available&#10;Transparent results"></textarea>
+      <label>Call to action</label><input name="cta" maxlength="120" placeholder="Try PredictionLab">
+      <label>Destination URL</label><input name="destination_url" maxlength="400" placeholder="https://predictionlab.io/mlb-picks">
+      <label>Optional promo code</label><input name="promo_code" maxlength="32" style="text-transform:uppercase;">
+      <label>Start date</label><input name="start_date" maxlength="40" placeholder="YYYY-MM-DD">
+      <label>End date</label><input name="end_date" maxlength="40" placeholder="YYYY-MM-DD">
+      <button type="submit" class="aff-btn aff-btn-blue" style="margin-top:10px;">Create brief</button>
+    </form>
+  </div>
+
+  <div class="aff-section">
+    <h2>All briefs</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Title</th><th>Dates</th><th>CTA</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {% for b in briefs %}
+          <tr>
+            <td><strong>{{ b.title }}</strong><br><span class="aff-note">{{ (b.description or '')[:80] }}</span></td>
+            <td>{{ b.start_date or '—' }}{% if b.end_date %} – {{ b.end_date }}{% endif %}</td>
+            <td>{{ b.cta or '—' }}</td>
+            <td><span class="aff-badge {{ 'approved' if b.active else 'suspended' }}">{{ 'Active' if b.active else 'Hidden' }}</span></td>
+            <td><form method="POST" action="/admin/affiliates/briefs/{{ b.id }}/toggle"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="aff-copy-btn" type="submit" style="padding:6px 12px;font-size:0.8rem;">{{ 'Hide' if b.active else 'Show' }}</button></form></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px;">No briefs yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ mod.title }} | Affiliate Academy{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap" style="max-width:760px;">
+  <p style="margin:0 0 8px;"><a href="/affiliate/academy">← Academy</a></p>
+  <div class="aff-section">
+    <h1 style="margin:0 0 12px;">{{ mod.title }}</h1>
+    {% if mod.video_url %}<p><a href="{{ mod.video_url }}" target="_blank" rel="noopener">Watch the video →</a></p>{% endif %}
+    <div style="color:#334155;line-height:1.7;white-space:pre-wrap;">{{ mod.body }}</div>
+    <form method="POST" action="/affiliate/academy/{{ mod.slug }}" style="margin-top:18px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="aff-btn aff-btn-blue">Mark as complete</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

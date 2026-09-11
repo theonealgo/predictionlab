@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Admin · Recommendations | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Partner Recommendations</h1>
+  {% set active = 'reco' %}{% include "affiliate/_admin_subnav.html" %}
+  <div class="aff-section">
+    <p class="aff-note" style="margin-bottom:12px;">Deterministic scoring (not AI) from profile relevance + real performance. Prioritizes partners worth recruiting or nurturing. Built to plug in an AI engine later.</p>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Priority</th><th>Affiliate</th><th>Status</th><th>Score</th><th>Why</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><span class="aff-badge {{ 'approved' if r.priority=='high' else ('requested' if r.priority=='medium' else 'pending') }}">{{ r.priority|upper }}</span></td>
+            <td><a href="/admin/affiliates/{{ r.a.id }}"><strong>{{ r.a.affiliate_code }}</strong></a><br><span class="aff-note">{{ r.a.email }}</span></td>
+            <td><span class="aff-badge {{ r.a.status }}">{{ r.a.status }}</span></td>
+            <td>{{ r.score }}</td>
+            <td class="aff-note">{{ r.priority|capitalize }} priority — {{ r.reasons|join(' + ') }}.</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px;">No affiliates yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

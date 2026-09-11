@@ -1,0 +1,12 @@
+{# Admin affiliate subnav. Pass `active` var. #}
+<div class="aff-subnav">
+  <a href="/admin/affiliates" class="{{ 'active' if active=='affiliates' else '' }}">Affiliates</a>
+  <a href="/admin/affiliates/reports" class="{{ 'active' if active=='reports' else '' }}">Reports</a>
+  <a href="/admin/affiliates/recommendations" class="{{ 'active' if active=='reco' else '' }}">Recommendations</a>
+  <a href="/admin/affiliates/leads" class="{{ 'active' if active=='leads' else '' }}">Partner Leads</a>
+  <a href="/admin/affiliates/briefs" class="{{ 'active' if active=='briefs' else '' }}">Campaigns</a>
+  <a href="/admin/affiliates/assets" class="{{ 'active' if active=='assets' else '' }}">Assets</a>
+  <a href="/admin/affiliates/academy" class="{{ 'active' if active=='academy' else '' }}">Academy</a>
+  <a href="/admin/affiliates/terms" class="{{ 'active' if active=='terms' else '' }}">Terms</a>
+  <a href="/admin/affiliates/export.csv">Export CSV</a>
+</div>

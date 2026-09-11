@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Admin · Affiliates | PredictionLab{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Affiliate Management</h1>
+  {% set active = 'affiliates' %}{% include "affiliate/_admin_subnav.html" %}
+
+  <div class="aff-stat-grid">
+    <div class="aff-stat"><div class="v">{{ totals.affiliates }}</div><div class="l">Affiliates</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.active }}</div><div class="l">Active</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.pending }}</div><div class="l">Pending</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.prospects }}</div><div class="l">Partner prospects</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.clicks }}</div><div class="l">Clicks</div></div>
+    <div class="aff-stat"><div class="v">{{ totals.customers }}</div><div class="l">Referred customers</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.revenue) }}</div><div class="l">Attributed revenue</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.commissions) }}</div><div class="l">Total commissions</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.payable) }}</div><div class="l">Outstanding payable</div></div>
+    <div class="aff-stat"><div class="v">{{ money(totals.paid) }}</div><div class="l">Paid out</div></div>
+  </div>
+
+  {% if open_payouts %}
+  <div class="aff-section">
+    <h2>Open payout requests</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>#</th><th>Affiliate</th><th>Amount</th><th>Status</th><th>Requested</th><th>Action</th></tr></thead>
+        <tbody>
+        {% for p in open_payouts %}
+          <tr>
+            <td>{{ p.id }}</td>
+            <td><a href="/admin/affiliates/{{ p.affiliate_id }}">{{ p.affiliate_code }}</a></td>
+            <td>{{ money(p.amount_cents, p.currency) }}</td>
+            <td><span class="aff-badge {{ p.status }}">{{ p.status }}</span></td>
+            <td>{{ (p.requested_at or '')[:10] }}</td>
+            <td>
+              <form method="POST" action="/admin/affiliates/payouts/{{ p.id }}/status" style="display:flex;gap:6px;flex-wrap:wrap;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="text" name="reference" placeholder="reference" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8rem;width:120px;">
+                <select name="status" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8rem;">
+                  <option value="processing">processing</option>
+                  <option value="paid">paid</option>
+                  <option value="failed">failed</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+                <button class="aff-copy-btn" type="submit" style="padding:6px 12px;font-size:0.8rem;">Update</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="aff-section">
+    <h2>Affiliates</h2>
+    <form method="GET" action="/admin/affiliates" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search code / email / name" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;">
+      <select name="status" style="padding:9px;border:1px solid #cbd5e1;border-radius:8px;">
+        <option value="">All statuses</option>
+        {% for s in ['pending','approved','rejected','suspended'] %}
+          <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <button class="aff-btn aff-btn-blue" type="submit" style="padding:9px 18px;">Filter</button>
+    </form>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr>
+          <th>Affiliate</th><th>Status</th><th>Clicks</th><th>Signups</th><th>Customers</th>
+          <th>Revenue</th><th>Commissions</th><th>Payable</th><th>Paid</th><th>Joined</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          {% for row in rows %}
+          {% set a = row.a %}{% set s = row.s %}
+          <tr>
+            <td><a href="/admin/affiliates/{{ a.id }}"><strong>{{ a.affiliate_code }}</strong></a><br><span class="aff-note">{{ a.email }}</span></td>
+            <td><span class="aff-badge {{ a.status }}">{{ a.status }}</span></td>
+            <td>{{ s.clicks }}</td>
+            <td>{{ s.signups }}</td>
+            <td>{{ s.customers }}</td>
+            <td>{{ money(s.revenue_cents) }}</td>
+            <td>{{ money(s.earned_cents) }}</td>
+            <td>{{ money(s.payable_cents) }}</td>
+            <td>{{ money(s.paid_cents) }}</td>
+            <td>{{ (a.created_at or '')[:10] }}</td>
+            <td>
+              <form method="POST" action="/admin/affiliates/{{ a.id }}/status" style="display:flex;gap:4px;flex-wrap:wrap;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                {% if a.status == 'pending' %}
+                  <button class="aff-copy-btn" name="action" value="approve" style="padding:6px 10px;font-size:0.78rem;background:#166534;">Approve</button>
+                  <button class="aff-copy-btn" name="action" value="reject" style="padding:6px 10px;font-size:0.78rem;background:#991b1b;">Reject</button>
+                {% elif a.status == 'approved' %}
+                  <button class="aff-copy-btn" name="action" value="suspend" style="padding:6px 10px;font-size:0.78rem;background:#991b1b;">Suspend</button>
+                {% elif a.status in ['suspended','rejected'] %}
+                  <button class="aff-copy-btn" name="action" value="reactivate" style="padding:6px 10px;font-size:0.78rem;background:#166534;">Reactivate</button>
+                {% endif %}
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:22px;">No affiliates found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if suspicious %}
+  <div class="aff-section">
+    <h2>Suspicious activity</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>When</th><th>Affiliate</th><th>Type</th><th>Detail</th></tr></thead>
+        <tbody>
+          {% for e in suspicious %}
+          <tr><td>{{ (e.created_at or '')[:16] }}</td><td>{{ e.affiliate_code or e.affiliate_id }}</td><td>{{ e.kind }}</td><td class="aff-note">{{ e.detail }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

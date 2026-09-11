@@ -5836,6 +5836,13 @@ ODDS_ENGINE_URL = _os.environ.get('ODDS_ENGINE_URL')
 # ── Auth + Premium System ─────────────────────────────────────────────────────
 from auth_system import init_auth, is_premium_user
 init_auth(app, db_path=DATABASE)
+
+# ── Affiliate Program (first-party; reuses auth/DB/Stripe/email) ──────────────
+try:
+    from affiliate_system import init_affiliate
+    init_affiliate(app, db_path=DATABASE)
+except Exception as _aff_e:  # never let the affiliate module break the core site
+    logger.error(f"[affiliate] init failed (site continues without affiliate): {_aff_e}")
 _TRAFFIC_TZ = 'America/New_York'
 
 def _traffic_now():
