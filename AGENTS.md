@@ -119,3 +119,16 @@ Internal docs (`README.md`, code comments, server logs, API debug JSON that is n
 
 - The `/blog` **Soro** “Trending in Sports” embed (`#soro-blog` / `app.trysoro.com`) is a **paid product**. **Do not remove or “clean” it** when fixing blog content.
 - **Google Trends → blog auto-posts are forbidden** (no `Google Trends Betting Angle` articles). Keep `_BLOG_AUTO_TRENDS_ENABLED = False`. See `data/BLOG_OWNER_NOTES.md`.
+
+### 11. Shared sport-group UI — do not invent per-sport pages
+
+Team sports (MLB, NHL, NBA, NCAAB, NCAAW, NFL, NCAAF, WNBA, CFL) share **one**
+Predictions template and **one** Results template (`DAILY_RESULTS_TEMPLATE`).
+Tennis + UFC share one individual-competition template. Soccer and Golf each
+have their own template family under the same global header/footer.
+
+Do not create sport-specific copies of cards, charts, headers, or results
+boards. If the checker reports a team-sports template miss (thin NFL results,
+weekly frankenstein, chart still showing cards), that is an error — fix the
+page. See [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) and
+`.cursor/rules/ui-architecture.mdc`.

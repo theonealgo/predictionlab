@@ -1,0 +1,4 @@
+CFL picks/results UI signed off on :5052 (2026-09-11).
+Picks and results templates pass; cards have model values and market lines.
+Do not modify unless owner says UNLOCK CFL.
+Never push from this folder unless the owner confirms a production deploy.

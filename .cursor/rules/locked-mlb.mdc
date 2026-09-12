@@ -1,28 +1,45 @@
 ---
-description: MLB is permanently locked — do not edit unless UNLOCK MLB
+description: MLB models and 5052 UI are locked — do not edit unless UNLOCK MLB
 alwaysApply: true
 ---
 
 # MLB LOCKED — DO NOT MODIFY
 
-MLB is permanently locked after the 2026-08-22 results correction.
+MLB is **LOCKED**. Models (2026-08-22 results correction) and the signed-off `:5052` UI (picks, results, both consensus charts) stay as they are.
+
+Owner 2026-09-11: LOCK MLB after today's picks cards restored
+(Grinder2 / Takedown / XSharp lines from the real models).
 
 Do **not** modify MLB unless the user explicitly says:
 
 **UNLOCK MLB**
 
-This applies to:
+This is a hard stop. Fixing blog, affiliate, soccer, NFL, NCAAF, hangs, checkers, chrome, or production outages is **not** an MLB unlock. Leave every MLB file and every MLB block out of those diffs.
 
-- MLB Moneyline (Grinder2, Takedown, Edge, XSharp, Sharp Consensus)
-- MLB Spread / run-line fade
-- MLB O/U
-- MLB Efficiency
-- MLB prediction generation, grading, aggregation, ROI
-- MLB historical data, result queries, strategy IDs, MLB-specific transforms
+## Do not touch
 
-Changes to soccer, NBA, NFL, CFL, NHL, NCAAF, NCAAB, or WNBA must **not**
-modify MLB behavior.
+- `/mlb-picks`, `/mlb-results`, `/mlb-results?view=chart`
+- `mlb_live.py`, `locked_pages/mlb/*`
+- `mlb_spread_pick.py`, `mlb_results_ui.py`, `mlb_ui_fixup.py`, `mlb_consensus_hub.py`
+- `sports/MLB.py`, `mlb_ml_v2.py`, `mlb_run_line_v2.py`, `mlb_pitching.py`, `mlb_runs_model.py`, `mlb_context.py`, `mlb_three_way_consensus.py`
+- `static/css/mlb-*.css`, `static/js/mlb-*.js`
+- MLB consensus charts (Consensus Based Betting Records + Books · Prediction Lab · XSharp)
+- MLB Cards|Chart, share image, card HTML
+- Moneyline / run-line / O/U / Efficiency models, grading, ROI, historical queries
+- Any `NHL77FINAL.py` function or branch whose name or job is MLB (`render_mlb_*`, `_apply_mlb_*`, `_mlb_*`, MLB spread/grade/pin, Efficiency MLB)
+- Worktrees, hotfixes, and ship branches: same ban — do not “incidentally” edit MLB while patching other routes in `NHL77FINAL.py`
 
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* MLB pages
+- Adding non-MLB routes/templates (affiliate, blog partial) without changing MLB code paths
+
+```
+# BAD — restyle locked MLB cards/results/consensus/share, edit mlb_live snapshots, or patch MLB inside NHL77FINAL.py during a site hotfix
+# GOOD — leave MLB routes and MLB functions alone; work soccer, UFC results, blog, affiliate, football hangs
+```
+
+Do not put lock text on user-facing HTML.
 Isolation remains `~/Documents/Personal/mlb/`.
 Do not git push MLB unless the owner confirms a production deploy.
-Do not run the live clone as `PORT=5050` (soccer isolation). MLB live chrome is `:5001`.

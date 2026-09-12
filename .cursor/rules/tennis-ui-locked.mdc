@@ -5,9 +5,11 @@ alwaysApply: true
 
 # Tennis UI LOCKED (:5052 / premerge)
 
-Tennis picks and results on `:5052` (`predictionlabfix_work2`) are signed off after the isolation port.
+Tennis picks and results on `:5052` (`predictionlabfix_work2`) are signed off (copied from `:5081 /tennis/`).
 
-Do not change `/tennis-picks`, `/tennis-results`, `iso_hub/tennis_page.py`, `tennis_live.py`, tennis chart/card layout, tennis date-nav / Cards|Chart wiring, tennis consensus HTML, or `/tennis/share.jpg` unless the owner says **UNLOCK TENNIS**.
+Do not change `/tennis-picks`, `/tennis-results`, `_sandbox_hub_run/hub/tennis_page.py`, `tennis_live.py`, tennis chart/card layout, tennis date-nav / Cards|Chart wiring, tennis consensus HTML, or `/tennis/share.jpg` unless the owner says **UNLOCK TENNIS**.
+
+Owner 2026-09-09: tennis **results chart vs cards looking the same** may be fixed. Do not restyle tennis picks.
 
 Allowed without unlock: other sports; tennis data/engine sync that does not change tennis HTML/CSS.
 

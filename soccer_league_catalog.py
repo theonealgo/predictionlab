@@ -83,7 +83,7 @@ _LEAGUES: tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], ...] = (
       'la liga 2', 'esp.2')),
     ('CONCACAF Champions Cup', 'concacaf.champions', '5699', ('concacaf',),
      ('concacaf champions cup', 'concacaf champions league',
-      'concacaf.champions')),
+      'concacaf.champions', 'concacaf.champions_cup')),
     ('Leagues Cup', 'concacaf.leagues.cup', '19425', ('concacaf',),
      ('concacaf.leagues.cup',)),
     ('USL Championship', 'usa.usl.1', '4002', ('concacaf',),
@@ -274,6 +274,76 @@ _LEAGUES: tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ('CAF Champions League', 'caf.champions', '2391', ('africa',), ()),
     ('South African Premiership', 'rsa.1', '3937', ('africa',), ()),
     ('CAF Confederation Cup', 'caf.confed', '18000', ('africa',), ()),
+    # --- remaining ESPN soccer leagues (core API) ---
+    ('AFC Champions League Two', 'afc.cup', '2466', ('asia',), ()),
+    ('English FA Community Shield', 'eng.charity', '5329', ('europe',), ()),
+    ('Spanish Supercopa', 'esp.super_cup', '8102', ('europe',), ()),
+    ('Campeones Cup', 'campeones.cup', '18771', ('concacaf',), ()),
+    ('FIFA Women\'s Champions Cup', 'fifa.w.champions_cup', '24081', ('internationals',), ()),
+    ('German Bundesliga Promotion/Relegation Playoff', 'ger.playoff.relegation', '8304', ('europe',), ()),
+    ('French Trophee des Champions', 'fra.super_cup', '8357', ('europe',), ()),
+    ('Italian Supercoppa', 'ita.super_cup', '8103', ('europe',), ()),
+    ('German Supercup', 'ger.super_cup', '8101', ('europe',), ()),
+    ('English Women\'s Super League Promotion/Relegation Playoff', 'eng.w.promotion.relegation', '24405', ('europe',), ()),
+    ('Club Friendly', 'club.friendly', '19834', ('europe',), ()),
+    ('FIFA World Cup Qualifying - Playoff Tournament', 'fifa.wcq.ply', '23449', ('internationals',), ()),
+    ('FIFA Women\'s World Cup Qualifying - Playoff Tournament', 'fifa.wwcq.ply', '', ('internationals',), ()),
+    ('UEFA Women\'s Champions League Qualifying', 'uefa.wchampions_qual', '24458', ('europe',), ()),
+    ('English Women\'s League Cup', 'eng.w.league_cup', '23390', ('europe',), ()),
+    ('Saudi King\'s Cup', 'ksa.kings.cup', '22057', ('asia',), ()),
+    ('Concacaf Gold Cup Qualifying', 'concacaf.gold_qual', '19778', ('concacaf',), ()),
+    ('Concacaf Cup', 'concacaf.confederations_playoff', '8360', ('concacaf',), ()),
+    ('UEFA Super Cup', 'uefa.super_cup', '5462', ('europe',), ()),
+    ('CONMEBOL-UEFA Cup of Champions', 'global.finalissima', '20704', ('internationals',), ()),
+    ('CONMEBOL-UEFA U20 Intercontinental Cup', 'global.u20.intercontinental_cup', '22781', ('internationals',), ()),
+    ('CONMEBOL-UEFA Women\'s Cup of Champions', 'global.w.finalissima', '21191', ('internationals',), ()),
+    ('AFC Women\'s Asian Cup', 'afc.w.asian.cup', '23537', ('asia',), ()),
+    ('UEFA Women\'s Europa Cup', 'uefa.w.europa', '24079', ('europe',), ()),
+    ('AFC Champions League Elite Qualifying', 'afc.champions_qual', '24452', ('asia',), ()),
+    ('AFC Champions League Two Qualifying', 'afc.cup_qual', '24455', ('asia',), ()),
+    ('Non-FIFA Friendly', 'nonfifa', '19725', ('internationals',), ()),
+    ('Russian Premier League Relegation/Promotion Playoffs', 'rus.1.promotion.relegation', '20731', ('europe',), ()),
+    ('Belgian Pro League Promotion/Relegation Playoffs', 'bel.promotion.relegation', '20116', ('europe',), ()),
+    ('French Ligue 1 Promotion/Relegation Playoffs', 'fra.1.promotion.relegation', '20159', ('europe',), ()),
+    ('Portuguese Primeira Liga Promotion/Relegation Playoffs', 'por.1.promotion.relegation', '20186', ('europe',), ()),
+    ('CONMEBOL-UEFA Club Challenge', 'global.club_challenge', '21597', ('internationals',), ()),
+    ('Dutch Johan Cruyff Shield', 'ned.supercup', '10749', ('europe',), ()),
+    ('Emirates Cup', 'friendly.emirates_cup', '11108', ('internationals',), ()),
+    ('Trofeo Joan Gamper', 'esp.joan_gamper', '17929', ('europe',), ()),
+    ('Japanese J.League World Challenge', 'jpn.world_challenge', '17931', ('asia',), ()),
+    ('Arnold Clark Cup', 'global.arnold.clark_cup', '20566', ('internationals',), ()),
+    ('CONMEBOL Pre-Olympic Tournament', 'fifa.conmebol.olympicsq', '19727', ('internationals',), ()),
+    ('Men\'s Olympic Qualifying Playoff', 'fifa.concacaf.olympicsq', '19831', ('internationals',), ()),
+    ('Concacaf Women\'s Olympic Qualifying', 'fifa.w.concacaf.olympicsq', '5342', ('internationals',), ()),
+    ('Under-21 International Friendly', 'fifa.friendly_u21', '20132', ('internationals',), ()),
+    ('German Bundesliga 2. Promotion/Relegation Playoffs', 'ger.2.promotion.relegation', '19871', ('europe',), ()),
+    ('English FA Cup Qualifying', 'eng.fa_qual', '23480', ('europe',), ()),
+    ('Scottish Premiership Promotion/Relegation Playoffs', 'sco.1.promotion.relegation', '20133', ('europe',), ()),
+    ('Scottish Championship Promotion/Relegation Playoffs', 'sco.2.promotion.relegation', '20134', ('europe',), ()),
+    ('Scottish Cup Qualifying', 'sco.tennents_qual', '24457', ('europe',), ()),
+    ('Dutch Eredivisie Promotion/Relegation Playoffs', 'ned.playoff.relegation', '8305', ('europe',), ()),
+    ('Dutch Tweede Divisie Promotion/Relegation Playoffs', 'ned.3.promotion.relegation', '20798', ('europe',), ()),
+    ('Swedish Allsvenskan Promotion/Relegation Playoffs', 'swe.1.promotion.relegation', '19968', ('europe',), ()),
+    ('Norwegian Eliteserien Promotion/Relegation Playoffs', 'nor.1.promotion.relegation', '19989', ('europe',), ()),
+    ('CONMEBOL Recopa', 'conmebol.recopa', '8333', ('south-america',), ()),
+    ('Argentine Copa de la Superliga', 'arg.copa_de_la_superliga', '19264', ('south-america',), ()),
+    ('Argentine Trofeo de Campeones', 'arg.trofeo_de_la_campeones', '19705', ('south-america',), ()),
+    ('Argentine Supercopa', 'arg.supercopa', '8346', ('south-america',), ()),
+    ('Argentine Supercopa Internacional', 'arg.supercopa.internacional', '23348', ('south-america',), ()),
+    ('Brazilian Supercopa Rei', 'bra.supercopa_do_brazil', '19721', ('south-america',), ()),
+    ('Chilean Supercopa', 'chi.super_cup', '8364', ('south-america',), ()),
+    ('Chilean Primera División Promotion/Relegation Playoffs', 'chi.1.promotion.relegation', '20524', ('south-america',), ()),
+    ('Segunda División de Uruguay', 'uru.2', '3948', ('south-america',), ()),
+    ('Colombian Superliga', 'col.superliga', '19112', ('south-america',), ()),
+    ('Paraguayan Supercopa', 'par.1.supercopa', '20526', ('south-america',), ()),
+    ('Bolivian Liga Profesional Promotion/Relegation Playoffs', 'bol.ply.rel', '20525', ('south-america',), ()),
+    ('Copa Bolivia', 'bol.copa', '23284', ('south-america',), ()),
+    ('Mexican Campeon de Campeones', 'mex.campeon', '17893', ('concacaf',), ()),
+    ('CONCACAF U23 Tournament', 'concacaf.u23', '3911', ('concacaf',), ()),
+    ('Intercontinental Cup (India)', 'fifa.intercontinental.cup', '782', ('internationals',), ()),
+    ('Chinese Super League Promotion/Relegation Playoffs', 'chn.1.promotion.relegation', '19948', ('asia',), ()),
+    ('Arabian Gulf Cup', 'global.gulf_cup', '23107', ('internationals',), ()),
+    ('COSAFA Cup', 'caf.cosafa', '20220', ('africa',), ()),
 )
 
 # Extra endpoints kept for logo hydrate / legacy fetches — not shown in the picker.
@@ -450,7 +520,7 @@ SOCCER_LEAGUE_ORDER = [row[0] for row in _LEAGUES]
 SOCCER_LEAGUE_ENDPOINTS = {row[0]: row[1] for row in _LEAGUES}
 SOCCER_LEAGUE_ENDPOINTS.update(_EXTRA_ENDPOINTS)
 
-SOCCER_LEAGUE_NUMERIC_IDS = {row[2]: row[0] for row in _LEAGUES}
+SOCCER_LEAGUE_NUMERIC_IDS = {row[2]: row[0] for row in _LEAGUES if row[2]}
 
 SOCCER_LEAGUE_REGIONS = {row[0]: row[3] for row in _LEAGUES}
 
@@ -597,6 +667,105 @@ def missing_espn_browse_leagues(html_or_labels) -> list[str]:
         if not canon or canon not in mapped:
             missing.append(espn_name)
     return missing
+
+
+def _site_league_slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+
+
+def espn_browse_league_pages() -> list[dict[str, str]]:
+    """One picks URL + one results URL per ESPN soccer scoreboard league."""
+    out: list[dict[str, str]] = []
+    for espn_name in ESPN_BROWSE_LEAGUES:
+        canon = _SOCCER_LEAGUE_CANONICAL.get(espn_name.lower()) or ""
+        slug = _site_league_slug(canon) if canon else ""
+        out.append(
+            {
+                "espn": espn_name,
+                "catalog": canon,
+                "slug": slug,
+                "picks": f"/soccer-picks?league={slug}" if slug else "",
+                "results": f"/soccer-results?league={slug}" if slug else "",
+            }
+        )
+    return out
+
+
+def league_page_selection_issues(
+    html: str, *, slug: str, espn_name: str, catalog_name: str = ""
+) -> list[str]:
+    """FAIL reasons when a league URL is not that league's own page."""
+    html = html or ""
+    issues: list[str] = []
+    if 'id="league-controls"' not in html or 'id="league"' not in html:
+        issues.append(f"{espn_name}: page has no league dropdown")
+        return issues
+    sel = re.search(
+        r'<select[^>]*\bid=["\']league["\'][^>]*>([\s\S]*?)</select>',
+        html,
+        flags=re.I,
+    )
+    body = sel.group(1) if sel else ""
+    picked = re.search(
+        rf'<option\b[^>]*\bvalue=["\']{re.escape(slug)}["\'][^>]*\bselected\b',
+        body,
+        flags=re.I,
+    ) or re.search(
+        rf'<option\b[^>]*\bselected\b[^>]*\bvalue=["\']{re.escape(slug)}["\']',
+        body,
+        flags=re.I,
+    )
+    if not picked:
+        issues.append(f"{espn_name}: picks/results URL did not select this league")
+    all_picked = re.search(
+        r'<option\b[^>]*\bvalue=["\']["\'][^>]*\bselected\b|'
+        r'<option\b[^>]*\bselected\b[^>]*\bvalue=["\']["\']',
+        body,
+        flags=re.I,
+    )
+    if all_picked and not picked:
+        issues.append(f"{espn_name}: page fell back to All leagues")
+    scope = ""
+    sm = re.search(
+        r'id=["\']soccer-showing-scope["\'][^>]*>([\s\S]*?)</p>',
+        html,
+        flags=re.I,
+    )
+    if sm:
+        scope = _clean_league_option_label(sm.group(1)).lower()
+    if scope and "all leagues" in scope and not picked:
+        issues.append(f"{espn_name}: showing line is All leagues")
+    return issues
+
+
+def missing_in_season_green_leagues(html: str) -> list[str]:
+    """In-season dropdown rows that are not painted green on the custom menu."""
+    html = html or ""
+    marked = []
+    for m in re.finditer(
+        r"<option\b([^>]*)>([\s\S]*?)</option>",
+        html,
+        flags=re.I,
+    ):
+        attrs, inner = m.group(1) or "", m.group(2) or ""
+        if not re.search(r'\bdata-in-season=["\']1["\']', attrs, flags=re.I):
+            continue
+        label = _clean_league_option_label(inner)
+        if not label or label.lower() in ("all", "all leagues"):
+            continue
+        marked.append(label)
+    if not marked:
+        return []
+    green = set()
+    for m in re.finditer(
+        r'<button\b[^>]*class="[^"]*\bin-season\b[^"]*"[^>]*>([\s\S]*?)</button>',
+        html,
+        flags=re.I,
+    ):
+        lab = _clean_league_option_label(m.group(1))
+        if lab:
+            green.add(lab.lower())
+    return [n for n in marked if n.lower() not in green]
 
 
 def soccer_heading_labels(html: str) -> list[str]:

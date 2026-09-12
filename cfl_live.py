@@ -414,6 +414,12 @@ def render_cfl_results(*, view: str = "normal") -> str:
         raise RuntimeError(f"cfl mlb shell results failed: {meta}")
     html = _strip_mlb_content_from_cfl(html)
     html = apply_sport_fixups(html, "cfl", which="results")
+    html = re.sub(
+        r'<style id="sandbox-hide-books">[\s\S]*?</style>',
+        "",
+        html,
+        flags=re.I,
+    )
     # Consensus/tabs already applied inside render_team_sport. A second
     # build_cfl_payload() hangs the worker and shadows local ufc_live.
     close = (html or "").lower().find("</html>")

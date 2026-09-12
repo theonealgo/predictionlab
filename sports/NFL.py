@@ -157,17 +157,28 @@ def calculate_nfl_weekly_performance():
             week = int(api_game['week'])
             game_id = api_game['game_id']
 
-            # Look up stored predictions from database
-            pred = conn.execute('''
-                SELECT p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
-                FROM predictions p
-                WHERE p.game_id = ? AND p.sport = 'NFL'
-            ''', (game_id,)).fetchone()
-
             # Get team full names
             home_team_full = abbr_to_full.get(api_game['home_team'], api_game['home_team'])
             away_team_full = abbr_to_full.get(api_game['away_team'], api_game['away_team'])
+            gameday = str(api_game['gameday'])[:10]
 
+            # Look up stored predictions. Weekly nflverse ids (2026_01_SF_LA)
+            # often have empty rows; the ESPN-id prediction has the real models.
+            pred = conn.execute('''
+                SELECT p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob,
+                       p.win_probability, p.glicko_home_prob, p.trueskill_home_prob
+                FROM predictions p
+                WHERE p.sport = 'NFL' AND (
+                    p.game_id = ?
+                    OR (p.home_team_id = ? AND p.away_team_id = ?
+                        AND substr(p.game_date,1,10) = ?)
+                )
+                ORDER BY (p.glicko_home_prob IS NOT NULL) DESC,
+                         (p.elo_home_prob IS NOT NULL) DESC
+                LIMIT 1
+            ''', (game_id, home_team_full, away_team_full, gameday)).fetchone()
+
+            stored_g2 = stored_td = None
             if not pred or pred[0] is None:
                 # No stored prediction (e.g. Super Bowl / playoff game never visited).
                 # Fall back to live Elo so the game still shows in results.
@@ -183,12 +194,18 @@ def calculate_nfl_weekly_performance():
                 # Stored DB predictions
                 elo_prob = float(pred[0]) if pred[0] else None
                 xgb_prob = float(pred[1]) if pred[1] else elo_prob
-                ens_prob = elo_prob  # start with elo as fallback
+                ens_prob = float(pred[3]) if pred[3] else elo_prob
+                stored_g2 = float(pred[4]) if pred[4] is not None else None
+                stored_td = float(pred[5]) if pred[5] is not None else None
 
             # V2 model predictions
-            v2 = main().get_v2_prediction('NFL', home_team_full, away_team_full, str(api_game['gameday']))
+            v2 = main().get_v2_prediction('NFL', home_team_full, away_team_full, gameday)
             glicko2_prob   = v2.get('glicko2_prob')   if v2 else None
             trueskill_prob = v2.get('trueskill_prob') if v2 else None
+            if glicko2_prob is None:
+                glicko2_prob = stored_g2
+            if trueskill_prob is None:
+                trueskill_prob = stored_td
             if v2:
                 xgb_prob = v2.get('xgboost_prob', xgb_prob)
                 ens_prob = main()._compute_ensemble_prob(glicko2_prob, trueskill_prob, xgb_prob, elo_prob, fallback=ens_prob)

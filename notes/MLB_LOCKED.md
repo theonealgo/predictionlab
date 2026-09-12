@@ -1,6 +1,8 @@
-# MLB LOCKED — permanently hands-off after 2026-08-22 results correction
+# MLB LOCKED — models (2026-08-22) and :5052 UI (2026-09-04)
 
-**Status:** MLB is **permanently LOCKED**.
+**Status:** MLB is **LOCKED**. Models stay locked after the 2026-08-22 results
+correction. The `:5052` picks/results UI (including both consensus charts) is
+also locked as of 2026-09-04.
 
 Do **not** modify MLB again unless the owner explicitly says:
 
@@ -23,6 +25,9 @@ with 113-101 (that produced the 55.4% bug).
 
 ## Covered surfaces
 
+- `/mlb-picks`, `/mlb-results`, `/mlb-results?view=chart` on `:5052`
+- `mlb_live.py`, `locked_pages/mlb/picks.html`, `results.html`, `results_chart.html`
+- Both results consensus charts (moneyline + Books · Prediction Lab · XSharp)
 - `mlb_spread_pick.py`
 - `sports/MLB.py`
 - `mlb_results_ui.py` / `mlb_ui_fixup.py`
@@ -40,6 +45,8 @@ No further MLB edits. Do not git push MLB unless the owner confirms a
 production deploy.
 
 Fixing or merging another sport is **not** an MLB unlock. Leave MLB files
-out of those diffs.
+out of those diffs. Production hotfixes (blog 500, affiliate 404, NFL/NCAAF
+hangs, soccer, checker) must not edit MLB functions, snapshots, or `mlb_*`
+files. Do not patch MLB blocks inside `NHL77FINAL.py` while fixing other routes.
 
 Do not put this lock text on user-facing HTML.

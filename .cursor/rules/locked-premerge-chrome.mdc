@@ -1,0 +1,25 @@
+# Premerge (:5052) — header/footer LOCKED
+
+**Folder:** `predictionlabfix_work2` only.
+
+## Locked (do not modify unless owner names the file)
+
+- `templates/partials/research_header.html`
+- `templates/partials/research_footer.html`
+- `templates/partials/site_directory_footer.html`
+- `static/css/research-theme.css` (global chrome)
+
+UFC merge must **preserve live site header/footer** from these templates. Never swap in hub frozen chrome (`shared_chrome.ensure_canonical_chrome` / `hub/static/chrome/`).
+
+## Allowed edits on :5052
+
+- `ufc_live.py`
+- `sports/UFC.py`
+- `_sandbox_hub_run/hub/*` (vendored :5081 UFC stack only)
+- UFC-specific routes in `NHL77FINAL.py` (`/ufc-picks`, `/ufc-results`, `/ufc/api/*`, share.jpg)
+
+## Do not
+
+- Restyle, reorder, or rewrite global header/footer
+- Change non-UFC sport pages while merging UFC
+- Copy hub sandbox hrefs (`/mlb/`, `/soccer/`, etc.) into live footer

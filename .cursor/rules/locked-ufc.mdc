@@ -1,0 +1,18 @@
+---
+description: UFC picks and results UI locked on :5052 — do not edit unless UNLOCK UFC
+alwaysApply: true
+---
+
+# UFC LOCKED (:5052 / premerge)
+
+UFC **picks and results** on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** change `/ufc-picks`, `/ufc-results`, `/ufc-results?view=chart`,
+`ufc_live.py`, vendored `_sandbox_hub_run/hub/ufc_*`, UFC Cards|Chart, share
+image, or card HTML unless the owner says **UNLOCK UFC**.
+
+This replaces the older picks-only lock. Results are locked too.
+
+Source of truth for UFC UI: `:5081` hub (`independent_sports/hub`).
+
+Do not put lock text on user-facing HTML.

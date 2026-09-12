@@ -1417,7 +1417,7 @@ def _inject_soccer_league_dropdown_block(html: str, block: str) -> str:
             r'(?:\s*<style\b[^>]*\bid="soccer-league-dropdown-css"[^>]*>[\s\S]*?</style>)?'
             r'(?:\s*<script\b[^>]*\bid="soccer-league-dropdown-js"[^>]*>[\s\S]*?</script>)?'
             r'(?:\s*<script\b[^>]*\bid="soccer-region-dropdown-js"[^>]*>[\s\S]*?</script>)?',
-            block,
+            lambda _m: block,
             html,
             count=1,
             flags=re.I,

@@ -1153,6 +1153,11 @@ _CONSENSUS_BUCKETS_MLB = (
     "3/6 split",
 )
 
+# Team sports with Spread / Totals consensus tabs (not ML-only UFC/Tennis).
+_SPORTS_CONSENSUS_MARKETS = frozenset(
+    {"mlb", "cfl", "soccer", "wnba", "nba", "nhl", "nfl", "ncaaf", "ncaab", "ncaaw"}
+)
+
 
 def _fold_agree_n(agree_n: int) -> int:
     n = int(agree_n or 0)
@@ -1191,18 +1196,25 @@ def _consensus_bucket_label_smart(agree_n: int) -> str:
     return "3/6 split"
 
 
+def _consensus_wl(items: list[dict[str, Any]]) -> tuple[int, int, int, float | None]:
+    w = sum(1 for i in items if i.get("grade") == "WIN")
+    l = sum(1 for i in items if i.get("grade") == "LOSS")
+    p = sum(1 for i in items if i.get("grade") == "PUSH")
+    decided = w + l
+    pct = (100.0 * w / decided) if decided else None
+    return w, l, p, pct
+
+
 def _consensus_record_cell(
     items: list[dict[str, Any]],
     *,
+    bar: bool = False,
+    empty: str = "—",
     empty_label: str | None = None,
 ) -> str:
-    graded = [i for i in items if i.get("grade") in ("WIN", "LOSS", "PUSH")]
-    w = sum(1 for i in graded if i.get("grade") == "WIN")
-    l = sum(1 for i in graded if i.get("grade") == "LOSS")
-    p = sum(1 for i in graded if i.get("grade") == "PUSH")
-    decided = w + l
-    if decided == 0 and p == 0:
-        return empty_label or "—"
+    w, l, p, pct = _consensus_wl(items)
+    if w + l == 0 and p == 0:
+        return empty_label or empty
     rec = f"{w}-{l}" + (f"-{p}" if p else "")
     if pct is None:
         return rec
@@ -1382,17 +1394,14 @@ def _consensus_agreements_from_finals(
         extracted = _extract_six_model_ml_sides(g)
         if not extracted:
             continue
-        counts = Counter(s.lower() for s in sides)
-        top_n = counts.most_common(1)[0][1]
-        # Map majority key back to original casing
-        maj_key = counts.most_common(1)[0][0]
-        majority = next((s for s in sides if s.lower() == maj_key), sides[0])
-        is_tie = (
-            len(counts) >= 2
-            and counts.most_common(2)[0][1] == counts.most_common(2)[1][1]
+        sides, _picks = extracted
+        home = str(g.get("home_team_id") or g.get("home") or g.get("home_team") or "")
+        away = str(g.get("away_team_id") or g.get("away") or g.get("away_team") or "")
+        models = g.get("models") or {}
+        agree_n, is_unanimous, majority_side, is_three_three = _ml_agreement_counts(
+            sides, models
         )
-        if is_tie:
-            top_n = 3
+        if is_three_three:
             if mlb_honest_ties:
                 # Pregame 3–3: no predetermined independent resolver → no bet.
                 dk = str(g.get("game_date") or "")[:10]
@@ -1405,8 +1414,10 @@ def _consensus_agreements_from_finals(
                     }
                 )
                 continue
-            sc = (models.get("Sharp Consensus") or {}).get("pick") or majority
-            majority = str(sc)
+            sc = (models.get("Sharp Consensus") or {}).get("pick")
+            sc_side = _normalize_ml_pick_side(str(sc or ""), home, away)
+            if sc_side in ("HOME", "AWAY"):
+                majority_side = sc_side
         hs, aa = g.get("home_score"), g.get("away_score")
         try:
             hs_i = int(hs) if hs is not None else None
@@ -1417,7 +1428,7 @@ def _consensus_agreements_from_finals(
             g,
             sides=sides,
             majority_side=majority_side,
-            is_three_three=is_three_three,
+            is_three_three=False,
             hs_i=hs_i,
             aa_i=aa_i,
         )
@@ -1599,6 +1610,14 @@ def build_consensus_records_html(
             else "Moneyline record when model sides agree. Graded only when a pre-game pick was locked."
         )
     )
+    read = _consensus_calibration_line(d30_b)
+    extra_css = (
+        ".pl-consensus-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;"
+        "margin:6px auto 0;max-width:7.5rem;overflow:hidden}"
+        ".pl-consensus-records .cons-bar i{display:block;height:100%;border-radius:99px}"
+        ".pl-consensus-records .cons-split-note{margin-top:4px;font-size:.72rem;font-weight:500;"
+        "color:#64748b;line-height:1.35;text-align:left}"
+    )
     return f"""
     <div class="pl-consensus-records" id="pl-consensus-records">
       <h2>Consensus Based Betting Records</h2>
@@ -1632,6 +1651,21 @@ def build_consensus_records_html(
     """
 
 
+def _market_grade_from_block(blk: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        grade = blk.get(key)
+        if grade in ("WIN", "LOSS", "PUSH"):
+            return str(grade)
+    if blk.get("push"):
+        return "PUSH"
+    ok = blk.get("correct")
+    if ok is True:
+        return "WIN"
+    if ok is False:
+        return "LOSS"
+    return None
+
+
 def _plxs_items_from_finals(
     finals: list[dict[str, Any]], market: str
 ) -> list[dict[str, Any]]:
@@ -1643,10 +1677,13 @@ def _plxs_items_from_finals(
         if not isinstance(blk, dict):
             continue
         dk = str(g.get("game_date") or "")[:10]
-        # Prediction Lab = published face pick (skip pick'em). Raw val-pl is
-        # often the favorite — that is not the product run-line record.
-        for model, gkey in (("Prediction Lab", "grade"), ("XSharp", "xs_grade")):
-            grade = blk.get(gkey)
+        # Prediction Lab = published face pick (skip pick'em). CFL isolation
+        # stores correct/push; MLB cards store grade / pl_grade / xs_grade.
+        for model, keys in (
+            ("Prediction Lab", ("grade", "pl_grade")),
+            ("XSharp", ("xs_grade",)),
+        ):
+            grade = _market_grade_from_block(blk, *keys)
             if grade not in ("WIN", "LOSS", "PUSH"):
                 continue
             out.append({"model": model, "grade": grade, "game_date": dk})
@@ -1665,7 +1702,7 @@ def _plxs_calibration_line(d30: dict[str, list], *, market: str) -> str:
         bits.append("XSharp —")
     else:
         bits.append(f"XSharp {xs_pct:.0f}%")
-    label = "run line" if market == "spread" else "totals"
+    label = "spread" if market == "spread" else "totals"
     if pl_pct is None and xs_pct is None:
         read = f"Not enough graded {label} games in the last 30 days."
     elif pl_pct is not None and xs_pct is not None:
@@ -1687,6 +1724,7 @@ def build_pl_xs_records_html(
     market: str,
     *,
     last_night_key: str | None = None,
+    sport: str = "",
 ) -> str:
     """Same last-night / 7 / 30 chart as consensus, for Prediction Lab and XSharp."""
     market = "spread" if market == "spread" else "totals"
@@ -1734,14 +1772,24 @@ def build_pl_xs_records_html(
             "</tr>"
         )
     ln_hdr = f"Last night ({ln_key})" if ln_key else "Last night"
+    sport_l = (sport or "").strip().lower()
     if market == "spread":
-        title = "Prediction Lab & XSharp — Run Line"
-        sub = (
-            "Prediction Lab is the published run-line pick (same games as the "
-            "Last Night Spread card). Pick'em games with no run-line edge are "
-            "not graded. XSharp is that model's pre-game run line. "
-            "Same last-night, past-7, and past-30 windows as moneyline."
-        )
+        if sport_l == "mlb":
+            title = "Prediction Lab & XSharp — Run Line"
+            sub = (
+                "Prediction Lab is the published run-line pick (same games as the "
+                "Last Night Spread card). Pick'em games with no run-line edge are "
+                "not graded. XSharp is that model's pre-game run line. "
+                "Same last-night, past-7, and past-30 windows as moneyline."
+            )
+        else:
+            title = "Prediction Lab & XSharp — Spread"
+            sub = (
+                "Prediction Lab is the published spread pick (same games as the "
+                "Last Night Spread card). Pick'em games with no spread edge are "
+                "not graded. XSharp is that model's pre-game spread. "
+                "Same last-night, past-7, and past-30 windows as moneyline."
+            )
     else:
         title = "Prediction Lab & XSharp — Totals"
         sub = (
@@ -1962,17 +2010,23 @@ def _wrap_results_markets(
         "spread": spread_block or empty,
         "totals": totals_block or empty,
     }
+    if sport_l == "cfl":
+        spread_tab = "Spread"
+        results_path = "/cfl-results"
+    else:
+        spread_tab = "Spread / Run Line"
+        results_path = f"/{sport_l}/results"
     tabs = []
     for key, label in (
         ("moneyline", "Moneyline"),
-        ("spread", "Spread / Run Line"),
+        ("spread", spread_tab),
         ("totals", "Totals"),
     ):
         cls = "market-tab active" if key == active else "market-tab"
         if chart_view:
-            href = f"/{sport_l}/results?view=chart&market={key}"
+            href = f"{results_path}?view=chart&market={key}"
         else:
-            href = f"/{sport_l}/results?market={key}"
+            href = f"{results_path}?market={key}"
         tabs.append(f'<a class="{cls}" href="{href}">{label}</a>')
     panel_html = []
     for key, body in panels.items():
@@ -2084,10 +2138,10 @@ def inject_consensus_records_html(
             )
     if _sport_has_consensus_markets(sport_l):
         spread_block = build_pl_xs_records_html(
-            rows, "spread", last_night_key=last_night_key
+            rows, "spread", last_night_key=last_night_key, sport=sport_l
         )
         totals_block = build_pl_xs_records_html(
-            rows, "totals", last_night_key=last_night_key
+            rows, "totals", last_night_key=last_night_key, sport=sport_l
         )
         if block or spread_block or totals_block:
             block = _wrap_results_markets(
@@ -3164,10 +3218,20 @@ def enrich_mlb_sou_windows(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+_CFL_PAYLOAD_CACHE: dict[str, Any] = {}
+_CFL_PAYLOAD_TTL = 45.0
+
+
 def build_cfl_payload() -> dict[str, Any]:
     """CFL tabbed markets from isolation pipeline (ML + model spread/total)."""
     import importlib.util
     import sys
+    import time
+
+    now = time.time()
+    hit = _CFL_PAYLOAD_CACHE.get("p")
+    if isinstance(hit, dict) and hit.get("data") and (now - float(hit.get("ts") or 0)) < _CFL_PAYLOAD_TTL:
+        return hit["data"]
 
     root = str(CFL_ISO.resolve())
     if root not in sys.path:
@@ -3186,6 +3250,13 @@ def build_cfl_payload() -> dict[str, Any]:
         rows = pipe.list_graded_results(days=120, regular_season_only=True)
     except Exception as e:
         return {"ok": False, "error": f"CFL results unavailable: {e}"}
+    for _fn in ("attach_book_totals", "attach_book_odds", "attach_moneylines"):
+        attach = getattr(pipe, _fn, None)
+        if callable(attach):
+            try:
+                rows = attach(rows)
+            except Exception:
+                pass
 
     fade_path = CFL_ISO / "engine" / "display_fade.py"
     fade_spec = importlib.util.spec_from_file_location("cfl_tabbed_fade", fade_path)
@@ -3444,6 +3515,23 @@ def build_cfl_payload() -> dict[str, Any]:
         card["models"] = models
         card["home"] = home
         card["away"] = away
+        bh = r.get("book_home_moneyline") or r.get("home_moneyline")
+        ba = r.get("book_away_moneyline") or r.get("away_moneyline")
+        ph = r.get("pl_model_home_ml") or r.get("pl_home_moneyline")
+        pa = r.get("pl_model_away_ml") or r.get("pl_away_moneyline")
+        if bh is not None:
+            card["book_home_moneyline"] = bh
+        if ba is not None:
+            card["book_away_moneyline"] = ba
+        try:
+            if bh is not None and ba is not None and float(bh) != float(ba):
+                card["book_fav_side"] = "HOME" if float(bh) < float(ba) else "AWAY"
+        except (TypeError, ValueError):
+            pass
+        if ph is not None:
+            card["pl_model_home_ml"] = ph
+        if pa is not None:
+            card["pl_model_away_ml"] = pa
         sp_ok, sp_push = grade_spread(r)
         if sp_ok is not None or sp_push:
             sp = r.get("model_spread")
@@ -3453,17 +3541,23 @@ def build_cfl_payload() -> dict[str, Any]:
                 sp_f = None
             if fade_spread and sp_f is not None:
                 sp_f = -sp_f
+            sp_grade = "PUSH" if sp_push else ("WIN" if sp_ok else "LOSS")
             card["spread"] = {
                 "pick": spread_label(home, away, sp_f),
                 "correct": sp_ok,
                 "push": sp_push,
+                "grade": sp_grade,
+                "pl_grade": sp_grade,
             }
         ou_ok, ou_push = grade_total(r)
         if ou_ok is not None or ou_push:
+            ou_grade = "PUSH" if ou_push else ("WIN" if ou_ok else "LOSS")
             card["totals"] = {
                 "pick": f"O/U {r.get('model_total')}",
                 "correct": ou_ok,
                 "push": ou_push,
+                "grade": ou_grade,
+                "pl_grade": ou_grade,
             }
         finals.append(card)
 
@@ -3478,7 +3572,7 @@ def build_cfl_payload() -> dict[str, Any]:
         snap=None,
     )
 
-    return {
+    payload = {
         "ok": True,
         "today": _today_et(),
         "model_order": list(MODEL_ORDER),
@@ -3522,6 +3616,8 @@ def build_cfl_payload() -> dict[str, Any]:
             },
         },
     }
+    _CFL_PAYLOAD_CACHE["p"] = {"ts": time.time(), "data": payload}
+    return payload
 
 
 def build_ufc_payload() -> dict[str, Any]:

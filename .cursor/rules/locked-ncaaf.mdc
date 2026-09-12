@@ -1,0 +1,29 @@
+---
+description: NCAAF picks/results UI locked on :5052 — do not edit unless UNLOCK NCAAF
+alwaysApply: true
+---
+
+# NCAAF LOCKED (:5052 / premerge)
+
+NCAAF picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify NCAAF unless the owner says:
+
+**UNLOCK NCAAF**
+
+Owner 2026-09-09: if the checker catches a real NCAAF miss (blank Odds &
+Lines, Edge stuck at 50%), unlock that miss and fix it. Do not restyle
+cards. Drive-by soccer/CFL/golf/chrome work is still not an unlock.
+
+## Do not touch
+
+- `/ncaaf-picks`, `/ncaaf-results`, `/ncaaf-results?view=chart`
+- NCAAF Cards|Chart, card HTML, date nav
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NCAAF
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* NCAAF pages
+
+Do not put lock text on user-facing HTML.

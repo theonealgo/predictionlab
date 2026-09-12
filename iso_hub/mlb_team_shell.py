@@ -390,6 +390,14 @@ def _cfl_mlb_result_card(card: dict[str, Any], idx: int, render) -> str:
 
     bk_spread = _book_num(card, "book_spread", "book_home_spread")
     bk_total = _book_num(card, "book_total")
+    bk_a = _fmt_american(_book_num(card, "book_away_moneyline", "away_moneyline"))
+    bk_h = _fmt_american(_book_num(card, "book_home_moneyline", "home_moneyline"))
+    pl_a = _fmt_american(
+        _book_num(card, "pl_away_moneyline", "pl_model_away_ml")
+    )
+    pl_h = _fmt_american(
+        _book_num(card, "pl_home_moneyline", "pl_model_home_ml")
+    )
     pl_spread = card.get("model_spread")
     pl_total = card.get("model_total")
     try:
@@ -471,7 +479,8 @@ def _cfl_mlb_result_card(card: dict[str, Any], idx: int, render) -> str:
     h2h = render._h2h_last10(away, home)
 
     return f"""
-<div class="game-card-stack" data-pick-card data-league="CFL" data-date="{e(day)}">
+<div class="game-card-stack" data-pick-card data-league="CFL" data-date="{e(day)}"
+     data-away="{e(away)}" data-home="{e(home)}">
   <div class="game-card" data-league="CFL">
     <div class="card-hero">
       <div class="card-hero-meta-line">{e(meta)}</div>
@@ -480,6 +489,12 @@ def _cfl_mlb_result_card(card: dict[str, Any], idx: int, render) -> str:
           <img class="team-logo" src="{render._logo(away)}" alt="" width="48" height="48" loading="lazy"
                onerror="this.style.opacity='0.4'">
           <div class="team-name">{e(as_)}</div>
+          <div class="ml-stack">
+            <div class="ml-line face-books-ml">
+              <span class="ml-src books">Books</span>
+              <span class="ml-num">{e(bk_a)}</span>
+            </div>
+          </div>
           <div class="final-score {'score-winner' if away_win else ''}">{actual_away}</div>
         </div>
         <div class="teams-at">@</div>
@@ -487,6 +502,12 @@ def _cfl_mlb_result_card(card: dict[str, Any], idx: int, render) -> str:
           <img class="team-logo" src="{render._logo(home)}" alt="" width="48" height="48" loading="lazy"
                onerror="this.style.opacity='0.4'">
           <div class="team-name">{e(hs)}</div>
+          <div class="ml-stack">
+            <div class="ml-line face-books-ml">
+              <span class="ml-src books">Books</span>
+              <span class="ml-num">{e(bk_h)}</span>
+            </div>
+          </div>
           <div class="final-score {'score-winner' if home_win else ''}">{actual_home}</div>
         </div>
       </div>
@@ -503,6 +524,12 @@ def _cfl_mlb_result_card(card: dict[str, Any], idx: int, render) -> str:
           </tr>
         </thead>
         <tbody>
+          <tr>
+            <td class="market-k">Moneyline</td>
+            <td class="val-books">{e(bk_a)} / {e(bk_h)}</td>
+            <td class="val-pl">{e(pl_a)} / {e(pl_h)}</td>
+            <td class="val-xs">—</td>
+          </tr>
           <tr>
             <td class="market-k">Spread</td>
             <td class="val-books">{e(bk_spread_txt)}</td>
@@ -728,15 +755,23 @@ def _cfl_cards(mode: str) -> tuple[list[dict[str, Any]], Any]:
     render._refresh_fade_flags()
     if mode == "results":
         raw = render.list_graded_results(days=21, regular_season_only=True)
-        attach = getattr(pipe, "attach_book_totals", None)
-        if callable(attach):
-            raw = attach(raw)
+        for _fn in ("attach_book_totals", "attach_book_odds", "attach_moneylines"):
+            attach = getattr(pipe, _fn, None)
+            if callable(attach):
+                try:
+                    raw = attach(raw)
+                except Exception:
+                    pass
         cards = [render._faded(c) for c in raw]
     else:
         raw = render.list_pick_cards()
-        attach = getattr(pipe, "attach_book_totals", None)
-        if callable(attach):
-            raw = attach(raw)
+        for _fn in ("attach_book_totals", "attach_book_odds", "attach_moneylines"):
+            attach = getattr(pipe, _fn, None)
+            if callable(attach):
+                try:
+                    raw = attach(raw)
+                except Exception:
+                    pass
         cards = [render._faded(c) for c in raw]
     return cards, render
 

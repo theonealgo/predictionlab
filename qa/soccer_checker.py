@@ -309,13 +309,13 @@ class SoccerChecker:
             missing_espn_browse_leagues(html) if missing_espn_browse_leagues else []
         )
         if missing:
-            shown = ", ".join(missing[:8])
-            extra = f" (+{len(missing) - 8} more)" if len(missing) > 8 else ""
             self.add(
                 f"soccer {which} league catalog",
                 FAIL,
-                f"{len(missing)} ESPN league(s) missing from the dropdown: {shown}{extra}",
+                f"{len(missing)} ESPN league(s) missing from the dropdown: "
+                + ", ".join(missing),
                 url=url,
+                detail="\n".join(missing),
             )
         elif which == "picks" and league_opts < 40:
             self.add(
@@ -359,6 +359,13 @@ class SoccerChecker:
                 "League options carry continent keys for in-place filtering",
                 url=url,
             )
+        unpainted = []
+        try:
+            from soccer_league_catalog import missing_in_season_green_leagues
+
+            unpainted = missing_in_season_green_leagues(html)
+        except Exception:
+            unpainted = []
         if in_season < 1 and live < 1 and which == "picks":
             self.add(
                 f"soccer {which} in-season green",
@@ -373,6 +380,15 @@ class SoccerChecker:
                 "In-season leagues are not painted green on the custom menu "
                 "(native <option> color is ignored on Mac)",
                 url=url,
+            )
+        elif unpainted:
+            self.add(
+                f"soccer {which} in-season green",
+                FAIL,
+                f"{len(unpainted)} in-season league(s) are not green: "
+                + ", ".join(unpainted),
+                url=url,
+                detail="\n".join(unpainted),
             )
         else:
             self.add(
@@ -477,6 +493,88 @@ class SoccerChecker:
                 PASS,
                 "Results Load URL returns 200 with league picker",
                 url=url_r,
+            )
+
+    def check_every_espn_league_page(self) -> None:
+        """Each ESPN browse league must have its own picks page and results page."""
+        try:
+            from soccer_league_catalog import (
+                espn_browse_league_pages,
+                league_page_selection_issues,
+            )
+        except Exception as exc:
+            self.add(
+                "soccer ESPN league pages",
+                FAIL,
+                f"Could not load ESPN browse league list: {exc}",
+            )
+            return
+        pages = espn_browse_league_pages()
+        missing_map = [p["espn"] for p in pages if not p.get("slug")]
+        if missing_map:
+            self.add(
+                "soccer ESPN league slugs",
+                FAIL,
+                "ESPN leagues have no site slug / catalog row: "
+                + ", ".join(missing_map),
+                detail="\n".join(missing_map),
+            )
+        else:
+            self.add(
+                "soccer ESPN league slugs",
+                PASS,
+                f"{len(pages)} ESPN browse leagues map to a site slug",
+            )
+        miss_picks: list[str] = []
+        miss_results: list[str] = []
+        for spec in pages:
+            espn = spec["espn"]
+            slug = spec.get("slug") or ""
+            catalog = spec.get("catalog") or ""
+            if not slug:
+                miss_picks.append(f"{espn}: no slug")
+                miss_results.append(f"{espn}: no slug")
+                continue
+            for which, path, bucket in (
+                ("picks", spec["picks"], miss_picks),
+                ("results", spec["results"], miss_results),
+            ):
+                st, html, url = self.fetch(path)
+                if st != 200 or len(html) < 800:
+                    bucket.append(f"{espn}: {which} HTTP {st or 'timeout'} ({url})")
+                    continue
+                issues = league_page_selection_issues(
+                    html, slug=slug, espn_name=espn, catalog_name=catalog
+                )
+                bucket.extend(issues)
+
+        if miss_picks:
+            self.add(
+                "soccer ESPN league picks pages",
+                FAIL,
+                f"{len(miss_picks)} ESPN league(s) missing their own prediction page: "
+                + ", ".join(miss_picks),
+                detail="\n".join(miss_picks),
+            )
+        else:
+            self.add(
+                "soccer ESPN league picks pages",
+                PASS,
+                f"{len(pages)} ESPN leagues have their own /soccer-picks?league= page",
+            )
+        if miss_results:
+            self.add(
+                "soccer ESPN league results pages",
+                FAIL,
+                f"{len(miss_results)} ESPN league(s) missing their own results page: "
+                + ", ".join(miss_results),
+                detail="\n".join(miss_results),
+            )
+        else:
+            self.add(
+                "soccer ESPN league results pages",
+                PASS,
+                f"{len(pages)} ESPN leagues have their own /soccer-results?league= page",
             )
 
     def check_three_card_row(self, html: str, url: str, which: str) -> None:
@@ -749,6 +847,7 @@ class SoccerChecker:
 
         if pst == 200:
             self.check_load_works()
+        self.check_every_espn_league_page()
 
 
 def main(argv: list[str] | None = None) -> int:

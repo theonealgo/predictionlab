@@ -669,28 +669,36 @@ def blank_moneyline_model_issues(html: str) -> list[str]:
         flags=re.I,
     ):
         return []
-    if "Grinder2" not in text or "Takedown" not in text:
-        return []
     issues: list[str] = []
     for label, chunk in _tally_sections(text):
+        if not re.search(r"Last Night|Last 7 Days", label, flags=re.I):
+            continue
         models = _models_in_tally_chunk(chunk)
+        # Footer "Premium Edge — $4.99/wk" is not a moneyline board.
         sibling_hit = any(
-            (not _is_blank_tally_val(models[n][0]) or _has_wl_rec(models[n][1]))
+            _has_wl_rec(models[n][0]) or _has_wl_rec(models[n][1])
             for n in _ML_TALLY_SIBLINGS
             if n in models
         )
         if not sibling_hit:
             continue
+        required = _ML_TALLY_REQUIRED
+        if re.search(r"NCAA Football", label, flags=re.I):
+            # NCAAF still hides a blank Efficiency tile when no PL spread
+            # is stored. Missing G2/TD is the miss; do not fail Efficiency.
+            required = ("Grinder2", "Takedown")
+        missing = [n for n in required if n not in models]
         blank = [
             n
-            for n in _ML_TALLY_REQUIRED
+            for n in required
             if n in models
             and _is_blank_tally_val(models[n][0])
             and _is_blank_tally_val(models[n][1])
         ]
-        if blank:
+        bad = missing + blank
+        if bad:
             issues.append(
-                f"{label}: {', '.join(blank)} are missing or — while other "
+                f"{label}: {', '.join(bad)} are missing or — while other "
                 "moneyline models have a record"
             )
     return issues
@@ -936,8 +944,6 @@ def nfl_missing_efficiency_issues(html: str) -> list[str]:
         )
     )
     if not nflish:
-        return []
-    if "Grinder2" not in text or "Takedown" not in text:
         return []
     # Chart view is the MLB dissent table — Last Night tiles are stripped.
     if "Last Night's NFL Results" not in blob and "NFL - Week by Week" not in blob:
@@ -1277,7 +1283,7 @@ def nfl_chart_window_tally_issues(chart_html: str) -> list[str]:
     issues: list[str] = []
     if not re.search(r"Last Night", html, flags=re.I):
         issues.append("NFL chart missing Last Night tally")
-    if not re.search(r"Last 7", html, flags=re.I):
+    if not re.search(r"Last 7|Past 7", html, flags=re.I):
         issues.append("NFL chart missing Last 7 tally")
     if not re.search(r">\s*Season\s*<", html, flags=re.I) and "Season " not in html:
         issues.append("NFL chart missing Season tally")

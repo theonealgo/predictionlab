@@ -3228,6 +3228,18 @@ def _fill_ncaaf_display_gaps(card: dict) -> None:
     if not isinstance(card, dict):
         return
     _backfill_display_lines_from_proj(card)
+    if card.get('efficiency_prob') is None:
+        esp = _safe_float(
+            card.get('efficiency_spread')
+            or card.get('disp_pl_spread')
+            or card.get('our_spread')
+        )
+        if esp is not None:
+            try:
+                from sports.team_efficiency_attach import spread_to_home_prob_pct
+                card['efficiency_prob'] = spread_to_home_prob_pct(float(esp), 'NCAAF')
+            except Exception:
+                pass
     if not _ncaaf_elo_is_placeholder(card.get('elo_prob')):
         return
     home = card.get('home_team_id') or card.get('home')
@@ -3320,6 +3332,27 @@ def _fill_mlb_missing_card_models(pred: dict) -> None:
         pred['xs_proj_home_pts'] = _round_to_half(home_s)
     if pred.get('xs_proj_away_pts') is None and away_s is not None:
         pred['xs_proj_away_pts'] = _round_to_half(away_s)
+
+
+def _fill_mlb_edge_display(card: dict) -> None:
+    """Replace placeholder Edge 50% from the published PL run line (same as NFL/NCAAF)."""
+    if not isinstance(card, dict):
+        return
+    if not _ncaaf_elo_is_placeholder(card.get('elo_prob')):
+        return
+    sp = _safe_float(
+        card.get('disp_pl_spread')
+        or card.get('_unfaded_our_spread')
+        or card.get('our_spread')
+        or card.get('efficiency_spread')
+    )
+    if sp is None:
+        return
+    try:
+        from sports.team_efficiency_attach import spread_to_home_prob_pct
+        card['elo_prob'] = float(spread_to_home_prob_pct(float(sp), 'MLB'))
+    except Exception:
+        return
 
 
 def _fill_mlb_efficiency_display(card: dict) -> None:
@@ -3495,6 +3528,10 @@ def _prepare_result_card_display(g: dict, sport: str) -> None:
     _set_card_pl_spread(g, sport=sport)
     _set_card_projected_scores(g, sport=sport)
     _set_card_edge_pct(g, sport=sport)
+    if str(sport or '').upper() == 'NFL':
+        _fill_nfl_display_gaps(g)
+    if str(sport or '').upper() == 'NCAAF':
+        _fill_ncaaf_display_gaps(g)
     if str(sport or '').upper() == 'SOCCER':
         _restamp_soccer_chart_models(g)
         _soccer_sanitize_result_lines(g)
@@ -4626,6 +4663,7 @@ def _prepare_pred_card_display(pred: dict, sport: str = 'NBA') -> None:
         _fill_ncaaf_display_gaps(pred)
     if sport == 'MLB':
         _fill_mlb_efficiency_display(pred)
+        _fill_mlb_edge_display(pred)
     _set_card_edge_pct(pred, sport=sport)
     _prepare_pred_card_face(pred, sport=sport)
     if sport == 'SOCCER':
@@ -5329,6 +5367,67 @@ def _daily_game_keys(daily_results):
     return ids, matchups
 
 
+def _daily_card_model_fill_score(card) -> int:
+    """How many real moneyline models a results card already has."""
+    if not isinstance(card, dict):
+        return 0
+    n = 0
+    for key in (
+        'glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob',
+        'ens_prob', 'efficiency_prob',
+    ):
+        val = card.get(key)
+        if val is None:
+            continue
+        if key == 'elo_prob' and _ncaaf_elo_is_placeholder(val):
+            continue
+        n += 1
+    return n
+
+
+def _dedupe_daily_matchups(daily_results):
+    """Keep one card per (home, away) on a date; prefer the row with models.
+
+    NFL stores the same Thursday night game as 2026_01_SF_LA (empty preds)
+    and NFL_401872657 (real G2/TD). Showing both made Last Night look empty.
+    """
+    for bucket in (daily_results or {}).values():
+        games = list(bucket.get('games') or [])
+        if len(games) < 2:
+            continue
+        best = {}
+        for game in games:
+            if not isinstance(game, dict):
+                continue
+            key = (
+                str(game.get('home') or game.get('home_team_id') or '').strip().lower(),
+                str(game.get('away') or game.get('away_team_id') or '').strip().lower(),
+            )
+            if not key[0] or not key[1]:
+                continue
+            prev = best.get(key)
+            if prev is None or _daily_card_model_fill_score(game) > _daily_card_model_fill_score(prev):
+                best[key] = game
+        seen = set()
+        out = []
+        for game in games:
+            if not isinstance(game, dict):
+                out.append(game)
+                continue
+            key = (
+                str(game.get('home') or game.get('home_team_id') or '').strip().lower(),
+                str(game.get('away') or game.get('away_team_id') or '').strip().lower(),
+            )
+            if not key[0] or not key[1]:
+                out.append(game)
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(best.get(key, game))
+        bucket['games'] = out
+
+
 def _nfl_current_season_start_iso(today=None) -> str:
     """First date shown on NFL results cards (preseason + regular)."""
     return f"{_nfl_season_year(today)}-08-01"
@@ -5474,6 +5573,60 @@ def _prune_daily_results_before(daily_results, date_from):
     return daily_results
 
 
+def _fill_daily_game_models_from_db_row(daily_results, game) -> None:
+    """Copy stored G2/TD/Edge onto an already-listed daily card (NFL id mismatch)."""
+    if not daily_results or game is None:
+        return
+    dk = _normalize_game_date_key(game['game_date'] if 'game_date' in game.keys() else None) or ''
+    home = str(game['home_team_id'] or '').strip().lower()
+    away = str(game['away_team_id'] or '').strip().lower()
+    gid = str(game['game_id'] or '').strip()
+    g2 = _to_float_safe(game['glicko_home_prob']) if 'glicko_home_prob' in game.keys() else None
+    td = _to_float_safe(game['trueskill_home_prob']) if 'trueskill_home_prob' in game.keys() else None
+    elo = _to_float_safe(game['elo_home_prob']) if 'elo_home_prob' in game.keys() else None
+    xgb = _to_float_safe(game['xgboost_home_prob']) if 'xgboost_home_prob' in game.keys() else None
+    ens = _to_float_safe(game['win_probability']) if 'win_probability' in game.keys() else None
+    if g2 is None and td is None and elo is None:
+        return
+    for bucket in (daily_results or {}).values():
+        for card in bucket.get('games') or []:
+            if not isinstance(card, dict):
+                continue
+            same_id = gid and str(card.get('game_id') or '').strip() == gid
+            cdk = _normalize_game_date_key(card.get('date') or card.get('game_date')) or ''
+            ch = str(card.get('home') or card.get('home_team_id') or '').strip().lower()
+            ca = str(card.get('away') or card.get('away_team_id') or '').strip().lower()
+            same_match = bool(dk and cdk == dk and ch == home and ca == away)
+            if not same_id and not same_match:
+                continue
+            hs, aws = card.get('home_score'), card.get('away_score')
+            try:
+                home_won = float(hs) > float(aws)
+            except (TypeError, ValueError):
+                home_won = None
+            if card.get('glicko2_prob') is None and g2 is not None:
+                card['glicko2_prob'] = round(g2 * 100, 1) if abs(g2) <= 1.0 + 1e-9 else round(g2, 1)
+                if home_won is not None:
+                    card['glicko2_correct'] = (g2 >= 0.5) == home_won
+            if card.get('trueskill_prob') is None and td is not None:
+                card['trueskill_prob'] = round(td * 100, 1) if abs(td) <= 1.0 + 1e-9 else round(td, 1)
+                if home_won is not None:
+                    card['trueskill_correct'] = (td >= 0.5) == home_won
+            if _ncaaf_elo_is_placeholder(card.get('elo_prob')) and elo is not None and not _ncaaf_elo_is_placeholder(elo if abs(elo) > 1 else elo * 100):
+                card['elo_prob'] = round(elo * 100, 1) if abs(elo) <= 1.0 + 1e-9 else round(elo, 1)
+                if home_won is not None:
+                    card['elo_correct'] = (elo >= 0.5) == home_won
+            if card.get('xgb_prob') is None and xgb is not None:
+                card['xgb_prob'] = round(xgb * 100, 1) if abs(xgb) <= 1.0 + 1e-9 else round(xgb, 1)
+                if home_won is not None:
+                    card['xgb_correct'] = (xgb >= 0.5) == home_won
+            if card.get('ens_prob') is None and ens is not None:
+                card['ens_prob'] = round(ens * 100, 1) if abs(ens) <= 1.0 + 1e-9 else round(ens, 1)
+                if home_won is not None:
+                    card['ens_correct'] = (ens >= 0.5) == home_won
+            return
+
+
 def _merge_db_completed_into_daily(sport, daily_results, *, date_from=None, limit=150):
     """Add completed DB games the weekly/API slate dropped (NFL preseason, etc.)."""
     if not sport or daily_results is None:
@@ -5511,8 +5664,10 @@ def _merge_db_completed_into_daily(sport, daily_results, *, date_from=None, limi
         home = str(game['home_team_id'] or '').strip()
         away = str(game['away_team_id'] or '').strip()
         if gid and gid in have_ids:
+            _fill_daily_game_models_from_db_row(daily_results, game)
             continue
         if game_date and home and away and (game_date, home.lower(), away.lower()) in have_match:
+            _fill_daily_game_models_from_db_row(daily_results, game)
             continue
         home_won = home_score > away_score
         elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
@@ -9577,6 +9732,7 @@ def _fill_published_chrome_blanks(pred: dict, sport: str = 'NBA') -> None:
             pred['disp_xs_total'] = _round_to_half(xt)
     if sport == 'MLB':
         _fill_mlb_efficiency_display(pred)
+        _fill_mlb_edge_display(pred)
 
 
 def _format_published_card_face(pred: dict, sport: str = 'NBA') -> None:
@@ -11239,7 +11395,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 'NFL':   (14, 14, 200),   # offseason — small
                 'NCAAF': (3,  10, 200),   # FBS week slate (groups=80); site.api 403s without web fallback
                 'NBA':   (3,  7,  200),   # playoffs — tight
-                'MLB':   (3,  5,  100),   # daily — tight
+                'MLB':   (3,  5,  250),   # daily — 9-day window exceeds 100 events
                 'WNBA':  (3,  21, 200),  # playoffs sit past a 7-day ESPN window
                 'NCAAB': (3,  7,  200),
                 'NCAAW': (3,  7,  200),
@@ -11370,6 +11526,67 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     _have_w.add(_key)
             except Exception as _wnba_slate_e:
                 logger.debug("WNBA stored-slate merge failed: %s", _wnba_slate_e)
+
+        # MLB: ESPN's multi-day window + limit can drop a day game that
+        # already went final. Merge today's stored rows so the picks slate
+        # still matches the ESPN scoreboard the checker uses.
+        if sport == 'MLB':
+            try:
+                _conn_mlb = get_db_connection()
+                _today_m = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+                _have_m = {
+                    (
+                        str(g.get('game_date') or '')[:10],
+                        str(g.get('home_team_id') or '').strip().lower(),
+                        str(g.get('away_team_id') or '').strip().lower(),
+                    )
+                    for g in api_games
+                }
+                _have_ids_m = {str(g.get('game_id') or '') for g in api_games}
+                _mlb_rows = _conn_mlb.execute(
+                    '''
+                    SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
+                           g.home_score, g.away_score,
+                           p.elo_home_prob, p.xgboost_home_prob, p.win_probability,
+                           p.glicko_home_prob, p.trueskill_home_prob
+                    FROM games g
+                    LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = 'MLB'
+                    WHERE g.sport = 'MLB'
+                      AND date(g.game_date) = date(?)
+                    ORDER BY date(g.game_date)
+                    ''',
+                    (_today_m,),
+                ).fetchall()
+                _conn_mlb.close()
+                for _mr in _mlb_rows:
+                    _md = str(_mr['game_date'] or '')[:10]
+                    _key = (
+                        _md,
+                        str(_mr['home_team_id'] or '').strip().lower(),
+                        str(_mr['away_team_id'] or '').strip().lower(),
+                    )
+                    _gid = str(_mr['game_id'] or '')
+                    if not _md or _key in _have_m or (_gid and _gid in _have_ids_m):
+                        continue
+                    api_games.append({
+                        'game_id': _gid,
+                        'home_team_id': _mr['home_team_id'],
+                        'away_team_id': _mr['away_team_id'],
+                        'game_date': _md,
+                        'home_score': _mr['home_score'],
+                        'away_score': _mr['away_score'],
+                        'league': 'MLB',
+                        'stored_elo_prob': _to_float_safe(_mr['elo_home_prob']),
+                        'stored_xgb_prob': _to_float_safe(_mr['xgboost_home_prob']),
+                        'stored_ensemble_prob': _to_float_safe(_mr['win_probability']),
+                        'stored_glicko_prob': _to_float_safe(_mr['glicko_home_prob']),
+                        'stored_trueskill_prob': _to_float_safe(_mr['trueskill_home_prob']),
+                    })
+                    _have_m.add(_key)
+                    if _gid:
+                        _have_ids_m.add(_gid)
+            except Exception as _mlb_slate_e:
+                logger.debug("MLB stored-slate merge failed: %s", _mlb_slate_e)
 
         # NFL/NCAAF fallback: if ESPN returned nothing (offseason), load from database
         if not api_games and sport in ('NFL', 'NCAAF'):
@@ -12328,9 +12545,16 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 game_dict.setdefault('book_odds_source', 'betting_odds')
             _ensure_book_moneylines(game_dict)
 
-            # Picks page: skip finals (results page owns completed games).
+            # Picks page: skip older finals. Keep today's ET slate so a
+            # day game that already went final still appears vs ESPN today.
             if is_completed:
-                continue
+                try:
+                    gd = game_date.date() if isinstance(game_date, datetime) else game_date
+                    gd_s = gd.isoformat()[:10] if hasattr(gd, "isoformat") else str(game_date)[:10]
+                except Exception:
+                    continue
+                if gd_s != datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d"):
+                    continue
 
             predictions.append(game_dict)
     
@@ -23064,8 +23288,9 @@ def sport_results(sport):
             # Fallback path: render from existing DB data if the live NFL pipeline fails.
             conn = get_db_connection()
             _nfl_from = _nfl_current_season_start_iso()
-            completed_games = conn.execute('''
-                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+            _prob_sql = _predictions_prob_select_sql(conn)
+            completed_games = conn.execute(f'''
+                SELECT g.*, {_prob_sql}
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = 'NFL'
                 WHERE g.sport = 'NFL' AND g.home_score IS NOT NULL
@@ -23085,34 +23310,38 @@ def sport_results(sport):
                 if home_score is None or away_score is None:
                     continue
                 home_won = home_score > away_score
-                _raw_date = _to_date_str(game['game_date'])
                 game_date = _normalize_game_date_key(game['game_date']) or 'Unknown'
-                elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-                xgb_prob = _to_float_safe(game['xgboost_home_prob'], elo_prob)
-                ens_prob = _to_float_safe(game['win_probability'], elo_prob)
+                home_team = game['home_team_id']
+                away_team = game['away_team_id']
+                glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_for_grading(
+                    'NFL', game, home_team, away_team, game_date,
+                )
                 game_info = {
                     'game_id': game['game_id'],
                     'date': game_date,
-                    'home': game['home_team_id'],
-                    'away': game['away_team_id'],
+                    'home': home_team,
+                    'away': away_team,
                     'league': 'NFL',
                     'home_score': int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
                     'away_score': int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
                     'home_win': home_won,
                     'is_draw': False,
-                    'glicko2_prob': None,
-                    'trueskill_prob': None,
-                    'elo_prob': round(elo_prob * 100, 1),
-                    'xgb_prob': round(xgb_prob * 100, 1),
-                    'ens_prob': round(ens_prob * 100, 1),
-                    'glicko2_correct': None,
-                    'trueskill_correct': None,
-                    'elo_correct': (elo_prob >= 0.5) == home_won,
-                    'xgb_correct': (xgb_prob >= 0.5) == home_won,
-                    'ens_correct': (ens_prob >= 0.5) == home_won,
+                    'glicko2_prob': round(glicko2_prob * 100, 1) if glicko2_prob is not None else None,
+                    'trueskill_prob': round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
+                    'elo_prob': round(elo_prob * 100, 1) if elo_prob is not None else None,
+                    'xgb_prob': round(xgb_prob * 100, 1) if xgb_prob is not None else None,
+                    'ens_prob': round(ens_prob * 100, 1) if ens_prob is not None else None,
+                    'glicko2_correct': (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None else None,
+                    'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None else None,
+                    'elo_correct': (elo_prob >= 0.5) == home_won if elo_prob is not None else None,
+                    'xgb_correct': (xgb_prob >= 0.5) == home_won if xgb_prob is not None else None,
+                    'ens_correct': (ens_prob >= 0.5) == home_won if ens_prob is not None else None,
                     'skip_grading': False,
                 }
                 daily_results[game_date]['games'].append(game_info)
+            _dedupe_daily_matchups(daily_results)
+            _merge_db_completed_into_daily('NFL', daily_results, date_from=_nfl_from)
+            _dedupe_daily_matchups(daily_results)
 
             yesterday_dt = datetime.now() - timedelta(days=1)
             yesterday = yesterday_dt.strftime('%Y-%m-%d')
@@ -23125,6 +23354,10 @@ def sport_results(sport):
             _attach_engine_odds_to_daily_results(sport, daily_results, limit=40)
             _st_stats = _compute_spread_total_for_daily(sport, daily_results)
             _finalize_daily_result_cards(sport, daily_results)
+            try:
+                _grade_efficiency_for_results(sport, daily_results)
+            except Exception:
+                pass
             _nfl_season = _nfl_regular_season_perf_bundle(daily_results)
             overall_stats = _nfl_season['overall_stats']
             season_perf = _nfl_season['season_perf']

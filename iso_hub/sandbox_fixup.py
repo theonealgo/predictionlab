@@ -2936,6 +2936,36 @@ def inject_mlb_run_line_confidence(html: str) -> str:
 def _inject_consensus_if_results(html: str, sport: str, which: str) -> str:
     if (which or "").lower() != "results" or not html:
         return html
+    # CFL: keep a real Books row from isolation finals. Re-inject when the
+    # MLB shell leftover is still 0-0. Never extract CFL Books from HTML.
+    if (sport or "").lower() == "cfl":
+        rec = re.search(
+            r"Books favorite[\s\S]{0,160}?\b(\d{1,3}-\d{1,3})\b",
+            html or "",
+            flags=re.I,
+        )
+        if rec and rec.group(1) != "0-0":
+            return html
+        try:
+            from team_tabbed_results import (
+                build_cfl_payload,
+                inject_consensus_records_html,
+            )
+
+            payload = build_cfl_payload()
+            return inject_consensus_records_html(
+                html,
+                sport="cfl",
+                finals=(payload or {}).get("finals"),
+                last_night_key=(
+                    ((payload or {}).get("tallies") or {})
+                    .get("last_night", {})
+                    .get("date")
+                ),
+            )
+        except Exception as e:
+            print(f"[sandbox_fixup] consensus inject (cfl): {e}", flush=True)
+            return html
     try:
         from team_tabbed_results import inject_consensus_records_html
 

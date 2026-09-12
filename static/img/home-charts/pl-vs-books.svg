@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-label="PL vs Sportsbook">
+  <rect width="640" height="400" fill="#f8fafc"/>
+  <text x="24" y="36" font-family="Arial, sans-serif" font-size="18" font-weight="800" fill="#0c1e3a">PL vs Sportsbook</text>
+  <text x="24" y="58" font-family="Arial, sans-serif" font-size="11" fill="#64748b">Books favorite · PL favorite · Agree / disagree</text>
+  <g font-family="Arial, sans-serif" font-size="12" fill="#0f172a">
+    <text x="24" y="100">Books favorite</text>
+    <rect x="200" y="86" width="200" height="16" fill="#0c1e3a"/>
+    <text x="430" y="100">142-98</text>
+    <text x="24" y="140">PL favorite</text>
+    <rect x="200" y="126" width="210" height="16" fill="#00529B"/>
+    <text x="430" y="140">151-89</text>
+    <text x="24" y="180">PL vs Books disagree</text>
+    <rect x="200" y="166" width="120" height="16" fill="#f59e0b"/>
+    <text x="430" y="180">38-31</text>
+    <text x="24" y="220">PL and Books agree</text>
+    <rect x="200" y="206" width="240" height="16" fill="#16a34a"/>
+    <text x="430" y="220">113-67</text>
+  </g>
+</svg>

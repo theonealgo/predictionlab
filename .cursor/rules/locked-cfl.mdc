@@ -1,0 +1,28 @@
+---
+description: CFL picks/results UI locked on :5052 — do not edit unless UNLOCK CFL
+alwaysApply: true
+---
+
+# CFL LOCKED (:5052 / premerge)
+
+CFL picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify CFL unless the owner says:
+
+**UNLOCK CFL**
+
+Fixing NFL, soccer, golf, chrome, or production outages is **not** a CFL unlock.
+
+## Do not touch
+
+- `/cfl-picks`, `/cfl-results`, `/cfl-results?view=chart`
+- `cfl_live.py`
+- CFL Cards|Chart, card HTML
+- Any `NHL77FINAL.py` branch whose job is CFL
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* CFL pages
+
+Do not put lock text on user-facing HTML.

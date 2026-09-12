@@ -13,8 +13,11 @@ from soccer_league_catalog import (  # noqa: E402
     ESPN_BROWSE_LEAGUES,
     SOCCER_LEAGUE_ORDER,
     _SOCCER_LEAGUE_CANONICAL,
+    espn_browse_league_pages,
+    league_page_selection_issues,
     missing_espn_browse_headings,
     missing_espn_browse_leagues,
+    missing_in_season_green_leagues,
     soccer_league_option_labels,
 )
 
@@ -27,7 +30,7 @@ def test_every_espn_browse_name_maps_to_catalog():
     ]
     assert unmapped == []
     assert len(ESPN_BROWSE_LEAGUES) == 148
-    assert len(SOCCER_LEAGUE_ORDER) == 148
+    assert len(SOCCER_LEAGUE_ORDER) >= 148
 
 
 def test_missing_espn_leagues_empty_when_full_catalog_listed():
@@ -81,3 +84,41 @@ def test_heading_check_does_not_match_european_substring():
         '<select id="league"><option>UEFA European Championship</option></select>'
     )
     assert missing_espn_browse_headings(html) == []
+
+
+def test_every_espn_browse_league_has_own_picks_and_results_url():
+    pages = espn_browse_league_pages()
+    assert len(pages) == 148
+    slugs = [p["slug"] for p in pages]
+    assert all(slugs)
+    assert all(p["picks"].startswith("/soccer-picks?league=") for p in pages)
+    assert all(p["results"].startswith("/soccer-results?league=") for p in pages)
+    assert len(set(slugs)) == len(slugs)
+
+
+def test_league_page_must_select_that_league():
+    html = (
+        '<section id="league-controls">'
+        '<select id="league">'
+        '<option value="" selected>All leagues</option>'
+        '<option value="english-premier-league">English Premier League</option>'
+        "</select>"
+        '<p id="soccer-showing-scope">Showing: All continents · All leagues</p>'
+        "</section>"
+    )
+    issues = league_page_selection_issues(
+        html,
+        slug="english-premier-league",
+        espn_name="English Premier League",
+        catalog_name="English Premier League",
+    )
+    assert any("did not select" in i for i in issues)
+    assert any("All leagues" in i for i in issues)
+
+
+def test_in_season_not_green_is_listed():
+    html = (
+        '<option data-in-season="1">● English Premier League</option>'
+        '<button class="soccer-dd-opt">● English Premier League</button>'
+    )
+    assert missing_in_season_green_leagues(html) == ["English Premier League"]

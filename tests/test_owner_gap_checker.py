@@ -283,6 +283,77 @@ Last Night's NFL Results — 2026-09-09 (1 games)
 """
 
 
+def test_ncaaf_last_night_without_efficiency_tile_passes():
+    html = """
+    Last Night's NCAA Football Results — 2026-09-10 (1 games)
+    MONEYLINE
+    Grinder2
+    100.0%
+    1-0
+    Takedown
+    100.0%
+    1-0
+    Edge
+    100.0%
+    1-0
+    XSharp
+    100.0%
+    1-0
+    Sharp Consensus
+    100.0%
+    1-0
+    """
+    assert not blank_moneyline_model_issues(html)
+
+
+def test_cfl_footer_edge_price_is_not_a_tally_fail():
+    html = """
+    Last Night's CFL Results — 2026-09-07 (2 games)
+    MONEYLINE
+    Grinder2
+    50.0%
+    1-1
+    Takedown
+    50.0%
+    1-1
+    Edge
+    50.0%
+    1-1
+    XSharp
+    50.0%
+    1-1
+    Sharp Consensus
+    50.0%
+    1-1
+    Efficiency
+    50.0%
+    1-1
+    Last Night's CFL Results
+    Understanding These Results
+    Premium Edge — $4.99/wk
+    Monthly Plan — $19.99
+    """
+    assert not blank_moneyline_model_issues(html)
+
+
+def test_nfl_last_night_missing_g2_td_eff_tiles_fails():
+    html = """
+    Last Night's NFL Results — 2026-09-10 (2 games)
+    📊 Edge
+    50.0%
+    1-1
+    🤖 XSharp
+    0.0%
+    0-2
+    🏆 Sharp Consensus
+    0.0%
+    0-2
+    """
+    issues = blank_moneyline_model_issues(html)
+    assert issues
+    assert any("Grinder2" in i and "Takedown" in i and "Efficiency" in i for i in issues)
+
+
 def test_nfl_results_without_efficiency_fail():
     issues = nfl_missing_efficiency_issues(OWNER_NFL_NO_EFFICIENCY)
     assert issues

@@ -1,0 +1,16 @@
+---
+description: UFC picks UI locked on :5052 premerge — passthrough from :5081 only
+alwaysApply: true
+---
+
+# UFC LOCKED (:5052 / premerge)
+
+UFC **picks and results** on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** change `/ufc-picks`, `/ufc-results`, `ufc_live.py`, vendored
+`_sandbox_hub_run/hub/ufc_*`, UFC Cards|Chart, share image, or card HTML
+unless the owner says **UNLOCK UFC**.
+
+Source of truth for UFC UI: `:5081` hub (`independent_sports/hub`). Premerge copies via HTTP fetch + `_sandbox_hub_run/hub/` vendored modules.
+
+Do not put lock text on user-facing HTML.

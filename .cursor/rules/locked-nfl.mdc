@@ -1,0 +1,39 @@
+---
+description: NFL picks/results UI locked on :5052 — do not edit unless UNLOCK NFL
+alwaysApply: true
+---
+
+# NFL LOCKED (:5052 / premerge)
+
+NFL picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify NFL unless the owner says:
+
+**UNLOCK NFL**
+
+Owner 2026-09-11: NFL UI locked after Last Night / Last 7 chart cards and
+Moneyline | Spread | Totals hydrate via `/nfl/api/picks`. If the checker
+catches a real NFL miss (results stuck on last season’s Super Bowl /
+Week 22, Efficiency missing, Cards|Chart the same page, chart Last Night
+empty, tabs wiping the boards, or consensus not the MLB 6/6 dissent
+table), unlock that miss and fix it. Do not restyle cards.
+Drive-by soccer/CFL/golf/chrome/MLB work is still not an unlock.
+
+## Do not touch
+
+- `/nfl-picks`, `/nfl-results`, `/nfl-results?view=chart`
+- NFL Cards|Chart, share image, card HTML
+- Any `NHL77FINAL.py` function or branch whose job is NFL (`_apply_nfl_*`, `_nfl_*`)
+- `team_results_charts.py` branches that only exist for NFL
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* NFL pages
+
+```
+# BAD — restyle locked NFL cards/results/consensus, or patch NFL while fixing soccer
+# GOOD — leave NFL routes and NFL functions alone; work soccer / CFL / golf
+```
+
+Do not put lock text on user-facing HTML.

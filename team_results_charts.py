@@ -1875,6 +1875,16 @@ def _apply_last_night_windows(html: str, cards_html: str | None = None) -> str:
             nfl_rows = _nfl_consensus_finals(cards or html)
             if nfl_rows:
                 pl_vs_rows = nfl_rows
+        elif re.search(r"Last Night's CFL Results", cards or html, flags=re.I):
+            try:
+                from team_tabbed_results import build_cfl_payload
+
+                cfl_rows = (build_cfl_payload() or {}).get("finals") or []
+            except Exception:
+                cfl_rows = []
+            if cfl_rows:
+                pl_vs_rows = cfl_rows
+                rows = cfl_rows
         elif not rows:
             rows = _nfl_consensus_finals(cards or html)
             pl_vs_rows = rows
@@ -1915,15 +1925,19 @@ def _apply_last_night_windows(html: str, cards_html: str | None = None) -> str:
             )
             for label, key in mapping:
                 if slices_ln:
-                    cell = _consensus_record_cell(
-                        _grade_items(slices_ln[key]), bar=True, empty="0-0"
-                    )
-                    block = _set_row_data_col(block, label, 0, cell)
+                    graded_ln = _grade_items(slices_ln[key])
+                    if graded_ln:
+                        cell = _consensus_record_cell(
+                            graded_ln, bar=True, empty="0-0"
+                        )
+                        block = _set_row_data_col(block, label, 0, cell)
                 if slices7:
-                    cell = _consensus_record_cell(
-                        _grade_items(slices7[key]), bar=True, empty="0-0"
-                    )
-                    block = _set_row_data_col(block, label, 1, cell)
+                    graded7 = _grade_items(slices7[key])
+                    if graded7:
+                        cell = _consensus_record_cell(
+                            graded7, bar=True, empty="0-0"
+                        )
+                        block = _set_row_data_col(block, label, 1, cell)
             html = html[:start] + block + html[end:]
 
     for market, marker in (
@@ -2465,7 +2479,17 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
     view_l = (view or "").strip().lower()
     html = _inject_toggle(html, sport_u, view_l)
     six_wrong_panel = sport_u in ("NFL", "NCAAF", "CFL") and _six_model_chart_broken(html)
-    if six_wrong_panel or not _has_signed_off_consensus_charts(html):
+    cfl_needs_inject = False
+    if sport_u == "CFL":
+        rec = re.search(
+            r"Books favorite[\s\S]{0,160}?\b(\d{1,3}-\d{1,3})\b",
+            html or "",
+            flags=re.I,
+        )
+        cfl_needs_inject = (not rec) or rec.group(1) == "0-0"
+        if "No graded games for this market" in (html or ""):
+            cfl_needs_inject = True
+    if six_wrong_panel or not _has_signed_off_consensus_charts(html) or cfl_needs_inject:
         source = html
         if view_l == "chart":
             cards = _CHART_SOURCE_HTML.get(sport_u) or ""
@@ -2477,7 +2501,16 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
             six_finals = None
             if sport_u == "NFL":
                 six_finals = _nfl_consensus_finals(html)
-            elif sport_u in ("NCAAF", "CFL"):
+            elif sport_u == "CFL":
+                try:
+                    from team_tabbed_results import build_cfl_payload
+
+                    six_finals = (build_cfl_payload() or {}).get("finals") or []
+                except Exception:
+                    six_finals = []
+                if not six_finals:
+                    six_finals = _six_model_consensus_finals(html, sport_u)
+            elif sport_u == "NCAAF":
                 six_finals = _six_model_consensus_finals(html, sport_u)
             html = inject_consensus_records_html(
                 html,
@@ -2498,7 +2531,7 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
             cards_src = cached
     if sport_u == "WNBA":
         html = _apply_four_model_consensus_meanings(html, cards_html=cards_src)
-    if sport_u in ("WNBA", "NFL"):
+    if sport_u in ("WNBA", "NFL", "CFL"):
         html = _apply_last_night_windows(html, cards_html=cards_src)
     if sport_u != "NFL":
         html = _strip_empty_xsharp_bucket_rows(html)
@@ -2541,8 +2574,6 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
     if sport_u == "CFL":
         html = _hide_blank_ml_tally_cards(html, ("Grinder2", "Takedown", "Efficiency"))
     if sport_u == "NFL":
-        if view_l != "chart":
-            html = _hide_blank_ml_tally_cards(html, ("Grinder2", "Takedown", "Efficiency"))
         html = _apply_nfl_cards_chart_split(html, view_l)
     if sport_u == "WNBA" and "H2H Last 10" in html:
         html = _apply_h2h_faces(html, sport_u)

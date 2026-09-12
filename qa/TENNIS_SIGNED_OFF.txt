@@ -1,4 +1,4 @@
-Tennis picks/results/chart UI signed off 2026-09-02 on :5052 (isolation port from :5081).
+Tennis picks/results/chart UI signed off on :5052 (copied from :5081 /tennis/).
 Includes /tennis/share.jpg and Pick Confidence 3×2.
 Do not modify unless owner says UNLOCK TENNIS.
-Never push from this folder to production.
+Do not port to live until owner asks. Never push from this folder.

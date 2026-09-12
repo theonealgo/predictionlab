@@ -1,0 +1,33 @@
+---
+description: Soccer picks/results UI locked on :5052 — do not edit unless UNLOCK SOCCER
+alwaysApply: true
+---
+
+# SOCCER LOCKED (:5052 / premerge)
+
+Soccer picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify soccer unless the owner says:
+
+**UNLOCK SOCCER**
+
+Fixing NFL, CFL, golf, chrome, or production outages is **not** a soccer unlock.
+Do not invent Books ML / model numbers to fill blanks.
+
+Owner 2026-09-11: if the checker or owner catches a real soccer miss
+(league dropdowns missing / dead, ESPN browse leagues not selectable,
+shared header/footer not the site chrome), unlock that miss and fix it.
+Do not restyle cards.
+
+## Do not touch
+
+- `/soccer-picks`, `/soccer-results`, `/soccer-results?view=chart`
+- `soccer_ui_fixup.py`, `soccer_pl_xg.py`, `soccer_league_catalog.py`
+- Soccer Cards|Chart, card HTML
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* soccer pages
+
+Do not put lock text on user-facing HTML.

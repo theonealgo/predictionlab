@@ -1,0 +1,39 @@
+---
+description: WNBA picks/results UI locked on :5052 — do not edit unless UNLOCK WNBA
+alwaysApply: true
+---
+
+# WNBA LOCKED (:5052 / premerge)
+
+WNBA picks and results on `:5052` (`predictionlabfix_work2`) are signed off
+(clocks, Fire/Tempo logos, H2H Last 10, 4-model consensus, 50% face fill).
+
+Do **not** modify WNBA unless the owner says:
+
+**UNLOCK WNBA**
+
+Fixing NFL, NCAAF, soccer, chrome, checkers, or production outages is **not**
+a WNBA unlock. Leave every WNBA file and every WNBA block out of those diffs.
+
+## Do not touch
+
+- `/wnba-picks`, `/wnba-results`, `/wnba-results?view=chart`
+- `wnba_ui_fixup.py`, `sports/WNBA.py`
+- WNBA Cards|Chart, share image, card HTML
+- WNBA 4-model consensus (Edge / XSharp / Sharp Consensus / Efficiency)
+- Any `NHL77FINAL.py` function or branch whose job is WNBA (`_apply_wnba_*`, `_wnba_*`)
+- `team_results_charts.py` branches that only exist for WNBA (`_apply_four_model_*`)
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* WNBA pages
+
+```
+# BAD — restyle locked WNBA cards/results/consensus, or patch WNBA while fixing NFL
+# GOOD — leave WNBA routes and WNBA functions alone; work NFL / soccer / chrome
+```
+
+Do not put lock text on user-facing HTML.
+Isolation remains `~/Documents/Personal/wnba/`.
+Do not git push WNBA unless the owner confirms a production deploy.
