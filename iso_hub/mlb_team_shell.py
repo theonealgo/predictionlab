@@ -748,10 +748,7 @@ def _group_by_date(
 def _cfl_cards(mode: str) -> tuple[list[dict[str, Any]], Any]:
     render = _render_mod(reload=False)
     pipe = _pipe_mod()
-    try:
-        pipe.ensure_predictions(refresh=False)
-    except Exception:
-        pass
+    # Do not sync CFL.ca on the request path — 20–30s hang logs customers out.
     render._refresh_fade_flags()
     if mode == "results":
         raw = render.list_graded_results(days=21, regular_season_only=True)

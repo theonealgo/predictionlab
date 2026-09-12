@@ -442,6 +442,7 @@ class ChromeChecker:
         self.r = report
         self.CheckResult = CheckResult
         self.timeout = int(os.environ.get("AUDIT_CHROME_TIMEOUT", "45"))
+        self.speed_budget = float(os.environ.get("AUDIT_SPEED_BUDGET", "3"))
 
     def add(self, label, status, message, url="", detail=""):
         self.r.add(
@@ -463,10 +464,13 @@ class ChromeChecker:
             wait = max(wait, 70)
         if p.rstrip("/").endswith("ncaaf-picks"):
             wait = max(wait, 180)
+        started = __import__("time").perf_counter()
         try:
             resp = self.s.get(url, timeout=wait, allow_redirects=True)
+            self._last_elapsed = __import__("time").perf_counter() - started
             return resp.status_code, resp.text or "", url
         except Exception as exc:
+            self._last_elapsed = __import__("time").perf_counter() - started
             return 0, str(exc), url
 
     def _ok_status(self, path: str, status: int) -> bool:
@@ -623,9 +627,19 @@ class ChromeChecker:
         print(f"  Chrome checker: opening {len(unique)} header/footer destinations (one at a time)")
         fails = []
         chrome_fails = []
+        slow = []
         for path in unique:
             status, body, url = self.fetch(path)
+            elapsed = float(getattr(self, "_last_elapsed", 0) or 0)
             label = f"open {path}"
+            if elapsed > self.speed_budget:
+                self.add(
+                    f"speed {path}",
+                    FAIL,
+                    f"Took {elapsed:.1f}s (budget {self.speed_budget:.0f}s). Pages must load in 3s.",
+                    url=url,
+                )
+                slow.append(f"{path} {elapsed:.1f}s")
             if status == 0:
                 self.add(
                     label,
@@ -689,6 +703,18 @@ class ChromeChecker:
                 "DIGEST dead header/footer links",
                 PASS,
                 f"All {len(seen)} destinations opened",
+            )
+        if slow:
+            self.add(
+                "DIGEST slow pages",
+                FAIL,
+                f"{len(slow)} page(s) slower than {self.speed_budget:.0f}s: " + ", ".join(slow),
+            )
+        else:
+            self.add(
+                "DIGEST slow pages",
+                PASS,
+                f"All {len(seen)} destinations loaded within {self.speed_budget:.0f}s",
             )
 
     def _check_shared_chrome(self, path: str, html: str, url: str) -> bool | None:

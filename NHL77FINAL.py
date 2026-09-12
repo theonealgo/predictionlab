@@ -6674,6 +6674,8 @@ def _apply_team_template_gaps(response):
             ("soccer", "SOCCER"),
         ):
             if path.rstrip("/") == f"/{slug}-picks":
+                if sport == "SOCCER":
+                    return response
                 html = response.get_data(as_text=True)
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
@@ -6682,7 +6684,25 @@ def _apply_team_template_gaps(response):
             if path.rstrip("/") == f"/{slug}-results":
                 if sport not in RESULTS_SLUGS:
                     return response
+                # CFL inject already ran in cfl_live. A second payload build
+                # hangs the only worker and logs customers out.
+                if sport == "CFL":
+                    return response
                 html = response.get_data(as_text=True)
+                if sport == "SOCCER" and (
+                    "Consensus Based Betting Records" in html
+                    or "PL vs Sportsbook" in html
+                ):
+                    return response
+                if sport == "NFL" and "<!-- team-results-charts -->" in html:
+                    return response
+                if (
+                    sport == "NCAAF"
+                    and "<!-- team-results-charts -->" in html
+                    and html.count("H2H Last 10") >= 3
+                    and ("(1 game)" in html or "(2 games)" in html)
+                ):
+                    return response
                 out = apply_team_results_template(html, sport, view=view)
                 if out and out != html:
                     response.set_data(out)
@@ -6715,6 +6735,10 @@ def _graft_locked_site_chrome(response):
         from site_chrome import ensure_locked_site_chrome, skip_path
 
         if skip_path(path):
+            return response
+        # All-region soccer picks is ~9MB. Re-scanning it for chrome on every
+        # hit blocks the only worker for 20s+ and looks like a logout.
+        if path.rstrip("/") == "/soccer-picks":
             return response
         html = response.get_data(as_text=True)
         out = ensure_locked_site_chrome(html, path=path)
@@ -10154,15 +10178,23 @@ def _load_soccer_results_disk_cache() -> None:
         if not _os_v2.path.isfile(_SOCCER_RESULTS_DISK_PATH):
             return
         age = _time.time() - _os_v2.path.getmtime(_SOCCER_RESULTS_DISK_PATH)
-        if age > _SOCCER_RESULTS_DISK_MAX_AGE:
+        # Stale disk is better than a 40s rebuild that logs customers out.
+        if age > (7 * 24 * 3600):
             return
         with open(_SOCCER_RESULTS_DISK_PATH, 'r', encoding='utf-8') as _sf:
             html = _sf.read()
         if html and _results_page_html_usable(html):
-            _SPORT_RESULTS_CACHE['SOCCER_daily_results_html_all'] = {
+            entry = {
                 'ts': _time.time(),
                 'html': html,
             }
+            _SPORT_RESULTS_CACHE['SOCCER_daily_results_html_all'] = entry
+            try:
+                from soccer_ui_fixup import soccer_week_range
+                week = soccer_week_range('')[0].isoformat()
+            except Exception:
+                week = _soccer_et_today_str()
+            _SPORT_RESULTS_CACHE[f'SOCCER_daily_results_html_all_week_{week}'] = entry
             logger.info("[soccer-results-disk] seeded all-leagues results HTML")
     except Exception as _sde:
         logger.debug(f"[soccer-results-disk] seed failed: {_sde}")
@@ -18612,9 +18644,12 @@ _BLOG_DISK_PURGED = False
 
 @app.route('/', methods=['GET', 'HEAD'])
 def landing_page():
-    """Primary landing page — new research design (homepage_preview.html)."""
-    if request.method == 'HEAD':
-        return '', 200
+    """Primary landing page — new research design (homepage_preview.html).
+
+    Do not special-case HEAD. AdsBot/Google fetch HEAD on ad destinations;
+    an empty 200 here is cloaking (Google sees a blank page, people see the site).
+    Flask strips the body for HEAD after the same GET render.
+    """
     try:
         log_site_visit('/')
     except Exception:
@@ -20536,6 +20571,7 @@ def site_search():
 @app.route('/robots.txt')
 def robots_txt():
     body = f"""User-agent: *
+Allow: /
 Allow: /blog
 Allow: /mlb-picks
 Allow: /mlb-results
@@ -20551,7 +20587,6 @@ Allow: /tennis-picks
 Allow: /golf-picks
 Allow: /cfl-picks
 Allow: /static/
-Allow: /
 Allow: /login
 Allow: /signup
 Allow: /plans
@@ -20561,13 +20596,6 @@ Disallow: /stripe/
 Disallow: /auth/
 Disallow: /share/
 Disallow: /api/
-
-# Ads review must see the same public pages users see.
-User-agent: AdsBot-Google
-Allow: /
-
-User-agent: AdsBot-Google-Mobile
-Allow: /
 
 Sitemap: {_SITE_DOMAIN}/sitemap.xml
 """
@@ -21846,7 +21874,9 @@ def _picks_page_html_usable(sport: str, html: str) -> bool:
     if 'research-theme.css' not in html:
         return False
     # Full card chrome lives in templates/espn_predictions_template.html only.
-    if sport in ('MLB', 'NBA', 'NHL', 'NFL', 'WNBA', 'NCAAB', 'NCAAF', 'NCAAW', 'SOCCER', 'TENNIS', 'UFC'):
+    if sport == 'SOCCER':
+        return True
+    if sport in ('MLB', 'NBA', 'NHL', 'NFL', 'WNBA', 'NCAAB', 'NCAAF', 'NCAAW', 'TENNIS', 'UFC'):
         if 'picks-view-controls' not in html:
             return False
         if '.team-slot {' not in html:
@@ -22061,24 +22091,8 @@ def _soccer_results_cards_html_for_chart():
         html = cached.get('html')
         if html and len(html) > 500:
             return _apply_soccer_results_html_fixups(html)
-    qs = []
-    if region_key:
-        qs.append(f'region={region_key}')
-    if league:
-        qs.append(f'league={league}')
-    try:
-        week = (request.args.get('week') or '').strip()
-    except Exception:
-        week = ''
-    if week:
-        qs.append(f'week={week}')
-    url = '/soccer-results' + (('?' + '&'.join(qs)) if qs else '')
-    try:
-        with app.test_request_context(url):
-            return sport_results('SOCCER')
-    except Exception as e:
-        logger.exception('Soccer cards HTML for chart failed: %s', e)
-        return ''
+    # Cache only — never re-enter sport_results() from chart view.
+    return ''
 
 
 def _render_soccer_results_chart_page():
@@ -22273,19 +22287,18 @@ def _render_wnba_results_chart_page():
 
 
 def _nfl_results_cards_html_for_chart():
-    """Cards HTML used to build NFL chart payload (never view=chart)."""
+    """Cards HTML used to build NFL chart payload (never view=chart).
+
+    Cache only — never re-enter sport_results(). A recursive rebuild hangs
+    the only worker and logs paying customers out.
+    """
     cache_key = 'NFL_daily_results_html_v3'
     cached = _SPORT_RESULTS_CACHE.get(cache_key)
     if isinstance(cached, dict):
         html = cached.get('html')
         if html and len(html) > 500:
             return html
-    try:
-        with app.test_request_context('/nfl-results'):
-            return sport_results('NFL')
-    except Exception as e:
-        logger.exception('NFL cards HTML for chart failed: %s', e)
-        return ''
+    return ''
 
 
 def _render_nfl_results_chart_page():
@@ -22410,10 +22423,10 @@ def sport_predictions(sport, filter_date=None):
     if sport == 'TENNIS':
         from tennis_live import render_tennis_picks
         return _inject_sport_blog_hub(render_tennis_picks(), 'TENNIS')
-        if sport == 'UFC':
-            _prefer_repo_root_modules()
-            from ufc_live import render_ufc_picks
-            return _inject_sport_blog_hub(render_ufc_picks(), 'UFC')
+    if sport == 'UFC':
+        _prefer_repo_root_modules()
+        from ufc_live import render_ufc_picks
+        return _inject_sport_blog_hub(render_ufc_picks(), 'UFC')
     if sport == 'CFL':
         from cfl_live import render_cfl_picks
         return render_cfl_picks()
@@ -22453,7 +22466,7 @@ def sport_predictions(sport, filter_date=None):
                 if sport == 'WNBA':
                     return _apply_wnba_picks_html_fixups(cached_html)
                 if sport == 'SOCCER':
-                    return _apply_soccer_picks_html_fixups(cached_html, filter_date)
+                    return cached_html
                 if sport == 'UFC':
                     return _apply_ufc_picks_html_fixups(cached_html)
                 if sport == 'NFL':
@@ -22470,7 +22483,7 @@ def sport_predictions(sport, filter_date=None):
                 if sport == 'WNBA':
                     return _apply_wnba_picks_html_fixups(cached_html)
                 if sport == 'SOCCER':
-                    return _apply_soccer_picks_html_fixups(cached_html, filter_date)
+                    return cached_html
                 if sport == 'UFC':
                     return _apply_ufc_picks_html_fixups(cached_html)
                 if sport == 'NFL':
@@ -23060,15 +23073,21 @@ def sport_predictions(sport, filter_date=None):
         if isinstance(g, dict) and g.get('book_home_moneyline') is not None
     )
     _books_ok_for_cache = (
-        not _default_games
+        sport == 'SOCCER'
+        or not _default_games
         or _default_with_books >= max(1, len(_default_games) // 2)
     )
     if (
         cache_key
         and rendered
-        and grouped_predictions
-        and sorted_dates
-        and _books_ok_for_cache
+        and (
+            sport == 'SOCCER'
+            or (
+                grouped_predictions
+                and sorted_dates
+                and _books_ok_for_cache
+            )
+        )
         and rendered.count('class="game-card"') >= 1
         and 'no predictions available' not in rendered.lower()
         and 'upstream data/model dependency failed' not in rendered.lower()
@@ -23076,43 +23095,6 @@ def sport_predictions(sport, filter_date=None):
         _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180), max_entries=50)
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
     return rendered
-
-
-def _nfl_results_cards_html_for_chart():
-    """Cards HTML used to build NFL chart payload (never view=chart)."""
-    cache_key = 'NFL_daily_results_html_v3'
-    cached = _SPORT_RESULTS_CACHE.get(cache_key)
-    if isinstance(cached, dict):
-        html = cached.get('html')
-        if html and len(html) > 500:
-            return html
-    try:
-        with app.test_request_context('/nfl-results'):
-            return sport_results('NFL')
-    except Exception as e:
-        logger.exception('NFL cards HTML for chart failed: %s', e)
-        return ''
-
-
-def _render_nfl_results_chart_page():
-    """MLB team-results template for /nfl-results?view=chart."""
-    from mlb_results_ui import markets_from_live_html
-    from team_results_charts import render_nfl_results_chart_page, set_results_chart_source
-
-    market = ""
-    try:
-        market = (request.args.get("market") or "").strip().lower()
-    except Exception:
-        market = ""
-    cards = _nfl_results_cards_html_for_chart()
-    payload = None
-    if cards and len(cards) > 500:
-        try:
-            set_results_chart_source('NFL', cards)
-            payload = markets_from_live_html(cards, 'nfl')
-        except Exception as e:
-            logger.exception('NFL chart payload failed: %s', e)
-    return render_nfl_results_chart_page(payload=payload, market=market)
 
 
 def sport_results(sport):
@@ -23184,6 +23166,29 @@ def sport_results(sport):
                     return _render_nfl_results_chart_page()
                 except Exception as _nfl_chart_e:
                     logger.exception('NFL results chart render failed: %s', _nfl_chart_e)
+                    try:
+                        from mlb_results_ui import render_team_results_chart_page
+                        return render_team_results_chart_page('nfl')
+                    except Exception:
+                        return _results_fallback_page(
+                            sport,
+                            "NFL chart view is rebuilding. Open Cards, then try Chart again.",
+                        )
+            cache_key = 'NFL_daily_results_html_v3'
+            cached_page = _SPORT_RESULTS_CACHE.get(cache_key)
+            if isinstance(cached_page, dict):
+                cached_html = cached_page.get('html')
+                cached_ts = cached_page.get('ts')
+                cache_ttl = _SPORT_RESULTS_TTL_BY_SPORT.get('NFL', 300)
+                if (
+                    cached_html
+                    and len(cached_html) > 500
+                    and cached_ts is not None
+                    and (_time.time() - cached_ts) < cache_ttl
+                    and _results_page_html_usable(cached_html)
+                    and 'temporarily unavailable' not in cached_html.lower()
+                ):
+                    return cached_html
 
         # New individual sports (Tennis/UFC/Golf) render via their own module pipeline.
         if sport in _SPORT_RESULTS_RENDERERS:
@@ -23760,6 +23765,20 @@ def sport_results(sport):
                         if sport == 'SOCCER':
                             return _apply_soccer_results_html_fixups(cached_html)
                         return cached_html
+                    if (
+                        sport == 'SOCCER'
+                        and cached_html
+                        and _results_page_html_usable(cached_html)
+                        and cached_ts is not None
+                        and (_time.time() - cached_ts) < 1800
+                    ):
+                        return _apply_soccer_results_html_fixups(cached_html)
+                if sport == 'SOCCER' and cache_key.endswith(f'_week_{_soc_res_week}'):
+                    _seed = _SPORT_RESULTS_CACHE.get('SOCCER_daily_results_html_all')
+                    if isinstance(_seed, dict):
+                        _seed_html = _seed.get('html')
+                        if _seed_html and _results_page_html_usable(_seed_html):
+                            return _apply_soccer_results_html_fixups(_seed_html)
             # Update scores in background so the page is never blocked by API calls.
             # Soccer backfill can take 30-60s (100+ requests); run async always.
             sync_key = f'{sport}_results_score_sync_ts'

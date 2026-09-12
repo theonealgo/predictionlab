@@ -41,11 +41,14 @@
     /* Directory footer (normally in research-theme.css) — inlined so that
        stylesheet is not render-blocking on the homepage. */
     .site-directory-footer {
-        position: relative; z-index: 2; padding: 72px 24px 24px;
-        background: #0b0b0a; color: #f6f6f2;
+        position: relative; z-index: 20; padding: 72px 24px 24px;
+        background: #0b0b0a; background-color: #0b0b0a; color: #f6f6f2;
         border-top: 1px solid rgba(199,255,46,.35);
+        isolation: isolate;
     }
-    .site-directory-footer .directory-shell { width: min(100%, 1280px); margin: 0 auto; }
+    .site-directory-footer .directory-shell {
+        width: min(100%, 1280px); margin: 0 auto; background-color: #0b0b0a;
+    }
     .site-directory-footer .directory-label,
     .site-directory-footer h5,
     .site-directory-footer .directory-sub,
@@ -61,7 +64,7 @@
         font: 800 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
         letter-spacing: .12em;
     }
-    .site-directory-footer .directory-sub { color: #a8aba4; font-size: 12px; }
+    .site-directory-footer .directory-sub { color: #ebebe6; font-size: 12px; }
     .site-directory-footer .directory-grid {
         display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
         gap: 38px; margin-top: 52px; padding: 38px 0 46px;
@@ -70,24 +73,24 @@
     }
     .site-directory-footer h5,
     .site-directory-footer .footer-heading {
-        margin: 0 0 18px; color: #b7b9b3; font-size: 10px;
+        margin: 0 0 18px; color: #f3f3ef; font-size: 12px; font-weight: 800;
         text-transform: uppercase; letter-spacing: 2px;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     .site-directory-footer .directory-grid a {
-        display: block; padding: 6px 0; color: #b7b9b3; text-decoration: none;
-        font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+        display: block; padding: 6px 0; color: #f3f3ef; text-decoration: none;
+        font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     .site-directory-footer .directory-grid a:hover { color: var(--pl-neon); }
     .site-directory-footer .directory-bottom {
         display: flex; justify-content: space-between; align-items: center;
-        flex-wrap: wrap; gap: 24px; padding-top: 22px; color: #a8aba4;
-        font-size: 10px; text-transform: uppercase; letter-spacing: .8px;
+        flex-wrap: wrap; gap: 24px; padding-top: 22px; color: #ebebe6;
+        font-size: 12px; text-transform: uppercase; letter-spacing: .8px;
     }
     .site-directory-footer .directory-bottom a {
         display: inline-flex; align-items: center; justify-content: center;
         min-width: 44px; min-height: 44px; padding: 10px 14px; margin-left: 4px;
-        color: #c5c7c1; text-decoration: none;
+        color: #f3f3ef; text-decoration: none;
     }
     .site-directory-footer .directory-bottom a:hover { color: var(--pl-neon); }
     @media (max-width: 900px) {
@@ -934,12 +937,12 @@
                     </div>
                     <div class="pl2-chart-grid">
                         <a class="pl2-chart-card" href="/mlb-results?view=chart">
-                            <img src="/static/img/home-charts/consensus.png" alt="Consensus Based Betting Records chart">
+                            <img src="/static/img/home-charts/consensus.png" alt="Consensus Based Betting Records chart" width="1024" height="734" decoding="async">
                             <span>Moneyline</span>
                             <b>Consensus Based Betting Records</b>
                         </a>
                         <a class="pl2-chart-card" href="/mlb-results?view=chart">
-                            <img src="/static/img/home-charts/pl-vs-books.png" alt="PL vs Sportsbook chart">
+                            <img src="/static/img/home-charts/pl-vs-books.png" alt="PL vs Sportsbook chart" width="1024" height="378" decoding="async">
                             <span>Books vs models</span>
                             <b>PL vs Sportsbook</b>
                         </a>

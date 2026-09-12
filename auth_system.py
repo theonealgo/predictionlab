@@ -55,6 +55,7 @@ import sqlite3
 import logging
 import secrets
 import hashlib
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -130,6 +131,9 @@ ADMIN_EMAILS = {
 _DB_PATH = None  # set by init_auth()
 _login_manager = LoginManager()
 _login_manager.remember_cookie_duration = timedelta(days=90)
+# Never drop a valid session because the user opened a new tab, browser, or
+# their IP/UA changed. Paying customers must stay logged in.
+_login_manager.session_protection = None
 
 
 # ─── User Model ───────────────────────────────────────────────────────────────
@@ -167,8 +171,12 @@ class User(UserMixin):
 
 
 def _get_db():
-    """Get database connection."""
-    conn = sqlite3.connect(_DB_PATH)
+    """Get database connection.
+
+    timeout keeps login from dying when a results rebuild holds the DB.
+    A failed user_loader returns None and Flask-Login wipes the session.
+    """
+    conn = sqlite3.connect(_DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -254,21 +262,38 @@ def _ensure_users_table():
 
 
 def _load_user_by_id(user_id):
-    """Load user from database by ID."""
-    try:
-        conn = _get_db()
-        row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-        conn.close()
-        if row:
-            return User(
-                id=row['id'], email=row['email'], name=row['name'],
-                google_id=row['google_id'], is_premium=row['is_premium'],
-                premium_expires=row['premium_expires'],
-                stripe_customer_id=row['stripe_customer_id']
-            )
-    except Exception as e:
-        logger.error(f"Error loading user {user_id}: {e}")
-    return None
+    """Load user from database by ID.
+
+    Never return None on a transient DB error — Flask-Login treats None as
+    "this account is gone" and logs the customer out.
+    """
+    last_err = None
+    for attempt in range(4):
+        try:
+            conn = _get_db()
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+            conn.close()
+            if row:
+                return User(
+                    id=row['id'], email=row['email'], name=row['name'],
+                    google_id=row['google_id'], is_premium=row['is_premium'],
+                    premium_expires=row['premium_expires'],
+                    stripe_customer_id=row['stripe_customer_id']
+                )
+            return None
+        except sqlite3.OperationalError as e:
+            last_err = e
+            msg = str(e).lower()
+            if 'locked' in msg or 'busy' in msg:
+                time.sleep(0.08 * (attempt + 1))
+                continue
+            logger.error(f"Error loading user {user_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error loading user {user_id}: {e}")
+            raise
+    logger.error(f"Error loading user {user_id} after retries: {last_err}")
+    raise last_err
 
 
 def _load_user_by_email(email):
@@ -478,20 +503,23 @@ def init_auth(app, db_path=None):
     # Secret key for sessions — MUST stay stable across restarts.
     app.secret_key = _resolve_secret_key()
 
-    app.config.setdefault('PERMANENT_SESSION_LIFETIME', timedelta(days=90))
-    app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
-    app.config.setdefault('REMEMBER_COOKIE_HTTPONLY', True)
-    app.config.setdefault('REMEMBER_COOKIE_DURATION', timedelta(days=90))
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=90)
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+    app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=90)
+    app.config['REMEMBER_COOKIE_REFRESH_EACH_REQUEST'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
     if _running_on_render():
-        app.config.setdefault('SESSION_COOKIE_SAMESITE', 'None')
-        app.config.setdefault('SESSION_COOKIE_SECURE', True)
-        app.config.setdefault('REMEMBER_COOKIE_SAMESITE', 'None')
-        app.config.setdefault('REMEMBER_COOKIE_SECURE', True)
+        # Lax + Secure keeps first-party logins across new tabs. SameSite=None
+        # was getting dropped by Safari / in-app browsers and looked like logout.
+        app.config['SESSION_COOKIE_SECURE'] = True
+        app.config['REMEMBER_COOKIE_SECURE'] = True
+        app.config['SESSION_COOKIE_DOMAIN'] = '.predictionlab.io'
+        app.config['REMEMBER_COOKIE_DOMAIN'] = '.predictionlab.io'
     else:
-        app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
-        app.config.setdefault('SESSION_COOKIE_SECURE', False)
-        app.config.setdefault('REMEMBER_COOKIE_SAMESITE', 'Lax')
-        app.config.setdefault('REMEMBER_COOKIE_SECURE', False)
+        app.config['SESSION_COOKIE_SECURE'] = False
+        app.config['REMEMBER_COOKIE_SECURE'] = False
 
     @app.before_request
     def _make_session_permanent():
@@ -500,6 +528,9 @@ def init_auth(app, db_path=None):
     # Flask-Login setup
     _login_manager.init_app(app)
     _login_manager.login_view = 'auth.login_page'
+    # Re-assert after init_app — some Flask-Login versions reset SameSite.
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 
     @_login_manager.user_loader
     def load_user(user_id):

@@ -529,11 +529,6 @@ def cfl_results_share_jpeg_bytes() -> bytes | None:
 
 
 def cfl_chart_payload() -> dict[str, Any]:
-    from cfl_page import _pipe_mod
     from team_tabbed_results import build_cfl_payload
 
-    try:
-        _pipe_mod().ensure_predictions(refresh=False)
-    except Exception:
-        pass
     return build_cfl_payload()

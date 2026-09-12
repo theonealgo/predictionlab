@@ -30,7 +30,20 @@ ROOT = Path(__file__).resolve().parents[1]
 HUB_DIR = Path(__file__).resolve().parent
 LIVE_ROOT = Path.home() / "Documents/Personal/predictionlabfix_work"
 SNAPSHOT_DIR = LIVE_ROOT / "data" / "season_snapshots"
-CFL_ISO = Path.home() / "Documents/Personal/cfl"
+try:
+    from cfl_page import _resolve_cfl_iso as _resolve_cfl_iso_dir
+except Exception:
+    def _resolve_cfl_iso_dir() -> Path:
+        here = Path(__file__).resolve().parent.parent
+        for cand in (
+            Path.home() / "Documents/Personal/cfl",
+            here / "engines" / "cfl",
+        ):
+            if cand.is_dir() and (cand / "engine" / "pipeline.py").is_file():
+                return cand
+        return here / "engines" / "cfl"
+
+CFL_ISO = _resolve_cfl_iso_dir()
 UFC_ISO = Path.home() / "Documents/Personal/ufc"
 
 # UFC component-model deltas (match isolation render.MODEL_DELTAS).
@@ -3233,6 +3246,8 @@ def build_cfl_payload() -> dict[str, Any]:
     if isinstance(hit, dict) and hit.get("data") and (now - float(hit.get("ts") or 0)) < _CFL_PAYLOAD_TTL:
         return hit["data"]
 
+    if not (CFL_ISO / "engine" / "pipeline.py").is_file():
+        return {"ok": False, "error": "CFL engine is not installed on this host"}
     root = str(CFL_ISO.resolve())
     if root not in sys.path:
         sys.path.insert(0, root)
@@ -3241,11 +3256,8 @@ def build_cfl_payload() -> dict[str, Any]:
     pipe = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(pipe)
-    try:
-        pipe.ensure_predictions(refresh=False)
-    except Exception:
-        # Hub sandbox may mount the CFL DB read-only — still serve graded rows.
-        pass
+    # Do not call ensure_predictions here. It syncs CFL.ca (20–30s) and hangs
+    # the only worker. Graded rows come from the existing DB.
     try:
         rows = pipe.list_graded_results(days=120, regular_season_only=True)
     except Exception as e:

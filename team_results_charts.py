@@ -2531,7 +2531,7 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
             cards_src = cached
     if sport_u == "WNBA":
         html = _apply_four_model_consensus_meanings(html, cards_html=cards_src)
-    if sport_u in ("WNBA", "NFL", "CFL"):
+    if sport_u in ("WNBA", "NFL", "CFL", "NCAAF"):
         html = _apply_last_night_windows(html, cards_html=cards_src)
     if sport_u != "NFL":
         html = _strip_empty_xsharp_bucket_rows(html)
@@ -2575,8 +2575,10 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
         html = _hide_blank_ml_tally_cards(html, ("Grinder2", "Takedown", "Efficiency"))
     if sport_u == "NFL":
         html = _apply_nfl_cards_chart_split(html, view_l)
-    if sport_u == "WNBA" and "H2H Last 10" in html:
+    if sport_u in ("WNBA", "NCAAF") and "H2H Last 10" in html:
         html = _apply_h2h_faces(html, sport_u)
+    if sport_u in ("NCAAF", "CFL") and "game-card" in html and "H2H Last 10" in html:
+        html = _fill_game_card_h2h(html, sport_u)
     if MARKER not in html:
         if re.search(r"</body\s*>", html, flags=re.I):
             html = re.sub(r"</body\s*>", MARKER + "\n</body>", html, count=1, flags=re.I)
@@ -2805,6 +2807,11 @@ def _ncaaf_espn_disk_load() -> None:
         return
     _NCAAF_ESPN_DISK_LOADED = True
     try:
+        if not _NCAAF_ESPN_DISK.is_file():
+            return
+        # The on-disk ESPN dump is ~1GB. Parsing it on a request hangs NCAAF.
+        if _NCAAF_ESPN_DISK.stat().st_size > 8_000_000:
+            return
         raw = json.loads(_NCAAF_ESPN_DISK.read_text(encoding="utf-8"))
     except Exception:
         return
@@ -2968,6 +2975,46 @@ def _ensure_h2h_attr_first_meeting(html: str) -> str:
     return re.sub(r"<div\b[^>]*\bdata-pick-card\b[^>]*>", _tag, html or "", flags=re.I)
 
 
+def _fill_game_card_h2h(html: str, sport: str) -> str:
+    """Fill H2H Last 10 on results game-cards from completed meetings. Never invent."""
+    if not html or "game-card" not in html or "H2H Last 10" not in html:
+        return html
+    meetings = _load_meetings(sport)
+    if not meetings:
+        return html
+    parts = re.split(r'(?=<div class="game-card\b)', html)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        away_m = re.search(
+            r'<div class="team-col away">[\s\S]*?<div class="team-name">([^<]+)</div>',
+            stack,
+        )
+        home_m = re.search(
+            r'<div class="team-col home">[\s\S]*?<div class="team-name">([^<]+)</div>',
+            stack,
+        )
+        if not away_m or not home_m:
+            out.append(stack)
+            continue
+        away = html_lib.unescape(away_m.group(1)).strip()
+        home = html_lib.unescape(home_m.group(1)).strip()
+        val = _h2h_text(meetings, home, away, sport)
+        if not val:
+            out.append(stack)
+            continue
+        stack = re.sub(
+            r'(<span class="sf-label">\s*H2H Last 10\s*</span>\s*<span class="sf-val">)([\s\S]*?)(</span>)',
+            rf"\g<1>{val}\g<3>",
+            stack,
+            count=1,
+            flags=re.I,
+        )
+        out.append(stack)
+    return "".join(out)
+
+
 def _fill_blank_h2h_chips(html: str) -> str:
     """Replace leftover dash / 0 H2H faces with First meeting."""
 
@@ -3054,7 +3101,7 @@ def _apply_h2h_faces(html: str, sport: str) -> str:
         home = html_lib.unescape(m.group("home") or "")
         away = html_lib.unescape(m.group("away") or "")
         val = _h2h_text(meetings, home, away, sport_u) if meetings else ""
-        if not val:
+        if not val and sport_u != "NCAAF":
             val = "First meeting"
         if re.search(r'data-h2h="', tag, flags=re.I):
             tag = re.sub(r'data-h2h="[^"]*"', f'data-h2h="{escape(val)}"', tag, count=1)
@@ -3410,7 +3457,7 @@ def _ncaaf_espn_h2h_text(home: str, away: str) -> str:
     seen: set[str] = set()
     year = datetime.now().year
     for season in range(year, year - 16, -1):
-        for ev in _ncaaf_espn_events(tid, season, fetch=True):
+        for ev in _ncaaf_espn_events(tid, season, fetch=False):
             if not isinstance(ev, dict):
                 continue
             comps = (ev.get("competitions") or [{}])[0] or {}
@@ -3457,32 +3504,8 @@ def _fill_ncaaf_espn_h2h(html: str) -> str:
     """When the local NCAAF slate has no meetings, use ESPN schedules."""
     if not html or "data-pick-card" not in html:
         return html
-    ids: set[str] = set()
-    for m in re.finditer(
-        r"<div\b(?=[^>]*\bdata-pick-card\b)(?=[^>]*\bdata-home=\"(?P<home>[^\"]*)\")"
-        r"(?=[^>]*\bdata-away=\"(?P<away>[^\"]*)\")[^>]*>",
-        html,
-        flags=re.I,
-    ):
-        cur = re.search(r'data-h2h="([^"]*)"', m.group(0), flags=re.I)
-        if cur and not _is_fake_h2h(cur.group(1)):
-            continue
-        away = html_lib.unescape(m.group("away") or "").strip()
-        tid = _ncaaf_espn_id(away)
-        if tid:
-            ids.add(tid)
     _ncaaf_espn_disk_load()
-    if ids:
-        year = datetime.now().year
-        jobs = [(tid, season) for tid in ids for season in range(year, year - 12, -1)]
-        try:
-            from concurrent.futures import ThreadPoolExecutor
-
-            with ThreadPoolExecutor(max_workers=8) as pool:
-                list(pool.map(lambda p: _ncaaf_espn_events(p[0], p[1], fetch=True), jobs))
-            _ncaaf_espn_disk_save()
-        except Exception:
-            pass
+    # Request path: never fan-out 12 seasons of ESPN. Disk/memory cache only.
     cache: dict[tuple[str, str], str] = {}
 
     def _lookup(home: str, away: str) -> str:

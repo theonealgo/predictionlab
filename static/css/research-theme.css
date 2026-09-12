@@ -452,7 +452,7 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
     line-height: .95;
     letter-spacing: 0;
 }
-.site-directory-footer .directory-sub { color: #c8cbc4; font-size: 12px; }
+.site-directory-footer .directory-sub { color: #ebebe6; font-size: 12px; }
 .site-directory-footer .directory-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0,1fr));
@@ -465,7 +465,7 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
 .site-directory-footer h5,
 .site-directory-footer .footer-heading {
     margin: 0 0 18px;
-    color: #d6d8d2;
+    color: #f3f3ef;
     font-size: 12px;
     font-weight: 800;
     text-transform: uppercase;
@@ -475,7 +475,7 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
 .site-directory-footer .directory-grid a {
     display: block;
     padding: 6px 0;
-    color: #d6d8d2;
+    color: #f3f3ef;
     font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
     text-decoration: none;
 }
@@ -487,7 +487,7 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
     flex-wrap: wrap;
     gap: 24px;
     padding-top: 22px;
-    color: #c8cbc4;
+    color: #ebebe6;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .8px;
@@ -500,7 +500,7 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
     min-height: 44px;
     padding: 10px 14px;
     margin-left: 4px;
-    color: #d6d8d2;
+    color: #f3f3ef;
     text-decoration: none;
 }
 .site-directory-footer .directory-bottom a:hover { color: var(--pl-neon); }
