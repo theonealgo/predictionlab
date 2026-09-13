@@ -8,7 +8,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qa"))
 
 from datetime import date  # noqa: E402
 
+from page_speed import is_slow, speed_fail_message  # noqa: E402
 from chart_shape import (  # noqa: E402
+    best_performing_width_issues,
+    efficiency_copied_na_issues,
+    ncaaf_chart_api_issues,
+    share_ad_card_issues,
+    team_chart_sou_table_issues,
     blank_moneyline_model_issues,
     card_blank_market_line_issues,
     card_missing_model_value_issues,
@@ -18,18 +24,58 @@ from chart_shape import (  # noqa: E402
     nfl_chart_not_mlb_issues,
     nfl_chart_same_as_cards_issues,
     nfl_chart_window_tally_issues,
+    nfl_duplicate_h2h_issues,
     nfl_missing_efficiency_issues,
+    nfl_preseason_results_issues,
     empty_last_night_spread_tally_issues,
     nfl_spread_result_card_issues,
     nfl_stale_season_perf_issues,
     nfl_stale_season_week_issues,
     nhl_chart_view_missing_issues,
     six_model_chart_issues,
+    results_card_parameter_issues,
+    team_chart_leftover_board_issues,
+    team_chart_same_as_cards_issues,
     team_chart_template_issues,
+    team_chart_window_tally_issues,
     team_picks_template_issues,
+    team_results_tally_model_issues,
     team_results_template_issues,
     tennis_chart_same_as_cards_issues,
 )
+
+
+def test_page_over_5s_is_slow():
+    assert is_slow(5.01)
+    assert not is_slow(4.9)
+    msg = speed_fail_message("/ncaaf-results", 12.3)
+    assert "12.3s" in msg
+    assert "5s" in msg
+
+
+def test_site_checker_reports_slow_page_as_fail():
+    from site_checker import (  # noqa: E402
+        FAIL,
+        AuditReport,
+        _SLOW_PAGES_REPORTED,
+        _report_slow_page,
+    )
+
+    _SLOW_PAGES_REPORTED.clear()
+    report = AuditReport()
+    _report_slow_page(report, "/ncaaf-results", 5.01, "http://127.0.0.1:5052/ncaaf-results")
+    fails = [c for c in report.checks if c.status == FAIL]
+    assert fails
+    assert fails[0].label == "speed /ncaaf-results"
+    assert "5s" in fails[0].message
+    _report_slow_page(report, "/ncaaf-results", 9.0, "http://127.0.0.1:5052/ncaaf-results")
+    assert len([c for c in report.checks if c.label.startswith("speed")]) == 1
+
+    _SLOW_PAGES_REPORTED.clear()
+    fast = AuditReport()
+    _report_slow_page(fast, "/ncaaf-picks", 4.99)
+    assert not fast.checks
+    _SLOW_PAGES_REPORTED.clear()
 
 
 def test_mlb_missing_xsharp_totals_fails():
@@ -214,6 +260,59 @@ def test_nfl_last_season_snapshot_perf_fails():
     issues = nfl_stale_season_perf_issues(html, today=date(2026, 9, 10))
     assert issues
     assert any("206-79" in i or "285" in i for i in issues)
+
+
+def test_nfl_duplicate_h2h_fails():
+    html = """
+    <div data-pick-card>
+      <div class="lines-strip">
+        <div class="line-chip h2h-face-chip">
+          <div class="line-chip-label">H2H Last 10</div>
+          <div class="line-chip-val">First meeting</div>
+        </div>
+      </div>
+      <div class="sf-item">
+        <span class="sf-label">H2H Last 10</span>
+        <span class="sf-val">First meeting</span>
+      </div>
+    </div>
+    """
+    issues = nfl_duplicate_h2h_issues(html)
+    assert issues
+    assert any("details" in i.lower() for i in issues)
+
+
+def test_nfl_face_only_h2h_passes():
+    html = """
+    <div data-pick-card>
+      <div class="lines-strip">
+        <div class="line-chip h2h-face-chip">
+          <div class="line-chip-label">H2H Last 10</div>
+          <div class="line-chip-val">First meeting</div>
+        </div>
+      </div>
+    </div>
+    """
+    assert not nfl_duplicate_h2h_issues(html)
+
+
+def test_nfl_preseason_results_date_fails():
+    html = """
+    NFL Results nfl-results
+    <div id="date-2026-08-14" class="date-section"></div>
+    <div id="date-2026-09-10" class="date-section"></div>
+    """
+    issues = nfl_preseason_results_issues(html)
+    assert issues
+    assert any("2026-08-14" in i for i in issues)
+
+
+def test_nfl_regular_only_results_pass():
+    html = """
+    NFL Results nfl-results
+    <div id="date-2026-09-10" class="date-section"></div>
+    """
+    assert not nfl_preseason_results_issues(html)
 
 
 def test_nfl_preseason_in_season_perf_fails():
@@ -561,6 +660,100 @@ def test_team_chart_with_last_night_board_fails():
 
 def test_team_picks_missing_grid_fails():
     assert team_picks_template_issues("<html>no cards</html>", "NFL")
+
+
+def test_ncaaf_results_missing_efficiency_tally_fails():
+    html = """
+    Last Night's NCAA Football Results — 2026-09-11 (5 games)
+    Grinder2 80.0% Takedown 80.0% Edge 60.0% XSharp 80.0% Sharp Consensus 80.0%
+    Last 7 Days NCAA Football Results
+    Grinder2 Takedown Edge XSharp Sharp Consensus
+    Season Performance
+    Moneyline Accuracy by Model
+    Grinder2 Takedown Edge XSharp Sharp Consensus
+    <div class="date-nav"></div>
+    """
+    issues = team_results_tally_model_issues(html, "NCAAF")
+    assert issues
+    assert any("Efficiency" in i for i in issues)
+
+
+def test_ncaaf_results_card_efficiency_na_fails():
+    card = (
+        '<div class="game-card"><div class="odds-pricing-title">Odds &amp; Lines</div>'
+        '<div class="pick-conf-grid">'
+        '<div class="pc-name">Grinder2</div><div class="pc-val">80%</div>'
+        '<div class="pc-name">Takedown</div><div class="pc-val">80%</div>'
+        '<div class="pc-name">Edge</div><div class="pc-val">60%</div>'
+        '<div class="pc-name">XSharp</div><div class="pc-val">90%</div>'
+        '<div class="pc-name">Sharp Consensus</div><div class="pc-val">85%</div>'
+        '<div class="pc-name">Efficiency</div><div class="pc-val">N/A</div>'
+        '</div><span>H2H Last 10</span></div>'
+    )
+    issues = results_card_parameter_issues(card + card, "NCAAF")
+    assert issues
+    assert any("Efficiency" in i for i in issues)
+
+
+def test_efficiency_copied_percent_fails():
+    html = (
+        '<div class="pc-box"><div class="pc-name">Efficiency</div>'
+        '<div class="pc-val">81.8%</div>'
+        '<div class="pc-side">N/A</div></div>'
+    )
+    issues = efficiency_copied_na_issues(html)
+    assert issues
+
+
+def test_share_card_needs_two_picks():
+    assert share_ad_card_issues('<div class="social-export-wrap" data-share-picks="1"></div>')
+    assert not share_ad_card_issues('<div class="social-export-wrap" data-share-picks="2"></div>')
+
+
+def test_ncaaf_spread_table_still_moneyline_fails():
+    html = (
+        '<section id="ssr-finals" data-ssr-market="moneyline">'
+        "<h2>Moneyline games</h2><th>Edge pick</th></section>"
+    )
+    issues = team_chart_sou_table_issues(html, "spread")
+    assert issues
+    assert any("moneyline" in i.lower() for i in issues)
+
+
+def test_ncaaf_spread_table_with_compare_passes():
+    html = (
+        '<section id="ssr-finals" data-ssr-market="spread">'
+        "<th>Books</th><th>Actual vs lines</th><td>Act 19–29 · Books Hawai'i -7.5</td>"
+        "</section>"
+    )
+    assert not team_chart_sou_table_issues(html, "spread")
+
+
+def test_best_performing_width_fails_without_css():
+    html = '<section class="tally pl-analytics"><h2>Best Performing Model</h2></section>'
+    assert best_performing_width_issues(html)
+    html2 = html + '<style id="ncaaf-chart-best-width"></style>'
+    assert not best_performing_width_issues(html2)
+
+
+def test_ncaaf_chart_api_missing_spread_fails():
+    issues = ncaaf_chart_api_issues({"ok": True, "markets": {"moneyline": {"tallies": {}}}})
+    assert any("spread" in i for i in issues)
+
+
+def test_ncaaf_chart_leftover_cards_board_fails():
+    html = """
+    <nav id="ncaafTopDates"></nav>
+    Model Performance (Flat Unit Tracking)
+    Consensus Based Betting Records
+    <div class="game-card">a</div><div class="game-card">b</div><div class="game-card">c</div>
+    """
+    issues = team_chart_leftover_board_issues(html, "NCAAF")
+    assert issues
+    same = team_chart_same_as_cards_issues(html, html, "NCAAF")
+    assert same
+    windows = team_chart_window_tally_issues(html, "NCAAF")
+    assert any("Last Night" in i or "model card" in i for i in windows)
 
 
 def test_nfl_last_night_empty_spread_tally_fails():

@@ -9,6 +9,8 @@ Import helpers lazily via main() to avoid circular imports at module load.
 """
 from __future__ import annotations
 
+import html as html_mod
+import re
 import time as _time
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -280,6 +282,179 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
         m._SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
 
     return rendered
+
+
+def render_ncaaf_results_chart_page():
+    """MLB team-results template for /ncaaf-results?view=chart."""
+    m = main()
+    from mlb_results_ui import markets_from_live_html, render_team_results_chart_page
+
+    market = ""
+    try:
+        from flask import request
+
+        market = (request.args.get("market") or "").strip().lower()
+    except Exception:
+        market = ""
+    cards = ""
+    for key in (
+        "NCAAF_daily_results_html_v4",
+        "NCAAF_daily_results_html_v3",
+        "NCAAF_daily_results_html_v2",
+    ):
+        cached = m._SPORT_RESULTS_CACHE.get(key)
+        if isinstance(cached, dict):
+            html = cached.get("html")
+            if html and len(html) > 500:
+                cards = html
+                break
+    payload = None
+    if cards:
+        try:
+            from team_results_charts import set_results_chart_source
+
+            set_results_chart_source("NCAAF", cards)
+            payload = markets_from_live_html(cards, "ncaaf")
+        except Exception as exc:
+            m.logger.exception("NCAAF chart payload failed: %s", exc)
+    html = render_team_results_chart_page("ncaaf", payload=payload, market=market)
+    if html and "ncaaf-results-chart" not in html:
+        html = re.sub(
+            r"<body\b([^>]*)>",
+            r'<body class="ncaaf-results-chart"\1>',
+            html,
+            count=1,
+            flags=re.I,
+        )
+    html = _ncaaf_chart_best_width(html)
+    html = _ncaaf_chart_sou_compare(html, payload, market)
+    return html
+
+
+_NCAAF_CHART_BEST_CSS = """<style id="ncaaf-chart-best-width">
+body.ncaaf-results-chart section.pl-analytics{width:100%!important}
+body.ncaaf-results-chart section.pl-analytics .tally-grid{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  width:100%!important;
+}
+</style>"""
+
+
+def _ncaaf_chart_best_width(html: str) -> str:
+    if not html or "ncaaf-chart-best-width" in html:
+        return html
+    if re.search(r"</head\s*>", html, flags=re.I):
+        return re.sub(r"</head\s*>", _NCAAF_CHART_BEST_CSS + "</head>", html, count=1, flags=re.I)
+    return _NCAAF_CHART_BEST_CSS + html
+
+
+def _ncaaf_line_compare(row: dict, market: str) -> str:
+    aw, hs = row.get("away_score"), row.get("home_score")
+    block = row.get(market) if isinstance(row.get(market), dict) else {}
+    if aw is None or hs is None:
+        return "—"
+    if market == "totals":
+        actual = float(aw) + float(hs)
+        bits = [f"Act {actual:g}"]
+        bookn = block.get("book_line")
+        pln = block.get("pl_line")
+        def _vs(n, label):
+            if n is None:
+                return
+            try:
+                n = float(n)
+            except (TypeError, ValueError):
+                return
+            hit = "Over" if actual > n else "Under" if actual < n else "Push"
+            bits.append(f"{label} {n:g} {hit}")
+        _vs(bookn, "Books")
+        _vs(pln, "PL")
+        return " · ".join(bits)
+    book = html_mod.unescape(str(block.get("book") or block.get("book_line") or "—"))
+    pl = html_mod.unescape(str(block.get("pl_pick") or block.get("pl_line") or block.get("pick") or "—"))
+    return f"Act {aw}–{hs} · Books {book} · PL {pl}"
+
+
+def _ncaaf_chart_sou_compare(html: str, payload: dict | None, market: str) -> str:
+    """Add Actual vs lines on NCAAF spread/totals SSR tables."""
+    if not html or (market or "").lower() not in ("spread", "totals"):
+        return html
+    mk = market.lower()
+    split = re.split(r'(<section id="ssr-finals"[^>]*>)', html, maxsplit=1, flags=re.I)
+    if len(split) < 3:
+        return html
+    prefix, start, rest = split[0], split[1], split[2]
+    end_m = re.search(r"</section>", rest, flags=re.I)
+    if not end_m:
+        return html
+    section, after = rest[: end_m.end()], rest[end_m.end() :]
+    section = re.sub(
+        r"<th>H2H L10</th>",
+        "<th>Actual vs lines</th>",
+        section,
+        count=1,
+        flags=re.I,
+    )
+    section = re.sub(
+        r"<th>Book</th>",
+        "<th>Books</th>",
+        section,
+        count=1,
+        flags=re.I,
+    )
+    finals = []
+    if isinstance(payload, dict):
+        markets = payload.get("markets") or {}
+        block = markets.get(mk) or {}
+        finals = block.get("finals") or payload.get("finals") or []
+    by_match = {}
+    for f in finals:
+        if not isinstance(f, dict):
+            continue
+        away = html_mod.unescape(html_mod.unescape(str(f.get("away_team_id") or f.get("away") or "")))
+        home = html_mod.unescape(html_mod.unescape(str(f.get("home_team_id") or f.get("home") or "")))
+        if away and home:
+            by_match[f"{away} @ {home}"] = _ncaaf_line_compare(f, mk)
+
+    def _row(m: re.Match[str]) -> str:
+        cells = m.group(0)
+        tds = re.findall(r"<td>[\s\S]*?</td>", cells)
+        if len(tds) != 8:
+            return cells
+        match_key = html_mod.unescape(html_mod.unescape(re.sub(r"<[^>]+>", "", tds[1]).strip()))
+        score = re.sub(r"<[^>]+>", "", tds[2]).strip()
+        book = html_mod.unescape(html_mod.unescape(re.sub(r"<[^>]+>", "", tds[3]).strip()))
+        pl = html_mod.unescape(html_mod.unescape(re.sub(r"<[^>]+>", "", tds[5]).strip()))
+        cmp = by_match.get(match_key) or ""
+        if not cmp or cmp == "—":
+            if mk == "totals":
+                nums = re.findall(r"\d+", score.replace("–", "-"))
+                if len(nums) >= 2:
+                    actual = int(nums[0]) + int(nums[1])
+                    bits = [f"Act {actual}"]
+                    for raw, label in ((book, "Books"), (pl, "PL")):
+                        nm = re.search(r"(\d+(?:\.\d+)?)", raw or "")
+                        if not nm:
+                            continue
+                        n = float(nm.group(1))
+                        hit = "Over" if actual > n else "Under" if actual < n else "Push"
+                        bits.append(f"{label} {n:g} {hit}")
+                    cmp = " · ".join(bits)
+                else:
+                    cmp = "—"
+            else:
+                cmp = f"Act {score} · Books {book} · PL {pl}"
+        cmp = (
+            cmp.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        tds[4] = f"<td>{cmp}</td>"
+        return "<tr>" + "".join(tds) + "</tr>"
+
+    section = re.sub(r"<tr>\s*<td>[\s\S]*?</tr>", _row, section)
+    return prefix + start + section + after
 
 
 # === Extracted Dead Code Logic ===

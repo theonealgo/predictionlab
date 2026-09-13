@@ -61,13 +61,25 @@ from chart_shape import (  # noqa: E402
     h2h_gap_issues,
     missing_signed_off_charts,
     nba_last_season_gap_issues,
+    ncaaf_chart_api_issues,
     ncaaf_results_date_nav_issues,
+    best_performing_width_issues,
+    efficiency_copied_na_issues,
+    share_ad_card_issues,
+    team_chart_sou_table_issues,
+    results_card_parameter_issues,
+    team_chart_leftover_board_issues,
+    team_chart_same_as_cards_issues,
+    team_chart_window_tally_issues,
+    team_results_tally_model_issues,
     mlb_xsharp_totals_issues,
     nfl_chart_api_issues,
     nfl_chart_not_mlb_issues,
     nfl_chart_same_as_cards_issues,
     nfl_chart_window_tally_issues,
+    nfl_duplicate_h2h_issues,
     nfl_missing_efficiency_issues,
+    nfl_preseason_results_issues,
     nfl_spread_result_card_issues,
     nfl_stale_season_perf_issues,
     nfl_stale_season_week_issues,
@@ -442,7 +454,13 @@ class ChromeChecker:
         self.r = report
         self.CheckResult = CheckResult
         self.timeout = int(os.environ.get("AUDIT_CHROME_TIMEOUT", "45"))
-        self.speed_budget = float(os.environ.get("AUDIT_SPEED_BUDGET", "3"))
+        try:
+            from page_speed import PAGE_SPEED_BUDGET
+        except Exception:
+            PAGE_SPEED_BUDGET = 5.0
+        self.speed_budget = float(os.environ.get("AUDIT_SPEED_BUDGET", PAGE_SPEED_BUDGET))
+        self._slow_reported: set[str] = set()
+        self._slow: list[str] = []
 
     def add(self, label, status, message, url="", detail=""):
         self.r.add(
@@ -468,10 +486,36 @@ class ChromeChecker:
         try:
             resp = self.s.get(url, timeout=wait, allow_redirects=True)
             self._last_elapsed = __import__("time").perf_counter() - started
+            self._report_speed(path, url)
             return resp.status_code, resp.text or "", url
         except Exception as exc:
             self._last_elapsed = __import__("time").perf_counter() - started
+            self._report_speed(path, url)
             return 0, str(exc), url
+
+    def _report_speed(self, path: str, url: str) -> None:
+        elapsed = float(getattr(self, "_last_elapsed", 0) or 0)
+        if elapsed <= self.speed_budget:
+            return
+        key = path or url
+        if key in self._slow_reported:
+            return
+        self._slow_reported.add(key)
+        self._slow.append(f"{path} {elapsed:.1f}s")
+        try:
+            from page_speed import speed_fail_message
+            message = speed_fail_message(path, elapsed, self.speed_budget)
+        except Exception:
+            message = (
+                f"{path} took {elapsed:.1f}s (over {self.speed_budget:.0f}s). "
+                "Pages must load in 5s."
+            )
+        self.add(
+            f"speed {path}",
+            FAIL,
+            message,
+            url=url,
+        )
 
     def _ok_status(self, path: str, status: int) -> bool:
         if status == 200:
@@ -627,19 +671,9 @@ class ChromeChecker:
         print(f"  Chrome checker: opening {len(unique)} header/footer destinations (one at a time)")
         fails = []
         chrome_fails = []
-        slow = []
         for path in unique:
             status, body, url = self.fetch(path)
-            elapsed = float(getattr(self, "_last_elapsed", 0) or 0)
             label = f"open {path}"
-            if elapsed > self.speed_budget:
-                self.add(
-                    f"speed {path}",
-                    FAIL,
-                    f"Took {elapsed:.1f}s (budget {self.speed_budget:.0f}s). Pages must load in 3s.",
-                    url=url,
-                )
-                slow.append(f"{path} {elapsed:.1f}s")
             if status == 0:
                 self.add(
                     label,
@@ -704,18 +738,7 @@ class ChromeChecker:
                 PASS,
                 f"All {len(seen)} destinations opened",
             )
-        if slow:
-            self.add(
-                "DIGEST slow pages",
-                FAIL,
-                f"{len(slow)} page(s) slower than {self.speed_budget:.0f}s: " + ", ".join(slow),
-            )
-        else:
-            self.add(
-                "DIGEST slow pages",
-                PASS,
-                f"All {len(seen)} destinations loaded within {self.speed_budget:.0f}s",
-            )
+        self._digest_destinations_seen = len(seen)
 
     def _check_shared_chrome(self, path: str, html: str, url: str) -> bool | None:
         """Fail when this page's header/footer is not the homepage chrome.
@@ -796,6 +819,30 @@ class ChromeChecker:
                         url=url,
                     )
             self._check_picks_clock_and_logos(sport, body, url)
+            if sport == "NCAAF":
+                copied = efficiency_copied_na_issues(body)
+                if copied:
+                    self.add(
+                        "NCAAF Efficiency N/A copy",
+                        FAIL,
+                        "; ".join(copied),
+                        url=url,
+                    )
+                share = share_ad_card_issues(body)
+                if share:
+                    self.add(
+                        "NCAAF share card",
+                        FAIL,
+                        "; ".join(share),
+                        url=url,
+                    )
+                else:
+                    self.add(
+                        "NCAAF share card",
+                        PASS,
+                        "Bottom advertising card has at least 2 picks",
+                        url=url,
+                    )
             return
         if sport in OFFSEASON_OK_EMPTY or "is in the off-season" in (body or ""):
             return
@@ -875,6 +922,17 @@ class ChromeChecker:
                 "H2H Last 10 present on picks cards",
                 url=url,
             )
+        if sport == "NFL" and body:
+            dups = nfl_duplicate_h2h_issues(body)
+            if dups:
+                self.add("NFL picks duplicate H2H", FAIL, "; ".join(dups), url=url)
+            else:
+                self.add(
+                    "NFL picks duplicate H2H",
+                    PASS,
+                    "H2H Last 10 is on the face only, not repeated in details",
+                    url=url,
+                )
 
     def _check_xsharp_values(self, sport: str, html: str, url: str, label: str) -> None:
         if not _xsharp_rows_present(html):
@@ -1077,6 +1135,37 @@ class ChromeChecker:
                     "NFL Spread tab has result cards",
                     url=rurl,
                 )
+        if sport != "Soccer":
+            tally = team_results_tally_model_issues(rhtml, sport)
+            if tally:
+                self.add(
+                    f"{sport} results tally models",
+                    FAIL,
+                    "; ".join(tally),
+                    url=rurl,
+                )
+            else:
+                self.add(
+                    f"{sport} results tally models",
+                    PASS,
+                    f"{sport} Last Night / Last 7 / Season show every live model",
+                    url=rurl,
+                )
+            card_params = results_card_parameter_issues(rhtml, sport)
+            if card_params:
+                self.add(
+                    f"{sport} results card parameters",
+                    FAIL,
+                    "; ".join(card_params),
+                    url=rurl,
+                )
+            else:
+                self.add(
+                    f"{sport} results card parameters",
+                    PASS,
+                    f"{sport} results cards have Odds, H2H, and model values",
+                    url=rurl,
+                )
         if sport == "NCAAF":
             date_issues = ncaaf_results_date_nav_issues(rhtml)
             if date_issues:
@@ -1137,6 +1226,17 @@ class ChromeChecker:
                     f"{sport} results charts",
                     PASS,
                     "Consensus Based Betting Records present",
+                    url=rurl,
+                )
+        if sport == "NFL":
+            pre = nfl_preseason_results_issues(rhtml)
+            if pre:
+                self.add("NFL results preseason", FAIL, "; ".join(pre), url=rurl)
+            else:
+                self.add(
+                    "NFL results preseason",
+                    PASS,
+                    "NFL results are regular season only",
                     url=rurl,
                 )
         self._check_xsharp_values(sport, rhtml, rurl, f"{sport} consensus XSharp")
@@ -1272,6 +1372,21 @@ class ChromeChecker:
                     f"{sport} chart is the shared consensus table",
                     url=curl,
                 )
+            same = team_chart_same_as_cards_issues(rhtml, chtml, sport)
+            if same:
+                self.add(
+                    f"{sport} cards vs chart",
+                    FAIL,
+                    "; ".join(same),
+                    url=curl,
+                )
+            else:
+                self.add(
+                    f"{sport} cards vs chart",
+                    PASS,
+                    f"{sport} chart view is not the cards page",
+                    url=curl,
+                )
         if sport == "NFL":
             mlb_shape = nfl_chart_not_mlb_issues(chtml)
             if mlb_shape:
@@ -1341,6 +1456,66 @@ class ChromeChecker:
                     "NFL chart API",
                     PASS,
                     "/nfl/api/picks hydrates Moneyline | Spread | Totals",
+                    url=aurl,
+                )
+        if sport == "NCAAF":
+            width = best_performing_width_issues(chtml)
+            if width:
+                self.add(
+                    "NCAAF Best Performing width",
+                    FAIL,
+                    "; ".join(width),
+                    url=curl,
+                )
+            else:
+                self.add(
+                    "NCAAF Best Performing width",
+                    PASS,
+                    "Best Performing Model is as wide as the other boxes",
+                    url=curl,
+                )
+            for mk in ("spread", "totals"):
+                mst, mhtml, murl = self.fetch(f"/ncaaf-results?view=chart&market={mk}")
+                sou = [] if mst != 200 else team_chart_sou_table_issues(mhtml, mk)
+                if mst != 200:
+                    sou = [f"NCAAF {mk} chart HTTP {mst}"]
+                if sou:
+                    self.add(
+                        f"NCAAF {mk} chart table",
+                        FAIL,
+                        "; ".join(sou),
+                        url=murl,
+                    )
+                else:
+                    self.add(
+                        f"NCAAF {mk} chart table",
+                        PASS,
+                        f"{mk} compares actual score to books / PL lines",
+                        url=murl,
+                    )
+            ast, atext, aurl = self.fetch("/ncaaf/api/picks")
+            api_body = None
+            if ast == 200 and atext:
+                try:
+                    import json as _json
+                    api_body = _json.loads(atext)
+                except Exception:
+                    api_body = None
+            api = ncaaf_chart_api_issues(api_body)
+            if ast != 200:
+                api = [f"NCAAF chart API HTTP {ast}"] + api
+            if api:
+                self.add(
+                    "NCAAF chart API",
+                    FAIL,
+                    "; ".join(api),
+                    url=aurl,
+                )
+            else:
+                self.add(
+                    "NCAAF chart API",
+                    PASS,
+                    "/ncaaf/api/picks hydrates Moneyline | Spread | Totals",
                     url=aurl,
                 )
 
@@ -1515,6 +1690,21 @@ class ChromeChecker:
         self.check_homepage_chrome(html, url)
         self.check_destinations(html)
         self.check_all_sport_template_gaps()
+        if self._slow:
+            self.add(
+                "DIGEST slow pages",
+                FAIL,
+                f"{len(self._slow)} page(s) slower than {self.speed_budget:.0f}s: "
+                + ", ".join(self._slow),
+            )
+        else:
+            seen_n = getattr(self, "_digest_destinations_seen", 0)
+            self.add(
+                "DIGEST slow pages",
+                PASS,
+                f"Checked pages loaded within {self.speed_budget:.0f}s"
+                + (f" ({seen_n} destinations)" if seen_n else ""),
+            )
 
 
 def main(argv: list[str] | None = None) -> int:

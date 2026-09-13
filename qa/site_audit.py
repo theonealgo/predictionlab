@@ -1394,7 +1394,7 @@ def main():
     parser.add_argument("--full",        action="store_true",
                         help="Run all auditors (default)")
     parser.add_argument("--quick",       action="store_true",
-                        help="Quick mode: routes + content + nav only")
+                        help="Quick mode: routes + content + nav + chrome")
     parser.add_argument("--url",         type=str, default=None,
                         help=f"Override base URL (default: {BASE_URL})")
     args = parser.parse_args()
@@ -1423,4 +1423,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # The thin routes/content/nav copy dropped ~200 chrome checks (349 → 148).
+    # Always run the real checker so Cards|Chart / H2H / preseason are covered.
+    print("Delegating to qa/site_checker.py (includes chrome).")
+    from site_checker import main as _site_checker_main
+    _site_checker_main()

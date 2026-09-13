@@ -38,6 +38,7 @@ import json
 import os
 import re
 import sys
+import time as _time_mod
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -60,7 +61,7 @@ from audit_config import (
     EXPECTED_DASHBOARD_SPORTS, FORBIDDEN_CONTENT,
     FULL_MODE_AUDITORS, HISTORY_DIR, MODEL_DISPLAY_NAMES, MODEL_KEYS,
     SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS,
-    PREFLIGHT_TIMEOUT, QUICK_MODE_AUDITORS, REQUEST_TIMEOUT, SCREENSHOTS_DIR,
+    PAGE_SPEED_BUDGET, PREFLIGHT_TIMEOUT, QUICK_MODE_AUDITORS, REQUEST_TIMEOUT, SCREENSHOTS_DIR,
     SMTP_HOST, SMTP_PORT, SPORT_PICKS_SLUGS, SPORT_RESULTS_SLUGS, STALE_STRINGS,
     USER_AGENT, is_offseason,
 )
@@ -73,6 +74,46 @@ PASS    = "PASS"
 WARN    = "WARN"
 FAIL    = "FAIL"
 INFO    = "INFO"
+
+_SLOW_PAGES_REPORTED: set[str] = set()
+
+
+def _report_slow_page(report, path: str, elapsed: float, url: str = "") -> None:
+    """FAIL when an HTML fetch takes longer than PAGE_SPEED_BUDGET (5s)."""
+    if elapsed <= PAGE_SPEED_BUDGET:
+        return
+    key = path or url
+    if key in _SLOW_PAGES_REPORTED:
+        return
+    _SLOW_PAGES_REPORTED.add(key)
+    report.add(CheckResult(
+        label=f"speed {path}",
+        status=FAIL,
+        message=(
+            f"Took {elapsed:.1f}s (over {PAGE_SPEED_BUDGET:.0f}s). "
+            "Pages must load in 5s."
+        ),
+        url=url or path,
+        auditor="speed",
+    ))
+
+
+def _timed_get(session, report, base: str, path: str, *,
+               timeout: float | None = None, allow_redirects: bool = True):
+    """GET an HTML page and FAIL the report when it exceeds PAGE_SPEED_BUDGET."""
+    url = urljoin(base, path)
+    started = _time_mod.perf_counter()
+    try:
+        resp = session.get(
+            url,
+            timeout=REQUEST_TIMEOUT if timeout is None else timeout,
+            allow_redirects=allow_redirects,
+        )
+        _report_slow_page(report, path, _time_mod.perf_counter() - started, url)
+        return resp
+    except Exception:
+        _report_slow_page(report, path, _time_mod.perf_counter() - started, url)
+        raise
 
 
 @dataclass
@@ -219,10 +260,15 @@ class RouteAuditor:
     def _get(self, path: str) -> tuple[int, str]:
         """Return (status_code, final_url). Follows redirects once."""
         url = urljoin(self.base, path)
+        started = _time_mod.perf_counter()
         try:
             resp = self.s.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True, stream=False)
+            elapsed = _time_mod.perf_counter() - started
+            _report_slow_page(self.r, path, elapsed, url)
             return resp.status_code, resp.url
         except Exception as exc:
+            elapsed = _time_mod.perf_counter() - started
+            _report_slow_page(self.r, path, elapsed, url)
             return -1, str(exc)
 
     def _head(self, path: str) -> int:
@@ -300,8 +346,8 @@ class RouteAuditor:
         # Warm key routes sequentially so cold-cache pages don't false-timeout in parallel audit.
         for _warm_path in ('/all-sports-results', '/nba-picks', '/daily-report'):
             try:
-                self.s.get(urljoin(self.base, _warm_path), timeout=max(REQUEST_TIMEOUT, 45),
-                           allow_redirects=True)
+                _timed_get(self.s, self.r, self.base, _warm_path,
+                           timeout=max(REQUEST_TIMEOUT, 45))
             except Exception:
                 pass
 
@@ -354,11 +400,16 @@ class ContentAuditor:
         self.r = report
 
     def _fetch(self, path: str) -> str:
+        started = _time_mod.perf_counter()
         try:
             resp = self.s.get(urljoin(self.base, path),
                               timeout=REQUEST_TIMEOUT, allow_redirects=True)
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return resp.text
         except Exception:
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return ""
 
     def run(self):
@@ -441,8 +492,7 @@ class ContentAuditor:
         for slug in SPORT_PICKS_SLUGS:
             path = f"/{slug}"
             try:
-                resp = self.s.get(urljoin(self.base, path),
-                                  timeout=8, allow_redirects=True)
+                resp = _timed_get(self.s, self.r, self.base, path, timeout=8)
                 if resp.status_code == 404:
                     self.r.add(CheckResult(
                         label=f"Sport page broken: {slug}", status=FAIL,
@@ -465,8 +515,7 @@ class ContentAuditor:
                      "tennis-picks", "ufc-picks", "golf-picks"]:
             path = f"/{slug}"
             try:
-                resp = self.s.get(urljoin(self.base, path),
-                                  timeout=10, allow_redirects=True)
+                resp = _timed_get(self.s, self.r, self.base, path, timeout=10)
                 if resp.status_code != 200:
                     continue
                 html = resp.text
@@ -499,12 +548,23 @@ class ContentAuditor:
             h2h_gap_issues,
             nba_last_season_gap_issues,
             ncaaf_results_date_nav_issues,
+            best_performing_width_issues,
+            efficiency_copied_na_issues,
+            share_ad_card_issues,
+            team_chart_sou_table_issues,
+            ncaaf_chart_api_issues,
+            results_card_parameter_issues,
+            team_chart_same_as_cards_issues,
+            team_chart_window_tally_issues,
+            team_results_tally_model_issues,
             mlb_xsharp_totals_issues,
             nfl_chart_api_issues,
             nfl_chart_not_mlb_issues,
             nfl_chart_same_as_cards_issues,
             nfl_chart_window_tally_issues,
+            nfl_duplicate_h2h_issues,
             nfl_missing_efficiency_issues,
+            nfl_preseason_results_issues,
             nfl_spread_result_card_issues,
             nfl_stale_season_perf_issues,
             nfl_stale_season_week_issues,
@@ -572,11 +632,29 @@ class ContentAuditor:
             if slug in ("ncaaf-picks", "nfl-picks", "cfl-picks", "soccer-picks", "mlb-picks"):
                 miss = card_missing_model_value_issues(html, sport)
                 miss.extend(card_blank_market_line_issues(html, sport))
+                if slug == "ncaaf-picks":
+                    miss.extend(efficiency_copied_na_issues(html))
+                    share = share_ad_card_issues(html)
+                    if share:
+                        self.r.add(CheckResult(
+                            label="NCAAF share card",
+                            status=FAIL,
+                            message="; ".join(share),
+                            url=path, auditor=self.NAME))
                 if miss:
                     self.r.add(CheckResult(
                         label=f"{sport} missing models/values",
                         status=FAIL,
                         message="; ".join(miss),
+                        url=path, auditor=self.NAME))
+                if slug == "nfl-picks":
+                    dups = nfl_duplicate_h2h_issues(html)
+                    self.r.add(CheckResult(
+                        label="NFL picks duplicate H2H",
+                        status=FAIL if dups else PASS,
+                        message="; ".join(dups) if dups else (
+                            "H2H Last 10 is on the face only, not repeated in details"
+                        ),
                         url=path, auditor=self.NAME))
             if slug == "soccer-picks":
                 league_sel = re.search(
@@ -663,6 +741,12 @@ class ContentAuditor:
                         message="; ".join(chart_tpl),
                         url=f"{path}?view=chart", auditor=self.NAME))
             if slug == "nfl-results" and html:
+                pre = nfl_preseason_results_issues(html)
+                self.r.add(CheckResult(
+                    label="NFL results preseason",
+                    status=FAIL if pre else PASS,
+                    message="; ".join(pre) if pre else "NFL results are regular season only",
+                    url=path, auditor=self.NAME))
                 stale = nfl_stale_season_week_issues(html)
                 if stale:
                     self.r.add(CheckResult(
@@ -727,6 +811,33 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(api),
                         url="/nfl/api/picks", auditor=self.NAME))
+            if html and sport_name != "SOCCER":
+                tally = team_results_tally_model_issues(html, sport_name)
+                if tally:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} results tally models",
+                        status=FAIL,
+                        message="; ".join(tally),
+                        url=path, auditor=self.NAME))
+                card_params = results_card_parameter_issues(html, sport_name)
+                if card_params:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} results card parameters",
+                        status=FAIL,
+                        message="; ".join(card_params),
+                        url=path, auditor=self.NAME))
+                chart_html_full = locals().get("chart_html_tpl") or self._fetch(
+                    f"{path}?view=chart"
+                )
+                same = team_chart_same_as_cards_issues(
+                    html, chart_html_full or "", sport_name
+                )
+                if same:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} cards vs chart",
+                        status=FAIL,
+                        message="; ".join(same),
+                        url=f"{path}?view=chart", auditor=self.NAME))
             if slug == "ncaaf-results" and html:
                 date_issues = ncaaf_results_date_nav_issues(html)
                 if date_issues:
@@ -735,6 +846,40 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(date_issues),
                         url=path, auditor=self.NAME))
+                chart_html = locals().get("chart_html_full") or self._fetch(
+                    "/ncaaf-results?view=chart"
+                )
+                width = best_performing_width_issues(chart_html or "")
+                if width:
+                    self.r.add(CheckResult(
+                        label="NCAAF Best Performing width",
+                        status=FAIL,
+                        message="; ".join(width),
+                        url="/ncaaf-results?view=chart", auditor=self.NAME))
+                for mk in ("spread", "totals"):
+                    sou_html = self._fetch(f"/ncaaf-results?view=chart&market={mk}")
+                    sou = team_chart_sou_table_issues(sou_html or "", mk)
+                    if sou:
+                        self.r.add(CheckResult(
+                            label=f"NCAAF {mk} chart table",
+                            status=FAIL,
+                            message="; ".join(sou),
+                            url=f"/ncaaf-results?view=chart&market={mk}",
+                            auditor=self.NAME))
+                api_html = self._fetch("/ncaaf/api/picks")
+                api_payload = None
+                if api_html:
+                    try:
+                        api_payload = json.loads(api_html)
+                    except Exception:
+                        api_payload = None
+                api = ncaaf_chart_api_issues(api_payload)
+                if api:
+                    self.r.add(CheckResult(
+                        label="NCAAF chart API",
+                        status=FAIL,
+                        message="; ".join(api),
+                        url="/ncaaf/api/picks", auditor=self.NAME))
             if not html or "Consensus Based Betting Records" not in html:
                 continue
             sport_name = slug.split("-")[0].upper()
@@ -911,11 +1056,16 @@ class NavigationAuditor:
         self.r = report
 
     def _fetch(self, path: str) -> str:
+        started = _time_mod.perf_counter()
         try:
             resp = self.s.get(urljoin(self.base, path),
                               timeout=REQUEST_TIMEOUT, allow_redirects=True)
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return resp.text
         except Exception:
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return ""
 
     def _parse_menu_sections(self, html: str) -> dict:
@@ -1063,9 +1213,8 @@ class NavigationAuditor:
         checked = 0
         for href in key_links:
             try:
-                resp = self.s.get(urljoin(self.base, href),
-                                  timeout=max(REQUEST_TIMEOUT, 15),
-                                  allow_redirects=True)
+                resp = _timed_get(self.s, self.r, self.base, href,
+                                  timeout=max(REQUEST_TIMEOUT, 15))
                 checked += 1
                 if resp.status_code >= 400:
                     broken.append(f"{href} → HTTP {resp.status_code}")
@@ -1104,11 +1253,16 @@ class CardAuditor:
         self.r = report
 
     def _fetch(self, path: str) -> str:
+        started = _time_mod.perf_counter()
         try:
             resp = self.s.get(urljoin(self.base, path),
                               timeout=REQUEST_TIMEOUT, allow_redirects=True)
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return resp.text
         except Exception:
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return ""
 
     # Impossible line thresholds per prop type
@@ -1334,11 +1488,16 @@ class ModelAuditor:
         self.r = report
 
     def _fetch(self, path: str) -> str:
+        started = _time_mod.perf_counter()
         try:
             resp = self.s.get(urljoin(self.base, path),
                               timeout=REQUEST_TIMEOUT, allow_redirects=True)
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return resp.text
         except Exception:
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return ""
 
     def run(self):
@@ -1420,11 +1579,16 @@ class ResultsAuditor:
         self.r = report
 
     def _fetch(self, path: str) -> str:
+        started = _time_mod.perf_counter()
         try:
             resp = self.s.get(urljoin(self.base, path),
                               timeout=REQUEST_TIMEOUT, allow_redirects=True)
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return resp.text
         except Exception:
+            _report_slow_page(self.r, path, _time_mod.perf_counter() - started,
+                              urljoin(self.base, path))
             return ""
 
     def run(self):
@@ -1668,12 +1832,9 @@ class ResultsAuditor:
                 message=f"Performance page is still warming up (showing loading page) "
                         f"— loaded in {perf_elapsed:.1f}s",
                 auditor=self.NAME))
-        elif perf_elapsed > 30:
-            self.r.add(CheckResult(
-                label="Performance page slow", status=WARN,
-                message=f"Performance page took {perf_elapsed:.0f}s to load — "
-                        f"cache may be cold",
-                auditor=self.NAME))
+        elif perf_elapsed > PAGE_SPEED_BUDGET:
+            # _report_slow_page already FAILed this fetch.
+            pass
         else:
             self.r.add(CheckResult(
                 label="Performance page", status=PASS,
@@ -1726,8 +1887,7 @@ class GameCountAuditor:
 
     def _fetch(self, path: str) -> str:
         try:
-            return self.s.get(urljoin(self.base, path),
-                              timeout=REQUEST_TIMEOUT, allow_redirects=True).text
+            return _timed_get(self.s, self.r, self.base, path).text
         except Exception:
             return ""
 
@@ -1873,8 +2033,7 @@ class CardConsistencyAuditor:
 
     def _fetch(self, path: str) -> str:
         try:
-            return self.s.get(urljoin(self.base, path),
-                              timeout=REQUEST_TIMEOUT, allow_redirects=True).text
+            return _timed_get(self.s, self.r, self.base, path).text
         except Exception:
             return ""
 
@@ -2040,8 +2199,7 @@ class SeoAuditor:
 
     def _fetch(self, path: str) -> str:
         try:
-            return self.s.get(urljoin(self.base, path),
-                              timeout=REQUEST_TIMEOUT, allow_redirects=True).text
+            return _timed_get(self.s, self.r, self.base, path).text
         except Exception:
             return ""
 
@@ -2128,8 +2286,7 @@ class CsvAuditor:
 
     def _fetch(self, path: str) -> tuple[int, str]:
         try:
-            resp = self.s.get(urljoin(self.base, path),
-                              timeout=REQUEST_TIMEOUT, allow_redirects=False)
+            resp = _timed_get(self.s, self.r, self.base, path, allow_redirects=False)
             return resp.status_code, resp.text
         except Exception as exc:
             return -1, str(exc)
@@ -3000,6 +3157,10 @@ def print_summary(report: AuditReport):
     print(f"    latest_report.json")
     print(f"    qa_fix_prompt.txt")
     print(f"    audit_history/{report.run_id}/")
+    if not any((c.auditor or "") == "chrome" for c in report.checks):
+        print("\n  ⚠ Chrome checker did not run — that is the ~200 page/template checks.")
+        print("    Use: python qa/site_checker.py --chrome")
+        print("         python qa/site_checker.py          # default full (~300+)")
 
 
 def main():
@@ -3012,7 +3173,7 @@ def main():
     parser.add_argument("--full",        action="store_true",
                         help="Run all auditors (default)")
     parser.add_argument("--quick",       action="store_true",
-                        help="Quick mode: routes + content + nav only")
+                        help="Quick: routes + content + nav + chrome/ship/soccer")
     parser.add_argument("--ship",        action="store_true",
                         help="5052 ship-parity only: cards, results charts, header/footer, previews, blog")
     parser.add_argument("--chrome",      action="store_true",

@@ -11,9 +11,23 @@ Do **not** modify NCAAF unless the owner says:
 
 **UNLOCK NCAAF**
 
+Owner 2026-09-13: confirm LOCK NCAAF before NFL check. Do not edit NCAAF.
+
+Owner 2026-09-13: unlocked for (1) short Mercer/GT card missing Efficiency +
+Books spread/total, (2) share/ad card text + 2 picks, (3) chart Spread/Totals
+compare table, (4) Best Performing width. Miss closed — lock again.
+
+Mercer @ Georgia Tech is an FCS/FBS **moneyline-only** slate (books posted
++347/−445, no spread/total). Do not invent those lines.
+
+Owner 2026-09-13: unlocked once to add the shared Cards|Chart results
+chart and display the missing results parameters (Efficiency on cards /
+Last Night / Last 7 / Season). That miss is closed — lock again.
+
 Owner 2026-09-09: if the checker catches a real NCAAF miss (blank Odds &
-Lines, Edge stuck at 50%), unlock that miss and fix it. Do not restyle
-cards. Drive-by soccer/CFL/golf/chrome work is still not an unlock.
+Lines, Edge stuck at 50%, chart view missing, results parameters hidden),
+unlock that miss and fix it. Do not restyle cards. Drive-by soccer/CFL/golf/chrome
+work is still not an unlock.
 
 ## Do not touch
 

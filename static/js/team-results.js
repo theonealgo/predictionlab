@@ -126,6 +126,26 @@ function isSoccer() {
 function isMlb() {
   return String(window.TEAM_SPORT || "").toLowerCase() === "mlb";
 }
+function isNcaaf() {
+  return String(window.TEAM_SPORT || "").toLowerCase() === "ncaaf";
+}
+function ncaafSouCompare(c, marketKey) {
+  const row = c[marketKey] || {};
+  const aw = Number(c.away_score);
+  const ho = Number(c.home_score);
+  if (Number.isNaN(aw) || Number.isNaN(ho)) return "—";
+  if (marketKey === "totals") {
+    const actual = aw + ho;
+    const bookN = row.book_line != null ? Number(row.book_line) : NaN;
+    const plN = row.pl_line != null ? Number(row.pl_line) : NaN;
+    const vs = (n) => (Number.isNaN(n) ? "" : (actual > n ? "Over" : actual < n ? "Under" : "Push"));
+    const bits = [`Act ${actual}`];
+    if (!Number.isNaN(bookN)) bits.push(`Books ${bookN} ${vs(bookN)}`);
+    if (!Number.isNaN(plN)) bits.push(`PL ${plN} ${vs(plN)}`);
+    return bits.join(" · ");
+  }
+  return `Act ${aw}–${ho} · Books ${row.book || "—"} · PL ${row.pl_pick || row.pick || "—"}`;
+}
 function mlbScore(c) {
   if (c.home_score == null) return "—";
   return esc(c.away_score) + "–" + esc(c.home_score);
@@ -189,6 +209,18 @@ function souRowHtml(c, marketKey) {
       <td>${esc(xsProj)}</td>
       <td>${esc(ev)}</td>
       <td>${esc(row.pick || "—")}</td>
+      <td>${resultMark(row.correct, row.push || row.grade === "PUSH")}</td>
+    </tr>`;
+  }
+  if (isNcaaf() && (marketKey === "spread" || marketKey === "totals")) {
+    return `<tr data-game-id="${esc(c.game_id || "")}">
+      <td>${esc(c.game_date)}</td>
+      <td>${match}</td>
+      <td>${score}</td>
+      <td>${esc(row.book || row.book_line || "—")}</td>
+      <td>${esc(row.pl_pick || row.pl_line || "—")}</td>
+      <td>${esc(row.xs_pick || row.xs_line || "—")}</td>
+      <td>${esc(ncaafSouCompare(c, marketKey))}</td>
       <td>${resultMark(row.correct, row.push || row.grade === "PUSH")}</td>
     </tr>`;
   }
@@ -392,6 +424,10 @@ function renderActiveMarket() {
     wrap.hidden = true;
     document.getElementById("finals-wrap").hidden = true;
     sum.hidden = true;
+    if (ssrFinals && key !== "moneyline") {
+      ssrFinals.hidden = true;
+      ssrFinals.setAttribute("hidden", "");
+    }
     return;
   }
 
@@ -496,6 +532,12 @@ function renderActiveMarket() {
       <th>XSharp total</th><th>XSharp projected score</th>
       <th>Total EV</th><th>Published pick</th><th>Result</th>
     </tr>`;
+    } else if (isNcaaf() && (key === "spread" || key === "totals")) {
+      head.innerHTML = `<tr>
+      <th>Date</th><th>Match</th><th>Score</th>
+      <th>Books</th><th>Prediction Lab</th><th>XSharp</th>
+      <th>Actual vs lines</th><th>Result</th>
+    </tr>`;
     } else if (soccerTotals) {
       head.innerHTML = `<tr>
       <th>Date</th><th>League</th><th>Match</th><th>Score</th>
@@ -507,7 +549,7 @@ function renderActiveMarket() {
       <th>${esc(pickLabel)}</th><th>Result</th>
     </tr>`;
     }
-    const emptyCols = (mlbSou && key === "totals") ? 13 : (mlbSou && key === "spread") ? 9 : (soccerTotals ? 7 : 6);
+    const emptyCols = (mlbSou && key === "totals") ? 13 : (mlbSou && key === "spread") ? 9 : ((isNcaaf() && (key === "spread" || key === "totals")) ? 8 : (soccerTotals ? 7 : 6));
     body.innerHTML = finals.map((c) => souRowHtml(c, key)).join("") ||
       `<tr><td colspan="${emptyCols}" class="muted">No records for this market on the current slate.</td></tr>`;
     cards.innerHTML = finals.map((c) => souCardHtml(c, key)).join("");

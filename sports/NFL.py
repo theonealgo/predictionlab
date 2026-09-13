@@ -299,7 +299,7 @@ def render_sport_results_page(sport, season_start_dt=None):
         try:
             daily_results = main()._daily_results_from_weekly(weekly_results)
             main()._merge_db_completed_into_daily(
-                'NFL', daily_results, date_from=f"{nfl_season_year()}-08-01",
+                'NFL', daily_results, date_from=main()._nfl_regular_season_start_iso(),
             )
             main()._prune_daily_results_before(
                 daily_results, main()._nfl_current_season_start_iso(),

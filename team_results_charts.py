@@ -2567,7 +2567,7 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
             )
     if sport_u == "NCAAF":
         html = _ncaaf_top_date_nav(html)
-        html = _hide_blank_ml_tally_cards(html, ("Grinder2", "Takedown", "Efficiency"))
+        html = _hide_blank_ml_tally_cards(html, ("Grinder2", "Takedown"))
         if view_l == "chart":
             html = _strip_nfl_card_board_for_chart(html)
             html = _add_html_class(html, "body", "ncaaf-results-chart")
@@ -3129,7 +3129,7 @@ def _apply_h2h_faces(html: str, sport: str) -> str:
         html = _fill_ncaaf_espn_h2h(html)
         html = _fill_ncaaf_card_gaps(html)
         html = _fill_efficiency_na(html, "NCAAF")
-        html = _fill_na_from_published(html)
+        # Do not copy another model's % onto Efficiency N/A (ML-only FCS cards).
     html = _ensure_h2h_attr_first_meeting(html)
     html = _sync_h2h_chips(html)
     html = _inject_face_h2h_chips(html)
@@ -3158,7 +3158,23 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
     html = apply_team_picks_copy_all(html, sport_u)
     if sport_u == "CFL":
         html = _hide_blank_books_ml_lines(html)
+    if sport_u == "NFL":
+        html = _strip_nfl_duplicate_h2h(html)
     return html
+
+
+def _strip_nfl_duplicate_h2h(html: str) -> str:
+    """NFL face already shows H2H Last 10 — drop the details-row copy."""
+    if not html or "h2h-face-chip" not in html:
+        return html
+    return re.sub(
+        r'<div class="sf-item"[^>]*>\s*'
+        r'<span class="sf-label">\s*H2H Last 10\s*</span>\s*'
+        r'<span class="sf-val">[\s\S]*?</span>\s*</div>\s*',
+        "",
+        html,
+        flags=re.I,
+    )
 
 
 def _sync_h2h_chips(html: str) -> str:
@@ -3707,11 +3723,21 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
         return parts[-1] if parts else name
 
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2 and sport_u == "NCAAF":
+        parts = re.split(
+            r'(?=<div\b[^>]*class="[^"]*\bgame-card\b)',
+            html,
+            flags=re.I,
+        )
     if len(parts) < 2:
         return html
     out = [parts[0]]
     for stack in parts[1:]:
-        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        open_m = re.match(
+            r"(<div\b[^>]*(?:\bdata-pick-card\b|class=\"[^\"]*\bgame-card\b)[^>]*>)",
+            stack,
+            flags=re.I,
+        )
         if not open_m:
             out.append(stack)
             continue
@@ -3728,6 +3754,18 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
         away_m = re.search(r'data-away="([^"]*)"', open_tag, flags=re.I)
         home = html_lib.unescape((home_m.group(1) if home_m else "").strip())
         away = html_lib.unescape((away_m.group(1) if away_m else "").strip())
+        if (not home or not away) and sport_u == "NCAAF":
+            names = [
+                html_lib.unescape(re.sub(r"<[^>]+>", "", n)).strip()
+                for n in re.findall(
+                    r'class="team-name[^"]*"[^>]*>\s*([\s\S]*?)</div>',
+                    rest,
+                    flags=re.I,
+                )
+            ]
+            names = [n for n in names if n]
+            if len(names) >= 2:
+                away, home = names[0], names[1]
         pl = ""
         pl_m = re.search(r'data-pl-spread="([^"]*)"', open_tag, flags=re.I)
         if pl_m:

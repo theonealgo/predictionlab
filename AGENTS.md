@@ -63,7 +63,7 @@ Do not attempt a fix if you cannot implement it to the level of quality and corr
 
 ### 6. Review this file first
 
-Before starting any task, re-read this file and confirm your plan complies with all rules above.
+Before starting any task, re-read this file and confirm your plan complies with all rules above — especially Rule 12 (every sport is locked unless the owner unlocks one).
 
 ### 7. Always report where changes were made
 
@@ -132,3 +132,29 @@ boards. If the checker reports a team-sports template miss (thin NFL results,
 weekly frankenstein, chart still showing cards), that is an error — fix the
 page. See [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) and
 `.cursor/rules/ui-architecture.mdc`.
+
+### 12. All sports and results cards are LOCKED — unlock one at a time
+
+**Default before any site work:** every sport is locked. Every picks card and
+every results card is locked.
+
+This includes MLB, NHL, NBA, NFL, NCAAF, NCAAB, NCAAW, WNBA, CFL, soccer,
+tennis, UFC, golf, and any sport added later.
+
+Do **not** change a sport’s picks page, results page, chart view, card HTML,
+Books / H2H / model lines, or the shared functions that render those cards
+unless the owner says:
+
+**UNLOCK &lt;SPORT&gt;**
+
+and names the miss.
+
+Only that one unlocked sport (and only that miss) may be edited. All other
+sports stay locked. A hang, cloaking fix, checker fail, chrome pass, or
+“the worker is down” is **not** an unlock for any other sport.
+
+Do not restyle locked cards. Do not invent Books, Edge, or model numbers.
+Do not edit `NHL77FINAL.py`, `team_results_charts.py`, or `mlb_*` /
+sport-named files “incidentally” while working on something else.
+
+When the miss is done, that sport is locked again. Wait for the next unlock.

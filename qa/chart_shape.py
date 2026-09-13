@@ -547,7 +547,231 @@ def team_chart_template_issues(html: str, sport: str = "") -> list[str]:
             )
     if sport_u in _SIX_MODEL_SPORTS:
         issues.extend(six_model_chart_issues(html, sport_u))
+    issues.extend(team_chart_leftover_board_issues(html, sport_u))
+    issues.extend(team_chart_window_tally_issues(html, sport_u))
     return issues
+
+
+_SIX_MODEL_TALLY = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+_FOUR_MODEL_TALLY = ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
+_CHART_LEFTOVER = (
+    "ncaafTopDates",
+    "ncaaf-top-dates",
+    "Model Performance (Flat Unit Tracking)",
+    "Moneyline Accuracy by Model",
+)
+
+
+def _tally_models_for_sport(sport: str) -> tuple[str, ...]:
+    sport_u = (sport or "").strip().upper()
+    if sport_u in ("WNBA", "NBA"):
+        return _FOUR_MODEL_TALLY
+    return _SIX_MODEL_TALLY
+
+
+def _section_between(html: str, start: str, end: str) -> str:
+    i = html.find(start)
+    if i < 0:
+        return ""
+    j = html.find(end, i + len(start)) if end else -1
+    return html[i:j] if j > i else html[i : i + 4000]
+
+
+def team_results_tally_model_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when Last Night / Last 7 / Season Accuracy hide a required model.
+
+    NFL-only nfl_missing_efficiency_issues missed NCAAF because Efficiency
+    was deleted from the board instead of shown as a dash.
+    """
+    sport_u = (sport or "").strip().upper()
+    if sport_u not in _TEAM_SPORTS_SHARED_UI:
+        return []
+    html = html or ""
+    if "Last Night" not in html and "Moneyline Accuracy by Model" not in html:
+        return []
+    if re.search(r"data-ssr-chart\s*=\s*[\"']1[\"']", html) or (
+        f"{sport_u.lower()}-results-chart" in html
+        and "Last Night's" not in html
+        and "Moneyline Accuracy by Model" not in html
+    ):
+        return []
+    required = _tally_models_for_sport(sport_u)
+    issues: list[str] = []
+    sections = (
+        ("Last Night", "Last Night", "Last 7 Days"),
+        ("Last 7 Days", "Last 7 Days", "Season Performance"),
+        (
+            "Moneyline Accuracy by Model",
+            "Moneyline Accuracy by Model",
+            'class="date-nav"',
+        ),
+    )
+    for label, start, end in sections:
+        chunk = _section_between(html, start, end)
+        if not chunk:
+            if label == "Last Night" and "Last Night" not in html:
+                issues.append(f"{sport_u} results missing Last Night tally")
+            elif label == "Last 7 Days" and "Last 7 Days" not in html:
+                issues.append(f"{sport_u} results missing Last 7 Days tally")
+            elif (
+                label == "Moneyline Accuracy by Model"
+                and "Moneyline Accuracy by Model" not in html
+            ):
+                issues.append(
+                    f"{sport_u} results missing Moneyline Accuracy by Model"
+                )
+            continue
+        missing = [name for name in required if name not in chunk]
+        if missing:
+            issues.append(
+                f"{sport_u} {label} is missing {', '.join(missing)} "
+                "(team-sports results must show every live model)"
+            )
+    return issues
+
+
+def results_card_parameter_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when results game-cards drop Odds & Lines, models, or Efficiency."""
+    sport_u = (sport or "").strip().upper()
+    if sport_u not in _TEAM_SPORTS_SHARED_UI:
+        return []
+    html = html or ""
+    parts = re.split(
+        r'(?=<div\b[^>]*class="[^"]*\bgame-card\b)',
+        html,
+        flags=re.I,
+    )
+    cards = [p for p in parts[1:] if "pick-conf-grid" in p or "pc-name" in p]
+    if len(cards) < 2:
+        return []
+    required = _tally_models_for_sport(sport_u)
+    missing_model = 0
+    blank_eff = 0
+    missing_odds = 0
+    missing_h2h = 0
+    for card in cards:
+        names = [
+            re.sub(r"<[^>]+>", "", n).strip()
+            for n in re.findall(
+                r'class="pc-name">\s*([\s\S]*?)</div>', card, flags=re.I
+            )
+        ]
+        vals = [
+            re.sub(r"<[^>]+>", "", v).strip()
+            for v in re.findall(
+                r'class="pc-val"[^>]*>\s*([\s\S]*?)</div>', card, flags=re.I
+            )
+        ]
+        have = {n.lower() for n in names}
+        if any(model.lower() not in have for model in required):
+            missing_model += 1
+        for name, val_html in zip(names, vals):
+            if name.lower() != "efficiency":
+                continue
+            val = val_html.lower().replace("&mdash;", "—").replace("&ndash;", "–")
+            if val in {"", "n/a", "na", "—", "–", "-"}:
+                blank_eff += 1
+        if "Odds" not in card and "odds-pricing" not in card:
+            missing_odds += 1
+        if "H2H Last 10" not in card:
+            missing_h2h += 1
+    issues: list[str] = []
+    label = sport_u or "results"
+    if missing_model:
+        issues.append(
+            f"{label}: {missing_model}/{len(cards)} results cards are missing a "
+            "model box (Grinder2 / Takedown / Edge / XSharp / Sharp Consensus / "
+            "Efficiency)"
+        )
+    if blank_eff:
+        issues.append(
+            f"{label}: {blank_eff}/{len(cards)} results cards show Efficiency "
+            "as N/A or blank"
+        )
+    if missing_odds:
+        issues.append(
+            f"{label}: {missing_odds}/{len(cards)} results cards are missing "
+            "Odds & Lines"
+        )
+    if missing_h2h:
+        issues.append(
+            f"{label}: {missing_h2h}/{len(cards)} results cards are missing "
+            "H2H Last 10"
+        )
+    return issues
+
+
+def team_chart_leftover_board_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when ?view=chart still has cards-page leftovers (date strip, ROI)."""
+    sport_u = (sport or "").strip().upper()
+    if sport_u not in _TEAM_SPORTS_SHARED_UI or sport_u == "MLB":
+        return []
+    html = html or ""
+    if not html:
+        return [f"{sport_u} chart view did not load"]
+    issues: list[str] = []
+    for marker in _CHART_LEFTOVER:
+        if marker in html:
+            issues.append(
+                f"{sport_u} chart view still shows leftover cards chrome "
+                f"({marker}) — Chart must be the shared consensus table"
+            )
+    n_cards = html.count("game-card") + html.count("data-pick-card")
+    if n_cards >= 3:
+        issues.append(
+            f"{sport_u} chart view still has {n_cards} game cards "
+            "(Chart must not be a stripped cards page)"
+        )
+    return issues
+
+
+def team_chart_window_tally_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when team-sport chart lacks Last Night / Last 7 / Season model cards."""
+    sport_u = (sport or "").strip().upper()
+    if sport_u not in _TEAM_SPORTS_SHARED_UI or sport_u == "MLB":
+        return []
+    html = html or ""
+    if not html:
+        return [f"{sport_u} chart view did not load"]
+    issues: list[str] = []
+    if not re.search(r"Last Night", html, flags=re.I):
+        issues.append(f"{sport_u} chart missing Last Night tally")
+    if not re.search(r"Last 7|Past 7", html, flags=re.I):
+        issues.append(f"{sport_u} chart missing Last 7 tally")
+    if not re.search(r">\s*Season\s*<", html, flags=re.I) and "Season " not in html:
+        issues.append(f"{sport_u} chart missing Season tally")
+    n_cards = html.count("tally-card") + html.count("daily-tally-card")
+    need = 4 if sport_u in ("WNBA", "NBA") else 6
+    if n_cards < need:
+        issues.append(
+            f"{sport_u} chart Last Night / Last 7 / Season have {n_cards} "
+            f"model card(s) — shared chart shows the {need}-model rows"
+        )
+    return issues
+
+
+def team_chart_same_as_cards_issues(
+    cards_html: str, chart_html: str, sport: str = ""
+) -> list[str]:
+    """FAIL when Cards and Chart are the same board."""
+    sport_u = (sport or "").strip().upper()
+    cards_html = cards_html or ""
+    chart_html = chart_html or ""
+    if not cards_html or not chart_html:
+        return [f"{sport_u} cards or chart view did not load"]
+    if cards_html == chart_html:
+        return [f"{sport_u} results chart view looks the same as cards"]
+    leftovers = team_chart_leftover_board_issues(chart_html, sport_u)
+    if leftovers:
+        return leftovers
+    return []
 
 
 _ML_TALLY_MODELS = (
@@ -1355,6 +1579,45 @@ def empty_last_night_spread_tally_issues(html: str) -> list[str]:
     return issues
 
 
+def nfl_duplicate_h2h_issues(html: str) -> list[str]:
+    """FAIL when H2H Last 10 is on the card face and again in details."""
+    html = html or ""
+    if "h2h-face-chip" not in html:
+        return []
+    cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+    if len(cards) < 2:
+        cards = re.split(r'(?=<div\b[^>]*\bgame-card-stack\b)', html, flags=re.I)
+    duped = 0
+    for card in cards[1:]:
+        if "h2h-face-chip" not in card:
+            continue
+        if re.search(r'class="sf-label">\s*H2H Last 10', card, flags=re.I):
+            duped += 1
+    if duped:
+        return [
+            f"{duped} NFL pick card(s) show H2H Last 10 on the face and again "
+            "under details"
+        ]
+    return []
+
+
+def nfl_preseason_results_issues(html: str) -> list[str]:
+    """FAIL when NFL results still list August / preseason games."""
+    html = html or ""
+    if "nfl-results" not in html.lower() and "NFL Results" not in html:
+        return []
+    dates = set(re.findall(r'id="date-(20\d{2}-08-\d{2})"', html))
+    dates.update(re.findall(r'data-date="(20\d{2}-08-\d{2})"', html))
+    dates.update(re.findall(r'[?&]date=(20\d{2}-08-\d{2})', html))
+    if dates:
+        shown = ", ".join(sorted(dates)[:6])
+        return [
+            f"NFL results still include preseason date(s) {shown} "
+            "— regular season only"
+        ]
+    return []
+
+
 def nfl_spread_result_card_issues(html: str) -> list[str]:
     """FAIL when NFL results have a Spread tab but no ATS result cards."""
     html = html or ""
@@ -1408,4 +1671,91 @@ def results_math_issues(html: str, cards_html: str | None = None) -> list[str]:
     except Exception:
         return issues
     issues.extend(four_model_chart_mismatches(html, cards_html))
+    return issues
+
+
+def efficiency_copied_na_issues(html: str) -> list[str]:
+    """FAIL when Efficiency shows another model's % but the side is still N/A."""
+    html = html or ""
+    n = 0
+    for box in re.findall(
+        r'<div class="pc-box[^"]*">[\s\S]*?<div class="pc-name">\s*Efficiency\s*</div>'
+        r'[\s\S]*?</div>\s*</div>',
+        html,
+        flags=re.I,
+    ):
+        val_m = re.search(r'class="pc-val"[^>]*>\s*([^<]+)', box, flags=re.I)
+        side_m = re.search(r'class="pc-side"[^>]*>\s*([^<]+)', box, flags=re.I)
+        val = (val_m.group(1) if val_m else "").strip()
+        side = (side_m.group(1) if side_m else "").strip()
+        if re.fullmatch(r"\d+(?:\.\d+)?%", val) and side.upper() == "N/A":
+            n += 1
+    if n:
+        return [f"Efficiency shows a copied % with N/A side on {n} card(s)"]
+    return []
+
+
+def share_ad_card_issues(html: str, min_picks: int = 2) -> list[str]:
+    """FAIL when the bottom advertising / share card is missing or has <2 picks."""
+    html = html or ""
+    if "social-export-wrap" not in html:
+        return ["Picks page missing bottom share / advertising card"]
+    m = re.search(r'data-share-picks="(\d+)"', html)
+    if not m:
+        return ["Share card does not report how many picks it drew"]
+    n = int(m.group(1))
+    if n < min_picks:
+        return [f"Share card has {n} pick(s); need at least {min_picks}"]
+    return []
+
+
+def team_chart_sou_table_issues(html: str, market: str) -> list[str]:
+    """FAIL when Spread/Totals still show the moneyline table or omit line compare."""
+    html = html or ""
+    market = (market or "").lower()
+    if market not in ("spread", "totals"):
+        return []
+    issues: list[str] = []
+    ssr = re.search(
+        r'id="ssr-finals"[^>]*data-ssr-market="([^"]+)"', html, flags=re.I
+    )
+    ssr_m = (ssr.group(1) if ssr else "").lower()
+    if ssr_m == "moneyline" or (
+        "Moneyline games" in html and "Edge pick" in html and ssr_m != market
+    ):
+        issues.append(f"{market} chart still showing the moneyline Edge pick table")
+    if not re.search(r">\s*Books?\s*<", html, flags=re.I):
+        issues.append(f"{market} chart missing Books line column")
+    if not re.search(r"Actual vs lines|Act \d", html, flags=re.I):
+        issues.append(
+            f"{market} chart does not compare actual score to books / PL lines"
+        )
+    return issues
+
+
+def best_performing_width_issues(html: str) -> list[str]:
+    """FAIL when Best Performing Model is not stretched to the tally row width."""
+    html = html or ""
+    if "Best Performing Model" not in html:
+        return []
+    if "ncaaf-chart-best-width" in html:
+        return []
+    if re.search(
+        r"section\.pl-analytics\s+\.tally-grid\s*\{[^}]*width\s*:\s*100%",
+        html,
+        flags=re.I,
+    ):
+        return []
+    return ["Best Performing Model box is not as wide as the other tally boxes"]
+
+
+def ncaaf_chart_api_issues(payload: dict | None) -> list[str]:
+    """FAIL when /ncaaf/api/picks cannot hydrate Moneyline | Spread | Totals."""
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        return ["NCAAF chart API /ncaaf/api/picks did not return ok"]
+    issues: list[str] = []
+    markets = payload.get("markets") or {}
+    for key in ("moneyline", "spread", "totals"):
+        if not (markets.get(key) or {}):
+            issues.append(f"NCAAF chart API missing {key} market")
     return issues

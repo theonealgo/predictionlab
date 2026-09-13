@@ -1027,7 +1027,7 @@
 </div>
 
 {% if share_image_src %}
-<div class="social-export-wrap">
+<div class="social-export-wrap"{% if share_pick_count is defined %} data-share-picks="{{ share_pick_count }}"{% endif %}>
     <div class="social-export-head">
         <div class="social-export-title">{{ sport_info.name }} Predictions Image</div>
         <div class="social-export-actions">

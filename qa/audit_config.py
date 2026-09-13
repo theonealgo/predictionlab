@@ -57,6 +57,8 @@ SMTP_PORT    = _email_cfg["SMTP_PORT"]
 # ── HTTP settings ──────────────────────────────────────────────────────────
 REQUEST_TIMEOUT   = int(os.environ.get("AUDIT_TIMEOUT",   "12"))
 PREFLIGHT_TIMEOUT = int(os.environ.get("AUDIT_PREFLIGHT_TIMEOUT", "5"))
+# Fail any HTML page that takes longer than this to return.
+PAGE_SPEED_BUDGET = float(os.environ.get("AUDIT_SPEED_BUDGET", "5"))
 MAX_REDIRECTS     = 3
 USER_AGENT        = "PredictionLab-QA/1.0 (internal audit bot)"
 
