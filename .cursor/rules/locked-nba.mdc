@@ -1,0 +1,27 @@
+---
+description: NBA picks/results UI locked on :5052 — do not edit unless UNLOCK NBA
+alwaysApply: true
+---
+
+# NBA LOCKED (:5052 / premerge)
+
+NBA picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify NBA unless the owner says:
+
+**UNLOCK NBA**
+
+Fixing NFL, MLB, soccer, chrome, or production outages is **not** an NBA unlock.
+
+## Do not touch
+
+- `/nba-picks`, `/nba-results`, `/nba-results?view=chart`
+- NBA Cards|Chart, card HTML, date nav
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NBA
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* NBA pages
+
+Do not put lock text on user-facing HTML.

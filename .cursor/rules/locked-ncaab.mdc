@@ -1,0 +1,27 @@
+---
+description: NCAAB picks/results UI locked on :5052 — do not edit unless UNLOCK NCAAB
+alwaysApply: true
+---
+
+# NCAAB LOCKED (:5052 / premerge)
+
+NCAAB picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify NCAAB unless the owner says:
+
+**UNLOCK NCAAB**
+
+Fixing NFL, MLB, soccer, chrome, or production outages is **not** an NCAAB unlock.
+
+## Do not touch
+
+- `/ncaab-picks`, `/ncaab-results`, `/ncaab-results?view=chart`
+- NCAAB Cards|Chart, card HTML, date nav
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NCAAB
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* NCAAB pages
+
+Do not put lock text on user-facing HTML.

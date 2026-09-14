@@ -206,81 +206,61 @@ def ensure_locked_site_chrome(html: str, *, path: str = "") -> str:
     return html
 
 
-# Google Ads “Online gambling” / gambling-promoting landing-page requirements:
-# prominent age warning, responsible-gambling + addiction help, Terms, Privacy,
-# and a footer that we are not a sportsbook. Do not invent a license number.
-_RG_POLICY_MARK = 'id="pl-rg-policy"'
-_RG_POLICY_CSS = """<style id="pl-rg-policy-css">
-.pl-age-bar{background:#111827;color:#f8fafc;font:600 13px/1.4 system-ui,sans-serif;padding:8px 14px;text-align:center}
-.pl-age-bar a{color:#fde68a;font-weight:700}
-.pl-rg-policy{background:#0f172a;color:#e2e8f0;font:14px/1.55 system-ui,sans-serif;padding:16px 18px;border-top:1px solid #334155}
-.pl-rg-policy p{margin:0 0 8px;max-width:1100px}
-.pl-rg-policy p:last-child{margin:0}
-.pl-rg-policy a{color:#fde68a;font-weight:700}
-</style>"""
-_RG_POLICY_TOP = (
-    '<div id="pl-age-bar" class="pl-age-bar">'
-    "21+ only (18+ where that is the legal age). Not for minors. "
-    "If you or someone you know has a gambling problem, call "
-    '<a href="tel:18005224700">1-800-GAMBLER</a> (US) · '
+# Google Ads landing-page copy: 21+, helpline, not a sportsbook.
+# Fine print goes in the existing footer only — no top bar, no second footer.
+_RG_AGE_BAR_RE = re.compile(
+    r'<div[^>]*id=["\']pl-age-bar["\'][^>]*>.*?</div>\s*',
+    re.I | re.S,
+)
+_RG_POLICY_RE = re.compile(
+    r'<div[^>]*id=["\']pl-rg-policy["\'][^>]*>.*?</div>\s*',
+    re.I | re.S,
+)
+_RG_POLICY_CSS_RE = re.compile(
+    r'<style[^>]*id=["\']pl-rg-policy-css["\'][^>]*>.*?</style>\s*',
+    re.I | re.S,
+)
+_RG_FINEPRINT = (
+    '<p class="pl-rg-fineprint" id="pl-rg-fineprint">'
+    "21+ / 18+ where required. Not intended for minors. "
+    "PredictionLab is a sports research and information site. "
+    "We are not an online gambling operator and we do not take bets. "
     '<a href="/responsible-gaming">Responsible Gaming</a> · '
+    '<a href="tel:18005224700">1-800-GAMBLER</a> · '
     '<a href="/terms">Terms</a> · '
     '<a href="/privacy">Privacy</a>'
-    "</div>"
+    "</p>"
 )
-_RG_POLICY_FOOT = (
-    '<div id="pl-rg-policy" class="pl-rg-policy" role="contentinfo">'
-    "<p><strong>21+ / 18+ where required. Not intended for minors.</strong> "
-    "PredictionLab is a sports research and information site. "
-    "We are not an online gambling operator, not a province-run or state-run "
-    "gambling operator, and we do not provide online gambling services. "
-    "We do not take bets, accept wagers, or pay out winnings.</p>"
-    "<p>Any outbound sportsbook or operator links on this domain are exclusively "
-    "to gambling entities licensed and authorized in the relevant geographic "
-    "location. Gambling involves risk. Please wager only what you can afford "
-    "to lose.</p>"
-    "<p>Help: <a href=\"https://www.ncpgambling.org/help-treatment/national-helpline-1-800-gambler/\" "
-    'target="_blank" rel="noopener">1-800-GAMBLER</a> · '
-    '<a href="https://www.connexontario.ca/" target="_blank" rel="noopener">ConnexOntario</a> · '
-    '<a href="/responsible-gaming">Responsible Gaming</a> · '
-    '<a href="/terms">Terms</a> · '
-    '<a href="/privacy">Privacy</a></p>'
-    "</div>"
-)
+
+
+def _has_gambling_policy_copy(html: str) -> bool:
+    low = (html or "").lower()
+    return (
+        ("21+" in html or "18+" in html)
+        and "1-800-gambler" in low
+        and "/responsible-gaming" in low
+        and (
+            "not an online gambling operator" in low
+            or "not a sportsbook" in low
+            or "do not take bets" in low
+        )
+    )
 
 
 def ensure_gambling_policy_chrome(html: str) -> str:
-    """Add the age bar + RG footer Google Ads reviewers look for."""
+    """Keep 21+/helpline copy inside the real footer. Never add a second footer."""
     html = html or ""
-    if _RG_POLICY_MARK in html or "<html" not in html.lower():
+    if "<html" not in html.lower():
         return html
-    if "id=\"pl-rg-policy-css\"" not in html:
-        if re.search(r"</head\s*>", html, flags=re.I):
-            html = re.sub(
-                r"</head\s*>",
-                _RG_POLICY_CSS + "</head>",
-                html,
-                count=1,
-                flags=re.I,
-            )
-        else:
-            html = _RG_POLICY_CSS + html
-    if 'id="pl-age-bar"' not in html:
-        html = re.sub(
-            r"(<body\b[^>]*>)",
-            r"\1" + _RG_POLICY_TOP,
-            html,
-            count=1,
-            flags=re.I,
-        )
-    if re.search(r"</body\s*>", html, flags=re.I):
-        html = re.sub(
-            r"</body\s*>",
-            _RG_POLICY_FOOT + "</body>",
-            html,
-            count=1,
-            flags=re.I,
-        )
-    else:
-        html += _RG_POLICY_FOOT
+    html = _RG_AGE_BAR_RE.sub("", html)
+    html = _RG_POLICY_RE.sub("", html)
+    html = _RG_POLICY_CSS_RE.sub("", html)
+    if _has_gambling_policy_copy(html):
+        return html
+    if 'id="pl-rg-fineprint"' in html:
+        return html
+    lasts = list(re.finditer(r"</footer\s*>", html, flags=re.I))
+    if lasts:
+        i = lasts[-1].start()
+        return html[:i] + _RG_FINEPRINT + html[i:]
     return html

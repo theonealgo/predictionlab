@@ -88,12 +88,13 @@ function mlCardHtml(c, order) {
 }
 
 function mlRowHtml(c, order) {
+  const pickTd = isMlb() ? "" : `<td>${esc(c.face_pick || "—")}</td>`;
   return `<tr>
     <td>${esc(c.game_date)}</td>
     <td>${esc(displayLeague(c.league))}</td>
     <td>${esc(teamName(c, "away"))} @ ${esc(teamName(c, "home"))}</td>
     <td>${isMlb() ? mlbScore(c) : (c.home_score != null ? esc(c.home_score) + "–" + esc(c.away_score) : "—")}</td>
-    <td>${esc(c.face_pick || "—")}</td>
+    ${pickTd}
     <td>${c.face_prob != null ? c.face_prob + "%" : "—"}</td>
     <td>${resultMark(c.correct)}</td>
     <td class="mono-models">${modelCompact(c.models, order)}</td>
@@ -496,13 +497,19 @@ function renderActiveMarket() {
   }
 
   if (key === "moneyline") {
-    // Same MLB Moneyline chart columns (Edge pick + Models). ML-only sports keep League.
-    const mlHead = `<tr>
+    // MLB moneyline games table omits empty Edge pick / dash. Other sports keep it.
+    const mlHead = isMlb()
+      ? `<tr>
+      <th>Date</th><th>League</th><th>Match</th><th>Score</th>
+      <th>%</th><th>Result</th><th>Models</th>
+    </tr>`
+      : `<tr>
       <th>Date</th><th>League</th><th>Match</th><th>Score</th>
       <th>Edge pick</th><th>%</th><th>Result</th><th>Models</th>
     </tr>`;
+    const mlCols = isMlb() ? "7" : "8";
     const mlRows = finals.map((c) => mlRowHtml(c, baseOrder)).join("") ||
-      '<tr><td colspan="8" class="muted">No finals for this league.</td></tr>';
+      `<tr><td colspan="${mlCols}" class="muted">No finals for this league.</td></tr>`;
     // Prefer #ssr-finals (sits above consensus; survives #tallies wipe).
     if (useSsrMl) {
       const ssrTable = ssrFinals.querySelector("table.results-table");

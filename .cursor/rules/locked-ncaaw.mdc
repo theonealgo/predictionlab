@@ -1,0 +1,27 @@
+---
+description: NCAAW picks/results UI locked on :5052 — do not edit unless UNLOCK NCAAW
+alwaysApply: true
+---
+
+# NCAAW LOCKED (:5052 / premerge)
+
+NCAAW picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify NCAAW unless the owner says:
+
+**UNLOCK NCAAW**
+
+Fixing NFL, MLB, soccer, chrome, or production outages is **not** an NCAAW unlock.
+
+## Do not touch
+
+- `/ncaaw-picks`, `/ncaaw-results`, `/ncaaw-results?view=chart`
+- NCAAW Cards|Chart, card HTML, date nav
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NCAAW
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* NCAAW pages
+
+Do not put lock text on user-facing HTML.

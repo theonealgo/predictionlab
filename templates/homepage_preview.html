@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Prediction Labs | AI Sports Predictions and Betting Research{% endblock %}
+{% block title %}PredictionLab — AI sports predictions and value bets. Public record.{% endblock %}
 {% block head_meta %}
 {% if request.path == "/homepage-preview" %}<meta name="robots" content="noindex,nofollow">{% endif %}
-<meta name="description" content="AI sports predictions with transparent tracking. Free moneyline picks and win probabilities for NBA, MLB, NHL, NFL, WNBA, and soccer.">
+<meta name="description" content="AI-powered sports predictions and value bets across 13 sports. Six models, live odds, and a public win-loss record. Free daily moneyline picks.">
 <link rel="canonical" href="https://predictionlab.io{{ request.path }}">
 {# Decorative canvas only — do not contend with LCP text for Slow-4G bandwidth. #}
 <link rel="preload" as="image" href="/static/img/hero-canvas.webp" fetchpriority="low">
-<meta property="og:title" content="Prediction Labs | AI Sports Predictions and Betting Research">
-<meta property="og:description" content="AI sports predictions with transparent tracking. Free moneyline picks for NBA, MLB, NHL, NFL, WNBA, and soccer.">
+<meta property="og:title" content="PredictionLab — AI sports predictions and value bets. Public record.">
+<meta property="og:description" content="AI-powered sports predictions and value bets across 13 sports. Six models, live odds, and a public win-loss record. Free daily moneyline picks.">
 <meta property="og:type" content="website">
 {% endblock %}
 
@@ -298,10 +298,13 @@
     .pl2-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 48px; }
     .pl2-eyebrow::before { content: ""; width: 48px; height: 1px; background: var(--pl-accent); }
     .pl2-hero h1 {
-        margin: 0 0 30px; font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(4.1rem, 6.4vw, 7rem);
-        line-height: .88; letter-spacing: 0; font-weight: 950; text-transform: uppercase;
+        margin: 0 0 24px; max-width: 720px;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(3rem, 5.4vw, 5rem);
+        line-height: .92; letter-spacing: 0; font-weight: 950;
+        text-transform: none;
     }
+    .pl2-hero h1 .block { display: block; }
     .pl2-h1-row { display: flex; align-items: flex-end; justify-content: flex-start; flex-wrap: wrap; gap: clamp(44px, 8vw, 145px); }
     .pl2-h1-side {
         font: 800 clamp(.62rem, 1vw, .88rem) var(--pl-mono); letter-spacing: .18em;
@@ -703,7 +706,7 @@
         .pl2-sec { padding: 56px 0 50px; }
         .pl2-login { display: none; }
         .pl2-hero { min-height: auto; padding: 88px 0 64px; background: hsl(45 25% 99% / .64); }
-        .pl2-hero h1 { font-size: clamp(2rem, 11vw, 3.25rem); overflow-wrap: break-word; hyphens: auto; }
+        .pl2-hero h1 { font-size: clamp(1.85rem, 7.5vw, 2.75rem); overflow-wrap: break-word; hyphens: auto; }
         .pl2-sec h2 { font-size: clamp(1.85rem, 7.5vw, 2.75rem); overflow-wrap: break-word; }
     }
 
@@ -738,17 +741,13 @@
             <div class="pl2-shell">
                 <div class="pl2-eyebrow pl2-mono">Research Index Vol. 2026</div>
                 <h1>
-                    <span class="block">Advanced</span>
-                    <span class="block pl2-h1-row">
-                        <span>Predictive</span>
-                        <span class="pl2-h1-side">AI Sports Analysis</span>
-                    </span>
-                    <span class="block">Modeling</span>
+                    <span class="block">Free AI sports picks.</span>
+                    <span class="block">Every result posted.</span>
                 </h1>
                 <div class="pl2-hero-rule"></div>
                 <div class="pl2-hero-grid">
                     <div>
-                        <p class="pl2-lede">Free daily AI picks for NBA, NFL, MLB, NHL, Soccer &amp; more. Multi-model consensus. Full transparency. Every result tracked. No opinions — only data.</p>
+                        <p class="pl2-lede">Free moneyline picks for NBA, NFL, MLB, NHL, Soccer and more. Six models. Public win-loss record. Spread, totals, and props are premium.</p>
                         <div class="pl2-hero-cta">
                             <a class="pl2-btn primary" href="/ai-sports-betting-picks-today">Access Free Picks →</a>
                             <a class="pl2-btn" href="/performance">View Model Performance</a>

@@ -2185,6 +2185,7 @@ def inject_ssr_chart_bootstrap(
     )
 
     rows = []
+    is_mlb = (sport or "").strip().lower() == "mlb"
     if mk == "moneyline":
         for c in finals:
             home = _chart_team_name(c, "home")
@@ -2196,24 +2197,26 @@ def inject_ssr_chart_bootstrap(
             fp_s = f"{fp}%" if fp is not None else "—"
             ok = c.get("correct")
             res = "Correct" if ok is True else "Wrong" if ok is False else "—"
+            pick_td = "" if is_mlb else f"<td>{_esc_html(face)}</td>"
             rows.append(
                 "<tr>"
                 f"<td>{_esc_html(str(c.get('game_date') or '')[:10])}</td>"
                 f"<td>{_esc_html(c.get('league') or sport.upper())}</td>"
                 f"<td>{_esc_html(away)} @ {_esc_html(home)}</td>"
                 f"<td>{_esc_html(score)}</td>"
-                f"<td>{_esc_html(face)}</td>"
+                f"{pick_td}"
                 f"<td>{_esc_html(fp_s)}</td>"
                 f"<td>{_esc_html(res)}</td>"
                 "<td class=\"mono-models\">Edge</td>"
                 "</tr>"
             )
+        pick_th = "" if is_mlb else "<th>Edge pick</th>"
         head = (
             "<thead><tr><th>Date</th><th>League</th><th>Match</th><th>Score</th>"
-            "<th>Edge pick</th><th>%</th><th>Result</th><th>Models</th></tr></thead>"
+            f"{pick_th}<th>%</th><th>Result</th><th>Models</th></tr></thead>"
         )
         title = "Moneyline games"
-        colspan = 8
+        colspan = 7 if is_mlb else 8
     else:
         sou_key = "spread" if mk == "spread" else "totals"
         for c in finals:

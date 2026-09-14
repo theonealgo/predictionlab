@@ -1,0 +1,27 @@
+---
+description: Golf picks/results UI locked on :5052 — do not edit unless UNLOCK GOLF
+alwaysApply: true
+---
+
+# GOLF LOCKED (:5052 / premerge)
+
+Golf picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify Golf unless the owner says:
+
+**UNLOCK GOLF**
+
+Fixing NFL, MLB, soccer, chrome, or production outages is **not** a Golf unlock.
+
+## Do not touch
+
+- `/golf-picks`, `/golf-results`, golf chart/card views
+- Golf Cards|Chart, card HTML
+- Any `NHL77FINAL.py` branch whose job is Golf
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* Golf pages
+
+Do not put lock text on user-facing HTML.

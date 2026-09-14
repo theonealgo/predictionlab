@@ -21705,6 +21705,12 @@ def ai_picks_today_page():
     return render_template('ai_picks_today.html')
 
 
+@app.route('/predictions')
+@app.route('/value-bets')
+def seo_query_redirects():
+    return redirect('/ai-sports-betting-picks-today', code=302)
+
+
 @app.route('/what-are-ai-sports-betting-picks')
 def what_are_ai_picks_page():
     return render_template('what_are_ai_picks.html')

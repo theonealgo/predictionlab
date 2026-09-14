@@ -1,19 +1,33 @@
 ---
-description: NFL UNLOCKED — duplicate H2H, drop preseason, restore checker
+description: NFL picks/results UI locked on :5052 — do not edit unless UNLOCK NFL
 alwaysApply: true
 ---
 
-# NFL UNLOCKED (:5052 / premerge) — one miss
+# NFL LOCKED (:5052 / premerge)
 
-Owner 2026-09-14: **UNLOCK NFL** to fix:
+NFL picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
 
-- Consensus Based Betting Records W-L not matching the six card picks
-- Best Performing Model saying Today for yesterday's slate
-- Checker treating a hanging / 30s NFL results 200 as "opened"
+Do **not** modify NFL unless the owner says:
 
-Owner 2026-09-13: duplicate H2H, preseason, thin `--quick` checker.
+**UNLOCK NFL**
 
-Do not restyle cards. Do not invent Books/Edge/model numbers.
-Do not touch MLB, NCAAF, or any other sport.
+Owner 2026-09-14: unlocked once for Consensus W-L vs six card picks, Best
+Performing Model slate label, and checker hang/30s false "opened". Miss closed
+— lock again. Do not restyle cards.
 
-Leave unlocked until the owner checks and says to lock.
+Owner 2026-09-13: duplicate H2H, preseason, thin `--quick` checker — closed.
+
+Fixing MLB, NCAAF, soccer, chrome, or production outages is **not** an NFL unlock.
+
+## Do not touch
+
+- `/nfl-picks`, `/nfl-results`, `/nfl-results?view=chart`
+- NFL Cards|Chart, card HTML, date nav
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NFL
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* NFL pages
+
+Do not put lock text on user-facing HTML.
