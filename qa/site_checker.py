@@ -86,13 +86,18 @@ def _report_slow_page(report, path: str, elapsed: float, url: str = "") -> None:
     if key in _SLOW_PAGES_REPORTED:
         return
     _SLOW_PAGES_REPORTED.add(key)
+    try:
+        from page_speed import speed_fail_message
+        msg = speed_fail_message(path, elapsed)
+    except Exception:
+        msg = (
+            f"Took {elapsed:.1f}s (over {PAGE_SPEED_BUDGET:.0f}s). "
+            "Pages must load in 5s."
+        )
     report.add(CheckResult(
         label=f"speed {path}",
         status=FAIL,
-        message=(
-            f"Took {elapsed:.1f}s (over {PAGE_SPEED_BUDGET:.0f}s). "
-            "Pages must load in 5s."
-        ),
+        message=msg,
         url=url or path,
         auditor="speed",
     ))
@@ -552,17 +557,20 @@ class ContentAuditor:
             efficiency_copied_na_issues,
             share_ad_card_issues,
             team_chart_sou_table_issues,
-            ncaaf_chart_api_issues,
             results_card_parameter_issues,
+            results_missing_efficiency_issues,
+            team_chart_api_issues,
+            six_model_consensus_from_cards_issues,
+            pl_vs_books_partition_issues,
+            best_performing_today_issues,
             team_chart_same_as_cards_issues,
             team_chart_window_tally_issues,
             team_results_tally_model_issues,
             mlb_xsharp_totals_issues,
-            nfl_chart_api_issues,
+            team_xsharp_totals_issues,
             nfl_chart_not_mlb_issues,
             nfl_chart_same_as_cards_issues,
-            nfl_chart_window_tally_issues,
-            nfl_duplicate_h2h_issues,
+            duplicate_h2h_issues,
             nfl_missing_efficiency_issues,
             nfl_preseason_results_issues,
             nfl_spread_result_card_issues,
@@ -629,28 +637,39 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(tpl),
                         url=path, auditor=self.NAME))
-            if slug in ("ncaaf-picks", "nfl-picks", "cfl-picks", "soccer-picks", "mlb-picks"):
+            if sport != "Soccer":
                 miss = card_missing_model_value_issues(html, sport)
                 miss.extend(card_blank_market_line_issues(html, sport))
-                if slug == "ncaaf-picks":
-                    miss.extend(efficiency_copied_na_issues(html))
-                    share = share_ad_card_issues(html)
-                    if share:
-                        self.r.add(CheckResult(
-                            label="NCAAF share card",
-                            status=FAIL,
-                            message="; ".join(share),
-                            url=path, auditor=self.NAME))
+                copied = efficiency_copied_na_issues(html)
+                if copied:
+                    self.r.add(CheckResult(
+                        label=f"{sport} Efficiency N/A copy",
+                        status=FAIL,
+                        message="; ".join(copied),
+                        url=path, auditor=self.NAME))
+                share = share_ad_card_issues(html)
+                if share:
+                    self.r.add(CheckResult(
+                        label=f"{sport} share card",
+                        status=FAIL,
+                        message="; ".join(share),
+                        url=path, auditor=self.NAME))
+                elif "game-card" in html or "pick-card" in html:
+                    self.r.add(CheckResult(
+                        label=f"{sport} share card",
+                        status=PASS,
+                        message="Bottom advertising card has at least 2 picks",
+                        url=path, auditor=self.NAME))
                 if miss:
                     self.r.add(CheckResult(
                         label=f"{sport} missing models/values",
                         status=FAIL,
                         message="; ".join(miss),
                         url=path, auditor=self.NAME))
-                if slug == "nfl-picks":
-                    dups = nfl_duplicate_h2h_issues(html)
+                dups = duplicate_h2h_issues(html, sport)
+                if dups or "h2h-face-chip" in html:
                     self.r.add(CheckResult(
-                        label="NFL picks duplicate H2H",
+                        label=f"{sport} picks duplicate H2H",
                         status=FAIL if dups else PASS,
                         message="; ".join(dups) if dups else (
                             "H2H Last 10 is on the face only, not repeated in details"
@@ -790,27 +809,6 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(same),
                         url="/nfl-results?view=chart", auditor=self.NAME))
-                windows = nfl_chart_window_tally_issues(chart_html or "")
-                if windows:
-                    self.r.add(CheckResult(
-                        label="NFL chart Last Night / Last 7",
-                        status=FAIL,
-                        message="; ".join(windows),
-                        url="/nfl-results?view=chart", auditor=self.NAME))
-                api_html = self._fetch("/nfl/api/picks")
-                api_payload = None
-                if api_html:
-                    try:
-                        api_payload = json.loads(api_html)
-                    except Exception:
-                        api_payload = None
-                api = nfl_chart_api_issues(api_payload)
-                if api:
-                    self.r.add(CheckResult(
-                        label="NFL chart API",
-                        status=FAIL,
-                        message="; ".join(api),
-                        url="/nfl/api/picks", auditor=self.NAME))
             if html and sport_name != "SOCCER":
                 tally = team_results_tally_model_issues(html, sport_name)
                 if tally:
@@ -838,6 +836,96 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(same),
                         url=f"{path}?view=chart", auditor=self.NAME))
+                windows = team_chart_window_tally_issues(
+                    chart_html_full or "", sport_name
+                )
+                if windows:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} chart Last Night / Last 7",
+                        status=FAIL,
+                        message="; ".join(windows),
+                        url=f"{path}?view=chart", auditor=self.NAME))
+                width = best_performing_width_issues(chart_html_full or "")
+                if width:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} Best Performing width",
+                        status=FAIL,
+                        message="; ".join(width),
+                        url=f"{path}?view=chart", auditor=self.NAME))
+                for mk in ("spread", "totals"):
+                    sou_html = self._fetch(f"{path}?view=chart&market={mk}")
+                    sou = team_chart_sou_table_issues(sou_html or "", mk)
+                    if sou:
+                        self.r.add(CheckResult(
+                            label=f"{sport_name} {mk} chart table",
+                            status=FAIL,
+                            message="; ".join(sou),
+                            url=f"{path}?view=chart&market={mk}",
+                            auditor=self.NAME))
+                api_slug = sport_name.lower()
+                api_html = self._fetch(f"/{api_slug}/api/picks")
+                api_payload = None
+                if api_html:
+                    try:
+                        api_payload = json.loads(api_html)
+                    except Exception:
+                        api_payload = None
+                api = team_chart_api_issues(api_payload, api_slug)
+                if api:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} chart API",
+                        status=FAIL,
+                        message="; ".join(api),
+                        url=f"/{api_slug}/api/picks", auditor=self.NAME))
+                missing_eff = results_missing_efficiency_issues(html, sport_name)
+                if missing_eff:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} results Efficiency",
+                        status=FAIL,
+                        message="; ".join(missing_eff),
+                        url=path, auditor=self.NAME))
+                xs = team_xsharp_totals_issues(
+                    html, chart_html_full or "", sport_name
+                )
+                if xs:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} XSharp totals",
+                        status=FAIL,
+                        message="; ".join(xs),
+                        url=f"{path}?view=chart", auditor=self.NAME))
+                cons = six_model_consensus_from_cards_issues(
+                    html, html, sport_name
+                )
+                if not cons:
+                    cons = six_model_consensus_from_cards_issues(
+                        chart_html_full or "", html, sport_name
+                    )
+                if cons:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} consensus buckets",
+                        status=FAIL,
+                        message="; ".join(cons),
+                        url=path, auditor=self.NAME))
+                pl_part = pl_vs_books_partition_issues(html, sport_name)
+                if not pl_part:
+                    pl_part = pl_vs_books_partition_issues(
+                        chart_html_full or "", sport_name
+                    )
+                if pl_part:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} PL vs Books partition",
+                        status=FAIL,
+                        message="; ".join(pl_part),
+                        url=path, auditor=self.NAME))
+                today_lbl = best_performing_today_issues(
+                    chart_html_full or html, sport_name
+                )
+                if today_lbl:
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} Best Performing Today",
+                        status=FAIL,
+                        message="; ".join(today_lbl),
+                        url=f"{path}?view=chart", auditor=self.NAME))
             if slug == "ncaaf-results" and html:
                 date_issues = ncaaf_results_date_nav_issues(html)
                 if date_issues:
@@ -846,40 +934,6 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(date_issues),
                         url=path, auditor=self.NAME))
-                chart_html = locals().get("chart_html_full") or self._fetch(
-                    "/ncaaf-results?view=chart"
-                )
-                width = best_performing_width_issues(chart_html or "")
-                if width:
-                    self.r.add(CheckResult(
-                        label="NCAAF Best Performing width",
-                        status=FAIL,
-                        message="; ".join(width),
-                        url="/ncaaf-results?view=chart", auditor=self.NAME))
-                for mk in ("spread", "totals"):
-                    sou_html = self._fetch(f"/ncaaf-results?view=chart&market={mk}")
-                    sou = team_chart_sou_table_issues(sou_html or "", mk)
-                    if sou:
-                        self.r.add(CheckResult(
-                            label=f"NCAAF {mk} chart table",
-                            status=FAIL,
-                            message="; ".join(sou),
-                            url=f"/ncaaf-results?view=chart&market={mk}",
-                            auditor=self.NAME))
-                api_html = self._fetch("/ncaaf/api/picks")
-                api_payload = None
-                if api_html:
-                    try:
-                        api_payload = json.loads(api_html)
-                    except Exception:
-                        api_payload = None
-                api = ncaaf_chart_api_issues(api_payload)
-                if api:
-                    self.r.add(CheckResult(
-                        label="NCAAF chart API",
-                        status=FAIL,
-                        message="; ".join(api),
-                        url="/ncaaf/api/picks", auditor=self.NAME))
             if not html or "Consensus Based Betting Records" not in html:
                 continue
             sport_name = slug.split("-")[0].upper()

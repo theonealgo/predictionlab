@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import html as html_lib
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 ML_CHART = "Consensus Based Betting Records"
 PL_VS_BOOKS = "PL vs Sportsbook"
@@ -371,7 +371,7 @@ def h2h_gap_issues(html: str) -> list[str]:
     return [f"H2H Last 10 missing on {blank}/{len(vals)} cards"]
 
 
-_SIX_MODEL_SPORTS = frozenset({"NFL", "NHL", "NCAAF", "CFL"})
+_SIX_MODEL_SPORTS = frozenset({"MLB", "NFL", "NHL", "NCAAF", "CFL"})
 _TEAM_SPORTS_SHARED_UI = frozenset({
     "MLB", "NHL", "NBA", "NCAAB", "NCAAW", "NFL", "NCAAF", "WNBA", "CFL",
 })
@@ -523,7 +523,7 @@ def team_results_template_issues(
 def team_chart_template_issues(html: str, sport: str = "") -> list[str]:
     """FAIL when a team-sport chart view is still the card board."""
     sport_u = (sport or "").strip().upper()
-    if sport_u not in _TEAM_SPORTS_SHARED_UI or sport_u == "MLB":
+    if sport_u not in _TEAM_SPORTS_SHARED_UI:
         return []
     html = html or ""
     if not html:
@@ -711,7 +711,7 @@ def results_card_parameter_issues(html: str, sport: str = "") -> list[str]:
 def team_chart_leftover_board_issues(html: str, sport: str = "") -> list[str]:
     """FAIL when ?view=chart still has cards-page leftovers (date strip, ROI)."""
     sport_u = (sport or "").strip().upper()
-    if sport_u not in _TEAM_SPORTS_SHARED_UI or sport_u == "MLB":
+    if sport_u not in _TEAM_SPORTS_SHARED_UI:
         return []
     html = html or ""
     if not html:
@@ -735,7 +735,7 @@ def team_chart_leftover_board_issues(html: str, sport: str = "") -> list[str]:
 def team_chart_window_tally_issues(html: str, sport: str = "") -> list[str]:
     """FAIL when team-sport chart lacks Last Night / Last 7 / Season model cards."""
     sport_u = (sport or "").strip().upper()
-    if sport_u not in _TEAM_SPORTS_SHARED_UI or sport_u == "MLB":
+    if sport_u not in _TEAM_SPORTS_SHARED_UI:
         return []
     html = html or ""
     if not html:
@@ -1020,6 +1020,264 @@ def pl_vs_books_empty_vs_tally_issues(html: str) -> list[str]:
     return []
 
 
+_SIX_CONSENSUS_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+
+
+def _norm_cons_label(label: str) -> str:
+    text = html_lib.unescape(label or "")
+    text = re.sub(r"[–—]", "-", text)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _wl_parts(text: str) -> tuple[int, int, int] | None:
+    m = re.search(r"\b(\d{1,3})-(\d{1,3})(?:-(\d{1,3}))?\b", text or "")
+    if not m:
+        return None
+    wins, losses = int(m.group(1)), int(m.group(2))
+    pushes = int(m.group(3) or 0)
+    return wins, losses, wins + losses + pushes
+
+
+def _last_night_consensus_date(html: str) -> str:
+    m = re.search(r"Last night \((\d{4}-\d{2}-\d{2})\)", html or "", flags=re.I)
+    if m:
+        return m.group(1)
+    m = re.search(
+        r"Last Night(?:'s)?[^<—\-]{0,40}[—\-]\s*(\d{4}-\d{2}-\d{2})",
+        html or "",
+        flags=re.I,
+    )
+    return m.group(1) if m else ""
+
+
+def _six_model_games_from_cards(html: str, sport: str = "") -> list[dict]:
+    """One row per results card: date, dissent bucket, W/L."""
+    html = html or ""
+    games: list[dict] = []
+    chunks = re.split(r'<div id="date-(\d{4}-\d{2}-\d{2})"', html)
+    it = iter(chunks[1:])
+    for dk in it:
+        content = next(it, "")
+        parts = re.split(r'(<div class="game-card\b[^"]*"[^>]*>)', content, flags=re.I)
+        idx = 1
+        while idx < len(parts):
+            body = parts[idx + 1] if idx + 1 < len(parts) else ""
+            idx += 2
+            boxes = re.findall(
+                r'class="pc-name">([^<]+)</div>\s*'
+                r'<div class="pc-val"[^>]*>([^<]+)</div>\s*'
+                r'<div class="pc-side[^"]*"[^>]*>([^<]+)</div>',
+                body[:25000],
+            )
+            picks: dict[str, tuple[str, bool | None]] = {}
+            for name, _pct, side in boxes:
+                name = re.sub(r"[^A-Za-z0-9 ]+", "", name).strip()
+                if name not in _SIX_CONSENSUS_MODELS:
+                    continue
+                side_txt = re.sub(r"[✅❌]", "", side).strip()
+                if not side_txt or side_txt.upper() in ("N/A", "NA", "—", "-"):
+                    continue
+                ok = True if "✅" in side else False if "❌" in side else None
+                picks[name] = (side_txt, ok)
+            if len(picks) < 6:
+                continue
+            sides = [picks[n][0] for n in _SIX_CONSENSUS_MODELS if n in picks]
+            counts: dict[str, int] = {}
+            for side in sides:
+                counts[side] = counts.get(side, 0) + 1
+            maj_side, maj_n = max(counts.items(), key=lambda kv: kv[1])
+            dissent = [
+                n for n in _SIX_CONSENSUS_MODELS
+                if n in picks and picks[n][0] != maj_side
+            ]
+            if maj_n >= 6:
+                label = "6/6 unanimous"
+            elif dissent:
+                label = f"{maj_n}/6 — all but " + " and ".join(dissent)
+            else:
+                continue
+            # NFL Last Night W-L is Edge's pick in the bucket. Other 6-model
+            # sports still grade the majority side.
+            if (sport or "").strip().upper() == "NFL":
+                grade_ok = picks.get("Edge", ("", None))[1]
+            else:
+                grade_ok = next(
+                    (
+                        picks[n][1]
+                        for n in _SIX_CONSENSUS_MODELS
+                        if picks.get(n, ("", None))[0] == maj_side
+                    ),
+                    None,
+                )
+            if grade_ok is True:
+                grade = "WIN"
+            elif grade_ok is False:
+                grade = "LOSS"
+            else:
+                continue
+            games.append({"date": dk, "label": label, "grade": grade})
+    return games
+
+
+def _displayed_consensus_last_night(html: str) -> dict[str, tuple[int, int, int]]:
+    rows: dict[str, tuple[int, int, int]] = {}
+    start = (html or "").find(ML_CHART)
+    if start < 0:
+        return rows
+    end = (html or "").find(PL_VS_BOOKS, start + 1)
+    block = html[start : end if end > start else start + 8000]
+    for m in re.finditer(
+        r'<td class="bucket">([^<]+)</td>\s*<td>([\s\S]*?)</td>',
+        block,
+        flags=re.I,
+    ):
+        parts = _wl_parts(re.sub(r"<[^>]+>", " ", m.group(2)))
+        if not parts:
+            continue
+        rows[_norm_cons_label(m.group(1))] = parts
+    return rows
+
+
+def six_model_consensus_from_cards_issues(
+    html: str,
+    cards_html: str | None = None,
+    sport: str = "",
+) -> list[str]:
+    """FAIL when Consensus last-night W-L does not match the 6 model picks on the cards."""
+    html = html or ""
+    if ML_CHART not in html or "6/6 unanimous" not in html:
+        return []
+    cards = cards_html or html
+    games = _six_model_games_from_cards(cards, sport)
+    ln_key = _last_night_consensus_date(html)
+    if not games or not ln_key:
+        return []
+    try:
+        ln_d = date.fromisoformat(ln_key)
+        cut7 = (ln_d - timedelta(days=6)).isoformat()
+    except ValueError:
+        cut7 = ln_key
+    # NFL Last night column is the Last 7 slate (Sun + Thu/Mon), not Sunday only.
+    if (sport or "").strip().upper() == "NFL":
+        ln_games = [g for g in games if cut7 <= g["date"] <= ln_key]
+    else:
+        ln_games = [g for g in games if g["date"] == ln_key]
+    if len(ln_games) < 3:
+        return []
+    expected: dict[str, list[str]] = {}
+    for g in ln_games:
+        expected.setdefault(_norm_cons_label(g["label"]), []).append(g["grade"])
+    shown = _displayed_consensus_last_night(html)
+    if not shown:
+        return []
+    label = (sport or "").strip().upper() or "Team"
+    issues: list[str] = []
+    for key, grades in expected.items():
+        want_w = sum(1 for g in grades if g == "WIN")
+        want_l = sum(1 for g in grades if g == "LOSS")
+        got = shown.get(key)
+        if not got or got[0] != want_w or got[1] != want_l:
+            got_s = f"{got[0]}-{got[1]}" if got else "missing"
+            pretty = next(
+                (g["label"] for g in ln_games if _norm_cons_label(g["label"]) == key),
+                key,
+            )
+            issues.append(
+                f"{label} consensus last night {pretty} is {got_s}; "
+                f"cards grade {want_w}-{want_l}"
+            )
+    shown_n = sum(v[2] for v in shown.values() if v[0] + v[1] > 0 or v[2] > 0)
+    if shown_n and shown_n != len(ln_games):
+        issues.append(
+            f"{label} consensus last-night buckets cover {shown_n} game(s); "
+            f"cards have {len(ln_games)} classifiable 6-model game(s)"
+        )
+    return issues
+
+
+def pl_vs_books_partition_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when agree + disagree does not partition PL favorite / Last Night."""
+    text = _plain_results_text(html)
+    if PL_VS_BOOKS not in text:
+        return []
+    games = _last_night_game_count(text)
+    start = text.find(PL_VS_BOOKS)
+    block = text[start : start + 2500]
+    recs = _first_col_records(
+        block,
+        r"(?m)^(Books favorite|PL favorite|PL vs Books disagree|PL and Books agree)",
+    )
+    if len(recs) < 4:
+        return []
+    parsed = [_wl_parts(r) for r in recs[:4]]
+    if any(p is None for p in parsed):
+        return []
+    books, pl, disagree, agree = parsed  # type: ignore[misc]
+    label = (sport or "").strip().upper() or "Team"
+    issues: list[str] = []
+    part_n = agree[2] + disagree[2]
+    if pl[2] >= 3 and part_n != pl[2]:
+        issues.append(
+            f"{label} PL vs Books agree+disagree is {part_n} game(s) "
+            f"but PL favorite is {pl[0]}-{pl[1]} ({pl[2]} games)"
+        )
+    if games >= 3 and part_n and part_n != games:
+        issues.append(
+            f"{label} PL vs Books agree+disagree is {part_n} game(s); "
+            f"Last Night has {games}"
+        )
+    if games >= 3 and books[2] and books[2] != games:
+        issues.append(
+            f"{label} Books favorite last night is {books[0]}-{books[1]} "
+            f"({books[2]} games); Last Night has {games}"
+        )
+    return issues
+
+
+def best_performing_today_issues(
+    html: str,
+    sport: str = "",
+    today: date | None = None,
+) -> list[str]:
+    """FAIL when Best Performing still says Today for yesterday's completed slate."""
+    html = html or ""
+    start = html.find("Best Performing Model")
+    if start < 0:
+        return []
+    block = html[start : start + 1800]
+    if not re.search(r'class="mlabel">\s*Today\s*<', block, flags=re.I):
+        return []
+    ln_key = _last_night_consensus_date(html)
+    if not ln_key:
+        m = re.search(
+            r"Last Night(?:'s)?[^<]{0,80}(\d{4}-\d{2}-\d{2})",
+            html,
+            flags=re.I,
+        )
+        ln_key = m.group(1) if m else ""
+    if not ln_key:
+        return []
+    try:
+        ln_d = date.fromisoformat(ln_key)
+    except ValueError:
+        return []
+    today = today or date.today()
+    if ln_d >= today:
+        return []
+    label = (sport or "").strip().upper() or "Team"
+    return [
+        f"{label} Best Performing Model says Today but the completed window is "
+        f"{ln_key} — use Last Night or Previous Day"
+    ]
+
+
 def ncaaf_results_date_nav_issues(html: str) -> list[str]:
     """FAIL when NCAAF results hide dates below Last Night or leave the strip empty."""
     html = html or ""
@@ -1151,41 +1409,54 @@ def nfl_stale_season_perf_issues(html: str, today: date | None = None) -> list[s
     return []
 
 
-def nfl_missing_efficiency_issues(html: str) -> list[str]:
-    """FAIL when NFL results omit Efficiency while the other ML models are shown.
-
-    blank_moneyline_model_issues used to require Efficiency to already be in
-    the Last Night / Last 7 board (present as a dash). The NFL weekly template
-    left Efficiency out entirely, so that check passed on a 5-model page.
-    """
+def results_missing_efficiency_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when results omit Efficiency while the other ML models are shown."""
+    sport_u = (sport or "").strip().upper()
     blob = html or ""
     text = _plain_results_text(blob)
-    nflish = bool(
+    if sport_u and sport_u not in _TEAM_SPORTS_SHARED_UI:
+        return []
+    label = sport_u or "Team"
+    has_board = bool(
         re.search(
-            r"Last Night's NFL Results|NFL - Week by Week|nfl-results|\bNFL\b",
-            blob + "\n" + text,
+            r"Last Night's .+ Results|Week by Week|Season Performance",
+            blob,
             flags=re.I,
         )
     )
-    if not nflish:
-        return []
-    # Chart view is the MLB dissent table — Last Night tiles are stripped.
-    if "Last Night's NFL Results" not in blob and "NFL - Week by Week" not in blob:
+    if not has_board:
         return []
     if not re.search(r"(?:Last Night|Last 7 Days|Week by Week|Overall Model)", text, flags=re.I):
         return []
     issues: list[str] = []
     if not re.search(r"\bEfficiency\b", text):
         issues.append(
-            "NFL results omit Efficiency while Grinder2 / Takedown / Edge / "
-            "XSharp / Sharp Consensus are shown"
+            f"{label} results omit Efficiency while the other moneyline "
+            "models are shown"
         )
         return issues
     if re.search(r"<th>\s*Grinder2\s*</th>", blob, flags=re.I) and not re.search(
         r"<th>\s*Efficiency\s*</th>", blob, flags=re.I
     ):
-        issues.append("NFL week game table has no Efficiency column")
+        issues.append(f"{label} week game table has no Efficiency column")
     return issues
+
+
+def nfl_missing_efficiency_issues(html: str) -> list[str]:
+    """NFL alias for results_missing_efficiency_issues."""
+    blob = html or ""
+    nflish = bool(
+        re.search(
+            r"Last Night's NFL Results|NFL - Week by Week|nfl-results|\bNFL\b",
+            blob,
+            flags=re.I,
+        )
+    )
+    if not nflish:
+        return []
+    if "Last Night's NFL Results" not in blob and "NFL - Week by Week" not in blob:
+        return []
+    return results_missing_efficiency_issues(html, "NFL")
 
 
 _CARD_MODELS = (
@@ -1439,21 +1710,35 @@ def nba_last_season_gap_issues(html: str) -> list[str]:
     return issues
 
 
-def mlb_xsharp_totals_issues(cards_html: str = "", chart_html: str = "") -> list[str]:
-    """FAIL when MLB results drop Prediction Lab · XSharp — Totals."""
+def team_xsharp_totals_issues(
+    cards_html: str = "",
+    chart_html: str = "",
+    sport: str = "MLB",
+) -> list[str]:
+    """FAIL when results drop Prediction Lab · XSharp — Totals (MLB miss)."""
+    sport_u = (sport or "MLB").strip().upper()
+    if sport_u not in _TEAM_SPORTS_SHARED_UI:
+        return []
     issues: list[str] = []
     for label, html in (("cards", cards_html or ""), ("chart", chart_html or "")):
         if not html:
             if label == "chart" and cards_html:
-                issues.append("MLB /mlb-results?view=chart did not load")
+                issues.append(
+                    f"{sport_u} /{sport_u.lower()}-results?view=chart did not load"
+                )
             continue
         if not has_totals_chart(html):
             issues.append(
-                f"MLB results {label} missing Prediction Lab · XSharp — Totals"
+                f"{sport_u} results {label} missing Prediction Lab · XSharp — Totals"
             )
         if "XSharp" not in html:
-            issues.append(f"MLB results {label} has no XSharp face at all")
+            issues.append(f"{sport_u} results {label} has no XSharp face at all")
     return issues
+
+
+def mlb_xsharp_totals_issues(cards_html: str = "", chart_html: str = "") -> list[str]:
+    """MLB alias for team_xsharp_totals_issues."""
+    return team_xsharp_totals_issues(cards_html, chart_html, "MLB")
 
 
 def nhl_chart_view_missing_issues(chart_html: str, cards_html: str = "") -> list[str]:
@@ -1520,29 +1805,36 @@ def nfl_chart_window_tally_issues(chart_html: str) -> list[str]:
     return issues
 
 
-def nfl_chart_api_issues(payload: dict | None) -> list[str]:
-    """FAIL when /nfl/api/picks cannot hydrate Moneyline | Spread | Totals."""
+def team_chart_api_issues(payload: dict | None, sport: str) -> list[str]:
+    """FAIL when /{sport}/api/picks cannot hydrate Moneyline | Spread | Totals."""
+    sport_l = (sport or "").strip().lower()
+    label = sport_l.upper() or "TEAM"
+    path = f"/{sport_l}/api/picks"
     if not isinstance(payload, dict) or not payload.get("ok"):
-        return ["NFL chart API /nfl/api/picks did not return ok"]
+        return [f"{label} chart API {path} did not return ok"]
     issues: list[str] = []
     markets = payload.get("markets") or {}
     for key in ("moneyline", "spread", "totals"):
         market = markets.get(key) or {}
         if not market:
-            issues.append(f"NFL chart API missing {key} market")
+            issues.append(f"{label} chart API missing {key} market")
             continue
         tallies = market.get("tallies") or {}
         ln = (tallies.get("last_night") or {}).get("models") or {}
         l7 = (tallies.get("last_7") or {}).get("models") or {}
         if key == "moneyline" and len(ln) < 3:
             issues.append(
-                f"NFL chart API moneyline Last Night has {len(ln)} model(s)"
+                f"{label} chart API moneyline Last Night has {len(ln)} model(s)"
             )
         if key == "moneyline" and len(l7) < 3:
             issues.append(
-                f"NFL chart API moneyline Last 7 has {len(l7)} model(s)"
+                f"{label} chart API moneyline Last 7 has {len(l7)} model(s)"
             )
     return issues
+
+
+def nfl_chart_api_issues(payload: dict | None) -> list[str]:
+    return team_chart_api_issues(payload, "nfl")
 
 
 def nfl_chart_same_as_cards_issues(cards_html: str, chart_html: str) -> list[str]:
@@ -1579,7 +1871,7 @@ def empty_last_night_spread_tally_issues(html: str) -> list[str]:
     return issues
 
 
-def nfl_duplicate_h2h_issues(html: str) -> list[str]:
+def duplicate_h2h_issues(html: str, sport: str = "") -> list[str]:
     """FAIL when H2H Last 10 is on the card face and again in details."""
     html = html or ""
     if "h2h-face-chip" not in html:
@@ -1594,11 +1886,16 @@ def nfl_duplicate_h2h_issues(html: str) -> list[str]:
         if re.search(r'class="sf-label">\s*H2H Last 10', card, flags=re.I):
             duped += 1
     if duped:
+        label = (sport or "pick").strip().upper() or "PICK"
         return [
-            f"{duped} NFL pick card(s) show H2H Last 10 on the face and again "
+            f"{duped} {label} pick card(s) show H2H Last 10 on the face and again "
             "under details"
         ]
     return []
+
+
+def nfl_duplicate_h2h_issues(html: str) -> list[str]:
+    return duplicate_h2h_issues(html, "NFL")
 
 
 def nfl_preseason_results_issues(html: str) -> list[str]:
@@ -1660,6 +1957,9 @@ def results_math_issues(html: str, cards_html: str | None = None) -> list[str]:
     issues.extend(last_night_window_mismatch_issues(html))
     issues.extend(consensus_empty_vs_tally_issues(html))
     issues.extend(pl_vs_books_empty_vs_tally_issues(html))
+    issues.extend(pl_vs_books_partition_issues(html))
+    issues.extend(six_model_consensus_from_cards_issues(html, cards_html))
+    issues.extend(best_performing_today_issues(html))
     issues.extend(empty_last_night_spread_tally_issues(html))
     if is_nfl:
         issues.extend(nfl_missing_efficiency_issues(html))
@@ -1750,12 +2050,4 @@ def best_performing_width_issues(html: str) -> list[str]:
 
 
 def ncaaf_chart_api_issues(payload: dict | None) -> list[str]:
-    """FAIL when /ncaaf/api/picks cannot hydrate Moneyline | Spread | Totals."""
-    if not isinstance(payload, dict) or not payload.get("ok"):
-        return ["NCAAF chart API /ncaaf/api/picks did not return ok"]
-    issues: list[str] = []
-    markets = payload.get("markets") or {}
-    for key in ("moneyline", "spread", "totals"):
-        if not (markets.get(key) or {}):
-            issues.append(f"NCAAF chart API missing {key} market")
-    return issues
+    return team_chart_api_issues(payload, "ncaaf")

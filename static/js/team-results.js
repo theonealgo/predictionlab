@@ -245,6 +245,13 @@ function fmtUnits(u) {
   return `${n >= 0 ? "+" : ""}${n.toFixed(1)}u`;
 }
 
+function bestTodayLabel() {
+  const raw =
+    (document.body && document.body.getAttribute("data-best-today-label")) || "";
+  const label = String(raw).trim();
+  return label || "Today";
+}
+
 function analyticsHtml(analytics) {
   if (!analytics) return "";
   const best = analytics.best_performing || {};
@@ -290,7 +297,7 @@ function analyticsHtml(analytics) {
   return `<section class="tally pl-analytics">
     <h2>Best Performing Model</h2>
     <div class="tally-grid">
-      ${bestCard("Today", best.today)}
+      ${bestCard(bestTodayLabel(), best.today)}
       ${bestCard("Last 7", best.last_7)}
       ${bestCard("Season", best.season)}
     </div>

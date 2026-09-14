@@ -6707,6 +6707,16 @@ def _apply_team_template_gaps(response):
                 ):
                     return response
                 if sport == "NFL" and "<!-- team-results-charts -->" in html:
+                    try:
+                        from team_results_charts import apply_nfl_card_aggregates
+
+                        out = apply_nfl_card_aggregates(html)
+                        if out and out != html:
+                            response.set_data(out)
+                            if out.count("game-card") >= 3:
+                                _store_nfl_daily_results_html(out)
+                    except Exception:
+                        pass
                     return response
                 if sport == "NCAAF" and view in (
                     "chart",
@@ -6780,6 +6790,28 @@ def _graft_locked_site_chrome(response):
             logger.exception("locked site chrome after_request failed: %s", _ch_e)
         except Exception:
             pass
+    return response
+
+
+@app.after_request
+def _graft_gambling_policy_notice(response):
+    """Google Ads landing pages must show age, RG help, Terms, Privacy."""
+    try:
+        if response.status_code != 200:
+            return response
+        ctype = (response.mimetype or response.content_type or "") + ""
+        if "html" not in ctype.lower():
+            return response
+        html = response.get_data(as_text=True)
+        if len(html or "") > 1_800_000:
+            return response
+        from site_chrome import ensure_gambling_policy_chrome
+
+        out = ensure_gambling_policy_chrome(html)
+        if out and out != html:
+            response.set_data(out)
+    except Exception:
+        pass
     return response
 
 import os as _os
@@ -15616,7 +15648,10 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
     <div class="rg-wrap">
         <div class="rg-card">
             <h1>Responsible Gaming &amp; Resources</h1>
-            <p>predictionlab.io provides data-driven sports predictions for informational purposes. We do not promote irresponsible gambling. If betting is becoming a concern, support resources are available below. Please bet responsibly and only wager what you can afford to lose.</p>
+            <p><strong>21+ only</strong> (18+ where that is the legal gambling age). This site is not intended for minors.</p>
+            <p>predictionlab.io is a sports research and information site. We are not an online gambling operator, not a province-run or state-run gambling operator, and we do not provide online gambling services. We do not take bets, accept wagers, or pay out winnings. Predictions are model output, not a guarantee. Any outbound sportsbook links are exclusively to entities licensed and authorized in the relevant geographic location.</p>
+            <p>We do not promote irresponsible gambling. If betting is becoming a concern, use the help resources below. Wager only what you can afford to lose.</p>
+            <p>Terms: <a href="/terms">/terms</a>. Privacy (data controller): <a href="/privacy">/privacy</a>.</p>
         </div>
         <div class="rg-card">
             <h2>Canada Support Resources</h2>
@@ -15632,8 +15667,8 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="rg-card">
             <h2>United States Support Resources</h2>
             <div class="rg-resource">
-                <h3><a href="https://www.ncpgambling.org/" target="_blank" rel="noopener">National Council on Problem Gambling</a></h3>
-                <p>24/7 confidential helpline and resources for individuals experiencing gambling problems. Call 1-800-522-4700.</p>
+                <h3><a href="https://www.ncpgambling.org/help-treatment/national-helpline-1-800-gambler/" target="_blank" rel="noopener">1-800-GAMBLER</a> (US National Helpline)</h3>
+                <p>24/7 confidential help. Call or text <a href="tel:18005224700">1-800-GAMBLER</a> (1-800-522-4700). Also see the <a href="https://www.ncpgambling.org/" target="_blank" rel="noopener">National Council on Problem Gambling</a>.</p>
             </div>
             <div class="rg-resource">
                 <h3><a href="https://www.gamblersanonymous.org/" target="_blank" rel="noopener">Gamblers Anonymous</a></h3>

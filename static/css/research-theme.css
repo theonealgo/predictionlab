@@ -532,3 +532,22 @@ body.research-site .tv-premium-cta-weekly { border-radius: 2px; }
     .site-directory-footer { padding: 52px 18px 22px; }
     .site-directory-footer .directory-grid { grid-template-columns: 1fr; gap: 28px; }
 }
+
+.pl-age-bar {
+    background: #111827;
+    color: #f8fafc;
+    font: 600 13px/1.4 system-ui, sans-serif;
+    padding: 8px 14px;
+    text-align: center;
+}
+.pl-age-bar a { color: #fde68a; font-weight: 700; }
+.pl-rg-policy {
+    background: #0f172a;
+    color: #e2e8f0;
+    font: 14px/1.55 system-ui, sans-serif;
+    padding: 16px 18px;
+    border-top: 1px solid #334155;
+}
+.pl-rg-policy p { margin: 0 0 8px; max-width: 1100px; }
+.pl-rg-policy p:last-child { margin: 0; }
+.pl-rg-policy a { color: #fde68a; font-weight: 700; }

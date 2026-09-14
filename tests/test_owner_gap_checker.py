@@ -1,6 +1,7 @@
 """Owner-reported gaps the checker must fail on."""
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -8,7 +9,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qa"))
 
 from datetime import date  # noqa: E402
 
-from page_speed import is_slow, speed_fail_message  # noqa: E402
+from page_speed import (  # noqa: E402
+    is_results_path,
+    is_slow,
+    results_wont_open_message,
+    speed_fail_message,
+)
 from chart_shape import (  # noqa: E402
     best_performing_width_issues,
     efficiency_copied_na_issues,
@@ -19,13 +25,17 @@ from chart_shape import (  # noqa: E402
     card_blank_market_line_issues,
     card_missing_model_value_issues,
     mlb_xsharp_totals_issues,
+    team_xsharp_totals_issues,
     nba_last_season_gap_issues,
     nfl_chart_api_issues,
     nfl_chart_not_mlb_issues,
     nfl_chart_same_as_cards_issues,
     nfl_chart_window_tally_issues,
+    duplicate_h2h_issues,
     nfl_duplicate_h2h_issues,
     nfl_missing_efficiency_issues,
+    results_missing_efficiency_issues,
+    team_chart_api_issues,
     nfl_preseason_results_issues,
     empty_last_night_spread_tally_issues,
     nfl_spread_result_card_issues,
@@ -42,6 +52,9 @@ from chart_shape import (  # noqa: E402
     team_results_tally_model_issues,
     team_results_template_issues,
     tennis_chart_same_as_cards_issues,
+    six_model_consensus_from_cards_issues,
+    pl_vs_books_partition_issues,
+    best_performing_today_issues,
 )
 
 
@@ -51,6 +64,9 @@ def test_page_over_5s_is_slow():
     msg = speed_fail_message("/ncaaf-results", 12.3)
     assert "12.3s" in msg
     assert "5s" in msg
+    assert "Won't open" in msg
+    assert is_results_path("/nfl-results")
+    assert "Won't open" in results_wont_open_message("/nfl-results", 32.6)
 
 
 def test_site_checker_reports_slow_page_as_fail():
@@ -90,6 +106,11 @@ def test_mlb_xsharp_totals_present_passes():
     cards = "<html>Prediction Lab · XSharp — Totals XSharp</html>"
     chart = "<html>Prediction Lab · XSharp — Totals XSharp</html>"
     assert not mlb_xsharp_totals_issues(cards, chart)
+
+
+def test_xsharp_totals_flags_any_team_sport():
+    issues = team_xsharp_totals_issues("<html>XSharp</html>", "<html>XSharp</html>", "CFL")
+    assert any("CFL" in i and "Totals" in i for i in issues)
 
 
 def test_tennis_identical_pages_fail():
@@ -260,6 +281,47 @@ def test_nfl_last_season_snapshot_perf_fails():
     issues = nfl_stale_season_perf_issues(html, today=date(2026, 9, 10))
     assert issues
     assert any("206-79" in i or "285" in i for i in issues)
+
+
+def test_duplicate_h2h_flags_any_team_sport():
+    html = """
+    <div data-pick-card>
+      <div class="line-chip h2h-face-chip">
+        <div class="line-chip-label">H2H Last 10</div>
+        <div class="line-chip-val">First meeting</div>
+      </div>
+      <div class="sf-item">
+        <span class="sf-label">H2H Last 10</span>
+        <span class="sf-val">First meeting</span>
+      </div>
+    </div>
+    """
+    issues = duplicate_h2h_issues(html, "NHL")
+    assert issues
+    assert any("NHL" in i for i in issues)
+
+
+def test_team_chart_api_missing_ok_fails_for_mlb():
+    issues = team_chart_api_issues(None, "mlb")
+    assert any("mlb/api/picks" in i for i in issues)
+
+
+def test_results_missing_efficiency_flags_cfl():
+    html = """
+    Last Night's CFL Results
+    Grinder2 80% Takedown 80% Edge 60% XSharp 80% Sharp Consensus 80%
+    Last 7 Days CFL Results
+    """
+    issues = results_missing_efficiency_issues(html, "CFL")
+    assert issues
+    assert any("Efficiency" in i for i in issues)
+
+
+def test_mlb_chart_window_tally_is_checked():
+    html = "Consensus Based Betting Records"
+    issues = team_chart_window_tally_issues(html, "MLB")
+    assert issues
+    assert any("Last Night" in i or "Season" in i or "model card" in i for i in issues)
 
 
 def test_nfl_duplicate_h2h_fails():
@@ -767,3 +829,155 @@ def test_nfl_last_night_empty_spread_tally_fails():
     issues = empty_last_night_spread_tally_issues(html)
     assert any("no spread data" in i for i in issues)
     assert any("no O/U data" in i for i in issues)
+
+
+_SIX_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+
+
+def _pc_box(name: str, side: str, ok: bool) -> str:
+    mark = " ✅" if ok else " ❌"
+    return (
+        f'<div class="pc-box"><div class="pc-name">{name}</div>'
+        f'<div class="pc-val">60%</div>'
+        f'<div class="pc-side">{side}{mark}</div></div>'
+    )
+
+
+def _six_card(*, majority: str, won: bool, dissent: tuple[str, ...] = ()) -> str:
+    other = "Away" if majority == "Home" else "Home"
+    boxes = []
+    for name in _SIX_MODELS:
+        if name in dissent:
+            boxes.append(_pc_box(name, other, not won))
+        else:
+            boxes.append(_pc_box(name, majority, won))
+    return f'<div class="game-card">{"".join(boxes)}</div>'
+
+
+def _date_section(day: str, cards: list[str]) -> str:
+    return f'<div id="date-{day}" class="date-section">{"".join(cards)}</div>'
+
+
+def _cons_table(rows: list[tuple[str, str]]) -> str:
+    body = "".join(
+        f'<tr><td class="bucket">{label}</td><td>{rec}</td><td>0-0</td><td>0-0</td></tr>'
+        for label, rec in rows
+    )
+    return f"""
+    Consensus Based Betting Records
+    <th>Last night (2026-09-13)</th>
+    <tbody>{body}</tbody>
+    """
+
+
+def test_consensus_buckets_mismatch_owner_nfl_slate():
+    cards = (
+        [_six_card(majority="Home", won=True) for _ in range(4)]
+        + [_six_card(majority="Home", won=False)]
+        + [_six_card(majority="Home", won=False, dissent=("Edge",)) for _ in range(3)]
+        + [_six_card(majority="Home", won=True, dissent=("Edge",)) for _ in range(2)]
+        + [_six_card(majority="Home", won=True, dissent=("Efficiency",))]
+        + [_six_card(majority="Home", won=False, dissent=("Efficiency",))]
+        + [
+            _six_card(majority="Home", won=False, dissent=("Edge", "Efficiency"))
+            for _ in range(3)
+        ]
+    )
+    section = _date_section("2026-09-13", cards)
+    wrong = section + _cons_table(
+        [
+            ("6/6 unanimous", "3-1"),
+            ("5/6 — all but Edge", "2-3"),
+            ("5/6 — all but Efficiency", "1-1"),
+            ("4/6 — all but Edge and Efficiency", "0-2"),
+        ]
+    )
+    issues = six_model_consensus_from_cards_issues(wrong, wrong, "NFL")
+    assert issues
+    assert any("6/6 unanimous" in i and "3-1" in i and "4-1" in i for i in issues)
+    assert any("all but Edge" in i and "2-3" in i and "3-2" in i for i in issues)
+    assert any("Edge and Efficiency" in i and "0-2" in i and "3-0" in i for i in issues)
+
+    right = section + _cons_table(
+        [
+            ("6/6 unanimous", "4-1"),
+            ("5/6 — all but Edge", "3-2"),
+            ("5/6 — all but Efficiency", "1-1"),
+            ("4/6 — all but Edge and Efficiency", "3-0"),
+        ]
+    )
+    assert not six_model_consensus_from_cards_issues(right, right, "NFL")
+
+
+def test_pl_vs_books_partition_missing_game_fails():
+    html = """
+    Last Night's NFL Results — 2026-09-13 (13 games)
+    PL vs Sportsbook
+    Books favorite
+    10-3
+    PL favorite
+    6-7
+    PL vs Books disagree
+    1-5
+    PL and Books agree
+    5-1
+    """
+    issues = pl_vs_books_partition_issues(html, "NFL")
+    assert issues
+    assert any("12" in i and "13" in i for i in issues)
+
+
+def test_best_performing_today_on_yesterdays_slate_fails():
+    html = """
+    <section class="tally pl-analytics"><h2>Best Performing Model</h2>
+    <div class="tally-card"><div class="mlabel">Today</div><div class="rec">9-4</div></div>
+    </section>
+    <th>Last night (2026-09-13)</th>
+    """
+    issues = best_performing_today_issues(html, "NFL", today=date(2026, 9, 14))
+    assert issues
+    assert any("Today" in i and "2026-09-13" in i for i in issues)
+
+
+def test_nfl_card_aggregates_rewrites_wrong_consensus_and_today():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from team_results_charts import apply_nfl_card_aggregates
+
+    cards = (
+        [_six_card(majority="Home", won=True) for _ in range(4)]
+        + [_six_card(majority="Home", won=False)]
+        + [_six_card(majority="Home", won=False, dissent=("Edge",)) for _ in range(3)]
+        + [_six_card(majority="Home", won=True, dissent=("Edge",)) for _ in range(2)]
+        + [_six_card(majority="Home", won=True, dissent=("Efficiency",))]
+        + [_six_card(majority="Home", won=False, dissent=("Efficiency",))]
+        + [
+            _six_card(majority="Home", won=False, dissent=("Edge", "Efficiency"))
+            for _ in range(3)
+        ]
+    )
+    html = (
+        _date_section("2026-09-13", cards)
+        + _cons_table(
+            [
+                ("6/6 unanimous", "3-1"),
+                ("5/6 — all but Edge", "2-3"),
+                ("5/6 — all but Efficiency", "1-1"),
+                ("4/6 — all but Edge and Efficiency", "0-2"),
+            ]
+        )
+        + '<section class="tally pl-analytics"><h2>Best Performing Model</h2>'
+        '<div class="tally-card"><div class="mlabel">Today</div></div></section>'
+    )
+    out = apply_nfl_card_aggregates(html)
+    assert not six_model_consensus_from_cards_issues(out, out, "NFL")
+    assert "4-1" in out
+    assert "3-2" in out
+    assert "3-0" in out
+    assert re.search(r'class="mlabel">\s*Last Night\s*<', out)

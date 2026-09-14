@@ -10,7 +10,7 @@ import re
 import sqlite3
 import time
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 from pathlib import Path
 
@@ -549,6 +549,243 @@ def _nfl_keep_six_model_rows(rows: list[dict]) -> list[dict]:
         if str(row.get("game_date") or "").startswith(year)
     ]
     return season or list(rows or [])
+
+
+def nfl_card_consensus_games(html: str) -> list[dict]:
+    """Grade each results card from the six visible model sides."""
+    html = html or ""
+    games: list[dict] = []
+    chunks = re.split(r'<div id="date-(\d{4}-\d{2}-\d{2})"', html)
+    it = iter(chunks[1:])
+    for dk in it:
+        content = next(it, "")
+        parts = re.split(r'(<div class="game-card\b[^"]*"[^>]*>)', content, flags=re.I)
+        idx = 1
+        while idx < len(parts):
+            body = parts[idx + 1] if idx + 1 < len(parts) else ""
+            idx += 2
+            boxes = re.findall(
+                r'class="pc-name">([^<]+)</div>\s*'
+                r'<div class="pc-val"[^>]*>([^<]+)</div>\s*'
+                r'<div class="pc-side[^"]*"[^>]*>([^<]+)</div>',
+                body[:25000],
+            )
+            picks: dict[str, tuple[str, bool | None]] = {}
+            for name, _pct, side in boxes:
+                name = re.sub(r"[^A-Za-z0-9 ]+", "", name).strip()
+                if name not in _NFL_SIX_MODELS:
+                    continue
+                side_txt = re.sub(r"[✅❌]", "", side).strip()
+                if not side_txt or side_txt.upper() in ("N/A", "NA", "—", "-"):
+                    continue
+                ok = True if "✅" in side else False if "❌" in side else None
+                picks[name] = (side_txt, ok)
+            if len(picks) < 6:
+                continue
+            sides = [picks[n][0] for n in _NFL_SIX_MODELS if n in picks]
+            counts: dict[str, int] = {}
+            for side in sides:
+                counts[side] = counts.get(side, 0) + 1
+            maj_side, maj_n = max(counts.items(), key=lambda kv: kv[1])
+            dissent = [
+                n for n in _NFL_SIX_MODELS
+                if n in picks and picks[n][0] != maj_side
+            ]
+            if maj_n >= 6:
+                label = "6/6 unanimous"
+            elif dissent:
+                label = f"{maj_n}/6 — all but " + " and ".join(dissent)
+            else:
+                continue
+            # Owner 2026-09-14: W-L is Edge's moneyline in that dissent
+            # bucket (the 15-game slate), not the 5/4-model field.
+            edge_ok = picks.get("Edge", ("", None))[1]
+            if edge_ok is True:
+                grade = "WIN"
+            elif edge_ok is False:
+                grade = "LOSS"
+            else:
+                continue
+            games.append({"date": dk, "label": label, "grade": grade})
+    return games
+
+
+def _nfl_results_last_night_date(html: str, games: list[dict] | None = None) -> str:
+    html = html or ""
+    m = re.search(
+        r"Last Night(?:'s)?[^<—\-]{0,48}[—\-]\s*(\d{4}-\d{2}-\d{2})",
+        html,
+        flags=re.I,
+    )
+    if m:
+        return m.group(1)
+    m = re.search(r"Last night \((\d{4}-\d{2}-\d{2})\)", html, flags=re.I)
+    if m:
+        return m.group(1)
+    dates = sorted({g.get("date") or "" for g in (games or []) if g.get("date")})
+    today = date.today().isoformat()
+    past = [d for d in dates if d < today]
+    return (past[-1] if past else dates[-1]) if dates else ""
+
+
+def _apply_nfl_consensus_from_cards(html: str, cards_html: str | None = None) -> str:
+    """Replace Consensus last night / 7 / 30 with grades from the six card boxes."""
+    html = html or ""
+    if "Consensus Based Betting Records" not in html:
+        return html
+    cards = cards_html or html
+    games = nfl_card_consensus_games(cards)
+    if len(games) < 3:
+        return html
+    ln_key = _nfl_results_last_night_date(html, games) or _nfl_results_last_night_date(
+        cards, games
+    )
+    if not ln_key:
+        return html
+    try:
+        ln_d = date.fromisoformat(ln_key)
+    except ValueError:
+        return html
+    cut7 = (ln_d - timedelta(days=6)).isoformat()
+    cut30 = (ln_d - timedelta(days=29)).isoformat()
+
+    def window(lo: str, hi: str) -> list[dict]:
+        return [g for g in games if lo <= g["date"] <= hi]
+
+    # Last night column = the Last 7 card slate. Owner classified all 15
+    # moneyline games (Sun + Thu/Mon), not the 13 Sunday cards alone.
+    d7_g = window(cut7, ln_key)
+    d30_g = window(cut30, ln_key)
+    ln_g = d7_g
+    labels = []
+    for g in ln_g + d7_g + d30_g:
+        if g["label"] not in labels:
+            labels.append(g["label"])
+    if "6/6 unanimous" not in labels:
+        labels.insert(0, "6/6 unanimous")
+
+    def grades(rows: list[dict], label: str) -> list[str]:
+        return [g["grade"] for g in rows if g["label"] == label]
+
+    body = "".join(
+        "<tr>"
+        f'<td class="bucket">{html_lib.escape(label)}</td>'
+        f"<td>{_wl_cell_from_grades(grades(ln_g, label))}</td>"
+        f"<td>{_wl_cell_from_grades(grades(d7_g, label))}</td>"
+        f"<td>{_wl_cell_from_grades(grades(d30_g, label))}</td>"
+        "</tr>"
+        for label in labels
+    )
+    html = re.sub(
+        r"Last night \(\d{4}-\d{2}-\d{2}\)",
+        f"Last night ({ln_key})",
+        html,
+        count=1,
+    )
+    rec = re.search(
+        r'(<div class="pl-consensus-records"(?:(?!\bpl-books-pl-records\b)[^>])*>'
+        r"[\s\S]*?Consensus Based Betting Records[\s\S]*?<tbody>)"
+        r"([\s\S]*?)(</tbody>)",
+        html,
+        flags=re.I,
+    )
+    if not rec:
+        rec = re.search(
+            r"(Consensus Based Betting Records[\s\S]*?<tbody>)([\s\S]*?)(</tbody>)",
+            html,
+            flags=re.I,
+        )
+    if not rec:
+        return html
+    return html[: rec.start(2)] + body + html[rec.end(2) :]
+
+
+def _nfl_relabel_best_performing_today(html: str) -> str:
+    """Yesterday's completed slate is Last Night, not Today."""
+    html = html or ""
+    start = html.find("Best Performing Model")
+    if start < 0:
+        return html
+    ln_key = _nfl_results_last_night_date(html)
+    has_ln_tally = bool(re.search(r"Last Night\s*\(\d+\s*games?\)", html, flags=re.I))
+    if ln_key:
+        try:
+            if date.fromisoformat(ln_key) >= date.today():
+                return html
+        except ValueError:
+            if not has_ln_tally:
+                return html
+    elif not has_ln_tally:
+        return html
+    block = html[start : start + 2000]
+    new_block = re.sub(
+        r'(<div class="(?:mlabel|pl-analytics-k)">)\s*Today\s*(</div>)',
+        r"\1Last Night\2",
+        block,
+        count=1,
+        flags=re.I,
+    )
+    html = html[:start] + new_block + html[start + len(block) :]
+    if 'data-best-today-label=' not in html:
+        html = re.sub(
+            r"<body\b([^>]*)>",
+            r'<body\1 data-best-today-label="Last Night">',
+            html,
+            count=1,
+            flags=re.I,
+        )
+    if 'id="nfl-best-perf-last-night"' in html:
+        return html
+    script = (
+        '<script id="nfl-best-perf-last-night">'
+        "(function(){function relabel(){"
+        "var roots=document.querySelectorAll('.pl-analytics,#tallies');"
+        "if(!roots.length&&document.body)roots=[document.body];"
+        "for(var i=0;i<roots.length;i++){"
+        "var els=roots[i].querySelectorAll('.mlabel,.pl-analytics-k');"
+        "for(var j=0;j<els.length;j++){"
+        "if(/^\\s*Today\\s*$/i.test(els[j].textContent||''))"
+        "els[j].textContent='Last Night';}}}"
+        "relabel();document.addEventListener('DOMContentLoaded',relabel);"
+        "[50,200,400,800,1600,3000].forEach(function(t){setTimeout(relabel,t);});"
+        "if(window.MutationObserver){"
+        "new MutationObserver(relabel).observe(document.documentElement,"
+        "{childList:true,subtree:true});}"
+        "})();"
+        "</script>"
+    )
+    if re.search(r"</body\s*>", html, flags=re.I):
+        return re.sub(
+            r"</body\s*>",
+            lambda m: script + "\n" + m.group(0),
+            html,
+            count=1,
+            flags=re.I,
+        )
+    return html + script
+
+
+def _nfl_cards_for_aggregates(cards_html: str | None, html: str) -> str:
+    """Prefer the stored 15-game cards over a thin chart shell."""
+    candidates = [
+        cards_html or "",
+        _CHART_SOURCE_HTML.get("NFL") or "",
+        html or "",
+    ]
+    usable = [c for c in candidates if c.count("game-card") >= 3]
+    if usable:
+        return usable[0]
+    for c in candidates:
+        if "pick-conf-grid" in c:
+            return c
+    return html or cards_html or ""
+
+
+def apply_nfl_card_aggregates(html: str, cards_html: str | None = None) -> str:
+    """NFL-only: consensus + Best Performing labels from the cards, not DB sides."""
+    cards = _nfl_cards_for_aggregates(cards_html, html)
+    html = _apply_nfl_consensus_from_cards(html, cards)
+    return _nfl_relabel_best_performing_today(html)
 
 
 def _six_model_consensus_finals(html: str, sport: str) -> list[dict]:
@@ -2574,6 +2811,7 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
     if sport_u == "CFL":
         html = _hide_blank_ml_tally_cards(html, ("Grinder2", "Takedown", "Efficiency"))
     if sport_u == "NFL":
+        html = apply_nfl_card_aggregates(html, cards_src)
         html = _apply_nfl_cards_chart_split(html, view_l)
     if sport_u in ("WNBA", "NCAAF") and "H2H Last 10" in html:
         html = _apply_h2h_faces(html, sport_u)

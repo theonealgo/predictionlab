@@ -5,11 +5,13 @@ alwaysApply: true
 
 # NFL UNLOCKED (:5052 / premerge) — one miss
 
-Owner 2026-09-13: **UNLOCK NFL** to fix:
+Owner 2026-09-14: **UNLOCK NFL** to fix:
 
-- Duplicate H2H Last 10 on picks cards (face + details)
-- Preseason games still on NFL results
-- Checker missed both (thin `site_audit.py --quick` vs chrome)
+- Consensus Based Betting Records W-L not matching the six card picks
+- Best Performing Model saying Today for yesterday's slate
+- Checker treating a hanging / 30s NFL results 200 as "opened"
+
+Owner 2026-09-13: duplicate H2H, preseason, thin `--quick` checker.
 
 Do not restyle cards. Do not invent Books/Edge/model numbers.
 Do not touch MLB, NCAAF, or any other sport.

@@ -61,9 +61,11 @@ from chart_shape import (  # noqa: E402
     h2h_gap_issues,
     missing_signed_off_charts,
     nba_last_season_gap_issues,
-    ncaaf_chart_api_issues,
     ncaaf_results_date_nav_issues,
+    best_performing_today_issues,
     best_performing_width_issues,
+    six_model_consensus_from_cards_issues,
+    pl_vs_books_partition_issues,
     efficiency_copied_na_issues,
     share_ad_card_issues,
     team_chart_sou_table_issues,
@@ -73,12 +75,11 @@ from chart_shape import (  # noqa: E402
     team_chart_window_tally_issues,
     team_results_tally_model_issues,
     mlb_xsharp_totals_issues,
-    nfl_chart_api_issues,
-    nfl_chart_not_mlb_issues,
-    nfl_chart_same_as_cards_issues,
-    nfl_chart_window_tally_issues,
-    nfl_duplicate_h2h_issues,
+    team_xsharp_totals_issues,
+    duplicate_h2h_issues,
     nfl_missing_efficiency_issues,
+    results_missing_efficiency_issues,
+    team_chart_api_issues,
     nfl_preseason_results_issues,
     nfl_spread_result_card_issues,
     nfl_stale_season_perf_issues,
@@ -607,6 +608,33 @@ class ChromeChecker:
         else:
             self.add("homepage footer links", PASS, "Affiliate + sport footer links present", url=url)
 
+        low_rg = html.lower()
+        rg_ok = (
+            ("21+" in html or "18+" in html)
+            and "1-800-gambler" in low_rg
+            and "/responsible-gaming" in low_rg
+            and (
+                "not an online gambling operator" in low_rg
+                or "not a sportsbook" in low_rg
+                or "do not take bets" in low_rg
+            )
+        )
+        if not rg_ok:
+            self.add(
+                "homepage gambling policy chrome",
+                FAIL,
+                "Ad landing pages need 21+/18+, 1-800-GAMBLER, /responsible-gaming, "
+                "and a we-are-not-a-sportsbook line",
+                url=url,
+            )
+        else:
+            self.add(
+                "homepage gambling policy chrome",
+                PASS,
+                "Age warning, helpline, and not-a-sportsbook copy present",
+                url=url,
+            )
+
         low = html.lower()
         hits = [s for s in RULE9 if s in low]
         if hits:
@@ -709,7 +737,24 @@ class ChromeChecker:
                 self.add(label, FAIL, "Won't open — HTTP 500 error page", url=url)
                 fails.append(f"{path} 500-page")
                 continue
-            self.add(label, PASS, f"HTTP {status} ({len(body):,} bytes)", url=url)
+            elapsed = float(getattr(self, "_last_elapsed", 0) or 0)
+            try:
+                from page_speed import is_results_path, results_wont_open_message
+            except Exception:
+                is_results_path = lambda p: "-results" in (p or "")
+                results_wont_open_message = lambda p, e, b=None: (
+                    f"Won't open — took {e:.1f}s"
+                )
+            if status == 200 and is_results_path(path) and elapsed > self.speed_budget:
+                self.add(
+                    label,
+                    FAIL,
+                    results_wont_open_message(path, elapsed, self.speed_budget),
+                    url=url,
+                )
+                fails.append(f"{path} hung")
+            else:
+                self.add(label, PASS, f"HTTP {status} ({len(body):,} bytes)", url=url)
             if status == 200 and self._check_shared_chrome(path, body, url) is False:
                 chrome_fails.append(path)
 
@@ -819,30 +864,36 @@ class ChromeChecker:
                         url=url,
                     )
             self._check_picks_clock_and_logos(sport, body, url)
-            if sport == "NCAAF":
-                copied = efficiency_copied_na_issues(body)
-                if copied:
-                    self.add(
-                        "NCAAF Efficiency N/A copy",
-                        FAIL,
-                        "; ".join(copied),
-                        url=url,
-                    )
-                share = share_ad_card_issues(body)
-                if share:
-                    self.add(
-                        "NCAAF share card",
-                        FAIL,
-                        "; ".join(share),
-                        url=url,
-                    )
-                else:
-                    self.add(
-                        "NCAAF share card",
-                        PASS,
-                        "Bottom advertising card has at least 2 picks",
-                        url=url,
-                    )
+            copied = efficiency_copied_na_issues(body)
+            if copied:
+                self.add(
+                    f"{sport} Efficiency N/A copy",
+                    FAIL,
+                    "; ".join(copied),
+                    url=url,
+                )
+            else:
+                self.add(
+                    f"{sport} Efficiency N/A copy",
+                    PASS,
+                    "Efficiency is not a copied % with an N/A side",
+                    url=url,
+                )
+            share = share_ad_card_issues(body)
+            if share:
+                self.add(
+                    f"{sport} share card",
+                    FAIL,
+                    "; ".join(share),
+                    url=url,
+                )
+            else:
+                self.add(
+                    f"{sport} share card",
+                    PASS,
+                    "Bottom advertising card has at least 2 picks",
+                    url=url,
+                )
             return
         if sport in OFFSEASON_OK_EMPTY or "is in the off-season" in (body or ""):
             return
@@ -922,13 +973,13 @@ class ChromeChecker:
                 "H2H Last 10 present on picks cards",
                 url=url,
             )
-        if sport == "NFL" and body:
-            dups = nfl_duplicate_h2h_issues(body)
+        if sport != "Soccer" and body:
+            dups = duplicate_h2h_issues(body, sport)
             if dups:
-                self.add("NFL picks duplicate H2H", FAIL, "; ".join(dups), url=url)
-            else:
+                self.add(f"{sport} picks duplicate H2H", FAIL, "; ".join(dups), url=url)
+            elif "h2h-face-chip" in body:
                 self.add(
-                    "NFL picks duplicate H2H",
+                    f"{sport} picks duplicate H2H",
                     PASS,
                     "H2H Last 10 is on the face only, not repeated in details",
                     url=url,
@@ -1135,6 +1186,22 @@ class ChromeChecker:
                     "NFL Spread tab has result cards",
                     url=rurl,
                 )
+        elif sport != "Soccer":
+            missing_eff = results_missing_efficiency_issues(rhtml, sport)
+            if missing_eff:
+                self.add(
+                    f"{sport} results Efficiency",
+                    FAIL,
+                    "; ".join(missing_eff),
+                    url=rurl,
+                )
+            elif "Last Night" in rhtml or "Season Performance" in rhtml:
+                self.add(
+                    f"{sport} results Efficiency",
+                    PASS,
+                    f"{sport} results include Efficiency with the other moneyline models",
+                    url=rurl,
+                )
         if sport != "Soccer":
             tally = team_results_tally_model_issues(rhtml, sport)
             if tally:
@@ -1313,20 +1380,20 @@ class ChromeChecker:
         self._check_xsharp_values(
             sport, chtml, curl, f"{sport} chart-view consensus XSharp"
         )
-        if sport == "MLB":
-            xs = mlb_xsharp_totals_issues(rhtml, chtml)
+        if sport != "Soccer":
+            xs = team_xsharp_totals_issues(rhtml, chtml, sport)
             if xs:
                 self.add(
-                    "MLB XSharp totals",
+                    f"{sport} XSharp totals",
                     FAIL,
                     "; ".join(xs),
                     url=curl,
                 )
             else:
                 self.add(
-                    "MLB XSharp totals",
+                    f"{sport} XSharp totals",
                     PASS,
-                    "MLB cards + chart have Prediction Lab · XSharp — Totals",
+                    f"{sport} cards + chart have Prediction Lab · XSharp — Totals",
                     url=curl,
                 )
         if sport != "MLB":
@@ -1387,137 +1454,138 @@ class ChromeChecker:
                     f"{sport} chart view is not the cards page",
                     url=curl,
                 )
-        if sport == "NFL":
-            mlb_shape = nfl_chart_not_mlb_issues(chtml)
-            if mlb_shape:
+        if sport != "Soccer":
+            self._check_team_chart_contract(sport, results, rhtml, chtml, curl)
+
+    def _check_team_chart_contract(
+        self, sport: str, results: str, cards: str, chtml: str, curl: str
+    ) -> None:
+        """NFL/MLB owner misses — run on every shared team-sport chart."""
+        import json as _json
+
+        slug = "soccer" if sport == "Soccer" else sport.lower()
+        cons = six_model_consensus_from_cards_issues(chtml or cards, cards or chtml, sport)
+        if not cons and cards:
+            cons = six_model_consensus_from_cards_issues(cards, cards, sport)
+        if cons:
+            self.add(
+                f"{sport} consensus buckets",
+                FAIL,
+                "; ".join(cons),
+                url=curl,
+            )
+        elif ML_CHART in (chtml or cards or ""):
+            self.add(
+                f"{sport} consensus buckets",
+                PASS,
+                "Consensus last night matches the 6 model picks on the cards",
+                url=curl,
+            )
+        pl_part = pl_vs_books_partition_issues(chtml or cards, sport)
+        if not pl_part:
+            pl_part = pl_vs_books_partition_issues(cards, sport)
+        if pl_part:
+            self.add(
+                f"{sport} PL vs Books partition",
+                FAIL,
+                "; ".join(pl_part),
+                url=curl,
+            )
+        elif PL_VS_BOOKS in (chtml or cards or ""):
+            self.add(
+                f"{sport} PL vs Books partition",
+                PASS,
+                "Agree / disagree partitions Last Night and PL favorite",
+                url=curl,
+            )
+        today_lbl = best_performing_today_issues(chtml or cards, sport)
+        if today_lbl:
+            self.add(
+                f"{sport} Best Performing Today",
+                FAIL,
+                "; ".join(today_lbl),
+                url=curl,
+            )
+        elif "Best Performing Model" in (chtml or ""):
+            self.add(
+                f"{sport} Best Performing Today",
+                PASS,
+                "Best Performing does not label yesterday's slate as Today",
+                url=curl,
+            )
+        windows = team_chart_window_tally_issues(chtml, sport)
+        if windows:
+            self.add(
+                f"{sport} chart Last Night / Last 7",
+                FAIL,
+                "; ".join(windows),
+                url=curl,
+            )
+        else:
+            self.add(
+                f"{sport} chart Last Night / Last 7",
+                PASS,
+                f"{sport} chart has Last Night / Last 7 / Season model cards",
+                url=curl,
+            )
+        width = best_performing_width_issues(chtml)
+        if width:
+            self.add(
+                f"{sport} Best Performing width",
+                FAIL,
+                "; ".join(width),
+                url=curl,
+            )
+        elif "Best Performing Model" in (chtml or ""):
+            self.add(
+                f"{sport} Best Performing width",
+                PASS,
+                "Best Performing Model is as wide as the other boxes",
+                url=curl,
+            )
+        for mk in ("spread", "totals"):
+            mst, mhtml, murl = self.fetch(f"{results}?view=chart&market={mk}")
+            sou = [] if mst != 200 else team_chart_sou_table_issues(mhtml, mk)
+            if mst != 200:
+                sou = [f"{sport} {mk} chart HTTP {mst}"]
+            if sou:
                 self.add(
-                    "NFL chart vs MLB template",
+                    f"{sport} {mk} chart table",
                     FAIL,
-                    "; ".join(mlb_shape),
-                    url=curl,
+                    "; ".join(sou),
+                    url=murl,
                 )
             else:
                 self.add(
-                    "NFL chart vs MLB template",
+                    f"{sport} {mk} chart table",
                     PASS,
-                    "NFL chart is the MLB 6/6 dissent table",
-                    url=curl,
+                    f"{mk} compares actual score to books / PL lines",
+                    url=murl,
                 )
-            same = nfl_chart_same_as_cards_issues(rhtml, chtml)
-            if same:
-                self.add(
-                    "NFL cards vs chart",
-                    FAIL,
-                    "; ".join(same),
-                    url=curl,
-                )
-            else:
-                self.add(
-                    "NFL cards vs chart",
-                    PASS,
-                    "NFL chart view is not the same as the week board",
-                    url=curl,
-                )
-            windows = nfl_chart_window_tally_issues(chtml)
-            if windows:
-                self.add(
-                    "NFL chart Last Night / Last 7",
-                    FAIL,
-                    "; ".join(windows),
-                    url=curl,
-                )
-            else:
-                self.add(
-                    "NFL chart Last Night / Last 7",
-                    PASS,
-                    "NFL chart has Last Night / Last 7 / Season model cards",
-                    url=curl,
-                )
-            ast, atext, aurl = self.fetch("/nfl/api/picks")
-            api_body = None
-            if ast == 200 and atext:
-                try:
-                    import json as _json
-                    api_body = _json.loads(atext)
-                except Exception:
-                    api_body = None
-            api = nfl_chart_api_issues(api_body)
-            if ast != 200:
-                api = [f"NFL chart API HTTP {ast}"] + api
-            if api:
-                self.add(
-                    "NFL chart API",
-                    FAIL,
-                    "; ".join(api),
-                    url=aurl,
-                )
-            else:
-                self.add(
-                    "NFL chart API",
-                    PASS,
-                    "/nfl/api/picks hydrates Moneyline | Spread | Totals",
-                    url=aurl,
-                )
-        if sport == "NCAAF":
-            width = best_performing_width_issues(chtml)
-            if width:
-                self.add(
-                    "NCAAF Best Performing width",
-                    FAIL,
-                    "; ".join(width),
-                    url=curl,
-                )
-            else:
-                self.add(
-                    "NCAAF Best Performing width",
-                    PASS,
-                    "Best Performing Model is as wide as the other boxes",
-                    url=curl,
-                )
-            for mk in ("spread", "totals"):
-                mst, mhtml, murl = self.fetch(f"/ncaaf-results?view=chart&market={mk}")
-                sou = [] if mst != 200 else team_chart_sou_table_issues(mhtml, mk)
-                if mst != 200:
-                    sou = [f"NCAAF {mk} chart HTTP {mst}"]
-                if sou:
-                    self.add(
-                        f"NCAAF {mk} chart table",
-                        FAIL,
-                        "; ".join(sou),
-                        url=murl,
-                    )
-                else:
-                    self.add(
-                        f"NCAAF {mk} chart table",
-                        PASS,
-                        f"{mk} compares actual score to books / PL lines",
-                        url=murl,
-                    )
-            ast, atext, aurl = self.fetch("/ncaaf/api/picks")
-            api_body = None
-            if ast == 200 and atext:
-                try:
-                    import json as _json
-                    api_body = _json.loads(atext)
-                except Exception:
-                    api_body = None
-            api = ncaaf_chart_api_issues(api_body)
-            if ast != 200:
-                api = [f"NCAAF chart API HTTP {ast}"] + api
-            if api:
-                self.add(
-                    "NCAAF chart API",
-                    FAIL,
-                    "; ".join(api),
-                    url=aurl,
-                )
-            else:
-                self.add(
-                    "NCAAF chart API",
-                    PASS,
-                    "/ncaaf/api/picks hydrates Moneyline | Spread | Totals",
-                    url=aurl,
-                )
+        ast, atext, aurl = self.fetch(f"/{slug}/api/picks")
+        api_body = None
+        if ast == 200 and atext:
+            try:
+                api_body = _json.loads(atext)
+            except Exception:
+                api_body = None
+        api = team_chart_api_issues(api_body, slug)
+        if ast != 200:
+            api = [f"{sport} chart API HTTP {ast}"] + api
+        if api:
+            self.add(
+                f"{sport} chart API",
+                FAIL,
+                "; ".join(api),
+                url=aurl,
+            )
+        else:
+            self.add(
+                f"{sport} chart API",
+                PASS,
+                f"/{slug}/api/picks hydrates Moneyline | Spread | Totals",
+                url=aurl,
+            )
 
     def _check_copy_all(self, sport: str, picks: str) -> None:
         """In-season team picks with cards must have Copy All.
@@ -1589,7 +1657,7 @@ class ChromeChecker:
                             f"{sport} picks uses the shared team-sports cards",
                             url=purl,
                         )
-            if sport in ("NCAAF", "NFL", "CFL", "Soccer", "MLB"):
+            if sport != "Soccer":
                 pst, phtml, purl = self.fetch(picks)
                 if pst == 200 and _has_pick_cards(phtml):
                     miss = card_missing_model_value_issues(phtml, sport)
