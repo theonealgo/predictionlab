@@ -16,6 +16,7 @@ Usage:
     python qa/site_checker.py --preflight      # server reachability only (~1s)
     python qa/site_checker.py --ship           # 5052 ship-parity + today's slates vs ESPN
     python qa/site_checker.py --chrome         # open every Sports/Results/Blog/Affiliate URL; fail if dead or template gaps
+    python qa/site_checker.py --pagespeed      # Google PageSpeed Insights only (same run as --full/--ship)
 
 EMAIL SETUP (one-time):
   Edit qa/checker_email.py and fill in your Gmail address and App Password.
@@ -29,6 +30,10 @@ Environment variable overrides:
   AUDIT_EMAIL_PASSWORD app password for SMTP
   AUDIT_SMTP_HOST      default smtp.gmail.com
   AUDIT_SMTP_PORT      default 587
+  PAGESPEED_API_KEY    Google PSI key (or qa/.pagespeed_api_key)
+  PAGESPEED_BASE_URL   Public origin for PSI when auditing :5052 (e.g. https://predictionlab.io)
+  PAGESPEED_PATHS      Comma paths (default /mlb-picks,/)
+  PAGESPEED_STRATEGY   mobile | desktop | both (default mobile in site_checker)
 """
 
 from __future__ import annotations
@@ -60,7 +65,8 @@ from audit_config import (
     CLUSTER_WARN_PCT, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO,
     EXPECTED_DASHBOARD_SPORTS, FORBIDDEN_CONTENT,
     FULL_MODE_AUDITORS, HISTORY_DIR, MODEL_DISPLAY_NAMES, MODEL_KEYS,
-    SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS,
+    SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS, PAGESPEED_MODE_AUDITORS,
+    PAGESPEED_PATHS, PAGESPEED_STRATEGY, PAGESPEED_PERF_FLOOR, PAGESPEED_A11Y_FLOOR,
     PAGE_SPEED_BUDGET, PREFLIGHT_TIMEOUT, QUICK_MODE_AUDITORS, REQUEST_TIMEOUT, SCREENSHOTS_DIR,
     SMTP_HOST, SMTP_PORT, SPORT_PICKS_SLUGS, SPORT_RESULTS_SLUGS, STALE_STRINGS,
     USER_AGENT, is_offseason,
@@ -3035,6 +3041,20 @@ def _run_chrome_checker(session, base: str, report: AuditReport):
     ChromeChecker(session, base, report, CheckResult).run()
 
 
+def _run_pagespeed_checker(base: str, report: AuditReport):
+    """Google PageSpeed Insights API — same checker run, not a second tool."""
+    from pagespeed_api_checker import PagespeedAuditor
+    PagespeedAuditor(
+        base,
+        report,
+        CheckResult,
+        paths=PAGESPEED_PATHS,
+        strategy=PAGESPEED_STRATEGY,
+        perf_floor=PAGESPEED_PERF_FLOOR,
+        a11y_floor=PAGESPEED_A11Y_FLOOR,
+    ).run()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN ORCHESTRATOR
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3050,7 +3070,16 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     report = AuditReport(run_id=run_id, timestamp=ts, base_url=base)
 
     live = "predictionlab.io" in base
-    mode = "ship" if getattr(args, "ship", False) else ("quick" if args.quick else "full")
+    if getattr(args, "pagespeed", False) and not (
+        getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False) or args.full
+    ):
+        mode = "pagespeed"
+    elif getattr(args, "ship", False):
+        mode = "ship"
+    elif args.quick:
+        mode = "quick"
+    else:
+        mode = "full"
     print(f"\n{'='*60}")
     print(f"  PredictionLab QA Audit")
     print(f"  FETCHING LIVE HTTP PAGES — not local HTML folders")
@@ -3064,7 +3093,11 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     session = _make_session()
 
     # Determine which auditors to run
-    if getattr(args, "chrome", False):
+    if getattr(args, "pagespeed", False) and not (
+        getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False) or args.full
+    ):
+        auditors_to_run = PAGESPEED_MODE_AUDITORS
+    elif getattr(args, "chrome", False):
         auditors_to_run = CHROME_MODE_AUDITORS
     elif getattr(args, "ship", False):
         auditors_to_run = SHIP_MODE_AUDITORS
@@ -3075,9 +3108,36 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
 
     print("  ▶ Preflight server check…")
     reachable, preflight_fail = preflight_server(session, base)
+    pagespeed_only = list(auditors_to_run) == list(PAGESPEED_MODE_AUDITORS)
     if not reachable:
-        report.add(preflight_fail)
-        print(f"  ❌ {preflight_fail.message}")
+        # --pagespeed alone talks to Google against a public URL; local down is not a FAIL.
+        if pagespeed_only:
+            report.add(CheckResult(
+                label=preflight_fail.label,
+                status=WARN,
+                message=preflight_fail.message + " (ignored for --pagespeed-only)",
+                detail=preflight_fail.detail,
+                auditor="preflight",
+                url=preflight_fail.url,
+            ))
+            print(f"  ⚠️  {preflight_fail.message} (ignored for --pagespeed-only)")
+        else:
+            report.add(preflight_fail)
+            print(f"  ❌ {preflight_fail.message}")
+        # PageSpeed hits Google's API against a public URL — still run it when selected.
+        if "pagespeed" in auditors_to_run:
+            print("  ⏭  Skipping HTTP auditors — server unreachable; still running pagespeed")
+            try:
+                print("  ▶ Running pagespeed audit…")
+                _run_pagespeed_checker(base, report)
+            except Exception as exc:
+                report.add(CheckResult(
+                    label="pagespeed auditor crash", status=FAIL,
+                    message=str(exc),
+                    detail=traceback.format_exc()[-400:],
+                    auditor="pagespeed"))
+            report.duration = time.time() - start
+            return report
         print("  ⏭  Skipping HTTP auditors — server unreachable")
         report.duration = time.time() - start
         return report
@@ -3118,6 +3178,9 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     # Props auditor imports the engine directly (props API is auth-gated) —
     # not HTTP-dependent, so it runs even if the site is unreachable.
     run_auditor("props",      lambda: PropsAuditor(report).run())
+    # PageSpeed Insights (Google API). Not HTTP-dependent on AUDIT_BASE_URL —
+    # Google fetches a public origin (PAGESPEED_BASE_URL when auditing :5052).
+    run_auditor("pagespeed",  lambda: _run_pagespeed_checker(base, report))
 
     if args.screenshots:
         print("  ▶ Running screenshot audit…")
@@ -3232,6 +3295,8 @@ def main():
                         help="5052 ship-parity only: cards, results charts, header/footer, previews, blog")
     parser.add_argument("--chrome",      action="store_true",
                         help="Open every Sports/Results/Blog/Affiliate URL and fail if 404/500/timeout")
+    parser.add_argument("--pagespeed",   action="store_true",
+                        help="Google PageSpeed Insights only (also included in --full/--ship)")
     parser.add_argument("--url",         type=str, default=None,
                         help=f"Override base URL (default: {BASE_URL})")
     parser.add_argument("--preflight",   action="store_true",
@@ -3255,8 +3320,8 @@ def main():
             print(f"   {fail.detail[:200]}")
         sys.exit(1)
 
-    # If neither quick, ship, chrome, nor full, default to full
-    if not args.quick and not args.ship and not getattr(args, "chrome", False):
+    # If neither quick, ship, chrome, pagespeed, nor full, default to full
+    if not args.quick and not args.ship and not getattr(args, "chrome", False) and not getattr(args, "pagespeed", False):
         args.full = True
 
     report = run_audit(args, base_url=target_url)

@@ -131,9 +131,22 @@ CLUSTER_WARN_PCT   = 80        # warn if >80% of probs are in the clustering ran
 QUICK_MODE_AUDITORS = ["routes", "content", "navigation", "chrome", "ship", "soccer", "espn_slate"]
 FULL_MODE_AUDITORS  = ["routes", "content", "navigation", "cards", "models",
                        "results", "gamecounts", "csv", "props", "seo", "schema",
-                       "consistency", "chrome", "ship", "soccer", "espn_slate"]
-SHIP_MODE_AUDITORS  = ["chrome", "ship", "soccer", "espn_slate"]
+                       "consistency", "chrome", "ship", "soccer", "espn_slate",
+                       "pagespeed"]
+SHIP_MODE_AUDITORS  = ["chrome", "ship", "soccer", "espn_slate", "pagespeed"]
 CHROME_MODE_AUDITORS = ["chrome"]
+PAGESPEED_MODE_AUDITORS = ["pagespeed"]
+
+# PageSpeed Insights (Google API) — used by pagespeed auditor inside site_checker.
+# Google cannot fetch localhost; set PAGESPEED_BASE_URL when AUDIT_BASE_URL is :5052.
+PAGESPEED_PATHS = [
+    p.strip()
+    for p in (os.environ.get("PAGESPEED_PATHS") or "/mlb-picks,/").split(",")
+    if p.strip()
+]
+PAGESPEED_STRATEGY = (os.environ.get("PAGESPEED_STRATEGY") or "mobile").strip().lower()
+PAGESPEED_PERF_FLOOR = int(os.environ.get("PAGESPEED_PERF_FLOOR", "50"))
+PAGESPEED_A11Y_FLOOR = int(os.environ.get("PAGESPEED_A11Y_FLOOR", "90"))
 
 # ── Season windows (mirrors NHL77FINAL._SEASON_WINDOWS) ──────────────────
 SEASON_WINDOWS = {
