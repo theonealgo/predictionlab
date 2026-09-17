@@ -5183,11 +5183,45 @@ def _fill_ncaaf_g2_td_from_v2(html: str) -> str:
     return "".join(out)
 
 
+def inject_shared_picks_card_grid_css(html: str) -> str:
+    """All picks cards (not golf board) use the NFL 3-up grid size."""
+    if not html:
+        return html
+    html = re.sub(
+        r'<style id="pl-shared-picks-card-grid">.*?</style>',
+        "",
+        html,
+        count=1,
+        flags=re.I | re.S,
+    )
+    css = (
+        '<style id="pl-shared-picks-card-grid">'
+        "body:not(.sport-golf):not(.golf-board) .games-grid{"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;"
+        "gap:12px!important}"
+        "body:not(.sport-golf):not(.golf-board) .game-card-stack{"
+        "max-width:none!important;width:100%!important;min-width:0}"
+        "@media(max-width:1100px){"
+        "body:not(.sport-golf):not(.golf-board) .games-grid{"
+        "grid-template-columns:repeat(2,minmax(0,1fr))!important}}"
+        "@media(max-width:768px){"
+        "body:not(.sport-golf):not(.golf-board) .games-grid{"
+        "grid-template-columns:1fr!important}}"
+        "</style>"
+    )
+    if re.search(r"</head\s*>", html, flags=re.I):
+        return re.sub(r"</head\s*>", css + "</head>", html, count=1, flags=re.I)
+    if re.search(r"</body\s*>", html, flags=re.I):
+        return re.sub(r"</body\s*>", css + "</body>", html, count=1, flags=re.I)
+    return html + css
+
+
 def apply_team_picks_copy_all(html: str, sport: str) -> str:
     """Copy All = every loaded pick card with models, lines, and H2H."""
     sport_u = _sport_key(sport)
     if not html:
         return html
+    html = inject_shared_picks_card_grid_css(html)
     if "refreshing this page right now" in html.lower():
         return html
     if 'id="pvCopyBtn"' not in html:

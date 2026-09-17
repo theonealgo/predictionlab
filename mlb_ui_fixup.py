@@ -1018,16 +1018,22 @@ def strip_mlb_picks_chart_total_ev(html: str) -> str:
 
 
 def ensure_mlb_pick_conf_no_scroll(html: str) -> str:
-    """MLB picks: readable cards — 3×2 Pick Confidence, no body-grid blowup."""
-    if not html or 'id="mlb-pick-conf-no-scroll"' in html:
+    """MLB picks: same 3-up card size as NFL; Pick Confidence 3×2, no 520px blowup."""
+    if not html:
         return html
+    html = re.sub(
+        r'<style id="mlb-pick-conf-no-scroll">.*?</style>',
+        "",
+        html,
+        count=1,
+        flags=re.I | re.S,
+    )
     # Keep CSS braces in non-f-string fragments so we do not emit `}}`.
     css = (
         '<style id="mlb-pick-conf-no-scroll">'
-        f"{_mlb_sel('')}{{--pl-card-min:520px!important;--pl-card-max:none!important;}}"
         f"{_mlb_sel('.games-grid')}{{display:grid!important;"
-        "grid-template-columns:repeat(auto-fit,minmax(520px,1fr))!important;"
-        "gap:16px!important;align-items:start!important;}"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;"
+        "gap:12px!important;align-items:start!important;}"
         f"{_mlb_sel('.games-grid>.game-card-stack')}{{max-width:none!important;"
         "width:100%!important;min-width:0!important;margin:0!important;"
         "overflow:visible!important;}"
@@ -1045,9 +1051,12 @@ def ensure_mlb_pick_conf_no_scroll(html: str) -> str:
         f"{_mlb_sel('.pc-name')}{{font-size:0.7em!important;line-height:1.2!important;}}"
         f"{_mlb_sel('.pc-side')}{{font-size:0.62em!important;padding:2px 4px!important;}}"
         f"{_mlb_sel('.pc-val')}{{font-size:0.95em!important;}}"
-        "@media(max-width:700px){"
+        "@media(max-width:1100px){"
+        f"{_mlb_sel('.games-grid')}{{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}"
+        "}"
+        "@media(max-width:768px){"
         f"{_mlb_sel('.games-grid')}{{grid-template-columns:1fr!important;}}"
-        f"{_mlb_sel('.pick-conf-grid')}{{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}"
+        f"{_mlb_sel('.pick-conf-grid')}{{grid-template-columns:repeat(3,minmax(0,1fr))!important;}}"
         "}"
         "</style>"
     )

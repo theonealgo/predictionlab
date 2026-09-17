@@ -1,3 +1,8 @@
+---
+description: MLB picks/results UI locked on :5052 — do not edit unless UNLOCK MLB
+alwaysApply: true
+---
+
 # MLB LOCKED (:5052 / premerge)
 
 MLB picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
@@ -5,6 +10,10 @@ MLB picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
 Do **not** modify MLB unless the owner says:
 
 **UNLOCK MLB**
+
+Owner 2026-09-17: picks cards were super wide from `minmax(520px)` inject.
+Restored shared 3-up grid (`repeat(3, minmax(0, 1fr))`) so MLB matches NFL
+and other team sports. Miss closed — lock again.
 
 Owner 2026-09-17: Consensus Historical for free users — dissent now
 reads `data-m-*` when Pick Confidence HTML is paywalled. Cache v39.

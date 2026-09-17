@@ -43,3 +43,32 @@ def test_html_with_today_section_is_fresh():
     today = mlb_et_today_str()
     html = f'<div class="date-section" id="date-{today}"></div>'
     assert mlb_html_has_et_today(html) is True
+
+
+def test_mlb_pick_conf_css_matches_nfl_3up():
+    from mlb_ui_fixup import ensure_mlb_pick_conf_no_scroll
+
+    html = "<html><head></head><body class=\"sport-mlb\"></body></html>"
+    out = ensure_mlb_pick_conf_no_scroll(html)
+    assert "minmax(520px" not in out
+    assert "repeat(3,minmax(0,1fr))" in out
+    wide = (
+        '<html><head><style id="mlb-pick-conf-no-scroll">'
+        "grid-template-columns:repeat(auto-fit,minmax(520px,1fr))!important;"
+        "</style></head><body></body></html>"
+    )
+    fixed = ensure_mlb_pick_conf_no_scroll(wide)
+    assert "minmax(520px" not in fixed
+    assert fixed.count('id="mlb-pick-conf-no-scroll"') == 1
+
+
+def test_shared_picks_grid_matches_nfl_3up():
+    from team_results_charts import inject_shared_picks_card_grid_css
+
+    html = "<html><head></head><body class=\"sport-nhl\"></body></html>"
+    out = inject_shared_picks_card_grid_css(html)
+    assert "pl-shared-picks-card-grid" in out
+    assert "repeat(3,minmax(0,1fr))" in out
+    assert "minmax(520px" not in out
+    assert inject_shared_picks_card_grid_css(out).count("pl-shared-picks-card-grid") == 1
+

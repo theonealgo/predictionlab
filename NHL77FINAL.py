@@ -6997,6 +6997,15 @@ def _apply_team_template_gaps(response):
         )
 
         html = None
+        if path.endswith("-picks") and "golf" not in path:
+            try:
+                from team_results_charts import inject_shared_picks_card_grid_css
+                _grid_html = response.get_data(as_text=True)
+                _grid_out = inject_shared_picks_card_grid_css(_grid_html)
+                if _grid_out:
+                    response.set_data(_grid_out)
+            except Exception:
+                pass
         if path.rstrip("/") == "/mlb-picks":
             html = response.get_data(as_text=True)
             from team_results_charts import apply_team_picks_copy_all
