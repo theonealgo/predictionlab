@@ -4778,21 +4778,28 @@ def _nfl_book_fav_from_spread(stack: str) -> str | None:
 
 
 def _inject_nfl_picks_card_width_css(html: str) -> str:
-    """Widen NFL pick cards so Pick Confidence wraps on words, not mid-word.
+    """NFL Pick Confidence wraps on words; cards stay on the shared 3-up grid.
 
-    Shared 3-up grid leaves ~1/3-width cards (worse on 1-game slates). NFL-only
-    auto-fit + normal word-break; other sports unchanged.
+    A prior auto-fit minmax(520px) + max-width:none made one card fill the
+    row. Other sports unchanged.
     """
-    if not html or 'id="nfl-picks-card-width"' in html:
+    if not html:
         return html
+    html = re.sub(
+        r'<style id="nfl-picks-card-width">.*?</style>',
+        '',
+        html,
+        count=1,
+        flags=re.I | re.S,
+    )
     if "sport-nfl" not in html and 'data-sport="NFL"' not in html:
         # Still inject — body class may be applied after; selector is sport-scoped.
         pass
     css = (
         '<style id="nfl-picks-card-width">'
         "body.sport-nfl .games-grid{"
-        "grid-template-columns:repeat(auto-fit,minmax(520px,1fr))!important;"
-        "gap:14px!important}"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;"
+        "gap:12px!important}"
         "body.sport-nfl .game-card-stack{"
         "max-width:none!important;width:100%!important;min-width:0}"
         "body.sport-nfl .pick-conf-grid{gap:8px!important}"
@@ -4802,7 +4809,9 @@ def _inject_nfl_picks_card_width_css(html: str) -> str:
         "hyphens:none!important;letter-spacing:0.12px!important}"
         "body.sport-nfl .pc-name{font-size:0.64em!important}"
         "body.sport-nfl .pc-side{font-size:0.58em!important;padding:2px 4px!important}"
-        "@media(max-width:560px){"
+        "@media(max-width:1100px){"
+        "body.sport-nfl .games-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}"
+        "@media(max-width:768px){"
         "body.sport-nfl .games-grid{grid-template-columns:1fr!important}"
         "body.sport-nfl .pick-conf-grid{"
         "grid-template-columns:repeat(3,minmax(0,1fr))!important}}"

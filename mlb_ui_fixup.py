@@ -38,6 +38,35 @@ MLB_FLIP_SPREAD = os.environ.get("MLB_FLIP_SPREAD", "0").strip().lower() in (
     "yes",
 )
 
+
+def mlb_et_today_str() -> str:
+    """MLB game-day in America/New_York (not Render UTC)."""
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d")
+
+
+def mlb_slate_has_et_today(predictions) -> bool:
+    """True when any card is dated today ET — yesterday-only cache is stale."""
+    today = mlb_et_today_str()
+    for pred in predictions or []:
+        if not isinstance(pred, dict):
+            continue
+        if str(pred.get("game_date") or "")[:10] == today:
+            return True
+    return False
+
+
+def mlb_html_has_et_today(html: str) -> bool:
+    """True when rendered picks HTML has today's date section."""
+    if not html:
+        return False
+    return f'id="date-{mlb_et_today_str()}"' in html
+
+
 def ensure_pl2_header_css(html: str) -> str:
     """Put signed-off header CSS back if a stale page cache omitted it.
 

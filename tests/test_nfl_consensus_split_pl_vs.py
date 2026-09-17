@@ -152,8 +152,17 @@ def test_nfl_picks_card_width_css_injected():
     html = "<html><head></head><body class=\"sport-nfl\"></body></html>"
     out = _inject_nfl_picks_card_width_css(html)
     assert 'id="nfl-picks-card-width"' in out
-    assert "minmax(520px,1fr)" in out
+    assert "repeat(3,minmax(0,1fr))" in out
+    assert "minmax(520px" not in out
     assert "word-break:normal" in out
-    # idempotent
-    assert out.count('id="nfl-picks-card-width"') == 1
-    assert _inject_nfl_picks_card_width_css(out).count('id="nfl-picks-card-width"') == 1
+    # Replaces the old 520px blow-up CSS if already injected.
+    wide = (
+        '<html><head><style id="nfl-picks-card-width">'
+        "body.sport-nfl .games-grid{"
+        "grid-template-columns:repeat(auto-fit,minmax(520px,1fr))!important;}"
+        "</style></head><body class=\"sport-nfl\"></body></html>"
+    )
+    fixed = _inject_nfl_picks_card_width_css(wide)
+    assert "minmax(520px" not in fixed
+    assert "repeat(3,minmax(0,1fr))" in fixed
+    assert fixed.count('id="nfl-picks-card-width"') == 1

@@ -1,15 +1,3 @@
-# NFL UNLOCKED (:5052 / premerge) — results share image only
-
-Owner 2026-09-17: **UNLOCK NFL** for bottom Results Image on `/nfl-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
-
-Prior lock notes preserved below for when this miss is closed.
-
----
-
-description: NFL LOCKED (:5052 / premerge)
-alwaysApply: true
----
-
 # NFL LOCKED (:5052 / premerge)
 
 NFL picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
@@ -17,6 +5,10 @@ NFL picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
 Do **not** modify NFL unless the owner says:
 
 **UNLOCK NFL**
+
+Owner 2026-09-17: picks cards were super wide from `auto-fit minmax(520px)` +
+`max-width:none`. Restored shared 3-up grid; Pick Confidence still wraps on
+words. Miss closed — lock again.
 
 Owner 2026-09-16: unlocked for Pick Confidence card width
 (`auto-fit minmax(520px)` + word-break normal). Miss paused when
