@@ -6,19 +6,14 @@ Do **not** modify MLB unless the owner says:
 
 **UNLOCK MLB**
 
-Owner 2026-09-17: results share image layout fixed (clipped Last 7 header /
-cramped rows). Homepage sport link + face `data-m-*` for Consensus chips
-shipped in same push. Miss closed — lock again.
+Owner 2026-09-17: Consensus Historical for free users — dissent now
+reads `data-m-*` when Pick Confidence HTML is paywalled. Cache v39.
+Miss closed — lock again.
 
 ## Do not touch
 
 - `/mlb-picks`, `/mlb-results`, `/mlb-results?view=chart`
 - MLB Cards|Chart, card HTML, date nav
-- Any `NHL77FINAL.py` / `team_results_charts.py` / `mlb_*` branch whose job is MLB
-
-## Allowed without unlock
-
-- Other sports
-- Checker reports that only *read* MLB pages
+- Sport-only MLB branches whose job is the card face
 
 Do not put lock text on user-facing HTML.

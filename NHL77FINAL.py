@@ -7834,6 +7834,109 @@ def _attach_soccer_event_dates(predictions) -> int:
     return filled
 
 
+def _mlb_parse_espn_scoreboard_events(data) -> list:
+    """Parse ESPN MLB scoreboard JSON into the same game dicts as the range fetch."""
+    games = []
+    for event in (data or {}).get('events') or []:
+        competition = (event.get('competitions') or [{}])[0] or {}
+        competitors = competition.get('competitors') or []
+        if len(competitors) != 2:
+            continue
+        home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+        away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+        if not home or not away:
+            continue
+        home_team = (home.get('team') or {}).get('displayName', '')
+        away_team = (away.get('team') or {}).get('displayName', '')
+        if _is_exhibition_espn_competition(competition, event) or _is_exhibition_matchup(
+            home_team, away_team, event_name=event.get('name') or ''
+        ):
+            continue
+        event_id = event.get('id', '')
+        league_name = None
+        try:
+            league_name = (
+                event.get('league', {}) or {}
+            ).get('name') or (
+                competition.get('league', {}) or {}
+            ).get('name')
+        except Exception:
+            league_name = None
+        raw_dt = event.get('date', '')
+        game_date = _espn_event_date_to_local(raw_dt) or datetime.now().strftime('%Y-%m-%d')
+        status_info = (event.get('status') or {}).get('type') or {}
+        status_name = status_info.get('name', 'scheduled')
+        home_score = None
+        away_score = None
+        if status_name in ['STATUS_FINAL', 'STATUS_FINAL_OT']:
+            try:
+                home_score = int(home.get('score', 0))
+                away_score = int(away.get('score', 0))
+            except (TypeError, ValueError):
+                pass
+        games.append({
+            'game_id': f"MLB_{event_id}",
+            'home_team_id': home_team,
+            'away_team_id': away_team,
+            'game_date': game_date,
+            'event_date': raw_dt or None,
+            'home_score': home_score,
+            'away_score': away_score,
+            'league': league_name or 'MLB',
+        })
+    return games
+
+
+def _fetch_mlb_espn_scoreboard_days(date_strs) -> list:
+    """Single-day ESPN boards. The multi-day range URL often drops today's slate."""
+    out = []
+    seen = set()
+    for raw in date_strs or []:
+        ymd = str(raw or '').replace('-', '')[:8]
+        if len(ymd) != 8 or ymd in seen:
+            continue
+        seen.add(ymd)
+        url = (
+            'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/'
+            f'scoreboard?dates={ymd}&limit=50'
+        )
+        try:
+            data = _cached_get(url, timeout=10)
+        except Exception:
+            continue
+        out.extend(_mlb_parse_espn_scoreboard_events(data))
+    return out
+
+
+def _mlb_append_missing_espn_days(api_games, date_strs) -> list:
+    """Add ESPN day-board games that a range fetch omitted."""
+    if not isinstance(api_games, list):
+        api_games = []
+    have = {
+        (
+            str(g.get('game_date') or '')[:10],
+            str(g.get('home_team_id') or '').strip().lower(),
+            str(g.get('away_team_id') or '').strip().lower(),
+        )
+        for g in api_games
+    }
+    have_ids = {str(g.get('game_id') or '') for g in api_games}
+    for game in _fetch_mlb_espn_scoreboard_days(date_strs):
+        key = (
+            str(game.get('game_date') or '')[:10],
+            str(game.get('home_team_id') or '').strip().lower(),
+            str(game.get('away_team_id') or '').strip().lower(),
+        )
+        gid = str(game.get('game_id') or '')
+        if key in have or (gid and gid in have_ids):
+            continue
+        api_games.append(game)
+        have.add(key)
+        if gid:
+            have_ids.add(gid)
+    return api_games
+
+
 def _attach_mlb_event_dates(predictions) -> int:
     """Fill ESPN kickoff timestamps onto MLB cards missing event_date / game_time."""
     rows = [
@@ -11889,6 +11992,13 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             len(_cached_preds) < 8 or _ncaaf_slate_mixes_fcs(_cached_preds)
         ):
             _cached_preds = None
+        if sport == 'MLB' and _cached_preds:
+            try:
+                from mlb_ui_fixup import mlb_slate_has_et_today
+                if not mlb_slate_has_et_today(_cached_preds):
+                    _cached_preds = None
+            except Exception:
+                pass
         if _cached_preds:
             # Stale-while-revalidate: if the cache is past its TTL, rebuild in the
             # background but still serve the stale slate now so no request blocks
@@ -11932,6 +12042,13 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
         _recovered = _recover_cached_predictions(sport)
         if sport == 'NCAAF':
             _recovered = None  # stale disk slates mix FCS; always use ESPN groups=80
+        if sport == 'MLB' and _recovered:
+            try:
+                from mlb_ui_fixup import mlb_slate_has_et_today
+                if not mlb_slate_has_et_today(_recovered):
+                    _recovered = None
+            except Exception:
+                pass
         if _recovered:
             _start_background_predictions_refresh(sport, days)
             _cold_refresh_started = True
@@ -11965,7 +12082,7 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             return out
         with _PREDICTIONS_REFRESH_LOCK:
             _already_refreshing = sport in _PREDICTIONS_REFRESH_INFLIGHT
-        if not _already_refreshing:
+        if not _already_refreshing and sport != 'MLB':
             _start_background_predictions_refresh(sport, days)
             _cold_refresh_started = True
         # Soccer live slates (15 ESPN days + card build) hang the single worker.
@@ -12246,8 +12363,29 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
         # still matches the ESPN scoreboard the checker uses.
         if sport == 'MLB':
             try:
-                _conn_mlb = get_db_connection()
+                from mlb_ui_fixup import mlb_et_today_str as _mlb_today_fn
+                _today_m = _mlb_today_fn()
+            except Exception:
                 _today_m = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+            _has_mlb_today = any(
+                str(g.get('game_date') or '')[:10] == _today_m for g in api_games
+            )
+            if not _has_mlb_today:
+                try:
+                    _mlb_tom = (
+                        datetime.now(ZoneInfo('America/New_York')) + timedelta(days=1)
+                    ).strftime('%Y-%m-%d')
+                    api_games = _mlb_append_missing_espn_days(
+                        api_games, [_today_m, _mlb_tom],
+                    )
+                    logger.info(
+                        "MLB ESPN day-board fill for %s/%s (range missed today)",
+                        _today_m, _mlb_tom,
+                    )
+                except Exception as _mlb_day_e:
+                    logger.debug("MLB ESPN day-board fill failed: %s", _mlb_day_e)
+            try:
+                _conn_mlb = get_db_connection()
                 _have_m = {
                     (
                         str(g.get('game_date') or '')[:10],
@@ -12393,6 +12531,51 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 _conn_store.close()
             except Exception as _store_err:
                 logger.debug(f"[{sport}] API game storage failed: {_store_err}")
+        if sport == 'MLB':
+            try:
+                _conn_up = get_db_connection()
+                _cur_up = _conn_up.cursor()
+                _up_n = 0
+                for _sd, _sg in all_games_with_dates:
+                    if _sg.get('home_score') is not None:
+                        continue
+                    gid = _sg.get('game_id')
+                    if not gid:
+                        continue
+                    _existing = _cur_up.execute(
+                        'SELECT 1 FROM games WHERE game_id=? AND sport=? LIMIT 1',
+                        (gid, 'MLB'),
+                    ).fetchone()
+                    if _existing:
+                        continue
+                    gd = str(_sg.get('game_date') or '')[:10]
+                    try:
+                        season = int(gd[:4]) if gd else None
+                    except Exception:
+                        season = None
+                    try:
+                        _cur_up.execute(
+                            '''
+                            INSERT INTO games
+                            (sport, league, game_id, season, game_date,
+                             home_team_id, away_team_id, home_score, away_score, status)
+                            VALUES (?,?,?,?,?,?,?,?,?,?)
+                            ''',
+                            (
+                                'MLB', _sg.get('league') or 'MLB', gid, season, gd,
+                                _sg.get('home_team_id'), _sg.get('away_team_id'),
+                                None, None, 'scheduled',
+                            ),
+                        )
+                        _up_n += 1
+                    except Exception:
+                        pass
+                if _up_n:
+                    _conn_up.commit()
+                    logger.info("[MLB] stored %s upcoming ESPN games in DB", _up_n)
+                _conn_up.close()
+            except Exception as _up_err:
+                logger.debug("[MLB] upcoming game storage failed: %s", _up_err)
 
     else:
         # NFL and other sports: load from database
@@ -22949,7 +23132,7 @@ def _render_espn_picks_page(**ctx):
 
 def _cached_usable_picks_html(sport, filter_date=None):
     """Last good rendered picks HTML (memory). Prefer this over the black stub."""
-    prefix = f"pred_page::v38::{sport}::{filter_date or 'all'}::"
+    prefix = f"pred_page::v39::{sport}::{filter_date or 'all'}::"
     best_html = None
     best_ts = -1.0
     for key, entry in list(_SPORT_PREDICTIONS_PAGE_CACHE.items()):
@@ -23735,7 +23918,7 @@ def sport_predictions(sport, filter_date=None):
     _nfl_use_page_cache = str(sport or '').upper() == 'NFL'
     if (not current_user.is_authenticated) or _nfl_use_page_cache:
         cache_key = (
-            f"pred_page::v38::{sport}::{filter_date or 'all'}::"
+            f"pred_page::v39::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
@@ -23753,6 +23936,13 @@ def sport_predictions(sport, filter_date=None):
                 cached_ts is not None
                 and _picks_page_html_usable(sport, cached_html)
             )
+            if _page_usable and sport == 'MLB':
+                try:
+                    from mlb_ui_fixup import mlb_html_has_et_today
+                    if not mlb_html_has_et_today(cached_html):
+                        _page_usable = False
+                except Exception:
+                    pass
             if _page_usable and _page_age is not None and _page_age < cache_ttl:
                 if sport == 'MLB':
                     return _apply_mlb_picks_html_fixups(cached_html)

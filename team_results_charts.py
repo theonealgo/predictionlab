@@ -4286,6 +4286,37 @@ def _norm_team_token(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (name or "").strip().lower())
 
 
+_MODEL_DATA_ATTR = {
+    "grinder2": "data-m-grinder2",
+    "takedown": "data-m-takedown",
+    "edge": "data-m-edge",
+    "xsharp": "data-m-xsharp",
+    "efficiency": "data-m-efficiency",
+    "sharp consensus": "data-m-consensus",
+    "consensus": "data-m-consensus",
+}
+
+
+def _pc_model_ml_side_from_data_attr(card: str, name: str) -> str | None:
+    """HOME/AWAY from data-m-* when Pick Confidence HTML is paywalled."""
+    attr = _MODEL_DATA_ATTR.get((name or "").strip().lower())
+    if not attr:
+        return None
+    m = re.search(rf'\b{re.escape(attr)}="([^"]*)"', card[:4000], flags=re.I)
+    if not m:
+        return None
+    raw = (m.group(1) or "").strip().replace("%", "")
+    if raw.lower() in {"", "n/a", "na", "—", "–", "-"}:
+        return None
+    try:
+        pct = float(raw)
+    except ValueError:
+        return None
+    if pct <= 1.5:
+        pct *= 100.0
+    return "HOME" if pct >= 50.0 else "AWAY"
+
+
 def _pc_model_ml_side(
     card: str, name: str, *, home: str, away: str
 ) -> str | None:
@@ -4298,10 +4329,11 @@ def _pc_model_ml_side(
         flags=re.I,
     )
     if not m:
-        return None
+        # Free/anon cards lock Pick Confidence — use model attrs on the stack.
+        return _pc_model_ml_side_from_data_attr(card, name)
     raw_pct = (m.group(1) or "").strip().replace("%", "")
     if raw_pct.lower() in {"", "n/a", "na", "—", "–", "-"}:
-        return None
+        return _pc_model_ml_side_from_data_attr(card, name)
     classes = m.group(2) or ""
     side_txt = (m.group(3) or "").strip()
     if re.search(r"\bhome\b", classes, flags=re.I):
@@ -4319,7 +4351,7 @@ def _pc_model_ml_side(
     try:
         pct = float(raw_pct)
     except ValueError:
-        return None
+        return _pc_model_ml_side_from_data_attr(card, name)
     return "HOME" if pct >= 50.0 else "AWAY"
 
 
