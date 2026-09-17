@@ -18,16 +18,20 @@ Do not treat this as a sandbox for unrelated changes.
 
 ## Rules
 
-### 0. Never touch production / the live site — critical
+### 0. Production / git push — owner-controlled
 
-**Agents never work on the live site.**
+**Default:** work locally only. Do **not** push, deploy, or restart Render on your own.
 
-- Do **not** push to git, trigger deploys, restart Render, or change anything that affects `predictionlab.io`.
-- Do **not** run `git push` or equivalent — **not even if the user says “push” in a panic**, unless the user also explicitly confirms they understand it will redeploy production and still wants that specific action.
-- Default assumption: **local only.** Edit here (or in approved isolation folders), run locally, prove it works, stop.
-- A redeploy of “just HTML” still restarts the only Render worker and can take the whole site down. There is no safe casual push.
+**When the owner says push:** push. The owner controls Render. If they say
+`push`, `git push`, or `push to git`, commit the relevant work if needed and
+`git push` to the branch that updates the live site (normally `origin/main`)
+without asking for a second confirmation.
 
-If production is already down and the user asks for help diagnosing, **advise** (restart steps, what to check). Do not push fixes unless they clearly re-confirm a production deploy after local verification.
+- Do **not** change Render settings, force-push to `main`/`master`, or rewrite
+  history unless the owner explicitly asks for that specific action.
+- Prefer excluding local-only junk from commits (large DBs, `.cache/`, secrets).
+- If production is down and the owner has **not** said push, advise (Render
+  restart / logs). If they **have** said push, push.
 
 ### 1. Stay in this project folder — critical
 
@@ -51,7 +55,7 @@ Work locally only.
 1. Make the change in this folder or an approved isolation folder.
 2. **Run the app locally** and smoke-test the affected pages (and shared paths if risk is non-zero).
 3. Report what you verified. Do not claim “fixed” without a local check when the change could affect serving pages.
-4. **Never push.** The owner deploys after they are satisfied.
+4. Do **not** push unless the owner says push (see Rule 0). When they say push, push.
 
 ### 4. Ask before risky changes
 
@@ -150,8 +154,14 @@ unless the owner says:
 and names the miss.
 
 Only that one unlocked sport (and only that miss) may be edited. All other
-sports stay locked. A hang, cloaking fix, checker fail, chrome pass, or
-“the worker is down” is **not** an unlock for any other sport.
+sports stay locked. A hang, cloaking fix, checker fail, chrome pass,
+blank-slate merge for sport A, or “the worker is down” is **not** an unlock
+for any other sport.
+
+**Extra enforcement (2026-09-16):** see `.cursor/rules/sport-lock-enforcement.mdc`
+and `.cursor/rules/one-miss-only.mdc`. Do not edit locked-sport branches of
+`NHL77FINAL.py` / `team_results_charts.py` “incidentally.” Shared merge
+allow-lists may prevent empty slates only — never rewrite another sport’s face.
 
 Do not restyle locked cards. Do not invent Books, Edge, or model numbers.
 Do not edit `NHL77FINAL.py`, `team_results_charts.py`, or `mlb_*` /

@@ -25,7 +25,8 @@ _HDR = {
     "Accept": "application/json",
     "Referer": "https://www.espn.com/tennis/scoreboard",
 }
-_TOURS = ("atp",)  # ATP board includes men's + women's singles at majors; avoids WTA dupes.
+# ATP + WTA — mid-season weeks often have WTA only (post-US Open ATP gaps).
+_TOURS = ("atp", "wta")
 _MODEL_DELTAS = [
     ("Grinder2", 0.035),
     ("Takedown", 0.018),

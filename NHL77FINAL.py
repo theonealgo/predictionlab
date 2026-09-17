@@ -464,6 +464,31 @@ def _fetch_db_games_for_picks_date(sport, filter_date):
             ''',
             (sport, sport, filter_date),
         ).fetchall()
+        # Predictions can lead the games table (locked slate before schedule sync).
+        if not rows:
+            rows = conn.execute(
+                '''
+                SELECT
+                    p.game_id AS game_id,
+                    p.sport AS sport,
+                    p.league AS league,
+                    p.game_date AS game_date,
+                    p.home_team_id AS home_team_id,
+                    p.away_team_id AS away_team_id,
+                    NULL AS home_score,
+                    NULL AS away_score,
+                    NULL AS status,
+                    NULL AS source_keys,
+                    p.elo_home_prob AS stored_elo_prob,
+                    p.xgboost_home_prob AS stored_xgb_prob,
+                    p.win_probability AS stored_ensemble_prob,
+                    p.lock_card_json AS lock_card_json
+                FROM predictions p
+                WHERE p.sport = ? AND date(p.game_date) = date(?)
+                  AND p.actual_home_score IS NULL
+                ''',
+                (sport, filter_date),
+            ).fetchall()
         conn.close()
     except Exception as exc:
         logger.debug('DB picks date load failed for %s %s: %s', sport, filter_date, exc)
@@ -491,10 +516,32 @@ def _fetch_db_games_for_picks_date(sport, filter_date):
 
 
 def _merge_stored_upcoming_predictions(sport, predictions):
-    """Add unscored prediction-table rows the ESPN window / cache omitted."""
-    if sport != 'WNBA' or not isinstance(predictions, list):
+    """Add unscored prediction-table rows the ESPN window / cache omitted.
+
+    Needed whenever the games table / live ESPN window lags while locked
+    predictions already exist for today+ (otherwise picks shows
+    "No predictions available"). Applies to all in-season team sports that
+    publish lock_card_json rows.
+    """
+    sport_u = str(sport or "").strip().upper()
+    _MERGE_SPORTS = (
+        "WNBA",
+        "MLB",
+        "NCAAF",
+        "NFL",
+        "CFL",
+        "NHL",
+        "NBA",
+        "NCAAB",
+        "NCAAW",
+    )
+    if sport_u not in _MERGE_SPORTS or not isinstance(predictions, list):
         return predictions
     today = datetime.now().strftime('%Y-%m-%d')
+    try:
+        today = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+    except Exception:
+        pass
     seen = {
         (
             str(p.get('game_date') or '')[:10],
@@ -519,8 +566,47 @@ def _merge_stored_upcoming_predictions(sport, predictions):
               AND actual_home_score IS NULL
             ORDER BY date(game_date)
             ''',
-            (sport, today),
+            (sport_u, today),
         ).fetchall()
+        # Keep games table in sync so date SEO / joins find the slate.
+        if rows:
+            for row in rows:
+                gid = row["game_id"]
+                if not gid:
+                    continue
+                exists = conn.execute(
+                    "SELECT 1 FROM games WHERE sport = ? AND game_id = ? LIMIT 1",
+                    (sport_u, gid),
+                ).fetchone()
+                if exists:
+                    continue
+                gd = str(row["game_date"] or "")[:10]
+                try:
+                    season = int(gd[:4]) if gd else None
+                except Exception:
+                    season = None
+                conn.execute(
+                    '''
+                    INSERT INTO games (
+                        sport, league, game_id, season, game_date,
+                        home_team_id, away_team_id, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''',
+                    (
+                        sport_u,
+                        sport_u,
+                        gid,
+                        season,
+                        gd,
+                        row["home_team_id"],
+                        row["away_team_id"],
+                        "scheduled",
+                    ),
+                )
+            try:
+                conn.commit()
+            except Exception:
+                pass
         conn.close()
     except Exception as exc:
         logger.debug('stored upcoming merge failed for %s: %s', sport, exc)
@@ -531,19 +617,21 @@ def _merge_stored_upcoming_predictions(sport, predictions):
         key = (gd, row['home_team_id'], row['away_team_id'])
         if not gd or key in seen:
             continue
+        if _is_exhibition_matchup(row['home_team_id'], row['away_team_id']):
+            continue
         stored_elo = _to_float_safe(row['elo_home_prob'])
         stored_xgb = _to_float_safe(row['xgboost_home_prob'])
         stored_ens = _to_float_safe(row['win_probability'])
         stored_g2 = _to_float_safe(row['glicko_home_prob'])
         stored_ts = _to_float_safe(row['trueskill_home_prob'])
-        out.append({
+        card = {
             'game_id': row['game_id'],
             'home_team_id': row['home_team_id'],
             'away_team_id': row['away_team_id'],
             'game_date': gd,
             'home_score': row['actual_home_score'],
             'away_score': row['actual_away_score'],
-            'league': sport,
+            'league': sport_u,
             'stored_elo_prob': stored_elo,
             'stored_xgb_prob': stored_xgb,
             'stored_ensemble_prob': stored_ens,
@@ -556,7 +644,13 @@ def _merge_stored_upcoming_predictions(sport, predictions):
             'glicko2_prob': _normalize_home_win_prob_pct(stored_g2),
             'trueskill_prob': _normalize_home_win_prob_pct(stored_ts),
             'lock_card_json': row['lock_card_json'],
-        })
+        }
+        try:
+            if _card_is_published(card):
+                _apply_lock_card_snapshot(card)
+        except Exception:
+            pass
+        out.append(card)
         seen.add(key)
     return out
 
@@ -776,7 +870,7 @@ def _fit_text_font(draw, text: str, max_width: int, start_size: int, min_size: i
     return _get_share_font(min_size, bold=bold), cleaned
 
 
-def _render_predictions_share_image(payload: dict, fmt: str):
+def _render_predictions_share_image(payload: dict, fmt: str, *, max_width: int | None = None):
     if not _HAS_PIL:
         return None, None
     # 1080×1920, 9:16 vertical — fills a phone screen on TikTok/Reels (landscape 16:9 letterboxes on mobile).
@@ -847,10 +941,24 @@ def _render_predictions_share_image(payload: dict, fmt: str):
                 hx = cx - home_w // 2 - 54
                 draw.rounded_rectangle((hx, home_y - 10, hx + 44, home_y + 38), radius=8, fill=(34, 197, 94))
                 draw.text((hx + 9, home_y - 8), "✓", fill=(255, 255, 255), font=check_font)
+    # Page embeds request ?w=640 (or similar) so Lighthouse is not forced to
+    # download the full 1080×1920 social asset for a ~420px preview.
+    try:
+        mw = int(max_width) if max_width is not None else None
+    except (TypeError, ValueError):
+        mw = None
+    if mw and 240 <= mw < width:
+        new_h = max(1, int(round(height * (mw / float(width)))))
+        try:
+            _resample = Image.Resampling.LANCZOS
+        except AttributeError:
+            _resample = Image.LANCZOS
+        image = image.resize((mw, new_h), _resample)
     output = io.BytesIO()
     out_fmt = 'JPEG' if fmt in ('jpg', 'jpeg') else 'PNG'
     if out_fmt == 'JPEG':
-        image.save(output, format=out_fmt, quality=93, optimize=True, subsampling=0)
+        q = 82 if (mw and mw < width) else 93
+        image.save(output, format=out_fmt, quality=q, optimize=True, subsampling=0)
         mimetype = 'image/jpeg'
     else:
         image.save(output, format=out_fmt, optimize=True)
@@ -910,6 +1018,74 @@ def _render_daily_report_share_image(payload: dict, fmt: str):
         mimetype = 'image/png'
     output.seek(0)
     return output.getvalue(), mimetype
+
+
+def _render_results_summary_share_image(payload: dict, fmt: str, *, max_width: int | None = None):
+    try:
+        from results_share_image import render_results_summary_share_image
+        return render_results_summary_share_image(payload, fmt, max_width=max_width)
+    except Exception as e:
+        logger.debug('results summary share render failed: %s', e)
+        return None, None
+
+
+def _with_results_share_image(response, sport: str):
+    """Attach bottom Results Image (LN + L7 ML/Spread/Total) like picks share chrome."""
+    status = None
+    headers = None
+    html = response
+    if isinstance(response, tuple):
+        if not response:
+            return response
+        html = response[0]
+        if len(response) >= 2:
+            status = response[1]
+        if len(response) >= 3:
+            headers = response[2]
+    if not isinstance(html, str) or len(html) < 400:
+        return response
+    # Chart views keep their own layout; cards results get the ad image.
+    try:
+        view = (request.args.get('view') or '').strip().lower()
+    except Exception:
+        view = ''
+    if view in ('chart', 'tabs', 'markets', 'tabbed'):
+        return response
+    try:
+        from results_share_image import (
+            inject_results_share_block,
+            payload_from_results_html,
+            results_share_wrap_html,
+        )
+        sport_name = (SPORTS.get(sport) or {}).get('name') or sport
+        payload = payload_from_results_html(html, sport_name)
+        if not payload and str(sport or '').upper() == 'GOLF':
+            # Golf is tournament-finish, not ML/spread/total — still ship the
+            # same ad chrome with empty windows so the results page matches.
+            from results_share_image import _empty_window
+            payload = {
+                'type': 'results-summary',
+                'sport_name': sport_name,
+                'last_night': _empty_window(),
+                'last_7': _empty_window(),
+            }
+        if not payload:
+            return response
+        token = _register_share_image(payload)
+        src = url_for('share_results_summary_image', token=token, fmt='jpg')
+        view_url = url_for('share_results_summary_view', token=token)
+        wrap = results_share_wrap_html(
+            sport_name=sport_name, share_src=src, view_url=view_url,
+        )
+        html = inject_results_share_block(html, wrap)
+    except Exception as e:
+        logger.debug('results share inject failed for %s: %s', sport, e)
+        return response
+    if status is None and headers is None:
+        return html
+    if headers is None:
+        return html, status
+    return html, status, headers
 
 
 def _cached_get(url: str, timeout: int = 10):
@@ -3146,7 +3322,9 @@ def _fill_nfl_display_gaps(card: dict) -> None:
     Does not invent books. Copies PL reconstruction onto XSharp only when the
     XSharp spread/total/score fields are already empty. Placeholder Edge 50%
     is replaced from the published PL spread — same as NCAAF.
+    Does not move locked face % / pick team (customers must see a frozen face).
     """
+    _fill_nfl_missing_card_models(card)
     if _ncaaf_elo_is_placeholder(card.get('elo_prob')):
         sp = _safe_float(card.get('disp_pl_spread') or card.get('our_spread'))
         if sp is not None:
@@ -3235,6 +3413,7 @@ def _fill_ncaaf_display_gaps(card: dict) -> None:
     """NCAAF only. Fill blank PL/XSharp lines and placeholder Edge 50%."""
     if not isinstance(card, dict):
         return
+    _fill_ncaaf_missing_card_models(card)
     _backfill_display_lines_from_proj(card)
     if card.get('efficiency_prob') is None:
         esp = _safe_float(
@@ -3269,6 +3448,140 @@ def _fill_ncaaf_display_gaps(card: dict) -> None:
         card['elo_prob'] = float(spread_to_home_prob_pct(float(sp), 'NCAAF'))
     except Exception:
         pass
+
+
+def _fill_ncaaf_missing_card_models(pred: dict) -> None:
+    """Display-only: restore Grinder2/Takedown the lock snapshot never stored.
+
+    Same idea as MLB — call NCAAF v2 for missing glicko/trueskill only.
+    Never copies Edge / Sharp Consensus / books onto G2 or TD.
+    """
+    if not isinstance(pred, dict):
+        return
+    ht = pred.get('home_team_id') or pred.get('home')
+    at = pred.get('away_team_id') or pred.get('away')
+    if not ht or not at:
+        return
+    gdate = str(pred.get('game_date') or pred.get('date') or '')[:10] or None
+    need_g2 = _safe_float(pred.get('glicko2_prob')) is None
+    need_ts = _safe_float(pred.get('trueskill_prob')) is None
+    if not need_g2 and not need_ts:
+        return
+    try:
+        v2 = get_v2_prediction('NCAAF', ht, at, gdate)
+    except Exception:
+        v2 = None
+    if not v2:
+        return
+    if need_g2:
+        g2 = _safe_float(v2.get('glicko2_prob'))
+        if g2 is not None:
+            if abs(g2) <= 1.0:
+                g2 *= 100.0
+            pred['glicko2_prob'] = round(g2, 1)
+    if need_ts:
+        ts = _safe_float(v2.get('trueskill_prob'))
+        if ts is not None:
+            if abs(ts) <= 1.0:
+                ts *= 100.0
+            pred['trueskill_prob'] = round(ts, 1)
+
+
+def _fill_nfl_missing_card_models(pred: dict) -> None:
+    """Display-only: restore Grinder2/Takedown the NFL lock snapshot omitted.
+
+    Never copies Edge / Sharp Consensus / books onto G2 or TD.
+    """
+    if not isinstance(pred, dict):
+        return
+    ht = pred.get('home_team_id') or pred.get('home')
+    at = pred.get('away_team_id') or pred.get('away')
+    if not ht or not at:
+        return
+    gdate = str(pred.get('game_date') or pred.get('date') or '')[:10] or None
+    need_g2 = _safe_float(pred.get('glicko2_prob')) is None
+    need_ts = _safe_float(pred.get('trueskill_prob')) is None
+    if not need_g2 and not need_ts:
+        return
+    try:
+        v2 = get_v2_prediction('NFL', ht, at, gdate)
+    except Exception:
+        v2 = None
+    if not v2:
+        return
+    if need_g2:
+        g2 = _safe_float(v2.get('glicko2_prob'))
+        if g2 is not None:
+            if abs(g2) <= 1.0:
+                g2 *= 100.0
+            pred['glicko2_prob'] = round(g2, 1)
+    if need_ts:
+        ts = _safe_float(v2.get('trueskill_prob'))
+        if ts is not None:
+            if abs(ts) <= 1.0:
+                ts *= 100.0
+            pred['trueskill_prob'] = round(ts, 1)
+
+
+def _amer_ml_to_implied_pct(ml) -> float | None:
+    n = _safe_float(ml)
+    if n is None or abs(n) < 1e-9:
+        return None
+    if n < 0:
+        return (-n) / (-n + 100.0) * 100.0
+    return 100.0 / (n + 100.0) * 100.0
+
+
+def _repair_nfl_locked_pickem_face(pred: dict) -> None:
+    """When a locked NFL card is stuck at 50/50 face but PL MLs exist, rebuild face.
+
+    Uses published Prediction Lab moneylines already on the card (devig). Does not
+    invent books or move odds numbers — only restores face % / pick / favored.
+    """
+    if not isinstance(pred, dict):
+        return
+    fh = _safe_float(pred.get('face_home_prob'))
+    fa = _safe_float(pred.get('face_away_prob'))
+    if fh is not None and abs(fh) <= 1.0 + 1e-9:
+        fh *= 100.0
+    if fa is not None and abs(fa) <= 1.0 + 1e-9:
+        fa *= 100.0
+    stuck = (
+        fh is not None
+        and fa is not None
+        and abs(fh - 50.0) < 0.051
+        and abs(fa - 50.0) < 0.051
+    )
+    if not stuck:
+        return
+    home_ml = _safe_float(
+        pred.get('pl_model_home_ml') or pred.get('pl_home_ml')
+    )
+    away_ml = _safe_float(
+        pred.get('pl_model_away_ml') or pred.get('pl_away_ml')
+    )
+    ph = _amer_ml_to_implied_pct(home_ml)
+    pa = _amer_ml_to_implied_pct(away_ml)
+    if ph is None or pa is None:
+        return
+    total = ph + pa
+    if total <= 0:
+        return
+    face_h = round(100.0 * ph / total, 1)
+    face_a = round(100.0 - face_h, 1)
+    if abs(face_h - 50.0) < 0.051:
+        return
+    home = pred.get('home_team_id') or pred.get('home') or ''
+    away = pred.get('away_team_id') or pred.get('away') or ''
+    pred['face_home_prob'] = face_h
+    pred['face_away_prob'] = face_a
+    pred['face_pick_confidence'] = max(face_h, face_a)
+    if face_h >= face_a:
+        pred['face_pick_team'] = home
+    else:
+        pred['face_pick_team'] = away
+    if not pred.get('face_model_label'):
+        pred['face_model_label'] = 'Sharp Consensus'
 
 
 def _fill_mlb_missing_card_models(pred: dict) -> None:
@@ -3889,7 +4202,9 @@ _TEAM_NAME_TO_ABBR = {
         'Detroit Tigers': 'det', 'Houston Astros': 'hou', 'Kansas City Royals': 'kc',
         'Los Angeles Angels': 'laa', 'Los Angeles Dodgers': 'lad', 'Miami Marlins': 'mia',
         'Milwaukee Brewers': 'mil', 'Minnesota Twins': 'min', 'New York Mets': 'nym',
-        'New York Yankees': 'nyy', 'Oakland Athletics': 'oak', 'Philadelphia Phillies': 'phi',
+        'New York Yankees': 'nyy', 'Oakland Athletics': 'oak', 'Athletics': 'oak',
+        "Oakland A's": 'oak', "A's": 'oak', 'Sacramento Athletics': 'oak',
+        'Philadelphia Phillies': 'phi',
         'Pittsburgh Pirates': 'pit', 'San Diego Padres': 'sd', 'San Francisco Giants': 'sf',
         'Seattle Mariners': 'sea', 'St. Louis Cardinals': 'stl', 'Tampa Bay Rays': 'tb',
         'Texas Rangers': 'tex', 'Toronto Blue Jays': 'tor', 'Washington Nationals': 'wsh',
@@ -3931,7 +4246,11 @@ _TEAM_NAME_TO_ABBR = {
 
 
 def team_logo_url(sport: str, team_name: str) -> str:
-    """ESPN team logo for prediction card header."""
+    """ESPN team logo for prediction card header.
+
+    MLB uses /100/ (display ~52px / retina) — /500/ wastes ~40–70KB per face.
+    Other sports stay on /500/ until unlocked for the same PageSpeed miss.
+    """
     if not (sport and team_name):
         return '/static/pl-logo.svg'
     if sport == 'SOCCER':
@@ -3942,7 +4261,8 @@ def team_logo_url(sport: str, team_name: str) -> str:
     abbr = (_TEAM_NAME_TO_ABBR.get(sport) or {}).get(team_name)
     if not slug or not abbr:
         return '/static/pl-logo.svg'
-    return f'https://a.espncdn.com/i/teamlogos/{slug}/500/{abbr}.png'
+    size = 100 if sport == 'MLB' else 500
+    return f'https://a.espncdn.com/i/teamlogos/{slug}/{size}/{abbr}.png'
 
 
 
@@ -4273,7 +4593,17 @@ def _set_card_edge_pct(pred: dict, sport: str = 'NBA') -> None:
 
 
 def _prepare_pred_card_face(pred: dict, sport: str = 'NBA') -> None:
-    """Precompute card-face win % from the best model for this sport."""
+    """Precompute card-face win % from the best model for this sport.
+
+    Published cards keep their locked face_* — never recompute from live/model
+    keys (that caused day-to-day drift customers notice).
+    """
+    if (
+        pred.get('_picks_locked')
+        and pred.get('face_home_prob') is not None
+        and pred.get('face_away_prob') is not None
+    ):
+        return
     prob_key, label = BEST_MODEL_BY_SPORT.get(sport, ('ensemble_prob', 'Sharp Consensus'))
     draw_pct = _safe_float(pred.get('draw_prob'))
     home_win_pct = _safe_float(pred.get('home_win_prob'))
@@ -7504,6 +7834,128 @@ def _attach_soccer_event_dates(predictions) -> int:
     return filled
 
 
+def _attach_mlb_event_dates(predictions) -> int:
+    """Fill ESPN kickoff timestamps onto MLB cards missing event_date / game_time."""
+    rows = [
+        p
+        for p in (predictions or [])
+        if isinstance(p, dict)
+        and not p.get('event_date')
+        and not _format_card_game_time(p)
+    ]
+    if not rows:
+        return 0
+    dates = sorted(
+        {
+            str(p.get('game_date') or '')[:10]
+            for p in rows
+            if str(p.get('game_date') or '')[:10]
+        }
+    )
+    if not dates:
+        return 0
+    by_id: dict[str, str] = {}
+    by_match: dict[tuple[str, str, str], str] = {}
+    for gd in dates:
+        ds = gd.replace('-', '')
+        url = (
+            'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/'
+            f'scoreboard?dates={ds}&limit=50'
+        )
+        try:
+            data = _cached_get(url, timeout=10)
+        except Exception:
+            continue
+        for event in (data or {}).get('events') or []:
+            eid = str(event.get('id') or '')
+            raw = event.get('date') or ''
+            if not raw:
+                continue
+            if eid:
+                by_id[f'MLB_{eid}'] = raw
+            comps = (event.get('competitions') or [{}])[0] or {}
+            home = away = ''
+            for c in comps.get('competitors') or []:
+                team = (c.get('team') or {})
+                name = (team.get('displayName') or team.get('name') or '').strip()
+                if str(c.get('homeAway') or '') == 'home':
+                    home = name
+                elif str(c.get('homeAway') or '') == 'away':
+                    away = name
+            if home and away:
+                by_match[(gd, away.lower(), home.lower())] = raw
+    if not by_id and not by_match:
+        return 0
+    filled = 0
+    for pred in rows:
+        gid = str(pred.get('game_id') or '')
+        hit = by_id.get(gid)
+        if not hit:
+            gd = str(pred.get('game_date') or '')[:10]
+            away = str(pred.get('away_team_id') or pred.get('away') or '').strip().lower()
+            home = str(pred.get('home_team_id') or pred.get('home') or '').strip().lower()
+            hit = by_match.get((gd, away, home))
+        if not hit:
+            continue
+        pred['event_date'] = hit
+        _set_card_game_time(pred)
+        filled += 1
+    return filled
+
+
+def _attach_nfl_event_dates(predictions) -> int:
+    """Fill ESPN kickoff timestamps onto NFL cards missing event_date / game_time.
+
+    site.api date-range often 400s on future seasons; site.web.api day boards work.
+    """
+    rows = [
+        p
+        for p in (predictions or [])
+        if isinstance(p, dict)
+        and not p.get('event_date')
+        and not _format_card_game_time(p)
+    ]
+    if not rows:
+        return 0
+    dates = sorted(
+        {
+            str(p.get('game_date') or '')[:10]
+            for p in rows
+            if str(p.get('game_date') or '')[:10]
+        }
+    )
+    if not dates:
+        return 0
+    by_id: dict[str, str] = {}
+    for gd in dates:
+        ds = gd.replace('-', '')
+        url = (
+            'https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/'
+            f'scoreboard?dates={ds}&limit=50'
+        )
+        try:
+            data = _cached_get(url, timeout=10)
+        except Exception:
+            continue
+        for event in (data or {}).get('events') or []:
+            eid = str(event.get('id') or '')
+            raw = event.get('date') or ''
+            if eid and raw:
+                by_id[f'NFL_{eid}'] = raw
+    if not by_id:
+        return 0
+    filled = 0
+    for pred in rows:
+        gid = str(pred.get('game_id') or '')
+        hit = by_id.get(gid)
+        if not hit:
+            continue
+        pred['event_date'] = hit
+        _set_card_game_time(pred)
+        filled += 1
+    return filled
+
+
 def _fetch_soccer_league_scoreboard_games(league_name, days_back=1, days_forward=7):
     """Lazy one-league scoreboard fetch when soccer/all has no slate for it."""
     league_code = SOCCER_LEAGUE_ENDPOINTS.get(league_name)
@@ -7729,9 +8181,13 @@ def _hydrate_soccer_team_logos(team_names, league_code=None):
         return
     today = datetime.now()
     if not league_code:
-        # One soccer/all scan — never walk 148 catalog slugs on first paint.
-        for days_offset in (0, 1):
+        # One soccer/all scan — never walk every catalog slug on first paint.
+        # Cover a short window so mid-week teams not on today's board still resolve.
+        for days_offset in range(0, 8):
             if not missing:
+                break
+            if days_offset >= 4 and len(missing) > 12:
+                # Cap request budget when many names remain unresolved.
                 break
             date_str = (today - timedelta(days=days_offset)).strftime('%Y%m%d')
             try:
@@ -9282,14 +9738,93 @@ def update_espn_scores(sport):
         return
     
     try:
-        logger.info(f"Fetching {sport} scores from ESPN API (last 7 days)...")
+        logger.info(f"Fetching {sport} scores from ESPN API...")
         
         conn = get_db_connection()
         cursor = conn.cursor()
         updates_count = 0
+
+        # WNBA: one season-scoreboard pull backfills months the 7-day loop misses.
+        if sport == 'WNBA':
+            try:
+                season_url = (
+                    f"{ESPN_ENDPOINTS[sport]}?seasontype=2&dates={datetime.now().year}"
+                    f"&limit=400"
+                )
+                resp = requests.get(season_url, timeout=25)
+                resp.raise_for_status()
+                season_events = (resp.json() or {}).get('events') or []
+                logger.info(
+                    f"[WNBA] season scoreboard returned {len(season_events)} events"
+                )
+                for event in season_events:
+                    competition = event.get('competitions', [{}])[0]
+                    competitors = competition.get('competitors', [])
+                    if len(competitors) != 2:
+                        continue
+                    status_info = event.get('status', {}).get('type', {})
+                    status_name = status_info.get('name', '')
+                    if status_name not in ['STATUS_FINAL', 'STATUS_FINAL_OT']:
+                        continue
+                    home = next((c for c in competitors if c.get('homeAway') == 'home'), None)
+                    away = next((c for c in competitors if c.get('homeAway') == 'away'), None)
+                    if not home or not away:
+                        continue
+                    home_team = home.get('team', {}).get('displayName', '')
+                    away_team = away.get('team', {}).get('displayName', '')
+                    try:
+                        home_score = int(home.get('score', 0))
+                        away_score = int(away.get('score', 0))
+                    except Exception:
+                        continue
+                    game_date = (event.get('date') or '')[:10]
+                    if len(game_date) != 10:
+                        continue
+                    game_id = f"{sport}_{event.get('id')}"
+                    existing = cursor.execute(
+                        "SELECT 1 FROM games WHERE game_id = ? AND sport = ?",
+                        (game_id, sport),
+                    ).fetchone()
+                    if existing:
+                        cursor.execute(
+                            """
+                            UPDATE games
+                            SET home_score = ?, away_score = ?, status = 'final', game_date = ?
+                            WHERE sport = ? AND game_id = ?
+                              AND (home_score IS NULL OR home_score != ? OR game_date != ?)
+                            """,
+                            (
+                                home_score, away_score, game_date,
+                                sport, game_id, home_score, game_date,
+                            ),
+                        )
+                    else:
+                        try:
+                            cursor.execute(
+                                """
+                                INSERT INTO games (
+                                    sport, league, game_id, season, game_date,
+                                    home_team_id, away_team_id, home_score, away_score, status
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
+                                """,
+                                (
+                                    sport, sport, game_id, int(game_date[:4]), game_date,
+                                    home_team, away_team, home_score, away_score,
+                                ),
+                            )
+                        except Exception as insert_error:
+                            logger.error(
+                                f"Error inserting {sport} game {game_id}: {insert_error}"
+                            )
+                            continue
+                    if cursor.rowcount > 0:
+                        updates_count += 1
+            except Exception as _wnba_exc:
+                logger.warning(f"[WNBA] season scoreboard backfill failed: {_wnba_exc}")
         
-        # Check last 7 days
-        for days_back in range(7):
+        # Check last 7 days (14 for WNBA) for late finals
+        _day_span = 14 if sport == 'WNBA' else 7
+        for days_back in range(_day_span):
             check_date = datetime.now() - timedelta(days=days_back)
             date_str = check_date.strftime('%Y%m%d')
             
@@ -9366,7 +9901,7 @@ def update_espn_scores(sport):
                             cursor.execute("""
                                 INSERT INTO games (sport, league, game_id, season, game_date, home_team_id, away_team_id, home_score, away_score, status)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
-                            """, (sport, league_name or sport, game_id, 2025, game_date, home_team, away_team, home_score, away_score))
+                            """, (sport, league_name or sport, game_id, int(game_date[:4]), game_date, home_team, away_team, home_score, away_score))
                             logger.info(f"Inserted new {sport} game: {away_team} @ {home_team} ({game_date})")
                         except Exception as insert_error:
                             logger.error(f"Error inserting {sport} game {game_id}: {insert_error}")
@@ -9381,6 +9916,9 @@ def update_espn_scores(sport):
         conn.close()
         if updates_count > 0:
             logger.info(f"Successfully updated {updates_count} {sport} game scores.")
+            stale = [k for k in _SPORT_RESULTS_CACHE if k.startswith(f'{sport}_daily_results_html')]
+            for _sk in stale:
+                _SPORT_RESULTS_CACHE.pop(_sk, None)
         else:
             logger.info(f"No {sport} score updates needed.")
         
@@ -9785,6 +10323,10 @@ def _fill_published_chrome_blanks(pred: dict, sport: str = 'NBA') -> None:
         _fill_wnba_efficiency_markets_if_missing(pred)
     if str(sport or '').upper() == 'MLB':
         _fill_mlb_missing_card_models(pred)
+    if str(sport or '').upper() == 'NCAAF':
+        _fill_ncaaf_missing_card_models(pred)
+    if str(sport or '').upper() == 'NFL':
+        _fill_nfl_missing_card_models(pred)
     if pred.get('book_spread') is None:
         ms = _safe_float(pred.get('market_spread'))
         if ms is not None:
@@ -9826,6 +10368,7 @@ def _fill_published_chrome_blanks(pred: dict, sport: str = 'NBA') -> None:
 def _format_published_card_face(pred: dict, sport: str = 'NBA') -> None:
     """Paint locked numbers onto the card chrome. Does not change the pick."""
     _apply_lock_card_snapshot(pred)
+    snap = pred.get('stored_lock_card') if isinstance(pred.get('stored_lock_card'), dict) else {}
     _fill_published_chrome_blanks(pred, sport=sport)
     if sport == 'MLB':
         _set_mlb_spread_pick_label(pred)
@@ -9834,8 +10377,47 @@ def _format_published_card_face(pred: dict, sport: str = 'NBA') -> None:
     _set_card_projected_scores(pred, sport=sport)
     if sport == 'NCAAF':
         _fill_ncaaf_display_gaps(pred)
+    if sport == 'NFL':
+        _fill_nfl_display_gaps(pred)
     _set_card_edge_pct(pred, sport=sport)
-    _prepare_pred_card_face(pred, sport=sport)
+    # Face % / pick team: locked snapshot wins. Only build face when the first
+    # publish never stored face_* (then pin from locked model probs once).
+    if snap.get('face_home_prob') is not None and snap.get('face_away_prob') is not None:
+        pred['face_home_prob'] = snap.get('face_home_prob')
+        pred['face_away_prob'] = snap.get('face_away_prob')
+        if snap.get('face_pick_team') is not None:
+            pred['face_pick_team'] = snap.get('face_pick_team')
+        if snap.get('face_pick_confidence') is not None:
+            pred['face_pick_confidence'] = snap.get('face_pick_confidence')
+        if snap.get('face_model_label'):
+            pred['face_model_label'] = snap.get('face_model_label')
+    else:
+        _prepare_pred_card_face(pred, sport=sport)
+    # Re-pin identity fields from the frozen snap so later chrome fills cannot drift.
+    for key in (
+        'ensemble_prob',
+        'ens_prob',
+        'elo_prob',
+        'xgb_prob',
+        'glicko2_prob',
+        'trueskill_prob',
+        'predicted_winner',
+        'face_home_prob',
+        'face_away_prob',
+        'face_pick_team',
+        'face_pick_confidence',
+        'face_model_label',
+        'pl_model_home_ml',
+        'pl_model_away_ml',
+        'book_home_moneyline',
+        'book_away_moneyline',
+        'disp_pl_spread',
+        'disp_xs_spread',
+        'our_spread',
+        'our_total',
+    ):
+        if snap.get(key) is not None:
+            pred[key] = snap.get(key)
 
 
 def _persist_lock_card_json(cursor, sport, pred) -> bool:
@@ -9847,15 +10429,24 @@ def _persist_lock_card_json(cursor, sport, pred) -> bool:
     if not game_id or not snap:
         return False
     row = cursor.execute(
-        "SELECT id, lock_card_json FROM predictions WHERE game_id = ? AND sport = ?",
+        "SELECT id, lock_card_json, locked FROM predictions WHERE game_id = ? AND sport = ?",
         (game_id, sport),
     ).fetchone()
     if not row:
         return False
     if _lock_row_get(row, 'lock_card_json'):
+        # Already published — still force locked=1 if a legacy row was left open.
+        try:
+            if int(_lock_row_get(row, 'locked') or 0) != 1:
+                cursor.execute(
+                    "UPDATE predictions SET locked = 1 WHERE id = ?",
+                    (_lock_row_get(row, 'id'),),
+                )
+        except Exception:
+            pass
         return False
     cursor.execute(
-        "UPDATE predictions SET lock_card_json = ? WHERE id = ?",
+        "UPDATE predictions SET lock_card_json = ?, locked = 1 WHERE id = ?",
         (json.dumps(snap, default=str), _lock_row_get(row, 'id')),
     )
     pred['_picks_locked'] = True
@@ -9864,7 +10455,11 @@ def _persist_lock_card_json(cursor, sport, pred) -> bool:
 
 
 def _merge_lock_card_missing(cursor, sport, pred) -> bool:
-    """First-write-wins per field. Add chrome that was blank on the first snapshot."""
+    """First-write-wins per field. Add chrome that was blank on the first snapshot.
+
+    Never replaces a field that was already published (including a locked 50/50
+    face) — that would look like the pick moved later in the day.
+    """
     if pred is None or pred.get('home_score') is not None:
         return False
     game_id = pred.get('game_id')
@@ -9893,11 +10488,12 @@ def _merge_lock_card_missing(cursor, sport, pred) -> bool:
     if not added:
         return False
     cursor.execute(
-        "UPDATE predictions SET lock_card_json = ? WHERE id = ?",
+        "UPDATE predictions SET lock_card_json = ?, locked = 1 WHERE id = ?",
         (json.dumps(snap, default=str), _lock_row_get(row, 'id')),
     )
     pred['stored_lock_card'] = snap
     pred['lock_card_json'] = json.dumps(snap, default=str)
+    pred['_picks_locked'] = True
     return True
 
 
@@ -10242,24 +10838,46 @@ def _load_soccer_results_disk_cache() -> None:
         if not _os_v2.path.isfile(_SOCCER_RESULTS_DISK_PATH):
             return
         age = _time.time() - _os_v2.path.getmtime(_SOCCER_RESULTS_DISK_PATH)
-        # Stale disk is better than a 40s rebuild that logs customers out.
-        if age > (7 * 24 * 3600):
+        # Prefer a rebuild over serving multi-day-old all-leagues HTML under
+        # today's week key (that froze Last night at 2026-09-10 with 4/4).
+        max_age = _SOCCER_RESULTS_DISK_MAX_AGE or (12 * 3600)
+        if age > max_age:
             return
         with open(_SOCCER_RESULTS_DISK_PATH, 'r', encoding='utf-8') as _sf:
             html = _sf.read()
-        if html and _results_page_html_usable(html):
-            entry = {
-                'ts': _time.time(),
-                'html': html,
-            }
-            _SPORT_RESULTS_CACHE['SOCCER_daily_results_html_all'] = entry
-            try:
-                from soccer_ui_fixup import soccer_week_range
-                week = soccer_week_range('')[0].isoformat()
-            except Exception:
-                week = _soccer_et_today_str()
-            _SPORT_RESULTS_CACHE[f'SOCCER_daily_results_html_all_week_{week}'] = entry
-            logger.info("[soccer-results-disk] seeded all-leagues results HTML")
+        if not html or not _results_page_html_usable(html):
+            return
+        # Reject snapshots whose slate night is outside the current week.
+        try:
+            from soccer_ui_fixup import soccer_week_range
+            week_start, week_end = soccer_week_range('')
+            week = week_start.isoformat()
+            week_end_s = week_end.isoformat()
+        except Exception:
+            week = _soccer_et_today_str()
+            week_end_s = week
+        import re as _re_disk
+        nights = _re_disk.findall(
+            r"Last [Nn]ight(?:'s)?[^0-9]{0,40}(\d{4}-\d{2}-\d{2})",
+            html,
+        )
+        dates = _re_disk.findall(r'\bdata-date="(\d{4}-\d{2}-\d{2})"', html)
+        slate_dates = [d for d in (nights + dates) if d]
+        if slate_dates:
+            newest = max(slate_dates)
+            if newest < week or newest > week_end_s:
+                logger.info(
+                    "[soccer-results-disk] skip seed — slate %s outside week %s..%s",
+                    newest, week, week_end_s,
+                )
+                return
+        entry = {
+            'ts': _time.time(),
+            'html': html,
+        }
+        _SPORT_RESULTS_CACHE['SOCCER_daily_results_html_all'] = entry
+        _SPORT_RESULTS_CACHE[f'SOCCER_daily_results_html_all_week_{week}'] = entry
+        logger.info("[soccer-results-disk] seeded all-leagues results HTML")
     except Exception as _sde:
         logger.debug(f"[soccer-results-disk] seed failed: {_sde}")
 
@@ -12173,12 +12791,12 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                     ensemble_prob = _fp_ens
                 if _fp_g2 is not None:
                     game['glicko2_prob'] = _fp_g2
-                elif _fp_ens is not None and sport != 'MLB':
-                    # MLB first-write often omitted G2/TD — leave room for display fill.
+                elif _fp_ens is not None and sport not in ('MLB', 'NCAAF'):
+                    # MLB/NCAAF first-write often omitted G2/TD — leave room for display fill.
                     game['glicko2_prob'] = None
                 if _fp_ts is not None:
                     game['trueskill_prob'] = _fp_ts
-                elif _fp_ens is not None and sport != 'MLB':
+                elif _fp_ens is not None and sport not in ('MLB', 'NCAAF'):
                     game['trueskill_prob'] = None
             
             # Add predictions to game dict
@@ -15029,16 +15647,23 @@ def _align_roi_moneyline_to_season_perf(roi_total, season_perf):
     return out
 
 
-def build_roi_cards(roi_daily, roi_weekly, roi_total):
+def build_roi_cards(roi_daily, roi_weekly, roi_total, *, win_pct_primary: bool = False):
     def _format_entry(entry):
         if not entry:
             return {"roi": "—", "detail": "—"}
-        if entry.get("roi_pct") is None:
+        if entry.get("roi_pct") is None and not win_pct_primary:
             return {"roi": "—", "detail": entry.get("reason") or "—"}
         units = entry.get("units_won", 0.0)
-        wins = entry.get("wins", 0)
-        losses = entry.get("losses", 0)
-        pushes = entry.get("pushes", 0)
+        wins = int(entry.get("wins", 0) or 0)
+        losses = int(entry.get("losses", 0) or 0)
+        pushes = int(entry.get("pushes", 0) or 0)
+        graded = wins + losses
+        if win_pct_primary:
+            if graded <= 0:
+                return {"roi": "—", "detail": entry.get("reason") or "—"}
+            pct = round(wins / graded * 100, 1)
+            detail = f"{wins}-{losses}-{pushes}, {units:+.2f}u"
+            return {"roi": f"{pct}%", "detail": detail}
         return {
             "roi": f"{entry['roi_pct']}%",
             "detail": f"{wins}-{losses}-{pushes}, {units:+.2f}u",
@@ -16858,7 +17483,13 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
+            {% if sport == 'NCAAF' %}
+            <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
+            {% elif sport == 'WNBA' %}
+            <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
+            {% else %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate.</p>
+            {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
                 {% for mkt, mkt_label in [('moneyline','Moneyline'),('spread','Spread'),('total','Total (O/U)')] %}
                 {% set c = roi_cards[mkt] %}
@@ -16877,6 +17508,9 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            {% if sport == 'WNBA' %}
+            <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
+            {% endif %}
             {% set sp = season_perf if season_perf is defined and season_perf else none %}
             {% if not sp and overall_stats and overall_stats.ensemble %}
             {% set _ens = overall_stats.ensemble %}
@@ -17611,7 +18245,7 @@ SPORT_REGULAR_SEASON_GAMES_PER_TEAM = {
     'NCAAW': 30,
 }
 _SPORT_TEAM_COUNTS = {
-    'NHL': 32, 'NBA': 30, 'MLB': 30, 'NFL': 32, 'WNBA': 12,
+    'NHL': 32, 'NBA': 30, 'MLB': 30, 'NFL': 32, 'WNBA': 15,
     'NCAAF': 136, 'NCAAB': 362, 'NCAAW': 362,
 }
 SPORT_REGULAR_SEASON_LEAGUE_GAMES = {
@@ -19893,6 +20527,8 @@ def player_props_api_props():
                 resp['model_variance'] = data['model_variance']
             if 'sanity_flags' in data:
                 resp['sanity_flags'] = data['sanity_flags']
+            if 'eligibility_audit' in data:
+                resp['eligibility_audit'] = data['eligibility_audit']
         return jsonify(resp)
     except Exception as exc:
         return jsonify({'detail': str(exc)}), 500
@@ -19997,7 +20633,12 @@ def _grade_and_store_props(league: str, for_date_str: str):
 
 
 def _query_prop_results(league: str, for_date: str | None = None):
-    """Return items + summary for a date (default yesterday) + cumulative stats."""
+    """Return items + summary for a date (default yesterday) + cumulative stats.
+
+    If the requested date has no graded rows, fall back to the most recent
+    result_date for that league so NFL Week 1 (etc.) is visible instead of an
+    empty "today" board mid-week.
+    """
     from datetime import date as _date, timedelta as _td
     today = datetime.now(ZoneInfo("America/New_York")).date()
     if for_date:
@@ -20023,6 +20664,26 @@ def _query_prop_results(league: str, for_date: str | None = None):
             (league, target_str)
         ).fetchall()
         items = [dict(r) for r in rows]
+        fallback_used = False
+        if not items:
+            latest = conn.execute(
+                "SELECT MAX(result_date) AS d FROM player_prop_results WHERE league=?",
+                (league,),
+            ).fetchone()
+            latest_d = (latest["d"] if latest else None) or None
+            if latest_d and latest_d != target_str:
+                rows = conn.execute(
+                    'SELECT * FROM player_prop_results WHERE league=? AND result_date=? ORDER BY player_name, prop_type',
+                    (league, latest_d)
+                ).fetchall()
+                items = [dict(r) for r in rows]
+                if items:
+                    target_str = latest_d
+                    try:
+                        target = _date.fromisoformat(latest_d)
+                    except Exception:
+                        pass
+                    fallback_used = True
 
         # Summary for the target date
         def _tally(rr):
@@ -20069,6 +20730,7 @@ def _query_prop_results(league: str, for_date: str | None = None):
         return {
             'league': league,
             'result_date': target_str,
+            'result_date_fallback': fallback_used,
             'count': len(items),
             'items': items,
             'summary': {
@@ -20965,7 +21627,7 @@ def seo_picks_page(slug):
     # Check results slugs
     sport = _RESULTS_SLUG_TO_SPORT.get(slug)
     if sport:
-        return sport_results(sport)
+        return _with_results_share_image(sport_results(sport), sport)
     # Not a known SEO slug — fall through to 404
     return "Page not found", 404
 
@@ -21225,7 +21887,11 @@ def share_predictions_image(token, fmt):
     payload = entry.get('payload') or {}
     if payload.get('type') != 'predictions':
         return _share_gone_plain('Image not found')
-    img_bytes, mimetype = _render_predictions_share_image(payload, fmt)
+    try:
+        max_w = request.args.get('w', type=int)
+    except Exception:
+        max_w = None
+    img_bytes, mimetype = _render_predictions_share_image(payload, fmt, max_width=max_w)
     if not img_bytes:
         return "Image engine unavailable", 503
     return Response(
@@ -21247,6 +21913,63 @@ def share_predictions_view(token: str):
     if not entry or (entry.get('payload') or {}).get('type') != 'predictions':
         return _share_gone_response()
     img_href = url_for('share_predictions_image', token=token, fmt='jpg')
+    html = (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=4">'
+        '<meta name="robots" content="noindex,nofollow">'
+        '<title>\u200b</title>'
+        '<style>html,body{margin:0;padding:0;height:100%;background:#fff}'
+        '.w{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:0}'
+        'img{display:block;width:100vmin;max-width:100%;height:auto;max-height:100vh;object-fit:contain}</style></head>'
+        f'<body><div class="w"><img src="{img_href}" alt="" decoding="async" fetchpriority="high"></div></body></html>'
+    )
+    return Response(
+        html,
+        mimetype='text/html; charset=utf-8',
+        headers={'Cache-Control': 'private, max-age=120', 'X-Robots-Tag': 'noindex, nofollow'},
+    )
+
+
+@app.route('/share/results/<token>.<fmt>')
+def share_results_summary_image(token, fmt):
+    fmt = (fmt or '').lower()
+    if fmt not in ('jpg', 'jpeg', 'png'):
+        return "Unsupported format", 400
+    if not _SHARE_TOKEN_RE.match(token or ''):
+        return _share_gone_plain('Image not found')
+    entry = _get_share_cache_entry(token)
+    if not entry:
+        return _share_gone_plain('Image not found')
+    payload = entry.get('payload') or {}
+    if payload.get('type') != 'results-summary':
+        return _share_gone_plain('Image not found')
+    try:
+        max_w = request.args.get('w', type=int)
+    except Exception:
+        max_w = None
+    img_bytes, mimetype = _render_results_summary_share_image(
+        payload, fmt, max_width=max_w,
+    )
+    if not img_bytes:
+        return "Image engine unavailable", 503
+    return Response(
+        img_bytes,
+        mimetype=mimetype,
+        headers={
+            'Cache-Control': 'private, max-age=300',
+            'Content-Disposition': 'inline; filename="results.jpg"',
+        },
+    )
+
+
+@app.route('/share/results/view/<token>')
+def share_results_summary_view(token: str):
+    if not _SHARE_TOKEN_RE.match(token or ''):
+        return _share_gone_response()
+    entry = _get_share_cache_entry(token)
+    if not entry or (entry.get('payload') or {}).get('type') != 'results-summary':
+        return _share_gone_response()
+    img_href = url_for('share_results_summary_image', token=token, fmt='jpg')
     html = (
         '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=4">'
@@ -21926,6 +22649,12 @@ def _apply_nfl_picks_html_fixups(html):
         html = enrich_mlb_chart_data_attrs(html)
     except Exception as exc:
         logger.debug('NFL chart attr enrich skipped: %s', exc)
+    try:
+        from team_results_charts import apply_team_picks_h2h
+
+        html = apply_team_picks_h2h(html, "NFL")
+    except Exception as exc:
+        logger.debug('NFL consensus/H2H face inject skipped: %s', exc)
     return html
 
 
@@ -21940,7 +22669,7 @@ def _render_espn_picks_page(**ctx):
 
 def _cached_usable_picks_html(sport, filter_date=None):
     """Last good rendered picks HTML (memory). Prefer this over the black stub."""
-    prefix = f"pred_page::v35::{sport}::{filter_date or 'all'}::"
+    prefix = f"pred_page::v37::{sport}::{filter_date or 'all'}::"
     best_html = None
     best_ts = -1.0
     for key, entry in list(_SPORT_PREDICTIONS_PAGE_CACHE.items()):
@@ -22114,10 +22843,18 @@ def _apply_mlb_picks_html_fixups(html):
     """Publish-layer MLB picks UI (spread flip, RL confidence, chart attrs). Keeps live chrome."""
     if not html or not isinstance(html, str):
         return html
-    if 'data-mlb-ui-fixup="1"' in html or "<!-- mlb-ui-fixup -->" in html:
-        return _inject_mlb_blog_hub(html)
+    already = 'data-mlb-ui-fixup="1"' in html or "<!-- mlb-ui-fixup -->" in html
     try:
-        from mlb_ui_fixup import apply_mlb_picks_fixups
+        from mlb_ui_fixup import (
+            apply_mlb_picks_fixups,
+            apply_mlb_picks_pagespeed_a11y,
+            ensure_mlb_pick_conf_no_scroll,
+        )
+        if already:
+            # Cached HTML may predate logo/bubble fixes — re-apply those only.
+            out = ensure_mlb_pick_conf_no_scroll(html)
+            out = apply_mlb_picks_pagespeed_a11y(out)
+            return _inject_mlb_blog_hub(out)
         out = apply_mlb_picks_fixups(html)
         if out and "<!-- mlb-ui-fixup -->" not in out:
             if re.search(r"</body\s*>", out, flags=re.I):
@@ -22166,7 +22903,11 @@ def _render_mlb_results_chart_page():
 
 
 def _soccer_results_cards_html_for_chart():
-    """Cards HTML used to build soccer chart API/SSR payload (never view=chart)."""
+    """Cards HTML used to build soccer chart API/SSR payload (never view=chart).
+
+    Must use the same week/league/region keys as sport_results(), otherwise
+    chart view always gets an empty shell (no Moneyline consensus payload).
+    """
     league = ''
     region = ''
     try:
@@ -22175,19 +22916,29 @@ def _soccer_results_cards_html_for_chart():
     except Exception:
         league = ''
         region = ''
-    cache_key = 'SOCCER_daily_results_html_v3'
+    week = _soccer_request_week_slug()
     lg_name = _soccer_league_from_slug(league) if league else None
     region_key = soccer_region_from_slug(region)
     if lg_name:
-        cache_key = f'SOCCER_daily_results_html_{_soccer_league_slug(lg_name)}'
+        base = f'SOCCER_daily_results_html_{_soccer_league_slug(lg_name)}'
     elif region_key:
-        cache_key = f'SOCCER_daily_results_html_region_{region_key}'
-    cached = _SPORT_RESULTS_CACHE.get(cache_key)
-    if isinstance(cached, dict):
+        base = f'SOCCER_daily_results_html_region_{region_key}'
+    else:
+        base = 'SOCCER_daily_results_html_all'
+    candidates = [
+        f'{base}_week_{week}',
+        base,
+        'SOCCER_daily_results_html_all_week_' + week,
+        'SOCCER_daily_results_html_all',
+    ]
+    for cache_key in candidates:
+        cached = _SPORT_RESULTS_CACHE.get(cache_key)
+        if not isinstance(cached, dict):
+            continue
         html = cached.get('html')
-        if html and len(html) > 500:
+        if html and len(html) > 500 and _results_page_html_usable(html):
             return _apply_soccer_results_html_fixups(html)
-    # Cache only — never re-enter sport_results() from chart view.
+    # Cache / disk only — never re-enter sport_results() from chart view.
     return ''
 
 
@@ -22349,7 +23100,7 @@ def _apply_wnba_picks_html_fixups(html):
 
 def _wnba_results_cards_html_for_chart():
     """Cards HTML used to build WNBA chart API/SSR payload (never view=chart)."""
-    cache_key = 'WNBA_daily_results_html_v3'
+    cache_key = 'WNBA_daily_results_html_v5'
     cached = _SPORT_RESULTS_CACHE.get(cache_key)
     if isinstance(cached, dict):
         html = cached.get('html')
@@ -22704,7 +23455,7 @@ def sport_predictions(sport, filter_date=None):
     _nfl_use_page_cache = str(sport or '').upper() == 'NFL'
     if (not current_user.is_authenticated) or _nfl_use_page_cache:
         cache_key = (
-            f"pred_page::v35::{sport}::{filter_date or 'all'}::"
+            f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
@@ -22825,6 +23576,16 @@ def sport_predictions(sport, filter_date=None):
                 _added, _today_s,
             )
         _attach_soccer_event_dates(predictions)
+    if str(sport or '').upper() == 'NFL':
+        try:
+            _attach_nfl_event_dates(predictions)
+        except Exception as _nfl_t_exc:
+            logger.debug('NFL event_date attach failed: %s', _nfl_t_exc)
+    if str(sport or '').upper() == 'MLB':
+        try:
+            _attach_mlb_event_dates(predictions)
+        except Exception as _mlb_t_exc:
+            logger.debug('MLB event_date attach failed: %s', _mlb_t_exc)
     if filter_date:
         _seen = {
             (p.get('game_date'), p.get('home_team_id'), p.get('away_team_id'))
@@ -22967,6 +23728,18 @@ def sport_predictions(sport, filter_date=None):
             )
         except Exception as _soc_bk:
             logger.debug('soccer catalog book overlay failed: %s', _soc_bk)
+        try:
+            _soccer_team_names = set()
+            for _sp in predictions:
+                if not isinstance(_sp, dict):
+                    continue
+                for _tk in ('home_team_id', 'away_team_id'):
+                    _tn = _sp.get(_tk)
+                    if _tn:
+                        _soccer_team_names.add(_tn)
+            _hydrate_soccer_team_logos(_soccer_team_names)
+        except Exception as _soc_lg:
+            logger.debug('soccer picks logo hydrate failed: %s', _soc_lg)
 
     try:
         today_date = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
@@ -23369,6 +24142,8 @@ def sport_predictions(sport, filter_date=None):
         or not _default_games
         or _default_with_books >= max(1, len(_default_games) // 2)
     )
+    # Soccer cards use class="game-card game-card-stack" — match the prefix,
+    # not the exact attribute, or the page HTML is never cached (9s every hit).
     if (
         cache_key
         and rendered
@@ -23380,7 +24155,7 @@ def sport_predictions(sport, filter_date=None):
                 and _books_ok_for_cache
             )
         )
-        and rendered.count('class="game-card"') >= 1
+        and rendered.count('class="game-card') >= 1
         and 'no predictions available' not in rendered.lower()
         and 'upstream data/model dependency failed' not in rendered.lower()
     ):
@@ -23937,7 +24712,11 @@ def sport_results(sport):
                 else (
                     'NCAAF_daily_results_html_v4'
                     if sport == 'NCAAF'
-                    else f'{sport}_daily_results_html_v3'
+                    else (
+                        'WNBA_daily_results_html_v5'
+                        if sport == 'WNBA'
+                        else f'{sport}_daily_results_html_v3'
+                    )
                 )
             )
             skip_cache = False
@@ -24031,21 +24810,16 @@ def sport_results(sport):
                     )
                 else:
                     # One slice per day so Saturday cannot hide the rest of the week.
-                    # Last night / today need the full slate — a 50-row cap was
-                    # NCAA Women's only and zeroed Books favorite last night.
+                    # Always use the all-leagues cap — a 50-row day limit dropped
+                    # catalog finals on busy matchdays (e.g. Sep 12 had 70 curated
+                    # games) when browsing prior weeks.
                     _wd = datetime.strptime(_ws, '%Y-%m-%d').date()
                     _we_d = datetime.strptime(_we, '%Y-%m-%d').date()
-                    _night_s = _soccer_last_night_et_str()
                     while _wd <= _we_d:
                         _ds = _wd.strftime('%Y-%m-%d')
-                        _day_limit = (
-                            SOCCER_RESULTS_GAMES_ALL
-                            if _ds >= _night_s
-                            else fetch_limit
-                        )
                         week_games.extend(
                             _fetch_soccer_completed_games(
-                                conn, selected_league, _day_limit,
+                                conn, selected_league, SOCCER_RESULTS_GAMES_ALL,
                                 selected_region=selected_region,
                                 date_start=_ds, date_end=_ds,
                             ) or []
@@ -24101,7 +24875,17 @@ def sport_results(sport):
                 # first; the displayed cards and weekly/season tallies use recent
                 # games, and this also caps how many live book-odds API calls
                 # _attach_book_odds_to_daily_results can attempt.
-                _results_cap = 150 if sport in ('NBA', 'NCAAB', 'NCAAW', 'WNBA') else 800
+                # WNBA 2026: 15×44 = 330 regular-season games. A 150-row cap after
+                # ESPN season backfill kept unscored finals and dropped older
+                # graded rows, pinning Season Performance near the July ~67 band.
+                if sport == 'WNBA':
+                    _results_cap = int(
+                        SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('WNBA') or 330
+                    ) + 40
+                elif sport in ('NBA', 'NCAAB', 'NCAAW'):
+                    _results_cap = 150
+                else:
+                    _results_cap = 800
                 if len(completed_games) > _results_cap:
                     completed_games = completed_games[:_results_cap]
             conn.close()
@@ -24266,11 +25050,23 @@ def sport_results(sport):
                 sorted_dates = _recent_result_dates(
                     daily_results, yesterday=yesterday, limit=60, recent_window_days=90,
                 )
+            elif sport == 'WNBA':
+                # Full 2026 regular season (~May–Sep): date bubbles must cover
+                # every completed slate night, not only the last ~30 days.
+                sorted_dates = _recent_result_dates(
+                    daily_results, yesterday=yesterday, limit=220, recent_window_days=220,
+                )
             else:
                 sorted_dates = _recent_result_dates(daily_results, yesterday=yesterday, limit=30)
             overall_stats = compute_overall_stats_from_daily(daily_results, sport=sport)
             _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
-            if sport == 'SOCCER':
+            # WNBA: DB-only books on results — full-season card HTML must not wait on
+            # live odds for 300+ games (that hung /wnba-results and thinned the page).
+            if sport == 'WNBA':
+                _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
+                _cache_market_lines_for_results(sport, daily_results, limit=400)
+                _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
+            elif sport == 'SOCCER':
                 # Request path: DB book lines only. ESPN/odds API hung live.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
@@ -24365,9 +25161,12 @@ def sport_results(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER'):
+            if sport in ('MLB', 'SOCCER', 'WNBA'):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
-            roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+            roi_cards = build_roi_cards(
+                roi_daily, roi_weekly, roi_total,
+                win_pct_primary=(sport == 'NCAAF'),
+            )
             soccer_leagues = None
             if sport == 'SOCCER':
                 _all_count = sum(soccer_league_counts.values())
@@ -24409,7 +25208,10 @@ def sport_results(sport):
                 page=sport, sport=sport, sport_info=SPORTS[sport], sport_bg_image=SPORT_BG_IMAGES.get(sport, ''),
                 sport_seo_slug=SPORT_SEO_SLUGS.get(sport, sport.lower()),
                 sport_results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
-                daily_results=daily_results, sorted_dates=sorted_dates,
+                **(_results_page_date_kwargs(daily_results, sorted_dates) if sport == 'WNBA' else {
+                    'daily_results': daily_results,
+                    'sorted_dates': sorted_dates,
+                }),
                 today_date=today_date, overall_stats=overall_stats,
                 total_over=_ov, total_under=_un, total_games_ou=_gou,
                 avg_total=_avg, ou_bench=_bench,
@@ -24437,6 +25239,12 @@ def sport_results(sport):
             if _daily_results_game_count(daily_results) and _results_page_html_usable(rendered):
                 _trim_cache(_SPORT_RESULTS_CACHE, _SPORT_RESULTS_TTL_BY_SPORT.get(sport, 300), max_entries=50)
                 _SPORT_RESULTS_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
+                if sport == 'WNBA':
+                    try:
+                        from team_results_charts import set_results_chart_source
+                        set_results_chart_source('WNBA', rendered)
+                    except Exception:
+                        pass
                 if sport == 'SOCCER' and cache_key == 'SOCCER_daily_results_html_all':
                     _persist_soccer_results_html(rendered)
             return rendered
@@ -24900,8 +25708,46 @@ def _load_sport_season_snapshot(sport, phase='regular'):
             logger.debug('Season snapshot read failed (%s): %s', path, exc)
             continue
         if isinstance(data, dict) and data.get('sport') == sport:
+            if sport == 'WNBA' and not _wnba_snapshot_is_current(data):
+                logger.info(
+                    "[WNBA] ignoring stale season snapshot %s (window=%s built_at=%s)",
+                    path,
+                    (data.get('window') or {}),
+                    data.get('built_at'),
+                )
+                continue
             return _apply_wnba_snapshot_flip(data) if sport == 'WNBA' else data
     return None
+
+
+def _wnba_snapshot_is_current(snap: dict) -> bool:
+    """Reject mid-season archives whose window ended weeks ago.
+
+    Owner 2026-09-15: July snapshot (window end 2026-07-20, expected 264)
+    left Season Performance at ~67 games while ESPN already had 300+ finals.
+    """
+    if not isinstance(snap, dict):
+        return False
+    window = snap.get('window') or {}
+    end = str((window or {}).get('end') or '')[:10]
+    if len(end) >= 10 and end[4] == '-' and end[7] == '-':
+        try:
+            end_dt = datetime.strptime(end, '%Y-%m-%d')
+        except ValueError:
+            end_dt = None
+        if end_dt is not None:
+            # During the live season, snapshot must cover through ~2 weeks ago.
+            if (datetime.now() - end_dt).days > 14:
+                season_end = _SEASON_WINDOWS.get('WNBA', ((5, 8), (10, 15)))[1]
+                # Still in-season (before Oct 15 window)?
+                now = datetime.now()
+                if (now.month, now.day) <= season_end or now.month >= 5:
+                    return False
+    expected = int(snap.get('games_expected') or 0)
+    # 2026 slate is 15×44 = 330; old 12-team archives said 264.
+    if expected and expected < 300:
+        return False
+    return True
 
 
 def _snapshot_matches_current_nfl_season(snap) -> bool:

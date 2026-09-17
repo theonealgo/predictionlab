@@ -1,0 +1,33 @@
+---
+description: Player Props LOCKED (:5052 / premerge)
+alwaysApply: true
+---
+
+# PLAYER PROPS LOCKED (:5052 / premerge)
+
+`/player-props` and the props eligibility / grading stack on `:5052`
+(`predictionlabfix_work2`) are signed off for this pass.
+
+Do **not** modify player props unless the owner says:
+
+**UNLOCK PROPS**
+
+Owner 2026-09-16: eligibility layer, NFL real lines, Week 1 results
+backfill, column sort, Fair odds — work paused; lock props and unlock
+NFL for Consensus Record face chip only.
+
+## Do not touch
+
+- `/player-props`, `/player-props-api/*`
+- `standalone-player-props/`
+- `templates/player_props.html`
+- `backfill_nfl_props.py` / `backfill_props.py` (unless owner unlocks props)
+- Props snapshot / results branches in `NHL77FINAL.py` whose job is props
+
+## Allowed without unlock
+
+- Other sports when unlocked
+- Checker reports that only *read* props pages
+
+Fixing NFL/MLB/etc. picks is **not** a props unlock.
+Do not put lock text on user-facing HTML.

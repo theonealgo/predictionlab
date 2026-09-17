@@ -1,0 +1,37 @@
+# TENNIS UNLOCKED (:5052 / premerge) — results share image only
+
+Owner 2026-09-17: **UNLOCK TENNIS** for bottom Results Image on `/tennis-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
+
+Prior lock notes preserved below for when this miss is closed.
+
+---
+
+description: TENNIS LOCKED (:5052 / premerge)
+alwaysApply: true
+---
+
+# TENNIS LOCKED (:5052 / premerge)
+
+Tennis picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+
+Do **not** modify Tennis unless the owner says:
+
+**UNLOCK TENNIS**
+
+Owner 2026-09-16: owner paused all non-CFL work for CFL results header
+miss — lock Tennis again (prior Cards≠Chart unlock remains incomplete;
+do not resume without a fresh UNLOCK TENNIS).
+
+## Do not touch
+
+- `/tennis-picks`, `/tennis-results`, `/tennis-results?view=chart`
+- `tennis_live.py`, `_sandbox_hub_run/hub/tennis_page.py`
+- Tennis Cards|Chart, card HTML
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is Tennis
+
+## Allowed without unlock
+
+- Other sports
+- Checker reports that only *read* Tennis pages
+
+Do not put lock text on user-facing HTML.

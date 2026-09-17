@@ -11,6 +11,8 @@ LEAGUE_CONFIG = {
     "WNBA": {"espn_sport": "basketball", "espn_league": "wnba", "dist": "normal"},
     "NCAAF": {"espn_sport": "football", "espn_league": "college-football", "dist": "normal"},
     "NCAAW": {"espn_sport": "basketball", "espn_league": "womens-college-basketball", "dist": "normal"},
+    "CFL": {"espn_sport": "football", "espn_league": "cfl", "dist": "normal"},
+    "UFC": {"espn_sport": "mma", "espn_league": "ufc", "dist": "normal"},
 }
 
 SUPPORTED_LEAGUES = list(LEAGUE_CONFIG.keys())
@@ -33,7 +35,7 @@ ESPN_PROP_PROVIDER_ID = os.getenv("ESPN_PROP_PROVIDER_ID", "100")
 ESPN_EVENTS_CAP = int(os.getenv("ESPN_EVENTS_CAP", "20"))
 # How long to reuse a fetched real-lines snapshot before re-hitting ESPN.
 REAL_LINES_TTL = int(os.getenv("REAL_LINES_TTL", "3600"))
-# Candidate roster-player pool size per league used for prop matching. Larger
-# pool -> more overlap with the players a book actually posts props for.
-TOP_PLAYER_POOL = int(os.getenv("TOP_PLAYER_POOL", "120"))
+# Soft ceiling on raw roster pull before role/relevance eligibility.
+# Eligibility keeps ~TOP_PER_ROLE per position (see player_eligibility.py).
+TOP_PLAYER_POOL = int(os.getenv("TOP_PLAYER_POOL", "400"))
 DEBUG_PLAYER_VALIDATION = os.getenv("DEBUG_PLAYER_VALIDATION", "").strip().lower() in ("1", "true", "yes", "on")

@@ -240,7 +240,7 @@
         <div class="line-chip-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% elif card.h2h_missing_reason is defined and card.h2h_missing_reason %}First meeting{% else %}—{% endif %}</div>
     </div>
     {% endif %}
-    {% if sport != 'TENNIS' %}
+    {% if sport != 'TENNIS' and sport != 'MLB' and sport != 'NFL' %}
     <div class="line-chip">
         <div class="line-chip-label">{{ _book_spread_lbl }}</div>
         <div class="line-chip-val">{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}</div>

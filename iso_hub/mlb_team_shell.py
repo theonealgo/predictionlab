@@ -185,6 +185,8 @@ def _retarget_chrome(html: str, sport: str, *, which: str) -> str:
 
     html = html.replace('href="/mlb-results?view=chart"', f'href="{chart}"')
     html = html.replace('href="/mlb/results?view=chart"', f'href="{chart}"')
+    html = html.replace('href="/mlb-results"', f'href="{results}"')
+    html = html.replace('href="/mlb-picks"', f'href="{picks}"')
     html = html.replace('href="/cfl-picks"', f'href="{picks}"')
     html = html.replace('href="/cfl-results"', f'href="{results}"')
 
@@ -1082,7 +1084,7 @@ def _ensure_cfl_result_css(html: str, render) -> str:
         flags=re.I,
     )
     if "cfl-pick-cards.css" not in html:
-        tag = '<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-bpm-1">'
+        tag = '<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-eqht-2">'
         if re.search(r"</head>", html, re.I):
             html = re.sub(r"</head>", tag + "</head>", html, count=1, flags=re.I)
         else:

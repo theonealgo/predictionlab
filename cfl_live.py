@@ -57,8 +57,70 @@ def _rewrite_iso_hrefs(html: str) -> str:
     html = html.replace('href="/cfl/"', 'href="/cfl-picks"')
     html = html.replace("href='/cfl/'", "href='/cfl-picks'")
     html = html.replace('href="/cfl"', 'href="/cfl-picks"')
+    # Do NOT rewrite /mlb-picks|/mlb-results here — that breaks the global
+    # Sports/Results nav (MLB → CFL). Section-tab MLB leftovers are scoped
+    # in _strip_mlb_content_from_cfl.
     html = html.replace("/static/img/cfl/montreal.png", "/static/img/cfl/montreal.svg")
     return html
+
+
+def _dedupe_cfl_results_chrome(html: str) -> str:
+    """One Predictions|Results row and one Cards|Chart row under the page title."""
+    if not html:
+        return html
+    # Keep the first section-tabs; drop later duplicates.
+    seen_tabs = False
+
+    def _tabs(m: re.Match[str]) -> str:
+        nonlocal seen_tabs
+        if seen_tabs:
+            return ""
+        seen_tabs = True
+        return m.group(0)
+
+    html = re.sub(
+        r'<div class="section-tabs">[\s\S]*?</div>\s*',
+        _tabs,
+        html,
+        flags=re.I,
+    )
+    # Keep the first pl-view-toggle (+ optional style); drop later duplicates.
+    seen_toggle = False
+
+    def _toggle(m: re.Match[str]) -> str:
+        nonlocal seen_toggle
+        if seen_toggle:
+            return ""
+        seen_toggle = True
+        return m.group(0)
+
+    html = re.sub(
+        r'<div class="pl-view-toggle\b[^>]*>[\s\S]*?</div>\s*'
+        r'(?:<style>\.pl-view-toggle[\s\S]*?</style>\s*)?',
+        _toggle,
+        html,
+        flags=re.I,
+    )
+    # Extra page-title H1 under the SEO title (MLB shell leftover).
+    titles = list(
+        re.finditer(
+            r'<h1\b[^>]*class="[^"]*\bpage-title\b[^"]*"[^>]*>[\s\S]*?</h1>\s*',
+            html,
+            flags=re.I,
+        )
+    )
+    if len(titles) > 1:
+        for m in reversed(titles[1:]):
+            html = html[: m.start()] + html[m.end() :]
+    return html
+
+
+def _finalize_cfl_html(html: str) -> str:
+    """Last-pass CFL HTML: strip MLB leftovers, restore global MLB nav, vendor labels."""
+    html = _strip_mlb_content_from_cfl(html)
+    html = _rewrite_iso_hrefs(html)
+    html = _restore_global_nav_mlb_links(html)
+    return _strip_vendor_labels(html)
 
 
 def _strip_vendor_labels(html: str) -> str:
@@ -76,8 +138,65 @@ def _strip_vendor_labels(html: str) -> str:
     return html
 
 
+_PL2_HEADER_RE = re.compile(
+    r'<header\b[^>]*\bpl2-header\b[^>]*>[\s\S]*?</header>\s*',
+    flags=re.I,
+)
+
+# research_header.html ships header + ACCOUNT/NAV dropdown <script>. Stripping
+# only <header> leaves those scripts; reinjecting chrome doubles them and the
+# duplicate document-click handlers cancel the Sports/Models/Results menus.
+_RESEARCH_NAV_SCRIPT_RE = re.compile(
+    r"<script\b[^>]*>\s*/\*\s*ACCOUNT MENU:[\s\S]*?NAV DROPDOWNS:[\s\S]*?</script>\s*",
+    flags=re.I,
+)
+
+
+def _strip_all_pl2_headers(html: str) -> str:
+    """Remove every site chrome header (attribute order / extra classes safe)."""
+    if not html:
+        return html
+    return _PL2_HEADER_RE.sub("", html)
+
+
+def _strip_research_nav_scripts(html: str) -> str:
+    """Drop orphaned research_header dropdown scripts (safe before re-inject)."""
+    if not html:
+        return html
+    return _RESEARCH_NAV_SCRIPT_RE.sub("", html)
+
+
+def _dedupe_pl2_headers(html: str) -> str:
+    """Keep the first pl2-header only — chart paths often inject twice."""
+    if not html:
+        return html
+    matches = list(_PL2_HEADER_RE.finditer(html))
+    if len(matches) <= 1:
+        return html
+    # Drop later duplicates (reverse so offsets stay valid).
+    for m in reversed(matches[1:]):
+        html = html[: m.start()] + html[m.end() :]
+    return html
+
+
+def _dedupe_research_nav_scripts(html: str) -> str:
+    """Keep a single ACCOUNT/NAV dropdown script block."""
+    if not html:
+        return html
+    matches = list(_RESEARCH_NAV_SCRIPT_RE.finditer(html))
+    if len(matches) <= 1:
+        return html
+    for m in reversed(matches[1:]):
+        html = html[: m.start()] + html[m.end() :]
+    return html
+
+
 def _inject_chrome_into_page(html: str, *, extra_css: list[str] | None = None) -> str:
     from flask import render_template
+
+    # Strip header + its leftover dropdown scripts so we inject one working set.
+    html = _strip_all_pl2_headers(html)
+    html = _strip_research_nav_scripts(html)
 
     chrome = render_template("includes/picks_nav_chrome.html", **_nav_ctx())
     css_tags = [
@@ -89,16 +208,35 @@ def _inject_chrome_into_page(html: str, *, extra_css: list[str] | None = None) -
         tag = f'<link rel="stylesheet" href="{href}">'
         if tag not in css_tags:
             css_tags.append(tag)
-    css_html = "\n".join(css_tags) + '<script src="/static/js/pl-header-logo.js" defer></script>'
-    if re.search(r"</head\s*>", html, flags=re.I):
-        html = re.sub(r"</head\s*>", css_html + "</head>", html, count=1, flags=re.I)
-    else:
-        html = css_html + html
+    # Avoid stacking duplicate chrome CSS when the shell already linked them.
+    for tag in list(css_tags):
+        href_m = re.search(r'href="([^"]+)"', tag)
+        if href_m and href_m.group(1) in html:
+            css_tags.remove(tag)
+    css_html = "\n".join(css_tags)
+    if css_html:
+        css_html += '<script src="/static/js/pl-header-logo.js" defer></script>'
+    elif 'pl-header-logo.js' not in html:
+        css_html = '<script src="/static/js/pl-header-logo.js" defer></script>'
+    if css_html:
+        if re.search(r"</head\s*>", html, flags=re.I):
+            html = re.sub(r"</head\s*>", css_html + "</head>", html, count=1, flags=re.I)
+        else:
+            html = css_html + html
 
     def _body_repl(m: re.Match[str]) -> str:
         tag = m.group(0)
         if "research-site" not in tag:
-            tag = tag[:-1] + ' class="research-site">'
+            if re.search(r'\bclass="', tag, flags=re.I):
+                tag = re.sub(
+                    r'\bclass="([^"]*)"',
+                    r'class="\1 research-site"',
+                    tag,
+                    count=1,
+                    flags=re.I,
+                )
+            else:
+                tag = tag[:-1] + ' class="research-site">'
         if "data-sport=" not in tag and "data-sandbox-sport=" not in tag:
             tag = tag[:-1] + ' data-sport="cfl">'
         return tag + chrome
@@ -107,7 +245,8 @@ def _inject_chrome_into_page(html: str, *, extra_css: list[str] | None = None) -
         html = re.sub(r"<body\b[^>]*>", _body_repl, html, count=1, flags=re.I)
     else:
         html = chrome + html
-    return html
+    html = _dedupe_pl2_headers(html)
+    return _dedupe_research_nav_scripts(html)
 
 
 def _cfl_view_toggle(active: str = "normal") -> str:
@@ -208,6 +347,78 @@ def _strip_mlb_content_from_cfl(html: str) -> str:
         r'<li><a href="[^"]*">20\d{2}-\d{2}-\d{2}</a></li>\s*',
         "",
         html,
+    )
+    # Stray empty-state from the MLB shell when CFL slate is present.
+    html = re.sub(
+        r'<div class="no-data">\s*No predictions available for MLB\s*</div>\s*',
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"No predictions available for MLB",
+        "",
+        html,
+        flags=re.I,
+    )
+    # Cards|Chart / Predictions|Results tabs only — never the global Sports nav.
+    def _tabs_mlb_to_cfl(m: re.Match[str]) -> str:
+        block = m.group(0)
+        block = block.replace('href="/mlb-results"', 'href="/cfl-results"')
+        block = block.replace("href='/mlb-results'", "href='/cfl-results'")
+        block = block.replace('href="/mlb-results?', 'href="/cfl-results?')
+        block = block.replace('href="/mlb-picks"', 'href="/cfl-picks"')
+        block = block.replace("href='/mlb-picks'", "href='/cfl-picks'")
+        return block
+
+    html = re.sub(
+        r'<div class="section-tabs\b[\s\S]*?</div>',
+        _tabs_mlb_to_cfl,
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'<div class="pl-view-toggle\b[\s\S]*?</div>',
+        _tabs_mlb_to_cfl,
+        html,
+        flags=re.I,
+    )
+    html = html.replace("{l:'MLB',h:'/cfl-results'}", "{l:'MLB',h:'/mlb-results'}")
+    html = html.replace('{l:"MLB",h:"/cfl-results"}', '{l:"MLB",h:"/mlb-results"}')
+    html = html.replace(
+        'content="https://predictionlab.io/mlb-results"',
+        'content="https://predictionlab.io/cfl-results"',
+    )
+    html = html.replace(
+        'href="https://predictionlab.io/mlb-results"',
+        'href="https://predictionlab.io/cfl-results"',
+    )
+    html = html.replace("localhost/mlb-results", "localhost/cfl-results")
+    html = html.replace("%2Fmlb-results", "%2Fcfl-results")
+    # Meta / social leftovers from the MLB template.
+    html = re.sub(
+        r'(property="og:title" content=")MLB([^"]*)(")',
+        r"\1CFL\2\3",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(name="twitter:title" content=")MLB([^"]*)(")',
+        r"\1CFL\2\3",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(content=")Daily AI-powered MLB',
+        r"\1Daily AI-powered CFL",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r">MLB Predictions Today<",
+        ">CFL Predictions Today<",
+        html,
+        flags=re.I,
     )
     return html
 
@@ -349,9 +560,9 @@ def _strip_cfl_empty_books(html: str) -> str:
     if not html:
         return html
     html = re.sub(
-        r'<div class="line-chip">\s*'
+        r'<div class="line-chip[^"]*">\s*'
         r'<div class="line-chip-label">\s*Books[^<]*</div>\s*'
-        r'<div class="line-chip-val">\s*(?:—|&mdash;|&ndash;|N/A)?\s*</div>\s*'
+        r'<div class="line-chip-val">\s*(?:—|&mdash;|&ndash;|N/A|–|-)?\s*</div>\s*'
         r"</div>",
         "",
         html,
@@ -366,8 +577,24 @@ def _strip_cfl_empty_books(html: str) -> str:
         html,
         flags=re.I,
     )
-    html = re.sub(r'\sdata-books-spread="[^"]*"', "", html, flags=re.I)
-    html = re.sub(r'\sdata-books-total="[^"]*"', "", html, flags=re.I)
+    # Omit chips whose data-* books attrs are blank.
+    html = re.sub(
+        r'<div class="line-chip[^"]*"[^>]*>\s*'
+        r'<div class="line-chip-label">\s*Books Spread\s*</div>\s*'
+        r'<div class="line-chip-val">[^<]*</div>\s*</div>'
+        r'(?=[\s\S]{0,800}?data-books-spread="\s*")',
+        "",
+        html,
+        flags=re.I,
+    )
+    try:
+        from team_results_charts import _hide_empty_books_spread_total
+
+        html = _hide_empty_books_spread_total(html)
+    except Exception:
+        pass
+    html = re.sub(r'\sdata-books-spread="\s*"', "", html, flags=re.I)
+    html = re.sub(r'\sdata-books-total="\s*"', "", html, flags=re.I)
     return html
 
 
@@ -385,16 +612,116 @@ def render_cfl_picks() -> str:
     html = _ensure_mlb_copy_all_markets(html)
     html = _strip_mlb_content_from_cfl(html)
     html = _open_cfl_cards(html)
+    try:
+        from team_results_charts import apply_team_picks_h2h
+
+        html = apply_team_picks_h2h(html, "CFL")
+    except Exception:
+        pass
     html = _strip_cfl_empty_books(html)
     if not premium:
         html = _gate_cfl_paid_markets(html)
     html = re.sub(r"const sportName\s*=\s*[^;]+;", 'const sportName = "CFL";', html)
     html = re.sub(r"const sportIcon\s*=\s*[^;]+;", 'const sportIcon = "🏈";', html)
-    return _strip_vendor_labels(_rewrite_iso_hrefs(html))
+    return _finalize_cfl_html(html)
 
 
 _CFL_RESULTS_PAGE_CACHE: dict = {}
 _CFL_RESULTS_PAGE_TTL = 180
+
+
+def _cfl_section_tabs(*, results_active: bool = True) -> str:
+    picks_cls = "" if results_active else " active"
+    results_cls = " active" if results_active else ""
+    return (
+        '<div class="section-tabs">'
+        f'<a href="/cfl-picks" class="tab{picks_cls}">📊 Predictions</a>'
+        f'<a href="/cfl-results" class="tab{results_cls}">🎯 Results</a>'
+        "</div>"
+    )
+
+
+def _restore_global_nav_mlb_links(html: str) -> str:
+    """Shell rewrites every /mlb-* href to CFL — put Sports-nav MLB back."""
+    if not html:
+        return html
+    html = re.sub(
+        r'(<a\b[^>]*\bhref=")/cfl-picks("[^>]*>)\s*MLB\s*(</a>)',
+        r"\1/mlb-picks\2MLB\3",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(<a\b[^>]*\bhref=")/cfl-results("[^>]*>)\s*MLB\s*(</a>)',
+        r"\1/mlb-results\2MLB\3",
+        html,
+        flags=re.I,
+    )
+    return html
+
+
+def _ensure_cfl_results_section_tabs(html: str) -> str:
+    """Chart shells often omit Predictions|Results — put them under the title."""
+    if not html:
+        return html
+    if re.search(r'<div class="section-tabs\b', html, flags=re.I):
+        return html
+    tabs = _cfl_section_tabs(results_active=True)
+    h1 = re.search(r'(<h1\b[^>]*>[\s\S]*?</h1>\s*)', html, flags=re.I)
+    if h1:
+        return html[: h1.end()] + tabs + html[h1.end() :]
+    toggle = re.search(
+        r'<div class="pl-view-toggle\b[^>]*>[\s\S]*?</div>\s*'
+        r'(?:<style>\.pl-view-toggle[\s\S]*?</style>\s*)?',
+        html,
+        flags=re.I,
+    )
+    if toggle:
+        return html[: toggle.start()] + tabs + html[toggle.start() :]
+    return html
+
+
+def _reorder_cfl_results_headers(html: str) -> str:
+    """Title → Predictions|Results → Cards|Chart (single of each)."""
+    if not html:
+        return html
+    html = _ensure_cfl_results_section_tabs(html)
+
+    # If section-tabs landed above the page title, move them under h1.
+    h1 = re.search(r'(<h1\b[^>]*>[\s\S]*?</h1>\s*)', html, flags=re.I)
+    tabs_m = re.search(
+        r'(<div class="section-tabs\b[\s\S]*?</div>\s*(?:<style>[\s\S]*?</style>\s*)?)',
+        html,
+        flags=re.I,
+    )
+    if h1 and tabs_m and tabs_m.start() < h1.start():
+        tabs = tabs_m.group(1)
+        html = html[: tabs_m.start()] + html[tabs_m.end() :]
+        h1 = re.search(r'(<h1\b[^>]*>[\s\S]*?</h1>\s*)', html, flags=re.I)
+        if h1:
+            html = html[: h1.end()] + tabs + html[h1.end() :]
+
+    m = re.search(
+        r'(<div class="pl-view-toggle\b[^>]*>[\s\S]*?</div>\s*'
+        r'(?:<style>\.pl-view-toggle[\s\S]*?</style>\s*)?)',
+        html,
+        flags=re.I,
+    )
+    if not m:
+        return html
+    toggle = m.group(1)
+    html_wo = html[: m.start()] + html[m.end() :]
+    tabs = re.search(
+        r'(<div class="section-tabs\b[\s\S]*?</div>\s*(?:<style>[\s\S]*?</style>\s*)?)',
+        html_wo,
+        flags=re.I,
+    )
+    if tabs:
+        return html_wo[: tabs.end()] + toggle + html_wo[tabs.end() :]
+    h1 = re.search(r'(<h1\b[^>]*>[\s\S]*?</h1>\s*)', html_wo, flags=re.I)
+    if h1:
+        return html_wo[: h1.end()] + toggle + html_wo[h1.end() :]
+    return toggle + html_wo
 
 
 def render_cfl_results(*, view: str = "normal") -> str:
@@ -420,18 +747,34 @@ def render_cfl_results(*, view: str = "normal") -> str:
         html,
         flags=re.I,
     )
+    try:
+        from team_results_charts import _inject_cfl_consensus_hist_chips
+
+        html = _inject_cfl_consensus_hist_chips(html)
+    except Exception:
+        pass
+    html = _reorder_cfl_results_headers(html)
+    html = _dedupe_cfl_results_chrome(html)
     # Consensus/tabs already applied inside render_team_sport. A second
     # build_cfl_payload() hangs the worker and shadows local ufc_live.
     close = (html or "").lower().find("</html>")
     if close >= 0:
         html = html[: close + len("</html>")]
-    html = _strip_vendor_labels(_rewrite_iso_hrefs(_strip_mlb_content_from_cfl(html)))
+    html = _finalize_cfl_html(html)
     _CFL_RESULTS_PAGE_CACHE["cards"] = {"ts": now, "html": html}
     return html
 
 
 def _render_cfl_results_chart() -> str:
     from mlb_team_shell import render_team_sport
+
+    # Chart inject needs cards HTML as source — warm the cache if empty.
+    hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+    if not (isinstance(hit, dict) and hit.get("html")):
+        try:
+            render_cfl_results(view="normal")
+        except Exception:
+            pass
 
     try:
         from team_results_charts import set_results_chart_source
@@ -445,20 +788,34 @@ def _render_cfl_results_chart() -> str:
     html, meta = render_team_sport("cfl", which="chart")
     if meta.get("ok") and html:
         html = _strip_mlb_content_from_cfl(html)
-        html = re.sub(
-            r'<header class="pl2-header">[\s\S]*?</header>',
-            "",
-            html,
-            count=1,
-            flags=re.I,
-        )
-        html = html.replace('href="/mlb-results"', 'href="/cfl-results"')
+        html = _strip_all_pl2_headers(html)
+        html = _strip_research_nav_scripts(html)
         html = html.replace("Spread / Run Line", "Spread")
+        try:
+            from team_results_charts import (
+                _hide_empty_books_spread_total,
+                apply_team_results_template,
+                set_results_chart_source,
+            )
+
+            hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+            if isinstance(hit, dict) and hit.get("html"):
+                set_results_chart_source("CFL", hit["html"])
+            html = apply_team_results_template(html, "CFL", view="chart")
+            html = _hide_empty_books_spread_total(html)
+        except Exception:
+            pass
+        # Template may have re-inserted site chrome — strip before our inject.
+        html = _strip_all_pl2_headers(html)
+        html = _strip_research_nav_scripts(html)
         html = _inject_chrome_into_page(
             html,
             extra_css=["/static/css/team-results.css", "/static/css/cfl-pick-cards.css"],
         )
-        return _strip_vendor_labels(_rewrite_iso_hrefs(html))
+        html = _reorder_cfl_results_headers(html)
+        html = _dedupe_cfl_results_chrome(html)
+        html = _dedupe_pl2_headers(html)
+        return _finalize_cfl_html(html)
 
     from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -496,24 +853,23 @@ def _render_cfl_results_chart() -> str:
         "",
         html,
     )
-    html = re.sub(
-        r'<header class="pl2-header">[\s\S]*?</header>',
-        "",
-        html,
-        count=1,
-        flags=re.I,
-    )
+    html = _strip_all_pl2_headers(html)
     try:
         payload = build_cfl_payload()
         if isinstance(payload, dict):
             html = inject_ssr_chart_bootstrap(html, payload, "cfl")
     except Exception:
         pass
+    html = _strip_all_pl2_headers(html)
+    html = _strip_research_nav_scripts(html)
     html = _inject_chrome_into_page(
         html,
         extra_css=["/static/css/team-results.css", "/static/css/cfl-pick-cards.css"],
     )
-    return _strip_vendor_labels(_rewrite_iso_hrefs(html))
+    html = _reorder_cfl_results_headers(html)
+    html = _dedupe_cfl_results_chrome(html)
+    html = _dedupe_pl2_headers(html)
+    return _finalize_cfl_html(html)
 
 
 def cfl_share_jpeg_bytes() -> bytes | None:

@@ -1,0 +1,46 @@
+---
+description: Triple lock — all sports picks/results locked; props unlocked separately
+alwaysApply: true
+---
+
+# Triple lock — sports picks & results
+
+**Default:** every sport’s **predictions** and **results** pages are locked.
+Agents must not edit them unless the owner says exactly:
+
+**UNLOCK &lt;SPORT&gt;**
+
+and names the miss. **One sport. One miss.**
+
+## Locked surfaces (no unlock = no edits)
+
+For every sport (MLB, NHL, NBA, NFL, NCAAF, NCAAB, NCAAW, WNBA, CFL,
+soccer, tennis, UFC, golf, and any sport added later):
+
+- `/&lt;sport&gt;-picks`, `/&lt;sport&gt;-results`, chart views
+- Sport card HTML, Books/H2H/model face chips, Cards|Chart
+- Sport-named modules whose job is that sport’s picks/results UI
+- Sport-only branches in `NHL77FINAL.py` / `team_results_charts.py` /
+  `templates/includes/game_card_body.html`
+
+## Critical: unlocked work must not touch locked sports
+
+Fixing **player props**, chrome, checkers, or an unlocked sport **must not**
+edit locked sports’ picks/results pages or card faces — even “incidentally”
+in shared files. If a shared edit would change locked sport B while sport A
+(or props) is the task, stop and ask.
+
+Shared blank-slate merge allow-lists may prevent empty slates only — never
+rewrite another sport’s Books / face / model chips.
+
+## Props is not a sports unlock
+
+`/player-props` and the props eligibility stack may be edited when the owner
+asks to fix props. That is **not** an unlock for NFL/MLB/etc. picks or results.
+
+## When done with an unlock
+
+Lock that sport again in `.cursor/rules/locked-&lt;sport&gt;.mdc`. Do not leave
+sports UNLOCKED overnight.
+
+Also follow: `one-miss-only.mdc`, `sport-lock-enforcement.mdc`, AGENTS.md Rule 12.

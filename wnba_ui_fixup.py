@@ -1196,6 +1196,42 @@ def strip_wnba_g2_td_tiles(html: str) -> str:
     return "".join(parts)
 
 
+def _inject_wnba_graded_decisions_note(html: str) -> str:
+    """Audit clarity: Model Performance / Season count decisions, not all finals."""
+    if not html or "graded decision" in html.lower():
+        return html
+    note_mp = (
+        '<p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">'
+        "Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline "
+        "win rate. Records count <strong>graded decisions</strong> — not every completed "
+        "final (no model pick, missing line, or no-lean / push is omitted).</p>"
+    )
+    if "Model Performance (Flat Unit Tracking)" in html and "graded decisions" not in html:
+        html = re.sub(
+            r'(Model Performance \(Flat Unit Tracking)</h2>\s*)'
+            r'(?:<p\b[^>]*>[\s\S]*?</p>\s*)?',
+            r"\1" + note_mp,
+            html,
+            count=1,
+            flags=re.I,
+        )
+    note_sp = (
+        '<p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">'
+        "W-L tiles count <strong>graded model decisions</strong>, which can be fewer "
+        "than completed games on the slate.</p>"
+    )
+    if re.search(r"Season Performance", html, flags=re.I) and "graded model decisions" not in html:
+        html = re.sub(
+            r'(🏆\s*)?Season Performance([^<]*)</h2>\s*'
+            r'(?:<p\b[^>]*>[\s\S]*?</p>\s*)?',
+            r"\1Season Performance\2</h2>" + note_sp,
+            html,
+            count=1,
+            flags=re.I,
+        )
+    return html
+
+
 def apply_wnba_results_fixups(html: str) -> str:
     """Cards|Chart toggle + last-7/season window from game cards."""
     if not html:
@@ -1216,6 +1252,10 @@ def apply_wnba_results_fixups(html: str) -> str:
         pass
     try:
         html = patch_wnba_cards_ml_face(html)
+    except Exception:
+        pass
+    try:
+        html = _inject_wnba_graded_decisions_note(html)
     except Exception:
         pass
     html = inject_wnba_results_view_toggle(html, active="normal")

@@ -1035,7 +1035,7 @@ def inject_mlb_results_analytics_html(
         <section class="pl-mlb-analytics" aria-label="Results analytics">
           <h3 class="pl-analytics-title">Best Performing Model</h3>
           <div class="pl-analytics-grid">
-            {_best_card("Today", best.get("today"))}
+            {_best_card("Last Night", best.get("today"))}
             {_best_card("Last 7", best.get("last_7"))}
             {_best_card("Season", best.get("season"))}
           </div>
@@ -1223,10 +1223,12 @@ def _consensus_combo_label_html(
     dissent: tuple[str, ...] | list[str] | None = None,
     panel: int = 6,
 ) -> str:
-    """Row title: N/N unanimous, or K/N — all but <dissenters>."""
+    """Row title: N/N unanimous, even split, or K/N — all but <dissenters>."""
     panel_n = int(panel or 6)
     n = int(agree_n or 0)
     diss = tuple(dissent or ())
+    if n * 2 == panel_n and panel_n >= 2:
+        return html.escape(f"{n}/{panel_n} Split / no consensus")
     if n >= panel_n or not diss:
         return html.escape(f"{panel_n}/{panel_n} unanimous")
     head = f"{n}/{panel_n} — all but "
@@ -1762,12 +1764,15 @@ def _consensus_agreements_from_finals(
         if is_three_three:
             trio_home = [n for n in model_order if sides.get(n) == "HOME"]
             trio_away = [n for n in model_order if sides.get(n) == "AWAY"]
+            # NFL: include even splits in the consensus table as pushes (no
+            # majority to bet). Other sports keep NO_BET and omit the row.
+            split_grade = "PUSH" if sport_l == "nfl" else "NO_BET"
             out.append(
                 {
                     "agree_n": panel_n // 2,
                     "is_unanimous": False,
                     "is_three_three": True,
-                    "grade": "NO_BET",
+                    "grade": split_grade,
                     "panel_n": panel_n,
                     "game_date": dk,
                     "game_id": str(g.get("game_id") or ""),
@@ -2036,7 +2041,13 @@ def _consensus_combo_period_data(
     model_order = consensus_models_for_sport(sport_l, finals)
     panel_n = len(model_order)
     min_majority = panel_n // 2 + 1
+    # NFL includes the true even-split bucket (3/6); other sports omit it.
+    include_even_splits = sport_l == "nfl" and panel_n >= 2 and panel_n % 2 == 0
     folded_levels = tuple(range(panel_n, min_majority - 1, -1))
+    if include_even_splits:
+        split_n = panel_n // 2
+        if split_n not in folded_levels:
+            folded_levels = folded_levels + (split_n,)
     agreements = _consensus_agreements_from_finals(
         _dedupe_finals_by_game(finals), sport=sport_l
     )
@@ -2064,14 +2075,26 @@ def _consensus_combo_period_data(
     d30 = period(lambda d: cut30 <= d < today)
 
     def dissent_key(a: dict[str, Any]) -> tuple[str, ...]:
+        # Even splits collapse to one row (no majority dissenters).
+        if a.get("is_three_three") or (
+            include_even_splits
+            and int(a.get("agree_n") or 0) * 2 == panel_n
+        ):
+            return ()
         if a.get("dissent_models") is not None:
             present = {str(m) for m in (a.get("dissent_models") or []) if m}
             return tuple(name for name in model_order if name in present)
         return _dissent_models_tuple(_majority_models_tuple(a))
 
     def agree_bucket(a: dict[str, Any]) -> int | None:
-        if a.get("is_three_three") or a.get("grade") == "NO_BET":
+        if a.get("grade") == "NO_BET" and not (
+            include_even_splits and a.get("is_three_three")
+        ):
             return None
+        if a.get("is_three_three"):
+            if not include_even_splits:
+                return None
+            return panel_n // 2
         n = int(a.get("agree_n") or 0)
         folded = _fold_agree_n(n, panel=panel_n)
         if folded not in folded_levels:
@@ -2081,6 +2104,9 @@ def _consensus_combo_period_data(
         return folded
 
     combo_keys: dict[int, set[tuple[str, ...]]] = {lvl: set() for lvl in folded_levels}
+    if include_even_splits:
+        # Always surface the split row (0-0 when no graded splits yet).
+        combo_keys[panel_n // 2].add(())
     counts_30: dict[tuple[int, tuple[str, ...]], int] = {}
     for a in agreements:
         folded = agree_bucket(a)
@@ -2111,6 +2137,7 @@ def _consensus_combo_period_data(
         "filter_combo": filter_combo,
         "panel_n": panel_n,
         "folded_levels": folded_levels,
+        "include_even_splits": include_even_splits,
     }
 
 
@@ -2123,7 +2150,7 @@ def build_consensus_records_html(
     """HTML for Consensus Based Betting Records. Empty if no model-agreement data.
 
     Rows expand by dissent combination (who broke from the majority).
-    Even splits are omitted (not graded). Empty windows show 0-0.
+    NFL includes even splits (pushes). Other sports omit them. Empty windows show 0-0.
     """
     sport_l = (sport or "mlb").strip().lower() or "mlb"
     data = _consensus_combo_period_data(
@@ -2138,6 +2165,7 @@ def build_consensus_records_html(
     filter_combo = data["filter_combo"]
     panel_n = int(data.get("panel_n") or 6)
     folded_levels = tuple(data.get("folded_levels") or (6, 5, 4))
+    include_even_splits = bool(data.get("include_even_splits"))
     empty = _consensus_empty_cell()
     smart = True
     rows_html = []
@@ -2151,6 +2179,13 @@ def build_consensus_records_html(
                 rows_html.append(
                     "<tr>"
                     f'<td class="bucket">{_consensus_combo_label_html(agree_n=panel_n, panel=panel_n)}</td>'
+                    f"<td>{empty}</td><td>{empty}</td><td>{empty}</td>"
+                    "</tr>"
+                )
+            elif include_even_splits and folded * 2 == panel_n:
+                rows_html.append(
+                    "<tr>"
+                    f'<td class="bucket">{_consensus_combo_label_html(agree_n=folded, panel=panel_n)}</td>'
                     f"<td>{empty}</td><td>{empty}</td><td>{empty}</td>"
                     "</tr>"
                 )
@@ -2169,11 +2204,17 @@ def build_consensus_records_html(
 
     ln_hdr = f"Last night ({ln_key})" if ln_key else "Last night"
     read = _consensus_calibration_line({})
+    if include_even_splits:
+        split_note = (
+            f"Even splits ({panel_n // 2}/{panel_n}) are included and graded as pushes."
+        )
+    else:
+        split_note = "Even splits are omitted."
     sub = (
         f"Moneyline on the pregame majority among the {panel_n} live models. "
         "Each row is one dissent combination (model(s) that broke from the majority). "
         "0-0 means that combination had no graded games in the window. "
-        "Even splits are omitted."
+        f"{split_note}"
     )
     extra_css = (
         ".pl-consensus-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;"
@@ -4883,7 +4924,7 @@ def inject_ssr_chart_bootstrap(html: str, payload: dict[str, Any], sport: str) -
 
     best = analytics.get("best_performing") or {}
     best_bits = []
-    for label, key in (("Today", "today"), ("Last 7", "last_7"), ("Season", "season")):
+    for label, key in (("Last Night", "today"), ("Last 7", "last_7"), ("Season", "season")):
         row = best.get(key) or {}
         name = row.get("name") or "Edge"
         pct = row.get("pct")
@@ -4898,6 +4939,12 @@ def inject_ssr_chart_bootstrap(html: str, payload: dict[str, Any], sport: str) -
     analytics_html = (
         '<section class="tally pl-analytics"><h2>Best Performing Model</h2>'
         f'<div class="tally-grid">{"".join(best_bits)}</div></section>'
+        '<style id="mlb-chart-best-width">'
+        'section.pl-analytics{width:100%!important}'
+        'section.pl-analytics .tally-grid{'
+        'display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;'
+        'width:100%!important}'
+        '</style>'
     )
 
     rows = []

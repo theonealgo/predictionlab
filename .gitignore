@@ -94,3 +94,7 @@ qa/checker_cron.log
 qa/latest_report.*
 qa/audit_history/
 qa/screenshots/
+qa/lighthouse_reports/
+qa/pagespeed_reports/
+qa/.pagespeed_api_key
+data/ncaaf_espn_schedule_cache.json

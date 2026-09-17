@@ -85,6 +85,7 @@ from chart_shape import (  # noqa: E402
     nfl_stale_season_perf_issues,
     nfl_stale_season_week_issues,
     nhl_chart_view_missing_issues,
+    compact_consensus_hist_face_issues,
     picks_clock_issues,
     picks_logo_issues,
     picks_placeholder_issues,
@@ -94,6 +95,7 @@ from chart_shape import (  # noqa: E402
     team_picks_template_issues,
     team_results_template_issues,
     tennis_chart_same_as_cards_issues,
+    tennis_picks_slate_issues,
 )
 
 PASS = "PASS"
@@ -286,14 +288,47 @@ def _face_pl_ml_has_values(html: str) -> bool:
 def _has_pick_cards(html: str) -> bool:
     html = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html or "", flags=re.I)
     low = html.lower()
+    # Require a real card node — do not treat leftover "H2H Last 10" copy in
+    # chrome/CSS as proof of a slate (that hid blank MLB pages).
     return bool(
-        H2H_LAST10 in html
-        or "data-pick-card" in low
+        "data-pick-card" in low
         or "pl2-pick-card" in low
         or "data-game-card" in low
         or 'class="pick-card"' in low
         or "class='pick-card'" in low
+        or "game-card-stack" in low
     )
+
+
+def _picks_no_predictions_banner(html: str, sport: str) -> bool:
+    """True when the page shows the empty-slate banner for this sport."""
+    if not html:
+        return False
+    name = re.escape(sport or "")
+    return bool(
+        re.search(
+            rf'class="no-data"[^>]*>\s*No predictions available for\s+{name}\s*<',
+            html,
+            flags=re.I,
+        )
+        or re.search(
+            rf"No predictions available for\s+{name}\b",
+            html,
+            flags=re.I,
+        )
+    )
+
+
+def _et_today_str() -> str:
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+
+        return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        from datetime import datetime
+
+        return datetime.now().strftime("%Y-%m-%d")
 
 
 def _xsharp_rows_present(html: str) -> bool:
@@ -826,13 +861,46 @@ class ChromeChecker:
                 url=url,
             )
             return
-        if _has_pick_cards(body):
+        today = _et_today_str()
+        banner = _picks_no_predictions_banner(body, sport)
+        has_cards = _has_pick_cards(body)
+        has_today = f'id="date-{today}"' in (body or "")
+        # Explicit empty banner is always a fail for in-season sports — even if
+        # leftover script markup or previews make the page look non-empty.
+        if banner and sport not in OFFSEASON_OK_EMPTY:
+            self.add(
+                f"{sport} picks slate",
+                FAIL,
+                f'Page shows "No predictions available for {sport}" '
+                f"(blank slate on a live sport; today={today})",
+                url=url,
+            )
+            return
+        if has_cards:
             self.add(
                 f"{sport} picks slate",
                 PASS,
                 "Predictions page has pick cards",
                 url=url,
             )
+            # Daily sports only (MLB): cards with no ET-today section means the
+            # live day is missing. Do NOT require today for NFL/NCAAF/CFL/WNBA
+            # etc. — weekly slates routinely have no games on a given calendar day.
+            if sport == "MLB" and not has_today:
+                self.add(
+                    f"{sport} picks today",
+                    FAIL,
+                    f"Pick cards exist but none for today ({today}) — "
+                    "stale slate / missing today's games",
+                    url=url,
+                )
+            elif sport == "MLB":
+                self.add(
+                    f"{sport} picks today",
+                    PASS,
+                    f"Today's date section present ({today})",
+                    url=url,
+                )
             if sport != "MLB" and not _face_pl_ml_has_values(body):
                 self.add(
                     f"{sport} Prediction Lab moneyline",
@@ -1676,6 +1744,78 @@ class ChromeChecker:
                             f"{sport} cards have model boxes with values",
                             url=purl,
                         )
+            if sport in ("MLB", "NFL", "NCAAF", "CFL") and _has_pick_cards(phtml):
+                hist = compact_consensus_hist_face_issues(phtml, sport)
+                if hist:
+                    self.add(
+                        f"{sport} picks Consensus Historical face",
+                        FAIL,
+                        "; ".join(hist),
+                        url=purl,
+                    )
+                else:
+                    self.add(
+                        f"{sport} picks Consensus Historical face",
+                        PASS,
+                        "Compact Consensus Record face "
+                        "(pattern + W-L; no Last 7 Days)",
+                        url=purl,
+                    )
+            if sport == "WNBA":
+                from qa.chart_shape import wnba_consensus_hist_face_issues
+
+                hist = wnba_consensus_hist_face_issues(phtml)
+                if hist:
+                    self.add(
+                        "WNBA picks Consensus Historical face",
+                        FAIL,
+                        "; ".join(hist),
+                        url=purl,
+                    )
+                elif _has_pick_cards(phtml):
+                    self.add(
+                        "WNBA picks Consensus Historical face",
+                        PASS,
+                        "Consensus Historical Record matches per-card "
+                        "4-model pattern; no duplicate H2H",
+                        url=purl,
+                    )
+            if sport == "UFC":
+                from qa.chart_shape import ufc_consensus_hist_face_issues
+
+                hist = ufc_consensus_hist_face_issues(phtml)
+                if hist:
+                    self.add(
+                        "UFC picks Consensus Historical face",
+                        FAIL,
+                        "; ".join(hist),
+                        url=purl,
+                    )
+                elif _has_pick_cards(phtml):
+                    self.add(
+                        "UFC picks Consensus Historical face",
+                        PASS,
+                        "Consensus Historical Record on UFC cards",
+                        url=purl,
+                    )
+            if sport == "Golf":
+                from qa.chart_shape import golf_picks_board_issues
+
+                giss = golf_picks_board_issues(phtml)
+                if giss:
+                    self.add(
+                        "Golf picks board UI",
+                        FAIL,
+                        "; ".join(giss),
+                        url=purl,
+                    )
+                else:
+                    self.add(
+                        "Golf picks board UI",
+                        PASS,
+                        "Golf board has stacked model cells + tournament chrome",
+                        url=purl,
+                    )
             if sport == "WNBA":
                 rst, rhtml, rurl = self.fetch(results)
                 if rst == 200 and (
@@ -1698,6 +1838,17 @@ class ChromeChecker:
                             "WNBA results cards have H2H Last 10",
                             url=rurl,
                         )
+                    from qa.chart_shape import wnba_results_graded_clarity_issues
+
+                    clarity = wnba_results_graded_clarity_issues(rhtml)
+                    self.add(
+                        "WNBA results graded-decisions clarity",
+                        FAIL if clarity else PASS,
+                        "; ".join(clarity)
+                        if clarity
+                        else "graded decisions clarity present",
+                        url=rurl,
+                    )
             self._check_results_template(
                 sport, results, require_both_charts=True, require_chart_view=True
             )
@@ -1728,6 +1879,22 @@ class ChromeChecker:
                 require_chart_view=sport in ("Tennis", "UFC"),
             )
             if sport == "Tennis":
+                pst, phtml, purl = self.fetch(picks)
+                p_issues = tennis_picks_slate_issues(phtml if pst == 200 else "")
+                if p_issues:
+                    self.add(
+                        "Tennis picks slate",
+                        FAIL,
+                        "; ".join(p_issues),
+                        url=purl or picks,
+                    )
+                else:
+                    self.add(
+                        "Tennis picks slate",
+                        PASS,
+                        "Tennis picks has upcoming match cards",
+                        url=purl or picks,
+                    )
                 rst, rhtml, rurl = self.fetch(results)
                 cst, chtml, curl = self.fetch(f"{results}?view=chart")
                 issues = tennis_chart_same_as_cards_issues(
@@ -1745,7 +1912,7 @@ class ChromeChecker:
                     self.add(
                         "Tennis results chart vs cards",
                         PASS,
-                        "Tennis chart view is a real chart, not the cards page",
+                        "Cards|Chart href toggle; chart ≠ cards",
                         url=curl,
                     )
 

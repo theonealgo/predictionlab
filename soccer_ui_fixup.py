@@ -501,6 +501,10 @@ def enrich_soccer_h2h_from_db(html: str) -> str:
     """
     if not html or "data-pick-card" not in html:
         return html
+    n_cards = html.count("data-pick-card")
+    filled = len(re.findall(r'\bdata-h2h="[^"]*\d', html))
+    if n_cards and filled >= max(1, (n_cards * 2) // 3):
+        return html
 
     conns = _open_h2h_conns()
     if not conns:
@@ -1619,16 +1623,56 @@ _TIP_OU = (
 )
 _TIP_PICK_CONF = (
     "Each box is that model's estimated chance its side wins. "
-    "The number is moneyline confidence — not a spread or totals pick."
+    "The number is moneyline confidence — not a spread or totals pick. "
+    "Independent models: Grinder2, Takedown, XSharp. "
+    "Market-aware: Edge, Sharp Consensus. Strategy: Efficiency."
 )
-_TIP_EFFICIENCY = (
-    "Efficiency is our recent-form model. The percentage is how strongly it "
-    "favors its moneyline side."
-)
+try:
+    from soccer_model_taxonomy import TIP_BY_DISPLAY_NAME as _TAX_TIPS
+    from soccer_model_taxonomy import USER_FACING_LEGEND as _TAX_LEGEND
+except Exception:  # pragma: no cover - keep picks page up if import fails
+    _TAX_TIPS = {
+        "Efficiency": (
+            "Strategy view based on our spread lean — not an independent "
+            "home / draw / away probability model."
+        ),
+        "Edge": (
+            "Market-aware when book prices are posted: Edge follows the "
+            "sportsbook moneyline probabilities for that match."
+        ),
+        "Sharp Consensus": (
+            "Market-aware blend of the published model probabilities. When "
+            "Edge is using book prices, that market signal is part of this "
+            "consensus."
+        ),
+        "Grinder2": (
+            "Independent model. Does not use sportsbook prices."
+        ),
+        "Takedown": (
+            "Independent model. Does not use sportsbook prices."
+        ),
+        "XSharp": (
+            "Independent model. Does not use sportsbook prices."
+        ),
+    }
+    _TAX_LEGEND = (
+        "Independent models: Grinder2, Takedown, XSharp. "
+        "Market-aware: Edge, Sharp Consensus. "
+        "Strategy: Efficiency."
+    )
+_TIP_EFFICIENCY = _TAX_TIPS["Efficiency"]
+# Line-chip "Edge" = value vs book (not the Edge model box).
 _TIP_EDGE = (
     "Difference between our win probability and the sportsbook implied "
     "probability. Positive means our model sees more value than the posted price."
 )
+_TIP_MODEL_EDGE = _TAX_TIPS["Edge"]
+_TIP_MODEL_SHARP = _TAX_TIPS["Sharp Consensus"]
+_TIP_MODEL_G2 = _TAX_TIPS["Grinder2"]
+_TIP_MODEL_TD = _TAX_TIPS["Takedown"]
+_TIP_MODEL_XS = _TAX_TIPS["XSharp"]
+_MODEL_TAXONOMY_LEGEND = _TAX_LEGEND
+_MODEL_TAXONOMY_MARK = 'data-pl-soccer-model-taxonomy="1"'
 _TIP_WIN_PCT = (
     "This is the model's estimated chance that team wins the match. "
     "A draw chance is shown separately when listed."
@@ -1730,6 +1774,91 @@ def _insert_info_after_label(html: str, label_html: str, tip: str) -> str:
     return html.replace(marker, marker + btn)
 
 
+def _upgrade_soccer_model_taxonomy_tips(html: str) -> str:
+    """Honest Independent / Market-aware / Strategy tips on pick-confidence names."""
+    if not html or "pc-name" not in html:
+        return html
+    pairs = (
+        ("Grinder2", _TIP_MODEL_G2),
+        ("Takedown", _TIP_MODEL_TD),
+        ("Edge", _TIP_MODEL_EDGE),
+        ("XSharp", _TIP_MODEL_XS),
+        ("Sharp Consensus", _TIP_MODEL_SHARP),
+        ("Efficiency", _TIP_EFFICIENCY),
+    )
+    for name, tip in pairs:
+        html = _insert_info_after_label(
+            html, f'<div class="pc-name">{name}</div>', tip
+        )
+        # Tolerate whitespace variants from templates.
+        html = re.sub(
+            rf'(<div class="pc-name">\s*{re.escape(name)}\s*</div>)(?!\s*(?:<span[^>]*data-winpct-info|<button[^>]*pl-info-btn))',
+            lambda m, t=tip: m.group(1) + " " + _info_btn(t),
+            html,
+            count=0,
+            flags=re.I,
+        )
+    return html
+
+
+def inject_soccer_model_taxonomy_legend(html: str) -> str:
+    """One compact legend above the first Pick Confidence block (picks + results)."""
+    if not html or _MODEL_TAXONOMY_MARK in html:
+        return html
+    if "pick-conf-title" not in html and "pick-conf-grid" not in html:
+        return html
+    legend = (
+        f'<div class="pl-soccer-model-taxonomy" {_MODEL_TAXONOMY_MARK} '
+        f'style="font-size:0.78rem;color:#475569;margin:0 0 10px;'
+        f'line-height:1.35;max-width:52rem">'
+        f"{html_lib.escape(_MODEL_TAXONOMY_LEGEND)}"
+        f"</div>"
+    )
+    # Prefer first pick-conf-title; else first pick-conf-grid.
+    if "pick-conf-title" in html:
+        return html.replace(
+            '<div class="pick-conf-title">Pick Confidence</div>',
+            legend + '<div class="pick-conf-title">Pick Confidence</div>',
+            1,
+        )
+    return re.sub(
+        r'(<div\b[^>]*\bclass="[^"]*\bpick-conf-grid\b[^"]*"[^>]*>)',
+        legend + r"\1",
+        html,
+        count=1,
+        flags=re.I,
+    )
+
+
+def upgrade_soccer_picks_info_icons(html: str) -> str:
+    """Add ⓘ explanations on soccer pick-card labels that had none."""
+    if not html:
+        return html
+    html = inject_soccer_model_taxonomy_legend(html)
+    html = _insert_info_after_label(
+        html, '<div class="pick-conf-title">Pick Confidence</div>', _TIP_PICK_CONF
+    )
+    html = _insert_info_after_label(
+        html, '<div class="line-chip-label">Edge</div>', _TIP_EDGE
+    )
+    html = _upgrade_soccer_model_taxonomy_tips(html)
+    html = _insert_info_after_label(
+        html, '<div class="pc-name">Efficiency</div>', _TIP_EFFICIENCY
+    )
+    html = _insert_info_after_plxg_value(html)
+    html = _insert_info_after_label(
+        html, '<div class="line-chip-label">Books spread</div>', _TIP_SPREAD_LINE
+    )
+    # Face win % — ⓘ next to each team win % (not the draw row).
+    if 'class="win-pct"' in html and "data-winpct-info" not in html:
+        html = re.sub(
+            r'(<div class="win-pct">[\s\S]*?</div>)',
+            r'\1 <span data-winpct-info="1">' + _info_btn(_TIP_WIN_PCT) + "</span>",
+            html,
+        )
+    return html
+
+
 def _insert_info_after_plxg_value(html: str) -> str:
     """Put the PL Expected Goals ⓘ after the number, not between label and value."""
     if not html or "PL Expected Goals" not in html:
@@ -1752,32 +1881,6 @@ def _insert_info_after_plxg_value(html: str) -> str:
         flags=re.I,
     )
 
-
-def upgrade_soccer_picks_info_icons(html: str) -> str:
-    """Add ⓘ explanations on soccer pick-card labels that had none."""
-    if not html:
-        return html
-    html = _insert_info_after_label(
-        html, '<div class="pick-conf-title">Pick Confidence</div>', _TIP_PICK_CONF
-    )
-    html = _insert_info_after_label(
-        html, '<div class="line-chip-label">Edge</div>', _TIP_EDGE
-    )
-    html = _insert_info_after_label(
-        html, '<div class="pc-name">Efficiency</div>', _TIP_EFFICIENCY
-    )
-    html = _insert_info_after_plxg_value(html)
-    html = _insert_info_after_label(
-        html, '<div class="line-chip-label">Books spread</div>', _TIP_SPREAD_LINE
-    )
-    # Face win % — ⓘ next to each team win % (not the draw row).
-    if 'class="win-pct"' in html and "data-winpct-info" not in html:
-        html = re.sub(
-            r'(<div class="win-pct">[\s\S]*?</div>)',
-            r'\1 <span data-winpct-info="1">' + _info_btn(_TIP_WIN_PCT) + "</span>",
-            html,
-        )
-    return html
 
 
 def inject_pl_info_tips_assets(html: str) -> str:
@@ -2325,6 +2428,12 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "", 
         html = _hide_blank_books_ml_lines(html)
         html = _fill_soccer_xs_from_published(html)
         html = _fill_soccer_placeholder_edge(html)
+        try:
+            from team_results_charts import _inject_soccer_consensus_hist_chips
+
+            html = _inject_soccer_consensus_hist_chips(html)
+        except Exception as e:
+            print(f"[soccer_ui_fixup] consensus hist: {e}", flush=True)
     html = apply_soccer_info_tooltips(html, kind="picks")
     html = ensure_soccer_league_dropdown(
         html, kind="picks", league=league, region=region, week=week,
@@ -2402,18 +2511,31 @@ def _league_from_soccer_results_html(html: str) -> str:
 
 
 def inject_soccer_results_page_title(html: str) -> str:
-    """Visible Soccer Results heading at the top (Cards-style chrome)."""
+    """Visible Soccer Results heading — h1 only (never a second <header>)."""
     if not html:
         return html
+    # Legacy Cards chrome used <header class="top"> next to pl2-header → double site header.
+    html = re.sub(
+        r'<header\b[^>]*\bid="soccer-results-page-title"[^>]*>[\s\S]*?</header>',
+        '<h1 class="page-title" id="soccer-results-page-title">⚽ Soccer Results</h1>',
+        html,
+        count=1,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'<header class="top"[^>]*>\s*'
+        r'(?:<div class="brand">\s*)?Soccer Results(?:\s*</div>)?\s*'
+        r'</header>',
+        '<h1 class="page-title" id="soccer-results-page-title">⚽ Soccer Results</h1>',
+        html,
+        count=1,
+        flags=re.I,
+    )
     if 'id="soccer-results-page-title"' in html:
         return html
     if re.search(r'class="page-title"[^>]*>[\s\S]*Soccer Results', html, flags=re.I):
         return html
-    block = (
-        '<header class="top" id="soccer-results-page-title">'
-        '<div class="brand">Soccer Results</div>'
-        "</header>"
-    )
+    block = '<h1 class="page-title" id="soccer-results-page-title">⚽ Soccer Results</h1>'
     if re.search(r"<main\b", html, re.I):
         return re.sub(r"(<main\b[^>]*>)", r"\1" + block, html, count=1, flags=re.I)
     return block + html
@@ -2562,6 +2684,85 @@ def ensure_soccer_results_ship_bits(
     return inject_soccer_chart_source(html, source_html=source_html, league=league)
 
 
+def inject_soccer_league_outcome_records(html: str) -> str:
+    """Per-league home-win / draw / away-win counts for visible result cards."""
+    if not html or "data-pick-card" not in html:
+        return html
+    if 'id="soccer-league-outcome-records"' in html:
+        return html
+    tallies: dict[str, dict[str, int]] = {}
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    for stack in parts[1:]:
+        lm = re.search(r'\bdata-league="([^"]*)"', stack[:1200], flags=re.I)
+        league = html_lib.unescape((lm.group(1) if lm else "") or "").strip() or "Other"
+        # Prefer FINAL scores on the card face.
+        scores = re.findall(
+            r'class="[^"]*final-score[^"]*"[^>]*>\s*(\d+)\s*<',
+            stack[:4000],
+            flags=re.I,
+        )
+        if len(scores) < 2:
+            continue
+        # Card layout is away @ home — first final-score is away.
+        try:
+            aws, hs = int(scores[0]), int(scores[1])
+        except ValueError:
+            continue
+        bucket = tallies.setdefault(
+            league, {"games": 0, "home_wins": 0, "draws": 0, "away_wins": 0}
+        )
+        bucket["games"] += 1
+        if hs > aws:
+            bucket["home_wins"] += 1
+        elif hs < aws:
+            bucket["away_wins"] += 1
+        else:
+            bucket["draws"] += 1
+    if not tallies:
+        return html
+    rows = []
+    for league in sorted(tallies.keys(), key=lambda k: (-tallies[k]["games"], k.lower())):
+        t = tallies[league]
+        rows.append(
+            "<tr>"
+            f"<td>{html_lib.escape(league)}</td>"
+            f"<td>{t['games']}</td>"
+            f"<td>{t['home_wins']}</td>"
+            f"<td>{t['draws']}</td>"
+            f"<td>{t['away_wins']}</td>"
+            "</tr>"
+        )
+    block = (
+        '<section id="soccer-league-outcome-records" class="soccer-league-records" '
+        'aria-label="League results">'
+        "<h2>League results (this page)</h2>"
+        '<p class="sub">Finals on the cards below — home wins, draws, and away wins '
+        "by competition.</p>"
+        '<div style="overflow-x:auto"><table>'
+        "<thead><tr>"
+        "<th style=\"text-align:left\">League</th>"
+        "<th>Games</th><th>Home wins</th><th>Draws</th><th>Away wins</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
+        "<style>#soccer-league-outcome-records{margin:16px 16px 24px}"
+        "#soccer-league-outcome-records table{width:100%;border-collapse:collapse;"
+        "font-size:.9rem}#soccer-league-outcome-records th,#soccer-league-outcome-records td"
+        "{padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:center}"
+        "#soccer-league-outcome-records th:first-child,#soccer-league-outcome-records td:first-child"
+        "{text-align:left}#soccer-league-outcome-records h2{margin:0 0 6px;font-size:1.05rem}"
+        "#soccer-league-outcome-records .sub{margin:0 0 10px;color:#64748b;font-size:.85rem}"
+        "</style></section>"
+    )
+    # Place above the first date section / first game card stack.
+    m = re.search(r'<div id="date-\d{4}-\d{2}-\d{2}"', html)
+    if m:
+        return html[: m.start()] + block + html[m.start() :]
+    if re.search(r"<main\b", html, flags=re.I):
+        return re.sub(r"(<main\b[^>]*>)", r"\1" + block, html, count=1, flags=re.I)
+    return block + html
+
+
 def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = "", week: str = "") -> str:
     """Cards|Chart toggle + league/continent dropdown on soccer results."""
     if not html:
@@ -2601,13 +2802,12 @@ def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = ""
         html = inject_consensus_records_html(html, sport="soccer")
     except Exception as e:
         print(f"[soccer_ui_fixup] consensus inject: {e}", flush=True)
-    try:
-        from team_results_charts import _apply_four_model_consensus_meanings
-
-        html = _apply_four_model_consensus_meanings(html)
-    except Exception as e:
-        print(f"[soccer_ui_fixup] 4-model meanings: {e}", flush=True)
+    # Soccer is a 6-model panel — do not rewrite meanings to 4/4.
     html = open_soccer_cards(html)
+    try:
+        html = inject_soccer_league_outcome_records(html)
+    except Exception as e:
+        print(f"[soccer_ui_fixup] league outcome records: {e}", flush=True)
     html = ensure_soccer_league_empty_state(html, league=league)
     return ensure_soccer_results_ship_bits(html, league=league)
 

@@ -978,7 +978,7 @@ def inject_mlb_results_analytics_html(
         <section class="pl-mlb-analytics" aria-label="Results analytics">
           <h3 class="pl-analytics-title">Best Performing Model</h3>
           <div class="pl-analytics-grid">
-            {_best_card("Today", best.get("today"))}
+            {_best_card("Last Night", best.get("today"))}
             {_best_card("Last 7", best.get("last_7"))}
             {_best_card("Season", best.get("season"))}
           </div>
@@ -2165,7 +2165,7 @@ def inject_ssr_chart_bootstrap(
 
     best = analytics.get("best_performing") or {}
     best_bits = []
-    for label, key in (("Today", "today"), ("Last 7", "last_7"), ("Season", "season")):
+    for label, key in (("Last Night", "today"), ("Last 7", "last_7"), ("Season", "season")):
         row = best.get(key) or {}
         name = row.get("name") or "Edge"
         pct = row.get("pct")
@@ -2177,12 +2177,19 @@ def inject_ssr_chart_bootstrap(
             f'{"%" if pct is not None else ""}</div>'
             f'<div class="rec">{_esc_html(rec)}</div></div>'
         )
-    analytics_html = (
-        '<section class="tally pl-analytics"><h2>Best Performing Model</h2>'
-        f'<div class="tally-grid">{"".join(best_bits)}</div></section>'
-        if mk == "moneyline"
-        else ""
-    )
+    if mk == "moneyline":
+        analytics_html = (
+            '<section class="tally pl-analytics"><h2>Best Performing Model</h2>'
+            f'<div class="tally-grid">{"".join(best_bits)}</div></section>'
+            '<style id="mlb-chart-best-width">'
+            "section.pl-analytics{width:100%!important}"
+            "section.pl-analytics .tally-grid{"
+            "display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;"
+            "width:100%!important}"
+            "</style>"
+        )
+    else:
+        analytics_html = ""
 
     rows = []
     is_mlb = (sport or "").strip().lower() == "mlb"
@@ -2314,15 +2321,29 @@ def inject_ssr_chart_bootstrap(
         flags=re.I,
     )
     if 'data-ssr-chart="1"' not in html:
-        html = html.replace("<body", f'<body data-ssr-chart="1" data-market="{_esc_html(mk)}"', 1)
-    elif "data-market=" not in html.split(">", 1)[0]:
-        html = re.sub(
-            r"(<body\b[^>]*)>",
-            rf'\1 data-market="{_esc_html(mk)}">',
-            html,
-            count=1,
-            flags=re.I,
+        html = html.replace(
+            "<body",
+            f'<body data-ssr-chart="1" data-market="{_esc_html(mk)}" '
+            f'data-best-today-label="Last Night"',
+            1,
         )
+    else:
+        if "data-market=" not in html.split(">", 1)[0]:
+            html = re.sub(
+                r"(<body\b[^>]*)>",
+                rf'\1 data-market="{_esc_html(mk)}">',
+                html,
+                count=1,
+                flags=re.I,
+            )
+        if "data-best-today-label=" not in html.split(">", 1)[0]:
+            html = re.sub(
+                r"(<body\b[^>]*)>",
+                r'\1 data-best-today-label="Last Night">',
+                html,
+                count=1,
+                flags=re.I,
+            )
     # Unhide market tabs + games chrome for first paint (JS also toggles)
     html = re.sub(
         r'(<nav\b[^>]*\bid=["\']market-tabs["\'][^>]*)\s*hidden',

@@ -24,6 +24,12 @@ from .config import (
     REAL_LINES_TTL,
     TOP_PLAYER_POOL,
 )
+from .player_eligibility import (
+    market_allowed,
+    position_to_role,
+    primary_market_for_role,
+    select_top_pool,
+)
 
 # Realistic "minutes" (or ice-time for hockey) ranges per sport.
 # NHL skaters average 12-22 min of ice time; using NBA values (24-40) was the
@@ -46,10 +52,12 @@ _LEAGUE_PROP_TYPES = {
     "NCAAB": ["points", "rebounds", "assists", "threes"],
     "NCAAW": ["points", "rebounds", "assists", "threes"],
     "NHL": ["shots_on_goal", "points", "assists", "goals"],
-    "MLB": ["hits", "strikeouts", "runs", "rbis", "home_runs"],
+    "MLB": ["hits", "strikeouts", "runs", "rbis", "home_runs", "walks"],
     "NFL": ["passing_yards", "rushing_yards", "receiving_yards", "receptions"],
     "NCAAF": ["passing_yards", "rushing_yards", "receiving_yards", "receptions"],
+    "CFL": ["passing_yards", "rushing_yards", "receiving_yards", "receptions"],
     "SOCCER": ["shots", "shots_on_target", "goals", "assists"],
+    "UFC": [],  # only real book markets once mapped; no synthetic UFC props
 }
 
 _PROP_LINE_RANGES = {
@@ -170,6 +178,31 @@ def fetch_schedule_and_teams(league: str, target_date=None) -> List[Dict]:
         events = resp.json().get("events", [])
         rows = []
         for ev in events:
+            if league == "UFC":
+                # MMA: each competition is a fight; competitors are athletes.
+                for fight in (ev.get("competitions") or []):
+                    teams = fight.get("competitors") or []
+                    if len(teams) < 2:
+                        continue
+                    a0 = teams[0]
+                    a1 = teams[1]
+                    ath0 = a0.get("athlete") or {}
+                    ath1 = a1.get("athlete") or {}
+                    n0 = (ath0.get("displayName") or ath0.get("fullName") or "").strip()
+                    n1 = (ath1.get("displayName") or ath1.get("fullName") or "").strip()
+                    if not n0 or not n1:
+                        continue
+                    rows.append(
+                        {
+                            "event_id": str(fight.get("id") or ev.get("id") or ""),
+                            "start_time": fight.get("date") or ev.get("date"),
+                            "home_team": n0,
+                            "away_team": n1,
+                            "home_team_id": str(ath0.get("id") or a0.get("id") or ""),
+                            "away_team_id": str(ath1.get("id") or a1.get("id") or ""),
+                        }
+                    )
+                continue
             comp = (ev.get("competitions") or [{}])[0]
             teams = comp.get("competitors") or []
             if len(teams) < 2:
@@ -260,7 +293,79 @@ def fetch_schedule_and_teams(league: str, target_date=None) -> List[Dict]:
     ]
 
 
+def _espn_season_year() -> int:
+    now = datetime.now(ZoneInfo("America/New_York"))
+    # NFL/NCAAF season year spans fall→winter; use calendar year for others.
+    return int(now.year)
+
+
+def _fetch_football_depth_ranks(
+    espn_league: str, team_id: str, season_year: Optional[int] = None
+) -> Dict[str, int]:
+    """Map athlete_id -> best (lowest) offensive depth-chart rank for a team.
+
+    ESPN depth charts are the relevance source of truth for football prop pools
+    (starter QB/RB/WR/TE vs depth / practice names). Returns {} on failure.
+    """
+    if not (espn_league and team_id):
+        return {}
+    year = int(season_year or _espn_season_year())
+    url = (
+        f"https://sports.core.api.espn.com/v2/sports/football/leagues/"
+        f"{espn_league}/seasons/{year}/teams/{team_id}/depthcharts"
+    )
+    out: Dict[str, int] = {}
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        items = resp.json().get("items") or []
+    except Exception:
+        return {}
+    # Prefer offensive packages (skill positions).
+    skill_keys = {"qb", "rb", "fb", "hb", "wr", "te", "slot", "lwr", "rwr"}
+    for chart in items:
+        positions = chart.get("positions") or {}
+        chart_name = (chart.get("name") or "").lower()
+        # Skip pure defensive / ST charts when possible.
+        if chart_name and any(x in chart_name for x in ("4-3", "3-4", "nickel", "special")):
+            if not any(k in positions for k in skill_keys):
+                continue
+        for slot_key, slot in positions.items():
+            sk = str(slot_key or "").lower()
+            if skill_keys and sk not in skill_keys and sk not in (
+                "qb", "rb", "wr", "te", "fb"
+            ):
+                # Still record skill-ish; ignore OL/DL slots.
+                if sk in ("lt", "lg", "c", "rg", "rt", "ol", "dl", "lb", "cb", "s", "pk", "p"):
+                    continue
+            for ath_row in (slot.get("athletes") or []):
+                try:
+                    rank = int(ath_row.get("rank") or 0)
+                except (TypeError, ValueError):
+                    rank = 0
+                if rank <= 0:
+                    continue
+                ath = ath_row.get("athlete") or {}
+                aid = str(ath.get("id") or "").strip()
+                if not aid and isinstance(ath.get("$ref"), str):
+                    # .../athletes/4429795?lang=en
+                    m = re.search(r"/athletes/(\d+)", ath.get("$ref") or "")
+                    aid = m.group(1) if m else ""
+                if not aid:
+                    continue
+                prev = out.get(aid)
+                if prev is None or rank < prev:
+                    out[aid] = rank
+    return out
+
+
 def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
+    """Eligible prop-player pool for a league slate.
+
+    Pulls ESPN rosters for scheduled teams, attaches depth-chart ranks,
+    keeps only position-eligible players, then caps to top ~35 per role
+    by relevance (not EV).
+    """
     cfg = LEAGUE_CONFIG.get(league, {})
     espn_sport = cfg.get("espn_sport", "")
     espn_league = cfg.get("espn_league", "")
@@ -268,11 +373,32 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
     seen_player_ids = set()
     seen_name_team = set()
     idx = 1
+    raw_seen = 0
+    depth_by_team: Dict[str, Dict[str, int]] = {}
 
-    def _add_player(player_id: str, name: str, team: str):
-        nonlocal idx
+    def _add_player(
+        player_id: str,
+        name: str,
+        team: str,
+        *,
+        team_id: str = "",
+        position: str = "",
+        experience_years: Optional[float] = None,
+        jersey: str = "",
+        depth_rank: Optional[int] = None,
+    ):
+        nonlocal idx, raw_seen
         if not name or not team:
             return
+        raw_seen += 1
+        role = position_to_role(league, position)
+        if role is None and league != "UFC":
+            # No usable position → do not guess into the prop universe.
+            if not position:
+                return
+            return
+        if league == "UFC":
+            role = "Fighter"
         key_id = (player_id or "").strip()
         key_name = (name.strip().lower(), team.strip().lower())
         if key_id and key_id in seen_player_ids:
@@ -280,17 +406,33 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
         if key_name in seen_name_team:
             return
         _min_lo, _min_hi = _LEAGUE_MINUTES_RANGE.get(league, (24.0, 40.0))
-        projected_minutes = random.uniform(_min_lo, _min_hi)
-        usage = random.uniform(0.35, 1.0)
-        prop_frequency = random.uniform(0.4, 1.0)
+        # Deterministic stub minutes from id (not random EV ranking).
+        seed = abs(hash(f"{league}:{key_id or name}:{team}")) % 1000
+        projected_minutes = _min_lo + (_min_hi - _min_lo) * (seed / 1000.0)
+        # Prefer depth-chart usage over hash stubs when available.
+        d_rank = int(depth_rank or 0)
+        if d_rank > 0:
+            usage = max(0.15, 0.95 - (d_rank - 1) * 0.18)
+            prop_frequency = max(0.2, 0.9 - (d_rank - 1) * 0.15)
+        else:
+            usage = 0.20 + 0.25 * (seed / 1000.0)
+            prop_frequency = 0.20 + 0.25 * ((999 - seed) / 1000.0)
         score = projected_minutes * 0.45 + usage * 30 + prop_frequency * 25
+        if d_rank > 0:
+            score += max(0.0, 80.0 - (d_rank - 1) * 25.0)
         final_id = key_id if key_id else f"{league}-{idx}"
         players.append(
             {
                 "player_id": final_id,
                 "name": name,
                 "team": team,
+                "team_id": str(team_id or ""),
                 "league": league,
+                "position": (position or "").strip().upper(),
+                "role": role,
+                "experience_years": experience_years,
+                "jersey": jersey,
+                "depth_rank": d_rank or None,
                 "projected_minutes": round(projected_minutes, 1),
                 "usage_score": round(usage, 3),
                 "prop_frequency": round(prop_frequency, 3),
@@ -301,9 +443,46 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
         seen_name_team.add(key_name)
         idx += 1
 
+    def _exp_years(athlete: Dict) -> Optional[float]:
+        exp = athlete.get("experience")
+        if isinstance(exp, dict):
+            try:
+                return float(exp.get("years"))
+            except Exception:
+                return None
+        try:
+            return float(exp) if exp is not None else None
+        except Exception:
+            return None
+
+    def _pos_abbr(athlete: Dict, group_hint: str = "") -> str:
+        pos = athlete.get("position")
+        if isinstance(pos, dict):
+            abbr = (pos.get("abbreviation") or "").strip()
+            if abbr:
+                return abbr
+        if group_hint and group_hint.upper() in (
+            "QB", "RB", "WR", "TE", "G", "F", "C", "D", "P", "H"
+        ):
+            return group_hint.upper()
+        return ""
+
+    def _depth_for(team_id: str) -> Dict[str, int]:
+        tid = str(team_id or "")
+        if not tid:
+            return {}
+        if tid not in depth_by_team:
+            if league in ("NFL", "NCAAF", "CFL") and espn_league:
+                depth_by_team[tid] = _fetch_football_depth_ranks(espn_league, tid)
+            else:
+                depth_by_team[tid] = {}
+        return depth_by_team[tid]
+
     def _fetch_roster(team_id: str, team_name: str):
         if not (team_id and espn_sport and espn_league):
             return
+        depth_map = _depth_for(team_id)
+        depth_loaded = bool(depth_map)
         url = (
             f"https://site.api.espn.com/apis/site/v2/sports/"
             f"{espn_sport}/{espn_league}/teams/{team_id}/roster"
@@ -312,73 +491,92 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
             resp = requests.get(url, timeout=10)
             resp.raise_for_status()
             payload = resp.json()
+
+            def _rank_for(a_id: str, role: Optional[str]) -> Optional[int]:
+                if a_id and a_id in depth_map:
+                    return depth_map[a_id]
+                # Skill players missing from a loaded depth chart are depth noise
+                # (practice squad / inactive) — mark deep so synthetic gate drops them.
+                if depth_loaded and role in ("QB", "RB", "WR", "TE"):
+                    return 99
+                return None
             for a in payload.get("athletes") or []:
-                # MLB roster shape often returns grouped entries:
-                # athletes: [{position: {...}, items: [{id, fullName, ...}, ...]}]
                 if isinstance(a, dict) and isinstance(a.get("items"), list):
+                    group_hint = ""
+                    gpos = a.get("position")
+                    if isinstance(gpos, dict):
+                        group_hint = (gpos.get("abbreviation") or "").strip()
+                    elif isinstance(gpos, str):
+                        group_hint = gpos.strip()
                     for it in a.get("items") or []:
                         full_name = (it.get("fullName") or it.get("displayName") or "").strip()
                         a_id = str(it.get("id") or "")
-                        _add_player(a_id, full_name, team_name)
+                        pos = _pos_abbr(it, group_hint)
+                        _add_player(
+                            a_id,
+                            full_name,
+                            team_name,
+                            team_id=str(team_id),
+                            position=pos,
+                            experience_years=_exp_years(it),
+                            jersey=str(it.get("jersey") or ""),
+                            depth_rank=_rank_for(a_id, position_to_role(league, pos)),
+                        )
                     continue
                 full_name = (a.get("fullName") or a.get("displayName") or "").strip()
                 a_id = str(a.get("id") or "")
-                _add_player(a_id, full_name, team_name)
+                pos = _pos_abbr(a)
+                _add_player(
+                    a_id,
+                    full_name,
+                    team_name,
+                    team_id=str(team_id),
+                    position=pos,
+                    experience_years=_exp_years(a),
+                    jersey=str(a.get("jersey") or ""),
+                    depth_rank=_rank_for(a_id, position_to_role(league, pos)),
+                )
             for group in payload.get("athletesByPosition") or []:
+                gpos = group.get("position") or {}
+                group_hint = (gpos.get("abbreviation") if isinstance(gpos, dict) else "") or ""
                 for a in group.get("athletes") or []:
                     full_name = (a.get("fullName") or a.get("displayName") or "").strip()
                     a_id = str(a.get("id") or "")
-                    _add_player(a_id, full_name, team_name)
+                    pos = _pos_abbr(a, group_hint)
+                    _add_player(
+                        a_id,
+                        full_name,
+                        team_name,
+                        team_id=str(team_id),
+                        position=pos,
+                        experience_years=_exp_years(a),
+                        jersey=str(a.get("jersey") or ""),
+                        depth_rank=_rank_for(a_id, position_to_role(league, pos)),
+                    )
         except Exception:
             return
+
+    if league == "UFC":
+        # UFC "roster" = fighters on the upcoming card (competitors).
+        for game in schedule_rows[:40]:
+            for side in ("home", "away"):
+                name = (game.get(f"{side}_team") or "").strip()
+                pid = str(game.get(f"{side}_team_id") or "")
+                if name:
+                    _add_player(pid, name, "UFC", position="Fighter", depth_rank=1)
+        kept, _audit = select_top_pool(players, league=league)
+        return kept
 
     for game in schedule_rows[:25]:
         _fetch_roster(game.get("home_team_id", ""), game["home_team"])
         _fetch_roster(game.get("away_team_id", ""), game["away_team"])
-    players.sort(key=lambda x: x["top50_score"], reverse=True)
+
     if players:
-        return players[:TOP_PLAYER_POOL]
-    # Fallback: synthesize a stable top-player pool from scheduled teams so
-    # props do not render blank when roster endpoints are temporarily empty.
-    teams = []
-    seen = set()
-    for g in schedule_rows[:25]:
-        for side in ("home_team", "away_team"):
-            t = (g.get(side) or "").strip()
-            if not t:
-                continue
-            key = t.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            teams.append(t)
-    if not teams:
-        teams = [f"{league} Team {i+1}" for i in range(12)]
-    synthetic = []
-    idx = 1
-    for t in teams:
-        for n in range(1, 5):
-            _smin_lo, _smin_hi = _LEAGUE_MINUTES_RANGE.get(league, (20.0, 38.0))
-            projected_minutes = random.uniform(_smin_lo, _smin_hi)
-            usage = random.uniform(0.25, 0.95)
-            prop_frequency = random.uniform(0.45, 1.0)
-            score = projected_minutes * 0.45 + usage * 30 + prop_frequency * 25
-            synthetic.append(
-                {
-                    "player_id": f"{league}-fallback-{idx}",
-                    "name": f"{t} Player {n}",
-                    "team": t,
-                    "league": league,
-                    "projected_minutes": round(projected_minutes, 1),
-                    "usage_score": round(usage, 3),
-                    "prop_frequency": round(prop_frequency, 3),
-                    "top50_score": round(score, 2),
-                }
-            )
-            idx += 1
-            if len(synthetic) >= TOP_PLAYER_POOL:
-                return synthetic
-    return synthetic
+        kept, _audit = select_top_pool(players, league=league)
+        return kept[:TOP_PLAYER_POOL]
+
+    # Fallback: do not invent named players — empty pool (page shows no props).
+    return []
 
 
 def _player_log_path() -> str:
@@ -685,7 +883,12 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
                     log_lines.append(f"DROP {player_name} ({team_name}) -> {','.join(reasons)}")
                     continue
 
-                role = "starter" if avg_minutes >= 24.0 else "bench"
+                minutes_band = "starter" if avg_minutes >= 24.0 else "bench"
+                pos_abbr = ""
+                pos = a.get("position")
+                if isinstance(pos, dict):
+                    pos_abbr = (pos.get("abbreviation") or "").strip().upper()
+                prop_role = position_to_role("NBA", pos_abbr) or "F"
                 points_avg = metrics.get("avg_points", 0.0)
                 superstar = usage_rate >= 0.30 and avg_minutes >= 32.0 and points_avg >= 24.0
                 players.append(
@@ -695,6 +898,9 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
                         "team": team_name,
                         "team_id": team_id,
                         "league": "NBA",
+                        "position": pos_abbr,
+                        "role": prop_role,
+                        "minutes_band": minutes_band,
                         "projected_minutes": round(avg_minutes, 1),
                         "projected_minutes_weighted": round(_clamp(metrics.get("projected_minutes", avg_minutes), 5.0, 40.0), 1),
                         "avg_minutes": round(avg_minutes, 1),
@@ -706,7 +912,6 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
                         "stats_weighted": metrics.get("stats_weighted", {}),
                         "prop_frequency": round(_clamp(len(last_10) / 10.0, 0.4, 1.0), 3),
                         "top50_score": round((avg_minutes * 0.5) + (usage_rate * 100.0 * 0.5), 2),
-                        "role": role,
                         "is_superstar": superstar,
                         "consensus_rank": _NBA_CONSENSUS_RANK.get(player_key, 999),
                         "consensus_tier": (
@@ -742,13 +947,16 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
 
 
 def _synthetic_prop_lines(league: str, players: List[Dict]) -> List[Dict]:
-    """One synthetic line per player for local/dev when odds API is unused or unavailable."""
+    """One synthetic line per eligible player for local/dev when odds are unavailable."""
     lines = []
-    prop_types = _LEAGUE_PROP_TYPES.get(league, ["points", "rebounds", "assists"])
     for p in players:
-        prop_type = random.choice(prop_types)
+        role = p.get("role") or position_to_role(league, p.get("position"))
+        prop_type = primary_market_for_role(league, role)
+        if not prop_type or not market_allowed(league, role, prop_type, line_source="synthetic"):
+            continue
         low, high = _PROP_LINE_RANGES.get(prop_type, (5.5, 25.5))
-        _line = _to_half_step(random.uniform(low, high))
+        seed = abs(hash(f"{p.get('player_id')}-{prop_type}")) % 1000
+        _line = _to_half_step(low + (high - low) * (seed / 1000.0))
         lines.append(
             {
                 "player_id": p["player_id"],
@@ -756,8 +964,8 @@ def _synthetic_prop_lines(league: str, players: List[Dict]) -> List[Dict]:
                 "line": _line,
                 "line_for_calc": _line,
                 "line_source": "synthetic",
-                "odds_over": random.choice([-130, -120, -110, 100, 110]),
-                "odds_under": random.choice([-130, -120, -110, 100, 110]),
+                "odds_over": -110,
+                "odds_under": -110,
             }
         )
     return lines
@@ -802,20 +1010,26 @@ def _internal_nba_prop_lines(players: List[Dict]) -> List[Dict]:
 
 
 def _internal_generic_prop_lines(league: str, players: List[Dict]) -> List[Dict]:
+    """Dev/fallback lines — primary market per role only (never WR Rush Yds)."""
+    if league == "UFC":
+        return []  # never invent UFC markets
     out = []
-    prop_types = _LEAGUE_PROP_TYPES.get(league, ["points"])
     for p in players:
-        prop_type = random.choice(prop_types)
+        role = p.get("role") or position_to_role(league, p.get("position"))
+        prop_type = primary_market_for_role(league, role)
+        if not prop_type:
+            continue
+        if not market_allowed(league, role, prop_type, line_source="internal_odds_api"):
+            continue
         low, high = _PROP_LINE_RANGES.get(prop_type, (1.5, 20.5))
         minutes = _clamp(float(p.get("projected_minutes", 24.0) or 24.0), 8.0, 42.0)
         usage = _clamp(float(p.get("usage_score", 0.25) or 0.25), 0.05, 1.0)
-        # Normalize to 0-1 so every prop type scales inside its own realistic band.
         level = _clamp((minutes / 42.0) * 0.35 + usage * 0.65, 0.05, 0.98)
         projection = low + (high - low) * level
-        projection += random.uniform(-(high - low) * 0.08, (high - low) * 0.08)
+        seed = abs(hash(f"{p.get('player_id')}-{prop_type}")) % 1000
+        projection += ((seed / 1000.0) - 0.5) * (high - low) * 0.12
         projection = _clamp(projection, low, high)
-        # Build a market line near projection with directional noise so picks aren't uniform.
-        line = _to_half_step(_clamp(projection + random.uniform(-0.9, 0.9), low, high))
+        line = _to_half_step(_clamp(projection + ((seed % 7) - 3) * 0.15, low, high))
         out.append(
             {
                 "player_id": p["player_id"],
@@ -824,8 +1038,8 @@ def _internal_generic_prop_lines(league: str, players: List[Dict]) -> List[Dict]
                 "line_for_calc": line,
                 "line_source": "internal_odds_api",
                 "projection": _to_half_step(projection),
-                "odds_over": random.choice([-130, -120, -110, 100, 110]),
-                "odds_under": random.choice([-130, -120, -110, 100, 110]),
+                "odds_over": -110,
+                "odds_under": -110,
             }
         )
     return out
@@ -857,19 +1071,16 @@ def _closest_price(entries: List, consensus: float) -> int:
 
 
 def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
-    """Attach real ESPN/DraftKings lines to players in our pool.
-
-    Raw rows carry the ESPN athlete id in `player_id` (the preferred match key,
-    since our pool ids are ESPN athlete ids) and an optional `norm_name`
-    fallback. Emits internal line dicts tagged line_source='espn_props'.
-    """
+    """Attach real ESPN/DraftKings lines to eligible players only."""
     by_id: Dict[str, Dict] = {}
     by_name: Dict[str, Dict] = {}
+    league = ""
     for p in players:
         pid = str(p.get("player_id", "")).strip()
         if pid:
             by_id.setdefault(pid, p)
         by_name.setdefault(_norm_name(p.get("name", "")), p)
+        league = league or str(p.get("league") or "")
     out = []
     for row in raw_rows:
         p = None
@@ -882,10 +1093,15 @@ def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
                 p = by_name.get(nm)
         if not p:
             continue
+        lg = str(p.get("league") or league)
+        role = p.get("role") or position_to_role(lg, p.get("position"))
+        pt = str(row.get("prop_type") or "")
+        if not market_allowed(lg, role, pt, line_source="espn_props"):
+            continue
         line = row["line"]
         item = {
             "player_id": p["player_id"],
-            "prop_type": row["prop_type"],
+            "prop_type": pt,
             "line": line,
             "line_for_calc": line,
             "line_source": "espn_props",
@@ -950,6 +1166,41 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
         return "home_runs" if "home_runs" in set(_LEAGUE_PROP_TYPES.get(league, [])) else None
     allowed = set(_LEAGUE_PROP_TYPES.get(league, []))
     if not allowed:
+        return None
+    # American football markets (NFL / NCAAF / CFL).
+    # Only full-game Total O/U lines — reject milestones, halves, quarters,
+    # longest-play, TD scorers (those pollute lines with 0.5 / 50.5 junk).
+    if league in ("NFL", "NCAAF", "CFL"):
+        if any(
+            x in n
+            for x in (
+                "milestone",
+                "1st half",
+                "1st quarter",
+                "first half",
+                "first quarter",
+                "longest",
+                "touchdown scorer",
+                "anytime",
+                "passing +",
+                "rushing +",
+                "receiving +",
+                "plus rushing",
+                "plus receiving",
+            )
+        ):
+            return None
+        football = [
+            ("passing_yards", ("total passing yards",)),
+            ("rushing_yards", ("total rushing yards",)),
+            ("receiving_yards", ("total receiving yards",)),
+            ("receptions", ("total receptions",)),
+        ]
+        for internal, keywords in football:
+            if internal not in allowed:
+                continue
+            if any(kw in n for kw in keywords):
+                return internal
         return None
     # MLB strikeouts: only starting-pitcher Total Strikeouts (e.g. 4.5 / 6.5).
     # "Strikeouts (Batter) …" would otherwise collapse every batter to line 1.
@@ -1036,13 +1287,24 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
     (athlete, prop_type). Each (athlete, prop_type) appears twice in the feed
     (Over then Under) with the same target; we keep the shared line and pair
     the two prices in feed order.
+
+    Uses the same look-ahead as the schedule helper: if today's scoreboard is
+    empty (e.g. Wed looking at Thu Night Football), walk forward up to 7 days
+    so posted prop books are not missed.
     """
     sb_url = f"https://site.api.espn.com/apis/site/v2/sports/{espn_sport}/{espn_league}/scoreboard"
+    events: List[Dict] = []
     try:
         now_et = datetime.now(ZoneInfo("America/New_York"))
-        r = requests.get(sb_url, params={"dates": now_et.strftime("%Y%m%d")}, timeout=12)
-        r.raise_for_status()
-        events = (r.json() or {}).get("events") or []
+        use_date = now_et.date()
+        for d in range(0, 8):
+            probe = (use_date + timedelta(days=d)).strftime("%Y%m%d")
+            r = requests.get(sb_url, params={"dates": probe}, timeout=12)
+            r.raise_for_status()
+            batch = (r.json() or {}).get("events") or []
+            if batch:
+                events = batch
+                break
     except Exception:
         return []
 
@@ -1068,7 +1330,8 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
             continue
         page = 1
         page_count = 1
-        while page <= page_count and page <= 12:
+        # NFL/NCAAF DK feeds can exceed 50 pages; keep a hard ceiling.
+        while page <= page_count and page <= 60:
             url = f"{comp_base}/odds/{pid}/propBets"
             try:
                 r = requests.get(
@@ -1143,13 +1406,14 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
 
     rows = []
     for (athlete_id, prop_type), slot in agg.items():
-        prices = slot["prices"]
-        odds_over = prices[0] if len(prices) >= 1 else -110
-        # Milestone / over-only markets have no Under side.
+        prices = [p for p in (slot.get("prices") or []) if p is not None]
+        # ESPN football often posts the line without american prices — leave
+        # odds None so the engine uses its projection model (do not fake -110).
+        odds_over = prices[0] if len(prices) >= 1 else None
         if slot.get("over_only"):
             odds_under = None
         else:
-            odds_under = prices[1] if len(prices) >= 2 else -110
+            odds_under = prices[1] if len(prices) >= 2 else None
         row = {
             "player_id": athlete_id,
             "norm_name": None,
@@ -1223,9 +1487,15 @@ def fetch_prop_lines(league: str, players: List[Dict], use_real: bool = True) ->
                         "player_id": p.get("player_id"),
                         "player_name": p.get("name"),
                         "team": p.get("team"),
-                        "prop_type": random.choice(_LEAGUE_PROP_TYPES.get(league, ["points"])),
+                        "prop_type": primary_market_for_role(
+                            league, p.get("role") or position_to_role(league, p.get("position"))
+                        )
+                        or next(iter(_LEAGUE_PROP_TYPES.get(league) or ["points"]), "points"),
                     }
                     for p in players
+                    if primary_market_for_role(
+                        league, p.get("role") or position_to_role(league, p.get("position"))
+                    )
                 ],
             }
             resp = requests.post(f"{ODDS_ENGINE_URL}/player-props/batch", json=payload, timeout=8)

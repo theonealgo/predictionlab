@@ -1,5 +1,12 @@
+# SOCCER UNLOCKED (:5052 / premerge) — results share image only
+
+Owner 2026-09-17: **UNLOCK SOCCER** for bottom Results Image on `/soccer-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
+
+Prior lock notes preserved below for when this miss is closed.
+
 ---
-description: Soccer picks/results UI locked on :5052 — do not edit unless UNLOCK SOCCER
+
+description: SOCCER LOCKED (:5052 / premerge)
 alwaysApply: true
 ---
 
@@ -7,27 +14,28 @@ alwaysApply: true
 
 Soccer picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
 
-Do **not** modify soccer unless the owner says:
+Do **not** modify Soccer unless the owner says:
 
 **UNLOCK SOCCER**
 
-Fixing NFL, CFL, golf, chrome, or production outages is **not** a soccer unlock.
-Do not invent Books ML / model numbers to fill blanks.
+Owner 2026-09-16: chart duplicate header (`header.top` + `pl2-header`) —
+page title is now `h1.page-title`. Miss closed — lock again.
 
-Owner 2026-09-11: if the checker or owner catches a real soccer miss
-(league dropdowns missing / dead, ESPN browse leagues not selectable,
-shared header/footer not the site chrome), unlock that miss and fix it.
-Do not restyle cards.
+Owner 2026-09-16: market-vs-model audit (isolation) + taxonomy labeling
+(display only). Historical 1X2 ingest continues in isolation only.
 
 ## Do not touch
 
 - `/soccer-picks`, `/soccer-results`, `/soccer-results?view=chart`
-- `soccer_ui_fixup.py`, `soccer_pl_xg.py`, `soccer_league_catalog.py`
-- Soccer Cards|Chart, card HTML
+- Soccer Cards|Chart, card HTML, week/league nav
+- `soccer_ui_fixup.py`, `soccer_pl_xg.py`, `soccer_models.py` prediction math
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is Soccer
 
 ## Allowed without unlock
 
 - Other sports
-- Checker reports that only *read* soccer pages
+- Checker reports that only *read* Soccer pages
+- Isolation research under `~/Documents/Personal/soccer/` when the owner
+  asks for research only (no merge / no site edits)
 
 Do not put lock text on user-facing HTML.

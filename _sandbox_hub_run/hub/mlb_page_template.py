@@ -267,8 +267,11 @@ def _force_cards_chart_after_date_nav(html: str) -> str:
 .pv-btn.active{background:#0c1e3a;color:#fff;}
 .date-section.chart-mode .games-grid,
 .date-section.chart-mode .game-card-stack{display:none!important;}
-.date-section.chart-mode .chart-table-wrap{display:block!important;max-height:78vh;overflow:auto;
-border:1px solid rgba(15,23,42,0.12);border-radius:10px;-webkit-overflow-scrolling:touch;}
+.date-section.chart-mode .chart-table-wrap,
+.date-section.chart-mode .chart-table-wrap[hidden]{
+  display:block!important;max-height:78vh;overflow:auto;
+  border:1px solid rgba(15,23,42,0.12);border-radius:10px;-webkit-overflow-scrolling:touch;
+}
 </style>
 """
     controls = (
@@ -317,7 +320,11 @@ border:1px solid rgba(15,23,42,0.12);border-radius:10px;-webkit-overflow-scrolli
         "if(typeof window.setPicksView==='function')return;"
         "window.setPicksView=function(mode){var chart=mode==='chart';"
         "document.querySelectorAll('.date-section').forEach(function(s){"
-        "s.classList.toggle('chart-mode',chart);});"
+        "s.classList.toggle('chart-mode',chart);"
+        "var w=s.querySelector('.chart-table-wrap');"
+        "if(w){if(chart){w.removeAttribute('hidden');w.hidden=false;}"
+        "else{w.setAttribute('hidden','');w.hidden=true;}}"
+        "});"
         "var cb=document.getElementById('pvCardsBtn'),hb=document.getElementById('pvChartBtn');"
         "if(cb)cb.classList.toggle('active',!chart);"
         "if(hb)hb.classList.toggle('active',chart);};});</script>"
@@ -339,13 +346,12 @@ def apply_mlb_picks_template(html: str, *, sport: str, which: str = "picks") -> 
         # Controls first so the scaffold in sandbox_fixup sees setPicksView and does
         # not wrap the real date-sections in a second (pc-slate) section.
         html = _force_cards_chart_after_date_nav(html)
-    try:
-        from sandbox_fixup import inject_picks_chart_tabs
+        try:
+            from sandbox_fixup import inject_picks_chart_tabs
 
-        html = inject_picks_chart_tabs(html, sport=sport_l, markets=["moneyline"])
-    except Exception:
-        pass
-    if which == "picks":
+            html = inject_picks_chart_tabs(html, sport=sport_l, markets=["moneyline"])
+        except Exception:
+            pass
         html = _ensure_today_previews(html, sport=sport_l)
     try:
         from share_chrome import ensure_share_and_social_chrome

@@ -861,7 +861,12 @@ def render_golf_board_html(event_id: str | None = None) -> tuple[str, dict[str, 
                 cell = "—"
             else:
                 wp_s = f"{float(wp) * 100:.1f}%" if wp is not None else "—"
-                cell = f'<span class="golf-mrank">#{r}</span> <span class="golf-mpct">{wp_s}</span>'
+                cell = (
+                    f'<div class="golf-model-cell">'
+                    f'<span class="golf-mrank">#{r}</span>'
+                    f'<span class="golf-mpct">{wp_s}</span>'
+                    f"</div>"
+                )
             model_tds.append(f"<td>{cell}</td>")
         rows.append(
             "<tr>"

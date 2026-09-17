@@ -1,4 +1,4 @@
-"""Soccer checker must fail when ESPN browse leagues are dropped."""
+"""Soccer checker must fail when active browse leagues are dropped."""
 from __future__ import annotations
 
 import sys
@@ -22,6 +22,11 @@ from soccer_league_catalog import (  # noqa: E402
 )
 
 
+def test_active_catalog_is_fifteen_leagues():
+    assert len(SOCCER_LEAGUE_ORDER) == 15
+    assert len(ESPN_BROWSE_LEAGUES) == 15
+
+
 def test_every_espn_browse_name_maps_to_catalog():
     unmapped = [
         name
@@ -29,8 +34,7 @@ def test_every_espn_browse_name_maps_to_catalog():
         if name.lower() not in _SOCCER_LEAGUE_CANONICAL
     ]
     assert unmapped == []
-    assert len(ESPN_BROWSE_LEAGUES) == 148
-    assert len(SOCCER_LEAGUE_ORDER) >= 148
+    assert len(SOCCER_LEAGUE_ORDER) == len(ESPN_BROWSE_LEAGUES)
 
 
 def test_missing_espn_leagues_empty_when_full_catalog_listed():
@@ -49,12 +53,12 @@ def test_missing_espn_leagues_empty_when_full_catalog_listed():
     assert missing_espn_browse_headings(html) == []
 
 
-def test_missing_espn_leagues_fails_when_asia_dropped():
-    keep = [n for n in SOCCER_LEAGUE_ORDER if n != "Japanese J.League"]
+def test_missing_espn_leagues_fails_when_active_league_dropped():
+    keep = [n for n in SOCCER_LEAGUE_ORDER if n != "Swiss Super League"]
     options = "".join(f"<option>{name} · Live</option>" for name in keep)
     html = f'<select id="league">{options}</select>'
     missing = missing_espn_browse_leagues(html)
-    assert "Japanese J.League" in missing
+    assert "Swiss Super League" in missing
     assert missing_espn_browse_headings(html) == list(ESPN_BROWSE_HEADINGS)
 
 
@@ -74,21 +78,18 @@ def test_heading_check_does_not_match_european_substring():
         '<select id="soccer-region">'
         "<option>All</option>"
         "<option>Top Competitions</option>"
-        "<option>USA, Mexico &amp; CONCACAF</option>"
+        "<option>USA &amp; Canada</option>"
         "<option>Europe</option>"
-        "<option>Internationals</option>"
         "<option>South America</option>"
-        "<option>Asia</option>"
-        "<option>Africa</option>"
         "</select>"
-        '<select id="league"><option>UEFA European Championship</option></select>'
+        '<select id="league"><option>English Premier League</option></select>'
     )
     assert missing_espn_browse_headings(html) == []
 
 
 def test_every_espn_browse_league_has_own_picks_and_results_url():
     pages = espn_browse_league_pages()
-    assert len(pages) == 148
+    assert len(pages) == 15
     slugs = [p["slug"] for p in pages]
     assert all(slugs)
     assert all(p["picks"].startswith("/soccer-picks?league=") for p in pages)

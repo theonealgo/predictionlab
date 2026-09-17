@@ -159,6 +159,39 @@ def test_lock_card_json_freezes_full_face():
     assert moved.get("face_pick_team") == "Tigers"
 
 
+def test_published_face_does_not_recompute_from_ensemble():
+    """Locked face_* must survive _format_published_card_face (no day drift)."""
+    import NHL77FINAL as N
+
+    snap = {
+        "ensemble_prob": 50.0,
+        "elo_prob": 50.0,
+        "xgb_prob": 50.0,
+        "face_home_prob": 62.0,
+        "face_away_prob": 38.0,
+        "face_pick_team": "Away Team",
+        "face_pick_confidence": 62.0,
+        "face_model_label": "Sharp Consensus",
+        "predicted_winner": "Away Team",
+        "pl_model_home_ml": 140,
+        "pl_model_away_ml": -165,
+    }
+    card = {
+        "game_id": "NFL_1",
+        "home_team_id": "Home Team",
+        "away_team_id": "Away Team",
+        "stored_lock_card": snap,
+        "_picks_locked": True,
+        "ensemble_prob": 71.0,  # live rebuild noise — must not win
+        "elo_prob": 71.0,
+    }
+    N._format_published_card_face(card, sport="NFL")
+    assert card["face_home_prob"] == 62.0
+    assert card["face_away_prob"] == 38.0
+    assert card["face_pick_team"] == "Away Team"
+    assert card["ensemble_prob"] == 50.0
+
+
 def test_published_card_fills_blank_chrome_once():
     import NHL77FINAL as N
 

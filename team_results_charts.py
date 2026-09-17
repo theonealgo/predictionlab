@@ -586,7 +586,18 @@ def nfl_card_consensus_games(html: str) -> list[dict]:
             counts: dict[str, int] = {}
             for side in sides:
                 counts[side] = counts.get(side, 0) + 1
-            maj_side, maj_n = max(counts.items(), key=lambda kv: kv[1])
+            ranked = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+            # True 3–3: no majority — one Split row graded as push.
+            if len(ranked) >= 2 and ranked[0][1] == ranked[1][1]:
+                games.append(
+                    {
+                        "date": dk,
+                        "label": "3/6 Split / no consensus",
+                        "grade": "PUSH",
+                    }
+                )
+                continue
+            maj_side, maj_n = ranked[0]
             dissent = [
                 n for n in _NFL_SIX_MODELS
                 if n in picks and picks[n][0] != maj_side
@@ -663,6 +674,8 @@ def _apply_nfl_consensus_from_cards(html: str, cards_html: str | None = None) ->
             labels.append(g["label"])
     if "6/6 unanimous" not in labels:
         labels.insert(0, "6/6 unanimous")
+    if "3/6 Split / no consensus" not in labels:
+        labels.append("3/6 Split / no consensus")
 
     def grades(rows: list[dict], label: str) -> list[str]:
         return [g["grade"] for g in rows if g["label"] == label]
@@ -2709,6 +2722,33 @@ def _hide_blank_books_ml_lines(html: str) -> str:
     )
 
 
+def _hide_empty_books_spread_total(html: str) -> str:
+    """Omit Books spread / Books total chips and detail rows when value is blank."""
+    if not html:
+        return html
+    # Face line-chips
+    html = re.sub(
+        r'<div class="line-chip[^"]*">\s*'
+        r'<div class="line-chip-label">\s*Books?\s*(?:Spread|Total)\s*</div>\s*'
+        r'<div class="line-chip-val">\s*(?:—|&mdash;|&ndash;|N/A|–|-)?\s*</div>\s*'
+        r"</div>",
+        "",
+        html,
+        flags=re.I,
+    )
+    # Details sf-items
+    html = re.sub(
+        r'<div class="sf-item"[^>]*>\s*'
+        r'<span class="sf-label">\s*Books?\s*(?:Spread|Total)\s*</span>\s*'
+        r'<span class="sf-val">\s*(?:—|&mdash;|&ndash;|N/A|–|-)?\s*</span>\s*'
+        r"</div>\s*",
+        "",
+        html,
+        flags=re.I,
+    )
+    return html
+
+
 def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
     sport_u = _sport_key(sport)
     if sport_u not in RESULTS_SLUGS or not html or "<" not in html:
@@ -2770,6 +2810,8 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
         html = _apply_four_model_consensus_meanings(html, cards_html=cards_src)
     if sport_u in ("WNBA", "NFL", "CFL", "NCAAF"):
         html = _apply_last_night_windows(html, cards_html=cards_src)
+    if sport_u == "CFL":
+        html = _hide_empty_books_spread_total(html)
     if sport_u != "NFL":
         html = _strip_empty_xsharp_bucket_rows(html)
     if not _has_signed_off_consensus_charts(html) and _charts_are_empty_stub(html):
@@ -2813,10 +2855,18 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
     if sport_u == "NFL":
         html = apply_nfl_card_aggregates(html, cards_src)
         html = _apply_nfl_cards_chart_split(html, view_l)
-    if sport_u in ("WNBA", "NCAAF") and "H2H Last 10" in html:
+    if sport_u in ("WNBA", "NCAAF", "CFL") and "H2H Last 10" in html:
         html = _apply_h2h_faces(html, sport_u)
     if sport_u in ("NCAAF", "CFL") and "game-card" in html and "H2H Last 10" in html:
         html = _fill_game_card_h2h(html, sport_u)
+    if sport_u == "CFL" and "data-pick-card" in html:
+        html = _inject_cfl_consensus_hist_chips(html)
+        html = re.sub(
+            r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
+            "",
+            html,
+            flags=re.I,
+        )
     if MARKER not in html:
         if re.search(r"</body\s*>", html, flags=re.I):
             html = re.sub(r"</body\s*>", MARKER + "\n</body>", html, count=1, flags=re.I)
@@ -3121,29 +3171,91 @@ def _meeting_keys(sport: str, home: str, away: str):
 
 def _load_meetings(sport: str) -> dict:
     path = _db_path()
-    if not path.is_file():
-        return {}
     out: dict = defaultdict(list)
+    if path.is_file():
+        try:
+            con = sqlite3.connect(str(path))
+            rows = con.execute(
+                """
+                SELECT home_team_id, away_team_id, home_score, away_score, game_date
+                FROM games
+                WHERE sport = ? AND home_score IS NOT NULL AND away_score IS NOT NULL
+                ORDER BY date(game_date) DESC
+                """,
+                (sport,),
+            ).fetchall()
+            con.close()
+            for home, away, hs, aws, dt in rows:
+                ch, ca = _meeting_keys(sport, home, away)
+                if not ch or not ca:
+                    continue
+                rec = (home, away, float(hs), float(aws), str(dt or "")[:10])
+                out[(ch, ca)].append(rec)
+        except Exception:
+            pass
+    # CFL finals live in the isolation pipeline, not sports_predictions DB.
+    if _sport_key(sport) == "CFL" and not out:
+        out = _load_cfl_isolation_meetings()
+    elif _sport_key(sport) == "CFL":
+        for k, rows in _load_cfl_isolation_meetings().items():
+            out[k].extend(rows)
+    return out
+
+
+def _load_cfl_isolation_meetings() -> dict:
+    """H2H history from CFL isolation DB (main sports DB has no CFL rows)."""
+    out: dict = defaultdict(list)
+    db = Path.home() / "Documents" / "Personal" / "cfl" / "database" / "cfl_sandbox.db"
+    if db.is_file():
+        try:
+            con = sqlite3.connect(str(db))
+            rows = con.execute(
+                """
+                SELECT home_team, away_team, home_score, away_score, game_date
+                FROM cfl_games
+                WHERE home_score IS NOT NULL AND away_score IS NOT NULL
+                ORDER BY game_date DESC
+                """
+            ).fetchall()
+            con.close()
+            for home, away, hs, aws, dt in rows:
+                ch, ca = _meeting_keys("CFL", home, away)
+                if not ch or not ca:
+                    continue
+                out[(ch, ca)].append(
+                    (home, away, float(hs), float(aws), str(dt or "")[:10])
+                )
+        except Exception:
+            pass
+    if out:
+        return out
+    # Fallback: graded payload finals only.
     try:
-        con = sqlite3.connect(str(path))
-        rows = con.execute(
-            """
-            SELECT home_team_id, away_team_id, home_score, away_score, game_date
-            FROM games
-            WHERE sport = ? AND home_score IS NOT NULL AND away_score IS NOT NULL
-            ORDER BY date(game_date) DESC
-            """,
-            (sport,),
-        ).fetchall()
-        con.close()
+        try:
+            from team_tabbed_results import build_cfl_payload
+        except ImportError:
+            from iso_hub.team_tabbed_results import build_cfl_payload
+
+        finals = (build_cfl_payload() or {}).get("finals") or []
     except Exception:
         return {}
-    for home, away, hs, aws, dt in rows:
-        ch, ca = _meeting_keys(sport, home, away)
+    for g in finals:
+        home = str(
+            g.get("home_team_id") or g.get("home") or g.get("home_team") or ""
+        ).strip()
+        away = str(
+            g.get("away_team_id") or g.get("away") or g.get("away_team") or ""
+        ).strip()
+        try:
+            hs = float(g.get("home_score"))
+            aws = float(g.get("away_score"))
+        except (TypeError, ValueError):
+            continue
+        dt = str(g.get("game_date") or "")[:10]
+        ch, ca = _meeting_keys("CFL", home, away)
         if not ch or not ca:
             continue
-        rec = (home, away, float(hs), float(aws), str(dt or "")[:10])
-        out[(ch, ca)].append(rec)
+        out[(ch, ca)].append((home, away, hs, aws, dt))
     return out
 
 
@@ -3366,12 +3478,23 @@ def _apply_h2h_faces(html: str, sport: str) -> str:
     elif sport_u == "NCAAF":
         html = _fill_ncaaf_espn_h2h(html)
         html = _fill_ncaaf_card_gaps(html)
+        html = _fill_ncaaf_g2_td_from_v2(html)
         html = _fill_efficiency_na(html, "NCAAF")
         # Do not copy another model's % onto Efficiency N/A (ML-only FCS cards).
     html = _ensure_h2h_attr_first_meeting(html)
     html = _sync_h2h_chips(html)
-    html = _inject_face_h2h_chips(html)
-    html = _sync_h2h_face_chips(html)
+    if sport_u == "NCAAF":
+        # Face chip = Consensus Historical Record (not duplicate H2H).
+        html = _inject_ncaaf_consensus_hist_chips(html)
+    elif sport_u == "NFL":
+        html = _inject_nfl_consensus_hist_chips(html)
+    elif sport_u == "CFL":
+        html = _inject_cfl_consensus_hist_chips(html)
+    elif sport_u == "WNBA":
+        html = _inject_wnba_consensus_hist_chips(html)
+    else:
+        html = _inject_face_h2h_chips(html)
+        html = _sync_h2h_face_chips(html)
     html = _fill_blank_h2h_chips(html)
     return html
 
@@ -3396,8 +3519,17 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
     html = apply_team_picks_copy_all(html, sport_u)
     if sport_u == "CFL":
         html = _hide_blank_books_ml_lines(html)
+        html = _hide_empty_books_spread_total(html)
     if sport_u == "NFL":
         html = _strip_nfl_duplicate_h2h(html)
+    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL"):
+        # Face shows Consensus Historical Record; keep one H2H in details only.
+        html = re.sub(
+            r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
+            "",
+            html,
+            flags=re.I,
+        )
     return html
 
 
@@ -4076,7 +4208,7 @@ def _inject_face_h2h_chips(html: str) -> str:
     def _strip(m: re.Match[str]) -> str:
         raw = next(it, "")
         val = "—" if _is_fake_h2h(raw) else raw
-        if "h2h-face-chip" in m.group(0):
+        if "h2h-face-chip" in m.group(0) or "consensus-hist-chip" in m.group(0):
             return m.group(0)
         chip = (
             '<div class="line-chip h2h-face-chip">'
@@ -4086,6 +4218,928 @@ def _inject_face_h2h_chips(html: str) -> str:
         return m.group(1) + chip
 
     return re.sub(r'(<div class="lines-strip">)', _strip, html, flags=re.I)
+
+
+_NCAAF_CONSENSUS_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+_CFL_CONSENSUS_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+_SOCCER_CONSENSUS_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+_WNBA_CONSENSUS_MODELS = (
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+_UFC_CONSENSUS_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Efficiency",
+    "Sharp Consensus",
+)
+
+
+def _pc_home_pct_for_model(card: str, name: str) -> float | None:
+    m = re.search(
+        rf'<div class="pc-name">\s*{re.escape(name)}\s*</div>\s*'
+        r'<div class="pc-val"[^>]*>\s*([^<]+)',
+        card,
+        flags=re.I,
+    )
+    if not m:
+        return None
+    raw = (m.group(1) or "").strip().replace("%", "")
+    if raw.lower() in {"", "n/a", "na", "—", "–", "-"}:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _ncaaf_pc_home_pct(card: str, name: str) -> float | None:
+    return _pc_home_pct_for_model(card, name)
+
+
+def _norm_team_token(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (name or "").strip().lower())
+
+
+def _pc_model_ml_side(
+    card: str, name: str, *, home: str, away: str
+) -> str | None:
+    """HOME/AWAY from pc-side class or team label — not face % (away can be 92%)."""
+    m = re.search(
+        rf'<div class="pc-name">\s*{re.escape(name)}\s*</div>\s*'
+        r'<div class="pc-val"[^>]*>\s*([^<]*)</div>\s*'
+        r'<div class="pc-side([^"]*)"[^>]*>\s*([^<]*)',
+        card,
+        flags=re.I,
+    )
+    if not m:
+        return None
+    raw_pct = (m.group(1) or "").strip().replace("%", "")
+    if raw_pct.lower() in {"", "n/a", "na", "—", "–", "-"}:
+        return None
+    classes = m.group(2) or ""
+    side_txt = (m.group(3) or "").strip()
+    if re.search(r"\bhome\b", classes, flags=re.I):
+        return "HOME"
+    if re.search(r"\baway\b", classes, flags=re.I):
+        return "AWAY"
+    side_n = _norm_team_token(side_txt)
+    home_n = _norm_team_token(home)
+    away_n = _norm_team_token(away)
+    if side_n and home_n and (side_n in home_n or home_n in side_n):
+        return "HOME"
+    if side_n and away_n and (side_n in away_n or away_n in side_n):
+        return "AWAY"
+    # Last resort: treat pc-val as home win% only when side text is missing.
+    try:
+        pct = float(raw_pct)
+    except ValueError:
+        return None
+    return "HOME" if pct >= 50.0 else "AWAY"
+
+
+def _card_dissent_for_models(
+    card: str, models: tuple[str, ...]
+) -> tuple[int, tuple[str, ...]] | None:
+    """Return (agree_n, dissent_models) for a card's Pick Confidence box."""
+    hm = re.search(r'data-home="([^"]*)"', card[:2000], flags=re.I)
+    am = re.search(r'data-away="([^"]*)"', card[:2000], flags=re.I)
+    home = html_lib.unescape(hm.group(1) if hm else "")
+    away = html_lib.unescape(am.group(1) if am else "")
+    sides: dict[str, str] = {}
+    for name in models:
+        side = _pc_model_ml_side(card, name, home=home, away=away)
+        if side in ("HOME", "AWAY"):
+            sides[name] = side
+    panel = len(models)
+    min_maj = panel // 2 + 1
+    if len(sides) < 2:
+        return None
+    counts = Counter(sides.values())
+    majority_side, agree_n = counts.most_common(1)[0]
+    # Even split (e.g. 2–2 on a 4-model card): still label the pattern.
+    if (
+        len(counts) >= 2
+        and counts.most_common(2)[0][1] == counts.most_common(2)[1][1]
+    ):
+        # Dissent = models on the non-first side in model order (stable key).
+        first_side = next(
+            (sides[n] for n in models if n in sides), majority_side
+        )
+        dissent = tuple(
+            name for name in models if sides.get(name) not in (None, first_side)
+        )
+        return agree_n, dissent
+    if agree_n < min_maj:
+        return None
+    dissent = tuple(
+        name for name in models if sides.get(name) not in (None, majority_side)
+    )
+    return agree_n, dissent
+
+
+def _ncaaf_card_dissent(
+    card: str,
+) -> tuple[int, tuple[str, ...]] | None:
+    return _card_dissent_for_models(card, _NCAAF_CONSENSUS_MODELS)
+
+
+def _wnba_nba_consensus_finals(sport: str) -> list[dict]:
+    """Finals for Consensus Historical — prefer graded results cards (4 models).
+
+    DB prediction rows omit Efficiency (null logistic). Results cards include
+    Efficiency after attach/grade, matching the on-page 4/4 Unanimous table.
+    """
+    sport_u = _sport_key(sport)
+    fallback: list[dict] = []
+    sources: list[str] = []
+    src = _CHART_SOURCE_HTML.get(sport_u) or ""
+    if src:
+        sources.append(src)
+    # Results page HTML cache (built with Efficiency graded).
+    try:
+        import sys
+
+        mod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
+        cache = getattr(mod, "_SPORT_RESULTS_CACHE", None) or {}
+        for key in (
+            f"{sport_u}_daily_results_html_v5",
+            f"{sport_u}_daily_results_html_v4",
+            f"{sport_u}_daily_results_html_v3",
+        ):
+            entry = cache.get(key)
+            if isinstance(entry, dict):
+                html = entry.get("html") or ""
+                if html and len(html) > 500:
+                    sources.append(html)
+                    break
+    except Exception:
+        pass
+    for html in sources:
+        try:
+            from mlb_consensus_hub import _extract_game_rows
+
+            rows = _extract_game_rows(html, limit=800)
+        except Exception:
+            rows = []
+        if not rows:
+            continue
+        if any(
+            isinstance((g.get("models") or {}).get("Efficiency"), dict) for g in rows
+        ):
+            return rows
+        if not fallback:
+            fallback = rows
+    try:
+        db_rows = _nfl_finals_from_db(limit=400, sport=sport_u)
+    except Exception:
+        db_rows = []
+    return fallback or db_rows
+
+
+def _consensus_d7_combo_lookup(
+    sport: str,
+) -> dict[tuple[int, tuple[str, ...]], tuple[int, int, float | None, int]]:
+    """Last-7-day consensus pattern W-L → (w, l, pct, pushes)."""
+    sport_u = _sport_key(sport)
+    try:
+        from mlb_consensus_hub import (
+            _consensus_combo_period_data,
+            _consensus_wl,
+        )
+    except Exception:
+        return {}
+    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER"):
+        finals = _six_model_consensus_finals("", sport_u)
+    elif sport_u in ("WNBA", "NBA"):
+        finals = _wnba_nba_consensus_finals(sport_u)
+    elif sport_u == "UFC":
+        finals = _ufc_consensus_finals()
+    else:
+        return {}
+    if not finals:
+        return {}
+    data = _consensus_combo_period_data(finals, sport=sport_u.lower())
+    if not data:
+        return {}
+    out: dict[tuple[int, tuple[str, ...]], tuple[int, int, float | None, int]] = {}
+    filter_combo = data["filter_combo"]
+    # Calendar last-7 can be empty mid-gap (WNBA paused after 8/30 while
+    # today is mid-September). Anchor to last-night key like results cards.
+    d7_items = list(data.get("d7") or [])
+    if not d7_items:
+        ln_key = str(data.get("ln_key") or "")[:10]
+        if len(ln_key) == 10 and ln_key[4] == "-":
+            try:
+                ln_dt = datetime.strptime(ln_key, "%Y-%m-%d")
+                cut = (ln_dt - timedelta(days=6)).strftime("%Y-%m-%d")
+                pool = list(data.get("d30") or []) or list(data.get("ln") or [])
+                d7_items = [
+                    a
+                    for a in pool
+                    if cut <= str(a.get("game_date") or "")[:10] <= ln_key
+                ]
+                if not d7_items and data.get("ln"):
+                    d7_items = list(data.get("ln") or [])
+            except ValueError:
+                pass
+    for folded, keys in (data.get("combo_keys") or {}).items():
+        for key in keys:
+            items = filter_combo(d7_items, folded=folded, key=key)
+            w, l, p, pct = _consensus_wl(items)
+            out[(int(folded), tuple(key))] = (w, l, pct, p)
+    return out
+
+
+def _ncaaf_d7_combo_lookup() -> dict[tuple[int, tuple[str, ...]], tuple[int, int, float | None]]:
+    raw = _consensus_d7_combo_lookup("NCAAF")
+    return {k: (v[0], v[1], v[2]) for k, v in raw.items()}
+
+
+def _consensus_hist_label(
+    folded: int,
+    dissent: tuple[str, ...],
+    w: int,
+    l: int,
+    pct: float | None,
+    *,
+    panel: int = 6,
+    pushes: int = 0,
+) -> str:
+    if w + l <= 0 and pushes <= 0:
+        rec = "0-0"
+        pct_s = "—"
+    elif pushes > 0 and w + l <= 0:
+        rec = f"0-0-{pushes}"
+        pct_s = "—"
+    elif pushes > 0:
+        rec = f"{w}-{l}-{pushes}"
+        pct_s = f"{pct:.0f}%" if pct is not None else "—"
+    else:
+        rec = f"{w}-{l}"
+        pct_s = f"{pct:.0f}%" if pct is not None else "—"
+    if folded >= panel and not dissent:
+        pattern = f"{panel}/{panel} unanimous"
+    elif folded * 2 == panel:
+        pattern = f"{folded}/{panel} Split / no consensus"
+    elif dissent:
+        pattern = f"{folded}/{panel} all but " + " and ".join(dissent)
+    else:
+        pattern = f"{folded}/{panel}"
+    return f"Consensus Record: {rec} ({pct_s}) — Last 7 Days · {pattern}"
+
+
+def _wnba_consensus_hist_label(
+    folded: int,
+    dissent: tuple[str, ...],
+    w: int,
+    l: int,
+    pct: float | None,
+    *,
+    panel: int = 4,
+    pushes: int = 0,
+) -> str:
+    """Face value: pattern name + W-L only (no 3/4 fraction)."""
+    if w + l <= 0 and pushes <= 0:
+        rec = "0-0"
+    elif pushes > 0 and w + l > 0:
+        rec = f"{w}-{l}-{pushes}"
+    elif pushes > 0:
+        rec = f"0-0-{pushes}"
+    else:
+        rec = f"{w}-{l}"
+    if folded >= panel and not dissent:
+        return f"Unanimous: {rec}"
+    if folded * 2 == panel:
+        return f"Split: {rec}"
+    if dissent:
+        who = " and ".join(dissent)
+        return f"All but {who}: {rec}"
+    return rec
+
+
+def _ncaaf_consensus_hist_label(
+    folded: int, dissent: tuple[str, ...], w: int, l: int, pct: float | None
+) -> str:
+    return _consensus_hist_label(folded, dissent, w, l, pct, panel=6)
+
+
+def _nfl_consensus_hist_label(
+    folded: int,
+    dissent: tuple[str, ...],
+    w: int,
+    l: int,
+    pct: float | None,
+    *,
+    panel: int = 6,
+    pushes: int = 0,
+) -> str:
+    """NFL face value: pattern + record only (no Last 7 Days / pct clutter).
+
+    Example: ``Consensus Record: 3/6 Split (0-0)``.
+    """
+    if w + l <= 0 and pushes <= 0:
+        rec = "0-0"
+    elif pushes > 0 and w + l > 0:
+        rec = f"{w}-{l}-{pushes}"
+    elif pushes > 0:
+        rec = f"0-0-{pushes}"
+    else:
+        rec = f"{w}-{l}"
+    if folded >= panel and not dissent:
+        pattern = f"{panel}/{panel} Unanimous"
+    elif folded * 2 == panel:
+        pattern = f"{folded}/{panel} Split"
+    elif dissent:
+        pattern = f"{folded}/{panel} all but " + " and ".join(dissent)
+    else:
+        pattern = f"{folded}/{panel}"
+    return f"Consensus Record: {pattern} ({rec})"
+
+
+def _inject_consensus_hist_chips(
+    html: str,
+    *,
+    sport: str,
+    models: tuple[str, ...],
+) -> str:
+    """Replace face H2H with Consensus Historical Record for this card's pattern."""
+    if not html or "data-pick-card" not in html:
+        return html
+    sport_u = _sport_key(sport)
+    lookup = _consensus_d7_combo_lookup(sport_u)
+    panel = len(models)
+    grade_models = models
+    # Only shrink the panel when graded finals never include a published model
+    # (e.g. NCAAF without G2). WNBA keeps the live 4-model face (Edge / XSharp /
+    # Sharp Consensus / Efficiency) so 4/4 unanimous is the best-win chip.
+    if lookup and sport_u not in ("WNBA", "NBA", "UFC", "SOCCER"):
+        lookup_panel = max((int(k[0]) for k in lookup.keys()), default=panel)
+        if lookup_panel and lookup_panel < panel:
+            try:
+                from mlb_consensus_hub import consensus_models_for_sport
+
+                finals = _six_model_consensus_finals("", sport_u)
+                graded = consensus_models_for_sport(sport_u.lower(), finals)
+                if graded and len(graded) < panel:
+                    grade_models = graded
+                    panel = len(grade_models)
+            except Exception:
+                pass
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        dissent_info = _card_dissent_for_models(stack, grade_models)
+        if dissent_info is None:
+            if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
+                label = "—"
+            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL"):
+                label = "Consensus Record: —"
+            else:
+                label = "Consensus Record: —"
+        else:
+            folded, dissent = dissent_info
+            # Even splits (3/6, 2/4) share one table row keyed by ().
+            lookup_key = (
+                (folded, ())
+                if folded * 2 == panel
+                else (folded, dissent)
+            )
+            hit = lookup.get(lookup_key)
+            if hit is None and (folded, dissent) in lookup:
+                hit = lookup.get((folded, dissent))
+            if hit is None and folded >= panel and not dissent:
+                hit = lookup.get((panel, ()))
+            if hit is None:
+                w, l, pct, pushes = 0, 0, None, 0
+            elif len(hit) >= 4:
+                w, l, pct, pushes = hit[0], hit[1], hit[2], int(hit[3] or 0)
+            else:
+                w, l, pct = hit[0], hit[1], hit[2]
+                pushes = 0
+            if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
+                label = _wnba_consensus_hist_label(
+                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                )
+            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL"):
+                label = _nfl_consensus_hist_label(
+                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                )
+            else:
+                label = _consensus_hist_label(
+                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                )
+        chip = (
+            '<div class="line-chip consensus-hist-chip">'
+            '<div class="line-chip-label">Consensus Historical Record</div>'
+            f'<div class="line-chip-val">{escape(label)}</div></div>'
+        )
+        stack = re.sub(
+            r'<div class="line-chip (?:h2h-face-chip|consensus-hist-chip)">[\s\S]*?</div>\s*</div>',
+            "",
+            stack,
+            flags=re.I,
+        )
+        if '<div class="lines-strip">' in stack:
+            stack = stack.replace(
+                '<div class="lines-strip">',
+                '<div class="lines-strip">' + chip,
+                1,
+            )
+        elif re.search(r'<div class="(?:odds-pricing-section|card-details)\b', stack):
+            # Results cards (no face lines-strip) — insert before odds / details.
+            strip = f'<div class="lines-strip">{chip}</div>\n'
+            stack = re.sub(
+                r'(<div class="(?:odds-pricing-section|card-details)\b)',
+                strip + r"\1",
+                stack,
+                count=1,
+                flags=re.I,
+            )
+        out.append(stack)
+    return "".join(out)
+
+
+def _inject_ncaaf_consensus_hist_chips(html: str) -> str:
+    return _inject_consensus_hist_chips(
+        html, sport="NCAAF", models=_NCAAF_CONSENSUS_MODELS
+    )
+
+
+def _nfl_book_fav_from_spread(stack: str) -> str | None:
+    """HOME/AWAY from Books spread when moneyline is a pick'em."""
+    hm = re.search(r'data-home="([^"]*)"', stack[:2500], flags=re.I)
+    am = re.search(r'data-away="([^"]*)"', stack[:2500], flags=re.I)
+    home = html_lib.unescape(hm.group(1) if hm else "").strip()
+    away = html_lib.unescape(am.group(1) if am else "").strip()
+    if not home or not away:
+        return None
+    spread = None
+    m = re.search(
+        r'market-k">(?:Spread|Books spread)</td>\s*'
+        r'<td class="val-books">\s*([^<]+)',
+        stack,
+        flags=re.I,
+    )
+    if m:
+        spread = html_lib.unescape(m.group(1)).strip()
+    if not spread:
+        m = re.search(
+            r'line-chip-label">Books spread</div>\s*'
+            r'<div class="line-chip-val">\s*([^<]+)',
+            stack,
+            flags=re.I,
+        )
+        if m:
+            spread = html_lib.unescape(m.group(1)).strip()
+    if not spread or spread in ("—", "-", "N/A", "PK", "pk"):
+        return None
+    # "Buffalo Bills -3" / "DET +3" / "-3"
+    low = spread.lower()
+    home_l, away_l = home.lower(), away.lower()
+    if home_l and home_l in low:
+        # Team named with a minus = favorite; with a plus = dog.
+        after = low.split(home_l, 1)[-1]
+        if re.search(r"^\s*-", after):
+            return "HOME"
+        if re.search(r"^\s*\+", after):
+            return "AWAY"
+    if away_l and away_l in low:
+        after = low.split(away_l, 1)[-1]
+        if re.search(r"^\s*-", after):
+            return "AWAY"
+        if re.search(r"^\s*\+", after):
+            return "HOME"
+    # Bare home-centric line like "-3.0" means home favorite.
+    if re.match(r"^\s*-", spread):
+        return "HOME"
+    if re.match(r"^\s*\+", spread):
+        return "AWAY"
+    return None
+
+
+def _inject_nfl_picks_card_width_css(html: str) -> str:
+    """Widen NFL pick cards so Pick Confidence wraps on words, not mid-word.
+
+    Shared 3-up grid leaves ~1/3-width cards (worse on 1-game slates). NFL-only
+    auto-fit + normal word-break; other sports unchanged.
+    """
+    if not html or 'id="nfl-picks-card-width"' in html:
+        return html
+    if "sport-nfl" not in html and 'data-sport="NFL"' not in html:
+        # Still inject — body class may be applied after; selector is sport-scoped.
+        pass
+    css = (
+        '<style id="nfl-picks-card-width">'
+        "body.sport-nfl .games-grid{"
+        "grid-template-columns:repeat(auto-fit,minmax(520px,1fr))!important;"
+        "gap:14px!important}"
+        "body.sport-nfl .game-card-stack{"
+        "max-width:none!important;width:100%!important;min-width:0}"
+        "body.sport-nfl .pick-conf-grid{gap:8px!important}"
+        "body.sport-nfl .pc-box{padding:6px 5px!important}"
+        "body.sport-nfl .pc-name,body.sport-nfl .pc-side{"
+        "word-break:normal!important;overflow-wrap:break-word!important;"
+        "hyphens:none!important;letter-spacing:0.12px!important}"
+        "body.sport-nfl .pc-name{font-size:0.64em!important}"
+        "body.sport-nfl .pc-side{font-size:0.58em!important;padding:2px 4px!important}"
+        "@media(max-width:560px){"
+        "body.sport-nfl .games-grid{grid-template-columns:1fr!important}"
+        "body.sport-nfl .pick-conf-grid{"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important}}"
+        "</style>"
+    )
+    if re.search(r"</head\s*>", html, flags=re.I):
+        return re.sub(r"</head\s*>", css + "</head>", html, count=1, flags=re.I)
+    if MARKER in html:
+        return html.replace(MARKER, css + MARKER, 1)
+    if re.search(r"</body\s*>", html, flags=re.I):
+        return re.sub(r"</body\s*>", css + "</body>", html, count=1, flags=re.I)
+    return html + css
+
+
+def _inject_nfl_consensus_hist_chips(html: str) -> str:
+    html = _inject_nfl_picks_card_width_css(html)
+    html = _inject_consensus_hist_chips(
+        html, sport="NFL", models=_NCAAF_CONSENSUS_MODELS  # same 6 models
+    )
+    return _inject_nfl_pl_vs_books_chips(html)
+
+
+def _inject_nfl_pl_vs_books_chips(html: str) -> str:
+    """Replace Books spread/total on NFL faces with best Past-30 PL vs Books signal."""
+    if not html or "data-pick-card" not in html or "lines-strip" not in html:
+        return html
+    try:
+        from zoneinfo import ZoneInfo
+
+        from mlb_consensus_hub import (
+            _pl_vs_books_rows_from_finals,
+            _pl_vs_books_slices,
+        )
+        from mlb_ui_fixup import _face_ml_favorite_side
+    except Exception:
+        return html
+
+    finals = _six_model_consensus_finals("", "NFL")
+    rows = _pl_vs_books_rows_from_finals(finals) if finals else []
+    now = datetime.now(ZoneInfo("America/New_York"))
+    today = now.strftime("%Y-%m-%d")
+    cut30 = (now.date() - timedelta(days=30)).strftime("%Y-%m-%d")
+    d30 = [
+        r
+        for r in rows
+        if cut30 <= str(r.get("game_date") or "")[:10] < today
+    ]
+    slices = (
+        _pl_vs_books_slices(d30)
+        if d30
+        else {
+            "books": [],
+            "pl": [],
+            "books_pl_agree": [],
+            "books_pl_disagree": [],
+        }
+    )
+
+    def _rec(grades: list) -> tuple[str, float | None, int]:
+        w = sum(1 for g in grades if g == "WIN")
+        l = sum(1 for g in grades if g == "LOSS")
+        p = sum(1 for g in grades if g == "PUSH")
+        decided = w + l
+        pct = (100.0 * w / decided) if decided else None
+        rec = f"{w}-{l}" + (f"-{p}" if p else "")
+        return rec, pct, decided
+
+    signals = {
+        "books": ("Books favorite", *_rec(slices.get("books") or [])),
+        "pl": ("PL favorite", *_rec(slices.get("pl") or [])),
+        "agree": ("PL and Books agree", *_rec(slices.get("books_pl_agree") or [])),
+        "disagree": (
+            "PL vs Books disagree",
+            *_rec(slices.get("books_pl_disagree") or []),
+        ),
+    }
+
+    def _best_for_card(stack: str) -> str:
+        book = _face_ml_favorite_side(stack, which="books")
+        pl = _face_ml_favorite_side(stack, which="pl")
+        # When Books ML is a pick'em, lean from the Books spread line.
+        if book is None:
+            book = _nfl_book_fav_from_spread(stack)
+        candidates: list[tuple[str, str, float | None, int]] = []
+        if book:
+            candidates.append(signals["books"])
+        if pl:
+            candidates.append(signals["pl"])
+        if book and pl and book == pl:
+            candidates.append(signals["agree"])
+        elif book and pl:
+            candidates.append(signals["disagree"])
+        if not candidates:
+            return "—"
+        graded = [c for c in candidates if c[3] > 0 and c[2] is not None]
+        if graded:
+            graded.sort(key=lambda c: (-(c[2] or 0.0), -c[3], c[0]))
+            label, rec, pct, _d = graded[0]
+        else:
+            label, rec, pct, _d = candidates[0]
+        pct_s = f"{pct:.0f}%" if pct is not None else "—"
+        return f"{label}: {rec} ({pct_s}) — Past 30 Days"
+
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        # Drop Books spread / Books total face chips (kept in Odds & Lines).
+        stack = re.sub(
+            r'<div class="line-chip">\s*'
+            r'<div class="line-chip-label">Books (?:spread|total|run line|puck line)</div>'
+            r'[\s\S]*?</div>\s*</div>',
+            "",
+            stack,
+            flags=re.I,
+        )
+        stack = re.sub(
+            r'<div class="line-chip pl-vs-books-chip">[\s\S]*?</div>\s*</div>',
+            "",
+            stack,
+            flags=re.I,
+        )
+        val = _best_for_card(stack)
+        chip = (
+            '<div class="line-chip pl-vs-books-chip">'
+            '<div class="line-chip-label">PL vs Books</div>'
+            f'<div class="line-chip-val">{escape(val)}</div></div>'
+        )
+        if '<div class="lines-strip">' in stack:
+            m = re.search(
+                r'(<div class="line-chip consensus-hist-chip">[\s\S]*?</div>\s*</div>)',
+                stack,
+                flags=re.I,
+            )
+            if m:
+                stack = stack.replace(m.group(1), m.group(1) + "\n    " + chip, 1)
+            else:
+                stack = stack.replace(
+                    '<div class="lines-strip">',
+                    '<div class="lines-strip">' + chip,
+                    1,
+                )
+        out.append(stack)
+    return "".join(out)
+
+
+def _inject_cfl_consensus_hist_chips(html: str) -> str:
+    return _inject_consensus_hist_chips(
+        html, sport="CFL", models=_CFL_CONSENSUS_MODELS
+    )
+
+
+def _inject_wnba_consensus_hist_chips(html: str) -> str:
+    # Picks may load before /wnba-results in this process — seed chart source
+    # from the results HTML cache so 4-model (incl. Efficiency) history exists.
+    if not (_CHART_SOURCE_HTML.get("WNBA") or ""):
+        try:
+            import sys
+
+            mod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
+            cache = getattr(mod, "_SPORT_RESULTS_CACHE", None) or {}
+            for key in (
+                "WNBA_daily_results_html_v5",
+                "WNBA_daily_results_html_v4",
+                "WNBA_daily_results_html_v3",
+            ):
+                entry = cache.get(key)
+                if isinstance(entry, dict):
+                    src = entry.get("html") or ""
+                    if src and len(src) > 500:
+                        set_results_chart_source("WNBA", src)
+                        break
+        except Exception:
+            pass
+    return _inject_consensus_hist_chips(
+        html, sport="WNBA", models=_WNBA_CONSENSUS_MODELS
+    )
+
+
+def _inject_soccer_consensus_hist_chips(html: str) -> str:
+    """Replace face H2H with Consensus Historical Record for this card's 6-model pattern."""
+    if not html or "data-pick-card" not in html:
+        return html
+    if not (_CHART_SOURCE_HTML.get("SOCCER") or ""):
+        try:
+            import sys
+
+            mod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
+            cache = getattr(mod, "_SPORT_RESULTS_CACHE", None) or {}
+            # Prefer any all-leagues / week cache entry with real card HTML.
+            preferred = []
+            others = []
+            for key, entry in list(cache.items()):
+                if not isinstance(key, str) or not key.startswith(
+                    "SOCCER_daily_results_html"
+                ):
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                src = entry.get("html") or ""
+                if not src or len(src) < 500:
+                    continue
+                if "_all" in key:
+                    preferred.append(src)
+                else:
+                    others.append(src)
+            for src in preferred + others:
+                set_results_chart_source("SOCCER", src)
+                break
+        except Exception:
+            pass
+    return _inject_consensus_hist_chips(
+        html, sport="SOCCER", models=_SOCCER_CONSENSUS_MODELS
+    )
+
+
+def _ufc_consensus_finals() -> list[dict]:
+    """Graded UFC fights for Consensus Historical (from results snapshot / payload)."""
+    sources: list[str] = []
+    src = _CHART_SOURCE_HTML.get("UFC") or ""
+    if src:
+        sources.append(src)
+    snap = (
+        Path(__file__).resolve().parent
+        / "_sandbox_hub_run"
+        / "locked_pages"
+        / "ufc"
+        / "results.html"
+    )
+    if snap.is_file():
+        try:
+            sources.append(snap.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            pass
+    for html in sources:
+        if not html or len(html) < 500:
+            continue
+        try:
+            from mlb_consensus_hub import _extract_game_rows
+
+            rows = _extract_game_rows(html, limit=800)
+        except Exception:
+            rows = []
+        if rows:
+            for row in rows:
+                if not row.get("league"):
+                    row["league"] = "UFC"
+            return rows
+    try:
+        from mlb_consensus_hub import build_ufc_payload
+
+        payload = build_ufc_payload() or {}
+        finals = list(payload.get("finals") or [])
+        for row in finals:
+            if not row.get("league"):
+                row["league"] = "UFC"
+        return finals
+    except Exception:
+        return []
+
+
+def _inject_ufc_consensus_hist_chips(html: str) -> str:
+    """Add Consensus Historical Record face chip on UFC pick/result cards."""
+    if not html or "data-pick-card" not in html:
+        return html
+    if not (_CHART_SOURCE_HTML.get("UFC") or ""):
+        snap = (
+            Path(__file__).resolve().parent
+            / "_sandbox_hub_run"
+            / "locked_pages"
+            / "ufc"
+            / "results.html"
+        )
+        if snap.is_file():
+            try:
+                set_results_chart_source(
+                    "UFC", snap.read_text(encoding="utf-8", errors="replace")
+                )
+            except Exception:
+                pass
+    return _inject_consensus_hist_chips(
+        html, sport="UFC", models=_UFC_CONSENSUS_MODELS
+    )
+
+
+def _fill_ncaaf_g2_td_from_v2(html: str) -> str:
+    """Restore Grinder2/Takedown N/A boxes from NCAAF v2 (display-only)."""
+    if not html or "data-pick-card" not in html:
+        return html
+    if "not available for NCAA Football yet" not in html and "Grinder2" not in html:
+        return html
+    try:
+        from NHL77FINAL import get_v2_prediction
+    except Exception:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            out.append(stack)
+            continue
+        open_tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+        hm = re.search(r'data-home="([^"]*)"', open_tag, flags=re.I)
+        am = re.search(r'data-away="([^"]*)"', open_tag, flags=re.I)
+        home = html_lib.unescape(hm.group(1) if hm else "")
+        away = html_lib.unescape(am.group(1) if am else "")
+        need = False
+        for name in ("Grinder2", "Takedown"):
+            if re.search(
+                rf'<div class="pc-name">\s*{name}\s*</div>\s*'
+                r'<div class="pc-val"[^>]*>\s*(?:N/A|—)\s*</div>',
+                rest,
+                flags=re.I,
+            ):
+                need = True
+                break
+        if need and home and away:
+            try:
+                v2 = get_v2_prediction("NCAAF", home, away, None)
+            except Exception:
+                v2 = None
+            if v2:
+                mapping = {
+                    "Grinder2": v2.get("glicko2_prob"),
+                    "Takedown": v2.get("trueskill_prob"),
+                }
+                for name, raw in mapping.items():
+                    if raw is None:
+                        continue
+                    try:
+                        pct = float(raw)
+                    except (TypeError, ValueError):
+                        continue
+                    if abs(pct) <= 1.0:
+                        pct *= 100.0
+                    pct = round(pct, 1)
+                    side = home if pct >= 50.0 else away
+                    face = pct if pct >= 50.0 else round(100.0 - pct, 1)
+                    cls = "home" if side == home else "away"
+                    rest = re.sub(
+                        rf'(<div class="pc-name">\s*{re.escape(name)}\s*</div>\s*)'
+                        r'<div class="pc-val"[^>]*>[\s\S]*?</div>\s*'
+                        r'<div class="pc-side"[^>]*>[\s\S]*?</div>',
+                        (
+                            rf'\1<div class="pc-val" style="color:#0f172a;">{face}%</div>'
+                            rf'<div class="pc-side {cls}">{escape(side)}</div>'
+                        ),
+                        rest,
+                        count=1,
+                        flags=re.I,
+                    )
+                    attr = "grinder2" if name == "Grinder2" else "takedown"
+                    if re.search(rf'data-m-{attr}="', open_tag, flags=re.I):
+                        open_tag = re.sub(
+                            rf'data-m-{attr}="[^"]*"',
+                            f'data-m-{attr}="{pct:.1f}"',
+                            open_tag,
+                            count=1,
+                            flags=re.I,
+                        )
+                    else:
+                        open_tag = open_tag[:-1] + f' data-m-{attr}="{pct:.1f}">'
+        out.append(open_tag + rest)
+    return "".join(out)
 
 
 def apply_team_picks_copy_all(html: str, sport: str) -> str:

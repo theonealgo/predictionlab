@@ -893,12 +893,18 @@ function _mlbPcTotalsRow(st, hasProj) {
 function _pcEnsureChartWrap(section) {
   if (!section) return null;
   let wrap = section.querySelector(".chart-table-wrap");
-  if (wrap) return wrap;
+  if (wrap) {
+    wrap.removeAttribute("hidden");
+    wrap.hidden = false;
+    return wrap;
+  }
   const id = section.id || "";
   const m = /^date-(.+)$/.exec(id);
   if (m) {
     const orphan = document.getElementById("chart-" + m[1]);
     if (orphan) {
+      orphan.removeAttribute("hidden");
+      orphan.hidden = false;
       section.appendChild(orphan);
       return orphan;
     }

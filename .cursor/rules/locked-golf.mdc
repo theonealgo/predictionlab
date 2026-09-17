@@ -1,4 +1,11 @@
+# GOLF UNLOCKED (:5052 / premerge) — results share image only
+
+Owner 2026-09-17: **UNLOCK GOLF** for bottom Results Image on `/golf-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
+
+Prior lock notes preserved below for when this miss is closed.
+
 ---
+
 description: Golf picks/results UI locked on :5052 — do not edit unless UNLOCK GOLF
 alwaysApply: true
 ---
@@ -11,6 +18,10 @@ Do **not** modify Golf unless the owner says:
 
 **UNLOCK GOLF**
 
+Owner 2026-09-15: board CSS served (`static/css/golf-board.css`), Active
+tournament chips as pills, tournament select chrome, stacked model
+rank/% cells. Miss closed — lock again.
+
 Fixing NFL, MLB, soccer, chrome, or production outages is **not** a Golf unlock.
 
 ## Do not touch
@@ -18,6 +29,7 @@ Fixing NFL, MLB, soccer, chrome, or production outages is **not** a Golf unlock.
 - `/golf-picks`, `/golf-results`, golf chart/card views
 - Golf Cards|Chart, card HTML
 - Any `NHL77FINAL.py` branch whose job is Golf
+- `iso_hub/golf_page.py`, `golf_live.py`, `static/css/golf-board.css`
 
 ## Allowed without unlock
 

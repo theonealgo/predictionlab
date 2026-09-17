@@ -1,6 +1,6 @@
 /* CFL isolation only — Pick Confidence: 6 boxes, one row, no horizontal slider.
    3 matchup cards per desktop row (same as other team sports). Golf excluded.
-   Content-height cards (no equal-height stretch). */
+   Equal-height cards in each row. */
 html body[data-sandbox-sport="cfl"] .games-grid,
 html body[data-sport="cfl"] .games-grid,
 html body.research-site[data-sandbox-sport="cfl"] .date-section:not(.chart-mode) .games-grid,
@@ -8,7 +8,7 @@ html body.research-site[data-sport="cfl"] .date-section:not(.chart-mode) .games-
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 12px !important;
-  align-items: start !important;
+  align-items: stretch !important;
   justify-items: stretch !important;
   width: 100% !important;
 }
@@ -42,8 +42,8 @@ html body[data-sport="cfl"] .games-grid > .game-card-stack {
   max-width: none !important;
   width: 100% !important;
   min-height: 0 !important;
-  height: auto !important;
-  align-self: start !important;
+  height: 100% !important;
+  align-self: stretch !important;
   display: flex !important;
   flex-direction: column !important;
 }
@@ -52,8 +52,8 @@ html body[data-sandbox-sport="cfl"] .game-card-stack > .game-card,
 html body[data-sport="cfl"] .game-card-stack > .game-card,
 html body[data-sandbox-sport="cfl"] .game-card-stack > .pick-card,
 html body[data-sport="cfl"] .game-card-stack > .pick-card {
-  flex: 0 0 auto !important;
-  height: auto !important;
+  flex: 1 1 auto !important;
+  height: 100% !important;
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;

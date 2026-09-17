@@ -37,27 +37,29 @@ def test_filter_href_keeps_week():
     assert "week=2026-08-31" in res
 
 
-def test_dropdown_africa_options_have_region_and_green_menu():
+def test_dropdown_active_options_have_region_and_green_menu():
     from soccer_ui_fixup import _curated_soccer_league_options, soccer_league_dropdown_html
 
     opts = _curated_soccer_league_options(kind="picks", selected_region="all", week="2026-09-07")
-    africa = [o for o in opts if "africa" in (o.get("regions") or "").split(",")]
-    assert africa, "Africa leagues must carry regions=africa"
+    europe = [o for o in opts if "europe" in (o.get("regions") or "").split(",")]
+    assert europe, "Europe leagues must carry regions=europe"
     html = soccer_league_dropdown_html(opts, kind="picks", selected_region="all", week="2026-09-07")
-    assert 'data-region="africa"' in html or "data-region=\"africa" in html
+    assert 'data-region="top,europe"' in html
     assert "filterLeagues" in html
     assert "go(true)" not in html
     assert ".soccer-dd-opt.in-season" in html
-    assert html.count('data-region=') >= 10
+    assert html.count("data-region=") >= 10
+    assert "Swiss Super League" in html
+    assert len([o for o in opts if o.get("slug")]) == 15
 
 
 def test_week_nav_has_prev_this_next():
     html = soccer_week_nav_html(kind="picks", region="all", week="2026-09-07")
     assert 'id="soccer-week-nav"' in html
     assert "week=2026-08-31" in html
-    assert "week=2026-09-07" in html
     assert "week=2026-09-14" in html
-    assert "This week" in html
+    assert "soccer-week-current" in html
+    assert "This week" in html or "Last week" in html
     results = soccer_week_nav_html(kind="results", week="2026-08-31")
     assert "Last week" in results or "Week of" in results
     assert "/soccer-results" in results

@@ -31,6 +31,13 @@ from .data_sources import (
     normal_cdf,
     poisson_cdf,
 )
+from .player_eligibility import (
+    filter_props_by_eligibility,
+    markets_catalog,
+    position_to_role,
+    roles_for_league,
+    select_top_pool,
+)
 
 
 _CACHE: Dict[str, Dict] = {}
@@ -215,6 +222,18 @@ def _ev_percent(p_win: float, american_odds: float) -> float:
     return ((p_win * b) - (1.0 - p_win)) * 100.0
 
 
+def _prob_to_american(p: float) -> Optional[int]:
+    """Convert a win probability to fair American odds (clamped for display)."""
+    try:
+        p = float(p)
+    except (TypeError, ValueError):
+        return None
+    p = _clamp(p, 0.05, 0.95)
+    if p >= 0.5:
+        return int(round(-100.0 * p / (1.0 - p)))
+    return int(round(100.0 * (1.0 - p) / p))
+
+
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
@@ -366,13 +385,32 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     # so there are no past lines to fetch and grading uses snapshotted picks.
     use_real = schedule_override is None
     excluded = []
+    pool_audit: Dict = {}
     if league == "NBA":
         validated = build_validated_nba_player_pool(schedule)
         players = validated["players"]
         excluded = validated["excluded"]
+        for p in players:
+            if not p.get("role"):
+                p["role"] = position_to_role(league, p.get("position") or p.get("role") or "G") or "G"
+        players, pool_audit = select_top_pool(players, league=league)
     else:
         players = build_top_players(league, schedule)
+        pool_audit = {
+            "league": league,
+            "eligible_players": len(players),
+            "roles": {},
+        }
+        for p in players:
+            r = p.get("role") or ""
+            pool_audit.setdefault("roles", {})
+            pool_audit["roles"][r] = pool_audit["roles"].get(r, 0) + 1
     prop_lines = fetch_prop_lines(league, players, use_real=use_real)
+    # Drop lines that violate position/market rules before EV ranking.
+    by_id_pre = {str(p["player_id"]): p for p in players}
+    prop_lines, line_audit = filter_props_by_eligibility(
+        prop_lines, by_id_pre, league=league
+    )
     if league == "MLB" and prop_lines:
         enrich_mlb_players_with_metrics(
             players,
@@ -444,6 +482,17 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
                     proj = _projection_from_market(league, calc_line, _mkt_p_over)
                 elif source_proj is not None:
                     proj = float(source_proj)
+                elif prop.get("line_source") == "espn_props" and calc_line > 0:
+                    # ESPN often posts the line without american prices. Do NOT
+                    # fall back to the NBA minutes proxy (that yields Pass Yds
+                    # projections like 14.5 vs a 253.5 book line). Anchor to
+                    # the posted line with a small depth-chart tilt instead.
+                    try:
+                        depth = int(p.get("depth_rank") or 2)
+                    except (TypeError, ValueError):
+                        depth = 2
+                    tilt = max(-0.05, min(0.05, (2.0 - float(depth)) * 0.015))
+                    proj = float(calc_line) * (1.0 + tilt)
                 else:
                     xgb_mean = _xgboost_style_projection(p, prop, league)
                     xsharp_mean = _xsharp_adjustment(league, xgb_mean)
@@ -464,9 +513,13 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         if league not in ("NBA", "MLB") and _mkt_p_over is not None:
             p_over = _mkt_p_over
         p_under = 1.0 - p_over
-        ev_over = _ev_percent(p_over, prop["odds_over"]) if prop.get("odds_over") is not None else 0.0
+        # When ESPN posts a line without prices, assume -110 for EV math only.
+        _oo = prop.get("odds_over")
         _ou = prop.get("odds_under")
-        ev_under = _ev_percent(p_under, _ou) if _ou is not None else -999.0
+        _oo_ev = -110 if _oo is None else _oo
+        _ou_ev = -110 if _ou is None else _ou
+        ev_over = _ev_percent(p_over, _oo_ev)
+        ev_under = _ev_percent(p_under, _ou_ev)
         confidence = min(99.0, max(50.0, (max(p_over, p_under) * 100.0 + agreement * 12.0 - variance * 0.4)))
         picked_side = "OVER" if (p_over >= p_under and agreement >= 0.5) else ("UNDER" if p_under > p_over else ("OVER" if ev_over >= ev_under else "UNDER"))
 
@@ -552,6 +605,8 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
                 "pick_ev":    round(_pick_ev, 1),
                 "tier":       _tier,
                 "model_name": f"{league} Projection Model",
+                "fair_over_odds":  _prob_to_american(p_over),
+                "fair_under_odds": _prob_to_american(p_under),
             })
 
         row = {
@@ -559,6 +614,9 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             "player_name": p["name"],
             "team": p["team"],
             "league": league,
+            "position": p.get("position") or "",
+            "role": p.get("role") or "",
+            "depth_rank": p.get("depth_rank"),
             "prop_type": prop["prop_type"],
             "line": public_line,
             "line_source": line_source,
@@ -589,9 +647,6 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             row["mlb_over_only"] = True
         row.update(poisson_fields)
         projections.append(row)
-    if league == "NBA":
-        players = sorted(players, key=lambda x: (float(x.get("consensus_rank", 999)), -float(x.get("top50_score", 0.0))))[:100]
-        projections.sort(key=lambda x: (-(x["projection"]), -x["confidence_score"], -(x["model_agreement"])),)
     _line_sources = {pl.get("line_source") for pl in prop_lines}
     # Real book lines can come from ESPN's free DraftKings feed (default) or the
     # optional Odds API path; either counts as "real" for grading + UI labeling.
@@ -601,11 +656,43 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         else None
     )
     lines_real = _real_src is not None
+    # Final eligibility pass after projections (cat role on player records).
+    projections, prop_audit = filter_props_by_eligibility(
+        projections, by_id, league=league
+    )
+    if league == "NBA":
+        projections.sort(
+            key=lambda x: (
+                -(x.get("projection") or 0),
+                -(x.get("confidence_score") or 0),
+                -(x.get("model_agreement") or 0),
+            )
+        )
+    else:
+        # Rank display by pick EV among already-eligible props; depth chart
+        # breaks ties so starters (Gibbs) outrank depth names when EV is flat.
+        projections.sort(
+            key=lambda x: (
+                -(x.get("pick_ev") if x.get("pick_ev") is not None else x.get("ev_over_percent") or -999),
+                -(x.get("confidence_score") or 0),
+                int(x.get("depth_rank") or 99),
+                x.get("player_name") or "",
+            )
+        )
     payload = {
         "players": players,
         "props": projections,
         "lines_real": lines_real,
         "line_source": (_real_src if lines_real else ("synthetic" if "synthetic" in _line_sources else "internal")),
+        "eligibility_audit": {
+            "pool": pool_audit,
+            "lines": line_audit,
+            "props": prop_audit,
+            "roles": roles_for_league(league),
+            "markets_by_role": markets_catalog(league),
+            "valid_props": len(projections),
+            "eligible_players": len(players),
+        },
     }
     if DEBUG_PLAYER_VALIDATION and league == "NBA":
         payload["excluded_players"] = excluded
@@ -644,6 +731,15 @@ _ACTUAL_STAT_LABELS: Dict[str, Dict[str, List[str]]] = {
         "strikeouts": ["K", "SO"],
         "walks":      ["BB"],
     },
+    # Football uses group-scoped labels (passing/rushing/receiving all have YDS).
+    "football": {},
+}
+
+# Football box-score category name -> {prop_type: column label}.
+_FOOTBALL_GROUP_PROPS: Dict[str, Dict[str, str]] = {
+    "passing": {"passing_yards": "YDS"},
+    "rushing": {"rushing_yards": "YDS"},
+    "receiving": {"receiving_yards": "YDS", "receptions": "REC"},
 }
 # Props whose ESPN cell is formatted "made-attempted" (e.g. "3-7") — take makes.
 _MADE_VALUE_PROPS = {"threes"}
@@ -672,9 +768,10 @@ def _stat_from_row(prop_type: str, idx: Dict[str, int], vals: List, sport: str) 
 def _fetch_event_actuals(league: str, event_id: str) -> Dict[str, Dict[str, float]]:
     """Return {player_name_lower: {prop_type: actual}} from an ESPN box score.
 
-    Only basketball + baseball box scores are parsed; other sports return {}
-    so callers grade them as N/A instead of fabricating a result. Stats are
-    merged across statistic groups (e.g. MLB batting + pitching) by player.
+    Basketball, baseball, and football box scores are parsed; other sports
+    return {} so callers grade them as N/A instead of fabricating a result.
+    Stats are merged across statistic groups (e.g. MLB batting + pitching,
+    NFL passing/rushing/receiving) by player.
     """
     cfg = LEAGUE_CONFIG.get(league) or {}
     sport = cfg.get("espn_sport")
@@ -694,12 +791,29 @@ def _fetch_event_actuals(league: str, event_id: str) -> Dict[str, Dict[str, floa
         for grp in (sec.get("statistics") or []):
             labels = grp.get("labels") or grp.get("names") or []
             idx = {k: i for i, k in enumerate(labels)}
+            group_name = str(grp.get("name") or grp.get("displayName") or "").strip().lower()
             for ath in (grp.get("athletes") or []):
                 name = ((ath.get("athlete") or {}).get("displayName") or "").strip()
                 vals = ath.get("stats") or []
                 if not name or not vals:
                     continue
                 rec = out.setdefault(name.lower(), {})
+                if sport == "football":
+                    mapping = _FOOTBALL_GROUP_PROPS.get(group_name) or {}
+                    for pt, lab in mapping.items():
+                        if pt in rec:
+                            continue
+                        i = idx.get(lab)
+                        if i is None or i >= len(vals):
+                            continue
+                        raw = vals[i]
+                        if raw in (None, "", "--"):
+                            continue
+                        try:
+                            rec[pt] = float(raw)
+                        except Exception:
+                            continue
+                    continue
                 for pt in _ACTUAL_STAT_LABELS.get(sport, {}):
                     if pt in rec:
                         continue

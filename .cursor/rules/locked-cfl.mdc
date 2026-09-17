@@ -1,5 +1,12 @@
+# CFL UNLOCKED (:5052 / premerge) — results share image only
+
+Owner 2026-09-17: **UNLOCK CFL** for bottom Results Image on `/cfl-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
+
+Prior lock notes preserved below for when this miss is closed.
+
 ---
-description: CFL picks/results UI locked on :5052 — do not edit unless UNLOCK CFL
+
+description: CFL LOCKED (:5052 / premerge)
 alwaysApply: true
 ---
 
@@ -11,14 +18,24 @@ Do **not** modify CFL unless the owner says:
 
 **UNLOCK CFL**
 
-Fixing NFL, soccer, golf, chrome, or production outages is **not** a CFL unlock.
+Owner 2026-09-16: results header — stripping only `<header>` left orphaned
+NAV DROPDOWNS scripts that canceled Sports/Models/Results menus; also
+stopped rewriting global MLB nav to CFL. Miss closed — lock again.
+
+Owner 2026-09-16: chart view double `pl2-header` (shell + chrome inject) —
+strip-all + dedupe before inject. Miss closed — lock again.
+
+Owner 2026-09-16: face Consensus Historical Record (replace duplicate H2H),
+strip MLB no-data / mlb-results shell leftovers, equal-height cards, single
+results header (Predictions|Results + one Cards|Chart). Miss closed — lock
+again.
 
 ## Do not touch
 
 - `/cfl-picks`, `/cfl-results`, `/cfl-results?view=chart`
 - `cfl_live.py`
 - CFL Cards|Chart, card HTML
-- Any `NHL77FINAL.py` branch whose job is CFL
+- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is CFL
 
 ## Allowed without unlock
 

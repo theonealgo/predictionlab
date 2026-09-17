@@ -317,11 +317,14 @@ class SoccerChecker:
                 url=url,
                 detail="\n".join(missing),
             )
-        elif which == "picks" and league_opts < 40:
+        elif which == "picks" and ESPN_BROWSE_LEAGUES and league_opts < len(
+            ESPN_BROWSE_LEAGUES
+        ):
             self.add(
                 f"soccer {which} league catalog",
                 FAIL,
-                f"League dropdown only has {league_opts} option(s) — full catalog is missing",
+                f"League dropdown only has {league_opts} option(s) — "
+                f"expected {len(ESPN_BROWSE_LEAGUES)} active leagues",
                 url=url,
             )
         else:
@@ -329,7 +332,7 @@ class SoccerChecker:
                 f"soccer {which} league catalog",
                 PASS,
                 f"{league_opts} league option(s); all {len(ESPN_BROWSE_LEAGUES)} "
-                "ESPN browse leagues present",
+                "active leagues present",
                 url=url,
             )
         in_season = len(re.findall(r'data-in-season="1"', html))
@@ -342,21 +345,26 @@ class SoccerChecker:
             self.add(
                 f"soccer {which} continent filter",
                 FAIL,
-                "League options have no data-region — Africa cannot filter the second list",
+                "League options have no data-region — region filter cannot work",
                 url=url,
             )
-        elif 'data-region="africa"' not in html and which == "picks":
+        elif which == "picks" and not re.search(
+            r'data-region="[^"]*(?:europe|concacaf|south-america|top)[^"]*"',
+            html,
+            flags=re.I,
+        ):
             self.add(
                 f"soccer {which} continent filter",
                 FAIL,
-                "Africa leagues are missing data-region=africa",
+                "Active leagues missing data-region keys "
+                "(europe / concacaf / south-america / top)",
                 url=url,
             )
         else:
             self.add(
                 f"soccer {which} continent filter",
                 PASS,
-                "League options carry continent keys for in-place filtering",
+                "League options carry region keys for in-place filtering",
                 url=url,
             )
         unpainted = []

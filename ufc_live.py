@@ -1,7 +1,7 @@
 """UFC on :5052 — exact HTML copied from the completed :5081 /ufc/ page.
 
 Snapshots: `_sandbox_hub_run/locked_pages/ufc/` (fetched from 5081).
-No fetch, no graft, no rebuild. Route remaps only.
+Route remaps + Consensus Historical face chips (same family as WNBA).
 """
 from __future__ import annotations
 
@@ -35,11 +35,22 @@ def _rewrite_hub_paths(html: str) -> str:
     return html
 
 
+def _with_consensus_hist(html: str) -> str:
+    try:
+        from team_results_charts import _inject_ufc_consensus_hist_chips
+
+        return _inject_ufc_consensus_hist_chips(html)
+    except Exception as e:
+        print(f"[ufc_live] consensus hist inject failed: {e}", flush=True)
+        return html
+
+
 def _read_page(name: str) -> str:
     path = _PAGES / name
     if not path.is_file():
         raise RuntimeError(f"locked UFC snapshot missing: {path}")
-    return _rewrite_hub_paths(path.read_text(encoding="utf-8", errors="replace"))
+    html = _rewrite_hub_paths(path.read_text(encoding="utf-8", errors="replace"))
+    return _with_consensus_hist(html)
 
 
 def render_ufc_picks() -> str:
@@ -49,7 +60,11 @@ def render_ufc_picks() -> str:
 def render_ufc_results(*, view: str = "normal") -> str:
     view = (view or "normal").strip().lower()
     if view in ("chart", "tabs", "markets", "tabbed"):
-        return _read_page("results_chart.html")
+        # Chart view keeps tallies / consensus table; no per-fight face chips needed.
+        path = _PAGES / "results_chart.html"
+        if not path.is_file():
+            raise RuntimeError(f"locked UFC snapshot missing: {path}")
+        return _rewrite_hub_paths(path.read_text(encoding="utf-8", errors="replace"))
     return _read_page("results.html")
 
 

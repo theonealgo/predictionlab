@@ -3023,14 +3023,14 @@ def inject_picks_chart_tabs(
     assets_sync = (
         f"{note}"
         f"<script>window.PICKS_CHART={cfg_js};</script>"
-        '<link rel="stylesheet" href="/static/css/picks-chart.css?v=pc20" />'
-        '<script src="/static/js/picks-chart.js?v=pc20"></script>'
+        '<link rel="stylesheet" href="/static/css/picks-chart.css?v=pc21" />'
+        '<script src="/static/js/picks-chart.js?v=pc21"></script>'
     )
     assets_head = (
         f"{note}"
         f"<script>window.PICKS_CHART={cfg_js};</script>"
-        '<link rel="stylesheet" href="/static/css/picks-chart.css?v=pc20" />'
-        '<script src="/static/js/picks-chart.js?v=pc20" defer></script>'
+        '<link rel="stylesheet" href="/static/css/picks-chart.css?v=pc21" />'
+        '<script src="/static/js/picks-chart.js?v=pc21" defer></script>'
     )
     if re.search(r"</body\s*>", html, flags=re.I):
         return re.sub(r"</body\s*>", assets_sync + "</body>", html, count=1, flags=re.I)

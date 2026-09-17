@@ -8,19 +8,28 @@ alwaysApply: true
 **Before any site work:** lock every sport and every results card. Unlock only
 the sport the owner named.
 
+**Triple lock (2026-09-16):** also follow `.cursor/rules/triple-lock-sports.mdc`.
+Fixing player props is **not** an unlock for any sport’s picks/results pages.
+Unlocked work must not touch locked sports’ card faces.
+
 All locked by default (picks + results): MLB, NHL, NBA, NFL, NCAAF, NCAAB,
 NCAAW, WNBA, CFL, soccer, tennis, UFC, golf. No agent edits to any of those
 surfaces without **UNLOCK &lt;SPORT&gt;** naming the miss.
 
 Requires **UNLOCK &lt;SPORT&gt;** plus the miss. One sport. One miss.
 
-A hang, timeout, cloaking fix, checker, or chrome pass is not an unlock for
-any other sport. Do not touch `NHL77FINAL.py` / `team_results_charts.py` /
-`mlb_*` for sport B while sport A is the unlock.
+A hang, timeout, cloaking fix, checker, chrome pass, or blank-slate restore
+for sport A is **not** an unlock for sport B. Do not touch `NHL77FINAL.py` /
+`team_results_charts.py` / `mlb_*` for sport B while sport A is the unlock.
+
+**Extra layers (2026-09-16):** also follow `.cursor/rules/sport-lock-enforcement.mdc`.
+Shared `_merge_stored_upcoming_predictions` allow-list changes are blank-slate
+only — never an excuse to rewrite another sport’s Books / face / model chips.
 
 ```
 # BAD — owner unlocked nothing; agent edits NHL77FINAL.py for soccer while MLB is locked
 # BAD — owner said UNLOCK MLB Books; agent also patches CFL/soccer
+# BAD — NCAAF blank emergency; agent also changes NFL card face without UNLOCK NFL
 # GOOD — UNLOCK MLB + Books/H2H on that card; leave every other sport alone
 ```
 

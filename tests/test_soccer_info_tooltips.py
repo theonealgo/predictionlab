@@ -75,3 +75,32 @@ def test_soccer_info_tooltips_idempotent():
     assert twice.count('id="pl-info-tips-css"') == 1
     assert twice.count("pl-info-tips.js") == 1
     assert len(_BTN.findall(twice)) == len(_BTN.findall(once))
+
+
+_PICK_CONF_SNIPPET = """
+<!DOCTYPE html><html><body>
+<div class="pick-conf-title">Pick Confidence</div>
+<div class="pc-name">Grinder2</div>
+<div class="pc-name">Edge</div>
+<div class="pc-name">Sharp Consensus</div>
+<div class="pc-name">Efficiency</div>
+<div class="line-chip-label">Edge</div>
+</body></html>
+"""
+
+
+def test_soccer_model_taxonomy_legend_and_edge_market_aware_tip():
+    out = apply_soccer_info_tooltips(_PICK_CONF_SNIPPET, kind="picks")
+    assert 'data-pl-soccer-model-taxonomy="1"' in out
+    assert "Independent models: Grinder2, Takedown, XSharp" in out
+    assert "Market-aware: Edge, Sharp Consensus" in out
+    assert "Strategy: Efficiency" in out
+    tips = " ".join(_attr(btn, "data-tip") for btn in _BTN.findall(out))
+    assert "Market-aware when book prices" in tips
+    assert "Independent model" in tips
+    assert "Strategy view based on our spread lean" in tips
+    # Value Edge chip tip stays distinct from the Edge model tip.
+    assert "Difference between our win probability" in tips
+    # Idempotent legend.
+    twice = apply_soccer_info_tooltips(out, kind="picks")
+    assert twice.count('data-pl-soccer-model-taxonomy="1"') == 1

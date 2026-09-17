@@ -46,37 +46,33 @@ _ESPN_SEARCH_CACHE: dict[str, str] = {}
 
 GRID_CSS = """
 <style id="tennis-mlb-grid-fix">
-body[data-sandbox-sport="tennis"] .games-grid,
-body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) > .games-grid,
-body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) .games-grid{
+/* Keep shared sports-chrome card width (UFC/MLB). Do not force 2-col stretch. */
+body[data-sandbox-sport="tennis"] .game-card-stack{
+  min-width:0!important;
+  justify-self:stretch!important;display:flex!important;flex-direction:column!important;
+}
+body[data-sandbox-sport="tennis"] .pick-conf-grid{
   display:grid!important;
   grid-template-columns:repeat(3, minmax(0, 1fr))!important;
-  gap:14px!important;
-  margin-bottom:22px!important;
-  align-items:start!important;
+  gap:8px!important;
 }
-@media (max-width:1100px){
-  body[data-sandbox-sport="tennis"] .games-grid,
-  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) > .games-grid,
-  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) .games-grid{
+@media (max-width:700px){
+  body[data-sandbox-sport="tennis"] .pick-conf-grid{
     grid-template-columns:repeat(2, minmax(0, 1fr))!important;
   }
 }
-@media (max-width:700px){
-  body[data-sandbox-sport="tennis"] .games-grid,
-  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) > .games-grid,
-  body[data-sandbox-sport="tennis"] .date-section:not(.chart-mode) .games-grid{
-    grid-template-columns:1fr!important;
-  }
-}
-body[data-sandbox-sport="tennis"] .game-card-stack{
-  min-width:0!important;max-width:none!important;width:100%!important;
-  justify-self:stretch!important;display:flex!important;flex-direction:column!important;
+body[data-sandbox-sport="tennis"] .pick-conf-grid .pc-side{
+  overflow-wrap:anywhere!important;word-break:break-word!important;
+  font-size:0.72rem!important;line-height:1.25!important;
 }
 body[data-sandbox-sport="tennis"] .date-section.chart-mode > .games-grid,
 body[data-sandbox-sport="tennis"] .date-section.chart-mode .games-grid{display:none!important;}
 body[data-sandbox-sport="tennis"] .date-section.chart-mode > .chart-table-wrap,
-body[data-sandbox-sport="tennis"] .date-section.chart-mode .chart-table-wrap{display:block;}
+body[data-sandbox-sport="tennis"] .date-section.chart-mode .chart-table-wrap,
+body[data-sandbox-sport="tennis"] .date-section.chart-mode > .chart-table-wrap[hidden],
+body[data-sandbox-sport="tennis"] .date-section.chart-mode .chart-table-wrap[hidden]{
+  display:block!important;
+}
 /* Left-align Tennis Predictions heading + Predictions|Results + Cards|Chart */
 body[data-sandbox-sport="tennis"] .sport-predictions-heading,
 body[data-sandbox-sport="tennis"] h2.sport-predictions-heading{
@@ -267,6 +263,24 @@ def tennis_section_tabs_html(which: str) -> str:
         ".section-tabs .tab{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;"
         "border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:.85rem;"
         "text-decoration:none}.section-tabs .tab.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}"
+        "</style>"
+    )
+
+
+def tennis_results_view_toggle_html(*, chart: bool = False) -> str:
+    """UFC-style Cards|Chart links (href), not picks setPicksView buttons."""
+    cards = "" if chart else "active"
+    ch = "active" if chart else ""
+    return (
+        '<div class="pl-view-toggle" role="navigation" aria-label="Results view">'
+        f'<a class="pl-view-btn {cards}" href="/tennis/results">Cards</a>'
+        f'<a class="pl-view-btn {ch}" href="/tennis/results?view=chart">Chart</a>'
+        "</div>"
+        "<style>.pl-view-toggle{display:flex;gap:8px;margin:12px 0 18px;flex-wrap:wrap;"
+        "justify-content:flex-start;width:100%}"
+        ".pl-view-btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;"
+        "border:1px solid #dbe3ee;background:#fff;color:#0c1e3a;font-weight:700;font-size:.85rem;"
+        "text-decoration:none}.pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}"
         "</style>"
     )
 
@@ -613,12 +627,20 @@ def _render_result_card(c: dict[str, Any], idx: int) -> str:
         "game_date": c.get("game_date"),
         "start_iso": c.get("start_iso") or c.get("game_date"),
     }
-    out = _render_pick_card(row, idx)
+    out = _render_pick_card(row, idx, expanded=True)
     day = html_lib.escape(str(c.get("game_date") or "").strip() or "Final")
-    # Keep identical chrome; only the time label marks the match as final.
+    tourney = html_lib.escape(_display_tournament(c.get("tournament")))
+    # UFC-style final line: FINAL · date · event
     out = re.sub(
         r'(<span class="game-time">)[^<]*(</span>)',
-        rf"\1FINAL · {day}\2",
+        rf"\1FINAL · {day} · {tourney}\2",
+        out,
+        count=1,
+    )
+    # Also patch card-hero-meta-line when present (shared chrome).
+    out = re.sub(
+        r'(<div class="card-hero-meta-line">)[^<]*(</div>)',
+        rf"\1FINAL · {day} · {tourney}\2",
         out,
         count=1,
     )
@@ -666,7 +688,7 @@ def render_tennis_picks_html(payload: dict[str, Any] | None = None) -> str:
                 f'<div class="date-section {visible}" id="date-{html_lib.escape(day)}">'
                 f'<div class="date-header">📅 {html_lib.escape(day)}{today_badge}</div>'
                 f'<div class="games-grid">{"".join(stacks)}</div>'
-                f'<div class="chart-table-wrap" hidden></div>'
+                f'<div class="chart-table-wrap"></div>'
                 f"</div>"
             )
         body_cards = "".join(parts)
@@ -742,6 +764,7 @@ def render_tennis_results_html(payload: dict[str, Any] | None = None) -> str:
 
     date_bit = esc(ln.get("date") or "—")
     tabs = tennis_section_tabs_html("results")
+    view_toggle = tennis_results_view_toggle_html(chart=False)
     tally = f"""
     <section class="tally-wrap" id="tallies">
       <div class="daily-tally">
@@ -768,11 +791,34 @@ def render_tennis_results_html(payload: dict[str, Any] | None = None) -> str:
     """
 
     if not finals:
-        cards_html = '<div class="no-data">No completed matches in sandbox slate yet.</div>'
+        body_cards = '<div class="no-data">No completed matches in sandbox slate yet.</div>'
     else:
-        cards_html = "".join(
-            _render_result_card(c, i) for i, c in enumerate(finals[:80])
-        )
+        # UFC layout: date-section boards (date-nav comes from mlb_page_template).
+        by_day: dict[str, list[dict[str, Any]]] = {}
+        for c in finals[:80]:
+            day = str(
+                c.get("game_date")
+                or _parse_match_dt(c.get("start_iso") or c.get("game_date"))[0]
+                or "final"
+            ).strip() or "final"
+            by_day.setdefault(day, []).append(c)
+        days = sorted(by_day.keys(), reverse=True)
+        parts: list[str] = []
+        idx = 0
+        for i, day in enumerate(days):
+            visible = "visible" if i == 0 else "seo-hidden"
+            stacks = []
+            for c in by_day[day]:
+                stacks.append(_render_result_card(c, idx))
+                idx += 1
+            parts.append(
+                f'<div class="date-section {visible}" id="date-{html_lib.escape(day)}">'
+                f'<div class="date-header">📅 {html_lib.escape(day)}</div>'
+                f'<div class="games-grid">{"".join(stacks)}</div>'
+                f'<div class="chart-table-wrap"></div>'
+                f"</div>"
+            )
+        body_cards = "".join(parts)
 
     consensus = ""
     try:
@@ -816,13 +862,11 @@ def render_tennis_results_html(payload: dict[str, Any] | None = None) -> str:
 <main>
   <div class="container">
     {tabs}
+    {view_toggle}
     {tally}
     {perf}
     {consensus}
-    <section id="finals-wrap">
-      <h2 class="sec-title">Completed matches <span class="tag">({min(len(finals), 80)})</span></h2>
-      <div class="cards games-grid" id="finals">{cards_html}</div>
-    </section>
+    {body_cards}
   </div>
 </main>
 {GRID_CSS}
@@ -873,64 +917,13 @@ function togglePickDetails(btn){{
     body[data-sandbox-sport="tennis"] .sport-predictions-heading {{
       text-align: left !important;
     }}
-    /* Tally boxes: full-width strip (team-results.css was shrinking .rec to ~0.75rem) */
-    body[data-sandbox-sport="tennis"] .tally-wrap,
-    body[data-sandbox-sport="tennis"] .daily-tally {{
-      max-width: none !important;
-      width: 100% !important;
-      margin-left: 0 !important;
-      margin-right: 0 !important;
-    }}
+    /* Do not override shared 1vs1/UFC tally board width — that made Cards look like Chart. */
     body[data-sandbox-sport="tennis"] .daily-tally-head h2 {{
       text-align: left !important;
       font-size: 1.05rem !important;
       font-weight: 800 !important;
       margin: 0 0 10px !important;
       color: #0f172a !important;
-    }}
-    body[data-sandbox-sport="tennis"] .daily-tally-grid,
-    body[data-sandbox-sport="tennis"] .tally-grid {{
-      display: grid !important;
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-      gap: 12px !important;
-      width: 100% !important;
-      justify-content: stretch !important;
-    }}
-    body[data-sandbox-sport="tennis"] .daily-tally-card,
-    body[data-sandbox-sport="tennis"] .tally-card {{
-      background: #fff !important;
-      border: 1px solid #dbe3ee !important;
-      border-radius: 12px !important;
-      padding: 14px 12px !important;
-      min-height: 84px !important;
-      width: 100% !important;
-      max-width: none !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: center !important;
-      gap: 4px !important;
-      text-align: left !important;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
-    }}
-    body[data-sandbox-sport="tennis"] .daily-tally-card .daily-model,
-    body[data-sandbox-sport="tennis"] .tally-card .mlabel {{
-      font-size: 0.72rem !important;
-      font-weight: 800 !important;
-      letter-spacing: 0.04em !important;
-      text-transform: uppercase !important;
-      color: #64748b !important;
-    }}
-    body[data-sandbox-sport="tennis"] .daily-tally-card .rec,
-    body[data-sandbox-sport="tennis"] .tally-card .rec {{
-      font-size: 1.15rem !important;
-      font-weight: 800 !important;
-      line-height: 1.15 !important;
-      color: #0f172a !important;
-      margin: 0 !important;
-    }}
-    body[data-sandbox-sport="tennis"] .daily-tally-card .muted {{
-      font-size: 0.78rem !important;
-      color: #64748b !important;
     }}
     /* Results cards: denser type matching chart view (team-results / picks-chart). */
     body[data-sandbox-sport="tennis"] .game-card-stack .team-name {{

@@ -240,7 +240,7 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
     roi_weekly = m.compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
     if not snapshot_stats:
         roi_total = m.compute_roi_for_range(daily_results, None, None)
-    roi_cards = m.build_roi_cards(roi_daily, roi_weekly, roi_total)
+    roi_cards = m.build_roi_cards(roi_daily, roi_weekly, roi_total, win_pct_primary=True)
 
     # ── Render template ─────────────────────────────────────────────────
     _date_ctx = m._results_page_date_kwargs(daily_results, sorted_dates)

@@ -1,5 +1,12 @@
+# NHL UNLOCKED (:5052 / premerge) — results share image only
+
+Owner 2026-09-17: **UNLOCK NHL** for bottom Results Image on `/nhl-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
+
+Prior lock notes preserved below for when this miss is closed.
+
 ---
-description: NHL picks/results UI locked on :5052 — do not edit unless UNLOCK NHL
+
+description: NHL LOCKED (:5052 / premerge)
 alwaysApply: true
 ---
 
@@ -11,7 +18,10 @@ Do **not** modify NHL unless the owner says:
 
 **UNLOCK NHL**
 
-Fixing NFL, MLB, soccer, chrome, or production outages is **not** an NHL unlock.
+Owner 2026-09-16: briefly unlocked for Books odds + Consensus Historical
+face chip — paused. Owner redirected to CFL header miss first. Lock again.
+
+Fixing CFL, NFL, MLB, soccer, chrome, or production outages is **not** an NHL unlock.
 
 ## Do not touch
 

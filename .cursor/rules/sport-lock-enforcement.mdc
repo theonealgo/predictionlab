@@ -1,0 +1,41 @@
+---
+description: HARD sport locks — never edit locked sports without UNLOCK
+alwaysApply: true
+---
+
+# Sport lock enforcement (extra layers)
+
+Owner 2026-09-16: locks alone were not enough — agents still touched locked
+sports via “shared” merges / incidental `NHL77FINAL.py` edits.
+
+## Layer A — verbal unlock required
+
+No picks/results/card/chart edit for a sport unless the owner message contains
+exactly **`UNLOCK <SPORT>`** and names the miss. Blank-slate emergencies,
+checker fails, chrome, and “fix all sports” are **not** unlocks for card UI
+on locked sports.
+
+## Layer B — protected paths (refuse without unlock)
+
+Do **not** edit these for a locked sport:
+
+- That sport’s routes (`/<sport>-picks`, `/<sport>-results`)
+- Sport-named modules (`nfl_*`, `mlb_*`, `cfl_live.py`, `soccer_*`, …)
+- Sport branches inside `NHL77FINAL.py` / `team_results_charts.py` /
+  `templates/includes/game_card_body.html` that change **only** that sport’s
+  face / models / books / times
+
+Shared blank-slate merge (`_merge_stored_upcoming_predictions`) may add a
+sport to the merge **allow-list** only to prevent “No predictions available”
+— never to rewrite that sport’s card face, Books chips, or model sides.
+
+## Layer C — one miss
+
+One unlocked sport. One named miss. When done, lock that sport again in
+`.cursor/rules/locked-<sport>.mdc`. Do not leave sports UNLOCKED overnight.
+
+## Layer D — verify isolation
+
+Before editing `NHL77FINAL.py` / `team_results_charts.py` / shared templates
+while sport A is unlocked: confirm the diff cannot change locked sport B’s
+HTML. If unsure, stop and ask.

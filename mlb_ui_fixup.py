@@ -930,10 +930,10 @@ def inject_mlb_run_line_confidence(html: str) -> str:
         )
         if rl:
             return stack.replace(rl.group(1), rl.group(1) + "\n    " + chip, 1)
-        # Fallback: end of lines-strip
-        ls = re.search(r'(<div class="lines-strip">[\s\S]*?)(</div>\s*(?:<footer|<!--|</div>\s*</div>))', stack, re.I)
+        # Face no longer shows Books run line — put RL confidence first in strip.
+        ls = re.search(r'(<div class="lines-strip">)', stack, re.I)
         if ls:
-            return stack.replace(ls.group(1), ls.group(1) + "\n    " + chip + "\n", 1)
+            return stack.replace(ls.group(1), ls.group(1) + "\n    " + chip, 1)
         return stack
 
     parts = re.split(r'(?=<div class="game-card-stack\b)', html)
@@ -945,6 +945,20 @@ def inject_mlb_run_line_confidence(html: str) -> str:
 
 
 _MLB_BODY = 'body.sport-mlb,body[data-sport="MLB"],body[data-sport="mlb"]'
+
+
+def _mlb_sel(suffix: str) -> str:
+    """Expand comma body selectors so each gets the descendant suffix.
+
+    ``body.a,body.b .x`` wrongly styles body.a. Need ``body.a .x,body.b .x``.
+    """
+    suf = (suffix or "").strip()
+    parts = [p.strip() for p in _MLB_BODY.split(",") if p.strip()]
+    if not suf:
+        return ",".join(parts)
+    if not suf.startswith((" ", ">", "+", "~", ":")):
+        suf = " " + suf
+    return ",".join(p + suf for p in parts)
 
 
 def strip_mlb_picks_chart_total_ev(html: str) -> str:
@@ -975,29 +989,41 @@ def strip_mlb_picks_chart_total_ev(html: str) -> str:
 
 
 def ensure_mlb_pick_conf_no_scroll(html: str) -> str:
-    """MLB picks: 3 cards/row; pick-conf 6-up inside each card (signed-off layout)."""
+    """MLB picks: readable cards — 3×2 Pick Confidence, no body-grid blowup."""
     if not html or 'id="mlb-pick-conf-no-scroll"' in html:
         return html
-    b = _MLB_BODY
+    # Keep CSS braces in non-f-string fragments so we do not emit `}}`.
     css = (
         '<style id="mlb-pick-conf-no-scroll">'
-        f"{b}{{--pl-card-min:320px!important;--pl-card-max:none!important;}}"
-        f"{b} .pick-conf-bar{{overflow-x:hidden!important;max-width:100%!important;}}"
-        f"{b} .pick-conf-grid{{display:grid!important;"
-        "grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:4px!important;"
-        "min-width:0!important;width:100%!important;}}"
-        f"{b} .pc-box{{min-width:0!important;width:100%!important;box-sizing:border-box!important;}}"
-        f"{b} .games-grid{{display:grid!important;"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;}}"
-        f"{b} .games-grid>.game-card-stack{{max-width:none!important;width:100%!important;"
-        "min-width:0!important;margin:0!important;}}"
-        "@media(max-width:1100px){"
-        f"{b} .games-grid{{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}"
+        f"{_mlb_sel('')}{{--pl-card-min:520px!important;--pl-card-max:none!important;}}"
+        f"{_mlb_sel('.games-grid')}{{display:grid!important;"
+        "grid-template-columns:repeat(auto-fit,minmax(520px,1fr))!important;"
+        "gap:16px!important;align-items:start!important;}"
+        f"{_mlb_sel('.games-grid>.game-card-stack')}{{max-width:none!important;"
+        "width:100%!important;min-width:0!important;margin:0!important;"
+        "overflow:visible!important;}"
+        f"{_mlb_sel('.game-card.pick-card')}{{overflow:visible!important;}}"
+        f"{_mlb_sel('.pick-conf-bar')}{{overflow:visible!important;"
+        "max-width:100%!important;padding-bottom:14px!important;}"
+        f"{_mlb_sel('.pick-conf-grid')}{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;"
+        "min-width:0!important;width:100%!important;}"
+        f"{_mlb_sel('.pc-box')}{{min-width:0!important;width:100%!important;"
+        "box-sizing:border-box!important;overflow:visible!important;"
+        "padding:8px 6px!important;min-height:88px!important;}"
+        f"{_mlb_sel('.pc-name')},{_mlb_sel('.pc-side')}{{word-break:normal!important;"
+        "overflow-wrap:break-word!important;hyphens:none!important;}"
+        f"{_mlb_sel('.pc-name')}{{font-size:0.7em!important;line-height:1.2!important;}}"
+        f"{_mlb_sel('.pc-side')}{{font-size:0.62em!important;padding:2px 4px!important;}}"
+        f"{_mlb_sel('.pc-val')}{{font-size:0.95em!important;}}"
         "@media(max-width:700px){"
-        f"{b} .games-grid{{grid-template-columns:1fr!important;}}"
-        f"{b} .pick-conf-grid{{grid-template-columns:repeat(3,minmax(0,1fr))!important;}}"
+        f"{_mlb_sel('.games-grid')}{{grid-template-columns:1fr!important;}}"
+        f"{_mlb_sel('.pick-conf-grid')}{{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}"
+        "}"
         "</style>"
     )
+    if re.search(r"</head\s*>", html, re.I):
+        return re.sub(r"</head\s*>", css + "</head>", html, count=1, flags=re.I)
     if re.search(r"</body\s*>", html, re.I):
         return re.sub(r"</body\s*>", css + "</body>", html, count=1, flags=re.I)
     return html + css
@@ -1029,24 +1055,670 @@ def ensure_mlb_results_card_layout(html: str) -> str:
     html = _shorten_mlb_results_pc_sides(html)
     if 'id="mlb-results-card-layout"' in html:
         return html
-    b = _MLB_BODY
     css = (
         '<style id="mlb-results-card-layout">'
-        f"{b} .games-grid,{b} .results-grid{{display:grid!important;"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;}}"
-        f"{b} .games-grid>.game-card,{b} .games-grid>.game-card-stack{{width:100%!important;"
-        "min-width:0!important;overflow:hidden!important;}}"
-        f"{b} .pick-conf-grid{{display:grid!important;"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;}}"
-        f"{b} .daily-tally-grid{{display:grid!important;"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;}}"
-        f"{b} .model-grid:has(>.model-card){{display:grid!important;"
-        "grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:10px!important;}}"
+        f"{_mlb_sel('.games-grid')},{_mlb_sel('.results-grid')}{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;}"
+        f"{_mlb_sel('.games-grid>.game-card')},{_mlb_sel('.games-grid>.game-card-stack')}{{"
+        "width:100%!important;min-width:0!important;overflow:hidden!important;}"
+        f"{_mlb_sel('.pick-conf-grid')}{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;}"
+        f"{_mlb_sel('.daily-tally-grid')}{{display:grid!important;"
+        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;}"
+        f"{_mlb_sel('.model-grid:has(>.model-card)')}{{display:grid!important;"
+        "grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:10px!important;}"
         "</style>"
     )
     if re.search(r"</body\s*>", html, re.I):
         return re.sub(r"</body\s*>", css + "</body>", html, count=1, flags=re.I)
     return html + css
+
+
+def apply_mlb_picks_pagespeed_a11y(html: str) -> str:
+    """PageSpeed + a11y fixups for /mlb-picks only (owner 2026-09-14 unlock).
+
+    Does not restyle card layout or invent model numbers. Keeps Google tags;
+    defers chart CSS and shrinks ESPN logo / share preview bytes.
+    """
+    if not html:
+        return html
+
+    # ESPN logos: many /100/ assets 404 (sf, kc, mia, sd, tb, wsh, …).
+    # Keep a 100px face via the combiner resizing a working /500/ source.
+    def _mlb_logo_to_combiner(m: re.Match[str]) -> str:
+        abbr = m.group(1).lower()
+        return (
+            "https://a.espncdn.com/combiner/i?"
+            f"img=/i/teamlogos/mlb/500/{abbr}.png&h=100&w=100"
+        )
+
+    html = re.sub(
+        r"https://a\.espncdn\.com/i/teamlogos/mlb/(?:500|100)/([a-z0-9]+)\.png",
+        _mlb_logo_to_combiner,
+        html,
+        flags=re.I,
+    )
+
+    # If an old sync Ads tag snuck into HTML, strip it — base include already
+    # loads AW-18345189026 after idle (do not remove the tag from the site).
+    html = re.sub(
+        r'<script\b[^>]*src="https://www\.googletagmanager\.com/gtag/js\?id=AW-[^"]*"[^>]*>\s*</script>\s*',
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"<script>\s*window\.dataLayer\s*=\s*window\.dataLayer\s*\|\|\s*\[\];\s*"
+        r"function\s+gtag\(\)\s*\{[^}]*\}\s*gtag\('js',\s*new Date\(\)\);\s*"
+        r"gtag\('config',\s*'AW-[^']+'\);\s*</script>\s*",
+        "",
+        html,
+        flags=re.I,
+    )
+
+    # Share preview: request a downscaled JPEG for the in-page thumb; keep
+    # download/fullscreen links on the full asset.
+    def _share_preview_img(m: re.Match[str]) -> str:
+        tag = m.group(0)
+        src_m = re.search(r'\bsrc="([^"]+)"', tag, flags=re.I)
+        if not src_m:
+            return tag
+        src = src_m.group(1)
+        if "w=" not in src and "/share/predictions/" in src:
+            joiner = "&" if "?" in src else "?"
+            src = f"{src}{joiner}w=640"
+        tag = re.sub(r'\bsrc="[^"]+"', f'src="{src}"', tag, count=1, flags=re.I)
+        if re.search(r'\balt="[^"]*"', tag, flags=re.I):
+            tag = re.sub(r'\balt="[^"]*"', 'alt="MLB predictions share image"', tag, count=1, flags=re.I)
+        else:
+            tag = tag.replace("<img ", '<img alt="MLB predictions share image" ', 1)
+        if "loading=" not in tag.lower():
+            tag = tag.replace("<img ", '<img loading="lazy" decoding="async" width="420" height="747" ', 1)
+        return tag
+
+    html = re.sub(
+        r'<img\b[^>]*src="[^"]*/share/predictions/[^"]+"[^>]*>',
+        _share_preview_img,
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(<a\b[^>]*\bclass="[^"]*\bsocial-image-link\b[^"]*"[^>]*)(>)',
+        lambda m: (
+            m.group(1)
+            if re.search(r"\baria-label=", m.group(1), flags=re.I)
+            else m.group(1) + ' aria-label="Open MLB predictions share image"'
+        )
+        + m.group(2),
+        html,
+        count=1,
+        flags=re.I,
+    )
+
+    # Cards|Chart tablist requires role=tab children.
+    def _tab_btn(m: re.Match[str]) -> str:
+        tag = m.group(0)
+        active = bool(re.search(r'\bclass="[^"]*\bactive\b', tag, flags=re.I))
+        if not re.search(r'\brole="tab"', tag, flags=re.I):
+            tag = tag.replace("<button ", '<button role="tab" ', 1)
+        if re.search(r"\baria-selected=", tag, flags=re.I):
+            tag = re.sub(
+                r'\baria-selected="[^"]*"',
+                f'aria-selected="{"true" if active else "false"}"',
+                tag,
+                count=1,
+                flags=re.I,
+            )
+        else:
+            tag = tag.replace(
+                "<button ",
+                f'<button aria-selected="{"true" if active else "false"}" ',
+                1,
+            )
+        return tag
+
+    html = re.sub(
+        r'<button\b[^>]*\bid="pv(?:Cards|Chart)Btn"[^>]*>',
+        _tab_btn,
+        html,
+        flags=re.I,
+    )
+    if 'id="mlb-pv-aria-sync"' not in html:
+        html += (
+            '<script id="mlb-pv-aria-sync">'
+            "(function(){function sync(){var c=document.getElementById('pvCardsBtn'),"
+            "h=document.getElementById('pvChartBtn');if(!c||!h)return;"
+            "var chart=h.classList.contains('active');"
+            "c.setAttribute('aria-selected',chart?'false':'true');"
+            "h.setAttribute('aria-selected',chart?'true':'false');}"
+            "var _s=window.setPicksView;if(typeof _s==='function'){"
+            "window.setPicksView=function(mode){_s(mode);sync();};}"
+            "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);"
+            "else sync();})();</script>"
+        )
+
+    # html lang + main landmark
+    if re.search(r"<html\b", html, flags=re.I) and not re.search(
+        r"<html\b[^>]*\blang=", html, flags=re.I
+    ):
+        html = re.sub(r"<html\b", '<html lang="en"', html, count=1, flags=re.I)
+    if not re.search(r"<main\b", html, flags=re.I) and not re.search(
+        r'\brole=["\']main["\']', html, flags=re.I
+    ):
+        # Prefer wrapping the picks board; fall back to body child marker.
+        if 'class="picks-view-controls"' in html:
+            html = html.replace(
+                '<div class="picks-view-controls"',
+                '<main id="main-content"><div class="picks-view-controls"',
+                1,
+            )
+            if re.search(r"</body\s*>", html, flags=re.I):
+                html = re.sub(r"</body\s*>", "</main></body>", html, count=1, flags=re.I)
+        elif re.search(r"<body\b[^>]*>", html, flags=re.I):
+            html = re.sub(
+                r"(<body\b[^>]*>)",
+                r'\1<main id="main-content">',
+                html,
+                count=1,
+                flags=re.I,
+            )
+            html = re.sub(r"</body\s*>", "</main></body>", html, count=1, flags=re.I)
+
+    # Drop unused Google Fonts preconnect/Oswald on MLB picks (system fonts).
+    html = re.sub(
+        r'<link[^>]+href="https://fonts\.googleapis\.com[^"]*"[^>]*>\s*',
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'<link[^>]+href="https://fonts\.gstatic\.com[^"]*"[^>]*>\s*',
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"<noscript>\s*<link[^>]+fonts\.googleapis\.com[^>]*>\s*</noscript>\s*",
+        "",
+        html,
+        flags=re.I,
+    )
+
+    # Defer chart-only CSS (not needed for Cards LCP).
+    def _defer_css(m: re.Match[str]) -> str:
+        tag = m.group(0)
+        if "onload=" in tag.lower() or "media=" in tag.lower():
+            return tag
+        return tag.replace(
+            'rel="stylesheet"',
+            'rel="stylesheet" media="print" onload="this.media=\'all\'"',
+            1,
+        )
+
+    html = re.sub(
+        r'<link[^>]+href="[^"]*(?:mlb-picks-chart|picks-chart|pl-info-tips)\.css[^"]*"[^>]*>',
+        _defer_css,
+        html,
+        flags=re.I,
+    )
+
+    if 'id="mlb-psi-a11y-css"' not in html:
+        # Contrast: keep card chrome, darken low-contrast text PSI flagged.
+        css = (
+            '<style id="mlb-psi-a11y-css">'
+            "body.sport-mlb .win-pct{color:#0f172a!important;}"
+            "body.sport-mlb .model-tag{color:#0f172a!important;}"
+            "body.sport-mlb .ml-num{color:#0f172a!important;}"
+            "body.sport-mlb .ml-num.fav{color:#14532d!important;}"
+            "body.sport-mlb .analysis-toggle{color:#1e293b!important;}"
+            "body.sport-mlb .team-slot span[style*='opacity']{opacity:1!important;color:#475569!important;}"
+            "body.sport-mlb .date-bubble.today.today-bubble,"
+            "body.sport-mlb .date-bubble.today{"
+            "background:#047857!important;color:#fff!important;}"
+            "body.sport-mlb .date-bubble.today span{"
+            "background:#047857!important;color:#fff!important;}"
+            "body.sport-mlb .date-section{min-height:120px;}"
+            "body.sport-mlb .social-image-link{min-height:320px;}"
+            "</style>"
+        )
+        if re.search(r"</head\s*>", html, flags=re.I):
+            html = re.sub(r"</head\s*>", css + "</head>", html, count=1, flags=re.I)
+        else:
+            html = css + html
+    return html
+
+
+def _mlb_frozen_results_snapshot() -> str:
+    sandbox = Path("/Users/nimamesghali/Sports Sandbox")
+    candidates = (
+        sandbox / "mlb_FROZEN_SIGNED_OFF_20260828" / "mlb-results.snapshot.html",
+        sandbox
+        / "independent_sports"
+        / "_archives"
+        / "mlb_DONE_20260828"
+        / "mlb-results.snapshot.html",
+        sandbox / "mlb_DONE_premerge_20260828" / "mlb-results.snapshot.html",
+    )
+    for path in candidates:
+        try:
+            if path.is_file() and path.stat().st_size > 100_000:
+                return path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+    return ""
+
+
+def _mlb_merged_consensus_finals(live_html: str = "") -> list:
+    """Live results HTML + frozen snapshot — same merge as results consensus."""
+    try:
+        from mlb_consensus_hub import (
+            _dedupe_finals_by_game,
+            _extract_raw_mlb_finals_from_html,
+            _merge_consensus_finals,
+        )
+    except Exception:
+        return []
+    live = _extract_raw_mlb_finals_from_html(live_html or "", limit=800) or []
+    if not live:
+        try:
+            import sys
+
+            mod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
+            cache = getattr(mod, "_SPORT_RESULTS_CACHE", None) or {}
+            for key in (
+                "MLB_daily_results_html_v5",
+                "MLB_daily_results_html_v4",
+                "MLB_daily_results_html_v3",
+            ):
+                entry = cache.get(key)
+                if isinstance(entry, dict):
+                    src = entry.get("html") or ""
+                    if src and len(src) > 500:
+                        live = _extract_raw_mlb_finals_from_html(src, limit=800) or []
+                        if live:
+                            break
+        except Exception:
+            pass
+    snap = _mlb_frozen_results_snapshot()
+    snap_finals = (
+        _extract_raw_mlb_finals_from_html(snap, limit=800) if snap else []
+    ) or []
+    return _dedupe_finals_by_game(_merge_consensus_finals(live, snap_finals))
+
+
+def strip_mlb_face_books_run_total(html: str) -> str:
+    """Remove Books run line / Books total from the pick-card face strip.
+
+    Odds & Lines table in details still shows book lines.
+    """
+    if not html:
+        return html
+    html = re.sub(
+        r'<div class="line-chip">\s*'
+        r'<div class="line-chip-label">\s*Books run line\s*</div>\s*'
+        r'<div class="line-chip-val[^"]*">[\s\S]*?</div>\s*</div>\s*',
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'<div class="line-chip">\s*'
+        r'<div class="line-chip-label">\s*Books total\s*</div>\s*'
+        r'<div class="line-chip-val[^"]*">[\s\S]*?</div>\s*</div>\s*',
+        "",
+        html,
+        flags=re.I,
+    )
+    return html
+
+
+def _parse_amer_ml(raw: str) -> int | None:
+    s = (raw or "").strip().replace(",", "").replace("−", "-")
+    if not s or s in {"—", "–", "-", "N/A", "n/a"}:
+        return None
+    try:
+        return int(float(s))
+    except ValueError:
+        return None
+
+
+def _face_ml_favorite_side(stack: str, *, which: str) -> str | None:
+    """HOME/AWAY from face Books or Prediction Lab moneylines (more negative = fav)."""
+    cls = "face-books-ml" if which == "books" else "face-pl-ml"
+    nums = re.findall(
+        rf'<div class="ml-line {cls}">\s*'
+        r'<span class="ml-src[^"]*">[^<]*</span>\s*'
+        r'<span class="ml-num[^"]*">\s*([^<]+?)\s*</span>',
+        stack,
+        flags=re.I,
+    )
+    if len(nums) < 2:
+        return None
+    away_ml = _parse_amer_ml(nums[0])
+    home_ml = _parse_amer_ml(nums[1])
+    if away_ml is None or home_ml is None or away_ml == home_ml:
+        return None
+    return "HOME" if home_ml < away_ml else "AWAY"
+
+
+def _wl_pct(grades: list) -> tuple[int, int, float | None]:
+    w = sum(1 for g in grades if g == "WIN")
+    l = sum(1 for g in grades if g == "LOSS")
+    if w + l <= 0:
+        return 0, 0, None
+    return w, l, round(100.0 * w / (w + l), 1)
+
+
+def inject_mlb_consensus_and_pl_vs_books_chips(html: str) -> str:
+    """Face chips: Consensus Historical Record + PL vs Books (agree/disagree L7).
+
+    Replaces the room left by removing Books run line / Books total.
+    """
+    if not html or "data-pick-card" not in html or "lines-strip" not in html:
+        return html
+    try:
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        from mlb_consensus_hub import (
+            _pl_vs_books_rows_from_finals,
+            _pl_vs_books_slices,
+        )
+        from team_results_charts import (
+            _inject_consensus_hist_chips,
+            set_results_chart_source,
+        )
+    except Exception as e:
+        print(f"[mlb_ui_fixup] consensus/pl-vs import: {e}", flush=True)
+        return html
+
+    finals = _mlb_merged_consensus_finals("")
+    if finals:
+        # Seed chart source so consensus hist can grade patterns from MLB finals.
+        try:
+            # Minimal HTML seed is not needed — patch lookup via inject + models.
+            pass
+        except Exception:
+            pass
+
+    # Consensus Historical Record (same injector as NCAAF/CFL; MLB finals below).
+    try:
+        from team_results_charts import _consensus_d7_combo_lookup as _orig_lookup
+        import team_results_charts as trc
+
+        mlb_models = (
+            "Grinder2",
+            "Takedown",
+            "Edge",
+            "XSharp",
+            "Sharp Consensus",
+            "Efficiency",
+        )
+
+        def _mlb_lookup(sport: str):
+            sport_u = trc._sport_key(sport)
+            if sport_u != "MLB":
+                return _orig_lookup(sport)
+            try:
+                from mlb_consensus_hub import (
+                    _consensus_combo_period_data,
+                    _consensus_wl,
+                )
+            except Exception:
+                return {}
+            if not finals:
+                return {}
+            data = _consensus_combo_period_data(finals, sport="mlb")
+            if not data:
+                return {}
+            out: dict = {}
+            filter_combo = data["filter_combo"]
+            d7_items = list(data.get("d7") or [])
+            if not d7_items:
+                ln_key = str(data.get("ln_key") or "")[:10]
+                if len(ln_key) == 10 and ln_key[4] == "-":
+                    try:
+                        ln_dt = datetime.strptime(ln_key, "%Y-%m-%d")
+                        cut = (ln_dt - timedelta(days=6)).strftime("%Y-%m-%d")
+                        pool = list(data.get("d30") or []) or list(data.get("ln") or [])
+                        d7_items = [
+                            a
+                            for a in pool
+                            if cut <= str(a.get("game_date") or "")[:10] <= ln_key
+                        ]
+                        if not d7_items and data.get("ln"):
+                            d7_items = list(data.get("ln") or [])
+                    except ValueError:
+                        pass
+            for folded, keys in (data.get("combo_keys") or {}).items():
+                for key in keys:
+                    items = filter_combo(d7_items, folded=folded, key=key)
+                    w, l, _p, pct = _consensus_wl(items)
+                    out[(int(folded), tuple(key))] = (w, l, pct)
+            return out
+
+        trc._consensus_d7_combo_lookup = _mlb_lookup  # type: ignore[assignment]
+        try:
+            html = _inject_consensus_hist_chips(
+                html, sport="MLB", models=mlb_models
+            )
+        finally:
+            trc._consensus_d7_combo_lookup = _orig_lookup  # type: ignore[assignment]
+    except Exception as e:
+        print(f"[mlb_ui_fixup] consensus hist inject: {e}", flush=True)
+
+    # PL vs Books agree/disagree Last 7 record for this card's ML lean.
+    try:
+        rows = _pl_vs_books_rows_from_finals(finals) if finals else []
+        now = datetime.now(ZoneInfo("America/New_York"))
+        today = now.strftime("%Y-%m-%d")
+        cut7 = (now.date() - timedelta(days=7)).strftime("%Y-%m-%d")
+        d7 = [
+            r
+            for r in rows
+            if cut7 <= str(r.get("game_date") or "")[:10] < today
+        ]
+        if not d7 and rows:
+            # Mid-gap fallback: last calendar night's cluster.
+            past = sorted(
+                {
+                    str(r.get("game_date") or "")[:10]
+                    for r in rows
+                    if str(r.get("game_date") or "")[:10] < today
+                }
+            )
+            if past:
+                ln = past[-1]
+                cut = (
+                    datetime.strptime(ln, "%Y-%m-%d").date() - timedelta(days=6)
+                ).strftime("%Y-%m-%d")
+                d7 = [
+                    r
+                    for r in rows
+                    if cut <= str(r.get("game_date") or "")[:10] <= ln
+                ]
+        slices = _pl_vs_books_slices(d7) if d7 else {
+            "books_pl_agree": [],
+            "books_pl_disagree": [],
+        }
+        aw, al, ap = _wl_pct(slices.get("books_pl_agree") or [])
+        dw, dl, dp = _wl_pct(slices.get("books_pl_disagree") or [])
+
+        def _pl_chip(stack: str) -> str:
+            if "pl-vs-books-chip" in stack or "lines-strip" not in stack:
+                return stack
+            book = _face_ml_favorite_side(stack, which="books")
+            pl = _face_ml_favorite_side(stack, which="pl")
+            if book and pl and book == pl:
+                rec = f"{aw}-{al}"
+                pct_s = f"{ap:.0f}%" if ap is not None else "—"
+                val = f"Agree: {rec} ({pct_s}) — Last 7 Days"
+            elif book and pl:
+                rec = f"{dw}-{dl}"
+                pct_s = f"{dp:.0f}%" if dp is not None else "—"
+                val = f"Disagree: {rec} ({pct_s}) — Last 7 Days"
+            else:
+                val = "—"
+            tip = html_lib.escape(
+                "PL vs Books uses this game's moneyline favorites. "
+                "Agree = same side; Disagree = split. Record is Last 7 Days "
+                "from graded finals (Disagree grades the PL favorite).",
+                quote=True,
+            )
+            chip = (
+                '<div class="line-chip pl-vs-books-chip">'
+                '<div class="line-chip-label">PL vs Books '
+                '<button type="button" class="h2h-info-btn pct-info-btn pl-vs-info" '
+                f'data-tip="{tip}" aria-label="What is PL vs Books?" '
+                'aria-expanded="false" aria-haspopup="true">i</button></div>'
+                f'<div class="line-chip-val">{html_lib.escape(val)}</div></div>'
+            )
+            # Prefer after consensus hist; else after RL confidence; else strip start.
+            for anchor in (
+                r'(<div class="line-chip consensus-hist-chip">[\s\S]*?</div>\s*</div>)',
+                r'(<div class="line-chip rl-confidence-chip">[\s\S]*?</div>\s*</div>)',
+            ):
+                m = re.search(anchor, stack, flags=re.I)
+                if m:
+                    return stack.replace(m.group(1), m.group(1) + "\n    " + chip, 1)
+            m = re.search(r'(<div class="lines-strip">)', stack, flags=re.I)
+            if m:
+                return stack.replace(m.group(1), m.group(1) + "\n    " + chip, 1)
+            return stack
+
+        parts = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+        if len(parts) >= 2:
+            html = parts[0] + "".join(_pl_chip(p) for p in parts[1:])
+    except Exception as e:
+        print(f"[mlb_ui_fixup] pl vs books inject: {e}", flush=True)
+
+    return html
+
+
+def fill_mlb_card_clocks(html: str) -> str:
+    """Fill Upcoming kickoff clocks from ESPN when cards lack a real time."""
+    if not html or "data-pick-card" not in html:
+        return html
+    if "Upcoming" not in html and "TBD" not in html:
+        return html
+    dates = sorted(set(re.findall(r'id="date-(\d{4}-\d{2}-\d{2})"', html)))
+    if not dates:
+        dates = sorted(set(re.findall(r'data-date="(\d{4}-\d{2}-\d{2})"', html)))
+    clocks: dict[tuple[str, str], str] = {}
+    try:
+        import json
+        import urllib.request
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        def _fmt(raw: str) -> str:
+            s = (raw or "").strip()
+            if not s:
+                return ""
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+            local = dt.astimezone(ZoneInfo("America/New_York"))
+            return f"{local.strftime('%I:%M %p').lstrip('0')} ET"
+
+        def _key(name: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+        for gd in dates or []:
+            ds = gd.replace("-", "")
+            url = (
+                "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/"
+                f"scoreboard?dates={ds}&limit=50"
+            )
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "application/json",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                data = json.loads(resp.read().decode())
+            for ev in data.get("events") or []:
+                clock = _fmt(str(ev.get("date") or ""))
+                if not clock:
+                    continue
+                comps = (ev.get("competitions") or [{}])[0] or {}
+                home = away = ""
+                for c in comps.get("competitors") or []:
+                    team = c.get("team") or {}
+                    name = (team.get("displayName") or team.get("name") or "").strip()
+                    if str(c.get("homeAway") or "") == "home":
+                        home = name
+                    elif str(c.get("homeAway") or "") == "away":
+                        away = name
+                if home and away:
+                    clocks[(_key(away), _key(home))] = clock
+    except Exception as e:
+        print(f"[mlb_ui_fixup] espn clocks: {e}", flush=True)
+        return html
+    if not clocks:
+        return html
+
+    def _attr(open_tag: str, *names: str) -> str:
+        for name in names:
+            m = re.search(rf'\b{name}="([^"]*)"', open_tag, flags=re.I)
+            if m:
+                return html_lib.unescape((m.group(1) or "").strip())
+        return ""
+
+    def _set_attr(tag: str, name: str, value: str) -> str:
+        if re.search(rf'\b{name}="', tag, flags=re.I):
+            return re.sub(
+                rf'\b{name}="[^"]*"',
+                f'{name}="{html_lib.escape(value, quote=True)}"',
+                tag,
+                count=1,
+                flags=re.I,
+            )
+        return tag[:-1] + f' {name}="{html_lib.escape(value, quote=True)}">'
+
+    def _patch(stack: str) -> str:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            return stack
+        open_tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+        cur = _attr(open_tag, "data-time")
+        cur_low = re.sub(r"\s+", " ", cur).strip().lower()
+        if cur and cur_low not in {"upcoming", "tbd", "tba", "", "—", "–", "-"} and re.search(
+            r"\d", cur
+        ):
+            return stack
+        if cur_low in {"final", "live"} or cur_low.startswith("final") or cur_low.startswith("live"):
+            return stack
+        home = _attr(open_tag, "data-home-full", "data-home")
+        away = _attr(open_tag, "data-away-full", "data-away")
+        clock = clocks.get(
+            (
+                re.sub(r"[^a-z0-9]+", "", away.lower()),
+                re.sub(r"[^a-z0-9]+", "", home.lower()),
+            ),
+            "",
+        )
+        if not clock:
+            return stack
+        open_tag = _set_attr(open_tag, "data-time", clock)
+        rest = re.sub(
+            r'(class="game-time">)(?:Upcoming|TBD|TBA|—|–|-)?(</span>)',
+            rf"\g<1>{html_lib.escape(clock)}\2",
+            rest,
+            count=1,
+            flags=re.I,
+        )
+        return open_tag + rest
+
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) <= 1:
+        return html
+    return parts[0] + "".join(_patch(p) for p in parts[1:])
 
 
 def apply_mlb_picks_fixups(html: str) -> str:
@@ -1066,12 +1738,26 @@ def apply_mlb_picks_fixups(html: str) -> str:
         html = dedupe_game_card_stacks(html)
     except Exception as e:
         print(f"[mlb_ui_fixup] dedupe: {e}", flush=True)
+    try:
+        html = fill_mlb_card_clocks(html)
+    except Exception as e:
+        print(f"[mlb_ui_fixup] clocks: {e}", flush=True)
     html = flip_mlb_model_spread_display(html)
     html = enrich_mlb_chart_data_attrs(html)
+    html = strip_mlb_face_books_run_total(html)
     html = inject_mlb_run_line_confidence(html)
     html = rewrite_mlb_edge_chip_to_consensus(html)
+    html = inject_mlb_consensus_and_pl_vs_books_chips(html)
     # Owner requirement: prediction cards stay expanded (Odds & Lines + Pick Confidence).
     html = open_all_pick_details_html(html)
+    try:
+        html = ensure_mlb_pick_conf_no_scroll(html)
+    except Exception as e:
+        print(f"[mlb_ui_fixup] pick-conf layout: {e}", flush=True)
+    try:
+        html = apply_mlb_picks_pagespeed_a11y(html)
+    except Exception as e:
+        print(f"[mlb_ui_fixup] pagespeed/a11y: {e}", flush=True)
     return html
 
 

@@ -16,6 +16,7 @@ Usage:
     python qa/site_checker.py --preflight      # server reachability only (~1s)
     python qa/site_checker.py --ship           # 5052 ship-parity + today's slates vs ESPN
     python qa/site_checker.py --chrome         # open every Sports/Results/Blog/Affiliate URL; fail if dead or template gaps
+    python qa/site_checker.py --pagespeed      # Google PageSpeed Insights only (same run as --full/--ship)
 
 EMAIL SETUP (one-time):
   Edit qa/checker_email.py and fill in your Gmail address and App Password.
@@ -29,6 +30,10 @@ Environment variable overrides:
   AUDIT_EMAIL_PASSWORD app password for SMTP
   AUDIT_SMTP_HOST      default smtp.gmail.com
   AUDIT_SMTP_PORT      default 587
+  PAGESPEED_API_KEY    Google PSI key (or qa/.pagespeed_api_key)
+  PAGESPEED_BASE_URL   Public origin for PSI when auditing :5052 (e.g. https://predictionlab.io)
+  PAGESPEED_PATHS      Comma paths (default /mlb-picks,/)
+  PAGESPEED_STRATEGY   mobile | desktop | both (default mobile in site_checker)
 """
 
 from __future__ import annotations
@@ -60,7 +65,8 @@ from audit_config import (
     CLUSTER_WARN_PCT, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO,
     EXPECTED_DASHBOARD_SPORTS, FORBIDDEN_CONTENT,
     FULL_MODE_AUDITORS, HISTORY_DIR, MODEL_DISPLAY_NAMES, MODEL_KEYS,
-    SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS,
+    SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS, PAGESPEED_MODE_AUDITORS,
+    PAGESPEED_PATHS, PAGESPEED_STRATEGY, PAGESPEED_PERF_FLOOR, PAGESPEED_A11Y_FLOOR,
     PAGE_SPEED_BUDGET, PREFLIGHT_TIMEOUT, QUICK_MODE_AUDITORS, REQUEST_TIMEOUT, SCREENSHOTS_DIR,
     SMTP_HOST, SMTP_PORT, SPORT_PICKS_SLUGS, SPORT_RESULTS_SLUGS, STALE_STRINGS,
     USER_AGENT, is_offseason,
@@ -571,6 +577,9 @@ class ContentAuditor:
             nfl_chart_not_mlb_issues,
             nfl_chart_same_as_cards_issues,
             duplicate_h2h_issues,
+            model_performance_wl_pct_issues,
+            ncaaf_consensus_hist_face_issues,
+            compact_consensus_hist_face_issues,
             nfl_missing_efficiency_issues,
             nfl_preseason_results_issues,
             nfl_spread_result_card_issues,
@@ -586,6 +595,7 @@ class ContentAuditor:
             team_picks_template_issues,
             team_results_template_issues,
             tennis_chart_same_as_cards_issues,
+            tennis_picks_slate_issues,
         )
         _skip_junk = {"mlb-picks", "tennis-picks", "ufc-picks"}
         for slug in SPORT_PICKS_SLUGS:
@@ -667,7 +677,49 @@ class ContentAuditor:
                         message="; ".join(miss),
                         url=path, auditor=self.NAME))
                 dups = duplicate_h2h_issues(html, sport)
-                if dups or "h2h-face-chip" in html:
+                if sport == "NCAAF":
+                    hist = ncaaf_consensus_hist_face_issues(html)
+                    self.r.add(CheckResult(
+                        label="NCAAF picks Consensus Historical / G2-TD",
+                        status=FAIL if hist else PASS,
+                        message="; ".join(hist) if hist else (
+                            "Consensus Historical Record on face; Grinder2/Takedown filled"
+                        ),
+                        url=path, auditor=self.NAME))
+                elif sport in ("MLB", "NFL", "CFL"):
+                    hist = compact_consensus_hist_face_issues(html, sport)
+                    self.r.add(CheckResult(
+                        label=f"{sport} picks Consensus Historical face",
+                        status=FAIL if hist else PASS,
+                        message="; ".join(hist) if hist else (
+                            "Compact Consensus Record face "
+                            "(pattern + W-L; no Last 7 Days)"
+                        ),
+                        url=path, auditor=self.NAME))
+                elif sport == "WNBA":
+                    from qa.chart_shape import wnba_consensus_hist_face_issues
+                    hist = wnba_consensus_hist_face_issues(html)
+                    self.r.add(CheckResult(
+                        label="WNBA picks Consensus Historical face",
+                        status=FAIL if hist else PASS,
+                        message="; ".join(hist) if hist else (
+                            "Consensus Historical Record on face; per-card "
+                            "4-model pattern (not blanket 4/4); no duplicate H2H"
+                        ),
+                        url=path, auditor=self.NAME))
+                if sport == "CFL":
+                    from qa.chart_shape import cfl_h2h_and_books_issues
+                    cfl_i = cfl_h2h_and_books_issues(html)
+                    self.r.add(CheckResult(
+                        label="CFL picks H2H + empty Books",
+                        status=FAIL if cfl_i else PASS,
+                        message="; ".join(cfl_i) if cfl_i else (
+                            "H2H from meeting history; no empty Books spread/total"
+                        ),
+                        url=path, auditor=self.NAME))
+                elif sport not in ("NCAAF", "MLB", "NFL", "WNBA") and (
+                    dups or "h2h-face-chip" in html
+                ):
                     self.r.add(CheckResult(
                         label=f"{sport} picks duplicate H2H",
                         status=FAIL if dups else PASS,
@@ -934,6 +986,14 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(date_issues),
                         url=path, auditor=self.NAME))
+                mp = model_performance_wl_pct_issues(html, "NCAAF")
+                self.r.add(CheckResult(
+                    label="NCAAF Model Performance W-L %",
+                    status=FAIL if mp else PASS,
+                    message="; ".join(mp) if mp else (
+                        "Model Performance big % matches W-L win rate"
+                    ),
+                    url=path, auditor=self.NAME))
             if not html or "Consensus Based Betting Records" not in html:
                 continue
             sport_name = slug.split("-")[0].upper()
@@ -967,6 +1027,40 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(gaps) if gaps else "WNBA results cards are missing H2H Last 10",
                         url=path, auditor=self.NAME))
+                from qa.chart_shape import (
+                    wnba_results_graded_clarity_issues,
+                    wnba_season_games_undercount_issues,
+                )
+                under = wnba_season_games_undercount_issues(html)
+                self.r.add(CheckResult(
+                    label="WNBA season games vs 330 slate",
+                    status=FAIL if under else PASS,
+                    message="; ".join(under) if under else (
+                        "Season Performance is past the stale July ~67-game band"
+                    ),
+                    url=path, auditor=self.NAME))
+                clarity = wnba_results_graded_clarity_issues(html)
+                self.r.add(CheckResult(
+                    label="WNBA results graded-decisions clarity",
+                    status=FAIL if clarity else PASS,
+                    message="; ".join(clarity) if clarity else (
+                        "Model Performance / Season state graded decisions "
+                        "vs completed games"
+                    ),
+                    url=path, auditor=self.NAME))
+            if slug == "cfl-results":
+                from qa.chart_shape import cfl_chart_consensus_issues
+                chart_html = self._fetch("/cfl-results?view=chart")
+                cfl_c = cfl_chart_consensus_issues(chart_html or "")
+                self.r.add(CheckResult(
+                    label="CFL chart consensus",
+                    status=FAIL if cfl_c else PASS,
+                    message="; ".join(cfl_c) if cfl_c else (
+                        "CFL chart has Consensus Based Betting Records / 6/6"
+                    ),
+                    url="/cfl-results?view=chart",
+                    auditor=self.NAME,
+                ))
 
         nhl_cards = self._fetch("/nhl-results")
         nhl_chart = self._fetch("/nhl-results?view=chart")
@@ -987,6 +1081,46 @@ class ContentAuditor:
                 status=FAIL,
                 message="; ".join(ten_issues),
                 url="/tennis-results?view=chart", auditor=self.NAME))
+        else:
+            self.r.add(CheckResult(
+                label="Tennis results chart vs cards",
+                status=PASS,
+                message="Cards|Chart href toggle; chart has no match-card board",
+                url="/tennis-results?view=chart", auditor=self.NAME))
+
+        ten_picks = self._fetch("/tennis-picks")
+        ten_p_issues = tennis_picks_slate_issues(ten_picks)
+        self.r.add(CheckResult(
+            label="Tennis picks slate",
+            status=FAIL if ten_p_issues else PASS,
+            message="; ".join(ten_p_issues) if ten_p_issues else (
+                "Tennis picks has upcoming match cards"
+            ),
+            url="/tennis-picks", auditor=self.NAME))
+
+        from qa.chart_shape import (
+            golf_picks_board_issues,
+            ufc_consensus_hist_face_issues,
+        )
+        ufc_picks = self._fetch("/ufc-picks")
+        ufc_hist = ufc_consensus_hist_face_issues(ufc_picks)
+        self.r.add(CheckResult(
+            label="UFC picks Consensus Historical face",
+            status=FAIL if ufc_hist else PASS,
+            message="; ".join(ufc_hist) if ufc_hist else (
+                "Consensus Historical Record on UFC cards"
+            ),
+            url="/ufc-picks", auditor=self.NAME))
+
+        golf_picks = self._fetch("/golf-picks")
+        golf_iss = golf_picks_board_issues(golf_picks)
+        self.r.add(CheckResult(
+            label="Golf picks board UI",
+            status=FAIL if golf_iss else PASS,
+            message="; ".join(golf_iss) if golf_iss else (
+                "Golf board has stacked model cells + tournament chrome"
+            ),
+            url="/golf-picks", auditor=self.NAME))
 
         # Dashboard completeness — every expected sport must appear on the
         # homepage "Today's Picks by Sport" grid AND the all-sports-results page.
@@ -3035,6 +3169,20 @@ def _run_chrome_checker(session, base: str, report: AuditReport):
     ChromeChecker(session, base, report, CheckResult).run()
 
 
+def _run_pagespeed_checker(base: str, report: AuditReport):
+    """Google PageSpeed Insights API — same checker run, not a second tool."""
+    from pagespeed_api_checker import PagespeedAuditor
+    PagespeedAuditor(
+        base,
+        report,
+        CheckResult,
+        paths=PAGESPEED_PATHS,
+        strategy=PAGESPEED_STRATEGY,
+        perf_floor=PAGESPEED_PERF_FLOOR,
+        a11y_floor=PAGESPEED_A11Y_FLOOR,
+    ).run()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN ORCHESTRATOR
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3050,7 +3198,16 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     report = AuditReport(run_id=run_id, timestamp=ts, base_url=base)
 
     live = "predictionlab.io" in base
-    mode = "ship" if getattr(args, "ship", False) else ("quick" if args.quick else "full")
+    if getattr(args, "pagespeed", False) and not (
+        getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False) or args.full
+    ):
+        mode = "pagespeed"
+    elif getattr(args, "ship", False):
+        mode = "ship"
+    elif args.quick:
+        mode = "quick"
+    else:
+        mode = "full"
     print(f"\n{'='*60}")
     print(f"  PredictionLab QA Audit")
     print(f"  FETCHING LIVE HTTP PAGES — not local HTML folders")
@@ -3064,7 +3221,11 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     session = _make_session()
 
     # Determine which auditors to run
-    if getattr(args, "chrome", False):
+    if getattr(args, "pagespeed", False) and not (
+        getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False) or args.full
+    ):
+        auditors_to_run = PAGESPEED_MODE_AUDITORS
+    elif getattr(args, "chrome", False):
         auditors_to_run = CHROME_MODE_AUDITORS
     elif getattr(args, "ship", False):
         auditors_to_run = SHIP_MODE_AUDITORS
@@ -3075,9 +3236,36 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
 
     print("  ▶ Preflight server check…")
     reachable, preflight_fail = preflight_server(session, base)
+    pagespeed_only = list(auditors_to_run) == list(PAGESPEED_MODE_AUDITORS)
     if not reachable:
-        report.add(preflight_fail)
-        print(f"  ❌ {preflight_fail.message}")
+        # --pagespeed alone talks to Google against a public URL; local down is not a FAIL.
+        if pagespeed_only:
+            report.add(CheckResult(
+                label=preflight_fail.label,
+                status=WARN,
+                message=preflight_fail.message + " (ignored for --pagespeed-only)",
+                detail=preflight_fail.detail,
+                auditor="preflight",
+                url=preflight_fail.url,
+            ))
+            print(f"  ⚠️  {preflight_fail.message} (ignored for --pagespeed-only)")
+        else:
+            report.add(preflight_fail)
+            print(f"  ❌ {preflight_fail.message}")
+        # PageSpeed hits Google's API against a public URL — still run it when selected.
+        if "pagespeed" in auditors_to_run:
+            print("  ⏭  Skipping HTTP auditors — server unreachable; still running pagespeed")
+            try:
+                print("  ▶ Running pagespeed audit…")
+                _run_pagespeed_checker(base, report)
+            except Exception as exc:
+                report.add(CheckResult(
+                    label="pagespeed auditor crash", status=FAIL,
+                    message=str(exc),
+                    detail=traceback.format_exc()[-400:],
+                    auditor="pagespeed"))
+            report.duration = time.time() - start
+            return report
         print("  ⏭  Skipping HTTP auditors — server unreachable")
         report.duration = time.time() - start
         return report
@@ -3118,6 +3306,9 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     # Props auditor imports the engine directly (props API is auth-gated) —
     # not HTTP-dependent, so it runs even if the site is unreachable.
     run_auditor("props",      lambda: PropsAuditor(report).run())
+    # PageSpeed Insights (Google API). Not HTTP-dependent on AUDIT_BASE_URL —
+    # Google fetches a public origin (PAGESPEED_BASE_URL when auditing :5052).
+    run_auditor("pagespeed",  lambda: _run_pagespeed_checker(base, report))
 
     if args.screenshots:
         print("  ▶ Running screenshot audit…")
@@ -3232,6 +3423,8 @@ def main():
                         help="5052 ship-parity only: cards, results charts, header/footer, previews, blog")
     parser.add_argument("--chrome",      action="store_true",
                         help="Open every Sports/Results/Blog/Affiliate URL and fail if 404/500/timeout")
+    parser.add_argument("--pagespeed",   action="store_true",
+                        help="Google PageSpeed Insights only (also included in --full/--ship)")
     parser.add_argument("--url",         type=str, default=None,
                         help=f"Override base URL (default: {BASE_URL})")
     parser.add_argument("--preflight",   action="store_true",
@@ -3255,8 +3448,8 @@ def main():
             print(f"   {fail.detail[:200]}")
         sys.exit(1)
 
-    # If neither quick, ship, chrome, nor full, default to full
-    if not args.quick and not args.ship and not getattr(args, "chrome", False):
+    # If neither quick, ship, chrome, pagespeed, nor full, default to full
+    if not args.quick and not args.ship and not getattr(args, "chrome", False) and not getattr(args, "pagespeed", False):
         args.full = True
 
     report = run_audit(args, base_url=target_url)

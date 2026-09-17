@@ -1,0 +1,14 @@
+---
+description: NFL file-glob lock — refuse NFL path edits without UNLOCK NFL
+globs: "**/nfl*","**/NFL*","**/locked-nfl.mdc"
+alwaysApply: false
+---
+
+# NFL path lock (file-glob layer)
+
+If you are editing a file matching these globs, stop unless the owner already
+said **UNLOCK NFL** in this conversation with a named miss.
+
+This is an extra lock layer on top of `locked-nfl.mdc` / AGENTS Rule 12.
+Shared files (`NHL77FINAL.py`, `team_results_charts.py`) are not matched here —
+those still require UNLOCK NFL before any NFL-only branch change.

@@ -252,10 +252,16 @@ def picks_placeholder_issues(html: str) -> list[str]:
 _CLOCK_STUBS = frozenset(
     {"upcoming", "tbd", "tba", "time tba", "time tbd", "—", "–", "-", ""}
 )
+_CLOCK_STATUS_OK = frozenset(
+    {"final", "live", "in progress", "delayed", "postponed", "suspended", "cancelled", "canceled"}
+)
 
 
 def picks_clock_issues(html: str) -> list[str]:
-    """FAIL when card kickoff is Upcoming / TBD instead of a clock."""
+    """FAIL when card kickoff is Upcoming / TBD instead of a clock.
+
+    Finished / in-progress status labels (FINAL, LIVE, …) are not kickoff stubs.
+    """
     html = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html or "", flags=re.I)
     times = [t.strip() for t in re.findall(r'class="game-time">([^<]+)', html)]
     if len(times) < 2:
@@ -265,19 +271,27 @@ def picks_clock_issues(html: str) -> list[str]:
 
     def _stub(t: str) -> bool:
         low = re.sub(r"\s+", " ", t).strip().lower()
+        if low in _CLOCK_STATUS_OK or low.startswith("final") or low.startswith("live"):
+            return False
         if low in _CLOCK_STUBS:
             return True
         if low == "upcoming":
             return True
         return not bool(re.search(r"\d", t))
 
-    stub = sum(1 for t in times if _stub(t))
+    open_times = [
+        t
+        for t in times
+        if re.sub(r"\s+", " ", t).strip().lower() not in _CLOCK_STATUS_OK
+        and not re.sub(r"\s+", " ", t).strip().lower().startswith(("final", "live"))
+    ]
+    check = open_times if open_times else times
+    stub = sum(1 for t in check if _stub(t))
     if stub == 0:
         return []
-    if stub == len(times):
-        return [f"Kickoff time stuck on Upcoming / no clock ({stub}/{len(times)})"]
-    return [f"Kickoff time missing on {stub}/{len(times)} cards"]
-
+    if stub == len(check):
+        return [f"Kickoff time stuck on Upcoming / no clock ({stub}/{len(check)})"]
+    return [f"Kickoff time missing on {stub}/{len(check)} cards"]
 
 def _logo_src_missing(src: str) -> bool:
     s = (src or "").strip()
@@ -1874,6 +1888,12 @@ def empty_last_night_spread_tally_issues(html: str) -> list[str]:
 def duplicate_h2h_issues(html: str, sport: str = "") -> list[str]:
     """FAIL when H2H Last 10 is on the card face and again in details."""
     html = html or ""
+    sport_u = (sport or "").strip().upper()
+    if sport_u == "NCAAF":
+        # NCAAF face must show Consensus Historical Record, not H2H.
+        return ncaaf_consensus_hist_face_issues(html)
+    if sport_u == "WNBA":
+        return wnba_consensus_hist_face_issues(html)
     if "h2h-face-chip" not in html:
         return []
     cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
@@ -1886,12 +1906,469 @@ def duplicate_h2h_issues(html: str, sport: str = "") -> list[str]:
         if re.search(r'class="sf-label">\s*H2H Last 10', card, flags=re.I):
             duped += 1
     if duped:
-        label = (sport or "pick").strip().upper() or "PICK"
+        label = sport_u or "PICK"
         return [
             f"{duped} {label} pick card(s) show H2H Last 10 on the face and again "
             "under details"
         ]
     return []
+
+
+def wnba_consensus_hist_face_issues(html: str) -> list[str]:
+    """FAIL when WNBA picks lack Consensus Historical Record or still dup H2H."""
+    html = html or ""
+    if "data-pick-card" not in html:
+        return []
+    issues: list[str] = []
+    cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+    cards = [c for c in cards[1:] if "pick-conf-grid" in c or "pc-name" in c]
+    if len(cards) < 2:
+        return []
+    missing_hist = 0
+    face_h2h = 0
+    wrong_pattern = 0
+    for card in cards:
+        if "consensus-hist-chip" not in card and "Consensus Historical Record" not in card:
+            missing_hist += 1
+        if "h2h-face-chip" in card:
+            face_h2h += 1
+        # Chip must match this card's 4-model agreement (not a blanket 4/4).
+        hm = re.search(r'data-home="([^"]*)"', card[:2000], flags=re.I)
+        am = re.search(r'data-away="([^"]*)"', card[:2000], flags=re.I)
+        home = html_lib.unescape(hm.group(1) if hm else "")
+        away = html_lib.unescape(am.group(1) if am else "")
+        sides: dict[str, str] = {}
+        for name in ("Edge", "XSharp", "Sharp Consensus", "Efficiency"):
+            m = re.search(
+                rf'<div class="pc-name">\s*{re.escape(name)}\s*</div>\s*'
+                r'<div class="pc-val"[^>]*>\s*([^<]*)</div>\s*'
+                r'<div class="pc-side([^"]*)"[^>]*>\s*([^<]*)',
+                card,
+                flags=re.I,
+            )
+            if not m:
+                continue
+            raw = (m.group(1) or "").strip().replace("%", "")
+            if raw.lower() in {"", "n/a", "na", "—", "–", "-"}:
+                continue
+            classes, side_txt = m.group(2) or "", (m.group(3) or "").strip()
+            if re.search(r"\bhome\b", classes, flags=re.I):
+                sides[name] = "HOME"
+            elif re.search(r"\baway\b", classes, flags=re.I):
+                sides[name] = "AWAY"
+            else:
+                sn = re.sub(r"[^a-z0-9]+", "", side_txt.lower())
+                hn = re.sub(r"[^a-z0-9]+", "", home.lower())
+                an = re.sub(r"[^a-z0-9]+", "", away.lower())
+                if sn and hn and (sn in hn or hn in sn):
+                    sides[name] = "HOME"
+                elif sn and an and (sn in an or an in sn):
+                    sides[name] = "AWAY"
+        # (rest of WNBA function continues below — keep file intact)
+        chip = re.search(
+            r"Consensus Historical Record</div>\s*"
+            r'<div class="line-chip-val">([^<]+)',
+            card,
+            flags=re.I,
+        )
+        chip_t = chip.group(1) if chip else ""
+        if len(sides) >= 4 and chip_t:
+            from collections import Counter
+
+            counts = Counter(sides.values())
+            top_n = counts.most_common(1)[0][1]
+            if top_n == 4 and (
+                not chip_t.startswith("Unanimous:")
+                or re.search(r"\d\s*/\s*\d", chip_t)
+            ):
+                wrong_pattern += 1
+            elif top_n == 3:
+                dissent = [
+                    n
+                    for n in ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
+                    if sides.get(n) != counts.most_common(1)[0][0]
+                ]
+                need = "All but " + " and ".join(dissent)
+                if (
+                    not chip_t.lower().startswith(need.lower() + ":")
+                    or re.search(r"\d\s*/\s*\d", chip_t)
+                    or "Last 7" in chip_t
+                    or "Strong consensus" in chip_t
+                ):
+                    wrong_pattern += 1
+            elif top_n == 2 and (
+                not chip_t.startswith("Split:")
+                or re.search(r"\d\s*/\s*\d", chip_t)
+                or "Unanimous:" in chip_t
+            ):
+                wrong_pattern += 1
+    if missing_hist:
+        issues.append(
+            f"WNBA: {missing_hist}/{len(cards)} cards missing Consensus Historical "
+            "Record on the face (not live Sharp Consensus %)"
+        )
+    if face_h2h:
+        issues.append(
+            f"WNBA: {face_h2h}/{len(cards)} cards still show H2H Last 10 on the face "
+            "— use Consensus Historical Record instead"
+        )
+    if wrong_pattern:
+        issues.append(
+            f"WNBA: {wrong_pattern}/{len(cards)} cards show the wrong Consensus "
+            "Historical pattern (must match this card's 4-model agreement)"
+        )
+    return issues
+
+
+def ufc_consensus_hist_face_issues(html: str) -> list[str]:
+    """FAIL when UFC cards lack Consensus Historical Record face chips."""
+    html = html or ""
+    if "data-pick-card" not in html:
+        return []
+    cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+    cards = [c for c in cards[1:] if "pick-conf-grid" in c or "pc-name" in c]
+    if len(cards) < 2:
+        return []
+    missing = 0
+    bad = 0
+    for card in cards:
+        if "consensus-hist-chip" not in card and "Consensus Historical Record" not in card:
+            missing += 1
+            continue
+        m = re.search(
+            r"Consensus Historical Record</div>\s*"
+            r'<div class="line-chip-val">([^<]+)',
+            card,
+            flags=re.I,
+        )
+        val = (m.group(1) if m else "").strip()
+        if not val or val == "—":
+            continue
+        if not (
+            val.startswith("Unanimous:")
+            or val.startswith("All but ")
+            or val.startswith("Split:")
+        ):
+            bad += 1
+        if re.search(r"\d\s*/\s*\d", val) or "Last 7" in val or "Consensus Record:" in val:
+            bad += 1
+    issues: list[str] = []
+    if missing:
+        issues.append(
+            f"UFC: {missing}/{len(cards)} cards missing Consensus Historical Record"
+        )
+    if bad:
+        issues.append(
+            f"UFC: {bad}/{len(cards)} cards have the wrong Consensus Historical format "
+            "(need Unanimous / All but / Split + W-L)"
+        )
+    return issues
+
+
+def golf_picks_board_issues(html: str) -> list[str]:
+    """FAIL when golf picks board CSS/chrome is missing or still bare-link junk."""
+    html = html or ""
+    if not html:
+        return ["Golf picks page did not load"]
+    issues: list[str] = []
+    if "golf-table" not in html:
+        issues.append("Golf picks missing ranked field table")
+    if "golf-model-cell" not in html and "golf-mrank" in html:
+        issues.append("Golf model cells are not stacked (rank/% still inline mess)")
+    if "golf-chip" in html and "golf-active-list" not in html:
+        issues.append("Golf active tournament chips missing list chrome")
+    if 'id="golf-event"' not in html and "golf-picker" not in html:
+        issues.append("Golf tournament dropdown missing")
+    # Bare blue-link Active row without chip class
+    if re.search(r">Active\s+Biltmore[^<]*</a>", html, flags=re.I) and "golf-chip" not in html:
+        issues.append("Golf Active tournament link is a bare blue link (need golf-chip)")
+    return issues
+
+
+def wnba_season_games_undercount_issues(html: str) -> list[str]:
+    """FAIL when Season Performance is stuck near the July ~67-game snapshot.
+
+    2026 WNBA slate is 15×44 = 330 regular-season games. ESPN had ~320 finals
+    by mid-September; a Season Moneyline total under ~100 after Aug means the
+    page is still on a stale / incomplete season window.
+    """
+    html = html or ""
+    totals: list[int] = []
+    # Prefer Moneyline Accuracy by Model (not Spread/O/U season tiles).
+    ml_acc = re.search(
+        r'Moneyline Accuracy by Model[\s\S]{0,2500}',
+        html,
+        flags=re.I,
+    )
+    if ml_acc:
+        for rec in re.finditer(r'(\d+)\s*[-–]\s*(\d+)', ml_acc.group(0)):
+            w, l = int(rec.group(1)), int(rec.group(2))
+            n = w + l
+            if 20 <= n <= 400:
+                totals.append(n)
+    if not totals:
+        tile = re.search(
+            r'Moneyline\s*\(\s*Efficiency\s*\)[\s\S]{0,400}?(\d+)\s*[-–]\s*(\d+)',
+            html,
+            flags=re.I,
+        )
+        if tile:
+            n = int(tile.group(1)) + int(tile.group(2))
+            if 20 <= n <= 400:
+                totals.append(n)
+    if not totals:
+        return []
+    best = max(totals)
+    # Mid-season floor: reject the known stale ~67-game July snapshot band.
+    if best < 100:
+        return [
+            f"WNBA Season Performance tops out at {best} graded games — "
+            "expected well above the stale July snapshot (~67) toward the "
+            "2026 330-game slate"
+        ]
+    return []
+
+
+def wnba_results_graded_clarity_issues(html: str) -> list[str]:
+    """FAIL when WNBA results omit 'graded decisions' vs completed-games copy."""
+    html = html or ""
+    if "Model Performance" not in html and "Season Performance" not in html:
+        return []
+    issues: list[str] = []
+    if "Model Performance" in html and not re.search(
+        r"graded decisions?", html, flags=re.I
+    ):
+        issues.append(
+            "WNBA Model Performance must state records are graded decisions "
+            "(not every completed final)"
+        )
+    if "Season Performance" in html and not re.search(
+        r"graded model decisions|graded decisions?", html, flags=re.I
+    ):
+        issues.append(
+            "WNBA Season Performance must state W-L tiles are graded model decisions"
+        )
+    return issues
+
+
+def cfl_h2h_and_books_issues(html: str) -> list[str]:
+    """FAIL CFL picks: all First meeting when history exists; empty Books chips."""
+    html = html or ""
+    if "data-pick-card" not in html:
+        return []
+    issues: list[str] = []
+    face_vals = re.findall(
+        r'H2H Last 10</div>\s*<div class="line-chip-val">([^<]+)',
+        html,
+        flags=re.I,
+    )
+    if len(face_vals) >= 3:
+        first = sum(1 for v in face_vals if re.search(r"first meeting", v, re.I))
+        real = sum(1 for v in face_vals if re.search(r"\d", v))
+        if first == len(face_vals) or real == 0:
+            issues.append(
+                "CFL: H2H Last 10 is all First meeting — expected meeting "
+                "averages from CFL isolation history"
+            )
+    empty_books = len(
+        re.findall(
+            r'<div class="line-chip-label">\s*Books?\s*(?:Spread|Total)\s*</div>\s*'
+            r'<div class="line-chip-val">\s*(?:—|&mdash;|&ndash;|N/A|–|-)?\s*</div>',
+            html,
+            flags=re.I,
+        )
+    )
+    if empty_books:
+        issues.append(
+            f"CFL: {empty_books} empty Books spread/total chip(s) — omit when missing"
+        )
+    return issues
+
+
+def cfl_chart_consensus_issues(html: str) -> list[str]:
+    """FAIL when CFL chart view is a thin stub without consensus tables."""
+    html = html or ""
+    if not html:
+        return ["CFL chart HTML empty"]
+    issues: list[str] = []
+    if "Consensus Based Betting Records" not in html:
+        issues.append("CFL chart missing Consensus Based Betting Records")
+    if "6/6" not in html and "unanimous" not in html.lower():
+        issues.append("CFL chart missing 6/6 unanimous consensus row")
+    return issues
+
+
+def compact_consensus_hist_face_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when 6-model team sports use verbose Consensus face copy.
+
+    Expected compact form (NFL-style): ``Consensus Record: 3/6 Split (0-0)``.
+    Rejects ``Last 7 Days``, ``/ no consensus``, and pct clutter.
+    """
+    html = html or ""
+    sport_u = (sport or "").strip().upper()
+    if sport_u and sport_u not in ("MLB", "NFL", "NCAAF", "CFL"):
+        return []
+    if "data-pick-card" not in html:
+        return []
+    cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+    cards = [c for c in cards[1:] if "pick-conf-grid" in c or "pc-name" in c]
+    if len(cards) < 2:
+        return []
+    issues: list[str] = []
+    missing_hist = 0
+    face_h2h = 0
+    verbose = 0
+    for card in cards:
+        if "consensus-hist-chip" not in card and "Consensus Historical Record" not in card:
+            missing_hist += 1
+        if "h2h-face-chip" in card:
+            face_h2h += 1
+        chip = re.search(
+            r"Consensus Historical Record</div>\s*"
+            r'<div class="line-chip-val">([^<]+)',
+            card,
+            flags=re.I,
+        )
+        chip_t = html_lib.unescape(chip.group(1) if chip else "").strip()
+        if not chip_t:
+            continue
+        low = chip_t.lower()
+        if (
+            "last 7" in low
+            or "/ no consensus" in low
+            or re.search(r"\(\s*[—\-–]\s*\)", chip_t)
+            or re.search(r"\(\s*\d{1,3}%\s*\)", chip_t)
+        ):
+            verbose += 1
+            continue
+        if not re.search(r"Consensus Record:\s*.+\(\s*\d", chip_t, flags=re.I):
+            # Allow em-dash empty only when inject could not classify.
+            if chip_t not in {"—", "–", "-", "Consensus Record: —"}:
+                verbose += 1
+    label = sport_u or "TEAM"
+    if missing_hist:
+        issues.append(
+            f"{label}: {missing_hist}/{len(cards)} cards missing Consensus Historical "
+            "Record on the face"
+        )
+    if face_h2h:
+        issues.append(
+            f"{label}: {face_h2h}/{len(cards)} cards still show H2H Last 10 on the face "
+            "— use Consensus Historical Record instead"
+        )
+    if verbose:
+        issues.append(
+            f"{label}: {verbose}/{len(cards)} cards still use verbose Consensus face "
+            "(Last 7 Days / no consensus / pct) — need compact "
+            "`Consensus Record: 3/6 Split (0-0)`"
+        )
+    return issues
+
+
+def ncaaf_consensus_hist_face_issues(html: str) -> list[str]:
+    """FAIL when NCAAF picks lack Consensus Historical Record or still dup H2H."""
+    html = html or ""
+    if "data-pick-card" not in html:
+        return []
+    issues: list[str] = []
+    cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+    cards = [c for c in cards[1:] if "pick-conf-grid" in c or "pc-name" in c]
+    if len(cards) < 2:
+        return []
+    missing_hist = 0
+    face_h2h = 0
+    g2_na = 0
+    for card in cards:
+        if "consensus-hist-chip" not in card and "Consensus Historical Record" not in card:
+            missing_hist += 1
+        if "h2h-face-chip" in card:
+            face_h2h += 1
+        for name in ("Grinder2", "Takedown"):
+            m = re.search(
+                rf'<div class="pc-name">\s*{name}\s*</div>\s*'
+                r'<div class="pc-val"[^>]*>\s*([^<]+)',
+                card,
+                flags=re.I,
+            )
+            if not m:
+                continue
+            val = (m.group(1) or "").strip().lower()
+            if val in {"n/a", "na", "—", "–", "-", ""}:
+                others = 0
+                for other in ("Edge", "XSharp", "Sharp Consensus", "Efficiency"):
+                    om = re.search(
+                        rf'<div class="pc-name">\s*{other}\s*</div>\s*'
+                        r'<div class="pc-val"[^>]*>\s*([^<]+)',
+                        card,
+                        flags=re.I,
+                    )
+                    if not om:
+                        continue
+                    ov = (om.group(1) or "").strip().lower()
+                    if ov and ov not in {"n/a", "na", "—", "–", "-"} and "%" in (om.group(1) or ""):
+                        others += 1
+                if others >= 2:
+                    g2_na += 1
+                    break
+    if missing_hist:
+        issues.append(
+            f"NCAAF: {missing_hist}/{len(cards)} cards missing Consensus Historical "
+            "Record on the face (not live Sharp Consensus %)"
+        )
+    if face_h2h:
+        issues.append(
+            f"NCAAF: {face_h2h}/{len(cards)} cards still show H2H Last 10 on the face "
+            "— use Consensus Historical Record instead"
+        )
+    if g2_na:
+        issues.append(
+            f"NCAAF: {g2_na}/{len(cards)} cards show Grinder2/Takedown as N/A while "
+            "other models have values"
+        )
+    for msg in compact_consensus_hist_face_issues(html, "NCAAF"):
+        if "verbose Consensus" in msg:
+            issues.append(msg)
+    return issues
+
+
+def model_performance_wl_pct_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when Model Performance big % does not match the W-L win rate.
+
+    Catches ROI (~35%) shown where win rate for 40-19 (~68%) belongs.
+    """
+    html = html or ""
+    sport_u = (sport or "").strip().upper()
+    if sport_u and sport_u != "NCAAF":
+        return []
+    if "Model Performance" not in html:
+        return []
+    # Pull 7 Days cells: big % then W-L-P detail
+    block_m = re.search(
+        r"Model Performance \(Flat Unit Tracking\)([\s\S]{0,6000})</div>\s*</div>\s*<!--",
+        html,
+        flags=re.I,
+    )
+    block = block_m.group(1) if block_m else html
+    issues: list[str] = []
+    for m in re.finditer(
+        r"7 Days</div>\s*<div[^>]*>\s*([0-9]+(?:\.[0-9]+)?)%\s*</div>\s*"
+        r"<div[^>]*>\s*(\d+)-(\d+)-(\d+)",
+        block,
+        flags=re.I,
+    ):
+        shown = float(m.group(1))
+        wins = int(m.group(2))
+        losses = int(m.group(3))
+        graded = wins + losses
+        if graded <= 0:
+            continue
+        expected = round(wins / graded * 100, 1)
+        if abs(shown - expected) > 1.5:
+            issues.append(
+                f"Model Performance 7 Days shows {shown}% next to {wins}-{losses} "
+                f"(win rate is {expected}%)"
+            )
+    return issues
 
 
 def nfl_duplicate_h2h_issues(html: str) -> list[str]:
@@ -1928,16 +2405,125 @@ def nfl_spread_result_card_issues(html: str) -> list[str]:
 
 
 def tennis_chart_same_as_cards_issues(cards_html: str, chart_html: str) -> list[str]:
-    """FAIL when tennis Cards and Chart are the same page."""
+    """FAIL when tennis results Cards ≠ shared 1vs1/UFC template.
+
+    Cards = date-nav + Best Performing / LN·L7·Season / Consensus table +
+    date-section result cards (normal shared card width).
+    Chart = analytics only (no date-section match boards).
+    """
     cards_html = cards_html or ""
     chart_html = chart_html or ""
+    issues: list[str] = []
     if not cards_html or not chart_html:
         return ["Tennis cards or chart view did not load"]
     if cards_html == chart_html:
         return ["Tennis results chart view looks the same as cards"]
+
+    def _has_href_toggle(html: str, *, chart: bool) -> bool:
+        if 'aria-label="Results view"' not in html and "pl-view-toggle" not in html:
+            return False
+        if chart:
+            return bool(
+                re.search(
+                    r'pl-view-btn[^>]*active[^>]*>\s*Chart\s*<|'
+                    r'pl-view-btn active"[^>]*>\s*Chart',
+                    html,
+                    flags=re.I,
+                )
+            )
+        return bool(
+            re.search(
+                r'pl-view-btn[^>]*active[^>]*>\s*Cards\s*<|'
+                r'pl-view-btn active"[^>]*>\s*Cards',
+                html,
+                flags=re.I,
+            )
+        )
+
+    if "setPicksView" in cards_html or "pvChartBtn" in cards_html:
+        issues.append(
+            "Tennis results Cards view has picks setPicksView controls "
+            "(need href Cards|Chart like UFC)"
+        )
+    if "setPicksView" in chart_html or "pvChartBtn" in chart_html:
+        issues.append(
+            "Tennis results Chart view has picks setPicksView controls "
+            "(need href Cards|Chart like UFC)"
+        )
+    if not _has_href_toggle(cards_html, chart=False):
+        issues.append("Tennis Cards view missing active Cards|Chart href toggle")
+    if not _has_href_toggle(chart_html, chart=True):
+        issues.append("Tennis Chart view missing active Cards|Chart href toggle")
+
+    # Cards must be analytics + date-section result cards (UFC Cards UI).
+    if "date-nav" not in cards_html:
+        issues.append(
+            "Tennis Cards missing date-nav (shared 1vs1/UFC Cards template)"
+        )
+    if "date-section" not in cards_html or "date-header" not in cards_html:
+        issues.append(
+            "Tennis Cards missing date-section boards "
+            "(shared 1vs1/UFC Cards template)"
+        )
+    if "Best Performing Model" not in cards_html and "Last Night" not in cards_html:
+        issues.append(
+            "Tennis Cards view missing results analytics "
+            "(Best Performing / Last Night · Last 7 · Season)"
+        )
+    if "Consensus Based Betting Records" not in cards_html:
+        issues.append("Tennis Cards view missing Consensus Based Betting Records")
+    if "class=\"bucket\"" not in cards_html and "class='bucket'" not in cards_html:
+        if "<table" not in cards_html or "Past 7 days" not in cards_html:
+            issues.append(
+                "Tennis Cards consensus is missing the Agreement / LN / 7d / 30d table"
+            )
+    cards_n = cards_html.count("data-pick-card") + cards_html.count("game-card-stack")
+    if cards_n < 2:
+        issues.append(
+            "Tennis Cards view missing result cards in date-sections "
+            "(shared 1vs1/UFC Cards template)"
+        )
+    # Chart must not be a Cards clone — no date-nav; must have Moneyline games table.
+    if "date-nav" in chart_html and "tennis-chart-hide-cards" not in chart_html:
+        issues.append(
+            "Tennis Chart still has date-nav (Cards chrome) — "
+            "Chart should match UFC chart UI"
+        )
+    if "Moneyline games" not in chart_html and 'id="ssr-finals"' not in chart_html:
+        issues.append(
+            "Tennis Chart missing Moneyline games results table at the bottom"
+        )
+    if re.search(r'class="date-section[^"]*visible', chart_html) and chart_html.count(
+        "data-pick-card"
+    ) > 5:
+        if "tennis-chart-hide-cards" not in chart_html:
+            issues.append(
+                "Tennis Chart view still shows date-section match cards "
+                "(should be tallies/consensus + Moneyline games, like UFC)"
+            )
     if ML_CHART not in chart_html and "cons-bar" not in chart_html:
-        return ["Tennis chart view has no results chart"]
-    return []
+        issues.append("Tennis chart view has no results chart")
+    if "Best Performing Model" not in chart_html and "Consensus Based" not in chart_html:
+        issues.append("Tennis Chart view missing performance / consensus analytics")
+    return issues
+
+
+def tennis_picks_slate_issues(html: str) -> list[str]:
+    """FAIL when tennis picks is an empty shell while the product expects a slate."""
+    html = html or ""
+    if not html:
+        return ["Tennis picks page did not load"]
+    issues: list[str] = []
+    empty = "No upcoming Tennis matches" in html or "No upcoming tennis matches" in html
+    n_cards = html.count("data-pick-card") + html.count("game-card-stack")
+    if empty and n_cards < 1:
+        issues.append(
+            "Tennis picks shows empty slate (No upcoming matches) — "
+            "check ESPN ATP/WTA sync"
+        )
+    if n_cards < 1 and "data-pick-card" not in html and not empty:
+        issues.append("Tennis picks has no pick cards")
+    return issues
 
 
 def results_math_issues(html: str, cards_html: str | None = None) -> list[str]:
@@ -2038,7 +2624,7 @@ def best_performing_width_issues(html: str) -> list[str]:
     html = html or ""
     if "Best Performing Model" not in html:
         return []
-    if "ncaaf-chart-best-width" in html:
+    if "ncaaf-chart-best-width" in html or "mlb-chart-best-width" in html:
         return []
     if re.search(
         r"section\.pl-analytics\s+\.tally-grid\s*\{[^}]*width\s*:\s*100%",
@@ -2051,3 +2637,100 @@ def best_performing_width_issues(html: str) -> list[str]:
 
 def ncaaf_chart_api_issues(payload: dict | None) -> list[str]:
     return team_chart_api_issues(payload, "ncaaf")
+
+
+def picks_pagespeed_a11y_issues(html: str, sport: str | None = None) -> list[str]:
+    """PageSpeed / a11y misses on picks pages (generic; enforce via PSI_ENFORCE_SPORTS).
+
+    Mirrors PSI reports so the site checker catches regressions without re-running
+    PageSpeed Insights on every sport. Logo /100/ is enforced for sports listed in
+    qa.contract_auditors.LOGO_CARD_SIZE_BY_SPORT (currently MLB).
+    """
+    html = html or ""
+    sport_u = (sport or "").strip().upper()
+    issues: list[str] = []
+
+    if not re.search(r"<html\b[^>]*\blang\s*=", html, flags=re.I):
+        issues.append("html missing lang attribute")
+
+    if not re.search(r"<main\b", html, flags=re.I) and not re.search(
+        r'\brole=["\']main["\']', html, flags=re.I
+    ):
+        issues.append("document missing main landmark")
+
+    if not re.search(r'<nav\b|role=["\']navigation["\']|hamburger|pl2-nav', html, flags=re.I):
+        issues.append("no navigation landmark/hamburger found")
+
+    # Cards|Chart tablist must have role=tab children + aria-selected on active
+    if re.search(r'role=["\']tablist["\']', html, flags=re.I):
+        if not re.search(r'<button\b[^>]*\brole=["\']tab["\']', html, flags=re.I):
+            issues.append("Cards|Chart tablist missing role=tab on buttons")
+        if not re.search(r'\baria-selected=["\']true["\']', html, flags=re.I):
+            issues.append("Cards|Chart tabs missing aria-selected=true on active tab")
+
+    # Share link needs a discernible name
+    for m in re.finditer(
+        r'<a\b([^>]*\bclass="[^"]*\bsocial-image-link\b[^"]*"[^>]*)>',
+        html,
+        flags=re.I,
+    ):
+        attrs = m.group(1)
+        has_aria = bool(re.search(r"\baria-label\s*=", attrs, flags=re.I))
+        start = m.end()
+        chunk = html[start : start + 400]
+        img_alt = re.search(r'<img\b[^>]*\balt="([^"]*)"', chunk, flags=re.I)
+        alt_ok = bool(img_alt and img_alt.group(1).strip())
+        if not has_aria and not alt_ok:
+            issues.append("social-image-link missing discernible name (aria-label or img alt)")
+            break
+
+    # Oversized ESPN logos when sport expects /100/
+    try:
+        from contract_auditors import LOGO_CARD_SIZE_BY_SPORT, logo_size_issues
+        issues.extend(logo_size_issues(html, sport_u))
+    except Exception:
+        if sport_u == "MLB":
+            big = re.findall(
+                r"https://a\.espncdn\.com/i/teamlogos/mlb/500/[a-z0-9]+\.png",
+                html,
+                flags=re.I,
+            )
+            if big:
+                issues.append(
+                    f"MLB team logos still using /500/ ({len(big)} URLs); use /100/ for card faces"
+                )
+
+    # Share preview downscale (all sports once wrap exists)
+    for m in re.finditer(
+        r'<img\b[^>]*src="([^"]*/share/predictions/[^"]+)"[^>]*>',
+        html,
+        flags=re.I,
+    ):
+        src = m.group(1)
+        if "w=" not in src:
+            issues.append("share preview image missing ?w= downscale param")
+        break
+
+    # Sync Google Ads / GA tag must not block in <head>
+    if re.search(
+        r'<script\b[^>]*src="https://www\.googletagmanager\.com/gtag/js\?id=(?:AW-|G-)',
+        html,
+        flags=re.I,
+    ):
+        issues.append(
+            "gtag.js loaded as script src in HTML; defer after load/idle (do not remove tag)"
+        )
+
+    # Chart CSS should not be render-blocking on cards-first picks pages
+    for href in ("mlb-picks-chart.css", "picks-chart.css", "pl-info-tips.css"):
+        for m in re.finditer(
+            rf'<link\b[^>]*href="[^"]*{re.escape(href)}[^"]*"[^>]*>',
+            html,
+            flags=re.I,
+        ):
+            tag = m.group(0)
+            if 'media="print"' not in tag.lower() and "onload=" not in tag.lower():
+                issues.append(f"render-blocking stylesheet: {href}")
+            break
+
+    return issues

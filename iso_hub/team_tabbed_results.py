@@ -996,7 +996,7 @@ def inject_mlb_results_analytics_html(
         <section class="pl-mlb-analytics" aria-label="Results analytics">
           <h3 class="pl-analytics-title">Best Performing Model</h3>
           <div class="pl-analytics-grid">
-            {_best_card("Today", best.get("today"))}
+            {_best_card("Last Night", best.get("today"))}
             {_best_card("Last 7", best.get("last_7"))}
             {_best_card("Season", best.get("season"))}
           </div>

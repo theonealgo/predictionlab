@@ -404,6 +404,15 @@ def enrich_soccer_plxg_html(html: str) -> str:
     html = strip_soccer_h2h_labels(html)
     if "data-pick-card" not in html:
         return html
+    # Already enriched (cached / prior fixup) — skip the per-card model lookups.
+    n_cards = html.count("data-pick-card")
+    n_plxg = len(re.findall(r'\bdata-plxg="[^"]+"', html))
+    if (
+        n_cards
+        and n_plxg >= max(1, (n_cards * 4) // 5)
+        and "PL Expected Goals" in html
+    ):
+        return html
 
     cache: dict[tuple[str, str, str, str], PLXGPrediction | None] = {}
 

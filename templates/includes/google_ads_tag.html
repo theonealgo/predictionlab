@@ -1,9 +1,29 @@
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18345189026"></script>
+<!-- Google Ads tag (gtag.js). Keep AW-18345189026; load after paint so it
+     does not compete with LCP / main-thread work. Commands queue in dataLayer. -->
 <script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'AW-18345189026');
+(function () {
+  var AW_ID = 'AW-18345189026';
+  function bootGoogleAdsTag() {
+    if (window.__plAwBooted) return;
+    window.__plAwBooted = true;
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    window.gtag = window.gtag || gtag;
+    gtag('js', new Date());
+    gtag('config', AW_ID);
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + AW_ID;
+    document.head.appendChild(s);
+  }
+  function schedule() {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(bootGoogleAdsTag, { timeout: 2500 });
+    } else {
+      setTimeout(bootGoogleAdsTag, 800);
+    }
+  }
+  if (document.readyState === 'complete') schedule();
+  else window.addEventListener('load', schedule, { once: true });
+})();
 </script>

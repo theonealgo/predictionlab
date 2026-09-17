@@ -133,6 +133,7 @@ class ShipParityAuditor:
             return 0, "", time.time() - t0, exc
 
     def _card_count(self, html: str) -> int:
+        html = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html or "", flags=re.I)
         stacks = html.count("game-card-stack")
         picks = len(re.findall(r'class="[^"]*pick-card[^"]*"', html, flags=re.I))
         data = html.count("data-pick-card")
@@ -520,13 +521,45 @@ class ShipParityAuditor:
     def _has_pick_cards(self, html: str) -> bool:
         html = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html or "", flags=re.I)
         low = html.lower()
+        # Real card nodes only — leftover H2H copy must not hide a blank slate.
         return bool(
-            H2H_LAST10 in html
-            or "data-pick-card" in low
+            "data-pick-card" in low
             or "pl2-pick-card" in low
             or "data-game-card" in low
             or 'class="pick-card"' in low
+            or "class='pick-card'" in low
+            or "game-card-stack" in low
         )
+
+    @staticmethod
+    def _picks_no_predictions_banner(html: str, sport: str) -> bool:
+        if not html:
+            return False
+        name = re.escape(sport or "")
+        return bool(
+            re.search(
+                rf'class="no-data"[^>]*>\s*No predictions available for\s+{name}\s*<',
+                html,
+                flags=re.I,
+            )
+            or re.search(
+                rf"No predictions available for\s+{name}\b",
+                html,
+                flags=re.I,
+            )
+        )
+
+    @staticmethod
+    def _et_today_str() -> str:
+        try:
+            from zoneinfo import ZoneInfo
+            from datetime import datetime
+
+            return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+        except Exception:
+            from datetime import datetime
+
+            return datetime.now().strftime("%Y-%m-%d")
 
     def _xsharp_rows_present(self, html: str) -> bool:
         return bool(
@@ -609,11 +642,41 @@ class ShipParityAuditor:
                              "H2H Last 10 present on picks cards", url=picks)
 
         if st == 200 and sport not in ("Tennis", "UFC", "Golf", "NBA", "NHL", "NCAAB", "NCAAW"):
-            if not self._has_pick_cards(html) and "is in the off-season" not in (html or ""):
+            today = self._et_today_str()
+            banner = self._picks_no_predictions_banner(html, sport)
+            has_cards = self._has_pick_cards(html)
+            has_today = f'id="date-{today}"' in (html or "")
+            if banner:
+                self.add(
+                    f"{sport} picks slate",
+                    FAIL,
+                    f'Page shows "No predictions available for {sport}" '
+                    f"(blank slate on a live sport; today={today})",
+                    url=picks,
+                )
+                self._note(self._missing_values, sport)
+            elif not has_cards and "is in the off-season" not in (html or ""):
                 self.add(f"{sport} picks slate", FAIL,
                          "Predictions page has no pick cards (blank slate on a live sport)",
                          url=picks)
                 self._note(self._missing_values, sport)
+            # Daily sport only — weekly sports often have no games today.
+            elif sport == "MLB" and has_cards and not has_today:
+                self.add(
+                    f"{sport} picks today",
+                    FAIL,
+                    f"Pick cards exist but none for today ({today}) — "
+                    "stale slate / missing today's games",
+                    url=picks,
+                )
+                self._note(self._missing_values, sport)
+            elif sport == "MLB" and has_cards:
+                self.add(
+                    f"{sport} picks today",
+                    PASS,
+                    f"Today's date section present ({today})",
+                    url=picks,
+                )
 
         if st == 200 and sport not in ("Tennis", "UFC", "Golf") and self._has_pick_cards(html):
             if not self._copy_all_present(html):

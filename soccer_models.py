@@ -2,13 +2,21 @@ from __future__ import annotations
 
 """Soccer model bundle: Grinder2 / Takedown / Edge / XSharp / Sharp Consensus.
 
+Taxonomy (see soccer_model_taxonomy.py) — labeling / analytics contract:
+
+  INDEPENDENT   Grinder2, Takedown, XSharp;
+                EdgeElo+ when no sportsbook odds are available
+  MARKET-AWARE  Edge when sportsbook odds are available;
+                Sharp Consensus when it incorporates market-sourced Edge
+  STRATEGY      Efficiency (not in this module; never part of consensus)
+
 Published slots (restore product intent — not one shared λ):
-  Grinder2        = Elo 1X2  (SoccerEloModel)
-  Takedown        = form / GD / soft-xG  (TakedownIndependent)
-  Edge            = book no-vig 1X2 when moneylines exist, else EdgeEloPlus
-  XSharp          = Poisson attack/defense λ 1X2  (PoissonRegressionModel)
-  Sharp Consensus = probability-weighted average of the independent bases
-                    (never Efficiency; never copy a missing neighbor)
+  Grinder2        = Elo 1X2  (SoccerEloModel)           [INDEPENDENT]
+  Takedown        = form / GD / soft-xG                 [INDEPENDENT]
+  Edge            = book no-vig when ML exist, else
+                    EdgeEloPlus                         [MARKET-AWARE / INDEPENDENT]
+  XSharp          = Poisson attack/defense λ 1X2        [INDEPENDENT]
+  Sharp Consensus = avg of available bases (incl. Edge) [MARKET-AWARE when Edge is]
 
 Efficiency is NOT part of this module and must never be edited here.
 """
