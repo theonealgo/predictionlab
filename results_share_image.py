@@ -256,6 +256,54 @@ def _get_font(size: int, bold: bool = True):
     return ImageFont.load_default()
 
 
+_MONTHS = (
+    "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+)
+
+
+def _short_date_label(raw: str) -> str:
+    """Turn ISO date ranges into short labels that fit the card width."""
+    t = re.sub(r"\s+", " ", (raw or "").strip())
+    if not t:
+        return ""
+    m = re.match(
+        r"(20\d{2})-(\d{2})-(\d{2})\s+to\s+(20\d{2})-(\d{2})-(\d{2})$",
+        t,
+        flags=re.I,
+    )
+    if m:
+        y1, mo1, d1, y2, mo2, d2 = m.groups()
+        a = f"{_MONTHS[int(mo1)]} {int(d1)}"
+        b = f"{_MONTHS[int(mo2)]} {int(d2)}"
+        if y1 != y2:
+            return f"{a}, {y1} – {b}, {y2}"
+        return f"{a} – {b}"
+    m = re.match(r"(20\d{2})-(\d{2})-(\d{2})$", t)
+    if m:
+        _y, mo, d = m.groups()
+        return f"{_MONTHS[int(mo)]} {int(d)}"
+    return t
+
+
+def _fit_text(
+    draw,
+    text: str,
+    font,
+    max_width: int,
+) -> str:
+    """Shrink text with ellipsis so it never clips the card edge."""
+    t = (text or "").strip()
+    if not t:
+        return ""
+    if draw.textbbox((0, 0), t, font=font)[2] <= max_width:
+        return t
+    ell = "…"
+    while t and draw.textbbox((0, 0), t + ell, font=font)[2] > max_width:
+        t = t[:-1].rstrip(" —–-")
+    return (t + ell) if t else ell
+
+
 def render_results_summary_share_image(
     payload: dict,
     fmt: str = "jpg",
@@ -270,72 +318,104 @@ def render_results_summary_share_image(
         return None, None
 
     width, height = 1080, 1920
-    pad = 48
+    pad = 56
+    inner = width - (pad * 2)
     image = Image.new("RGB", (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
-    title_font = _get_font(78, True)
-    sub_font = _get_font(40, True)
-    section_font = _get_font(44, True)
-    label_font = _get_font(40, True)
-    val_font = _get_font(52, True)
-    foot_font = _get_font(36, True)
 
     sport = str(payload.get("sport_name") or "Results")
-    y = 64
-    draw.text((pad, y), f"{sport} Results", fill=(15, 23, 42), font=title_font)
-    y += 96
-    draw.text((pad, y), "predictionlab.io", fill=(0, 82, 155), font=sub_font)
-    y += 72
+    title_font = _get_font(72, True)
+    sub_font = _get_font(34, True)
+    section_font = _get_font(42, True)
+    meta_font = _get_font(30, True)
+    label_font = _get_font(36, True)
+    rec_font = _get_font(38, True)
+    val_font = _get_font(52, True)
+    foot_font = _get_font(30, True)
+
+    footer_h = 120
+    header_h = 200
+    avail = height - header_h - footer_h
+    gap = 36
+    # Fill the frame — large cards, minimal dead air under the header.
+    box_h = (avail - gap) // 2
+    y = header_h + 8
+
+    draw.text((pad, 72), f"{sport} Results", fill=(15, 23, 42), font=title_font)
+    draw.text((pad, 160), "predictionlab.io", fill=(0, 82, 155), font=sub_font)
 
     def _draw_window(title: str, window: dict | None) -> int:
         nonlocal y
         window = window or {}
         games = int(window.get("games") or 0)
-        label = str(window.get("label") or "").strip()
-        head = title
-        if label:
-            head = f"{title} — {label}"
+        date_lbl = _short_date_label(str(window.get("label") or ""))
+        meta_bits = []
+        if date_lbl:
+            meta_bits.append(date_lbl)
         if games:
-            head = f"{head}  ({games} games)"
+            meta_bits.append(f"{games} games")
+        meta = " · ".join(meta_bits)
+
         box_top = y
-        box_h = 420
         draw.rounded_rectangle(
             (pad, box_top, width - pad, box_top + box_h),
-            radius=24,
+            radius=28,
             outline=(203, 213, 225),
             width=3,
             fill=(248, 250, 252),
         )
-        draw.text((pad + 28, box_top + 28), head, fill=(15, 23, 42), font=section_font)
+        text_max = inner - 56
+        head = _fit_text(draw, title, section_font, text_max)
+        draw.text((pad + 28, box_top + 32), head, fill=(15, 23, 42), font=section_font)
+        if meta:
+            meta_fit = _fit_text(draw, meta, meta_font, text_max)
+            draw.text(
+                (pad + 28, box_top + 88),
+                meta_fit,
+                fill=(100, 116, 139),
+                font=meta_font,
+            )
+
         rows = (
             ("Moneyline", window.get("ml") or {}),
             ("Spread", window.get("spread") or {}),
             ("Total", window.get("total") or {}),
         )
-        row_y = box_top + 110
-        for name, mkt in rows:
+        row_top = box_top + 150
+        row_h = (box_h - 170) // 3
+        for i, (name, mkt) in enumerate(rows):
             acc = str((mkt or {}).get("acc") or "—")
             rec = str((mkt or {}).get("record") or "—")
-            draw.text((pad + 36, row_y), name, fill=(51, 65, 85), font=label_font)
+            row_y = row_top + i * row_h
+            # One line: Market left, record center-left, % right — no cramped stack
+            mid_y = row_y + max(0, (row_h - 52) // 2)
+            draw.text((pad + 36, mid_y), name, fill=(51, 65, 85), font=label_font)
+            rec_x = pad + 280
+            draw.text((rec_x, mid_y), rec, fill=(71, 85, 105), font=rec_font)
             acc_bb = draw.textbbox((0, 0), acc, font=val_font)
             draw.text(
-                (width - pad - 36 - (acc_bb[2] - acc_bb[0]), row_y - 4),
+                (width - pad - 36 - (acc_bb[2] - acc_bb[0]), mid_y - 4),
                 acc,
                 fill=(15, 23, 42),
                 font=val_font,
             )
-            draw.text((pad + 36, row_y + 52), rec, fill=(71, 85, 105), font=label_font)
-            row_y += 100
-        y = box_top + box_h + 36
+            if i < 2:
+                sep_y = row_y + row_h - 2
+                draw.line(
+                    (pad + 28, sep_y, width - pad - 28, sep_y),
+                    fill=(226, 232, 240),
+                    width=2,
+                )
+        y = box_top + box_h + gap
         return y
 
     _draw_window("Last Night", payload.get("last_night"))
     _draw_window("Last 7 Days", payload.get("last_7"))
 
     note = "Sharp Consensus · ML / Spread / Total"
-    draw.text((pad, min(y + 12, height - 120)), note, fill=(100, 116, 139), font=foot_font)
+    draw.text((pad, height - 110), note, fill=(100, 116, 139), font=foot_font)
     draw.text(
-        (pad, height - 72),
+        (pad, height - 68),
         "Transparent results you can advertise",
         fill=(148, 163, 184),
         font=foot_font,

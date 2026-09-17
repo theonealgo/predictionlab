@@ -856,7 +856,8 @@
                     data-pl-spread="{% if sport != 'TENNIS' and pred.disp_pl_spread is defined and pred.disp_pl_spread is not none %}{{ fmt_spread_line(pred.disp_pl_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-xs-spread="{% if sport != 'TENNIS' and pred.disp_xs_spread is defined and pred.disp_xs_spread is not none %}{{ fmt_spread_line(pred.disp_xs_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-total-ev="{% if sport != 'TENNIS' and sport != 'SOCCER' and pred.total_ev is defined and pred.total_ev is not none %}{{ '%.1f'|format(pred.total_ev) }}{% endif %}"
-                    {% if is_premium|default(false) %}
+                    {# Face chips (Consensus Historical / Edge / RL) need model attrs for all
+                       visitors. Odds & Lines / Pick Confidence stay behind is_premium below. #}
                     data-m-grinder2="{% if pred.glicko2_prob is defined and pred.glicko2_prob is not none %}{{ pred.glicko2_prob }}{% endif %}"
                     data-m-takedown="{% if pred.trueskill_prob is defined and pred.trueskill_prob is not none %}{{ pred.trueskill_prob }}{% endif %}"
                     data-m-edge="{% if pred.elo_prob is defined and pred.elo_prob is not none %}{{ pred.elo_prob }}{% endif %}"
@@ -865,7 +866,6 @@
                     data-m-consensus="{% if pred.ensemble_prob is defined and pred.ensemble_prob is not none %}{{ pred.ensemble_prob }}{% endif %}"
                     data-pl-proj="{% if pred.pl_proj_away_pts is not none and pred.pl_proj_home_pts is not none %}{{ fmt_half(pred.pl_proj_away_pts) }}–{{ fmt_half(pred.pl_proj_home_pts) }}{% endif %}"
                     data-xs-proj="{% if pred.xs_proj_away_pts is not none and pred.xs_proj_home_pts is not none %}{{ fmt_half(pred.xs_proj_away_pts) }}–{{ fmt_half(pred.xs_proj_home_pts) }}{% endif %}"
-                    {% endif %}
                     data-result="{{ _chart_result }}">
                 <div class="game-card pick-card is-expanded" data-league="{{ pred.league if pred.league else 'Other' }}">
                     {% set _force_rl = (sport == 'MLB') %}

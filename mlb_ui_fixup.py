@@ -796,7 +796,7 @@ def inject_mlb_run_line_confidence(html: str) -> str:
     if not html or ("game-card-stack" not in html and "game-card" not in html):
         return html
     # Live paywall: anon pages lock View Details — do not inject RL confidence teaser.
-    if "odds-pricing-locked" in html and 'data-m-consensus="' not in html:
+    if "odds-pricing-locked" in html:
         return html
     if html.count("Run Line Confidence") >= 3:
         return html

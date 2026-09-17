@@ -22949,7 +22949,7 @@ def _render_espn_picks_page(**ctx):
 
 def _cached_usable_picks_html(sport, filter_date=None):
     """Last good rendered picks HTML (memory). Prefer this over the black stub."""
-    prefix = f"pred_page::v37::{sport}::{filter_date or 'all'}::"
+    prefix = f"pred_page::v38::{sport}::{filter_date or 'all'}::"
     best_html = None
     best_ts = -1.0
     for key, entry in list(_SPORT_PREDICTIONS_PAGE_CACHE.items()):
@@ -23735,7 +23735,7 @@ def sport_predictions(sport, filter_date=None):
     _nfl_use_page_cache = str(sport or '').upper() == 'NFL'
     if (not current_user.is_authenticated) or _nfl_use_page_cache:
         cache_key = (
-            f"pred_page::v37::{sport}::{filter_date or 'all'}::"
+            f"pred_page::v38::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
@@ -28056,7 +28056,7 @@ def _build_fast_landing_preview_context():
         })
     active_sport = next((s for s in landing_sports if s.get('is_live')), landing_sports[0] if landing_sports else None)
 
-    # Prefill from last-good cache/seed so first paint is useful without SQL.
+    # Prefer a sport that currently has games on the cached live board.
     live = {}
     try:
         live = _LANDING_EXTRAS_CACHE.get('payload') or _read_homepage_live_disk() or {}
@@ -28064,6 +28064,19 @@ def _build_fast_landing_preview_context():
         live = {}
     if not isinstance(live, dict):
         live = {}
+    picks = list(live.get('todays_picks') or [])
+    if picks:
+        pick_slug = str((picks[0] or {}).get('slug') or '').strip().lstrip('/')
+        pick_sport = str((picks[0] or {}).get('sport') or '').strip()
+        if pick_slug:
+            match = next((s for s in landing_sports if s.get('seo_slug') == pick_slug), None)
+            if match is None and pick_sport:
+                match = next(
+                    (s for s in landing_sports if str(s.get('name') or '').upper() == pick_sport.upper()),
+                    None,
+                )
+            if match:
+                active_sport = match
 
     return {
         'games_graded': int(live.get('games_graded') or 0),
@@ -28074,7 +28087,7 @@ def _build_fast_landing_preview_context():
         'sports_covered': len(landing_sports),
         'weekly_banner_messages': list(_MANUAL_BANNER_ITEMS),
         'units_banner_items': list(live.get('units_banner_items') or []),
-        'todays_picks': list(live.get('todays_picks') or []),
+        'todays_picks': picks,
         'latest_graded_game': live.get('latest_graded_game'),
         'latest_blog_post': live.get('latest_blog_post'),
         'recent_blog_posts': list(live.get('recent_blog_posts') or []),

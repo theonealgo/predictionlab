@@ -1,35 +1,24 @@
 # MLB LOCKED (:5052 / premerge)
 
-MLB picks and results on `:5052` (`predictionlabfix_work2`) are signed off
-except the shared Results Image miss below was closed on MLB and rolled out.
+MLB picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
 
 Do **not** modify MLB unless the owner says:
 
 **UNLOCK MLB**
 
-Owner 2026-09-17: bottom Results Image on `/mlb-results` (ML / Spread /
-Total for Last Night + Last 7). Miss closed on MLB — lock again. Same
-image rolled to other sports under their unlocks for owner check-back.
-
-Owner 2026-09-17: layout blowup from broken CSS selectors — fixed
-`_mlb_sel` + 3×2 Pick Confidence. Miss closed — lock again.
-
-Owner 2026-09-17: compact Consensus face, ESPN kickoff clocks, full today
-slate, Best Performing Today→Last Night + chart width. Miss closed —
-lock again.
+Owner 2026-09-17: results share image layout fixed (clipped Last 7 header /
+cramped rows). Homepage sport link + face `data-m-*` for Consensus chips
+shipped in same push. Miss closed — lock again.
 
 ## Do not touch
 
 - `/mlb-picks`, `/mlb-results`, `/mlb-results?view=chart`
 - MLB Cards|Chart, card HTML, date nav
-- `mlb_ui_fixup.py` publish / PageSpeed layers
-- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is MLB
+- Any `NHL77FINAL.py` / `team_results_charts.py` / `mlb_*` branch whose job is MLB
 
 ## Allowed without unlock
 
 - Other sports
 - Checker reports that only *read* MLB pages
-- Shared `results_share_image.py` only when another sport is unlocked for
-  that same Results Image miss (do not change MLB card face)
 
 Do not put lock text on user-facing HTML.
