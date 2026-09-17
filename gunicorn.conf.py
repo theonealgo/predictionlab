@@ -6,9 +6,13 @@ Prefer `bash render_start.sh` on Render so /data DB seeding and 8 threads apply.
 import os
 
 bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
+# Single worker (gthread) — keep one process to limit RAM (ML models are large).
+# More threads let / and /api/homepage-live stay responsive while a heavy
+# /mlb-results query runs on another thread (GIL still applies to pure Python,
+# but SQLite / network release it).
 workers = 1
 worker_class = "gthread"
-threads = 8
+threads = 12
 timeout = 120
 # preload_app MUST stay False.
 # With preload_app=True gunicorn imports the whole app in the MASTER *before*

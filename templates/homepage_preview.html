@@ -314,7 +314,10 @@
                             <a class="pl2-btn primary" href="/{{ active_sport_slug }}">Start with Free Picks →</a>
                         </div>
                         <aside class="pl2-why-aside">
-                            <img class="pl2-why-photo" src="/static/img/whyarepicksdifferent.png" width="1024" height="1024" alt="Prediction Lab research visual" loading="lazy" decoding="async">
+                            <picture>
+                                <source type="image/webp" srcset="/static/img/whyarepicksdifferent.webp">
+                                <img class="pl2-why-photo" src="/static/img/whyarepicksdifferent.png" width="1024" height="1024" alt="Prediction Lab research visual" loading="lazy" decoding="async" fetchpriority="low">
+                            </picture>
                         </aside>
                     </div>
                 </div>

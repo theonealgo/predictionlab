@@ -19343,11 +19343,19 @@ def healthz():
 
 
 _LANDING_PAGE_CACHE = {'ts': 0, 'html': None}
-_LANDING_PAGE_TTL = 300  # seconds — homepage is identical for all anonymous visitors
+_LANDING_PAGE_TTL = 120  # short — rebuilds quickly after extras refresh
 _LANDING_EXTRAS_CACHE = {'ts': 0, 'payload': None}
-_LANDING_EXTRAS_TTL = 120
+_LANDING_EXTRAS_TTL = 300  # serve cached picks/units/graded for 5 min
+_LANDING_EXTRAS_STALE_TTL = 86400  # still serve last-good up to 24h
+_LANDING_EXTRAS_REFRESHING = False
 _LANDING_DISK_PATH = _os_v2.path.join(
     _os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'landing_page.html',
+)
+_LANDING_EXTRAS_DISK_PATH = _os_v2.path.join(
+    _os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'homepage_live.json',
+)
+_LANDING_EXTRAS_SEED_PATH = _os_v2.path.join(
+    _os_v2.path.dirname(_os_v2.path.abspath(__file__)), 'data', 'homepage_live_seed.json',
 )
 _BLOG_PAGE_CACHE = {'ts': 0, 'html': None}
 _BLOG_PAGE_TTL = 120
@@ -19379,115 +19387,69 @@ def _write_landing_disk_html(html: str) -> None:
         logger.debug('landing disk cache write failed: %s', e)
 
 
-def _render_fast_landing_html() -> str:
-    """Shell-only homepage — no heavy DB / picks / units work on the request path."""
-    return render_template(
-        'homepage_preview.html',
-        **_build_fast_landing_preview_context(),
-        homepage_defer_live=True,
-    )
+def _payload_is_useful(payload: dict | None) -> bool:
+    if not isinstance(payload, dict) or not payload.get('ok'):
+        return False
+    if int(payload.get('games_graded') or 0) > 0:
+        return True
+    if payload.get('todays_picks'):
+        return True
+    if payload.get('units_banner_items'):
+        return True
+    return False
 
 
-@app.route('/', methods=['GET', 'HEAD'])
-def landing_page():
-    """Primary landing page — fast shell first; live boards hydrate via /api/homepage-live.
-
-    Do not special-case HEAD. AdsBot/Google fetch HEAD on ad destinations;
-    an empty 200 here is cloaking (Google sees a blank page, people see the site).
-    Flask strips the body for HEAD after the same GET render.
-    """
-    try:
-        log_site_visit('/')
-    except Exception:
-        pass
-    try:
-        _anon = not (getattr(current_user, 'is_authenticated', False) and current_user.is_authenticated)
-    except Exception:
-        _anon = True
-
-    # 1) In-memory cache (per worker)
-    if _anon:
-        _cached = _LANDING_PAGE_CACHE.get('html')
-        if _cached and (_time.time() - _LANDING_PAGE_CACHE.get('ts', 0)) < _LANDING_PAGE_TTL:
-            return _cached
-        # 2) Disk cache survives cold starts / deploys
-        _disk = _read_landing_disk_html()
-        if _disk:
-            _LANDING_PAGE_CACHE['ts'] = _time.time()
-            _LANDING_PAGE_CACHE['html'] = _disk
-            return _disk
-
-    # 3) Fast shell only — never block homepage on picks/units/blog queries
-    try:
-        rendered = _render_fast_landing_html()
-    except Exception as e:
-        logger.exception('fast landing render failed: %s', e)
-        rendered = (
-            '<!DOCTYPE html><html><head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>PredictionLab</title></head><body>'
-            '<h1>PredictionLab</h1>'
-            '<p><a href="/mlb-picks">MLB picks</a> · '
-            '<a href="/nfl-picks">NFL picks</a> · '
-            '<a href="/plans">Plans</a></p></body></html>'
-        )
-    if _anon and isinstance(rendered, str) and rendered:
-        _LANDING_PAGE_CACHE['ts'] = _time.time()
-        _LANDING_PAGE_CACHE['html'] = rendered
+def _read_homepage_live_disk() -> dict | None:
+    for path in (_LANDING_EXTRAS_DISK_PATH, _LANDING_EXTRAS_SEED_PATH):
         try:
-            import threading as _thr
-            _thr.Thread(
-                target=_write_landing_disk_html, args=(rendered,),
-                daemon=True, name='landing-disk',
-            ).start()
+            if not _os_v2.path.isfile(path):
+                continue
+            with open(path, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            if _payload_is_useful(data):
+                return data
         except Exception:
-            _write_landing_disk_html(rendered)
-        # Warm extras off the request path
+            continue
+    return None
+
+
+def _write_homepage_live_disk(payload: dict) -> None:
+    try:
+        if not _payload_is_useful(payload):
+            return
+        _os_v2.makedirs(_os_v2.path.dirname(_LANDING_EXTRAS_DISK_PATH), exist_ok=True)
+        tmp = _LANDING_EXTRAS_DISK_PATH + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            json.dump(payload, fh, separators=(',', ':'), default=str)
+        _os_v2.replace(tmp, _LANDING_EXTRAS_DISK_PATH)
+    except Exception as e:
+        logger.debug('homepage live disk write failed: %s', e)
+
+
+def _schedule_homepage_extras_refresh() -> None:
+    global _LANDING_EXTRAS_REFRESHING
+    if _LANDING_EXTRAS_REFRESHING:
+        return
+    _LANDING_EXTRAS_REFRESHING = True
+
+    def _run():
+        global _LANDING_EXTRAS_REFRESHING
         try:
-            import threading as _thr
-            _thr.Thread(target=_warm_homepage_extras, daemon=True, name='home-extras').start()
-        except Exception:
-            pass
-    return rendered
+            _rebuild_homepage_live_payload()
+        except Exception as e:
+            logger.exception('homepage extras background refresh failed: %s', e)
+        finally:
+            _LANDING_EXTRAS_REFRESHING = False
 
-
-@app.route('/api/homepage-live')
-def homepage_live_api():
-    """Deferred homepage boards: picks, units, graded highlight, blog teasers."""
     try:
-        payload = _get_homepage_live_payload()
-        return jsonify(payload)
-    except Exception as e:
-        logger.exception('homepage-live failed: %s', e)
-        return jsonify({
-            'ok': False,
-            'games_graded': 0,
-            'predictions_logged': 0,
-            'todays_picks': [],
-            'units_banner_items': [],
-            'latest_graded_game': None,
-            'latest_blog_post': None,
-            'recent_blog_posts': [],
-        }), 200
+        import threading as _thr
+        _thr.Thread(target=_run, daemon=True, name='home-extras-refresh').start()
+    except Exception:
+        _LANDING_EXTRAS_REFRESHING = False
 
 
-def _warm_homepage_extras() -> None:
-    try:
-        _get_homepage_live_payload(force=True)
-    except Exception as e:
-        logger.debug('homepage extras warm failed: %s', e)
-
-
-def _get_homepage_live_payload(*, force: bool = False) -> dict:
-    now = _time.time()
-    cached = _LANDING_EXTRAS_CACHE.get('payload')
-    if (
-        not force
-        and cached
-        and (now - _LANDING_EXTRAS_CACHE.get('ts', 0)) < _LANDING_EXTRAS_TTL
-    ):
-        return cached
-    # Reuse the heavy builder, but never call it from landing_page itself.
+def _rebuild_homepage_live_payload() -> dict:
+    """Heavy rebuild — only from background refresh / explicit force."""
     ctx = _build_landing_preview_context()
     blog = ctx.get('latest_blog_post') or {}
     recent = []
@@ -19518,14 +19480,13 @@ def _get_homepage_live_payload(*, force: bool = False) -> dict:
             'units': item.get('units') or '',
             'record': item.get('record') or '',
         })
-    graded = ctx.get('latest_graded_game')
     payload = {
         'ok': True,
         'games_graded': int(ctx.get('games_graded') or 0),
         'predictions_logged': int(ctx.get('predictions_logged') or 0),
         'todays_picks': picks,
         'units_banner_items': units,
-        'latest_graded_game': graded,
+        'latest_graded_game': ctx.get('latest_graded_game'),
         'latest_blog_post': {
             'title': blog.get('title') or '',
             'url': blog.get('url') or blog.get('href') or '/blog',
@@ -19533,14 +19494,169 @@ def _get_homepage_live_payload(*, force: bool = False) -> dict:
             'excerpt': (blog.get('excerpt') or blog.get('summary') or '')[:280],
         } if blog else None,
         'recent_blog_posts': recent,
+        'cached_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
-    _LANDING_EXTRAS_CACHE['ts'] = now
-    _LANDING_EXTRAS_CACHE['payload'] = payload
+    if _payload_is_useful(payload):
+        _LANDING_EXTRAS_CACHE['ts'] = _time.time()
+        _LANDING_EXTRAS_CACHE['payload'] = payload
+        _write_homepage_live_disk(payload)
+        # Force next homepage HTML rebuild so SSR includes fresh picks/counters
+        _LANDING_PAGE_CACHE['ts'] = 0
+        _LANDING_PAGE_CACHE['html'] = None
     return payload
 
 
-# Keep old name for any callers; unused by landing_page request path now.
-# (full builder remains for /api/homepage-live)
+def _get_homepage_live_payload(*, force: bool = False) -> dict:
+    """Stale-while-revalidate homepage boards. Never blocks visitors on heavy SQL."""
+    now = _time.time()
+    cached = _LANDING_EXTRAS_CACHE.get('payload')
+    cached_ts = float(_LANDING_EXTRAS_CACHE.get('ts') or 0)
+    if not _payload_is_useful(cached):
+        disk = _read_homepage_live_disk()
+        if _payload_is_useful(disk):
+            cached = disk
+            cached_ts = now - (_LANDING_EXTRAS_TTL + 1)  # treat disk as slightly stale → refresh
+            _LANDING_EXTRAS_CACHE['payload'] = disk
+            _LANDING_EXTRAS_CACHE['ts'] = cached_ts
+
+    if force:
+        try:
+            return _rebuild_homepage_live_payload()
+        except Exception:
+            logger.exception('forced homepage live rebuild failed')
+            if _payload_is_useful(cached):
+                return cached
+            raise
+
+    if _payload_is_useful(cached):
+        age = now - cached_ts
+        if age > _LANDING_EXTRAS_TTL:
+            _schedule_homepage_extras_refresh()
+        return cached
+
+    # Absolute cold start: kick rebuild, return seed-shaped empty-ok only if needed
+    _schedule_homepage_extras_refresh()
+    seed = _read_homepage_live_disk()
+    if _payload_is_useful(seed):
+        _LANDING_EXTRAS_CACHE['payload'] = seed
+        _LANDING_EXTRAS_CACHE['ts'] = now - _LANDING_EXTRAS_TTL - 1
+        return seed
+    return {
+        'ok': True,
+        'games_graded': 0,
+        'predictions_logged': 0,
+        'todays_picks': [],
+        'units_banner_items': [],
+        'latest_graded_game': None,
+        'latest_blog_post': None,
+        'recent_blog_posts': [],
+        'warming': True,
+    }
+
+
+def _render_fast_landing_html() -> str:
+    """Homepage shell with last-known cached boards (no live DB on this path)."""
+    return render_template(
+        'homepage_preview.html',
+        **_build_fast_landing_preview_context(),
+        homepage_defer_live=True,
+    )
+
+
+@app.route('/', methods=['GET', 'HEAD'])
+def landing_page():
+    """Primary landing page — cached shell + stale-while-revalidate live boards.
+
+    Do not special-case HEAD. AdsBot/Google fetch HEAD on ad destinations;
+    an empty 200 here is cloaking (Google sees a blank page, people see the site).
+    Flask strips the body for HEAD after the same GET render.
+    """
+    try:
+        log_site_visit('/')
+    except Exception:
+        pass
+    try:
+        _anon = not (getattr(current_user, 'is_authenticated', False) and current_user.is_authenticated)
+    except Exception:
+        _anon = True
+
+    # Ensure extras cache is populated from disk/seed ASAP (no heavy SQL here).
+    try:
+        _get_homepage_live_payload(force=False)
+    except Exception:
+        pass
+
+    if _anon:
+        _cached = _LANDING_PAGE_CACHE.get('html')
+        if _cached and (_time.time() - _LANDING_PAGE_CACHE.get('ts', 0)) < _LANDING_PAGE_TTL:
+            return _cached
+
+    try:
+        rendered = _render_fast_landing_html()
+    except Exception as e:
+        logger.exception('fast landing render failed: %s', e)
+        rendered = (
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>PredictionLab</title></head><body>'
+            '<h1>PredictionLab</h1>'
+            '<p><a href="/mlb-picks">MLB picks</a> · '
+            '<a href="/nfl-picks">NFL picks</a> · '
+            '<a href="/plans">Plans</a></p></body></html>'
+        )
+    if _anon and isinstance(rendered, str) and rendered:
+        _LANDING_PAGE_CACHE['ts'] = _time.time()
+        _LANDING_PAGE_CACHE['html'] = rendered
+        try:
+            import threading as _thr
+            _thr.Thread(
+                target=_write_landing_disk_html, args=(rendered,),
+                daemon=True, name='landing-disk',
+            ).start()
+        except Exception:
+            _write_landing_disk_html(rendered)
+    return rendered
+
+
+@app.route('/api/homepage-live')
+def homepage_live_api():
+    """Cached homepage boards. Always returns last-good data; refreshes in background."""
+    try:
+        payload = _get_homepage_live_payload(force=False)
+        return jsonify(payload)
+    except Exception as e:
+        logger.exception('homepage-live failed: %s', e)
+        fallback = _LANDING_EXTRAS_CACHE.get('payload') or _read_homepage_live_disk()
+        if _payload_is_useful(fallback):
+            out = dict(fallback)
+            out['ok'] = True
+            out['stale'] = True
+            return jsonify(out)
+        return jsonify({
+            'ok': False,
+            'error': 'temporarily unavailable',
+            'games_graded': 0,
+            'predictions_logged': 0,
+            'todays_picks': [],
+            'units_banner_items': [],
+            'latest_graded_game': None,
+            'latest_blog_post': None,
+            'recent_blog_posts': [],
+        }), 200
+
+
+def _warm_homepage_extras() -> None:
+    _schedule_homepage_extras_refresh()
+
+
+# Seed memory from disk/seed at import so the first visitor never waits on SQL.
+try:
+    _seed_payload = _read_homepage_live_disk()
+    if _payload_is_useful(_seed_payload):
+        _LANDING_EXTRAS_CACHE['payload'] = _seed_payload
+        _LANDING_EXTRAS_CACHE['ts'] = _time.time() - (_LANDING_EXTRAS_TTL + 5)
+except Exception:
+    pass
 
 _PUBLIC_TO_INTERNAL_MODEL = {
     'grinder2': 'Glicko-2',
@@ -27918,7 +28034,7 @@ def _build_landing_preview_context():
     }
 
 def _build_fast_landing_preview_context():
-    """Lightweight homepage context for production cold starts."""
+    """Lightweight homepage context — config sports + last-known cached boards."""
     today = datetime.now()
     landing_sports = []
     for sport_key in _LANDING_SPORT_ORDER:
@@ -27939,19 +28055,29 @@ def _build_fast_landing_preview_context():
             'is_live': is_live,
         })
     active_sport = next((s for s in landing_sports if s.get('is_live')), landing_sports[0] if landing_sports else None)
+
+    # Prefill from last-good cache/seed so first paint is useful without SQL.
+    live = {}
+    try:
+        live = _LANDING_EXTRAS_CACHE.get('payload') or _read_homepage_live_disk() or {}
+    except Exception:
+        live = {}
+    if not isinstance(live, dict):
+        live = {}
+
     return {
-        'games_graded': 0,
-        'predictions_logged': 0,
+        'games_graded': int(live.get('games_graded') or 0),
+        'predictions_logged': int(live.get('predictions_logged') or 0),
         'landing_sports': landing_sports,
         'active_sport_slug': active_sport.get('seo_slug') if active_sport else 'mlb-picks',
         'active_sport_name': active_sport.get('name') if active_sport else 'MLB',
         'sports_covered': len(landing_sports),
         'weekly_banner_messages': list(_MANUAL_BANNER_ITEMS),
-        'units_banner_items': [],
-        'todays_picks': [],
-        'latest_graded_game': None,
-        'latest_blog_post': None,
-        'recent_blog_posts': [],
+        'units_banner_items': list(live.get('units_banner_items') or []),
+        'todays_picks': list(live.get('todays_picks') or []),
+        'latest_graded_game': live.get('latest_graded_game'),
+        'latest_blog_post': live.get('latest_blog_post'),
+        'recent_blog_posts': list(live.get('recent_blog_posts') or []),
     }
 
 if __name__ == '__main__':
