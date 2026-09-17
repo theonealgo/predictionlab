@@ -64,7 +64,7 @@
                     </div>
                     <div class="pl2-stats">
                         <div class="pl2-stat">
-                            <b><span class="pl2-countup" data-target="{{ games_graded }}" data-suffix="+">0</span></b>
+                            <b><span class="pl2-countup" id="pl2GamesGraded" data-target="{{ games_graded }}" data-suffix="+">0</span></b>
                             <span>Games graded</span>
                         </div>
                         <div class="pl2-stat">
@@ -99,7 +99,7 @@
                         </div>
                     </div>
                     <span class="pl2-mono">Moneyline-only preview. Green highlights the model's selection.</span>
-                    <div class="pl2-live-board">
+                    <div class="pl2-live-board" id="pl2LiveBoard" data-hydrate="picks">
                         {% for tp in todays_picks[:6] %}
                         <a class="pl2-pick-card" href="/{{ tp.slug }}">
                             {% if tp.is_live %}<span class="pl2-pick-card-live">Live</span>{% endif %}
@@ -125,6 +125,15 @@
                             </div>
                             <div class="pl2-pick-details">View Details →</div>
                         </a>
+                        {% else %}
+                        <div class="pl2-pick-card" id="pl2PickSkeleton" aria-hidden="true" style="opacity:.55;pointer-events:none;">
+                            <div class="pl2-pick-card-meta">Loading live board…</div>
+                            <div class="pl2-pick-teams">
+                                <div class="pl2-pick-team"><code>..</code><span>Today's picks</span></div>
+                                <div class="pl2-pick-team"><code>..</code><span>loading</span></div>
+                            </div>
+                            <div class="pl2-pick-market">Match winner</div>
+                        </div>
                         {% endfor %}
                     </div>
                     <div class="pl2-board-actions">
@@ -220,7 +229,7 @@
                         <a class="pl2-sec-link" href="/all-sports-results">Full Results Archive →</a>
                     </div>
                     {% if todays_picks %}
-                    <div class="pl2-marquee" aria-label="Recent model picks tape">
+                    <div class="pl2-marquee" id="pl2Marquee" aria-label="Recent model picks tape">
                         <div class="pl2-marquee-track">
                             {% for pass in [1, 2] %}
                             {% for tp in todays_picks[:8] %}
@@ -234,9 +243,11 @@
                             {% endfor %}
                         </div>
                     </div>
+                    {% else %}
+                    <div class="pl2-marquee" id="pl2Marquee" aria-label="Recent model picks tape" hidden></div>
                     {% endif %}
                     <span class="pl2-mono" style="display:block;margin-top:28px;">Season performance — all results tracked. No edits. Full transparency.</span>
-                    <div class="pl2-units">
+                    <div class="pl2-units" id="pl2Units">
                         {% for item in units_banner_items %}
                         <div class="pl2-unit">
                             <div class="pl2-unit-top"><b>{{ item.label }}</b><span class="pl2-chip ghost">Moneyline</span></div>
@@ -639,6 +650,77 @@ pl2RunDeferred(function () {
     }, { root: null, rootMargin: '-28% 0px -45% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
     sections.forEach(function (sec) { io.observe(sec); });
     apply(sections[0]);
+})();
+(function hydrateHomepageLive() {
+    var board = document.getElementById('pl2LiveBoard');
+    if (!board) return;
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function code2(name) {
+        var t = String(name || '').replace(/[^A-Za-z0-9]/g, '');
+        return (t.slice(0, 2) || '..').toUpperCase();
+    }
+    function pickCard(tp) {
+        var awayPick = tp.pick_side === 'away' ? ' is-pick' : '';
+        var homePick = tp.pick_side === 'home' ? ' is-pick' : '';
+        var live = tp.is_live ? '<span class="pl2-pick-card-live">Live</span>' : '';
+        return (
+            '<a class="pl2-pick-card" href="/' + esc(tp.slug) + '">' + live +
+            '<div><div class="pl2-pick-card-meta">' + esc(tp.sport) + ' · Moneyline</div>' +
+            '<div class="pl2-pick-teams">' +
+            '<div class="pl2-pick-team"><code>' + esc(code2(tp.away)) + '</code><span>' + esc(tp.away) + '</span></div>' +
+            '<div class="pl2-pick-team"><code>' + esc(code2(tp.home)) + '</code><span>' + esc(tp.home) + '</span></div>' +
+            '</div></div><div class="pl2-pick-market">Match winner</div>' +
+            '<div class="pl2-pick-probs">' +
+            '<div class="pl2-pick-prob' + awayPick + '"><span>Away</span><b>' + esc(tp.away_prob) + '%</b></div>' +
+            '<div class="pl2-pick-prob' + homePick + '"><span>Home</span><b>' + esc(tp.home_prob) + '%</b></div>' +
+            '</div><div class="pl2-pick-summary"><span>AI pick · <strong>' + esc(tp.pick) +
+            '</strong></span><span>Confidence <strong>' + esc(tp.prob) + '%</strong></span></div>' +
+            '<div class="pl2-pick-details">View Details →</div></a>'
+        );
+    }
+    fetch('/api/homepage-live', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            if (!data || !data.ok) return;
+            var graded = document.getElementById('pl2GamesGraded');
+            if (graded && data.games_graded) {
+                graded.setAttribute('data-target', String(data.games_graded));
+                graded.textContent = String(data.games_graded) + '+';
+            }
+            var picks = data.todays_picks || [];
+            if (picks.length) {
+                board.innerHTML = picks.slice(0, 6).map(pickCard).join('');
+                var mq = document.getElementById('pl2Marquee');
+                if (mq) {
+                    var items = '';
+                    for (var pass = 0; pass < 2; pass++) {
+                        picks.slice(0, 8).forEach(function (tp) {
+                            var conf = Math.round(Number(tp.prob) >= 50 ? Number(tp.prob) : (100 - Number(tp.prob)));
+                            items += '<a class="pl2-marquee-item" href="/' + esc(tp.slug) + '"><span>' +
+                                esc(tp.sport) + '<i class="pl2-chip ghost" style="margin-left:8px;display:inline;">' +
+                                conf + '%</i></span><b>' + esc(tp.pick) + '</b><strong>' + conf +
+                                '%</strong><span>Moneyline</span></a>';
+                        });
+                    }
+                    mq.hidden = false;
+                    mq.innerHTML = '<div class="pl2-marquee-track">' + items + '</div>';
+                }
+            }
+            var units = document.getElementById('pl2Units');
+            if (units && (data.units_banner_items || []).length) {
+                units.innerHTML = (data.units_banner_items || []).map(function (item) {
+                    var pos = String(item.units || '').indexOf('+') === 0 ? ' pos' : '';
+                    return '<div class="pl2-unit"><div class="pl2-unit-top"><b>' + esc(item.label) +
+                        '</b><span class="pl2-chip ghost">Moneyline</span></div><strong class="' + pos.trim() +
+                        '">' + esc(item.units) + '</strong><span>' + esc(item.record) + ' tracked</span></div>';
+                }).join('');
+            }
+        })
+        .catch(function () { /* keep shell */ });
 })();
 });
 </script>
