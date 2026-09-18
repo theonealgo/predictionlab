@@ -772,24 +772,8 @@ class ChromeChecker:
                 self.add(label, FAIL, "Won't open — HTTP 500 error page", url=url)
                 fails.append(f"{path} 500-page")
                 continue
-            elapsed = float(getattr(self, "_last_elapsed", 0) or 0)
-            try:
-                from page_speed import is_results_path, results_wont_open_message
-            except Exception:
-                is_results_path = lambda p: "-results" in (p or "")
-                results_wont_open_message = lambda p, e, b=None: (
-                    f"Won't open — took {e:.1f}s"
-                )
-            if status == 200 and is_results_path(path) and elapsed > self.speed_budget:
-                self.add(
-                    label,
-                    FAIL,
-                    results_wont_open_message(path, elapsed, self.speed_budget),
-                    url=url,
-                )
-                fails.append(f"{path} hung")
-            else:
-                self.add(label, PASS, f"HTTP {status} ({len(body):,} bytes)", url=url)
+            # Slow 200s are a speed fail (already recorded). They still opened.
+            self.add(label, PASS, f"HTTP {status} ({len(body):,} bytes)", url=url)
             if status == 200 and self._check_shared_chrome(path, body, url) is False:
                 chrome_fails.append(path)
 
@@ -1762,7 +1746,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "WNBA":
-                from qa.chart_shape import wnba_consensus_hist_face_issues
+                from chart_shape import wnba_consensus_hist_face_issues
 
                 hist = wnba_consensus_hist_face_issues(phtml)
                 if hist:
@@ -1781,7 +1765,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "UFC":
-                from qa.chart_shape import ufc_consensus_hist_face_issues
+                from chart_shape import ufc_consensus_hist_face_issues
 
                 hist = ufc_consensus_hist_face_issues(phtml)
                 if hist:
@@ -1799,7 +1783,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "Golf":
-                from qa.chart_shape import golf_picks_board_issues
+                from chart_shape import golf_picks_board_issues
 
                 giss = golf_picks_board_issues(phtml)
                 if giss:
@@ -1838,7 +1822,7 @@ class ChromeChecker:
                             "WNBA results cards have H2H Last 10",
                             url=rurl,
                         )
-                    from qa.chart_shape import wnba_results_graded_clarity_issues
+                    from chart_shape import wnba_results_graded_clarity_issues
 
                     clarity = wnba_results_graded_clarity_issues(rhtml)
                     self.add(

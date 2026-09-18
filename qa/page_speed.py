@@ -22,17 +22,16 @@ def is_results_path(path: str) -> bool:
 
 
 def results_wont_open_message(path: str, elapsed: float, budget: float | None = None) -> str:
+    """Kept for tests; slow 200s are speed fails, not missing pages."""
     limit = float(PAGE_SPEED_BUDGET if budget is None else budget)
     return (
-        f"Won't open — took {elapsed:.1f}s (over {limit:.0f}s). "
-        "A results page that sits on the spinner is a fail, even if HTTP 200 arrives later."
+        f"{path} took {elapsed:.1f}s (over {limit:.0f}s). "
+        f"Pages must load in {limit:.0f}s."
     )
 
 
 def speed_fail_message(path: str, elapsed: float, budget: float | None = None) -> str:
     limit = float(PAGE_SPEED_BUDGET if budget is None else budget)
-    if is_results_path(path):
-        return results_wont_open_message(path, elapsed, limit)
     return (
         f"{path} took {elapsed:.1f}s (over {limit:.0f}s). "
         f"Pages must load in {limit:.0f}s."

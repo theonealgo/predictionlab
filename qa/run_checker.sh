@@ -5,7 +5,13 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-PYTHON=/Library/Frameworks/Python.framework/Versions/3.13/bin/python3
+if [ -x "$PROJECT_DIR/.venv/bin/python" ]; then
+    PYTHON="$PROJECT_DIR/.venv/bin/python"
+elif [ -x /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 ]; then
+    PYTHON=/Library/Frameworks/Python.framework/Versions/3.13/bin/python3
+else
+    PYTHON=python3
+fi
 LOG="$SCRIPT_DIR/checker_cron.log"
 # Audit the LIVE production site by default. Override with AUDIT_BASE_URL to point
 # at a local dev server, e.g. AUDIT_BASE_URL=http://127.0.0.1:5003 bash qa/run_checker.sh
@@ -42,7 +48,7 @@ case "$AUDIT_BASE_URL" in
         ;;
 esac
 
-"$PYTHON" qa/site_checker.py --full --email >> "$LOG" 2>&1
+PYTHONUNBUFFERED=1 "$PYTHON" -u qa/site_checker.py --full --email >> "$LOG" 2>&1
 EXIT=$?
 
 # If we started a local server just for the audit, shut it down again.

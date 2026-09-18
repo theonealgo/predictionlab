@@ -634,6 +634,7 @@ pl2RunDeferred(function () {
     sections.forEach(function (sec) { io.observe(sec); });
     apply(sections[0]);
 })();
+{% if not homepage_defer_live %}
 (function hydrateHomepageLive() {
     function esc(s) {
         return String(s == null ? '' : s)
@@ -677,6 +678,7 @@ pl2RunDeferred(function () {
         })
         .catch(function () { /* keep shell */ });
 })();
+{% endif %}
 });
 </script>
 {% endblock %}

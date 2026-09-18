@@ -64,9 +64,11 @@ def test_page_over_5s_is_slow():
     msg = speed_fail_message("/ncaaf-results", 12.3)
     assert "12.3s" in msg
     assert "5s" in msg
-    assert "Won't open" in msg
+    assert "Won't open" not in msg
     assert is_results_path("/nfl-results")
-    assert "Won't open" in results_wont_open_message("/nfl-results", 32.6)
+    slow = results_wont_open_message("/nfl-results", 32.6)
+    assert "32.6s" in slow
+    assert "Won't open" not in slow
 
 
 def test_site_checker_reports_slow_page_as_fail():
@@ -914,6 +916,19 @@ def test_consensus_buckets_mismatch_owner_nfl_slate():
         ]
     )
     assert not six_model_consensus_from_cards_issues(right, right, "NFL")
+
+
+def test_mlb_chart_unanimous_wl_not_matching_cards_fails():
+    """Cards 6/6 last night 2-3 must not silently show 0-0 / a different sample on chart."""
+    cards = _date_section(
+        "2026-09-13",
+        [_six_card(majority="Home", won=True) for _ in range(2)]
+        + [_six_card(majority="Home", won=False) for _ in range(3)],
+    )
+    chart = _cons_table([("6/6 unanimous", "0-0")])
+    issues = six_model_consensus_from_cards_issues(chart, cards, "MLB")
+    assert issues
+    assert any("2-3" in i and "0-0" in i for i in issues)
 
 
 def test_pl_vs_books_partition_missing_game_fails():

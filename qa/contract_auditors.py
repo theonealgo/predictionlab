@@ -27,6 +27,8 @@ from urllib.parse import urljoin, urlparse
 TEAM_SPORTS = (
     "mlb", "nhl", "nba", "ncaab", "ncaaw", "nfl", "ncaaf", "wnba", "cfl",
 )
+# Empty picks pages are OK only for these (true offseason in September).
+OFFSEASON_OK_EMPTY = frozenset({"NBA", "NHL", "NCAAB", "NCAAW"})
 INDIVIDUAL_SPORTS = ("tennis", "ufc")
 GOLF = ("golf",)
 SOCCER = ("soccer",)
@@ -133,6 +135,50 @@ def global_leakage_issues(html: str, *, base_url: str = "") -> list[str]:
 
 def empty_aria_label_count(html: str) -> int:
     return len(re.findall(r'aria-label=["\']\s*["\']', html or "", flags=re.I))
+
+
+def _picks_sport_display(sport: str) -> str:
+    s = (sport or "").strip()
+    if s.upper() == "SOCCER":
+        return "Soccer"
+    return s.upper() if s else ""
+
+
+def blank_picks_issues(html: str, sport: str) -> list[str]:
+    """FAIL-level: in-season sport showing an empty slate.
+
+    This is the miss the owner was still catching by hand (live NFL/MLB
+    'No predictions available') after chrome/ship already had a similar
+    check — the generic layer never ran, and thin pages were WARN-skipped.
+    """
+    sport_u = (sport or "").strip().upper()
+    if not html or sport_u in OFFSEASON_OK_EMPTY:
+        return []
+    display = _picks_sport_display(sport)
+    if display and re.search(
+        rf"No predictions available for\s+{re.escape(display)}\b",
+        html,
+        flags=re.I,
+    ):
+        return [f"blank-slate banner: No predictions available for {display}"]
+    if re.search(r"No predictions available\b", html, flags=re.I):
+        has_card = bool(
+            re.search(
+                r"data-pick-card|pl2-pick-card|data-game-card|game-card-stack",
+                html,
+                flags=re.I,
+            )
+            or re.search(
+                r"""class=["'][^"']*\b(?:game-card|pick-card)\b""",
+                html,
+                flags=re.I,
+            )
+        )
+        if not has_card:
+            return [
+                f"blank-slate: No predictions available ({display or sport_u})"
+            ]
+    return []
 
 
 def seo_page_issues(html: str, path: str = "") -> list[str]:
@@ -348,8 +394,9 @@ def picks_functional_issues(html: str, sport: str = "") -> list[str]:
     """Picks functional contract beyond visual chrome."""
     html = html or ""
     issues: list[str] = []
+    issues.extend(blank_picks_issues(html, sport))
     if "game-card" not in html and "pick-card" not in html and "data-pick-card" not in html:
-        return []
+        return issues
 
     # Placeholder / blank picks
     if re.search(r"\bTODO\b|\bPLACEHOLDER\b|\bTBD\b|lorem ipsum", html, flags=re.I):
@@ -441,11 +488,35 @@ class TemplateContractAuditor(_BaseContractAuditor):
             if code == 404:
                 self.add(f"Template picks load: {slug}", WARN, "404", url=picks)
                 continue
-            if len(html) < 4000 or ("game-card" not in html and "pick-card" not in html):
+            blank = blank_picks_issues(html, sport)
+            has_cards = bool(
+                "data-pick-card" in html.lower()
+                or "game-card" in html
+                or "pick-card" in html
+            )
+            offseason_page = (
+                sport in OFFSEASON_OK_EMPTY
+                or "is in the off-season" in html.lower()
+            )
+            if blank:
                 self.add(
                     f"Template picks: {slug}",
-                    WARN,
-                    "thin/empty picks page — skipped contract",
+                    FAIL,
+                    "; ".join(blank),
+                    url=picks,
+                )
+            elif (len(html) < 4000 or not has_cards) and not offseason_page:
+                self.add(
+                    f"Template picks: {slug}",
+                    FAIL,
+                    "thin/empty picks page on an in-season sport",
+                    url=picks,
+                )
+            elif not has_cards and offseason_page:
+                self.add(
+                    f"Template picks: {slug}",
+                    PASS,
+                    "off-season / no slate",
                     url=picks,
                 )
             else:
@@ -509,6 +580,16 @@ class TemplateContractAuditor(_BaseContractAuditor):
         # Golf + Soccer smoke loads (detailed soccer lives in SoccerChecker)
         for path in ("/golf-picks", "/golf-results", "/soccer-picks", "/soccer-results"):
             code, html = self.fetch(path, timeout=90)
+            if path == "/soccer-picks":
+                blank = blank_picks_issues(html, "SOCCER")
+                if blank:
+                    self.add(
+                        f"Template load: {path}",
+                        FAIL,
+                        "; ".join(blank),
+                        url=path,
+                    )
+                    continue
             sev = FAIL if code >= 500 or code == 0 else (WARN if code != 200 else PASS)
             self.add(
                 f"Template load: {path}",
@@ -534,6 +615,14 @@ class DataIntegrityAuditor(_BaseContractAuditor):
             sport = slug.upper()
             picks = f"/{slug}-picks"
             code, html = self.fetch(picks)
+            blank = blank_picks_issues(html, sport)
+            if blank:
+                self.add(
+                    f"Integrity picks slate: {slug}",
+                    FAIL,
+                    "; ".join(blank),
+                    url=picks,
+                )
             if code != 200 or len(html) < 4000:
                 continue
 

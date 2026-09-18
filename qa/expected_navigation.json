@@ -19,29 +19,15 @@
       ]
     },
     "props": {
-      "title": "Props",
+      "title": "Props & Models",
       "required": [
-        "/player-props"
-      ],
-      "forbidden": [
-        "/performance",
-        "/daily-report",
-        "/all-sports-results",
-        "/ai-sports-betting-picks-today",
-        "/our-model-vs-sportsbooks",
-        "/tutorial"
-      ]
-    },
-    "tools": {
-      "title": "Tools & Models",
-      "required": [
-        "/performance",
-        "/ai-sports-betting-picks-today",
-        "/our-model-vs-sportsbooks",
-        "/tutorial"
-      ],
-      "forbidden": [
         "/player-props",
+        "/performance",
+        "/ai-sports-betting-picks-today",
+        "/our-model-vs-sportsbooks",
+        "/tutorial"
+      ],
+      "forbidden": [
         "/daily-report",
         "/all-sports-results"
       ]
@@ -98,6 +84,7 @@
   "comment_cross_section": "Any internal href appearing in more than one menu SECTION is flagged \u2014 a page should live in exactly one section. Add exceptions to cross_section_allowed.",
   "cross_section_allowed": [
     "/tutorial",
-    "/plans"
+    "/plans",
+    "/performance"
   ]
 }

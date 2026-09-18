@@ -563,10 +563,17 @@ def _merge_stored_upcoming_predictions(sport, predictions):
             FROM predictions
             WHERE sport = ?
               AND date(game_date) >= date(?)
-              AND actual_home_score IS NULL
+              AND (
+                    actual_home_score IS NULL
+                    OR (
+                        date(game_date) = date(?)
+                        AND lock_card_json IS NOT NULL
+                        AND TRIM(lock_card_json) != ''
+                    )
+              )
             ORDER BY date(game_date)
             ''',
-            (sport_u, today),
+            (sport_u, today, today),
         ).fetchall()
         # Keep games table in sync so date SEO / joins find the slate.
         if rows:
@@ -11014,6 +11021,7 @@ def _persist_predictions_to_disk(cache_key, entry):
 def _predictions_cache_key_aliases(sport):
     """Current + prior slate keys so a version bump does not cold-start the site."""
     return (
+        f"{sport}_upcoming_predictions_v10",
         f"{sport}_upcoming_predictions_v9",
         f"{sport}_upcoming_predictions_v8",
         f"{sport}_upcoming_predictions_v7",
@@ -11022,7 +11030,7 @@ def _predictions_cache_key_aliases(sport):
 
 
 def _promote_predictions_cache_aliases():
-    """Copy older versioned slate keys onto the current v8 key when v8 is missing."""
+    """Copy older versioned slate keys onto the current key when it is missing."""
     try:
         sports = set()
         for key in list(_PREDICTIONS_CACHE.keys()):
@@ -11031,7 +11039,7 @@ def _promote_predictions_cache_aliases():
             sports.add(key.split('_upcoming_predictions_v', 1)[0])
         for sport in sports:
             keys = _predictions_cache_key_aliases(sport)
-            current = keys[0]  # v9
+            current = keys[0]
             if _PREDICTIONS_CACHE.get(current, {}).get('data'):
                 continue
             for alias in keys[1:]:
@@ -11142,9 +11150,13 @@ def _prewarm_predictions_cache():
         # Disk seed already put a usable slate in memory — do NOT force-rebuild
         # on the boot path. Stale-while-revalidate refreshes on the first sport
         # page hit. Only cold-build sports that have nothing cached.
-        _ck = f"{_sport}_upcoming_predictions_v8"
-        _entry = _PREDICTIONS_CACHE.get(_ck)
-        if isinstance(_entry, dict) and _entry.get('data'):
+        _seeded = False
+        for _ck in _predictions_cache_key_aliases(_sport):
+            _entry = _PREDICTIONS_CACHE.get(_ck)
+            if isinstance(_entry, dict) and _entry.get('data'):
+                _seeded = True
+                break
+        if _seeded:
             logger.info(f"[preds-prewarm] {_sport} already seeded — skip force rebuild")
             continue
         # Respect the same single-flight guard so an on-demand background refresh
@@ -19772,12 +19784,6 @@ def landing_page():
     except Exception:
         _anon = True
 
-    # Ensure extras cache is populated from disk/seed ASAP (no heavy SQL here).
-    try:
-        _get_homepage_live_payload(force=False)
-    except Exception:
-        pass
-
     if _anon:
         _cached = _LANDING_PAGE_CACHE.get('html')
         if _cached and (_time.time() - _LANDING_PAGE_CACHE.get('ts', 0)) < _LANDING_PAGE_TTL:
@@ -19813,9 +19819,15 @@ def landing_page():
 @app.route('/api/homepage-live')
 def homepage_live_api():
     """Cached homepage boards. Always returns last-good data; refreshes in background."""
+    def _live_response(payload, *, status=200):
+        resp = jsonify(payload)
+        resp.status_code = status
+        resp.headers['Cache-Control'] = 'public, max-age=120, stale-while-revalidate=1800'
+        return resp
+
     try:
         payload = _get_homepage_live_payload(force=False)
-        return jsonify(payload)
+        return _live_response(payload)
     except Exception as e:
         logger.exception('homepage-live failed: %s', e)
         fallback = _LANDING_EXTRAS_CACHE.get('payload') or _read_homepage_live_disk()
@@ -19823,8 +19835,8 @@ def homepage_live_api():
             out = dict(fallback)
             out['ok'] = True
             out['stale'] = True
-            return jsonify(out)
-        return jsonify({
+            return _live_response(out)
+        return _live_response({
             'ok': False,
             'error': 'temporarily unavailable',
             'games_graded': 0,
@@ -19834,7 +19846,7 @@ def homepage_live_api():
             'latest_graded_game': None,
             'latest_blog_post': None,
             'recent_blog_posts': [],
-        }), 200
+        })
 
 
 def _warm_homepage_extras() -> None:
@@ -24025,8 +24037,12 @@ def sport_predictions(sport, filter_date=None):
                     f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
                     "Please refresh in a minute."
                 )
+    if not predictions:
+        predictions = _recover_cached_predictions(sport) or []
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    if not predictions:
+        predictions = _recover_cached_predictions(sport) or []
     if str(sport or '').upper() == 'SOCCER' and not filter_date:
         _today_s = _soccer_et_today_str()
         _seen_today = {

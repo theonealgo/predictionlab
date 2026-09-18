@@ -8,7 +8,7 @@ emails a detailed report.
 
 Usage:
   python qa/site_checker.py                  # full check, no email
-  python qa/site_checker.py --quick          # routes + content + nav only (~45s)
+    python qa/site_checker.py --quick          # chrome/ship + generic contract auditors
   python qa/site_checker.py --full           # every auditor
   python qa/site_checker.py --email          # full check + email report
   python qa/site_checker.py --screenshots    # include Playwright screenshots
@@ -64,7 +64,7 @@ from audit_config import (
     BASE_URL, CARD_REQUIRED_CLASSES, CLUSTER_RANGE_HIGH, CLUSTER_RANGE_LOW,
     CLUSTER_WARN_PCT, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO,
     EXPECTED_DASHBOARD_SPORTS, FORBIDDEN_CONTENT,
-    FULL_MODE_AUDITORS, HISTORY_DIR, MODEL_DISPLAY_NAMES, MODEL_KEYS,
+    CONTRACT_AUDITORS, FULL_MODE_AUDITORS, HISTORY_DIR, MODEL_DISPLAY_NAMES, MODEL_KEYS,
     SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS, PAGESPEED_MODE_AUDITORS,
     PAGESPEED_PATHS, PAGESPEED_STRATEGY, PAGESPEED_PERF_FLOOR, PAGESPEED_A11Y_FLOOR,
     PAGE_SPEED_BUDGET, PREFLIGHT_TIMEOUT, QUICK_MODE_AUDITORS, REQUEST_TIMEOUT, SCREENSHOTS_DIR,
@@ -107,6 +107,32 @@ def _report_slow_page(report, path: str, elapsed: float, url: str = "") -> None:
         url=url or path,
         auditor="speed",
     ))
+
+
+def _wrap_session_get_cache(session: requests.Session) -> None:
+    """Reuse GET bodies across auditors so --quick does not refetch every sport 4×."""
+    if getattr(session, "_qa_get_wrapped", False):
+        return
+    raw_get = session.get
+    cache: dict = {}
+
+    def cached_get(url, **kwargs):
+        key = (str(url), bool(kwargs.get("allow_redirects", True)))
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        resp = raw_get(url, **kwargs)
+        try:
+            if 200 <= int(getattr(resp, "status_code", 0) or 0) < 500:
+                _ = resp.content  # pin body so later auditors can read .text
+                cache[key] = resp
+        except Exception:
+            pass
+        return resp
+
+    session._qa_get_cache = cache
+    session._qa_get_wrapped = True
+    session.get = cached_get  # type: ignore[method-assign]
 
 
 def _timed_get(session, report, base: str, path: str, *,
@@ -188,6 +214,8 @@ HTTP_DEPENDENT_AUDITORS = frozenset({
     "routes", "content", "navigation", "cards", "models", "results", "csv",
     "gamecounts", "screenshots", "seo", "consistency", "ship", "soccer", "chrome",
     "espn_slate",
+    "templates", "integrity", "runtime", "perf_a11y", "charts", "images", "api",
+    "responsive",
 })
 
 
@@ -697,7 +725,7 @@ class ContentAuditor:
                         ),
                         url=path, auditor=self.NAME))
                 elif sport == "WNBA":
-                    from qa.chart_shape import wnba_consensus_hist_face_issues
+                    from chart_shape import wnba_consensus_hist_face_issues
                     hist = wnba_consensus_hist_face_issues(html)
                     self.r.add(CheckResult(
                         label="WNBA picks Consensus Historical face",
@@ -708,7 +736,7 @@ class ContentAuditor:
                         ),
                         url=path, auditor=self.NAME))
                 if sport == "CFL":
-                    from qa.chart_shape import cfl_h2h_and_books_issues
+                    from chart_shape import cfl_h2h_and_books_issues
                     cfl_i = cfl_h2h_and_books_issues(html)
                     self.r.add(CheckResult(
                         label="CFL picks H2H + empty Books",
@@ -1027,7 +1055,7 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(gaps) if gaps else "WNBA results cards are missing H2H Last 10",
                         url=path, auditor=self.NAME))
-                from qa.chart_shape import (
+                from chart_shape import (
                     wnba_results_graded_clarity_issues,
                     wnba_season_games_undercount_issues,
                 )
@@ -1049,7 +1077,7 @@ class ContentAuditor:
                     ),
                     url=path, auditor=self.NAME))
             if slug == "cfl-results":
-                from qa.chart_shape import cfl_chart_consensus_issues
+                from chart_shape import cfl_chart_consensus_issues
                 chart_html = self._fetch("/cfl-results?view=chart")
                 cfl_c = cfl_chart_consensus_issues(chart_html or "")
                 self.r.add(CheckResult(
@@ -1098,7 +1126,7 @@ class ContentAuditor:
             ),
             url="/tennis-picks", auditor=self.NAME))
 
-        from qa.chart_shape import (
+        from chart_shape import (
             golf_picks_board_issues,
             ufc_consensus_hist_face_issues,
         )
@@ -1259,12 +1287,28 @@ class NavigationAuditor:
     def _parse_menu_sections(self, html: str) -> dict:
         """Parse TV_MENUS JS object into {section_key: [(label, href), ...]}."""
         sections: dict[str, list] = {}
-        m = re.search(r"var TV_MENUS=(\{.*?\}\});", html)
-        if not m:
+        marker = "var TV_MENUS="
+        i = (html or "").find(marker)
+        if i < 0:
             return sections
-        menu = m.group(1)
+        start = html.find("{", i)
+        if start < 0:
+            return sections
+        depth = 0
+        end = -1
+        for j, ch in enumerate(html[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = j
+                    break
+        if end < 0:
+            return sections
+        menu = html[start:end + 1]
         for sec in re.finditer(
-                r"(\w+):\{title:'([^']*)',items:\[(.*?)\]\}", menu):
+                r"(\w+):\{title:'([^']*)',items:\[(.*?)\]\}", menu, flags=re.S):
             key = sec.group(1)
             items = re.findall(r"\{l:'([^']+)',h:'([^']+)'", sec.group(3))
             sections[key] = items
@@ -1286,6 +1330,14 @@ class NavigationAuditor:
 
         # ── Parse the actual menu sections from TV_MENUS ──────────────────
         sections = self._parse_menu_sections(html)
+        if "var TV_MENUS=" in html and not sections:
+            self.r.add(CheckResult(
+                label="Navigation TV_MENUS parse",
+                status=FAIL,
+                message="Homepage has TV_MENUS but the checker could not parse hamburger sections",
+                auditor=self.NAME,
+                url="/",
+            ))
         section_cfg = cfg.get("menu_sections", {})
 
         # 1. Per-section required + forbidden link checks
@@ -3169,6 +3221,31 @@ def _run_chrome_checker(session, base: str, report: AuditReport):
     ChromeChecker(session, base, report, CheckResult).run()
 
 
+def _run_contract_auditor(name: str, session, base: str, report: AuditReport):
+    """Instantiate a generic contract auditor. They existed but were never called."""
+    from contract_auditors import (
+        ApiContractAuditor,
+        ChartAuditor,
+        DataIntegrityAuditor,
+        ImagesAuditor,
+        PerformanceAccessibilityAuditor,
+        ResponsiveAuditor,
+        RuntimeAuditor,
+        TemplateContractAuditor,
+    )
+    cls = {
+        "templates": TemplateContractAuditor,
+        "integrity": DataIntegrityAuditor,
+        "runtime": RuntimeAuditor,
+        "perf_a11y": PerformanceAccessibilityAuditor,
+        "charts": ChartAuditor,
+        "images": ImagesAuditor,
+        "api": ApiContractAuditor,
+        "responsive": ResponsiveAuditor,
+    }[name]
+    cls(session, base, report, CheckResult, _timed_get).run()
+
+
 def _run_pagespeed_checker(base: str, report: AuditReport):
     """Google PageSpeed Insights API — same checker run, not a second tool."""
     from pagespeed_api_checker import PagespeedAuditor
@@ -3208,17 +3285,22 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
         mode = "quick"
     else:
         mode = "full"
-    print(f"\n{'='*60}")
-    print(f"  PredictionLab QA Audit")
-    print(f"  FETCHING LIVE HTTP PAGES — not local HTML folders")
-    print(f"  Target: {base}")
-    print(f"  Mode: {mode}")
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+    print(f"\n{'='*60}", flush=True)
+    print(f"  PredictionLab QA Audit", flush=True)
+    print(f"  FETCHING LIVE HTTP PAGES — not local HTML folders", flush=True)
+    print(f"  Target: {base}", flush=True)
+    print(f"  Mode: {mode}", flush=True)
     if live:
-        print("  This is predictionlab.io (production)")
-    print(f"  Run ID: {run_id}")
-    print(f"{'='*60}\n")
+        print("  This is predictionlab.io (production)", flush=True)
+    print(f"  Run ID: {run_id}", flush=True)
+    print(f"{'='*60}\n", flush=True)
 
     session = _make_session()
+    _wrap_session_get_cache(session)
 
     # Determine which auditors to run
     if getattr(args, "pagespeed", False) and not (
@@ -3276,7 +3358,8 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
             return
         if name in HTTP_DEPENDENT_AUDITORS and not reachable:
             return
-        print(f"  ▶ Running {name} audit…")
+        print(f"  ▶ Running {name} audit…", flush=True)
+        n_before = len(report.checks)
         try:
             fn()
         except Exception as exc:
@@ -3285,6 +3368,12 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
                 message=str(exc),
                 detail=traceback.format_exc()[-400:],
                 auditor=name))
+        added = report.checks[n_before:]
+        fails = sum(1 for c in added if c.status == FAIL)
+        print(
+            f"     {name}: {fails} fail(s) / {len(added)} checks",
+            flush=True,
+        )
 
     run_auditor("routes",     lambda: RouteAuditor(session, base, report).run())
     run_auditor("content",    lambda: ContentAuditor(session, base, report).run())
@@ -3300,6 +3389,11 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("ship", lambda: _run_ship_parity(session, base, report))
     run_auditor("soccer", lambda: _run_soccer_checker(session, base, report))
     run_auditor("espn_slate", lambda: _run_espn_slate_checker(session, base, report))
+    for _contract_name in (*CONTRACT_AUDITORS, "responsive"):
+        run_auditor(
+            _contract_name,
+            lambda n=_contract_name: _run_contract_auditor(n, session, base, report),
+        )
     # Schema auditor is static (DB schema + source scan), not HTTP-dependent —
     # it catches SQL column typos in auth-gated routes the HTTP checks can't reach.
     run_auditor("schema",     lambda: SchemaAuditor(report).run())
@@ -3375,37 +3469,44 @@ def save_reports(report: AuditReport) -> tuple[Path, Path, Path, Path]:
 
 
 def print_summary(report: AuditReport):
-    print(f"\n{'='*60}")
-    print(f"  AUDIT COMPLETE — {report.overall}")
-    print(f"  Duration: {report.duration:.1f}s")
+    print(f"\n{'='*60}", flush=True)
+    print(f"  AUDIT COMPLETE — {report.overall}", flush=True)
+    print(f"  Duration: {report.duration:.1f}s", flush=True)
     print(f"  ✅ {len(report.passes)} passed | "
           f"⚠️  {len(report.warnings)} warnings | "
           f"❌ {len(report.failures)} failures | "
-          f"ℹ️  {len(report.infos)} info")
-    print(f"{'='*60}")
+          f"ℹ️  {len(report.infos)} info", flush=True)
+    print(f"{'='*60}", flush=True)
 
     if report.failures:
-        print("\n  ❌ FAILURES:")
+        print("\n  ❌ FAILURES:", flush=True)
         for c in report.failures:
-            print(f"    • [{c.auditor}] {c.label}")
-            print(f"      {c.message}")
+            print(f"    • [{c.auditor}] {c.label}", flush=True)
+            print(f"      {c.message}", flush=True)
 
     if report.warnings:
-        print("\n  ⚠️  WARNINGS:")
+        print("\n  ⚠️  WARNINGS:", flush=True)
         for c in report.warnings:
-            print(f"    • [{c.auditor}] {c.label}")
-            print(f"      {c.message}")
+            print(f"    • [{c.auditor}] {c.label}", flush=True)
+            print(f"      {c.message}", flush=True)
 
-    print(f"\n  Reports saved to: {QA_DIR}/")
-    print(f"    latest_report.html")
-    print(f"    latest_report.txt")
-    print(f"    latest_report.json")
-    print(f"    qa_fix_prompt.txt")
-    print(f"    audit_history/{report.run_id}/")
+    print(f"\n  Reports saved to: {QA_DIR}/", flush=True)
+    print(f"    latest_report.html", flush=True)
+    print(f"    latest_report.txt", flush=True)
+    print(f"    latest_report.json", flush=True)
+    print(f"    qa_fix_prompt.txt", flush=True)
+    print(f"    audit_history/{report.run_id}/", flush=True)
     if not any((c.auditor or "") == "chrome" for c in report.checks):
-        print("\n  ⚠ Chrome checker did not run — that is the ~200 page/template checks.")
-        print("    Use: python qa/site_checker.py --chrome")
-        print("         python qa/site_checker.py          # default full (~300+)")
+        print("\n  ⚠ Chrome checker did not run — that is the ~200 page/template checks.", flush=True)
+        print("    Use: python qa/site_checker.py --chrome", flush=True)
+        print("         python qa/site_checker.py          # default full (~300+)", flush=True)
+    ran_auditors = {(c.auditor or "") for c in report.checks}
+    missing_contracts = [n for n in CONTRACT_AUDITORS if n not in ran_auditors]
+    if missing_contracts:
+        print(
+            f"\n  ⚠ Contract auditors did not report: {', '.join(missing_contracts)}",
+            flush=True,
+        )
 
 
 def main():
@@ -3418,7 +3519,7 @@ def main():
     parser.add_argument("--full",        action="store_true",
                         help="Run all auditors (default)")
     parser.add_argument("--quick",       action="store_true",
-                        help="Quick: routes + content + nav + chrome/ship/soccer")
+                        help="Quick: chrome/ship/soccer + templates/integrity/runtime/charts/api")
     parser.add_argument("--ship",        action="store_true",
                         help="5052 ship-parity only: cards, results charts, header/footer, previews, blog")
     parser.add_argument("--chrome",      action="store_true",
