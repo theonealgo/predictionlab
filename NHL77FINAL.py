@@ -10934,7 +10934,7 @@ except Exception as _owe:
 _PREDICTIONS_DISK_CACHE_DIR = _os_v2.path.join(_DATA_DIR, '.cache', 'predictions')
 # Don't seed slates older than this on boot (dates would be too stale to show
 # even for the brief window before the background refresh completes).
-_PREDICTIONS_DISK_MAX_AGE = 2 * 24 * 3600  # 2 days
+_PREDICTIONS_DISK_MAX_AGE = 14 * 24 * 3600  # 14 days — weekly slates must survive a deploy
 _SOCCER_RESULTS_DISK_PATH = _os_v2.path.join(_DATA_DIR, '.cache', 'soccer_results_all.html')
 _SOCCER_RESULTS_DISK_MAX_AGE = 12 * 3600
 
@@ -11073,7 +11073,14 @@ def _load_predictions_disk_cache():
             data = d.get('data')
             if isinstance(key, str) and key.startswith('NCAAF_'):
                 continue
-            if not data or (now_ts - ts) > _PREDICTIONS_DISK_MAX_AGE:
+            if not data:
+                continue
+            # Expired disk slates still beat a blank page after a Render restart.
+            stale = (now_ts - ts) > _PREDICTIONS_DISK_MAX_AGE
+            if stale and not (
+                isinstance(key, str)
+                and key.split('_upcoming_predictions_v', 1)[0] in ('NFL', 'NCAAF', 'CFL')
+            ):
                 continue
             existing = _PREDICTIONS_CACHE.get(key)
             if existing and existing.get('ts', 0) >= ts:
@@ -11099,8 +11106,9 @@ def _recover_cached_predictions(sport):
     for cache_key in _predictions_cache_key_aliases(sport):
         entry = _PREDICTIONS_CACHE.get(cache_key)
         data = entry.get('data') if isinstance(entry, dict) else None
-        if data:
+        if isinstance(data, list) and len(data) > 0:
             break
+        data = None
     if not data:
         # Nothing in memory (e.g. right after a restart/redeploy) — try the disk mirror.
         try:
@@ -11110,8 +11118,9 @@ def _recover_cached_predictions(sport):
         for cache_key in _predictions_cache_key_aliases(sport):
             entry = _PREDICTIONS_CACHE.get(cache_key)
             data = entry.get('data') if isinstance(entry, dict) else None
-            if data:
+            if isinstance(data, list) and len(data) > 0:
                 break
+            data = None
     if not data:
         return None
     try:
@@ -11153,7 +11162,9 @@ def _prewarm_predictions_cache():
         _seeded = False
         for _ck in _predictions_cache_key_aliases(_sport):
             _entry = _PREDICTIONS_CACHE.get(_ck)
-            if isinstance(_entry, dict) and _entry.get('data'):
+            _data = _entry.get('data') if isinstance(_entry, dict) else None
+            _need = 8 if _sport in ('NFL', 'NCAAF') else 1
+            if isinstance(_data, list) and len(_data) >= _need:
                 _seeded = True
                 break
         if _seeded:
@@ -23206,26 +23217,6 @@ def _picks_page_html_usable(sport: str, html: str) -> bool:
     return True
 
 
-def _cached_usable_picks_html(sport, filter_date=None):
-    """Last good rendered picks HTML (memory). Prefer this over the black stub."""
-    prefix = f"pred_page::v28::{sport}::{filter_date or 'all'}::"
-    best_html = None
-    best_ts = -1.0
-    for key, entry in list(_SPORT_PREDICTIONS_PAGE_CACHE.items()):
-        if not isinstance(key, str) or not key.startswith(prefix):
-            continue
-        if not isinstance(entry, dict):
-            continue
-        html = entry.get('html')
-        ts = entry.get('ts')
-        if ts is None or not _picks_page_html_usable(sport, html):
-            continue
-        if float(ts) > best_ts:
-            best_ts = float(ts)
-            best_html = html
-    return best_html
-
-
 def _predictions_fallback_page(sport, filter_date=None):
     """Safe fallback HTML for SEO picks pages when dynamic rendering fails."""
     cached = _cached_usable_picks_html(sport, filter_date)
@@ -24005,17 +23996,20 @@ def sport_predictions(sport, filter_date=None):
     prediction_error = None
     if str(sport or '').upper() == 'NFL':
         predictions = _recover_cached_predictions('NFL') or []
-        if not predictions:
+        if not isinstance(predictions, list) or len(predictions) < 8:
             try:
-                predictions = get_upcoming_predictions(sport)
+                rebuilt = get_upcoming_predictions(sport)
+                if rebuilt:
+                    predictions = rebuilt
             except Exception as e:
                 import traceback as _tb_pred
                 logger.error(f"Error loading {sport} predictions: {e}\n{_tb_pred.format_exc()}")
-                predictions = []
-                prediction_error = (
-                    f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
-                    "Please refresh in a minute."
-                )
+                if not predictions:
+                    predictions = []
+                    prediction_error = (
+                        f"{sport} predictions could not be loaded because an upstream data/model dependency failed. "
+                        "Please refresh in a minute."
+                    )
     else:
         try:
             predictions = get_upcoming_predictions(sport)
