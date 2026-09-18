@@ -1,23 +1,93 @@
 The automated QA audit for PredictionLab detected the following issues:
-Audit run: 20260917_082247  |  2026-09-17 08:22:47
+Audit run: 20260917_214420  |  2026-09-17 21:44:20
 Target: http://127.0.0.1:5052
 
 FAILURES (must fix):
-  - [chrome] speed /soccer-picks: /soccer-picks took 11.0s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5052/soccer-picks
-  - [chrome] speed /tennis-picks: /tennis-picks took 6.5s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5052/tennis-picks
-  - [chrome] speed /soccer-results: Won't open — took 12.8s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/soccer-results
-  - [chrome] open /soccer-results: Won't open — took 12.8s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/soccer-results
-  - [chrome] speed /cfl-results: Won't open — took 7.2s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/cfl-results
-  - [chrome] open /cfl-results: Won't open — took 7.2s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/cfl-results
-  - [chrome] speed /daily-report: /daily-report took 8.3s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5052/daily-report
-  - [chrome] DIGEST dead header/footer links: 2 destination(s) do not open: /soccer-results hung, /cfl-results hung
+  - [speed] speed /ncaab-picks: /ncaab-picks took 6.5s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/ncaab-picks
+  - [speed] speed /ncaaf-picks: /ncaaf-picks took 6.0s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/ncaaf-picks
+  - [speed] speed /nfl-picks: /nfl-picks took 20.9s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/nfl-picks
+  - [speed] speed /nfl-results: /nfl-results took 8.5s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/nfl-results
+  - [speed] speed /ncaaw-picks: /ncaaw-picks took 9.4s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/ncaaw-picks
+  - [speed] speed /ncaaf-results: /ncaaf-results took 37.0s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/ncaaf-results
+  - [speed] speed /wnba-picks: /wnba-picks took 37.0s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/wnba-picks
+  - [speed] speed /nba-results: /nba-results took 30.6s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/nba-results
+  - [speed] speed /mlb-results: /mlb-results took 25.5s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/mlb-results
+  - [speed] speed /results/export.csv: /results/export.csv took 33.4s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/results/export.csv
+  - [speed] speed /ufc-picks: /ufc-picks took 7.5s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5052/ufc-picks
+  - [content] NBA share card: Share card does not report how many picks it drew
+    Page: /nba-picks
+  - [content] Junk / placeholder picks: nhl-picks: Edge Pick Confidence stuck at 50% (47/47)
+    Page: /nhl-picks
+  - [content] Team logos: nhl-picks: Team logo missing on 3/94 faces (Utah Mammoth)
+    Page: /nhl-picks
+  - [content] NHL Efficiency N/A copy: Efficiency shows a copied % with N/A side on 47 card(s)
+    Page: /nhl-picks
+  - [content] NHL missing models/values: NHL: 47/47 cards have a blank, N/A, or 50% Edge model value
+    Page: /nhl-picks
+  - [content] NHL picks duplicate H2H: 47 NHL pick card(s) show H2H Last 10 on the face and again under details
+    Page: /nhl-picks
+  - [content] NFL share card: Share card has 1 pick(s); need at least 2
+    Page: /nfl-picks
+  - [content] NCAAB share card: Share card does not report how many picks it drew
+    Page: /ncaab-picks
+  - [content] Kickoff time: ncaaf-picks: Kickoff time stuck on Upcoming / no clock (81/81)
+    Page: /ncaaf-picks
+  - [content] NCAAF Efficiency N/A copy: Efficiency shows a copied % with N/A side on 1 card(s)
+    Page: /ncaaf-picks
+  - [content] NCAAF missing models/values: NCAAF: 1/81 cards have a blank, N/A, or 50% Edge model value; NCAAF: 10/80 cards have a blank XSharp spread; NCAAF: 10/80 cards have a blank Prediction Lab total; NCAAF: 10/80 cards have a blank XSharp total; NCAAF: 10/80 cards have a blank XSharp projected score
+    Page: /ncaaf-picks
+  - [content] NCAAW share card: Share card does not report how many picks it drew
+    Page: /ncaaw-picks
+  - [content] Kickoff time: wnba-picks: Kickoff time stuck on Upcoming / no clock (29/29)
+    Page: /wnba-picks
+  - [content] WNBA missing models/values: WNBA: 29/29 cards are missing a model box (Edge / XSharp / Sharp Consensus / Efficiency / Grinder2 / Takedown)
+    Page: /wnba-picks
+  - [content] content auditor crash: No module named 'qa'
+    Detail: ", line 3355, in <lambda>
+    run_auditor("content",    lambda: ContentAuditor(session, base, report).run())
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/nimamesghali/Sports Sandbox/predictionlabfix_work2/qa/site_checker.py", line 728, in run
+    from qa.chart_shape import wnba_consensus_hist_face_issues
+ModuleNotFoundError: No module named 'qa'
+
+  - [navigation] Picks & Predictions: missing /nba-picks: Required link /nba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nhl-picks: Required link /nhl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nfl-picks: Required link /nfl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /mlb-picks: Required link /mlb-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaab-picks: Required link /ncaab-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaf-picks: Required link /ncaaf-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaw-picks: Required link /ncaaw-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /wnba-picks: Required link /wnba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Props: missing /player-props: Required link /player-props is NOT in the Props menu
+  - [navigation] Tools & Models: missing /performance: Required link /performance is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /ai-sports-betting-picks-today: Required link /ai-sports-betting-picks-today is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /our-model-vs-sportsbooks: Required link /our-model-vs-sportsbooks is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /tutorial: Required link /tutorial is NOT in the Tools & Models menu
+  - [navigation] Results & Tracking: missing /all-sports-results: Required link /all-sports-results is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /daily-report: Required link /daily-report is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /results/downloads: Required link /results/downloads is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /edge-performance: Required link /edge-performance is NOT in the Results & Tracking menu
+  - [navigation] Company: missing /plans: Required link /plans is NOT in the Company menu
+  - [navigation] Company: missing /blog: Required link /blog is NOT in the Company menu
+  - [navigation] Company: missing /affiliate: Required link /affiliate is NOT in the Company menu
+  - [navigation] Company: missing /faq: Required link /faq is NOT in the Company menu
+  - [navigation] Company: missing /tutorial: Required link /tutorial is NOT in the Company menu
+  - [navigation] Company: missing /contact: Required link /contact is NOT in the Company menu
+  - [navigation] Company: missing /privacy: Required link /privacy is NOT in the Company menu
+  - [navigation] Company: missing /terms: Required link /terms is NOT in the Company menu
+  - [navigation] Company: missing /refund-policy: Required link /refund-policy is NOT in the Company menu
+  - [navigation] Company: missing /responsible-gaming: Required link /responsible-gaming is NOT in the Company menu
   - [chrome] NBA Prediction Lab moneyline: Pick cards are missing Prediction Lab moneylines (all —)
     Page: http://127.0.0.1:5052/nba-picks
   - [chrome] NBA share card: Share card does not report how many picks it drew
@@ -30,20 +100,12 @@ FAILURES (must fix):
     Page: http://127.0.0.1:5052/nfl-picks
   - [chrome] NFL H2H Last 10: H2H Last 10 exists in page HTML but is not on the card face (only inside details)
     Page: http://127.0.0.1:5052/nfl-picks
-  - [chrome] NFL Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/nfl-results?view=chart
   - [chrome] NFL spread chart table: spread chart does not compare actual score to books / PL lines
     Page: http://127.0.0.1:5052/nfl-results?view=chart&market=spread
   - [chrome] NFL totals chart table: totals chart does not compare actual score to books / PL lines
     Page: http://127.0.0.1:5052/nfl-results?view=chart&market=totals
-  - [chrome] MLB kickoff time: Kickoff time stuck on Upcoming / no clock (30/30)
+  - [chrome] MLB missing models/values: MLB: 2/22 cards have a blank, N/A, or 50% Edge model value
     Page: http://127.0.0.1:5052/mlb-picks
-  - [chrome] MLB missing models/values: MLB: 1/30 cards have a blank, N/A, or 50% Edge model value
-    Page: http://127.0.0.1:5052/mlb-picks
-  - [chrome] MLB Best Performing Today: MLB Best Performing Model says Today but the completed window is 2026-09-16 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/mlb-results?view=chart
-  - [chrome] MLB Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/mlb-results?view=chart
   - [chrome] NHL placeholder picks: Edge Pick Confidence stuck at 50% (47/47)
     Page: http://127.0.0.1:5052/nhl-picks
   - [chrome] NHL team logos: Team logo missing on 3/94 faces (Utah Mammoth)
@@ -61,8 +123,6 @@ FAILURES (must fix):
   - [chrome] Soccer results charts: Missing: Consensus Based Betting Records
     Page: http://127.0.0.1:5052/soccer-results
   - [chrome] Soccer results chart view: Chart view is missing: Consensus Based Betting Records
-    Page: http://127.0.0.1:5052/soccer-results?view=chart
-  - [chrome] Soccer chart-view results math: Team Best Performing Model says Today but the completed window is 2026-09-16 — use Last Night or Previous Day
     Page: http://127.0.0.1:5052/soccer-results?view=chart
   - [chrome] NCAAB Prediction Lab moneyline: Pick cards are missing Prediction Lab moneylines (all —)
     Page: http://127.0.0.1:5052/ncaab-picks
@@ -82,13 +142,11 @@ FAILURES (must fix):
     Page: http://127.0.0.1:5052/ncaaf-picks
   - [chrome] NCAAF results math: Team PL vs Books agree+disagree is 79 game(s) but PL favorite is 59-21 (80 games); Team PL vs Books agree+disagree is 79 game(s); Last Night has 80; Team Books favorite last night is 71-8 (79 games); Last Night has 80; Team consensus last night 6/6 unanimous is 47-8; cards grade 54-14; Team consensus last night 3/6 — all but Takedown and Sharp Consensus and Efficiency is missing; cards grade 1-0; Team consensus last night 5/6 — all but Takedown is 2-1; cards grade 3-1; Team consensus last night 5/6 — all but Edge is 8-10; cards grade 1-4; Team consensus last night 4/6 — all but Takedown and Edge is 2-1; cards grade 1-1
     Page: http://127.0.0.1:5052/ncaaf-results
-  - [chrome] NCAAF chart-view results math: Team PL vs Books agree+disagree is 79 game(s) but PL favorite is 59-21 (80 games); Team consensus last night 3/6 — all but Takedown and Sharp Consensus and Efficiency is missing; cards grade 1-0; Team consensus last-night buckets cover 79 game(s); cards have 80 classifiable 6-model game(s); Team Best Performing Model says Today but the completed window is 2026-09-12 — use Last Night or Previous Day
+  - [chrome] NCAAF chart-view results math: Team PL vs Books agree+disagree is 79 game(s) but PL favorite is 59-21 (80 games); Team consensus last night 3/6 — all but Takedown and Sharp Consensus and Efficiency is missing; cards grade 1-0; Team consensus last-night buckets cover 79 game(s); cards have 80 classifiable 6-model game(s)
     Page: http://127.0.0.1:5052/ncaaf-results?view=chart
   - [chrome] NCAAF consensus buckets: NCAAF consensus last night 3/6 — all but Takedown and Sharp Consensus and Efficiency is missing; cards grade 1-0; NCAAF consensus last-night buckets cover 79 game(s); cards have 80 classifiable 6-model game(s)
     Page: http://127.0.0.1:5052/ncaaf-results?view=chart
   - [chrome] NCAAF PL vs Books partition: NCAAF PL vs Books agree+disagree is 79 game(s) but PL favorite is 59-21 (80 games)
-    Page: http://127.0.0.1:5052/ncaaf-results?view=chart
-  - [chrome] NCAAF Best Performing Today: NCAAF Best Performing Model says Today but the completed window is 2026-09-12 — use Last Night or Previous Day
     Page: http://127.0.0.1:5052/ncaaf-results?view=chart
   - [chrome] NCAAW Prediction Lab moneyline: Pick cards are missing Prediction Lab moneylines (all —)
     Page: http://127.0.0.1:5052/ncaaw-picks
@@ -106,12 +164,8 @@ FAILURES (must fix):
     Page: http://127.0.0.1:5052/wnba-picks
   - [chrome] WNBA results card parameters: WNBA: 172/302 results cards show Efficiency as N/A or blank
     Page: http://127.0.0.1:5052/wnba-results
-  - [chrome] WNBA chart-view results math: Team Best Performing Model says Today but the completed window is 2026-08-31 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/wnba-results?view=chart
-  - [chrome] WNBA Best Performing Today: WNBA Best Performing Model says Today but the completed window is 2026-08-31 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/wnba-results?view=chart
-  - [chrome] WNBA Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/wnba-results?view=chart
+  - [chrome] WNBA results math: Last night windows disagree (2026-09-17, 2026-08-31)
+    Page: http://127.0.0.1:5052/wnba-results
   - [chrome] WNBA spread chart table: spread chart still showing the moneyline Edge pick table; spread chart missing Books line column; spread chart does not compare actual score to books / PL lines
     Page: http://127.0.0.1:5052/wnba-results?view=chart&market=spread
   - [chrome] WNBA totals chart table: totals chart still showing the moneyline Edge pick table; totals chart missing Books line column; totals chart does not compare actual score to books / PL lines
@@ -162,7 +216,6 @@ FAILURES (must fix):
     Page: http://127.0.0.1:5052/ufc-results?view=chart&market=totals
   - [chrome] UFC chart API: UFC chart API missing spread market; UFC chart API missing totals market
     Page: http://127.0.0.1:5052/ufc/api/picks
-  - [chrome] DIGEST slow pages: 5 page(s) slower than 5s: /soccer-picks 11.0s, /tennis-picks 6.5s, /soccer-results 12.8s, /cfl-results 7.2s, /daily-report 8.3s
   - [ship] SOCCER results charts: Missing the new results consensus charts: Consensus Based Betting Records
     Page: /soccer-results
   - [ship] SOCCER results chart view: Cards|Chart view is missing Consensus Based Betting Records
@@ -181,13 +234,92 @@ FAILURES (must fix):
   - [ship] DIGEST missing card values: CFL
   - [soccer] soccer results charts: Missing chart(s): Consensus Based Betting Records
     Page: http://127.0.0.1:5052/soccer-results?region=all
-  - [espn_slate] MLB today vs ESPN: ESPN today missing from the page: Milwaukee Brewers vs Pittsburgh Pirates; Los Angeles Dodgers vs Cincinnati Reds; Athletics vs Tampa Bay Rays; San Diego Padres vs Colorado Rockies; Kansas City Royals vs Houston Astros; Boston Red Sox vs Texas Rangers
-    Detail: espn=9 page=3 day=2026-09-17
-    Page: http://127.0.0.1:5052/mlb-picks
+  - [templates] Team chart contract: nhl: NHL chart view still shows Season Performance (must be the shared consensus table); NHL chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NHL chart view still shows Last Night's NHL Results (must be the shared consensus table); NHL chart view still shows Last 7 Days NHL Results (must be the shared consensus table); NHL chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NHL chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NHL chart view still has 10 game cards (Chart must not be a stripped cards page)
+    Page: /nhl-results?view=chart
+  - [templates] Team chart contract: nba: NBA chart view still shows Season Performance (must be the shared consensus table); NBA chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NBA chart view still shows Last Night's NBA Results (must be the shared consensus table); NBA chart view still shows Last 7 Days NBA Results (must be the shared consensus table); NBA chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NBA chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NBA chart view still has 10 game cards (Chart must not be a stripped cards page)
+    Page: /nba-results?view=chart
+  - [templates] Team chart contract: ncaab: NCAAB chart view still shows Season Performance (must be the shared consensus table); NCAAB chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NCAAB chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAB chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAB chart view still has 153 game cards (Chart must not be a stripped cards page)
+    Page: /ncaab-results?view=chart
+  - [templates] Team chart contract: ncaaw: NCAAW chart view still shows Season Performance (must be the shared consensus table); NCAAW chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NCAAW chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAW chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAW chart view still has 11 game cards (Chart must not be a stripped cards page)
+    Page: /ncaaw-results?view=chart
+  - [perf_a11y] Perf/a11y picks: mlb-picks: placeholder/TODO text on picks page
+    Detail: placeholder/TODO text on picks page
+    Page: /mlb-picks
+  - [perf_a11y] Perf/a11y homepage: missing og:url
+    Detail: missing og:url
+    Page: /
+  - [charts] Chart contract: nhl: NHL chart view still shows Season Performance (must be the shared consensus table); NHL chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NHL chart view still shows Last Night's NHL Results (must be the shared consensus table); NHL chart view still shows Last 7 Days NHL Results (must be the shared consensus table); NHL chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NHL chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table
+    Detail: NHL chart view still shows Season Performance (must be the shared consensus table); NHL chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NHL chart view still shows Last Night's NHL Results (must be the shared consensus table); NHL chart view still shows Last 7 Days NHL Results (must be the shared consensus table); NHL chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NHL chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NHL chart view still has 10 game cards (Chart must not be a stripped cards page); NHL chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NHL chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NHL chart view still has 10 game cards (Chart must not be a stripped cards page)
+    Page: /nhl-results?view=chart
+  - [charts] Chart contract: nba: NBA chart view still shows Season Performance (must be the shared consensus table); NBA chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NBA chart view still shows Last Night's NBA Results (must be the shared consensus table); NBA chart view still shows Last 7 Days NBA Results (must be the shared consensus table); NBA chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NBA chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table
+    Detail: NBA chart view still shows Season Performance (must be the shared consensus table); NBA chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NBA chart view still shows Last Night's NBA Results (must be the shared consensus table); NBA chart view still shows Last 7 Days NBA Results (must be the shared consensus table); NBA chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NBA chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NBA chart view still has 10 game cards (Chart must not be a stripped cards page); NBA chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NBA chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NBA chart view still has 10 game cards (Chart must not be a stripped cards page)
+    Page: /nba-results?view=chart
+  - [charts] Chart contract: ncaab: NCAAB chart view still shows Season Performance (must be the shared consensus table); NCAAB chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NCAAB chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAB chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAB chart view still has 153 game cards (Chart must not be a stripped cards page); NCAAB chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table
+    Detail: NCAAB chart view still shows Season Performance (must be the shared consensus table); NCAAB chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NCAAB chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAB chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAB chart view still has 153 game cards (Chart must not be a stripped cards page); NCAAB chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAB chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAB chart view still has 153 game cards (Chart must not be a stripped cards page)
+    Page: /ncaab-results?view=chart
+  - [charts] Chart contract: ncaaw: NCAAW chart view still shows Season Performance (must be the shared consensus table); NCAAW chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NCAAW chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAW chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAW chart view still has 11 game cards (Chart must not be a stripped cards page); NCAAW chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table
+    Detail: NCAAW chart view still shows Season Performance (must be the shared consensus table); NCAAW chart view still shows Moneyline Accuracy by Model (must be the shared consensus table); NCAAW chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAW chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAW chart view still has 11 game cards (Chart must not be a stripped cards page); NCAAW chart view still shows leftover cards chrome (Model Performance (Flat Unit Tracking)) — Chart must be the shared consensus table; NCAAW chart view still shows leftover cards chrome (Moneyline Accuracy by Model) — Chart must be the shared consensus table; NCAAW chart view still has 11 game cards (Chart must not be a stripped cards page)
+    Page: /ncaaw-results?view=chart
 
 WARNINGS (should investigate):
-  - [pagespeed] pagespeed public base: PageSpeed skipped — Google cannot fetch this local base. Set PAGESPEED_BASE_URL=https://predictionlab.io (audit target was http://127.0.0.1:5052).
-    Page: http://127.0.0.1:5052
+  - [routes] Slow pages on local server: 2 page(s) exceeded the 12s timeout — normal on local dev
+    Detail: /ncaaf-results, /wnba-picks
+  - [runtime] Runtime a11y: /mlb-picks: 1 empty aria-label=""
+    Page: /mlb-picks
+  - [runtime] Runtime a11y: /nfl-picks: 1 empty aria-label=""
+    Page: /nfl-picks
+  - [runtime] Runtime a11y: /soccer-picks: 1 empty aria-label=""
+    Page: /soccer-picks
+  - [runtime] Runtime a11y: /ufc-picks: 1 empty aria-label=""
+    Page: /ufc-picks
+  - [perf_a11y] Perf/a11y picks: nhl-picks: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css
+    Detail: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; social-image-link missing discernible name; placeholder/TODO text on picks page; html missing lang
+    Page: /nhl-picks
+  - [perf_a11y] Perf/a11y picks: nba-picks: html missing lang attribute; document missing main landmark; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; share wrap present but no /share/predictions/ URL; placeholder/TODO text on picks page; html missing lang
+    Detail: html missing lang attribute; document missing main landmark; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; share wrap present but no /share/predictions/ URL; placeholder/TODO text on picks page; html missing lang
+    Page: /nba-picks
+  - [perf_a11y] Perf/a11y picks: ncaab-picks: html missing lang attribute; document missing main landmark; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; share wrap present but no /share/predictions/ URL; placeholder/TODO text on picks page; html missing lang
+    Detail: html missing lang attribute; document missing main landmark; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; share wrap present but no /share/predictions/ URL; placeholder/TODO text on picks page; html missing lang
+    Page: /ncaab-picks
+  - [perf_a11y] Perf/a11y picks: ncaaw-picks: html missing lang attribute; document missing main landmark; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; share wrap present but no /share/predictions/ URL; placeholder/TODO text on picks page; html missing lang
+    Detail: html missing lang attribute; document missing main landmark; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; share wrap present but no /share/predictions/ URL; placeholder/TODO text on picks page; html missing lang
+    Page: /ncaaw-picks
+  - [perf_a11y] Perf/a11y picks: nfl-picks: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css
+    Detail: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; social-image-link missing discernible name; placeholder/TODO text on picks page; html missing lang
+    Page: /nfl-picks
+  - [perf_a11y] Perf/a11y picks: ncaaf-picks: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css
+    Detail: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; social-image-link missing discernible name; placeholder/TODO text on picks page; HTML size 933 KiB exceeds 900 KiB budget (/ncaaf-picks); html missing lang
+    Page: /ncaaf-picks
+  - [perf_a11y] Perf/a11y picks: wnba-picks: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: mlb-picks-chart.css; render-blocking stylesheet: picks-chart.css
+    Detail: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; Cards|Chart tabs missing aria-selected=true on active tab; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: mlb-picks-chart.css; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; social-image-link missing discernible name; placeholder/TODO text on picks page; html missing lang
+    Page: /wnba-picks
+  - [perf_a11y] Perf/a11y picks: cfl-picks: placeholder/TODO text on picks page; canonical points at other sport (mlb)
+    Detail: placeholder/TODO text on picks page; canonical points at other sport (mlb)
+    Page: /cfl-picks
+  - [perf_a11y] Perf/a11y picks: tennis-picks: render-blocking stylesheet: picks-chart.css; share wrap present but no /share/predictions/ URL; missing meta description; missing canonical; missing og:title; missing og:description; missing og:url
+    Detail: render-blocking stylesheet: picks-chart.css; share wrap present but no /share/predictions/ URL; missing meta description; missing canonical; missing og:title; missing og:description; missing og:url
+    Page: /tennis-picks
+  - [perf_a11y] Perf/a11y picks: ufc-picks: html missing lang attribute; document missing main landmark; social-image-link missing discernible name (aria-label or img alt); gtag.js loaded as script src in HTML; defer after load/idle (do not remove tag); render-blocking stylesheet: picks-chart.css; share wrap present but no /share/predictions/ URL; social-image-link missing discernible name; Google Ads gtag.js present as blocking/async src in HTML; defer after load/idle
+    Detail: html missing lang attribute; document missing main landmark; social-image-link missing discernible name (aria-label or img alt); gtag.js loaded as script src in HTML; defer after load/idle (do not remove tag); render-blocking stylesheet: picks-chart.css; share wrap present but no /share/predictions/ URL; social-image-link missing discernible name; Google Ads gtag.js present as blocking/async src in HTML; defer after load/idle; placeholder/TODO text on picks page; html missing lang
+    Page: /ufc-picks
+  - [perf_a11y] Perf/a11y picks: golf-picks: document missing main landmark; missing meta description; missing canonical; missing og:title; missing og:description; missing og:url
+    Detail: document missing main landmark; missing meta description; missing canonical; missing og:title; missing og:description; missing og:url
+    Page: /golf-picks
+  - [perf_a11y] Perf/a11y picks: soccer-picks: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; social-image-link missing discernible name
+    Detail: html missing lang attribute; document missing main landmark; Cards|Chart tablist missing role=tab on buttons; social-image-link missing discernible name (aria-label or img alt); share preview image missing ?w= downscale param; render-blocking stylesheet: picks-chart.css; render-blocking stylesheet: pl-info-tips.css; social-image-link missing discernible name; placeholder/TODO text on picks page; HTML size 2555 KiB exceeds 900 KiB budget (/soccer-picks); html missing lang
+    Page: /soccer-picks
+  - [images] Images picks: nfl: social-image-link missing discernible name
+    Detail: social-image-link missing discernible name
+    Page: /nfl-picks
+  - [images] Images picks: nba: share wrap present but no /share/predictions/ URL
+    Detail: share wrap present but no /share/predictions/ URL
+    Page: /nba-picks
+  - [images] Images picks: soccer: social-image-link missing discernible name
+    Detail: social-image-link missing discernible name
+    Page: /soccer-picks
+  - [images] Images picks: tennis: share wrap present but no /share/predictions/ URL
+    Detail: share wrap present but no /share/predictions/ URL
+    Page: /tennis-picks
 
 ============================================================
 REQUIREMENTS FOR CLAUDE:
