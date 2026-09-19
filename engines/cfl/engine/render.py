@@ -270,14 +270,30 @@ def _clamp(x: float) -> float:
     return max(0.12, min(0.88, x))
 
 
+_FADE_FLAGS_MEMO = {"ts": 0.0, "ml": None, "spread": None}
+
+
 def _refresh_fade_flags() -> tuple[bool, bool]:
     """Season under-50% → fade ML / spread. Totals never fade."""
     global _FADE_ML, _FADE_SPREAD
+    now = __import__("time").time()
+    memo = _FADE_FLAGS_MEMO
+    if (
+        memo.get("ml") is not None
+        and memo.get("spread") is not None
+        and (now - float(memo.get("ts") or 0)) < 90
+    ):
+        _FADE_ML = bool(memo["ml"])
+        _FADE_SPREAD = bool(memo["spread"])
+        return _FADE_ML, _FADE_SPREAD
     try:
         rows = list_graded_results(days=120, regular_season_only=True)
     except Exception:
         rows = []
     _FADE_ML, _FADE_SPREAD = season_fade_flags(rows)
+    memo["ts"] = now
+    memo["ml"] = _FADE_ML
+    memo["spread"] = _FADE_SPREAD
     return _FADE_ML, _FADE_SPREAD
 
 

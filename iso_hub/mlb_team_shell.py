@@ -66,6 +66,90 @@ def _balanced_div_end(html: str, start: int) -> int:
     return -1
 
 
+def _cfl_results_shell_html() -> str:
+    """Local CFL results chrome. Do not rebuild /mlb-results on this path."""
+    today = datetime.now(ET).strftime("%Y-%m-%d")
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CFL Results | Prediction Lab</title>
+<link rel="stylesheet" href="/static/css/team-results.css">
+<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-eqht-2">
+<style>
+.page-title {{ font-size:2.2em; margin-bottom:20px; text-align:center; padding:22px 18px; border:1px solid rgba(15,23,42,0.14); border-radius:12px; background:#fff; color:#0f172a; }}
+.date-nav {{ display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:12px 16px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }}
+.nav-arrow {{ background:rgba(251,191,36,0.2); border:2px solid #fbbf24; color:#fbbf24; font-size:1.3em; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; }}
+.date-bubbles {{ display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:820px; }}
+.date-bubble {{ background:#fff; border:2px solid rgba(15,23,42,0.2); border-radius:22px; padding:8px 15px; min-width:100px; text-align:center; cursor:pointer; font-weight:500; font-size:0.84em; color:#0f172a; }}
+.date-bubble.active {{ background:#fbbf24; border-color:#fbbf24; font-weight:700; }}
+.date-bubble.today {{ border-color:#00C076; color:#00C076; }}
+.date-section {{ display:none; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }}
+.date-section.visible {{ display:block; }}
+.date-header {{ color:#0F172A; font-size:1.3em; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #E2E8F0; }}
+.games-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:start; }}
+@media(max-width:1100px){{ .games-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
+@media(max-width:480px){{ .games-grid {{ grid-template-columns:1fr; }} }}
+.container {{ max-width:1180px; margin:0 auto; padding:16px; }}
+</style>
+</head>
+<body class="sport-cfl" data-sport="cfl">
+<div class="container">
+<h1 class="page-title">🏈 CFL Results, Performance and Model Accuracy</h1>
+<!-- ── Daily Tally ── -->
+<!-- ── Date Slider ── -->
+<div class="date-nav">
+<div class="nav-arrow" onclick="previousWeek()">&#8249;</div>
+<div class="date-bubbles" id="dateBubbles"></div>
+<div class="nav-arrow" onclick="nextWeek()">&#8250;</div>
+</div>
+</div>
+<script>
+const allDates = [];
+const today = '{today}';
+let currentWeekStart = 0, activeDate = null;
+const datesPerWeek = 7;
+function fmtDate(ds) {{
+    const d = new Date(ds+'T12:00:00');
+    const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
+}}
+function showDate(date) {{
+    document.querySelectorAll('.date-section').forEach(s=>s.classList.remove('visible'));
+    const sec=document.getElementById('date-'+date);
+    if(sec){{sec.classList.add('visible');activeDate=date;}}
+}}
+function renderBubbles() {{
+    const c=document.getElementById('dateBubbles'); if(!c) return; c.innerHTML='';
+    const end=Math.min(currentWeekStart+datesPerWeek,allDates.length);
+    const week=allDates.slice(currentWeekStart,end);
+    if(activeDate && !week.includes(activeDate)){{activeDate=week[week.length-1];showDate(activeDate);}}
+    week.forEach(date=>{{
+        const b=document.createElement('div'); b.className='date-bubble';
+        if(date===today)b.classList.add('today');
+        if(date===activeDate)b.classList.add('active');
+        b.textContent=fmtDate(date);
+        b.onclick=()=>{{document.querySelectorAll('.date-bubble').forEach(x=>x.classList.remove('active'));b.classList.add('active');showDate(date);}};
+        c.appendChild(b);
+    }});
+}}
+function previousWeek(){{if(currentWeekStart>0){{currentWeekStart=Math.max(0,currentWeekStart-datesPerWeek);renderBubbles();}}}}
+function nextWeek(){{if(currentWeekStart+datesPerWeek<allDates.length){{currentWeekStart+=datesPerWeek;renderBubbles();}}}}
+document.addEventListener('DOMContentLoaded',()=>{{
+    if(allDates.length>0){{
+        const lastIdx=allDates.length-1;
+        currentWeekStart=Math.max(0,lastIdx-datesPerWeek+1);
+        activeDate=allDates[lastIdx];
+    }}
+    showDate(activeDate);renderBubbles();
+}});
+</script>
+</body>
+</html>
+"""
+
+
 def _mlb_html(path: str) -> tuple[str, dict[str, Any]]:
     """Same MLB page the sandbox copied — rendered in-process so :5001 does not deadlock."""
     m = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
@@ -754,13 +838,17 @@ def _cfl_cards(mode: str) -> tuple[list[dict[str, Any]], Any]:
     render._refresh_fade_flags()
     if mode == "results":
         raw = render.list_graded_results(days=21, regular_season_only=True)
+        attached = False
         for _fn in ("attach_book_totals", "attach_book_odds", "attach_moneylines"):
             attach = getattr(pipe, _fn, None)
             if callable(attach):
                 try:
                     raw = attach(raw)
+                    attached = True
                 except Exception:
                     pass
+        if not attached:
+            raw = list(raw or [])
         cards = [render._faded(c) for c in raw]
     else:
         raw = render.list_pick_cards()
@@ -1344,10 +1432,14 @@ def render_team_sport(sport: str, *, which: str = "picks") -> tuple[str, dict[st
         return html, meta
 
     mode = "results" if which == "results" else "picks"
-    path = "/mlb-results" if mode == "results" else "/mlb-picks"
-    html, meta = _mlb_html(path)
-    if not meta.get("ok"):
-        return html, meta
+    if mode == "results":
+        html = _cfl_results_shell_html()
+        meta = {"ok": True, "source": "cfl_local_shell", "status": 200}
+    else:
+        path = "/mlb-picks"
+        html, meta = _mlb_html(path)
+        if not meta.get("ok"):
+            return html, meta
 
     cards, render = _cfl_cards(mode)
     grouped = _group_by_date(render, cards, newest_first=(mode == "results"))
@@ -1358,20 +1450,15 @@ def render_team_sport(sport: str, *, which: str = "picks") -> tuple[str, dict[st
     html = _replace_all_dates_js(html, dates, today)
 
     if mode == "results":
-        raw = render.list_graded_results(days=21, regular_season_only=True)
-        html = _replace_results_perf(html, _cfl_tally_html(render, raw))
+        html = _replace_results_perf(html, _cfl_tally_html(render, cards))
         try:
-            from team_tabbed_results import (
-                build_cfl_payload,
-                inject_consensus_records_html,
-            )
+            from team_tabbed_results import inject_consensus_records_html
 
-            payload = build_cfl_payload()
+            buckets = render._bucket_results(cards)
             html = inject_consensus_records_html(
                 html,
                 sport=sport,
-                finals=(payload or {}).get("finals"),
-                last_night_key=((payload or {}).get("tallies") or {}).get("last_night", {}).get("date"),
+                last_night_key=buckets.get("last_night_key"),
             )
         except Exception as e:
             print(f"[hub] {sport} results analytics: {e}", flush=True)

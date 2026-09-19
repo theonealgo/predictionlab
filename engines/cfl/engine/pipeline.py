@@ -437,6 +437,10 @@ def _book_day_et(raw: Any) -> str:
 
 def _book_total_index() -> dict[tuple[str, str, str], dict[str, Any]]:
     """Match key (home, away, ET YYYY-MM-DD) → official row with any book line."""
+    now = __import__("time").time()
+    memo = _BOOK_INDEX_MEMO
+    if isinstance(memo.get("idx"), dict) and (now - float(memo.get("ts") or 0)) < 90:
+        return memo["idx"]
     idx: dict[tuple[str, str, str], dict[str, Any]] = {}
     try:
         games = fetch_official_all_games(use_cache=True)
@@ -454,6 +458,8 @@ def _book_total_index() -> dict[tuple[str, str, str], dict[str, Any]]:
         day = _book_day_et(g.get("game_date"))
         if home and away and day:
             idx[(home, away, day)] = g
+    _BOOK_INDEX_MEMO["ts"] = now
+    _BOOK_INDEX_MEMO["idx"] = idx
     return idx
 
 
@@ -516,6 +522,10 @@ def list_pick_cards(*, days_back: int = 1, days_fwd: int = 21) -> list[dict[str,
     return attach_book_totals(liveish or window or cards[:12])
 
 
+_GRADED_RESULTS_MEMO: dict[str, Any] = {"ts": 0.0, "key": None, "rows": None}
+_BOOK_INDEX_MEMO: dict[str, Any] = {"ts": 0.0, "idx": None}
+
+
 def list_graded_results(
     *,
     days: int | None = None,
@@ -528,6 +538,15 @@ def list_graded_results(
     replace Season Performance. A rolling ``days`` window is ignored for
     regular-season results so Week 1 is never dropped as the season runs.
     """
+    now = __import__("time").time()
+    memo_key = (days, bool(regular_season_only))
+    hit = _GRADED_RESULTS_MEMO
+    if (
+        hit.get("rows") is not None
+        and hit.get("key") == memo_key
+        and (now - float(hit.get("ts") or 0)) < 90
+    ):
+        return [dict(r) for r in hit["rows"]]
     if not DB_PATH.exists():
         ensure_predictions(refresh=True)
     with connect() as conn:
@@ -587,6 +606,9 @@ def list_graded_results(
             grade = None
         d["grade"] = grade
         out.append(d)
+    _GRADED_RESULTS_MEMO["ts"] = __import__("time").time()
+    _GRADED_RESULTS_MEMO["key"] = memo_key
+    _GRADED_RESULTS_MEMO["rows"] = [dict(r) for r in out]
     return out
 
 

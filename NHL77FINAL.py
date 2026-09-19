@@ -4252,6 +4252,32 @@ _TEAM_NAME_TO_ABBR = {
 }
 
 
+
+_CFL_TEAM_LOGOS = {
+    'calgary stampeders': '/static/img/cfl/calgary.svg',
+    'edmonton elks': '/static/img/cfl/edmonton.svg',
+    'saskatchewan roughriders': '/static/img/cfl/saskatchewan.svg',
+    'winnipeg blue bombers': '/static/img/cfl/winnipeg.svg',
+    'bc lions': '/static/img/cfl/bc.svg',
+    'hamilton tiger-cats': '/static/img/cfl/hamilton.svg',
+    'toronto argonauts': '/static/img/cfl/toronto.svg',
+    'montreal alouettes': '/static/img/cfl/montreal.svg',
+    'ottawa redblacks': '/static/img/cfl/ottawa.svg',
+    'ottawa red blacks': '/static/img/cfl/ottawa.svg',
+}
+
+
+def _cfl_team_logo_url(team_name: str) -> str:
+    """Local CFL marks only — do not send CFL through ESPN team-logo slugs."""
+    key = (team_name or '').strip().lower()
+    if key in _CFL_TEAM_LOGOS:
+        return _CFL_TEAM_LOGOS[key]
+    for name, url in _CFL_TEAM_LOGOS.items():
+        if key and (key in name or name.split()[-1] in key):
+            return url
+    return '/static/pl-logo.svg'
+
+
 def team_logo_url(sport: str, team_name: str) -> str:
     """ESPN team logo for prediction card header.
 
@@ -4264,6 +4290,8 @@ def team_logo_url(sport: str, team_name: str) -> str:
         return _soccer_espn_logo_url(team_name)
     if sport == 'NCAAF':
         return _ncaaf_espn_logo_url(team_name)
+    if sport == 'CFL':
+        return _cfl_team_logo_url(team_name)
     slug = _TEAM_LOGO_SLUG.get(sport)
     abbr = (_TEAM_NAME_TO_ABBR.get(sport) or {}).get(team_name)
     if not slug or not abbr:
@@ -17850,7 +17878,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 {% set home_score = game.home_score %}
                 {% set _force_rl = (sport == 'MLB') %}
                 {% set _spread_label = 'Run Line' if sport == 'MLB' else ('Puck Line' if sport == 'NHL' else 'Spread') %}
-                <div class="game-card{% if sport == 'SOCCER' %} game-card-stack{% endif %}"{% if sport == 'SOCCER' %} data-pick-card data-home-full="{{ game.home }}" data-away-full="{{ game.away }}" data-date="{{ date }}" data-time="FINAL" data-h2h="" data-plxg="{% if game.soccer_pl_expected_face is defined and game.soccer_pl_expected_face %}{{ game.soccer_pl_expected_face }}{% else %}N/A{% endif %}"{% if not (game.soccer_pl_expected_face is defined and game.soccer_pl_expected_face) %} data-plxg-reason="{{ game.soccer_pl_expected_missing_reason if game.soccer_pl_expected_missing_reason is defined and game.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}"{% endif %}{% endif %} data-league="{{ game.league if game.league else 'Other' }}" data-game-id="{{ game.game_id }}" data-spread-action="{% if game.spread_pick %}{{ game.spread_pick }}{% else %}NO BET{% endif %}"{% if game.our_spread is defined and game.our_spread is not none %} data-our-spread="{{ game.our_spread }}"{% endif %}{% if sport == 'SOCCER' %} data-m-grinder2="{% if game.glicko2_prob is not none %}{{ game.glicko2_prob }}{% endif %}" data-m-takedown="{% if game.trueskill_prob is not none %}{{ game.trueskill_prob }}{% endif %}" data-m-edge="{% if game.elo_prob is not none %}{{ game.elo_prob }}{% endif %}" data-m-xsharp="{% if game.xgb_prob is not none %}{{ game.xgb_prob }}{% endif %}" data-m-efficiency="{% if game.efficiency_prob is not none %}{{ game.efficiency_prob }}{% endif %}" data-m-consensus="{% if game.ens_prob is not none %}{{ game.ens_prob }}{% endif %}"{% endif %}>
+                <div class="game-card{% if sport == 'SOCCER' %} game-card-stack{% endif %}"{% if sport == 'SOCCER' %} data-pick-card data-home-full="{{ game.home }}" data-away-full="{{ game.away }}" data-date="{{ date }}" data-time="FINAL" data-h2h="" data-plxg="{% if game.soccer_pl_expected_face is defined and game.soccer_pl_expected_face %}{{ game.soccer_pl_expected_face }}{% else %}N/A{% endif %}"{% if not (game.soccer_pl_expected_face is defined and game.soccer_pl_expected_face) %} data-plxg-reason="{{ game.soccer_pl_expected_missing_reason if game.soccer_pl_expected_missing_reason is defined and game.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}"{% endif %}{% endif %}{% if sport == 'CFL' %} data-pick-card data-home="{{ game.home }}" data-away="{{ game.away }}" data-date="{{ date }}"{% endif %} data-league="{{ game.league if game.league else 'Other' }}" data-game-id="{{ game.game_id }}" data-spread-action="{% if game.spread_pick %}{{ game.spread_pick }}{% else %}NO BET{% endif %}"{% if game.our_spread is defined and game.our_spread is not none %} data-our-spread="{{ game.our_spread }}"{% endif %}{% if sport == 'SOCCER' %} data-m-grinder2="{% if game.glicko2_prob is not none %}{{ game.glicko2_prob }}{% endif %}" data-m-takedown="{% if game.trueskill_prob is not none %}{{ game.trueskill_prob }}{% endif %}" data-m-edge="{% if game.elo_prob is not none %}{{ game.elo_prob }}{% endif %}" data-m-xsharp="{% if game.xgb_prob is not none %}{{ game.xgb_prob }}{% endif %}" data-m-efficiency="{% if game.efficiency_prob is not none %}{{ game.efficiency_prob }}{% endif %}" data-m-consensus="{% if game.ens_prob is not none %}{{ game.ens_prob }}{% endif %}"{% endif %}>
                     {% set card = game %}
                     {% set is_results = true %}
                     {% set is_final = true %}

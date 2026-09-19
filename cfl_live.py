@@ -628,6 +628,248 @@ def render_cfl_picks() -> str:
 
 _CFL_RESULTS_PAGE_CACHE: dict = {}
 _CFL_RESULTS_PAGE_TTL = 180
+_CFL_MODEL_KEYS = (
+    ("Grinder2", "glicko2"),
+    ("Takedown", "trueskill"),
+    ("Edge", "elo"),
+    ("XSharp", "xgb"),
+    ("Sharp Consensus", "ens"),
+    ("Efficiency", "efficiency"),
+)
+
+
+def _cfl_num(v: Any) -> float | None:
+    try:
+        if v is None or v == "":
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _cfl_card_to_daily_game(card: dict[str, Any], render) -> dict[str, Any] | None:
+    """Engine result row → DAILY_RESULTS_TEMPLATE game. Never invent 50/50."""
+    home = card.get("home_team") or ""
+    away = card.get("away_team") or ""
+    try:
+        actual_home = int(card["home_score"])
+        actual_away = int(card["away_score"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    if not home or not away:
+        return None
+    day = render._date_key(card.get("game_date")) or ""
+    if not day:
+        return None
+    home_won = actual_home > actual_away
+    tie = actual_home == actual_away
+    locked = render._has_locked_pick(card)
+    game: dict[str, Any] = {
+        "game_id": card.get("game_id") or f"{day}-{away}-{home}",
+        "home": home,
+        "away": away,
+        "home_team_id": home,
+        "away_team_id": away,
+        "home_score": actual_home,
+        "away_score": actual_away,
+        "league": "CFL",
+        "date": day,
+        "game_date": day,
+        "glicko2_prob": None,
+        "trueskill_prob": None,
+        "elo_prob": None,
+        "xgb_prob": None,
+        "ens_prob": None,
+        "ensemble_prob": None,
+        "efficiency_prob": None,
+        "glicko2_correct": None,
+        "trueskill_correct": None,
+        "elo_correct": None,
+        "xgb_correct": None,
+        "ens_correct": None,
+        "efficiency_correct": None,
+    }
+    if locked:
+        hp = float(card["home_win_prob"])
+        for name, fav_p, fav in render._component_models(home, away, hp):
+            home_p = fav_p if fav == home else (1.0 - fav_p)
+            key = dict(_CFL_MODEL_KEYS).get(name)
+            if not key:
+                continue
+            game[f"{key}_prob"] = round(home_p * 100.0, 1)
+            if not tie:
+                game[f"{key}_correct"] = (home_p >= 0.5) == home_won
+        game["ensemble_prob"] = game.get("ens_prob")
+
+    bk_spread = _cfl_num(card.get("book_spread"))
+    if bk_spread is None:
+        bk_spread = _cfl_num(card.get("book_home_spread"))
+    bk_total = _cfl_num(card.get("book_total"))
+    pl_spread = _cfl_num(card.get("model_spread"))
+    pl_total = _cfl_num(card.get("model_total"))
+    game["book_away_moneyline"] = _cfl_num(
+        card.get("book_away_moneyline") or card.get("away_moneyline")
+    )
+    game["book_home_moneyline"] = _cfl_num(
+        card.get("book_home_moneyline") or card.get("home_moneyline")
+    )
+    game["book_spread"] = bk_spread
+    game["book_total"] = bk_total
+    game["our_spread"] = pl_spread
+    game["our_total"] = pl_total
+    game["xgb_spread"] = pl_spread
+    game["xgb_total"] = pl_total
+    if bk_spread is not None:
+        game["disp_book_spread"] = bk_spread
+    if pl_spread is not None:
+        game["disp_pl_spread"] = pl_spread
+        game["disp_xs_spread"] = pl_spread
+    if bk_total is not None:
+        game["disp_book_total"] = bk_total
+    if pl_total is not None:
+        game["disp_pl_total"] = pl_total
+        game["disp_xs_total"] = pl_total
+
+    ph = _cfl_num(card.get("predicted_home_score"))
+    pa = _cfl_num(card.get("predicted_away_score"))
+    if ph is not None:
+        game["pl_proj_home_pts"] = ph
+        game["xs_proj_home_pts"] = ph
+        game["expected_home_score"] = ph
+    if pa is not None:
+        game["pl_proj_away_pts"] = pa
+        game["xs_proj_away_pts"] = pa
+        game["expected_away_score"] = pa
+    game["pl_model_away_ml"] = _cfl_num(
+        card.get("pl_away_moneyline") or card.get("pl_model_away_ml")
+    )
+    game["pl_model_home_ml"] = _cfl_num(
+        card.get("pl_home_moneyline") or card.get("pl_model_home_ml")
+    )
+
+    sp_ok, sp_push = render.grade_spread_raw(card)
+    tot_ok, tot_push = render.grade_total_raw(card)
+    if pl_spread is not None:
+        game["spread_pick_label"] = render.spread_label(home, away, pl_spread)
+        game["spread_pick"] = (
+            "HOME" if pl_spread > 0 else ("AWAY" if pl_spread < 0 else "PUSH")
+        )
+    if sp_push:
+        game["spread_pick"] = "PUSH"
+        game["spread_correct"] = None
+        game["pl_spread_correct"] = None
+    elif sp_ok is not None:
+        game["spread_correct"] = bool(sp_ok)
+        game["pl_spread_correct"] = bool(sp_ok)
+    if pl_total is not None and ph is not None and pa is not None:
+        lean_over = (ph + pa) >= pl_total
+        game["total_pick_label"] = f"{'Over' if lean_over else 'Under'} {pl_total:g}"
+        game["total_pick"] = "OVER" if lean_over else "UNDER"
+    elif pl_total is not None:
+        game["total_pick_label"] = f"Over {pl_total:g}"
+        game["total_pick"] = "OVER"
+    if tot_push:
+        game["total_pick"] = "PUSH"
+        game["total_correct"] = None
+    elif tot_ok is not None:
+        game["total_correct"] = bool(tot_ok)
+
+    h2h = render._h2h_last10(away, home)
+    if h2h and str(h2h) not in ("N/A", "First meeting"):
+        m = re.match(r"([0-9.]+)\s*\((\d+)\s*games?\)", str(h2h))
+        if m:
+            game["h2h_last10_total"] = float(m.group(1))
+            game["h2h_last10_games"] = int(m.group(2))
+    elif str(h2h or "") == "First meeting":
+        game["h2h_missing_reason"] = "First meeting"
+    return game
+
+
+def _render_cfl_shared_daily_results() -> tuple[str, str | None]:
+    """Shared team-sports DAILY_RESULTS_TEMPLATE. Do not rebuild MLB."""
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+
+    from flask import render_template_string
+
+    from mlb_team_shell import _cfl_cards
+
+    m = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
+    if m is None or not hasattr(m, "DAILY_RESULTS_TEMPLATE"):
+        raise RuntimeError("CFL results need NHL77FINAL DAILY_RESULTS_TEMPLATE")
+
+    cards, render = _cfl_cards("results")
+    daily_results: dict = defaultdict(lambda: {"games": []})
+    for card in cards:
+        game = _cfl_card_to_daily_game(card, render)
+        if game:
+            daily_results[game["date"]]["games"].append(game)
+    if not daily_results:
+        raise RuntimeError("CFL results: no completed games")
+
+    yesterday_dt = datetime.now() - timedelta(days=1)
+    yesterday = yesterday_dt.strftime("%Y-%m-%d")
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    sorted_dates = m._recent_result_dates(
+        daily_results,
+        yesterday=yesterday,
+        limit=400,
+        recent_window_days=400,
+    )
+    if today_date in daily_results and today_date not in sorted_dates:
+        sorted_dates = [today_date] + list(sorted_dates)
+
+    overall_stats = m.compute_overall_stats_from_daily(daily_results, sport="CFL")
+    st_stats = m._recount_spread_total_stats(daily_results)
+    st_stats = m.promote_season_spread_ou_from_games(daily_results, st_stats)
+    season_perf = m._build_season_performance_summary(
+        overall_stats, st_stats, sport="CFL"
+    )
+    tally_bundle = m._compute_results_tally_bundle(
+        daily_results, yesterday_dt, sport="CFL"
+    )
+    _ov, _un, _gou, _avg, _bench = m._ou_stats(daily_results, "CFL")
+    roi_daily = m.compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
+    roi_weekly = m.compute_roi_for_range(
+        daily_results,
+        tally_bundle["weekly_start_dt"],
+        tally_bundle["weekly_end_dt"],
+    )
+    roi_total = m.compute_roi_for_range(daily_results, None, None)
+    roi_cards = m.build_roi_cards(roi_daily, roi_weekly, roi_total)
+    buckets = render._bucket_results(cards)
+    html = render_template_string(
+        m.DAILY_RESULTS_TEMPLATE,
+        **m._results_page_meta("CFL"),
+        page="CFL",
+        sport="CFL",
+        sport_info=m.SPORTS["CFL"],
+        sport_bg_image=m.SPORT_BG_IMAGES.get("CFL", ""),
+        sport_seo_slug=m.SPORT_SEO_SLUGS.get("CFL", "cfl-picks"),
+        sport_results_slug=m._SPORT_RESULTS_SLUGS.get("CFL", "cfl-results"),
+        daily_results=daily_results,
+        sorted_dates=sorted_dates,
+        today_date=today_date,
+        overall_stats=overall_stats,
+        total_over=_ov,
+        total_under=_un,
+        total_games_ou=_gou,
+        avg_total=_avg,
+        ou_bench=_bench,
+        spread_total_stats=st_stats,
+        season_perf=season_perf,
+        daily_tally=tally_bundle["daily_tally"],
+        daily_tally_date=tally_bundle["daily_tally_date"],
+        daily_tally_games=tally_bundle["daily_tally_games"],
+        weekly_tally=tally_bundle["weekly_tally"],
+        weekly_tally_date_range=tally_bundle["weekly_tally_date_range"],
+        weekly_tally_games=tally_bundle["weekly_tally_games"],
+        roi_cards=roi_cards,
+        results_stale_notice=tally_bundle.get("results_stale_notice"),
+        results_snapshot_notice=None,
+        soccer_leagues=None,
+    )
+    return html, buckets.get("last_night_key")
 
 
 def _cfl_section_tabs(*, results_active: bool = True) -> str:
@@ -708,6 +950,17 @@ def _reorder_cfl_results_headers(html: str) -> str:
         flags=re.I,
     )
     if not m:
+        tabs_only = re.search(
+            r'(<div class="section-tabs\b[\s\S]*?</div>\s*(?:<style>[\s\S]*?</style>\s*)?)',
+            html,
+            flags=re.I,
+        )
+        if tabs_only:
+            return (
+                html[: tabs_only.end()]
+                + _cfl_view_toggle("normal")
+                + html[tabs_only.end() :]
+            )
         return html
     toggle = m.group(1)
     html_wo = html[: m.start()] + html[m.end() :]
@@ -729,39 +982,41 @@ def render_cfl_results(*, view: str = "normal") -> str:
     if view in ("chart", "tabs", "markets", "tabbed"):
         return _render_cfl_results_chart()
     now = __import__("time").time()
-    hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+    hit = _CFL_RESULTS_PAGE_CACHE.get("cards_shared_v1")
     if isinstance(hit, dict) and hit.get("html") and (now - hit.get("ts", 0)) < _CFL_RESULTS_PAGE_TTL:
         return hit["html"]
 
-    from mlb_team_shell import render_team_sport
-    from sandbox_fixup import apply_sport_fixups
-
-    html, meta = render_team_sport("cfl", which="results")
-    if not meta.get("ok") or not html:
-        raise RuntimeError(f"cfl mlb shell results failed: {meta}")
+    html, last_night_key = _render_cfl_shared_daily_results()
     html = _strip_mlb_content_from_cfl(html)
-    html = apply_sport_fixups(html, "cfl", which="results")
-    html = re.sub(
-        r'<style id="sandbox-hide-books">[\s\S]*?</style>',
-        "",
-        html,
-        flags=re.I,
-    )
     try:
-        from team_results_charts import _inject_cfl_consensus_hist_chips
+        from team_results_charts import (
+            _inject_cfl_consensus_hist_chips,
+            set_results_chart_source,
+        )
 
+        set_results_chart_source("CFL", html)
         html = _inject_cfl_consensus_hist_chips(html)
+    except Exception:
+        pass
+    try:
+        from mlb_consensus_hub import inject_consensus_records_html
+
+        html = inject_consensus_records_html(
+            html, sport="cfl", last_night_key=last_night_key
+        )
     except Exception:
         pass
     html = _reorder_cfl_results_headers(html)
     html = _dedupe_cfl_results_chrome(html)
-    # Consensus/tabs already applied inside render_team_sport. A second
-    # build_cfl_payload() hangs the worker and shadows local ufc_live.
     close = (html or "").lower().find("</html>")
     if close >= 0:
         html = html[: close + len("</html>")]
+    html = _inject_chrome_into_page(
+        html,
+        extra_css=["/static/css/team-results.css", "/static/css/cfl-pick-cards.css"],
+    )
     html = _finalize_cfl_html(html)
-    _CFL_RESULTS_PAGE_CACHE["cards"] = {"ts": now, "html": html}
+    _CFL_RESULTS_PAGE_CACHE["cards_shared_v1"] = {"ts": now, "html": html}
     return html
 
 
@@ -769,7 +1024,7 @@ def _render_cfl_results_chart() -> str:
     from mlb_team_shell import render_team_sport
 
     # Chart inject needs cards HTML as source — warm the cache if empty.
-    hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+    hit = _CFL_RESULTS_PAGE_CACHE.get("cards_shared_v1")
     if not (isinstance(hit, dict) and hit.get("html")):
         try:
             render_cfl_results(view="normal")
@@ -779,7 +1034,7 @@ def _render_cfl_results_chart() -> str:
     try:
         from team_results_charts import set_results_chart_source
 
-        hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+        hit = _CFL_RESULTS_PAGE_CACHE.get("cards_shared_v1")
         if isinstance(hit, dict) and hit.get("html"):
             set_results_chart_source("CFL", hit["html"])
     except Exception:
@@ -798,7 +1053,7 @@ def _render_cfl_results_chart() -> str:
                 set_results_chart_source,
             )
 
-            hit = _CFL_RESULTS_PAGE_CACHE.get("cards")
+            hit = _CFL_RESULTS_PAGE_CACHE.get("cards_shared_v1")
             if isinstance(hit, dict) and hit.get("html"):
                 set_results_chart_source("CFL", hit["html"])
             html = apply_team_results_template(html, "CFL", view="chart")

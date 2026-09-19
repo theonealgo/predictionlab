@@ -262,3 +262,44 @@ html body[data-sandbox-sport="cfl"] .cfl-results-share-img {
     min-width: 0 !important;
   }
 }
+
+html body[data-sport="cfl"] .lines-strip,
+html body[data-sandbox-sport="cfl"] .lines-strip {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 2px;
+}
+html body[data-sport="cfl"] .line-chip,
+html body[data-sandbox-sport="cfl"] .line-chip {
+  flex: 1;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 8px 6px;
+  border: 1px solid #f1f5f9;
+}
+html body[data-sport="cfl"] .line-chip-label,
+html body[data-sandbox-sport="cfl"] .line-chip-label {
+  font-size: 0.6em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+html body[data-sport="cfl"] .line-chip-val,
+html body[data-sandbox-sport="cfl"] .line-chip-val {
+  font-size: 0.84em;
+  font-weight: 800;
+  color: #0f172a;
+}
+html body[data-sport="cfl"] .line-chip.consensus-hist-chip,
+html body[data-sandbox-sport="cfl"] .line-chip.consensus-hist-chip {
+  flex: 1 1 100%;
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.45);
+}

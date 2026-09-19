@@ -4715,6 +4715,15 @@ def _inject_consensus_hist_chips(
                 count=1,
                 flags=re.I,
             )
+        elif sport_u == "CFL" and re.search(r'<div class="pick-conf-bar\b', stack):
+            strip = f'<div class="lines-strip">{chip}</div>\n'
+            stack = re.sub(
+                r'(<div class="pick-conf-bar\b)',
+                strip + r"\1",
+                stack,
+                count=1,
+                flags=re.I,
+            )
         out.append(stack)
     return "".join(out)
 
