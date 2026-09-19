@@ -28,6 +28,7 @@ venv/
 # ── Trained model binaries (large, regeneratable) ─────────────────────
 *.pkl
 !models/**/*.pkl
+!data/prediction_slates/*.pkl
 *.h5
 *.joblib
 catboost_info/

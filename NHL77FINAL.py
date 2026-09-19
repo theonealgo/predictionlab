@@ -10932,6 +10932,9 @@ except Exception as _owe:
 # directory is wiped on every deploy, which would otherwise leave the first
 # post-deploy request with no warm slate to fall back on if the live build fails.
 _PREDICTIONS_DISK_CACHE_DIR = _os_v2.path.join(_DATA_DIR, '.cache', 'predictions')
+_BUNDLED_PREDICTIONS_DIR = _os_v2.path.join(
+    _os_v2.path.dirname(_os_v2.path.abspath(__file__)), 'data', 'prediction_slates'
+)
 # Don't seed slates older than this on boot (dates would be too stale to show
 # even for the brief window before the background refresh completes).
 _PREDICTIONS_DISK_MAX_AGE = 14 * 24 * 3600  # 14 days — weekly slates must survive a deploy
@@ -11005,6 +11008,8 @@ def _persist_predictions_to_disk(cache_key, entry):
     """Atomically mirror one cached prediction slate to disk (best-effort)."""
     try:
         import pickle
+        if not isinstance(entry, dict) or not entry.get('data'):
+            return
         _os_v2.makedirs(_PREDICTIONS_DISK_CACHE_DIR, exist_ok=True)
         path = _os_v2.path.join(_PREDICTIONS_DISK_CACHE_DIR, f'{cache_key}.pkl')
         tmp = f'{path}.{_os_v2.getpid()}.{threading.get_ident()}.tmp'
@@ -11054,15 +11059,21 @@ def _promote_predictions_cache_aliases():
 def _load_predictions_disk_cache():
     """Seed _PREDICTIONS_CACHE from disk at startup so cold starts serve warm."""
     try:
-        if not _os_v2.path.isdir(_PREDICTIONS_DISK_CACHE_DIR):
-            return
         import pickle
         now_ts = _time.time()
         loaded = 0
-        for _fn in _os_v2.listdir(_PREDICTIONS_DISK_CACHE_DIR):
+        dirs = []
+        if _os_v2.path.isdir(_PREDICTIONS_DISK_CACHE_DIR):
+            dirs.append(_PREDICTIONS_DISK_CACHE_DIR)
+        if _os_v2.path.isdir(_BUNDLED_PREDICTIONS_DIR):
+            dirs.append(_BUNDLED_PREDICTIONS_DIR)
+        if not dirs:
+            return
+        for cache_dir in dirs:
+          for _fn in _os_v2.listdir(cache_dir):
             if not _fn.endswith('.pkl'):
                 continue
-            path = _os_v2.path.join(_PREDICTIONS_DISK_CACHE_DIR, _fn)
+            path = _os_v2.path.join(cache_dir, _fn)
             try:
                 with open(path, 'rb') as _f:
                     d = pickle.load(_f)
@@ -11071,8 +11082,6 @@ def _load_predictions_disk_cache():
             key = d.get('key') or _fn[:-4]
             ts = d.get('ts') or 0
             data = d.get('data')
-            if isinstance(key, str) and key.startswith('NCAAF_'):
-                continue
             if not data:
                 continue
             # Expired disk slates still beat a blank page after a Render restart.
