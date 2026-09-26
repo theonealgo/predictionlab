@@ -12028,6 +12028,32 @@ def _persist_upcoming_prediction_row(cursor, sport, pred) -> bool:
     return True
 
 
+def _football_et_today():
+    """Eastern calendar day. NFL/NCAAF slates are judged against this, not UTC."""
+    try:
+        return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d")
+
+
+def _football_preds_reach_today(preds):
+    """True when the slate still has a game today or later (ET)."""
+    today = _football_et_today()
+    for pred in preds or []:
+        if isinstance(pred, dict) and str(pred.get("game_date") or "")[:10] >= today:
+            return True
+    return False
+
+
+def _football_html_reaches_today(html):
+    """True when rendered picks include a date section for today or later."""
+    if not html:
+        return False
+    today = _football_et_today()
+    dates = re.findall(r'id="date-(\d{4}-\d{2}-\d{2})"', html)
+    return any(d >= today for d in dates)
+
+
 def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
     """Get a sport's near-term prediction slate (recent finals + upcoming games).
     
@@ -12061,6 +12087,11 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             len(_cached_preds) < 8 or _ncaaf_slate_mixes_fcs(_cached_preds)
         ):
             _cached_preds = None
+        if sport in ('NFL', 'NCAAF') and _cached_preds and not _football_preds_reach_today(_cached_preds):
+            # A Thursday/Friday slate must not keep serving after that day.
+            # A fresh off-day build (no game today yet) may live until TTL.
+            if (now_ts - cached.get('ts', 0)) >= cache_ttl:
+                _cached_preds = None
         if sport == 'MLB' and _cached_preds:
             try:
                 from mlb_ui_fixup import mlb_slate_has_et_today
@@ -12111,6 +12142,8 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
         _recovered = _recover_cached_predictions(sport)
         if sport == 'NCAAF':
             _recovered = None  # stale disk slates mix FCS; always use ESPN groups=80
+        elif sport == 'NFL' and _recovered and not _football_preds_reach_today(_recovered):
+            _recovered = None
         if sport == 'MLB' and _recovered:
             try:
                 from mlb_ui_fixup import mlb_slate_has_et_today
@@ -12310,9 +12343,45 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
             else:
                 _extra = ''
             try:
-                url = f"{ESPN_ENDPOINTS[sport]}?dates={start_str}-{end_str}&limit={_api_limit}{_extra}"
-                data = _cached_get(url)
-                events = data.get('events', [])
+                if sport in ('NFL', 'NCAAF'):
+                    # The multi-day range URL 400s for NFL and cuts NCAAF off
+                    # before Saturday. One board per day, same display window
+                    # (past 3, future 10). Other sports stay on the range URL.
+                    events = []
+                    _seen_events = set()
+                    _day_cursor = datetime.now() - timedelta(days=3)
+                    _day_last = datetime.now() + timedelta(days=10)
+                    _day_ymds = []
+                    while _day_cursor.date() <= _day_last.date():
+                        _day_ymds.append(_day_cursor.strftime('%Y%m%d'))
+                        _day_cursor += timedelta(days=1)
+
+                    def _football_day_events(ymd, _sport=sport, _limit=_api_limit, _extra_q=_extra):
+                        _day_url = (
+                            f"{ESPN_ENDPOINTS[_sport]}?dates={ymd}&limit={_limit}{_extra_q}"
+                        )
+                        try:
+                            _day_data = _cached_get(_day_url, timeout=6)
+                            return _day_data.get('events', []) or []
+                        except Exception as _day_exc:
+                            logger.debug("%s day board %s failed: %s", _sport, ymd, _day_exc)
+                            return []
+
+                    from concurrent.futures import ThreadPoolExecutor
+                    with ThreadPoolExecutor(max_workers=4) as _day_pool:
+                        _day_lists = list(_day_pool.map(_football_day_events, _day_ymds))
+                    for _day_events in _day_lists:
+                        for _ev in _day_events:
+                            _eid = str(_ev.get('id') or '')
+                            if _eid and _eid in _seen_events:
+                                continue
+                            if _eid:
+                                _seen_events.add(_eid)
+                            events.append(_ev)
+                else:
+                    url = f"{ESPN_ENDPOINTS[sport]}?dates={start_str}-{end_str}&limit={_api_limit}{_extra}"
+                    data = _cached_get(url)
+                    events = data.get('events', [])
                 for event in events:
                     competition = event.get('competitions', [{}])[0]
                     competitors = competition.get('competitors', [])
@@ -24007,8 +24076,16 @@ def sport_predictions(sport, filter_date=None):
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
             # Stale-while-revalidate: serve last good HTML while models refresh.
             _stale_max = _SPORT_PREDICTIONS_PAGE_STALE_MAX.get(sport, 900)
+            if (
+                _page_usable
+                and sport in ('NFL', 'NCAAF')
+                and _page_age is not None
+                and _page_age >= cache_ttl
+                and not _football_html_reaches_today(cached_html)
+            ):
+                _page_usable = False
             if _page_usable and _page_age is not None and _page_age < _stale_max:
-                if _page_age >= cache_ttl and str(sport or '').upper() != 'NFL':
+                if _page_age >= cache_ttl:
                     _start_background_predictions_refresh(sport)
                 if sport == 'MLB':
                     return _apply_mlb_picks_html_fixups(cached_html)
@@ -24024,6 +24101,8 @@ def sport_predictions(sport, filter_date=None):
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
         if _nfl_use_page_cache:
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
+            if _any_nfl and not _football_html_reaches_today(_any_nfl):
+                _any_nfl = None
             if _any_nfl:
                 try:
                     return _inject_sport_blog_hub(
@@ -24033,6 +24112,8 @@ def sport_predictions(sport, filter_date=None):
     prediction_error = None
     if str(sport or '').upper() == 'NFL':
         predictions = _recover_cached_predictions('NFL') or []
+        if not _football_preds_reach_today(predictions):
+            predictions = []
         if not isinstance(predictions, list) or len(predictions) < 8:
             try:
                 rebuilt = get_upcoming_predictions(sport)
