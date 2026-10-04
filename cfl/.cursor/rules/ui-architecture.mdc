@@ -1,0 +1,45 @@
+---
+description: Shared sport-group UI — do not invent per-sport pages
+alwaysApply: true
+---
+
+# UI architecture (do not redesign)
+
+PredictionLab uses a component-driven UI. Centralize the **existing** UI.
+Do not restyle or invent sport-specific pages.
+
+Full spec: [docs/UI_ARCHITECTURE.md](../../docs/UI_ARCHITECTURE.md)
+
+## Before any UI change
+
+1. Is this UI shared across sports?
+2. Does a shared component already exist?
+3. Can the change be made in the shared component?
+4. Is the difference actually sport-specific?
+5. Can configuration/data solve it instead of duplicating UI?
+
+If it is shared, edit the shared component. Do **not** create another copy.
+
+## Sport groups
+
+- **Team sports** (MLB, NHL, NBA, NCAAB, NCAAW, NFL, NCAAF, WNBA, CFL): one
+  shared Predictions template + one shared Results template
+  (`DAILY_RESULTS_TEMPLATE`). MLB is the reference. Results chart = MLB 6/6
+  dissent table (WNBA/NBA stay 4-model).
+- **Tennis + UFC**: one individual-competition template.
+- **Soccer**: own template (1X2/leagues), same global chrome.
+- **Golf**: own template.
+
+## Forbidden
+
+- `NFLPredictionCard` / `MLBAccuracyChart` / weekly NFL-only results boards
+- One-date / one-card team-sport results when the season slate is larger
+- New Header / Footer / hamburger per sport
+- Drive-by restyles of locked sports
+- Inventing model numbers to fill blank cards
+
+## Checker
+
+`team_results_template_issues` / `team_picks_template_issues` /
+`team_chart_template_issues` are errors. If they fail, fix the page to match
+the shared template. Do not weaken the checker to hide a thin NFL results page.

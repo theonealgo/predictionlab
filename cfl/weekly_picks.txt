@@ -1,0 +1,21 @@
+Weekly Picks - 2025-11-14
+============================================================
+
+
+NFL:
+  Moneyline: ['New England Patriots', 'Indianapolis Colts', 'Denver Broncos', 'Los Angeles Chargers', 'Buffalo Bills', 'Philadelphia Eagles', 'Seattle Seahawks', 'Los Angeles Rams', 'Detroit Lions', 'Tampa Bay Buccaneers', 'Chicago Bears', 'San Francisco 49ers', 'Green Bay Packers']
+  Spread: []
+  Over: []
+  Under: []
+
+NBA:
+  Moneyline: ['New York Knicks', 'Philadelphia 76ers', 'Cleveland Cavaliers', 'Atlanta Hawks', 'Detroit Pistons', 'Minnesota Timberwolves', 'Phoenix Suns', 'Houston Rockets', 'Los Angeles Lakers', 'San Antonio Spurs', 'Denver Nuggets', 'Oklahoma City Thunder']
+  Spread: []
+  Over: []
+  Under: []
+
+NHL:
+  Moneyline: []
+  Spread: []
+  Over: []
+  Under: []

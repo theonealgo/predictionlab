@@ -1,0 +1,22 @@
+{# Vars: sport, away_team, home_team, away_score, home_score, away_wins, home_wins, team_logo_url #}
+<div class="card-hero">
+    <div class="card-hero-logos" aria-hidden="true">
+        <img class="team-logo" src="{{ team_logo_url(sport, away_team) }}" alt="" width="44" height="44" loading="lazy">
+        <span class="card-hero-at">@</span>
+        <img class="team-logo" src="{{ team_logo_url(sport, home_team) }}" alt="" width="44" height="44" loading="lazy">
+    </div>
+    <div class="card-hero-text">
+        <h3 class="card-hero-matchup">{{ away_team }} at {{ home_team }}</h3>
+        <div class="card-hero-meta final">FINAL</div>
+        <div class="card-hero-ml card-hero-final-scores">
+            <div class="card-hero-ml-row">
+                <span class="{% if away_wins %}score-winner{% endif %}">{{ away_team }}</span>
+                <span class="card-final-score {% if away_wins %}score-winner{% endif %}">{{ away_score }}</span>
+            </div>
+            <div class="card-hero-ml-row">
+                <span class="{% if home_wins %}score-winner{% endif %}">{{ home_team }}</span>
+                <span class="card-final-score {% if home_wins %}score-winner{% endif %}">{{ home_score }}</span>
+            </div>
+        </div>
+    </div>
+</div>

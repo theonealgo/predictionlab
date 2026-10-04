@@ -1,0 +1,4 @@
+Soccer picks/results UI signed off on :5052 (2026-09-11).
+Shared soccer template; blank Books lines stay blank (do not invent).
+Do not modify unless owner says UNLOCK SOCCER.
+Never push from this folder unless the owner confirms a production deploy.

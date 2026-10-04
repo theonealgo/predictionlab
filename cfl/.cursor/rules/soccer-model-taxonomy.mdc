@@ -1,0 +1,47 @@
+---
+description: Soccer model taxonomy — independent vs market-aware vs strategy
+alwaysApply: true
+---
+
+# Soccer model taxonomy (permanent)
+
+Do **not** present Edge as an independent model when sportsbook odds are available.
+Do **not** change soccer prediction math for taxonomy — labeling / analytics only
+unless the owner unlocks a named model miss.
+
+## Classes
+
+**INDEPENDENT** — team/match info only; no sportsbook odds input:
+
+- Grinder2
+- Takedown
+- XSharp
+- Dixon-Coles (research / isolation)
+- EdgeElo+ when no books are available
+
+**MARKET-AWARE** — uses sportsbook information when present:
+
+- Edge when sportsbook odds are available
+- Sharp Consensus / Production Consensus when it incorporates Edge
+
+**STRATEGY**
+
+- Efficiency (not a 1X2 ensemble probability model)
+
+## Rules
+
+- Keep Efficiency out of Sharp Consensus.
+- Model-performance tables and future market baselines must separate
+  Independent vs Market-Aware vs Strategy.
+- Source of truth module: `soccer_model_taxonomy.py` (also mirrored in
+  `~/Documents/Personal/soccer/soccer_model_taxonomy.py`).
+- User-facing copy must not name vendors or training pipelines (AGENTS Rule 9).
+
+## Do not do (until owner unlocks)
+
+- Replace Grinder2 / Takedown / XSharp
+- Install Dixon-Coles as primary
+- League-specific models or EPL-only tuning
+- Complicated ML ensembles
+
+Next research priority (isolation): historical true 1X2 (H/D/A) odds.

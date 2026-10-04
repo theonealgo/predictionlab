@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block extra_styles %}
+<style>
+    .main-content {
+        max-width: 900px;
+        margin: 0 auto;
+        text-align: center;
+        padding: 40px 20px;
+    }
+    
+    .page-title {
+        font-size: 3rem;
+        color: white;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .page-subtitle {
+        font-size: 1.3rem;
+        color: rgba(255, 255, 255, 0.95);
+        margin-bottom: 40px;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .free-pick-container {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    .free-pick-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+    }
+    
+    .sport-label {
+        font-size: 1.1rem;
+        color: #666;
+        margin-bottom: 10px;
+    }
+    
+    .matchup {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #333;
+        margin: 20px 0;
+    }
+    
+    .pick-display {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 15px;
+        margin: 25px 0;
+    }
+    
+    .pick-label {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin-bottom: 5px;
+    }
+    
+    .pick-team {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+    
+    .confidence {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+    
+    .model-breakdown {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin-top: 25px;
+    }
+    
+    .model-stat {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+    }
+    
+    .model-name {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 8px;
+    }
+    
+    .model-value {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #667eea;
+    }
+    
+    .model-weight {
+        font-size: 0.75rem;
+        color: #999;
+        margin-top: 5px;
+    }
+    
+    .cta-section {
+        margin-top: 40px;
+        padding-top: 30px;
+        border-top: 2px solid #e0e0e0;
+    }
+    
+    .cta-text {
+        font-size: 1.2rem;
+        color: #333;
+        margin-bottom: 20px;
+    }
+    
+    .cta-button {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px 40px;
+        border-radius: 30px;
+        text-decoration: none;
+        font-size: 1.1rem;
+        font-weight: 600;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .cta-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .no-pick {
+        padding: 60px 20px;
+        color: #666;
+        font-size: 1.2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <h1 class="page-title">🏆 jackpotpicks.bet</h1>
+    <p class="page-subtitle">Your Daily AI-Powered Sports Pick</p>
+    
+    <div class="free-pick-container">
+        {% if free_pick %}
+            <div class="free-pick-badge">🆓 FREE PICK OF THE DAY</div>
+            
+            <div class="sport-label">{{ free_pick.sport }}</div>
+            <div class="matchup">{{ free_pick.matchup }}</div>
+            
+            <div class="pick-display">
+                <div class="pick-label">Our AI Prediction</div>
+                <div class="pick-team">{{ free_pick.pick }}</div>
+                <div class="confidence">{{ "%.1f"|format(free_pick.confidence) }}% Confidence</div>
+            </div>
+            
+            <div style="font-size: 0.95rem; color: #666; margin: 20px 0;">
+                Powered by AI Model Ensemble:
+            </div>
+            <div class="model-breakdown">
+                <div class="model-stat">
+                    <div class="model-name">Elo Rating</div>
+                    <div class="model-value">{{ "%.1f"|format(free_pick.elo_home) }}%</div>
+                    <div class="model-weight">35% weight</div>
+                </div>
+                <div class="model-stat">
+                    <div class="model-name">Logistic</div>
+                    <div class="model-value">{{ "%.1f"|format(free_pick.logistic_home) }}%</div>
+                    <div class="model-weight">15% weight</div>
+                </div>
+                <div class="model-stat">
+                    <div class="model-name">XGBoost</div>
+                    <div class="model-value">{{ "%.1f"|format(free_pick.xgboost_home) }}%</div>
+                    <div class="model-weight">50% weight</div>
+                </div>
+            </div>
+            
+            <div class="cta-section">
+                <div class="cta-text">Want more picks across all sports?</div>
+                <a href="/dashboard" class="cta-button">View All Predictions →</a>
+            </div>
+        {% else %}
+            <div class="no-pick">
+                <p>No free pick available right now.</p>
+                <p style="font-size: 1rem; margin-top: 10px;">Check back soon or visit the Dashboard!</p>
+                <a href="/dashboard" class="cta-button" style="margin-top: 20px; display: inline-block;">Go to Dashboard →</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

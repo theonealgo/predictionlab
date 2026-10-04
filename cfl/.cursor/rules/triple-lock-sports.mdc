@@ -1,0 +1,32 @@
+---
+description: 3 UNLOCKS required before any sport or chrome edit
+alwaysApply: true
+---
+
+# 3 locks — sports + chrome + the rest of the site
+
+Owner 2026-09-22: every sport except a named open miss, and the rest of the
+site, takes **3 locks**. The agent must see the word **UNLOCK** three
+times in the same message before any picks, results, card, chart, chrome,
+homepage, blog, props, account, or shared-template edit.
+
+## Required phrase
+
+The same message must contain **UNLOCK** 3 times, name the surface, and name
+the miss.
+
+```
+# BAD — UNLOCK MLB
+# BAD — UNLOCK UNLOCK UNLOCK MLB
+# BAD — fix soccer, it is slow
+# GOOD — UNLOCK repeated 3 times, then SOCCER and the miss
+```
+
+## One surface after a valid 3-unlock
+
+Only that named miss. Then lock again. Do not leave a sport UNLOCKED overnight.
+
+Sports: MLB, NHL, NBA, NFL, NCAAF, NCAAB, NCAAW, WNBA, CFL, soccer, tennis, UFC, golf.
+
+Chrome and the rest of the site: HEADER, FOOTER, HAMBURGER, homepage, blog,
+props, performance, account, shared templates.

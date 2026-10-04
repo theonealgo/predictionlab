@@ -1,0 +1,74 @@
+{# Shared affiliate styling — consistent with PredictionLab research theme. #}
+<style>
+  .aff-wrap{max-width:1100px;margin:0 auto;}
+  .aff-hero{background:linear-gradient(135deg,#00305c 0%,#00529B 60%,#0a6bc4 100%);color:#fff;border-radius:18px;padding:44px 32px;text-align:center;box-shadow:0 12px 40px rgba(0,82,155,0.25);}
+  .aff-hero h1{font-size:clamp(1.8rem,4vw,2.7rem);margin:0 0 12px;font-weight:800;letter-spacing:-0.5px;}
+  .aff-hero p{font-size:clamp(1rem,2vw,1.2rem);max-width:680px;margin:0 auto 22px;color:rgba(255,255,255,0.92);line-height:1.6;}
+  .aff-cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+  .aff-btn{display:inline-flex;align-items:center;justify-content:center;padding:13px 26px;border-radius:999px;font-weight:800;font-size:0.98rem;text-decoration:none;border:none;cursor:pointer;transition:transform .12s,box-shadow .12s;}
+  .aff-btn-primary{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#111;box-shadow:0 6px 18px rgba(245,158,11,0.4);}
+  .aff-btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(245,158,11,0.55);}
+  .aff-btn-ghost{background:rgba(255,255,255,0.14);color:#fff;border:1.5px solid rgba(255,255,255,0.5);}
+  .aff-btn-ghost:hover{background:rgba(255,255,255,0.24);}
+  .aff-btn-blue{background:#00529B;color:#fff;box-shadow:0 4px 14px rgba(0,82,155,0.35);}
+  .aff-btn-blue:hover{transform:translateY(-1px);}
+  .aff-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:26px 0;}
+  .aff-stat{background:#fff;border:1px solid #d7e0ea;border-radius:14px;padding:18px 16px;text-align:center;box-shadow:0 3px 12px rgba(15,23,42,0.05);}
+  .aff-stat .v{font-size:1.6rem;font-weight:800;color:#00529B;}
+  .aff-stat .l{font-size:0.74rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;margin-top:4px;}
+  .aff-section{background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:26px 26px;box-shadow:0 4px 18px rgba(15,23,42,0.06);margin:18px 0;}
+  .aff-section h2{font-size:1.3rem;margin:0 0 14px;color:#0f172a;}
+  .aff-section h3{font-size:1rem;margin:16px 0 6px;color:#0f172a;}
+  .aff-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;}
+  .aff-step{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px;}
+  .aff-step .num{width:32px;height:32px;border-radius:50%;background:#00529B;color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+  .aff-step h4{margin:0 0 6px;font-size:0.98rem;color:#0f172a;}
+  .aff-step p{margin:0;font-size:0.88rem;color:#475569;line-height:1.55;}
+  .aff-terms-list{list-style:none;margin:0;padding:0;}
+  .aff-terms-list li{padding:10px 0;border-bottom:1px solid #eef2f6;display:flex;justify-content:space-between;gap:14px;font-size:0.94rem;color:#334155;}
+  .aff-terms-list li strong{color:#0f172a;}
+  .aff-faq details{border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:10px;background:#fff;}
+  .aff-faq summary{font-weight:700;cursor:pointer;color:#0f172a;}
+  .aff-faq p{margin:10px 0 0;color:#475569;line-height:1.6;font-size:0.92rem;}
+  .aff-form label{display:block;font-weight:700;font-size:0.86rem;color:#0f172a;margin:14px 0 6px;}
+  .aff-form input,.aff-form select,.aff-form textarea{width:100%;padding:11px 13px;border:1px solid #cbd5e1;border-radius:10px;font-size:0.95rem;font-family:inherit;background:#fff;color:#0f172a;}
+  .aff-form textarea{min-height:96px;resize:vertical;}
+  .aff-form .hint{font-size:0.78rem;color:#64748b;margin-top:4px;}
+  .aff-check{display:flex;align-items:flex-start;gap:10px;margin:16px 0;}
+  .aff-check input{width:auto;margin-top:3px;}
+  .aff-linkbox{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;}
+  .aff-linkbox input{flex:1;min-width:220px;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;font-size:0.95rem;background:#f8fafc;color:#0f172a;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .aff-copy-btn{padding:12px 18px;border-radius:10px;background:#00529B;color:#fff;border:none;font-weight:800;cursor:pointer;white-space:nowrap;}
+  .aff-copy-btn:hover{background:#0466c2;}
+  .aff-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table.aff-table{width:100%;border-collapse:collapse;font-size:0.88rem;}
+  table.aff-table th{text-align:left;padding:10px 12px;background:#f1f5f9;color:#334155;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid #e2e8f0;white-space:nowrap;}
+  table.aff-table td{padding:10px 12px;border-bottom:1px solid #eef2f6;color:#334155;white-space:nowrap;}
+  table.aff-table tr:hover td{background:#f8fafc;}
+  .aff-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.3px;}
+  .aff-badge.pending{background:#fef3c7;color:#92400e;}
+  .aff-badge.payable{background:#dbeafe;color:#1e40af;}
+  .aff-badge.paid{background:#dcfce7;color:#166534;}
+  .aff-badge.approved{background:#dcfce7;color:#166534;}
+  .aff-badge.reversed,.aff-badge.rejected,.aff-badge.suspended,.aff-badge.cancelled,.aff-badge.failed{background:#fee2e2;color:#991b1b;}
+  .aff-badge.requested,.aff-badge.processing,.aff-badge.signed_up,.aff-badge.converted{background:#e0e7ff;color:#3730a3;}
+  .aff-subnav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px;}
+  .aff-subnav a{padding:8px 16px;border-radius:999px;background:#fff;border:1px solid #cbd5e1;color:#334155;text-decoration:none;font-weight:700;font-size:0.86rem;}
+  .aff-subnav a:hover,.aff-subnav a.active{background:#00529B;color:#fff;border-color:#00529B;}
+  .aff-promo{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin:10px 0;position:relative;}
+  .aff-promo .txt{font-size:0.9rem;color:#334155;line-height:1.55;white-space:pre-wrap;}
+  .aff-alert{padding:12px 16px;border-radius:10px;margin:12px 0;font-size:0.92rem;}
+  .aff-alert.error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;}
+  .aff-alert.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;}
+  .aff-note{font-size:0.82rem;color:#64748b;line-height:1.5;}
+</style>
+<script>
+function affCopy(id, btn){
+  var el=document.getElementById(id); if(!el) return;
+  var txt = el.value !== undefined ? el.value : el.textContent;
+  navigator.clipboard.writeText(txt).then(function(){
+    var old=btn.textContent; btn.textContent='Copied!';
+    setTimeout(function(){btn.textContent=old;},1400);
+  });
+}
+</script>

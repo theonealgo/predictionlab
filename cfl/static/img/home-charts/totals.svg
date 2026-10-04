@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-label="Prediction Lab and XSharp totals">
+  <rect width="640" height="400" fill="#f8fafc"/>
+  <text x="24" y="36" font-family="Arial, sans-serif" font-size="18" font-weight="800" fill="#0c1e3a">Prediction Lab · XSharp  Totals</text>
+  <g font-family="Arial, sans-serif" font-size="12" fill="#0f172a">
+    <text x="24" y="100">Prediction Lab</text>
+    <rect x="200" y="86" width="170" height="16" fill="#00529B"/>
+    <text x="430" y="100">52.8%</text>
+    <text x="24" y="140">XSharp</text>
+    <rect x="200" y="126" width="205" height="16" fill="#7c3aed"/>
+    <text x="430" y="140">58.4%</text>
+    <text x="24" y="180">When they agree</text>
+    <rect x="200" y="166" width="250" height="16" fill="#16a34a"/>
+    <text x="430" y="180">64.0%</text>
+  </g>
+</svg>

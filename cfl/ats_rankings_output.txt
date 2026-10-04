@@ -1,0 +1,27 @@
+ATS Rankings - 2025-11-14 09:24:44
+======================================================================
+
+
+NBA:
+  Spread (0): []
+  Moneyline (1): ['Boston Celtics']
+  Over (0): []
+  Under (0): []
+
+NFL:
+  Spread (0): []
+  Moneyline (0): []
+  Over (0): []
+  Under (0): []
+
+NHL:
+  Spread (0): []
+  Moneyline (8): ['Utah Mammoth', 'New Jersey Devils', 'Carolina Hurricanes', 'Anaheim Ducks', 'Winnipeg Jets', 'Montreal Canadiens', 'Detroit Red Wings', 'Pittsburgh Penguins']
+  Over (0): []
+  Under (0): []
+
+NCAAF:
+  Spread (0): []
+  Moneyline (0): []
+  Over (0): []
+  Under (0): []

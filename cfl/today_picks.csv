@@ -1,0 +1,84 @@
+Sport,Date,Matchup,Bet Type,Pick,Pick Type,Details,Confidence
+NBA,2025-11-11,Phoenix Suns @ Cleveland Cavaliers,MONEYLINE,Cleveland Cavaliers,HOME_ML,Win Prob: 86.4%,73%
+NBA,2025-11-11,Orlando Magic @ Detroit Pistons,MONEYLINE,Detroit Pistons,HOME_ML,Win Prob: 62.4%,25%
+NBA,2025-11-11,San Antonio Spurs @ Chicago Bulls,MONEYLINE,Chicago Bulls,HOME_ML,Win Prob: 71.7%,43%
+NBA,2025-11-11,Sacramento Kings @ Los Angeles Lakers,MONEYLINE,Los Angeles Lakers,HOME_ML,Win Prob: 67.4%,35%
+NBA,2025-11-11,Orlando Magic @ Detroit Pistons,SPREAD,Detroit Pistons,HOME_SPREAD,Spread: +3.1,31%
+NBA,2025-11-11,San Antonio Spurs @ Chicago Bulls,SPREAD,Chicago Bulls,HOME_SPREAD,Spread: +5.4,54%
+NBA,2025-11-11,Sacramento Kings @ Los Angeles Lakers,SPREAD,Los Angeles Lakers,HOME_SPREAD,Spread: +4.4,44%
+NBA,2025-11-11,New York Knicks @ Brooklyn Nets,TOTAL,Brooklyn Nets,OVER,Total: 220.0,65%
+NBA,2025-11-11,Indiana Pacers @ Miami Heat,TOTAL,Indiana Pacers,UNDER,Total: 220.0,65%
+NBA,2025-11-11,Minnesota Timberwolves @ Memphis Grizzlies,TOTAL,Minnesota Timberwolves,OVER,Total: 220.0,65%
+NBA,2025-11-11,Utah Jazz @ Golden State Warriors,TOTAL,Golden State Warriors,OVER,Total: 220.0,65%
+NBA,2025-11-11,Sacramento Kings @ Los Angeles Lakers,TOTAL,Los Angeles Lakers,OVER,Total: 220.0,65%
+NBA,2025-11-11,Toronto Raptors @ Brooklyn Nets,TOTAL,Brooklyn Nets,OVER,Total: 220.0,65%
+NBA,2025-11-11,Memphis Grizzlies @ New York Knicks,TOTAL,New York Knicks,OVER,Total: 220.0,65%
+NBA,2025-11-11,Boston Celtics @ Philadelphia 76ers,TOTAL,Philadelphia 76ers,OVER,Total: 220.0,65%
+NBA,2025-11-11,Golden State Warriors @ Oklahoma City Thunder,TOTAL,Golden State Warriors,OVER,Total: 220.0,65%
+NBA,2025-11-11,Indiana Pacers @ Utah Jazz,TOTAL,Indiana Pacers,UNDER,Total: 220.0,65%
+NBA,2025-11-11,Denver Nuggets @ Sacramento Kings,TOTAL,Sacramento Kings,OVER,Total: 220.0,65%
+NBA,2025-11-12,Dallas Mavericks @ Portland Trail Blazers,SPREAD,Portland Trail Blazers,HOME_SPREAD,Spread: +4.8,48%
+NBA,2025-11-12,Portland Trail Blazers @ New Orleans Pelicans,SPREAD,Portland Trail Blazers,AWAY_SPREAD,Spread: -3.8,38%
+NBA,2025-11-12,Houston Rockets @ Philadelphia 76ers,TOTAL,Philadelphia 76ers,OVER,Total: 220.0,65%
+NBA,2025-11-12,Los Angeles Clippers @ Dallas Mavericks,TOTAL,Dallas Mavericks,UNDER,Total: 220.0,65%
+NBA,2025-11-12,Dallas Mavericks @ Portland Trail Blazers,TOTAL,Portland Trail Blazers,OVER,Total: 220.0,65%
+NBA,2025-11-12,Orlando Magic @ New York Knicks,TOTAL,New York Knicks,OVER,Total: 220.0,65%
+NBA,2025-11-12,Memphis Grizzlies @ Boston Celtics,TOTAL,Memphis Grizzlies,UNDER,Total: 220.0,65%
+NBA,2025-11-12,Washington Wizards @ Houston Rockets,TOTAL,Houston Rockets,OVER,Total: 220.0,65%
+NBA,2025-11-12,Portland Trail Blazers @ New Orleans Pelicans,TOTAL,Portland Trail Blazers,OVER,Total: 220.0,65%
+NBA,2025-11-12,Golden State Warriors @ San Antonio Spurs,TOTAL,Golden State Warriors,OVER,Total: 220.0,65%
+NBA,2025-11-12,PHO @ Dallas Mavericks,TOTAL,Dallas Mavericks,UNDER,Total: 220.0,65%
+NBA,2025-11-12,Los Angeles Lakers @ Oklahoma City Thunder,TOTAL,Los Angeles Lakers,OVER,Total: 220.0,65%
+NBA,2025-11-12,Atlanta Hawks @ Sacramento Kings,TOTAL,Sacramento Kings,OVER,Total: 220.0,65%
+NBA,2025-11-13,Detroit Pistons @ Charlotte Hornets,MONEYLINE,Detroit Pistons,AWAY_ML,Win Prob: 88.3%,77%
+NBA,2025-11-13,Chicago Bulls @ San Antonio Spurs,MONEYLINE,Chicago Bulls,AWAY_ML,Win Prob: 62.2%,24%
+NBA,2025-11-13,Cleveland Cavaliers @ Phoenix Suns,MONEYLINE,Cleveland Cavaliers,AWAY_ML,Win Prob: 83.8%,68%
+NBA,2025-11-13,Los Angeles Lakers @ Sacramento Kings,MONEYLINE,Los Angeles Lakers,AWAY_ML,Win Prob: 59.0%,18%
+NBA,2025-11-13,Detroit Pistons @ Charlotte Hornets,SPREAD,Detroit Pistons,AWAY_SPREAD,Spread: -9.6,96%
+NBA,2025-11-13,Chicago Bulls @ San Antonio Spurs,SPREAD,Chicago Bulls,AWAY_SPREAD,Spread: -3.0,30%
+NBA,2025-11-13,Miami Heat @ Indiana Pacers,TOTAL,Indiana Pacers,UNDER,Total: 220.0,65%
+NBA,2025-11-13,Boston Celtics @ Brooklyn Nets,TOTAL,Brooklyn Nets,OVER,Total: 220.0,65%
+NBA,2025-11-13,Milwaukee Bucks @ New York Knicks,TOTAL,New York Knicks,OVER,Total: 220.0,65%
+NBA,2025-11-13,Memphis Grizzlies @ Minnesota Timberwolves,TOTAL,Minnesota Timberwolves,OVER,Total: 220.0,65%
+NBA,2025-11-13,Los Angeles Lakers @ Sacramento Kings,TOTAL,Sacramento Kings,OVER,Total: 220.0,65%
+NBA,2025-11-13,Indiana Pacers @ PHO,TOTAL,Indiana Pacers,UNDER,Total: 220.0,65%
+NBA,2025-11-14,Phoenix Suns @ Cleveland Cavaliers,MONEYLINE,Cleveland Cavaliers,HOME_ML,Win Prob: 86.4%,73%
+NBA,2025-11-14,New York Knicks @ Milwaukee Bucks,MONEYLINE,Milwaukee Bucks,HOME_ML,Win Prob: 63.4%,27%
+NBA,2025-11-14,Golden State Warriors @ Oklahoma City Thunder,MONEYLINE,Oklahoma City Thunder,HOME_ML,Win Prob: 75.3%,51%
+NBA,2025-11-14,Utah Jazz @ Los Angeles Lakers,MONEYLINE,Los Angeles Lakers,HOME_ML,Win Prob: 90.2%,80%
+NBA,2025-11-14,New York Knicks @ Milwaukee Bucks,SPREAD,Milwaukee Bucks,HOME_SPREAD,Spread: +3.3,33%
+NBA,2025-11-14,Utah Jazz @ Los Angeles Lakers,SPREAD,Los Angeles Lakers,HOME_SPREAD,Spread: +10.0,100%
+NBA,2025-11-14,Los Angeles Lakers @ New Orleans Pelicans,SPREAD,Los Angeles Lakers,AWAY_SPREAD,Spread: -3.0,30%
+NBA,2025-11-14,Boston Celtics @ Brooklyn Nets,TOTAL,Brooklyn Nets,OVER,Total: 220.0,65%
+NBA,2025-11-14,New York Knicks @ Milwaukee Bucks,TOTAL,New York Knicks,OVER,Total: 220.0,65%
+NBA,2025-11-14,Golden State Warriors @ Oklahoma City Thunder,TOTAL,Golden State Warriors,OVER,Total: 220.0,65%
+NBA,2025-11-14,Portland Trail Blazers @ Dallas Mavericks,TOTAL,Portland Trail Blazers,OVER,Total: 220.0,65%
+NBA,2025-11-14,Utah Jazz @ Los Angeles Lakers,TOTAL,Los Angeles Lakers,OVER,Total: 220.0,65%
+NBA,2025-11-14,Houston Rockets @ Los Angeles Clippers,TOTAL,Houston Rockets,OVER,Total: 220.0,65%
+NBA,2025-11-14,Miami Heat @ New York Knicks,TOTAL,New York Knicks,OVER,Total: 220.0,65%
+NBA,2025-11-14,Brooklyn Nets @ Orlando Magic,TOTAL,Brooklyn Nets,OVER,Total: 220.0,65%
+NBA,2025-11-14,Philadelphia 76ers @ Detroit Pistons,TOTAL,Philadelphia 76ers,OVER,Total: 220.0,65%
+NBA,2025-11-14,Portland Trail Blazers @ Houston Rockets,TOTAL,Houston Rockets,OVER,Total: 220.0,65%
+NBA,2025-11-14,Sacramento Kings @ Minnesota Timberwolves,TOTAL,Minnesota Timberwolves,OVER,Total: 220.0,65%
+NBA,2025-11-14,Los Angeles Lakers @ New Orleans Pelicans,TOTAL,Los Angeles Lakers,OVER,Total: 220.0,65%
+NBA,2025-11-14,Los Angeles Clippers @ Dallas Mavericks,TOTAL,Dallas Mavericks,UNDER,Total: 220.0,65%
+NBA,2025-11-14,Golden State Warriors @ San Antonio Spurs,TOTAL,Golden State Warriors,OVER,Total: 220.0,65%
+NHL,2025-11-11,Toronto Maple Leafs @ Boston Bruins,TOTAL,Toronto Maple Leafs,OVER,Total: 6.0,65%
+NHL,2025-11-11,Washington Capitals @ Carolina Hurricanes,TOTAL,Carolina Hurricanes,OVER,Total: 6.0,65%
+NHL,2025-11-11,Anaheim Ducks @ Colorado Avalanche,TOTAL,Anaheim Ducks,OVER,Total: 6.0,65%
+NHL,2025-11-11,Los Angeles Kings @ Montreal Canadiens,TOTAL,Montreal Canadiens,OVER,Total: 6.0,65%
+NHL,2025-11-11,Dallas Stars @ Ottawa Senators,TOTAL,Ottawa Senators,OVER,Total: 6.0,65%
+NHL,2025-11-11,Calgary Flames @ St. Louis Blues,TOTAL,St. Louis Blues,OVER,Total: 6.0,65%
+NHL,2025-11-11,Winnipeg Jets @ Vancouver Canucks,TOTAL,Vancouver Canucks,OVER,Total: 6.0,65%
+NHL,2025-11-12,New Jersey Devils @ Chicago Blackhawks,TOTAL,Chicago Blackhawks,UNDER,Total: 6.0,65%
+NHL,2025-11-12,New York Rangers @ Tampa Bay Lightning,TOTAL,Tampa Bay Lightning,UNDER,Total: 6.0,65%
+NHL,2025-11-13,San Jose Sharks @ Calgary Flames,TOTAL,Calgary Flames,OVER,Total: 6.0,65%
+NHL,2025-11-13,Anaheim Ducks @ Detroit Red Wings,TOTAL,Anaheim Ducks,OVER,Total: 6.0,65%
+NHL,2025-11-13,Dallas Stars @ Montreal Canadiens,TOTAL,Montreal Canadiens,OVER,Total: 6.0,65%
+NHL,2025-11-13,Boston Bruins @ Ottawa Senators,TOTAL,Ottawa Senators,OVER,Total: 6.0,65%
+NHL,2025-11-13,Los Angeles Kings @ Toronto Maple Leafs,TOTAL,Toronto Maple Leafs,OVER,Total: 6.0,65%
+NHL,2025-11-13,New York Islanders @ Vegas Golden Knights,TOTAL,New York Islanders,OVER,Total: 6.0,65%
+NHL,2025-11-14,Vancouver Canucks @ Carolina Hurricanes,TOTAL,Carolina Hurricanes,OVER,Total: 6.0,65%
+NHL,2025-11-14,Pittsburgh Penguins @ Nashville Predators,TOTAL,Nashville Predators,UNDER,Total: 6.0,65%
+NHL,2025-11-14,Philadelphia Flyers @ St. Louis Blues,TOTAL,St. Louis Blues,OVER,Total: 6.0,65%
+NHL,2025-11-14,New York Islanders @ Utah Mammoth,TOTAL,New York Islanders,OVER,Total: 6.0,65%

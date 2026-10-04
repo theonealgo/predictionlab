@@ -1,0 +1,173 @@
+# Agent Instructions
+
+Read and follow every rule in this file before attempting any fix or change.
+
+## Project context
+
+This folder (`predictionlabfix_work`) is a **local copy** of predictionlab.io.
+
+**This is a live business with paying customers (~129 subscriptions).** Outages cost real money. Treat every change as if a mistake could take the site down for every customer.
+
+The goal of work in this folder is to:
+
+1. Fix issues **locally**
+2. **Run and verify locally** before anything is considered done
+3. Hand off for the owner to deploy — agents do **not** ship to production
+
+Do not treat this as a sandbox for unrelated changes.
+
+## Rules
+
+### 0. Production / git push — owner-controlled
+
+**Default:** work locally only. Do **not** push, deploy, or restart Render on your own.
+
+**When the owner says push:** push. The owner controls Render. If they say
+`push`, `git push`, or `push to git`, commit the relevant work if needed and
+`git push` to the branch that updates the live site (normally `origin/main`)
+without asking for a second confirmation.
+
+- Do **not** change Render settings, force-push to `main`/`master`, or rewrite
+  history unless the owner explicitly asks for that specific action.
+- Prefer excluding local-only junk from commits (large DBs, `.cache/`, secrets).
+- If production is down and the owner has **not** said push, advise (Render
+  restart / logs). If they **have** said push, push.
+
+### 1. Stay in this project folder — critical
+
+**Only work inside this workspace folder** (`predictionlabfix_work`), except when Rule 8 applies.
+
+- Do **not** read, modify, create, or delete files in any other folder on this computer.
+- Do **not** run commands that write to paths outside this project.
+- **Exception:** Cursor's own configuration folders (for example `~/.cursor/`) may be used when the task requires it.
+- **Exception (Rule 8):** Sport-isolation workspaces under `~/Documents/Personal/<sport>/` (for example `~/Documents/Personal/soccer/`) when the user asks to fix or rework that sport outside this repo.
+
+If files outside this project are touched outside those exceptions, the entire set of working folders may need to be deleted. Treat the default boundary as hard.
+
+### 2. Fix only what was asked
+
+Work only on the specific problem the user asked you to fix. Do not make unrelated changes, drive-by refactors, or "while I'm here" improvements unless the user requests them.
+
+### 3. Local work only — verify locally before calling anything done
+
+Work locally only.
+
+1. Make the change in this folder or an approved isolation folder.
+2. **Run the app locally** and smoke-test the affected pages (and shared paths if risk is non-zero).
+3. Report what you verified. Do not claim “fixed” without a local check when the change could affect serving pages.
+4. Do **not** push unless the owner says push (see Rule 0). When they say push, push.
+
+### 4. Ask before risky changes
+
+If a fix may affect functionality on other pages, features, or shared code paths, ask clarifying questions before implementing. Do not guess when the impact could break behavior elsewhere.
+
+### 5. Know your limits
+
+Do not attempt a fix if you cannot implement it to the level of quality and correctness the codebase requires. Say so clearly, explain what is blocking you, and ask for guidance or a narrower scope instead of shipping a partial or unreliable fix.
+
+### 6. Review this file first
+
+Before starting any task, re-read this file and confirm your plan complies with all rules above — especially Rule 12 (every sport is locked unless the owner unlocks one).
+
+### 7. Always report where changes were made
+
+After any task that creates, modifies, or deletes files, **always tell the user which folder(s) were changed**. Be explicit — for example:
+
+- `predictionlabfix_work/` (project root)
+- `predictionlabfix_work/templates/`
+- `predictionlabfix_work/.cursor/rules/`
+- `~/Documents/Personal/soccer/` (sport isolation workspace)
+
+If multiple folders were touched, list each one. If no files were changed, say that clearly.
+
+### 8. Sport model / picks / results work — isolate first
+
+**From now on, changes that rework how a sport's models pick, grade, or show results must NOT be done first inside `predictionlabfix_work`.**
+
+Required workflow:
+
+1. **Copy** the related sport files into a **separate folder** outside this repo, named for the sport — e.g. `~/Documents/Personal/soccer/`, `~/Documents/Personal/wnba/`.
+2. **Fix and test** entirely in that outside folder (league-by-league when needed). Build standalone picks/results UIs there — never wire them into the live app during testing.
+3. **Do not merge** any sport back into `predictionlabfix_work` / live until the owner explicitly says to. Plan is to ship **all** approved sport fixes together, not one at a time.
+4. After a sport fix is live, wait ~**one week** of real results before judging the new parameters.
+
+Do **not** invent a new pick/results pipeline for a sport inside this directory while it is still broken. Prefer not to touch live sport model files at all during isolation work.
+
+Current isolation workspaces:
+
+- Soccer: `~/Documents/Personal/soccer/`
+- WNBA: `~/Documents/Personal/wnba/`
+- SEO / growth features duplicate: `~/Documents/Personal/predictionlab_newfeatures/` (full site copy; merge only after owner approval)
+
+### 9. Never put internal / sandbox notes on user-facing HTML — critical
+
+**Public and paid users must only see product UI.** This applies to the offline hub (`:5081` / `_sandbox_hub_run`) and to live PredictionLab alike.
+
+**NEVER** put any of the following in user-facing HTML (pages, banners, sticky notes, lead paragraphs, home blurbs, card intros, **View Details panels**, data-attribute labels visible in “View Source” that name vendors):
+
+- Personal notes or agent scratchpad text
+- Isolation / debug / sandbox banners or yellow sticky chrome
+- Internal implementation details (training-set sizes, data-pipeline names, IP, model-training commentary)
+- “Sandbox only” / “not live” / “isolation — …” tech copy aimed at developers
+- **Probability / data-source IP:** “Prob source”, “Elo + market blend”, “Odds-implied”, “TheOddsAPI”, “The Odds API”, “market lean”, ESPN training counts, books-count-as-vendor labels like `TheOddsAPI (4)`
+
+**FORBIDDEN examples (do not ship):**  
+- `UFC isolation — Elo trained on 310 ESPN finals; market lean from The Odds API…`  
+- `Prob source: Elo + market blend` / `Books: TheOddsAPI (4)`
+
+Book **odds numbers** (e.g. DraftKings-style face ML like −150) may stay when shown like the live product. Vendor / blend / training-pipeline labels must not.
+
+Internal docs (`README.md`, code comments, server logs, API debug JSON that is not rendered) may describe isolation — **HTML that customers or hub visitors see must not.**
+
+### 10. Blog: keep Soro; never revive Google Trends auto-posts
+
+- The `/blog` **Soro** “Trending in Sports” embed (`#soro-blog` / `app.trysoro.com`) is a **paid product**. **Do not remove or “clean” it** when fixing blog content.
+- **Google Trends → blog auto-posts are forbidden** (no `Google Trends Betting Angle` articles). Keep `_BLOG_AUTO_TRENDS_ENABLED = False`. See `data/BLOG_OWNER_NOTES.md`.
+
+### 11. Shared sport-group UI — do not invent per-sport pages
+
+Team sports (MLB, NHL, NBA, NCAAB, NCAAW, NFL, NCAAF, WNBA, CFL) share **one**
+Predictions template and **one** Results template (`DAILY_RESULTS_TEMPLATE`).
+Tennis + UFC share one individual-competition template. Soccer and Golf each
+have their own template family under the same global header/footer.
+
+Do not create sport-specific copies of cards, charts, headers, or results
+boards. If the checker reports a team-sports template miss (thin NFL results,
+weekly frankenstein, chart still showing cards), that is an error — fix the
+page. See [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) and
+`.cursor/rules/ui-architecture.mdc`.
+
+### 12. Entire site READ-ONLY — triple UNLOCK to edit
+
+**Default:** this Sept 12 backup is locked read-only. Sports, results cards,
+header, footer, and hamburger are locked.
+
+The owner must say **UNLOCK** three times in the same message, name the
+surface, and name the miss. One unlock is not enough.
+
+This includes MLB, NHL, NBA, NFL, NCAAF, NCAAB, NCAAW, WNBA, CFL, soccer,
+tennis, UFC, golf, and any sport added later — plus HEADER / FOOTER / HAMBURGER.
+
+Do **not** change a sport’s picks page, results page, chart view, card HTML,
+Books / H2H / model lines, or the shared functions that render those cards
+unless the owner says:
+
+**UNLOCK UNLOCK UNLOCK &lt;SPORT&gt;**
+
+and names the miss.
+
+Only that one unlocked sport (and only that miss) may be edited. All other
+sports stay locked. A hang, cloaking fix, checker fail, chrome pass,
+blank-slate merge for sport A, or “the worker is down” is **not** an unlock
+for any other sport.
+
+**Extra enforcement (2026-09-16):** see `.cursor/rules/sport-lock-enforcement.mdc`
+and `.cursor/rules/one-miss-only.mdc`. Do not edit locked-sport branches of
+`NHL77FINAL.py` / `team_results_charts.py` “incidentally.” Shared merge
+allow-lists may prevent empty slates only — never rewrite another sport’s face.
+
+Do not restyle locked cards. Do not invent Books, Edge, or model numbers.
+Do not edit `NHL77FINAL.py`, `team_results_charts.py`, or `mlb_*` /
+sport-named files “incidentally” while working on something else.
+
+When the miss is done, that sport is locked again. Wait for the next unlock.

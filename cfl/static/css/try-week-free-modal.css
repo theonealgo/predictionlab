@@ -1,0 +1,177 @@
+/* Keep “Week FREE” as one text run so inline-flex CTAs do not drop the space. */
+a.js-try-week-cta {
+    word-spacing: 0.12em;
+}
+
+.pl-try-week-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.pl-try-week-modal[hidden] {
+    display: none !important;
+}
+
+.pl-try-week-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+}
+
+.pl-try-week-dialog {
+    position: relative;
+    z-index: 1;
+    width: min(440px, 100%);
+    max-height: min(92vh, 680px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #fff;
+    color: #0f172a;
+    border: 1px solid #E0E4E8;
+    border-radius: 16px;
+    box-shadow: 0 16px 48px rgba(15, 23, 42, 0.22);
+    padding: 28px 22px 22px;
+    box-sizing: border-box;
+}
+
+.pl-try-week-x {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #E0E4E8;
+    border-radius: 999px;
+    background: #fff;
+    color: #0f172a;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.pl-try-week-x:hover,
+.pl-try-week-x:focus {
+    border-color: #6d28d9;
+    outline: 2px solid rgba(109, 40, 217, 0.35);
+    outline-offset: 1px;
+}
+
+.pl-try-week-title {
+    margin: 0 36px 14px 0;
+    font-size: 1.28rem;
+    font-weight: 800;
+    line-height: 1.3;
+    color: #0f172a;
+}
+
+.pl-try-week-body {
+    font-size: 0.98rem;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.pl-try-week-body p {
+    margin: 0 0 10px;
+}
+
+.pl-try-week-code-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 8px 0 12px;
+}
+
+.pl-try-week-code {
+    display: inline-flex;
+    align-items: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    color: #4c1d95;
+    background: #f5f3ff;
+    border: 2px solid #6d28d9;
+    border-radius: 10px;
+    padding: 8px 14px;
+    line-height: 1.2;
+}
+
+.pl-try-week-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid #6d28d9;
+    background: #fff;
+    color: #4c1d95;
+    font-weight: 800;
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+
+.pl-try-week-copy:hover,
+.pl-try-week-copy:focus {
+    background: #f5f3ff;
+    outline: 2px solid rgba(109, 40, 217, 0.35);
+    outline-offset: 1px;
+}
+
+.pl-try-week-copy.is-copied {
+    border-color: #15803d;
+    color: #15803d;
+    background: #f0fdf4;
+}
+
+.pl-try-week-continue {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 16px;
+    width: 100%;
+    min-height: 46px;
+    padding: 12px 16px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #312e81 0%, #6d28d9 48%, #db2777 100%);
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.95rem;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.pl-try-week-continue:hover,
+.pl-try-week-continue:focus {
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(109, 40, 217, 0.4);
+    outline: 2px solid rgba(109, 40, 217, 0.45);
+    outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+    .pl-try-week-modal {
+        padding: 10px;
+        align-items: flex-end;
+    }
+    .pl-try-week-dialog {
+        width: 100%;
+        max-height: 90vh;
+        border-radius: 16px 16px 12px 12px;
+        padding: 24px 16px 18px;
+    }
+    .pl-try-week-title {
+        font-size: 1.12rem;
+    }
+    .pl-try-week-code {
+        font-size: 1.28rem;
+        letter-spacing: 0.1em;
+    }
+}

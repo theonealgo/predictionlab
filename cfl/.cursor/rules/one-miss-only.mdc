@@ -1,0 +1,24 @@
+---
+description: Every sport and the rest of the site stay locked unless the owner uses 3 UNLOCKS
+alwaysApply: true
+---
+
+# 3 locks — all sports and the rest of the site
+
+**Before any site work:** every sport, every results card, and the rest of the
+site are locked. Unlock only the surface the owner named, and only when that
+message contains **UNLOCK** 3 times plus the miss.
+
+All locked (picks + results + the rest of the site): MLB, NHL, NBA, NFL, NCAAF,
+NCAAB, NCAAW, WNBA, CFL, soccer, tennis, UFC, golf, props, performance, chrome,
+header, footer, hamburger, homepage, blog, account.
+
+Owner 2026-09-22: NHL, MLB, and NCAAF were opened for the picks-card misses
+(dead predictions image, Efficiency N/A, placeholder Edge). Those misses are
+closed. All three are locked again.
+
+A hang, timeout, checker fail, or blank-slate restore for sport A is not an
+unlock for sport B. Do not touch `NHL77FINAL.py` / `team_results_charts.py`
+for a locked sport.
+
+See AGENTS.md Rule 12.

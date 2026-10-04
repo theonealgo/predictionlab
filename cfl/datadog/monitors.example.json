@@ -1,0 +1,25 @@
+[
+  {
+    "name": "[predictionlab] NBA results p95 latency high",
+    "type": "query alert",
+    "query": "percentile(last_5m):p95:trace.flask.request{service:predictionlab,resource_name:get_nba_results} > 45",
+    "message": "NBA results p95 > 45s. Check Render worker, /nba-results cache, and betting_lines backfill.\n\n@your-oncall-handle",
+    "tags": ["service:predictionlab", "team:predictionlab"],
+    "options": {
+      "thresholds": { "critical": 45, "warning": 30 },
+      "notify_no_data": false,
+      "require_full_window": false
+    }
+  },
+  {
+    "name": "[predictionlab] 5xx error rate elevated",
+    "type": "query alert",
+    "query": "sum(last_10m):sum:trace.flask.request.errors{service:predictionlab,http.status_code:5*}.as_count() / sum:trace.flask.request.hits{service:predictionlab}.as_count() > 0.05",
+    "message": "More than 5% of Flask requests returned 5xx. Check Render logs and recent deploys.\n\n@your-oncall-handle",
+    "tags": ["service:predictionlab"],
+    "options": {
+      "thresholds": { "critical": 0.05, "warning": 0.02 },
+      "notify_no_data": false
+    }
+  }
+]

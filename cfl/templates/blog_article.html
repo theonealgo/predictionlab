@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title or post.title }} | Prediction Lab{% endblock %}
+{% block meta_description %}{{ page_description or post.excerpt or '' }}{% endblock %}
+{% block extra_head %}
+<link rel="canonical" href="{{ canonical_url }}">
+<meta name="robots" content="{{ robots_meta or 'index,follow' }}">
+<meta property="og:title" content="{{ page_title or post.title }}">
+<meta property="og:description" content="{{ page_description or post.excerpt or '' }}">
+<meta property="og:url" content="{{ canonical_url }}">
+{% if og_image %}<meta property="og:image" content="{{ og_image }}">{% endif %}
+{% if json_ld_blocks %}
+<script type="application/ld+json">{{ json_ld_blocks | tojson }}</script>
+{% endif %}
+<style>
+  .blog-article{max-width:760px;margin:0 auto;padding:28px 18px 60px}
+  .blog-article h1{font-size:1.85rem;line-height:1.25;margin:0 0 10px;color:#0f172a}
+  .blog-article .meta{color:#64748b;font-size:.9rem;margin:0 0 18px}
+  .blog-article .hero{width:100%;max-height:360px;object-fit:cover;border-radius:12px;margin:0 0 18px}
+  .blog-article .info-table,.blog-article .model-table{width:100%;border-collapse:collapse;font-size:.92rem;margin:12px 0}
+  .blog-article th,.blog-article td{text-align:left;padding:8px 10px;border:1px solid #e2e8f0}
+  .blog-article th{background:#f8fafc;color:#475569;font-weight:700}
+  .blog-article .disclaimer{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-size:.9rem;color:#334155;margin-top:16px}
+  .blog-article .related{list-style:none;padding:0;margin:16px 0 0}
+  .blog-article .related li{margin:0 0 8px}
+  .blog-article .news-list a{display:block;margin:0 0 8px;color:#00529B;font-weight:700;text-decoration:none}
+  .blog-article .back{display:inline-flex;margin-bottom:18px}
+</style>
+{% endblock %}
+{% block content %}
+<article class="blog-article">
+  <a class="back" href="/blog">← All articles</a>
+  <h1>{{ post.title }}</h1>
+  <p class="meta">
+    {% if display_published %}<time datetime="{{ date_published_iso or post.date }}">{{ display_published }}</time>{% endif %}
+    {% if post.sport_tag %} · {{ post.sport_tag }}{% endif %}
+  </p>
+  {% if post.image and not post.image_is_logo %}
+  <img class="hero" src="{{ post.image }}" alt="" width="760" height="360" loading="eager">
+  {% endif %}
+  {% set in_place = false %}
+  {% include "partials/blog_article_body.html" %}
+</article>
+{% endblock %}

@@ -1,0 +1,26 @@
+---
+description: Entire site locked — 3 UNLOCKS required
+alwaysApply: true
+---
+
+# Entire site LOCKED — 3 locks
+
+This folder is a locked copy. Agents must not edit product files (routes,
+templates, CSS, JS, sport modules, `NHL77FINAL.py`, databases) unless the
+owner puts **UNLOCK** in the same message **3 times**, names the surface,
+and names the miss.
+
+## Locked
+
+- Every sport picks/results/chart (MLB NHL NBA NFL NCAAF NCAAB NCAAW WNBA CFL soccer tennis UFC golf)
+- Header, footer, hamburger, site directory, global chrome CSS
+- Homepage, blog, props, account, performance, shared templates
+- This backup’s git history / push / Render
+
+## Allowed without unlock
+
+- Read files
+- Run the app locally and report checker results
+- Add or tighten lock rules when the owner asks to lock
+
+Do not put lock text on user-facing HTML.

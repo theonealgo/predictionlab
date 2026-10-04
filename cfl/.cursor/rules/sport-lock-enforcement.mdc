@@ -1,0 +1,27 @@
+---
+description: HARD sport locks — 3 UNLOCKS, never edit a locked sport
+alwaysApply: true
+---
+
+# Sport lock enforcement — 3 locks
+
+## Layer A — 3 verbal unlocks
+
+No picks/results/card/chart edit for a sport, and no edit to the rest of the
+site, unless the owner message contains **UNLOCK** 3 times and names the miss.
+Checker fails, chrome, and “fix all sports” are not unlocks.
+
+## Layer B — protected paths
+
+Do not edit a locked sport’s routes, sport-named modules, or that sport’s
+branch inside `NHL77FINAL.py` / `team_results_charts.py` /
+`templates/includes/game_card_body.html`.
+
+## Layer C — one miss, then lock
+
+One unlocked surface. One named miss. When it is done, lock it again the same
+day. Do not leave a sport UNLOCKED overnight.
+
+## Layer D — isolation
+
+A diff while one sport is unlocked must not change a locked sport’s HTML.

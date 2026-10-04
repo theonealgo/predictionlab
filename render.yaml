@@ -1,0 +1,26 @@
+# CFL pilot Blueprint. One service for CFL, using the shared env groups.
+# The secrets group "pl-secrets" must already exist in the Render dashboard.
+envVarGroups:
+  - name: pl-shared
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: SITE_URL
+        value: https://predictionlab.io
+
+services:
+  - type: web
+    name: pl-cfl
+    runtime: python
+    plan: starter
+    rootDir: cfl
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash render_start.sh
+    autoDeploy: true
+    disk:
+      name: cfl-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - fromGroup: pl-shared
+      - fromGroup: pl-secrets

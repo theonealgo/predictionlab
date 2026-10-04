@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block extra_styles %}
+<style>
+    .sport-page-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 30px 20px;
+    }
+    
+    .sport-header {
+        text-align: center;
+        margin-bottom: 30px;
+        color: white;
+    }
+    
+    .sport-header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+    
+    .back-link {
+        display: inline-block;
+        margin-bottom: 20px;
+        color: white;
+        text-decoration: none;
+        font-size: 1rem;
+        opacity: 0.9;
+        transition: opacity 0.3s;
+    }
+    
+    .back-link:hover {
+        opacity: 1;
+    }
+    
+    .predictions-table-container {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        overflow-x: auto;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    .predictions-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+    }
+    
+    .predictions-table thead {
+        background: #667eea;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .predictions-table th {
+        padding: 15px 10px;
+        text-align: left;
+        font-weight: 600;
+        white-space: nowrap;
+        background: #667eea;
+    }
+    
+    .predictions-table td {
+        padding: 12px 10px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .predictions-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .predictions-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .pick-cell {
+        font-weight: 600;
+        color: #667eea;
+    }
+    
+    .at-symbol {
+        color: #999;
+        font-weight: 500;
+    }
+    
+    .no-predictions {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+    }
+    
+    @media (max-width: 768px) {
+        .predictions-table {
+            font-size: 0.85rem;
+        }
+        
+        .predictions-table th,
+        .predictions-table td {
+            padding: 10px 5px;
+        }
+        
+        .sport-header h1 {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sport-page-container">
+    <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+    
+    <div class="sport-header">
+        <h1>{{ sport_emoji }} {{ sport_name }} Predictions</h1>
+    </div>
+    
+    <div class="predictions-table-container">
+        {% if predictions %}
+            <table class="predictions-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Away</th>
+                        <th>@</th>
+                        <th>Home</th>
+                        <th>Pick</th>
+                        <th>XGB% (Home Win)</th>
+                        <th>Elo% (Home Win)</th>
+                        <th>Confidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pred in predictions %}
+                    <tr>
+                        <td>{{ pred.date }}</td>
+                        <td>{{ pred.away }}</td>
+                        <td class="at-symbol">@</td>
+                        <td>{{ pred.home }}</td>
+                        <td class="pick-cell">{{ pred.pick }}</td>
+                        <td>{{ "%.1f"|format(pred.xgboost_pct) }}%</td>
+                        <td>{{ "%.1f"|format(pred.elo_pct) }}%</td>
+                        <td>{{ "%.1f"|format(pred.consensus_pct) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="no-predictions">
+                <h3>No predictions available for {{ sport_name }}</h3>
+                <p>Check back soon for upcoming games</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

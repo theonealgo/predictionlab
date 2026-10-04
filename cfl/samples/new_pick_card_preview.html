@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prediction Lab — NHL Pick Card Preview (Sample)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --pl-navy: #0c1e3a;
+      --pl-navy-mid: #1e3a5f;
+      --pl-gold: #c9a227;
+      --pl-gold-soft: rgba(201, 162, 39, 0.14);
+      --pl-green: #0d9488;
+      --pl-green-soft: rgba(13, 148, 136, 0.1);
+      --pl-border: #e2e8f0;
+      --pl-muted: #64748b;
+      --pl-text: #0f172a;
+      --pl-bg: #f1f5f9;
+      --card-radius: 16px;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--pl-bg);
+      color: var(--pl-text);
+      padding: 20px 16px 40px;
+      line-height: 1.4;
+    }
+    .page {
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .banner {
+      background: linear-gradient(135deg, var(--pl-navy) 0%, var(--pl-navy-mid) 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(201, 162, 39, 0.35);
+      box-shadow: 0 6px 20px rgba(12, 30, 58, 0.2);
+    }
+    .banner strong { color: var(--pl-gold); }
+    .banner p {
+      margin: 6px 0 0;
+      font-size: 0.82em;
+      opacity: 0.92;
+    }
+
+    /* ── Pick card ── */
+    .pick-card {
+      background: #fff;
+      border: 1px solid var(--pl-border);
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+    }
+    .pick-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px 0;
+    }
+    .league-badge {
+      font-size: 0.68em;
+      font-weight: 800;
+      letter-spacing: 0.25px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--pl-gold-soft);
+      color: var(--pl-navy);
+      border: 1px solid rgba(201, 162, 39, 0.25);
+    }
+    .league-badge.nhl { background: rgba(12, 30, 58, 0.08); }
+    .game-time {
+      font-size: 0.7em;
+      font-weight: 700;
+      color: var(--pl-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .matchup-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: start;
+      gap: 6px;
+      padding: 14px 12px 10px;
+    }
+    .team-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 10px 8px 12px;
+      border-radius: 12px;
+      border: 2px solid transparent;
+      min-width: 0;
+    }
+    .team-slot.favored {
+      border-color: rgba(13, 148, 136, 0.35);
+      background: var(--pl-green-soft);
+    }
+    .team-logo {
+      width: 52px;
+      height: 52px;
+      object-fit: contain;
+      margin-bottom: 6px;
+    }
+    .team-name {
+      font-size: 0.8em;
+      font-weight: 800;
+      color: var(--pl-text);
+      margin-bottom: 4px;
+      line-height: 1.2;
+    }
+    .win-pct {
+      font-size: 1.65em;
+      font-weight: 900;
+      color: #94a3b8;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+    .win-pct span.unit { font-size: 0.5em; font-weight: 700; vertical-align: super; }
+    .team-slot.favored .win-pct { color: var(--pl-green); }
+    .model-tag {
+      font-size: 0.58em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.35px;
+      color: var(--pl-muted);
+      margin-bottom: 6px;
+    }
+    .book-ml {
+      font-size: 0.8em;
+      font-weight: 700;
+      color: #475569;
+    }
+    .book-ml.fav { color: var(--pl-green); }
+    .book-ml.dog { color: #b45309; }
+
+    .matchup-at {
+      font-size: 0.75em;
+      font-weight: 900;
+      color: #cbd5e1;
+      padding-top: 22px;
+      user-select: none;
+    }
+
+    .lines-strip {
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 14px 12px;
+      border-top: 1px solid #f1f5f9;
+      margin-top: 2px;
+      padding-top: 10px;
+    }
+    .line-chip {
+      flex: 1;
+      text-align: center;
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 8px 6px;
+      border: 1px solid #f1f5f9;
+    }
+    .line-chip-label {
+      font-size: 0.6em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--pl-muted);
+      margin-bottom: 2px;
+    }
+    .line-chip-val {
+      font-size: 0.84em;
+      font-weight: 800;
+      color: var(--pl-text);
+    }
+
+    .ai-pick-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 14px;
+      border-top: 1px dashed #e2e8f0;
+      background: linear-gradient(180deg, #fff 0%, #fafbfc 100%);
+    }
+    .ai-pick-text {
+      font-size: 0.82em;
+      color: #334155;
+    }
+    .ai-pick-text strong { color: var(--pl-navy); }
+    .ai-pick-text .via {
+      font-size: 0.85em;
+      color: var(--pl-muted);
+      font-weight: 600;
+    }
+    .confidence {
+      font-size: 0.82em;
+      color: var(--pl-muted);
+      font-weight: 600;
+    }
+    .confidence strong {
+      color: var(--pl-navy);
+      font-weight: 900;
+    }
+
+    .card-footer {
+      border-top: 1px solid var(--pl-border);
+      padding: 10px 14px;
+      text-align: center;
+    }
+    .view-details-btn {
+      background: none;
+      border: none;
+      font-family: inherit;
+      font-size: 0.72em;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--pl-navy);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+    }
+    .view-details-btn:hover { color: var(--pl-gold); }
+    .view-details-btn .chevron {
+      display: inline-block;
+      transition: transform 0.2s;
+      font-size: 1.1em;
+    }
+    .pick-card.is-expanded .view-details-btn .chevron {
+      transform: rotate(-180deg);
+    }
+
+    /* ── Expanded body (fully visible, no paywall) ── */
+    .card-details {
+      border-top: 1px solid var(--pl-border);
+      background: #f8fafc;
+    }
+    .card-details[hidden] { display: none; }
+
+    .odds-pricing-section {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--pl-border);
+    }
+    .section-title {
+      font-size: 0.68em;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--pl-muted);
+      margin-bottom: 8px;
+    }
+    .odds-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.76em;
+    }
+    .odds-table th {
+      text-align: left;
+      padding: 5px 6px;
+      border-bottom: 1px solid var(--pl-border);
+      font-size: 0.68em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+    .odds-table td {
+      padding: 6px;
+      border-bottom: 1px solid #f1f5f9;
+      font-weight: 600;
+    }
+    .odds-table tr:last-child td { border-bottom: none; }
+    .col-books, .val-books { color: #0f766e; }
+    .col-pl, .val-pl { color: #92400e; }
+    .col-xs, .val-xs { color: #1d4ed8; }
+    .market-k {
+      color: #94a3b8;
+      font-size: 0.92em;
+      text-transform: uppercase;
+    }
+
+    .proj-score-box {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--pl-border);
+    }
+    .proj-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 0.78em;
+    }
+    .proj-model {
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.85em;
+      letter-spacing: 0.2px;
+    }
+    .proj-model.pl { color: #92400e; }
+    .proj-model.xs { color: #1d4ed8; }
+    .proj-val {
+      font-weight: 800;
+      color: var(--pl-text);
+      text-align: right;
+    }
+
+    .pick-conf-bar {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--pl-border);
+    }
+    .pick-conf-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+    }
+    @media (max-width: 360px) {
+      .pick-conf-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .pc-box {
+      background: #fff;
+      border: 1px solid var(--pl-border);
+      border-radius: 8px;
+      padding: 6px 3px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-height: 72px;
+    }
+    .pc-box.consensus {
+      border-color: rgba(201, 162, 39, 0.5);
+      background: rgba(201, 162, 39, 0.08);
+    }
+    .pc-name {
+      font-size: 0.58em;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--pl-text);
+      line-height: 1.2;
+    }
+    .pc-val {
+      font-size: 0.92em;
+      font-weight: 900;
+      color: var(--pl-text);
+    }
+    .pc-side {
+      font-size: 0.58em;
+      font-weight: 700;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .pc-side.home {
+      color: var(--pl-green);
+      background: rgba(13, 148, 136, 0.12);
+    }
+    .pc-side.away {
+      color: #b45309;
+      background: rgba(180, 83, 9, 0.1);
+    }
+
+    .odds-extras-footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      padding: 10px 14px 14px;
+    }
+    .sf-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .sf-label {
+      font-size: 0.68em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #94a3b8;
+    }
+    .sf-val {
+      font-size: 0.82em;
+      font-weight: 700;
+      color: var(--pl-text);
+    }
+
+    .footnote {
+      font-size: 0.72em;
+      color: var(--pl-muted);
+      margin-top: 16px;
+      padding: 0 2px;
+      line-height: 1.45;
+    }
+    .footnote code {
+      font-size: 0.95em;
+      background: #e2e8f0;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="banner">
+      <strong>Design sample only</strong> — not linked from production.
+      <p>NHL rollout preview — Hurricanes @ Canadiens. All details expanded and readable (no paywall). Win % = XSharp on card face.</p>
+    </div>
+
+    <!-- Single NHL card: face + expandable body (default expanded) -->
+    <article class="pick-card is-expanded" id="nhl-card" aria-label="NHL pick card preview">
+      <header class="pick-card-header">
+        <span class="league-badge nhl">🏒 NHL</span>
+        <span class="game-time">Tonight · 7:00 PM ET</span>
+      </header>
+
+      <div class="matchup-row">
+        <div class="team-slot favored">
+          <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/car.png" alt="Carolina Hurricanes" width="52" height="52" loading="lazy">
+          <div class="team-name">Hurricanes</div>
+          <div class="model-tag">XSharp</div>
+          <div class="win-pct">77.7<span class="unit">%</span></div>
+          <div class="book-ml fav">-180</div>
+        </div>
+        <div class="matchup-at">@</div>
+        <div class="team-slot">
+          <img class="team-logo" src="https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png" alt="Montreal Canadiens" width="52" height="52" loading="lazy">
+          <div class="team-name">Canadiens</div>
+          <div class="model-tag">XSharp</div>
+          <div class="win-pct">22.3<span class="unit">%</span></div>
+          <div class="book-ml dog">+155</div>
+        </div>
+      </div>
+
+      <div class="lines-strip">
+        <div class="line-chip">
+          <div class="line-chip-label">Book puck line</div>
+          <div class="line-chip-val">CAR -1.5</div>
+        </div>
+        <div class="line-chip">
+          <div class="line-chip-label">Book total</div>
+          <div class="line-chip-val">O/U 5.5</div>
+        </div>
+      </div>
+
+      <div class="ai-pick-row">
+        <div class="ai-pick-text">
+          AI pick · <strong>Carolina Hurricanes</strong>
+          <span class="via">via XSharp</span>
+        </div>
+        <div class="confidence">Confidence <strong>77.7%</strong></div>
+      </div>
+
+      <footer class="card-footer">
+        <button type="button" class="view-details-btn" id="toggle-details" aria-expanded="true" aria-controls="card-details">
+          View Details <span class="chevron">▾</span>
+        </button>
+      </footer>
+
+      <div class="card-details" id="card-details">
+        <div class="odds-pricing-section">
+          <div class="section-title">Odds &amp; Lines</div>
+          <table class="odds-table">
+            <thead>
+              <tr>
+                <th>Market</th>
+                <th class="col-books">Books</th>
+                <th class="col-pl">Prediction Lab</th>
+                <th class="col-xs">XSharp</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="market-k">Puck line</td>
+                <td class="val-books">CAR -1.5</td>
+                <td class="val-pl">CAR -0.5</td>
+                <td class="val-xs">CAR -1.0</td>
+              </tr>
+              <tr>
+                <td class="market-k">Total</td>
+                <td class="val-books">5.5</td>
+                <td class="val-pl">6.0</td>
+                <td class="val-xs">6.0</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="proj-score-box">
+            <div class="section-title">Projected Score</div>
+            <div class="proj-row">
+              <span class="proj-model pl">Prediction Lab</span>
+              <span class="proj-val">CAR 3.2 – MTL 2.5</span>
+            </div>
+            <div class="proj-row">
+              <span class="proj-model xs">XSharp</span>
+              <span class="proj-val">CAR 3.5 – MTL 2.0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pick-conf-bar">
+          <div class="section-title">Pick Confidence</div>
+          <div class="pick-conf-grid">
+            <div class="pc-box">
+              <div class="pc-name">Grinder2</div>
+              <div class="pc-val">55.9%</div>
+              <div class="pc-side home">Hurricanes ✅</div>
+            </div>
+            <div class="pc-box">
+              <div class="pc-name">Takedown</div>
+              <div class="pc-val">55.6%</div>
+              <div class="pc-side home">Hurricanes ✅</div>
+            </div>
+            <div class="pc-box">
+              <div class="pc-name">Edge</div>
+              <div class="pc-val">50.0%</div>
+              <div class="pc-side away">Canadiens ❌</div>
+            </div>
+            <div class="pc-box">
+              <div class="pc-name">XSharp</div>
+              <div class="pc-val">77.7%</div>
+              <div class="pc-side home">Hurricanes ✅</div>
+            </div>
+            <div class="pc-box consensus">
+              <div class="pc-name">Consensus</div>
+              <div class="pc-val">60.4%</div>
+              <div class="pc-side home">Hurricanes ✅</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="odds-extras-footer">
+          <div class="sf-item">
+            <span class="sf-label">Spread pick</span>
+            <span class="sf-val">CAR -1.5</span>
+          </div>
+          <div class="sf-item">
+            <span class="sf-label">Total pick</span>
+            <span class="sf-val">Over 5.5</span>
+          </div>
+          <div class="sf-item">
+            <span class="sf-label">H2H Last 10</span>
+            <span class="sf-val">6.5 (7 games)</span>
+          </div>
+          <div class="sf-item">
+            <span class="sf-label">Actual total</span>
+            <span class="sf-val">—</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <p class="footnote">
+      Mirrors <code>game_card_body.html</code> fields — sample only; production templates unchanged.
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      var card = document.getElementById('nhl-card');
+      var btn = document.getElementById('toggle-details');
+      var panel = document.getElementById('card-details');
+
+      btn.addEventListener('click', function () {
+        var expanded = card.classList.toggle('is-expanded');
+        if (expanded) {
+          panel.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+        } else {
+          panel.setAttribute('hidden', '');
+          btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

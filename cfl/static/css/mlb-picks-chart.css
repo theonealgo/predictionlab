@@ -1,0 +1,146 @@
+/* MLB picks Chart — market tabs */
+.picks-market-tabs {
+  display: none;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  width: 100%;
+}
+.date-section.chart-mode .picks-market-tabs,
+.picks-view-controls.chart-active .picks-market-tabs {
+  display: flex;
+}
+.picks-market-tabs .market-tab {
+  border: 1px solid #dbe3ee;
+  background: #fff;
+  color: #0c1e3a;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.picks-market-tabs .market-tab.active {
+  background: #0c1e3a;
+  color: #fff;
+  border-color: #0c1e3a;
+}
+.date-section.chart-mode .chart-table-wrap,
+.chart-table-wrap {
+  max-height: 78vh;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.picks-chart-table {
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.picks-chart-table th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  white-space: nowrap;
+}
+.picks-chart-table th.mu-col {
+  text-align: left;
+}
+.picks-chart-table td {
+  white-space: nowrap;
+}
+.picks-chart-table td.mu-col {
+  white-space: normal;
+  min-width: 120px;
+  max-width: 180px;
+  line-height: 1.2;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.picks-chart-table .mu-away,
+.picks-chart-table .mu-home {
+  display: block;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.picks-chart-table th.proj-col,
+.picks-chart-table td.proj-col,
+.picks-chart-table td.proj-cell {
+  /* Stacked total + scoreline; header aligns with cell (not right-nudged) */
+  white-space: nowrap;
+  text-align: left;
+  line-height: 1.25;
+  font-size: 0.95em;
+  vertical-align: middle;
+}
+.picks-chart-table th.proj-col {
+  font-size: 0.66em;
+}
+.picks-chart-table td.proj-cell .proj-total {
+  display: block;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.picks-chart-table td.proj-cell .proj-scoreline {
+  display: block;
+  margin-top: 2px;
+  font-weight: 600;
+  font-size: 0.92em;
+  color: #334155;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.picks-chart-table .odds-cell {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.picks-chart-table .odds-cell .fav { color: #b91c1c; }
+.picks-chart-table .odds-cell .dog { color: #1d4ed8; }
+.picks-chart-table .rl-conf-strong { color: #15803d; font-weight: 800; }
+.picks-chart-table .rl-conf-mod { color: #b45309; font-weight: 800; }
+.picks-chart-table .rl-conf-weak { color: #b91c1c; font-weight: 700; }
+.picks-chart-market-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 8px;
+}
+.picks-chart-table th.pct-info-th {
+  white-space: nowrap;
+}
+.picks-chart-table .pct-th-label {
+  margin-right: 2px;
+}
+.picks-chart-table .pct-info-btn,
+.rl-confidence-chip .pct-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  margin: 0 0 0 2px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  vertical-align: middle;
+}
+.picks-chart-table .pct-info-btn:hover,
+.picks-chart-table .pct-info-btn:focus,
+.rl-confidence-chip .pct-info-btn:hover,
+.rl-confidence-chip .pct-info-btn:focus {
+  background: #e2e8f0;
+  color: #0f172a;
+  outline: none;
+}

@@ -1,0 +1,20 @@
+{
+  "n_games": 1747,
+  "n_features": 36,
+  "ensemble_logloss": 0.29106065676624415,
+  "ensemble_brier": 0.08885479751527717,
+  "simple_avg_logloss": 0.26588889819381994,
+  "simple_avg_brier": 0.08286538567134248,
+  "uncalibrated_ece": 0.03985954200708608,
+  "platt_ece": 0.023267535374114447,
+  "isotonic_ece": 1.985945593562458e-17,
+  "selected_method": "isotonic",
+  "final_log_loss": 0.3157424011555367,
+  "final_brier": 0.10287742987561414,
+  "final_accuracy": 0.8546078992558672,
+  "model_weights": {
+    "xgboost": 0.29178470254957506,
+    "catboost": 0.43626062322946174,
+    "lightgbm": 0.2719546742209632
+  }
+}

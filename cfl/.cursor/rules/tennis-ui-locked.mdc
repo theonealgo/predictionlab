@@ -1,0 +1,4 @@
+# Tennis UI — use locked-tennis.mdc
+
+This file defers to `.cursor/rules/locked-tennis.mdc`. When tennis is locked,
+do not change tennis routes unless **UNLOCK UNLOCK UNLOCK TENNIS**.

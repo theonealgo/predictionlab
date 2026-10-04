@@ -1,0 +1,182 @@
+PredictionLab site checker — checkpoint architecture
+Updated 2026-09-14 (gap list v2)
+
+RUN
+  .venv/bin/python qa/site_checker.py --quick --url http://127.0.0.1:5052
+  .venv/bin/python qa/site_checker.py --ship --url http://127.0.0.1:5052
+  .venv/bin/python qa/site_checker.py --full --url http://127.0.0.1:5052
+  bash qa/run_checker.sh
+
+ENV
+  PSI_ENFORCE_SPORTS=MLB          # comma list → FAIL gate for perf/a11y (else WARN)
+  AUDIT_PLAYWRIGHT_CONSOLE=1      # RuntimeAuditor console errors
+  AUDIT_PLAYWRIGHT_RESPONSIVE=1   # ResponsiveAuditor viewport overflow
+
+════════════════════════════════════════════════════════════════════════════
+AUDITOR MAP (what runs)
+════════════════════════════════════════════════════════════════════════════
+
+LEGACY
+  routes | content | navigation | cards | models | results | gamecounts
+  consistency | schema | seo | csv | props | screenshots
+  chrome (qa/chrome_checker.py)
+  ship
+  soccer (qa/soccer_checker.py) — dedicated soccer family
+  espn_slate
+
+GENERIC CONTRACT LAYER (qa/contract_auditors.py)
+  templates   TemplateContractAuditor
+  integrity   DataIntegrityAuditor
+  runtime     RuntimeAuditor
+  perf_a11y   PerformanceAccessibilityAuditor   ← picks_pagespeed_a11y_issues(sport)
+  charts      ChartAuditor
+  images      ImagesAuditor
+  api         ApiContractAuditor
+  responsive  ResponsiveAuditor (Playwright; full mode / env flag)
+
+Quick includes: templates integrity runtime perf_a11y charts images api
+Ship includes:  same as quick contract layer (+ chrome/ship/soccer/espn_slate)
+Full includes:  + responsive + cards/models/results/seo/…
+
+════════════════════════════════════════════════════════════════════════════
+YOUR GAP LIST → STATUS
+════════════════════════════════════════════════════════════════════════════
+
+1. GLOBAL / SITE-WIDE
+  [x] Header/footer/nav / hamburger / dead links     → chrome + navigation
+  [x] Canonical / HTTPS-www / redirects / 5xx        → routes + runtime + seo
+  [x] Debug/traceback/Werkzeug                       → runtime global_leakage_issues
+  [x] localhost / staging URLs (prod audits)         → runtime
+  [x] Mixed content                                  → runtime
+  [x] Template Jinja leakage                         → runtime
+  [x] Duplicate IDs                                  → runtime
+  [x] Representative pages every family              → runtime SAMPLE + templates
+  [~] Broken static CSS/JS 404                       → partial (images HEAD logos;
+                                                       expand static asset HEAD next)
+  [~] JS console / failed network                    → AUDIT_PLAYWRIGHT_CONSOLE=1
+
+2. TEMPLATE MATRIX
+  [x] Team picks/results/chart contracts             → TemplateContractAuditor
+  [x] Tennis/UFC load contracts                      → TemplateContractAuditor
+  [x] Golf/Soccer load smoke                         → TemplateContractAuditor
+  [x] Soccer deep family                             → SoccerChecker
+
+3. SOCCER
+  [x] Dedicated SoccerChecker (leagues/charts/H2H/chrome/load)
+  [x] Site-wedge via PAGE_SPEED_BUDGET + runtime 5xx
+  [~] Every bullet (timezone, duplicate events, …)   → expand soccer_checker over time
+
+4. PICKS FUNCTIONAL
+  [x] Placeholders / blank model-tag / blank win-pct / None odds
+      → picks_functional_issues
+  [x] Existing content helpers (clock, logos, H2H, models, share, Efficiency…)
+  [~] Exact 6-model order + backend ML/spread/total parity → next integrity pass
+
+5. RESULTS FULL CONTRACT
+  [x] Many known helpers (preseason, stale week/perf, Efficiency, tallies…)
+  [~] Row-level compute-every-number cross-check     → DataIntegrityAuditor expand
+
+6. CHARTS
+  [x] Generic ChartAuditor (all team sports + tennis)
+  [x] Not-same-as-cards / template / sport bleed
+  [~] Full API schema + units/W-L series parity      → keep sport helpers + expand
+
+7. SEO
+  [x] Expanded seo_page_issues + SeoAuditor pages for all families
+  [x] title/desc/canonical/og/lang/h1/JSON-LD/noindex/wrong-sport canonical
+  [~] og:image + twitter:card + sitemap URL crawl    → api sitemap spot-check done;
+                                                       twitter/og:image next
+
+8. ACCESSIBILITY
+  [x] lang main nav tabs aria-selected share-name dup-id
+  [~] Keyboard/focus/contrast Lighthouse             → Playwright/Lighthouse later
+
+9. PERFORMANCE
+  [x] Generic picks_pagespeed_a11y_issues(sport) for ALL picks
+      (= static HTML mirror of known PSI misses — NOT real PageSpeed Insights)
+  [x] PSI_ENFORCE_SPORTS (default MLB FAIL; others WARN)
+  [x] HTML weight, deferred chart CSS, deferred gtag, logo /100/, share ?w=
+  [x] LOCAL real PSI engine: qa/lighthouse_local.py
+      Runs Google Lighthouse in Chrome on THIS Mac vs :5052 (or any --url).
+      Same engine as pagespeed.web.dev. Opens HTML report with `open`.
+      Never embedded in the website.
+      Example:
+        .venv/bin/python qa/lighthouse_local.py --url http://127.0.0.1:5052/mlb-picks
+  [ ] Wire Lighthouse into site_checker opt-in (AUDIT_LIGHTHOUSE=1) → next
+
+10. IMAGES / LOGOS
+  [x] ImagesAuditor (size endpoint, share, localhost, dims, HEAD 404 sample)
+
+11. SHARE
+  [x] share_card_contract_issues (?w=, name, lazy, localhost)
+  [~] Correct teams/prediction/branding pixels       → visual/OCR later
+
+12. ADS / ANALYTICS
+  [x] ads_analytics_issues (blocking gtag, dup config, unused font preconnect)
+
+13. API CONTRACT
+  [x] ApiContractAuditor (healthz, search, performance-data, robots, sitemap)
+
+14. DATA INTEGRITY
+  [x] DataIntegrityAuditor (share↔cards, chart sport consistency)
+  [~] Full API→card→chart→results numeric equality  → expand
+
+15. CSV
+  [x] CsvAuditor exists
+  [~] Header/row/units parity with results           → expand
+
+16. RESPONSIVE
+  [x] ResponsiveAuditor + AUDIT_PLAYWRIGHT_RESPONSIVE=1
+  [ ] Always-on in quick (too slow) — full mode only
+
+17. CONSOLE / RUNTIME
+  [x] RuntimeAuditor leakage + optional Playwright console
+
+════════════════════════════════════════════════════════════════════════════
+SPORT COVERAGE
+════════════════════════════════════════════════════════════════════════════
+  MLB NHL NBA NCAAB NCAAW NFL NCAAF WNBA CFL
+  Tennis UFC Golf Soccer
+
+  WNBA picks (ContentAuditor + ChromeAuditor — FAIL if missing):
+  - Face chip label Consensus Historical Record
+  - Value format ONLY: `Unanimous: W-L` or `All but <Model>: W-L` or `Split: W-L-P`
+  - FAIL if value has 3/4, Last 7 Days, Strong consensus, or blanket wrong pattern
+  - No duplicate H2H Last 10 on face
+  WNBA results: season not stuck on July ~67 band; Model Performance /
+  Season must say records are graded decisions (not every completed final).
+
+  MLB / NFL / NCAAF / CFL picks Consensus face (compact_consensus_hist_face_issues):
+  - FAIL if face still has `Last 7 Days`, `/ no consensus`, or pct clutter
+  - Expect compact `Consensus Record: 3/6 Split (0-0)` (pattern + W-L only)
+
+  CFL (when unlocked): H2H Last 10 from real meetings; no empty Books
+  spread/total chips; consensus/chart not a thin stub.
+
+  Tennis (shared 1vs1 with UFC — FAIL if missing):
+  - Picks not empty when ESPN ATP/WTA has a slate (tennis_picks_slate_issues)
+  - Results Cards|Chart are href toggles (pl-view-btn), not setPicksView
+  - Cards = UFC/1vs1 template: date-nav, date-sections, Best Performing /
+    LN·L7·Season, Consensus table, then result cards (shared card width)
+  - Chart stays analytics (no date-section match boards)
+
+  UFC picks: Consensus Historical Record face chip
+  (`Unanimous: W-L` / `All but …: W-L`) on each card.
+
+  Golf picks: golf-board.css served; Active chips are golf-chip pills;
+  model cells stacked (rank over %); tournament select styled.
+
+════════════════════════════════════════════════════════════════════════════
+KNOWN REGRESSIONS
+════════════════════════════════════════════════════════════════════════════
+  All chart_shape *_issues() helpers remain under content/chrome/ship.
+  Generic auditors catch the *next* bug; helpers catch known ones.
+
+════════════════════════════════════════════════════════════════════════════
+UNLOCK PATTERN (perf/a11y)
+════════════════════════════════════════════════════════════════════════════
+  1. UNLOCK <SPORT>
+  2. Fix logos/CSS/a11y for that sport
+  3. Add to LOGO_CARD_SIZE_BY_SPORT if using /100/
+  4. Add to PSI_ENFORCE_SPORTS
+  5. Checker FAILs until green

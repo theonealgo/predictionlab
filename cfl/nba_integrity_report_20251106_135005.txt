@@ -1,0 +1,3172 @@
+========================================================================================================================
+NBA PREDICTION INTEGRITY REPORT
+Generated: 2025-11-06 13:50:05
+========================================================================================================================
+
+Date: 2025-12-06
+Matchup: Houston Rockets @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.3% → AWAY | ✓ CORRECT
+  XGBoost     :  42.3% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-06
+Matchup: Los Angeles Clippers @ Minnesota Timberwolves
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.3% → AWAY | ✓ CORRECT
+  XGBoost     :  39.3% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-06
+Matchup: Sacramento Kings @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.4% → AWAY | ✓ CORRECT
+  XGBoost     :  42.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-06
+Matchup: Milwaukee Bucks @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.3% → HOME | ✗ INCORRECT
+  XGBoost     :  50.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-06
+Matchup: Golden State Warriors @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.5% → AWAY | ✓ CORRECT
+  XGBoost     :  44.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-06
+Matchup: Atlanta Hawks @ Washington Wizards
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.2% → AWAY | ✓ CORRECT
+  XGBoost     :  44.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-06
+Matchup: New Orleans Pelicans @ Brooklyn Nets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.8% → HOME | ✗ INCORRECT
+  XGBoost     :  50.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Dallas Mavericks @ Oklahoma City Thunder
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  59.6% → HOME | ✗ INCORRECT
+  XGBoost     :  59.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Philadelphia 76ers @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.2% → HOME | ✗ INCORRECT
+  XGBoost     :  52.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Los Angeles Clippers @ Memphis Grizzlies
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.2% → AWAY | ✓ CORRECT
+  XGBoost     :  45.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Indiana Pacers @ Chicago Bulls
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  62.3% → HOME | ✗ INCORRECT
+  XGBoost     :  62.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Charlotte Hornets @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.1% → AWAY | ✓ CORRECT
+  XGBoost     :  47.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Utah Jazz @ New York Knicks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  56.0% → HOME | ✗ INCORRECT
+  XGBoost     :  56.0% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Portland Trail Blazers @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.6% → AWAY | ✓ CORRECT
+  XGBoost     :  39.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: San Antonio Spurs @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.3% → AWAY | ✓ CORRECT
+  XGBoost     :  43.3% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Denver Nuggets @ Atlanta Hawks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.9% → AWAY | ✓ CORRECT
+  XGBoost     :  45.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Miami Heat @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.5% → AWAY | ✓ CORRECT
+  XGBoost     :  49.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-05
+Matchup: Los Angeles Lakers @ Boston Celtics
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.0% → AWAY | ✓ CORRECT
+  XGBoost     :  42.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-04
+Matchup: Los Angeles Lakers @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.4% → AWAY | ✓ CORRECT
+  XGBoost     :  42.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-04
+Matchup: Utah Jazz @ Brooklyn Nets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.4% → AWAY | ✓ CORRECT
+  XGBoost     :  49.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-04
+Matchup: Boston Celtics @ Washington Wizards
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.7% → AWAY | ✓ CORRECT
+  XGBoost     :  49.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-04
+Matchup: Golden State Warriors @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.8% → AWAY | ✓ CORRECT
+  XGBoost     :  43.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Miami Heat @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.0% → AWAY | ✓ CORRECT
+  XGBoost     :  48.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Detroit Pistons @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.7% → AWAY | ✓ CORRECT
+  XGBoost     :  49.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Sacramento Kings @ Houston Rockets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.1% → AWAY | ✓ CORRECT
+  XGBoost     :  48.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Brooklyn Nets @ Chicago Bulls
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  61.7% → HOME | ✗ INCORRECT
+  XGBoost     :  61.7% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Charlotte Hornets @ New York Knicks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.8% → AWAY | ✓ CORRECT
+  XGBoost     :  49.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Los Angeles Clippers @ Atlanta Hawks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.2% → AWAY | ✓ CORRECT
+  XGBoost     :  45.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: San Antonio Spurs @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.4% → AWAY | ✓ CORRECT
+  XGBoost     :  42.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Denver Nuggets @ Indiana Pacers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  36.5% → AWAY | ✓ CORRECT
+  XGBoost     :  36.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-03
+Matchup: Portland Trail Blazers @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  37.9% → AWAY | ✓ CORRECT
+  XGBoost     :  37.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-02
+Matchup: Oklahoma City Thunder @ Golden State Warriors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.3% → AWAY | ✓ CORRECT
+  XGBoost     :  48.3% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-02
+Matchup: Memphis Grizzlies @ San Antonio Spurs
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.3% → HOME | ✗ INCORRECT
+  XGBoost     :  50.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-02
+Matchup: Minnesota Timberwolves @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.1% → AWAY | ✓ CORRECT
+  XGBoost     :  46.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-02
+Matchup: New York Knicks @ Boston Celtics
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.9% → AWAY | ✓ CORRECT
+  XGBoost     :  46.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-02
+Matchup: Portland Trail Blazers @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.0% → AWAY | ✓ CORRECT
+  XGBoost     :  39.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-02
+Matchup: Washington Wizards @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.8% → AWAY | ✓ CORRECT
+  XGBoost     :  48.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Houston Rockets @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.6% → AWAY | ✓ CORRECT
+  XGBoost     :  42.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Dallas Mavericks @ Denver Nuggets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  62.6% → HOME | ✗ INCORRECT
+  XGBoost     :  62.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Chicago Bulls @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  40.0% → AWAY | ✓ CORRECT
+  XGBoost     :  40.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Los Angeles Clippers @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  38.6% → AWAY | ✓ CORRECT
+  XGBoost     :  38.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Charlotte Hornets @ Brooklyn Nets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.2% → AWAY | ✓ CORRECT
+  XGBoost     :  43.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Milwaukee Bucks @ Washington Wizards
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.0% → AWAY | ✓ CORRECT
+  XGBoost     :  49.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Cleveland Cavaliers @ Indiana Pacers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.6% → AWAY | ✓ CORRECT
+  XGBoost     :  46.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-12-01
+Matchup: Atlanta Hawks @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.5% → AWAY | ✓ CORRECT
+  XGBoost     :  45.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: New Orleans Pelicans @ Los Angeles Lakers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  62.1% → HOME | ✗ INCORRECT
+  XGBoost     :  62.1% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: Memphis Grizzlies @ Sacramento Kings
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.9% → HOME | ✗ INCORRECT
+  XGBoost     :  50.9% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: San Antonio Spurs @ Minnesota Timberwolves
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.7% → AWAY | ✓ CORRECT
+  XGBoost     :  43.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: Oklahoma City Thunder @ Portland Trail Blazers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  55.1% → HOME | ✗ INCORRECT
+  XGBoost     :  55.1% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: Atlanta Hawks @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.0% → AWAY | ✓ CORRECT
+  XGBoost     :  43.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: Toronto Raptors @ New York Knicks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.7% → HOME | ✗ INCORRECT
+  XGBoost     :  52.7% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: Boston Celtics @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.2% → AWAY | ✓ CORRECT
+  XGBoost     :  49.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-30
+Matchup: Houston Rockets @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.6% → AWAY | ✓ CORRECT
+  XGBoost     :  42.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-29
+Matchup: Dallas Mavericks @ Los Angeles Clippers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  63.3% → HOME | ✗ INCORRECT
+  XGBoost     :  63.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-29
+Matchup: New Orleans Pelicans @ Golden State Warriors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  59.0% → HOME | ✗ INCORRECT
+  XGBoost     :  59.0% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-29
+Matchup: Brooklyn Nets @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.2% → HOME | ✗ INCORRECT
+  XGBoost     :  54.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-29
+Matchup: Detroit Pistons @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.8% → AWAY | ✓ CORRECT
+  XGBoost     :  47.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-29
+Matchup: Chicago Bulls @ Indiana Pacers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  37.7% → AWAY | ✓ CORRECT
+  XGBoost     :  37.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-29
+Matchup: Toronto Raptors @ Charlotte Hornets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.9% → HOME | ✗ INCORRECT
+  XGBoost     :  52.9% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-29
+Matchup: Boston Celtics @ Minnesota Timberwolves
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.6% → AWAY | ✓ CORRECT
+  XGBoost     :  49.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Memphis Grizzlies @ Los Angeles Clippers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.8% → HOME | ✗ INCORRECT
+  XGBoost     :  54.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Dallas Mavericks @ Los Angeles Lakers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  61.0% → HOME | ✗ INCORRECT
+  XGBoost     :  61.0% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Sacramento Kings @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  40.7% → AWAY | ✓ CORRECT
+  XGBoost     :  40.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: San Antonio Spurs @ Denver Nuggets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.7% → HOME | ✗ INCORRECT
+  XGBoost     :  53.7% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Milwaukee Bucks @ New York Knicks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.4% → HOME | ✗ INCORRECT
+  XGBoost     :  52.4% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Washington Wizards @ Indiana Pacers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.2% → AWAY | ✓ CORRECT
+  XGBoost     :  46.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Orlando Magic @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.8% → HOME | ✗ INCORRECT
+  XGBoost     :  52.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Chicago Bulls @ Charlotte Hornets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.9% → AWAY | ✓ CORRECT
+  XGBoost     :  44.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Philadelphia 76ers @ Brooklyn Nets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.0% → AWAY | ✓ CORRECT
+  XGBoost     :  48.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-28
+Matchup: Cleveland Cavaliers @ Atlanta Hawks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  56.3% → HOME | ✗ INCORRECT
+  XGBoost     :  56.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-26
+Matchup: San Antonio Spurs @ Portland Trail Blazers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  55.6% → HOME | ✗ INCORRECT
+  XGBoost     :  55.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-26
+Matchup: Houston Rockets @ Golden State Warriors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.2% → HOME | ✗ INCORRECT
+  XGBoost     :  50.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-26
+Matchup: Memphis Grizzlies @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  40.2% → AWAY | ✓ CORRECT
+  XGBoost     :  40.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-26
+Matchup: Minnesota Timberwolves @ Oklahoma City Thunder
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  56.8% → HOME | ✗ INCORRECT
+  XGBoost     :  56.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-26
+Matchup: Indiana Pacers @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.5% → HOME | ✗ INCORRECT
+  XGBoost     :  54.5% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-26
+Matchup: New York Knicks @ Charlotte Hornets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.2% → HOME | ✗ INCORRECT
+  XGBoost     :  50.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-26
+Matchup: Detroit Pistons @ Boston Celtics
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.9% → AWAY | ✓ CORRECT
+  XGBoost     :  48.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-25
+Matchup: Los Angeles Clippers @ Los Angeles Lakers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.6% → AWAY | ✓ CORRECT
+  XGBoost     :  47.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-25
+Matchup: Orlando Magic @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.2% → HOME | ✗ INCORRECT
+  XGBoost     :  50.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-25
+Matchup: Atlanta Hawks @ Washington Wizards
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.2% → AWAY | ✓ CORRECT
+  XGBoost     :  44.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Minnesota Timberwolves @ Sacramento Kings
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  56.8% → HOME | ✗ INCORRECT
+  XGBoost     :  56.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Utah Jazz @ Golden State Warriors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  57.6% → HOME | ✗ INCORRECT
+  XGBoost     :  57.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Chicago Bulls @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  37.5% → AWAY | ✓ CORRECT
+  XGBoost     :  37.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Portland Trail Blazers @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.3% → AWAY | ✓ CORRECT
+  XGBoost     :  39.3% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Denver Nuggets @ Memphis Grizzlies
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.0% → AWAY | ✓ CORRECT
+  XGBoost     :  46.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Dallas Mavericks @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.0% → HOME | ✗ INCORRECT
+  XGBoost     :  52.0% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: New York Knicks @ Brooklyn Nets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.4% → AWAY | ✓ CORRECT
+  XGBoost     :  43.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Cleveland Cavaliers @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.1% → HOME | ✗ INCORRECT
+  XGBoost     :  51.1% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-24
+Matchup: Detroit Pistons @ Indiana Pacers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.8% → AWAY | ✓ CORRECT
+  XGBoost     :  44.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-23
+Matchup: Los Angeles Lakers @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.2% → AWAY | ✓ CORRECT
+  XGBoost     :  39.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-23
+Matchup: Portland Trail Blazers @ Oklahoma City Thunder
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.9% → AWAY | ✓ CORRECT
+  XGBoost     :  44.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-23
+Matchup: Brooklyn Nets @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.9% → HOME | ✗ INCORRECT
+  XGBoost     :  53.9% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-23
+Matchup: Los Angeles Clippers @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.0% → AWAY | ✓ CORRECT
+  XGBoost     :  39.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-23
+Matchup: Orlando Magic @ Boston Celtics
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.7% → HOME | ✗ INCORRECT
+  XGBoost     :  51.7% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-23
+Matchup: Charlotte Hornets @ Atlanta Hawks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.3% → HOME | ✗ INCORRECT
+  XGBoost     :  52.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-23
+Matchup: Miami Heat @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.7% → AWAY | ✓ CORRECT
+  XGBoost     :  49.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-22
+Matchup: Memphis Grizzlies @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  41.3% → AWAY | ✓ CORRECT
+  XGBoost     :  41.3% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-22
+Matchup: Detroit Pistons @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.7% → AWAY | ✓ CORRECT
+  XGBoost     :  49.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-22
+Matchup: Washington Wizards @ Chicago Bulls
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  58.6% → HOME | ✗ INCORRECT
+  XGBoost     :  58.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-22
+Matchup: Atlanta Hawks @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  40.2% → AWAY | ✓ CORRECT
+  XGBoost     :  40.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-22
+Matchup: New York Knicks @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.2% → AWAY | ✓ CORRECT
+  XGBoost     :  45.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-22
+Matchup: Los Angeles Clippers @ Charlotte Hornets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.9% → AWAY | ✓ CORRECT
+  XGBoost     :  42.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: Portland Trail Blazers @ Golden State Warriors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.2% → AWAY | ✓ CORRECT
+  XGBoost     :  43.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: Oklahoma City Thunder @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  40.7% → AWAY | ✓ CORRECT
+  XGBoost     :  40.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: Denver Nuggets @ Houston Rockets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.9% → AWAY | ✓ CORRECT
+  XGBoost     :  44.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: New Orleans Pelicans @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.1% → HOME | ✗ INCORRECT
+  XGBoost     :  51.1% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: Miami Heat @ Chicago Bulls
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  59.5% → HOME | ✗ INCORRECT
+  XGBoost     :  59.5% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: Washington Wizards @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.7% → HOME | ✗ INCORRECT
+  XGBoost     :  50.7% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: Brooklyn Nets @ Boston Celtics
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.5% → HOME | ✗ INCORRECT
+  XGBoost     :  53.5% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-21
+Matchup: Indiana Pacers @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.4% → HOME | ✗ INCORRECT
+  XGBoost     :  53.4% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-20
+Matchup: Atlanta Hawks @ San Antonio Spurs
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.4% → HOME | ✗ INCORRECT
+  XGBoost     :  50.4% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-20
+Matchup: Philadelphia 76ers @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.2% → HOME | ✗ INCORRECT
+  XGBoost     :  52.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-20
+Matchup: Sacramento Kings @ Memphis Grizzlies
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.1% → AWAY | ✓ CORRECT
+  XGBoost     :  49.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-20
+Matchup: Los Angeles Clippers @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  38.1% → AWAY | ✓ CORRECT
+  XGBoost     :  38.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Chicago Bulls @ Portland Trail Blazers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.2% → HOME | ✗ INCORRECT
+  XGBoost     :  53.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: New York Knicks @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.7% → AWAY | ✓ CORRECT
+  XGBoost     :  43.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Sacramento Kings @ Oklahoma City Thunder
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.0% → HOME | ✗ INCORRECT
+  XGBoost     :  50.0% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Denver Nuggets @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  36.4% → AWAY | ✓ CORRECT
+  XGBoost     :  36.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Washington Wizards @ Minnesota Timberwolves
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.9% → AWAY | ✓ CORRECT
+  XGBoost     :  49.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Toronto Raptors @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.1% → AWAY | ✓ CORRECT
+  XGBoost     :  48.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Golden State Warriors @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.1% → AWAY | ✓ CORRECT
+  XGBoost     :  44.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Charlotte Hornets @ Indiana Pacers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.6% → AWAY | ✓ CORRECT
+  XGBoost     :  42.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-19
+Matchup: Houston Rockets @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.7% → AWAY | ✓ CORRECT
+  XGBoost     :  44.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-18
+Matchup: Utah Jazz @ Los Angeles Lakers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  60.8% → HOME | ✗ INCORRECT
+  XGBoost     :  60.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-18
+Matchup: Memphis Grizzlies @ San Antonio Spurs
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.3% → HOME | ✗ INCORRECT
+  XGBoost     :  50.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-18
+Matchup: Detroit Pistons @ Atlanta Hawks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.5% → HOME | ✗ INCORRECT
+  XGBoost     :  54.5% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-18
+Matchup: Boston Celtics @ Brooklyn Nets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.5% → AWAY | ✓ CORRECT
+  XGBoost     :  46.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-18
+Matchup: Golden State Warriors @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.6% → AWAY | ✓ CORRECT
+  XGBoost     :  43.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: Chicago Bulls @ Denver Nuggets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.2% → HOME | ✗ INCORRECT
+  XGBoost     :  51.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: Oklahoma City Thunder @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.4% → AWAY | ✓ CORRECT
+  XGBoost     :  39.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: Dallas Mavericks @ Minnesota Timberwolves
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.8% → HOME | ✗ INCORRECT
+  XGBoost     :  52.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: Charlotte Hornets @ Toronto Raptors
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.1% → AWAY | ✓ CORRECT
+  XGBoost     :  47.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: New York Knicks @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.7% → AWAY | ✓ CORRECT
+  XGBoost     :  45.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: Los Angeles Clippers @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  38.3% → AWAY | ✓ CORRECT
+  XGBoost     :  38.3% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: Indiana Pacers @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  55.2% → HOME | ✗ INCORRECT
+  XGBoost     :  55.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-17
+Matchup: Milwaukee Bucks @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.5% → AWAY | ✓ CORRECT
+  XGBoost     :  48.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-16
+Matchup: Chicago Bulls @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  38.8% → AWAY | ✓ CORRECT
+  XGBoost     :  38.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-16
+Matchup: Portland Trail Blazers @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  35.6% → AWAY | ✓ CORRECT
+  XGBoost     :  35.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-16
+Matchup: Golden State Warriors @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  41.0% → AWAY | ✓ CORRECT
+  XGBoost     :  41.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-16
+Matchup: Orlando Magic @ Houston Rockets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  56.2% → HOME | ✗ INCORRECT
+  XGBoost     :  56.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-16
+Matchup: Brooklyn Nets @ Washington Wizards
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.2% → HOME | ✗ INCORRECT
+  XGBoost     :  53.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-16
+Matchup: Sacramento Kings @ San Antonio Spurs
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.5% → AWAY | ✓ CORRECT
+  XGBoost     :  49.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-16
+Matchup: Los Angeles Clippers @ Boston Celtics
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  39.7% → AWAY | ✓ CORRECT
+  XGBoost     :  39.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-15
+Matchup: Denver Nuggets @ Minnesota Timberwolves
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  40.1% → AWAY | ✓ CORRECT
+  XGBoost     :  40.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-15
+Matchup: Los Angeles Lakers @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.8% → AWAY | ✓ CORRECT
+  XGBoost     :  42.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-15
+Matchup: Toronto Raptors @ Indiana Pacers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.5% → AWAY | ✓ CORRECT
+  XGBoost     :  45.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-15
+Matchup: Oklahoma City Thunder @ Charlotte Hornets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.8% → AWAY | ✓ CORRECT
+  XGBoost     :  46.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-15
+Matchup: Memphis Grizzlies @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.7% → AWAY | ✓ CORRECT
+  XGBoost     :  43.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Golden State Warriors @ San Antonio Spurs
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.2% → HOME | ✗ INCORRECT
+  XGBoost     :  51.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Los Angeles Clippers @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  36.7% → AWAY | ✓ CORRECT
+  XGBoost     :  36.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Los Angeles Lakers @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  37.9% → AWAY | ✓ CORRECT
+  XGBoost     :  37.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Sacramento Kings @ Minnesota Timberwolves
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.2% → AWAY | ✓ CORRECT
+  XGBoost     :  43.2% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Charlotte Hornets @ Milwaukee Bucks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.4% → AWAY | ✓ CORRECT
+  XGBoost     :  47.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Portland Trail Blazers @ Houston Rockets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  43.0% → AWAY | ✓ CORRECT
+  XGBoost     :  43.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Philadelphia 76ers @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.6% → HOME | ✗ INCORRECT
+  XGBoost     :  52.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Brooklyn Nets @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.8% → HOME | ✗ INCORRECT
+  XGBoost     :  51.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-14
+Matchup: Miami Heat @ New York Knicks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.3% → HOME | ✗ INCORRECT
+  XGBoost     :  54.3% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-13
+Matchup: Atlanta Hawks @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  41.6% → AWAY | ✓ CORRECT
+  XGBoost     :  41.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-13
+Matchup: Toronto Raptors @ Cleveland Cavaliers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.9% → AWAY | ✓ CORRECT
+  XGBoost     :  48.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Denver Nuggets @ Los Angeles Clippers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.8% → HOME | ✗ INCORRECT
+  XGBoost     :  50.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Atlanta Hawks @ Sacramento Kings
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.9% → HOME | ✗ INCORRECT
+  XGBoost     :  50.9% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Los Angeles Lakers @ Oklahoma City Thunder
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.4% → AWAY | ✓ CORRECT
+  XGBoost     :  48.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Golden State Warriors @ San Antonio Spurs
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.2% → HOME | ✗ INCORRECT
+  XGBoost     :  51.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Portland Trail Blazers @ New Orleans Pelicans
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  34.6% → AWAY | ✓ CORRECT
+  XGBoost     :  34.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Washington Wizards @ Houston Rockets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.8% → HOME | ✗ INCORRECT
+  XGBoost     :  54.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Cleveland Cavaliers @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.6% → AWAY | ✓ CORRECT
+  XGBoost     :  49.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Memphis Grizzlies @ Boston Celtics
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  44.4% → AWAY | ✓ CORRECT
+  XGBoost     :  44.4% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Orlando Magic @ New York Knicks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.8% → HOME | ✗ INCORRECT
+  XGBoost     :  54.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Chicago Bulls @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.7% → AWAY | ✓ CORRECT
+  XGBoost     :  42.7% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-12
+Matchup: Milwaukee Bucks @ Charlotte Hornets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.6% → HOME | ✗ INCORRECT
+  XGBoost     :  52.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-11
+Matchup: Denver Nuggets @ Sacramento Kings
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.8% → AWAY | ✓ CORRECT
+  XGBoost     :  46.8% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-11
+Matchup: Indiana Pacers @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.2% → HOME | ✗ INCORRECT
+  XGBoost     :  51.2% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-11
+Matchup: Golden State Warriors @ Oklahoma City Thunder
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.7% → HOME | ✗ INCORRECT
+  XGBoost     :  51.7% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-11
+Matchup: Boston Celtics @ Philadelphia 76ers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  48.5% → AWAY | ✓ CORRECT
+  XGBoost     :  48.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-11
+Matchup: Memphis Grizzlies @ New York Knicks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.5% → AWAY | ✓ CORRECT
+  XGBoost     :  47.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-11
+Matchup: Toronto Raptors @ Brooklyn Nets
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.1% → AWAY | ✓ CORRECT
+  XGBoost     :  46.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-10
+Matchup: Atlanta Hawks @ Los Angeles Clippers
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.8% → HOME | ✗ INCORRECT
+  XGBoost     :  54.8% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-10
+Matchup: Minnesota Timberwolves @ Utah Jazz
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.5% → AWAY | ✓ CORRECT
+  XGBoost     :  47.5% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-10
+Matchup: Milwaukee Bucks @ Dallas Mavericks
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.1% → AWAY | ✓ CORRECT
+  XGBoost     :  46.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-10
+Matchup: San Antonio Spurs @ Chicago Bulls
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.5% → HOME | ✗ INCORRECT
+  XGBoost     :  52.5% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-10
+Matchup: Cleveland Cavaliers @ Miami Heat
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.6% → AWAY | ✓ CORRECT
+  XGBoost     :  49.6% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-10
+Matchup: Portland Trail Blazers @ Orlando Magic
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  37.0% → AWAY | ✓ CORRECT
+  XGBoost     :  37.0% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-10
+Matchup: Washington Wizards @ Detroit Pistons
+Final Score: 0-0 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  51.4% → HOME | ✗ INCORRECT
+  XGBoost     :  51.4% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Golden State Warriors @ Sacramento Kings
+Final Score: 116-121 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.867848
+
+  Elo         :  33.5% → AWAY | ✗ INCORRECT
+  XGBoost     :  36.2% → AWAY | ✗ INCORRECT
+  CatBoost    :  36.7% → AWAY | ✗ INCORRECT
+  Ensemble    :  35.5% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Oklahoma City Thunder @ Portland Trail Blazers
+Final Score: 119-121 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.867746
+
+  Elo         :  15.7% → AWAY | ✗ INCORRECT
+  XGBoost     :  12.8% → AWAY | ✗ INCORRECT
+  CatBoost    :  24.5% → AWAY | ✗ INCORRECT
+  Ensemble    :  16.3% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: San Antonio Spurs @ Los Angeles Lakers
+Final Score: 116-118 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.867657
+
+  Elo         :  75.2% → HOME | ✓ CORRECT
+  XGBoost     :  80.6% → HOME | ✓ CORRECT
+  CatBoost    :  84.3% → HOME | ✓ CORRECT
+  Ensemble    :  77.9% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Miami Heat @ Denver Nuggets
+Final Score: 112-122 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.867560
+
+  Elo         :  72.3% → HOME | ✓ CORRECT
+  XGBoost     :  46.5% → AWAY | ✗ INCORRECT
+  CatBoost    :  70.9% → HOME | ✓ CORRECT
+  Ensemble    :  63.1% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: New Orleans Pelicans @ Dallas Mavericks
+Final Score: 101-99 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.867449
+
+  Elo         :  65.6% → HOME | ✗ INCORRECT
+  XGBoost     :  68.3% → HOME | ✗ INCORRECT
+  CatBoost    :  63.7% → HOME | ✗ INCORRECT
+  Ensemble    :  67.3% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Houston Rockets @ Memphis Grizzlies
+Final Score: 124-109 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.867352
+
+  Elo         :  37.5% → AWAY | ✓ CORRECT
+  XGBoost     :  45.3% → AWAY | ✓ CORRECT
+  CatBoost    :  47.3% → AWAY | ✓ CORRECT
+  Ensemble    :  43.8% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Minnesota Timberwolves @ New York Knicks
+Final Score: 114-137 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.867257
+
+  Elo         :  36.3% → AWAY | ✗ INCORRECT
+  XGBoost     :  42.0% → AWAY | ✗ INCORRECT
+  CatBoost    :  33.7% → AWAY | ✗ INCORRECT
+  Ensemble    :  37.5% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Washington Wizards @ Boston Celtics
+Final Score: 107-136 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.867163
+
+  Elo         :  93.9% → HOME | ✓ CORRECT
+  XGBoost     :  84.4% → HOME | ✓ CORRECT
+  CatBoost    :  86.7% → HOME | ✓ CORRECT
+  Ensemble    :  90.1% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Brooklyn Nets @ Indiana Pacers
+Final Score: 112-103 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.867062
+
+  Elo         :  88.2% → HOME | ✗ INCORRECT
+  XGBoost     :  92.8% → HOME | ✗ INCORRECT
+  CatBoost    :  91.6% → HOME | ✗ INCORRECT
+  Ensemble    :  89.6% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Utah Jazz @ Detroit Pistons
+Final Score: 103-114 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.866980
+
+  Elo         :  84.5% → HOME | ✓ CORRECT
+  XGBoost     :  89.5% → HOME | ✓ CORRECT
+  CatBoost    :  89.1% → HOME | ✓ CORRECT
+  Ensemble    :  87.3% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-05
+Matchup: Philadelphia 76ers @ Cleveland Cavaliers
+Final Score: 121-132 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.866888
+
+  Elo         :  93.0% → HOME | ✓ CORRECT
+  XGBoost     :  91.5% → HOME | ✓ CORRECT
+  CatBoost    :  88.7% → HOME | ✓ CORRECT
+  Ensemble    :  90.7% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-04
+Matchup: PHO @ Golden State Warriors
+Final Score: 115-127 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  50.9% → HOME | ✓ CORRECT
+  XGBoost     :  50.9% → HOME | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-04
+Matchup: Oklahoma City Thunder @ Los Angeles Clippers
+Final Score: 126-107 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.9% → HOME | ✗ INCORRECT
+  XGBoost     :  53.9% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-04
+Matchup: Charlotte Hornets @ New Orleans Pelicans
+Final Score: 112-116 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  42.4% → AWAY | ✗ INCORRECT
+  XGBoost     :  42.4% → AWAY | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-04
+Matchup: Philadelphia 76ers @ Chicago Bulls
+Final Score: 111-113 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  59.8% → HOME | ✓ CORRECT
+  XGBoost     :  59.8% → HOME | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-04
+Matchup: Orlando Magic @ Atlanta Hawks
+Final Score: 112-127 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  57.2% → HOME | ✓ CORRECT
+  XGBoost     :  57.2% → HOME | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-04
+Matchup: Milwaukee Bucks @ Toronto Raptors
+Final Score: 100-128 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  49.6% → AWAY | ✗ INCORRECT
+  XGBoost     :  49.6% → AWAY | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Miami Heat @ Los Angeles Clippers
+Final Score: 120-119 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  61.4% → HOME | ✗ INCORRECT
+  XGBoost     :  61.4% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Los Angeles Lakers @ Portland Trail Blazers
+Final Score: 123-115 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.6% → HOME | ✗ INCORRECT
+  XGBoost     :  53.6% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Sacramento Kings @ Denver Nuggets
+Final Score: 124-130 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.2% → HOME | ✓ CORRECT
+  XGBoost     :  53.2% → HOME | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Detroit Pistons @ Memphis Grizzlies
+Final Score: 114-106 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  54.5% → HOME | ✗ INCORRECT
+  XGBoost     :  54.5% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Dallas Mavericks @ Houston Rockets
+Final Score: 102-110 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  57.7% → HOME | ✓ CORRECT
+  XGBoost     :  57.7% → HOME | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Washington Wizards @ New York Knicks
+Final Score: 102-119 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  53.4% → HOME | ✓ CORRECT
+  XGBoost     :  53.4% → HOME | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Utah Jazz @ Boston Celtics
+Final Score: 105-103 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  52.9% → HOME | ✗ INCORRECT
+  XGBoost     :  52.9% → HOME | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Milwaukee Bucks @ Indiana Pacers
+Final Score: 117-115 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  45.1% → AWAY | ✓ CORRECT
+  XGBoost     :  45.1% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-03
+Matchup: Minnesota Timberwolves @ Brooklyn Nets
+Final Score: 125-109 (Winner: AWAY)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  46.9% → AWAY | ✓ CORRECT
+  XGBoost     :  46.9% → AWAY | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: San Antonio Spurs @ PHO
+Final Score: 103-113 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  47.9% → AWAY | ✗ INCORRECT
+  XGBoost     :  47.9% → AWAY | ✗ INCORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: Miami Heat @ Los Angeles Lakers
+Final Score: 120-130 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.865669
+
+  Elo         :  72.8% → HOME | ✓ CORRECT
+  XGBoost     :  68.6% → HOME | ✓ CORRECT
+  CatBoost    :  75.7% → HOME | ✓ CORRECT
+  Ensemble    :  69.1% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: Chicago Bulls @ New York Knicks
+Final Score: 116-128 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.865565
+
+  Elo         :  45.0% → AWAY | ✗ INCORRECT
+  XGBoost     :  65.2% → HOME | ✓ CORRECT
+  CatBoost    :  67.9% → HOME | ✓ CORRECT
+  Ensemble    :  60.0% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: Memphis Grizzlies @ Toronto Raptors
+Final Score: 104-117 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.865507
+
+  Elo         :  32.5% → AWAY | ✗ INCORRECT
+  XGBoost     :  19.9% → AWAY | ✗ INCORRECT
+  CatBoost    :  24.5% → AWAY | ✗ INCORRECT
+  Ensemble    :  25.0% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: Atlanta Hawks @ Cleveland Cavaliers
+Final Score: 109-117 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.865431
+
+  Elo         :  74.5% → HOME | ✓ CORRECT
+  XGBoost     :  77.5% → HOME | ✓ CORRECT
+  CatBoost    :  81.0% → HOME | ✓ CORRECT
+  Ensemble    :  77.7% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: Utah Jazz @ Charlotte Hornets
+Final Score: 103-126 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.865350
+
+  Elo         :  47.7% → AWAY | ✗ INCORRECT
+  XGBoost     :  67.2% → HOME | ✓ CORRECT
+  CatBoost    :  55.1% → HOME | ✓ CORRECT
+  Ensemble    :  53.9% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: Philadelphia 76ers @ Brooklyn Nets
+Final Score: 129-105 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.865278
+
+  Elo         :  62.4% → HOME | ✗ INCORRECT
+  XGBoost     :  42.4% → AWAY | ✓ CORRECT
+  CatBoost    :  51.2% → HOME | ✗ INCORRECT
+  Ensemble    :  51.8% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-02
+Matchup: New Orleans Pelicans @ Oklahoma City Thunder
+Final Score: 106-137 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.865202
+
+  Elo         :  94.9% → HOME | ✓ CORRECT
+  XGBoost     :  92.0% → HOME | ✓ CORRECT
+  CatBoost    :  89.8% → HOME | ✓ CORRECT
+  Ensemble    :  93.0% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-01
+Matchup: Dallas Mavericks @ Detroit Pistons
+Final Score: 110-122 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.865114
+
+  Elo         :  66.0% → HOME | ✓ CORRECT
+  XGBoost     :  77.0% → HOME | ✓ CORRECT
+  CatBoost    :  81.9% → HOME | ✓ CORRECT
+  Ensemble    :  74.2% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-01
+Matchup: Houston Rockets @ Boston Celtics
+Final Score: 128-101 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.865027
+
+  Elo         :  65.9% → HOME | ✗ INCORRECT
+  XGBoost     :  63.2% → HOME | ✗ INCORRECT
+  CatBoost    :  74.0% → HOME | ✗ INCORRECT
+  Ensemble    :  67.5% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-01
+Matchup: Orlando Magic @ Washington Wizards
+Final Score: 125-94 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.864943
+
+  Elo         :  15.5% → AWAY | ✓ CORRECT
+  XGBoost     :  13.1% → AWAY | ✓ CORRECT
+  CatBoost    :  23.2% → AWAY | ✓ CORRECT
+  Ensemble    :  16.4% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-01
+Matchup: Golden State Warriors @ Indiana Pacers
+Final Score: 109-114 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.864873
+
+  Elo         :  55.3% → HOME | ✓ CORRECT
+  XGBoost     :  66.8% → HOME | ✓ CORRECT
+  CatBoost    :  61.4% → HOME | ✓ CORRECT
+  Ensemble    :  58.6% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-01
+Matchup: Minnesota Timberwolves @ Charlotte Hornets
+Final Score: 122-105 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.864810
+
+  Elo         :   7.3% → AWAY | ✓ CORRECT
+  XGBoost     :   5.6% → AWAY | ✓ CORRECT
+  CatBoost    :   7.0% → AWAY | ✓ CORRECT
+  Ensemble    :   6.3% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-11-01
+Matchup: Sacramento Kings @ Milwaukee Bucks
+Final Score: 135-133 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.864728
+
+  Elo         :  70.2% → HOME | ✗ INCORRECT
+  XGBoost     :  68.4% → HOME | ✗ INCORRECT
+  CatBoost    :  71.7% → HOME | ✗ INCORRECT
+  Ensemble    :  68.7% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: Utah Jazz @ PHO
+Final Score: 118-145 (Winner: HOME)
+Prediction Created: 2025-11-06 18:49:58
+
+  Elo         :  56.7% → HOME | ✓ CORRECT
+  XGBoost     :  56.7% → HOME | ✓ CORRECT
+  CatBoost    : NO PREDICTION
+  Ensemble    : NO PREDICTION
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: New Orleans Pelicans @ Los Angeles Clippers
+Final Score: 124-126 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.864648
+
+  Elo         :  76.9% → HOME | ✓ CORRECT
+  XGBoost     :  92.4% → HOME | ✓ CORRECT
+  CatBoost    :  84.8% → HOME | ✓ CORRECT
+  Ensemble    :  83.8% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: Denver Nuggets @ Portland Trail Blazers
+Final Score: 107-109 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.864557
+
+  Elo         :  36.0% → AWAY | ✗ INCORRECT
+  XGBoost     :  32.3% → AWAY | ✗ INCORRECT
+  CatBoost    :  37.4% → AWAY | ✗ INCORRECT
+  Ensemble    :  35.6% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: Los Angeles Lakers @ Memphis Grizzlies
+Final Score: 117-112 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.864406
+
+  Elo         :  35.4% → AWAY | ✓ CORRECT
+  XGBoost     :  39.6% → AWAY | ✓ CORRECT
+  CatBoost    :  54.7% → HOME | ✗ INCORRECT
+  Ensemble    :  45.4% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: New York Knicks @ Chicago Bulls
+Final Score: 125-135 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.864351
+
+  Elo         :  55.0% → HOME | ✓ CORRECT
+  XGBoost     :  60.3% → HOME | ✓ CORRECT
+  CatBoost    :  54.6% → HOME | ✓ CORRECT
+  Ensemble    :  53.3% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: Toronto Raptors @ Cleveland Cavaliers
+Final Score: 112-101 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.864297
+
+  Elo         :  83.7% → HOME | ✗ INCORRECT
+  XGBoost     :  91.5% → HOME | ✗ INCORRECT
+  CatBoost    :  89.7% → HOME | ✗ INCORRECT
+  Ensemble    :  87.5% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: Boston Celtics @ Philadelphia 76ers
+Final Score: 109-108 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.864233
+
+  Elo         :   5.5% → AWAY | ✓ CORRECT
+  XGBoost     :   3.7% → AWAY | ✓ CORRECT
+  CatBoost    :   7.0% → AWAY | ✓ CORRECT
+  Ensemble    :   5.3% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-31
+Matchup: Atlanta Hawks @ Indiana Pacers
+Final Score: 128-108 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.864150
+
+  Elo         :  73.3% → HOME | ✗ INCORRECT
+  XGBoost     :  71.6% → HOME | ✗ INCORRECT
+  CatBoost    :  75.6% → HOME | ✗ INCORRECT
+  Ensemble    :  72.1% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-30
+Matchup: Miami Heat @ San Antonio Spurs
+Final Score: 101-107 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.864096
+
+  Elo         :  46.9% → AWAY | ✗ INCORRECT
+  XGBoost     :  60.8% → HOME | ✓ CORRECT
+  CatBoost    :  48.2% → AWAY | ✗ INCORRECT
+  Ensemble    :  48.4% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-30
+Matchup: Washington Wizards @ Oklahoma City Thunder
+Final Score: 108-127 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.864038
+
+  Elo         :  96.2% → HOME | ✓ CORRECT
+  XGBoost     :  78.5% → HOME | ✓ CORRECT
+  CatBoost    :  86.3% → HOME | ✓ CORRECT
+  Ensemble    :  89.5% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-30
+Matchup: Golden State Warriors @ Milwaukee Bucks
+Final Score: 110-120 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.863961
+
+  Elo         :  54.2% → HOME | ✓ CORRECT
+  XGBoost     :  72.4% → HOME | ✓ CORRECT
+  CatBoost    :  63.4% → HOME | ✓ CORRECT
+  Ensemble    :  60.1% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-30
+Matchup: Orlando Magic @ Charlotte Hornets
+Final Score: 123-107 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.863862
+
+  Elo         :  13.4% → AWAY | ✓ CORRECT
+  XGBoost     :  13.9% → AWAY | ✓ CORRECT
+  CatBoost    :  24.4% → AWAY | ✓ CORRECT
+  Ensemble    :  16.4% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Portland Trail Blazers @ Los Angeles Lakers
+Final Score: 122-108 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.861340
+
+  Elo         :  64.6% → HOME | ✗ INCORRECT
+  XGBoost     :  74.6% → HOME | ✗ INCORRECT
+  CatBoost    :  70.4% → HOME | ✗ INCORRECT
+  Ensemble    :  68.2% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Memphis Grizzlies @ Golden State Warriors
+Final Score: 118-131 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.861232
+
+  Elo         :  65.2% → HOME | ✓ CORRECT
+  XGBoost     :  53.1% → HOME | ✓ CORRECT
+  CatBoost    :  63.7% → HOME | ✓ CORRECT
+  Ensemble    :  58.8% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Denver Nuggets @ Minnesota Timberwolves
+Final Score: 127-114 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.861126
+
+  Elo         :  55.7% → HOME | ✗ INCORRECT
+  XGBoost     :  63.5% → HOME | ✗ INCORRECT
+  CatBoost    :  73.0% → HOME | ✗ INCORRECT
+  Ensemble    :  63.0% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Phoenix Suns @ Utah Jazz
+Final Score: 134-138 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.861020
+
+  Elo         :  23.8% → AWAY | ✗ INCORRECT
+  XGBoost     :  26.6% → AWAY | ✗ INCORRECT
+  CatBoost    :  25.7% → AWAY | ✗ INCORRECT
+  Ensemble    :  25.6% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Oklahoma City Thunder @ Dallas Mavericks
+Final Score: 101-94 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.860913
+
+  Elo         :   9.2% → AWAY | ✓ CORRECT
+  XGBoost     :   6.4% → AWAY | ✓ CORRECT
+  CatBoost    :   8.0% → AWAY | ✓ CORRECT
+  Ensemble    :   7.6% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Toronto Raptors @ San Antonio Spurs
+Final Score: 103-121 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.860733
+
+  Elo         :  55.6% → HOME | ✓ CORRECT
+  XGBoost     :  45.3% → AWAY | ✗ INCORRECT
+  CatBoost    :  56.8% → HOME | ✓ CORRECT
+  Ensemble    :  53.4% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Boston Celtics @ New Orleans Pelicans
+Final Score: 122-90 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.860634
+
+  Elo         :   8.2% → AWAY | ✓ CORRECT
+  XGBoost     :   3.9% → AWAY | ✓ CORRECT
+  CatBoost    :   6.9% → AWAY | ✓ CORRECT
+  Ensemble    :   6.1% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Brooklyn Nets @ Houston Rockets
+Final Score: 109-137 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.860530
+
+  Elo         :  84.3% → HOME | ✓ CORRECT
+  XGBoost     :  92.4% → HOME | ✓ CORRECT
+  CatBoost    :  90.5% → HOME | ✓ CORRECT
+  Ensemble    :  88.3% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-28
+Matchup: Atlanta Hawks @ Chicago Bulls
+Final Score: 123-128 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.860430
+
+  Elo         :  64.9% → HOME | ✓ CORRECT
+  XGBoost     :  66.2% → HOME | ✓ CORRECT
+  CatBoost    :  60.5% → HOME | ✓ CORRECT
+  Ensemble    :  62.3% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-27
+Matchup: Orlando Magic @ Philadelphia 76ers
+Final Score: 124-136 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.860328
+
+  Elo         :  14.0% → AWAY | ✗ INCORRECT
+  XGBoost     :  17.4% → AWAY | ✗ INCORRECT
+  CatBoost    :  25.3% → AWAY | ✗ INCORRECT
+  Ensemble    :  19.1% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-27
+Matchup: Cleveland Cavaliers @ Detroit Pistons
+Final Score: 116-95 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.860212
+
+  Elo         :  29.9% → AWAY | ✓ CORRECT
+  XGBoost     :  27.6% → AWAY | ✓ CORRECT
+  CatBoost    :  26.3% → AWAY | ✓ CORRECT
+  Ensemble    :  28.3% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-27
+Matchup: Los Angeles Lakers @ Sacramento Kings
+Final Score: 127-120 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.860090
+
+  Elo         :  34.0% → AWAY | ✓ CORRECT
+  XGBoost     :  39.6% → AWAY | ✓ CORRECT
+  CatBoost    :  47.7% → AWAY | ✓ CORRECT
+  Ensemble    :  41.0% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-27
+Matchup: Portland Trail Blazers @ Los Angeles Clippers
+Final Score: 107-114 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.859974
+
+  Elo         :  48.8% → AWAY | ✗ INCORRECT
+  XGBoost     :  54.5% → HOME | ✓ CORRECT
+  CatBoost    :  55.3% → HOME | ✓ CORRECT
+  Ensemble    :  52.8% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Toronto Raptors @ Dallas Mavericks
+Final Score: 129-139 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.858682
+
+  Elo         :  53.2% → HOME | ✓ CORRECT
+  XGBoost     :  38.0% → AWAY | ✗ INCORRECT
+  CatBoost    :  51.9% → HOME | ✓ CORRECT
+  Ensemble    :  49.2% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Indiana Pacers @ Minnesota Timberwolves
+Final Score: 110-114 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.858574
+
+  Elo         :  49.1% → AWAY | ✗ INCORRECT
+  XGBoost     :  84.0% → HOME | ✓ CORRECT
+  CatBoost    :  79.4% → HOME | ✓ CORRECT
+  Ensemble    :  68.6% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Charlotte Hornets @ Washington Wizards
+Final Score: 139-113 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.858472
+
+  Elo         :  54.3% → HOME | ✗ INCORRECT
+  XGBoost     :  36.3% → AWAY | ✓ CORRECT
+  CatBoost    :  44.9% → AWAY | ✓ CORRECT
+  Ensemble    :  46.9% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: New York Knicks @ Miami Heat
+Final Score: 107-115 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.858372
+
+  Elo         :  34.8% → AWAY | ✗ INCORRECT
+  XGBoost     :  50.6% → HOME | ✓ CORRECT
+  CatBoost    :  45.3% → AWAY | ✗ INCORRECT
+  Ensemble    :  42.0% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Milwaukee Bucks @ Cleveland Cavaliers
+Final Score: 113-118 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.858270
+
+  Elo         :  52.7% → HOME | ✓ CORRECT
+  XGBoost     :  83.7% → HOME | ✓ CORRECT
+  CatBoost    :  82.5% → HOME | ✓ CORRECT
+  Ensemble    :  71.5% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Boston Celtics @ Detroit Pistons
+Final Score: 124-118 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.858166
+
+  Elo         :  24.7% → AWAY | ✓ CORRECT
+  XGBoost     :  24.5% → AWAY | ✓ CORRECT
+  CatBoost    :  23.8% → AWAY | ✓ CORRECT
+  Ensemble    :  25.2% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Brooklyn Nets @ San Antonio Spurs
+Final Score: 107-118 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.858062
+
+  Elo         :  66.0% → HOME | ✓ CORRECT
+  XGBoost     :  61.6% → HOME | ✓ CORRECT
+  CatBoost    :  65.7% → HOME | ✓ CORRECT
+  Ensemble    :  65.8% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Phoenix Suns @ Denver Nuggets
+Final Score: 111-133 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.857989
+
+  Elo         :  74.1% → HOME | ✓ CORRECT
+  XGBoost     :  71.9% → HOME | ✓ CORRECT
+  CatBoost    :  82.5% → HOME | ✓ CORRECT
+  Ensemble    :  75.9% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-26
+Matchup: Indiana Pacers @ Memphis Grizzlies
+Final Score: 103-128 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.857918
+
+  Elo         :  30.1% → AWAY | ✗ INCORRECT
+  XGBoost     :  69.9% → HOME | ✓ CORRECT
+  CatBoost    :  61.1% → HOME | ✓ CORRECT
+  Ensemble    :  52.3% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Charlotte Hornets @ Philadelphia 76ers
+Final Score: 121-125 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.857768
+
+  Elo         :  51.3% → HOME | ✓ CORRECT
+  XGBoost     :  39.6% → AWAY | ✗ INCORRECT
+  CatBoost    :  36.5% → AWAY | ✗ INCORRECT
+  Ensemble    :  47.6% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Oklahoma City Thunder @ Atlanta Hawks
+Final Score: 117-100 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.857684
+
+  Elo         :  13.6% → AWAY | ✓ CORRECT
+  XGBoost     :   7.8% → AWAY | ✓ CORRECT
+  CatBoost    :  16.0% → AWAY | ✓ CORRECT
+  Ensemble    :  12.1% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Chicago Bulls @ Orlando Magic
+Final Score: 110-98 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.857606
+
+  Elo         :  42.3% → AWAY | ✓ CORRECT
+  XGBoost     :  58.3% → HOME | ✗ INCORRECT
+  CatBoost    :  51.7% → HOME | ✗ INCORRECT
+  Ensemble    :  51.3% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Phoenix Suns @ Los Angeles Clippers
+Final Score: 102-129 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.857532
+
+  Elo         :  60.6% → HOME | ✓ CORRECT
+  XGBoost     :  69.6% → HOME | ✓ CORRECT
+  CatBoost    :  64.5% → HOME | ✓ CORRECT
+  Ensemble    :  64.6% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Utah Jazz @ Sacramento Kings
+Final Score: 104-105 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.857456
+
+  Elo         :  83.0% → HOME | ✓ CORRECT
+  XGBoost     :  94.1% → HOME | ✓ CORRECT
+  CatBoost    :  86.9% → HOME | ✓ CORRECT
+  Ensemble    :  86.5% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Golden State Warriors @ Portland Trail Blazers
+Final Score: 119-139 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.857367
+
+  Elo         :  34.8% → AWAY | ✗ INCORRECT
+  XGBoost     :  30.3% → AWAY | ✗ INCORRECT
+  CatBoost    :  35.5% → AWAY | ✗ INCORRECT
+  Ensemble    :  33.8% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Minnesota Timberwolves @ Los Angeles Lakers
+Final Score: 110-128 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.857270
+
+  Elo         :  44.9% → AWAY | ✗ INCORRECT
+  XGBoost     :  52.2% → HOME | ✓ CORRECT
+  CatBoost    :  49.2% → AWAY | ✗ INCORRECT
+  Ensemble    :  46.3% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Washington Wizards @ Dallas Mavericks
+Final Score: 117-107 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.857172
+
+  Elo         :  72.2% → HOME | ✗ INCORRECT
+  XGBoost     :  60.3% → HOME | ✗ INCORRECT
+  CatBoost    :  61.4% → HOME | ✗ INCORRECT
+  Ensemble    :  68.7% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: San Antonio Spurs @ New Orleans Pelicans
+Final Score: 120-116 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.857072
+
+  Elo         :  32.2% → AWAY | ✓ CORRECT
+  XGBoost     :  14.4% → AWAY | ✓ CORRECT
+  CatBoost    :  24.0% → AWAY | ✓ CORRECT
+  Ensemble    :  25.1% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Miami Heat @ Memphis Grizzlies
+Final Score: 146-114 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.856971
+
+  Elo         :  59.4% → HOME | ✗ INCORRECT
+  XGBoost     :  42.7% → AWAY | ✓ CORRECT
+  CatBoost    :  59.4% → HOME | ✗ INCORRECT
+  Ensemble    :  55.0% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-25
+Matchup: Detroit Pistons @ Houston Rockets
+Final Score: 115-111 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.856850
+
+  Elo         :  61.2% → HOME | ✗ INCORRECT
+  XGBoost     :  51.7% → HOME | ✗ INCORRECT
+  CatBoost    :  65.0% → HOME | ✗ INCORRECT
+  Ensemble    :  57.9% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-24
+Matchup: Cleveland Cavaliers @ Brooklyn Nets
+Final Score: 131-124 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.856693
+
+  Elo         :  11.1% → AWAY | ✓ CORRECT
+  XGBoost     :   3.8% → AWAY | ✓ CORRECT
+  CatBoost    :   6.7% → AWAY | ✓ CORRECT
+  Ensemble    :   7.2% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-24
+Matchup: Boston Celtics @ New York Knicks
+Final Score: 95-105 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.856592
+
+  Elo         :  28.4% → AWAY | ✗ INCORRECT
+  XGBoost     :  24.3% → AWAY | ✗ INCORRECT
+  CatBoost    :  25.5% → AWAY | ✗ INCORRECT
+  Ensemble    :  27.0% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-24
+Matchup: Atlanta Hawks @ Orlando Magic
+Final Score: 111-107 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.856489
+
+  Elo         :  57.5% → HOME | ✗ INCORRECT
+  XGBoost     :  42.3% → AWAY | ✓ CORRECT
+  CatBoost    :  52.3% → HOME | ✗ INCORRECT
+  Ensemble    :  51.7% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-24
+Matchup: Milwaukee Bucks @ Toronto Raptors
+Final Score: 122-116 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.856389
+
+  Elo         :  17.8% → AWAY | ✓ CORRECT
+  XGBoost     :  29.9% → AWAY | ✓ CORRECT
+  CatBoost    :  27.8% → AWAY | ✓ CORRECT
+  Ensemble    :  24.7% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-24
+Matchup: Denver Nuggets @ Golden State Warriors
+Final Score: 131-137 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.856292
+
+  Elo         :  51.3% → HOME | ✓ CORRECT
+  XGBoost     :  43.3% → AWAY | ✗ INCORRECT
+  CatBoost    :  61.7% → HOME | ✓ CORRECT
+  Ensemble    :  52.5% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: Oklahoma City Thunder @ Indiana Pacers
+Final Score: 141-135 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.856192
+
+  Elo         :  30.2% → AWAY | ✓ CORRECT
+  XGBoost     :  25.7% → AWAY | ✓ CORRECT
+  CatBoost    :  24.2% → AWAY | ✓ CORRECT
+  Ensemble    :  25.7% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: Minnesota Timberwolves @ Portland Trail Blazers
+Final Score: 118-114 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.856094
+
+  Elo         :  30.9% → AWAY | ✓ CORRECT
+  XGBoost     :  14.5% → AWAY | ✓ CORRECT
+  CatBoost    :  22.7% → AWAY | ✓ CORRECT
+  Ensemble    :  24.0% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: Sacramento Kings @ Phoenix Suns
+Final Score: 116-120 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.855994
+
+  Elo         :  39.7% → AWAY | ✗ INCORRECT
+  XGBoost     :  40.9% → AWAY | ✗ INCORRECT
+  CatBoost    :  42.4% → AWAY | ✗ INCORRECT
+  Ensemble    :  40.3% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: San Antonio Spurs @ Dallas Mavericks
+Final Score: 125-92 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.855888
+
+  Elo         :  47.5% → AWAY | ✓ CORRECT
+  XGBoost     :  58.9% → HOME | ✗ INCORRECT
+  CatBoost    :  53.5% → HOME | ✗ INCORRECT
+  Ensemble    :  52.2% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: Los Angeles Clippers @ Utah Jazz
+Final Score: 108-129 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.855761
+
+  Elo         :  16.9% → AWAY | ✗ INCORRECT
+  XGBoost     :  24.2% → AWAY | ✗ INCORRECT
+  CatBoost    :  22.4% → AWAY | ✗ INCORRECT
+  Ensemble    :  20.1% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: Washington Wizards @ Milwaukee Bucks
+Final Score: 120-133 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.855659
+
+  Elo         :  91.4% → HOME | ✓ CORRECT
+  XGBoost     :  76.3% → HOME | ✓ CORRECT
+  CatBoost    :  84.7% → HOME | ✓ CORRECT
+  Ensemble    :  86.1% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: New Orleans Pelicans @ Memphis Grizzlies
+Final Score: 122-128 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.855559
+
+  Elo         :  77.7% → HOME | ✓ CORRECT
+  XGBoost     :  90.2% → HOME | ✓ CORRECT
+  CatBoost    :  86.2% → HOME | ✓ CORRECT
+  Ensemble    :  85.1% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-23
+Matchup: Detroit Pistons @ Chicago Bulls
+Final Score: 111-115 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.855460
+
+  Elo         :  59.6% → HOME | ✓ CORRECT
+  XGBoost     :  48.0% → AWAY | ✗ INCORRECT
+  CatBoost    :  55.2% → HOME | ✓ CORRECT
+  Ensemble    :  51.5% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-22
+Matchup: Philadelphia 76ers @ Boston Celtics
+Final Score: 117-116 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.855358
+
+  Elo         :  94.5% → HOME | ✗ INCORRECT
+  XGBoost     :  92.9% → HOME | ✗ INCORRECT
+  CatBoost    :  89.5% → HOME | ✗ INCORRECT
+  Ensemble    :  91.8% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-22
+Matchup: Toronto Raptors @ Atlanta Hawks
+Final Score: 138-118 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.855256
+
+  Elo         :  63.8% → HOME | ✗ INCORRECT
+  XGBoost     :  62.3% → HOME | ✗ INCORRECT
+  CatBoost    :  69.2% → HOME | ✗ INCORRECT
+  Ensemble    :  64.9% → HOME | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-22
+Matchup: Miami Heat @ Orlando Magic
+Final Score: 121-125 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.855128
+
+  Elo         :  62.7% → HOME | ✓ CORRECT
+  XGBoost     :  41.8% → AWAY | ✗ INCORRECT
+  CatBoost    :  51.9% → HOME | ✓ CORRECT
+  Ensemble    :  51.6% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-22
+Matchup: Brooklyn Nets @ Charlotte Hornets
+Final Score: 117-136 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.855017
+
+  Elo         :  36.3% → AWAY | ✗ INCORRECT
+  XGBoost     :  60.3% → HOME | ✓ CORRECT
+  CatBoost    :  53.8% → HOME | ✓ CORRECT
+  Ensemble    :  47.3% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-22
+Matchup: Cleveland Cavaliers @ New York Knicks
+Final Score: 111-119 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.854900
+
+  Elo         :  34.0% → AWAY | ✗ INCORRECT
+  XGBoost     :  27.9% → AWAY | ✗ INCORRECT
+  CatBoost    :  29.4% → AWAY | ✗ INCORRECT
+  Ensemble    :  30.6% → AWAY | ✗ INCORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-22
+Matchup: Golden State Warriors @ Los Angeles Lakers
+Final Score: 119-109 (Winner: AWAY)
+Prediction Created: 2025-10-28T17:53:26.854760
+
+  Elo         :  49.4% → AWAY | ✓ CORRECT
+  XGBoost     :  40.1% → AWAY | ✓ CORRECT
+  CatBoost    :  52.5% → HOME | ✗ INCORRECT
+  Ensemble    :  47.1% → AWAY | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------
+
+Date: 2025-10-21
+Matchup: Houston Rockets @ Oklahoma City Thunder
+Final Score: 124-125 (Winner: HOME)
+Prediction Created: 2025-10-28T17:53:26.854180
+
+  Elo         :  76.3% → HOME | ✓ CORRECT
+  XGBoost     :  71.3% → HOME | ✓ CORRECT
+  CatBoost    :  77.4% → HOME | ✓ CORRECT
+  Ensemble    :  75.5% → HOME | ✓ CORRECT
+------------------------------------------------------------------------------------------------------------------------

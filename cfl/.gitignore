@@ -1,0 +1,100 @@
+# ── Databases (large & contain user data) ─────────────────────────────────────
+*.db
+!sports_predictions_original.db
+*.sqlite
+*.sqlite3
+
+# ── Secrets & environment variables ───────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+.flask_secret_key
+
+# ── Python ────────────────────────────────────────────────────────────────────
+.cache/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+.Python
+# ── Trained model binaries (large, regeneratable) ─────────────────────
+*.pkl
+!models/**/*.pkl
+*.h5
+*.joblib
+catboost_info/
+catboost_info/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ── Backups ───────────────────────────────────────────────────────────────────
+backups/
+database_backups/
+*.bak
+*_backup_*.py
+*_BACKUP_*.py
+*_SAFE_BACKUP_*.py
+*_WORKING_BACKUP_*.py
+
+# ── Old / deprecated files ────────────────────────────────────────────────────
+TO_DELETE/
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V4/
+.Trashes
+*.AppleDouble
+
+# ── Node.js (social-media-app) ────────────────────────────────────────────────
+node_modules/
+.next/
+.vercel/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+tsconfig.tsbuildinfo
+
+# ── IDE / editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── External repos ────────────────────────────────────────────────────────────
+TelegramExporter/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+.local/
+uv.lock
+*.txt.bak
+debug_*.html
+.claude/
+.props_backfill_*
+# Generated book-odds comparison samples (run src/odds/sample_today_book_odds.py)
+src/odds/samples/*.json
+.aider*
+
+# Site checker secrets / local reports
+qa/checker_email.py
+qa/checker_cron.log
+qa/latest_report.*
+qa/audit_history/
+qa/screenshots/
+qa/lighthouse_reports/
+qa/pagespeed_reports/
+qa/.pagespeed_api_key
+data/ncaaf_espn_schedule_cache.json

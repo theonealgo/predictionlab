@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Payouts | PredictionLab Affiliate{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Payouts</h1>
+  {% set active = 'payouts' %}{% include "affiliate/_subnav.html" %}
+
+  <div class="aff-section">
+    <h2>Request a payout</h2>
+    <p>Payable balance: <strong>{{ money(stats.payable_cents) }}</strong> · Minimum: {{ min_payout }}</p>
+    {% if can_payout %}
+      <form method="POST" action="/affiliate/payouts/request" style="margin-top:10px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="aff-btn aff-btn-blue">Request payout ({{ money(stats.payable_cents) }})</button>
+      </form>
+    {% else %}
+      <p class="aff-note">A payout can be requested once your payable balance reaches {{ min_payout }} and you have no payout in progress.</p>
+    {% endif %}
+  </div>
+
+  <div class="aff-section">
+    <h2>Payout history</h2>
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr><th>Requested</th><th>Amount</th><th>Status</th><th>Method</th><th>Reference</th><th>Processed</th></tr></thead>
+        <tbody>
+          {% for p in rows %}
+          <tr>
+            <td>{{ (p.requested_at or '')[:10] }}</td>
+            <td>{{ money(p.amount_cents, p.currency) }}</td>
+            <td><span class="aff-badge {{ p.status }}">{{ p.status }}</span></td>
+            <td>{{ p.method or '—' }}</td>
+            <td>{{ p.reference or '—' }}</td>
+            <td>{{ (p.processed_at or '')[:10] or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:22px;">No payouts yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

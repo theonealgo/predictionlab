@@ -1,0 +1,7 @@
+NFL picks/results/chart UI signed off on :5052 (2026-09-11).
+Picks: shared pick-conf-grid, Cards|Chart, Copy All, H2H Last 10.
+Results cards: Last Night + Last 7 + Season Performance + 6-model consensus.
+Results chart: MLB team_results shell — Last Night / Last 7 / Season model
+cards, Moneyline | Spread | Totals stay on tab click (/nfl/api/picks).
+Do not modify unless owner says UNLOCK NFL.
+Never push from this folder unless the owner confirms a production deploy.

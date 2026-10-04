@@ -1,0 +1,1129 @@
+{% extends "base.html" %}
+
+{% block title %}Prediction Labs | AI Sports Predictions and Betting Research{% endblock %}
+{% block head_meta %}
+{% if request.path == "/homepage-preview" %}<meta name="robots" content="noindex,nofollow">{% endif %}
+<meta name="description" content="AI-powered sports predictions with transparent model tracking. Free moneyline picks, win probabilities, and model performance for NBA, MLB, NHL, WNBA, NFL, and soccer.">
+<link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ request.path }}">
+<meta property="og:title" content="Prediction Labs | AI Sports Predictions and Betting Research">
+<meta property="og:description" content="AI-powered sports predictions with transparent model tracking. Free moneyline picks and win probabilities for NBA, MLB, NHL, WNBA, NFL, and soccer.">
+<meta property="og:type" content="website">
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    :root {
+        --pl-ink: hsl(0, 0%, 3.9%);
+        --pl-muted: hsl(0, 0%, 45.1%);
+        --pl-faint: hsl(0, 0%, 63%);
+        --pl-paper: hsl(0, 0%, 100%);
+        --pl-panel: hsl(0, 0%, 100%);
+        --pl-band: hsl(0, 0%, 96.1%);
+        --pl-line: hsl(0, 0%, 89.8%);
+        --pl-line-dark: hsl(0, 0%, 82%);
+        --pl-fill: hsl(0, 0%, 96.1%);
+        --pl-accent: hsl(76, 100%, 55%);
+        --pl-accent-soft: hsl(76, 100%, 92%);
+        --pl-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    body { background: var(--pl-paper); color: var(--pl-ink); }
+    .navbar, .share-strip, .site-footer, .join-premium-bar { display: none !important; }
+    /* Homepage renders full-bleed: neutralize base.html's centered .layout-main
+       (max-width:1200px) so the hero/sections fill the viewport. Otherwise the
+       fixed canvas (grid + image) shows through as grey side gutters. */
+    .layout-main, body.research-site .layout-main {
+        width: 100% !important; max-width: none !important; min-height: 0 !important;
+        margin: 0 !important; padding: 0 !important;
+        border: 0 !important; border-radius: 0 !important; background: transparent !important;
+        backdrop-filter: none !important;
+    }
+
+    /* ── Fixed canvas (grid + image) — content scrolls on top ─ */
+    .pl2-page { position: relative; min-height: 100vh; }
+    .pl2-canvas {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .pl2-canvas-img {
+        position: absolute; inset: 0;
+        background-image: url("/static/img/hero-canvas.webp");
+        background-size: cover; background-position: center;
+        opacity: 0.18;
+        transform: scale(1.04); will-change: transform;
+    }
+    .pl2-canvas-grid {
+        position: absolute; inset: 0;
+        background-image:
+            linear-gradient(hsl(65 42% 82% / 0.34) 1px, transparent 1px),
+            linear-gradient(90deg, hsl(65 42% 82% / 0.34) 1px, transparent 1px);
+        background-size: 80px 80px;
+    }
+
+    .pl2-scroll { position: relative; z-index: 10; }
+    .pl2-shell {
+        width: min(1180px, calc(100% - 220px));
+        margin-left: max(160px, calc((100% - 1180px) / 2));
+        margin-right: auto;
+    }
+    .pl2-mono { font: 800 .66rem var(--pl-mono); letter-spacing: .16em; text-transform: uppercase; color: hsl(0 0% 34%); }
+
+    /* ── Active breadcrumb (scroll spy) ─────────────────────── */
+    .pl2-breadcrumb {
+        position: fixed; left: 10px; top: 50%; transform: translateY(-50%); z-index: 55;
+        width: 190px; min-height: 250px; padding-left: 13px;
+        display: flex; align-items: center;
+        font: 900 .62rem var(--pl-mono); letter-spacing: .16em; text-transform: uppercase;
+        color: hsl(0 0% 18%); pointer-events: none; transition: color .2s;
+    }
+    .pl2-rail { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: grid; gap: 16px; }
+    .pl2-rail i { display: block; width: 1px; height: 18px; background: hsl(0 0% 78%); }
+    .pl2-rail i.active {
+        width: 2px; height: 38px;
+        background: var(--pl-accent);
+        box-shadow: 0 0 10px hsl(76 100% 55% / .35);
+    }
+    #pl2BreadcrumbText {
+        display: inline-block;
+        max-width: 155px;
+        padding: 7px 9px;
+        background: transparent;
+    }
+    .pl2-breadcrumb.is-active { color: var(--pl-ink); }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .pl2-header {
+        position: sticky; top: 0; z-index: 60;
+        display: flex; align-items: center; gap: 26px;
+        height: 56px; padding: 0 22px;
+        background: hsl(0 0% 100% / 0.97);
+        border-bottom: 1px solid var(--pl-line);
+    }
+    .pl2-burger {
+        width: 38px; height: 38px; flex: 0 0 auto;
+        display: grid; place-items: center;
+        border: 1px solid var(--pl-line-dark); background: var(--pl-panel); cursor: pointer;
+    }
+    .pl2-burger:hover { background: var(--pl-fill); }
+    .pl2-search {
+        width: 38px; height: 38px; flex: 0 0 auto;
+        display: grid; place-items: center;
+        border: 1px solid var(--pl-line-dark); background: var(--pl-panel);
+        color: var(--pl-ink); cursor: pointer;
+    }
+    .pl2-search:hover { background: var(--pl-accent); border-color: var(--pl-accent); }
+    .pl2-burger i, .pl2-burger i::before, .pl2-burger i::after {
+        display: block; width: 16px; height: 2px; background: var(--pl-ink); content: ""; position: relative;
+    }
+    .pl2-burger i::before { position: absolute; top: -5px; }
+    .pl2-burger i::after  { position: absolute; top: 5px; }
+    .pl2-brand { display: flex; align-items: baseline; gap: 9px; text-decoration: none; color: var(--pl-ink); }
+    .pl2-brand b { font-weight: 950; letter-spacing: .02em; font-size: .92rem; }
+    .pl2-brand span { font: 800 .62rem var(--pl-mono); letter-spacing: .18em; color: var(--pl-faint); }
+    .pl2-nav { display: flex; gap: 26px; margin-left: auto; }
+    .pl2-nav a, .pl2-login {
+        color: var(--pl-muted); text-decoration: none;
+        font: 850 .64rem var(--pl-mono); letter-spacing: .15em; text-transform: uppercase; white-space: nowrap;
+    }
+    .pl2-nav a:hover { color: var(--pl-ink); }
+    .pl2-cta {
+        padding: 12px 16px; background: var(--pl-accent); color: var(--pl-ink);
+        border: 1px solid var(--pl-accent); text-decoration: none;
+        font: 950 .64rem var(--pl-mono); letter-spacing: .13em; text-transform: uppercase; white-space: nowrap;
+    }
+    .pl2-cta:hover { border-color: var(--pl-ink); }
+
+    /* ── Burger drawer ──────────────────────────────────────── */
+    .pl2-drawer-veil { position: fixed; inset: 0; z-index: 70; background: hsl(0 0% 0% / 0.18); opacity: 0; pointer-events: none; transition: opacity .2s; }
+    .pl2-drawer {
+        position: fixed; top: 0; left: 0; bottom: 0; z-index: 71;
+        width: min(330px, 88vw); overflow-y: auto;
+        background: var(--pl-panel); border-right: 1px solid var(--pl-line-dark);
+        transform: translateX(-102%); transition: transform .24s ease;
+        padding: 18px 22px 40px;
+    }
+    body.pl2-drawer-open .pl2-drawer { transform: none; }
+    body.pl2-drawer-open .pl2-drawer-veil { opacity: 1; pointer-events: auto; }
+    .pl2-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .pl2-drawer-close { width: 34px; height: 34px; border: 1px solid var(--pl-line-dark); background: #fff; cursor: pointer; font-size: 1rem; line-height: 1; }
+    .pl2-drawer h5 { margin: 22px 0 8px; font: 800 .62rem var(--pl-mono); letter-spacing: .18em; text-transform: uppercase; color: var(--pl-faint); border-bottom: 1px solid var(--pl-line); padding-bottom: 7px; }
+    .pl2-drawer a { display: block; padding: 7px 0; color: var(--pl-ink); text-decoration: none; font-weight: 750; font-size: .9rem; }
+    .pl2-drawer a:hover { text-decoration: underline; text-decoration-color: var(--pl-line-dark); text-decoration-thickness: 2px; }
+    .pl2-drawer a.hot {
+        background: var(--pl-fill); border: 1px solid var(--pl-line-dark);
+        display: inline-block; padding: 9px 13px; margin-top: 4px;
+        font: 900 .68rem var(--pl-mono); letter-spacing: .12em; text-transform: uppercase;
+    }
+
+    /* ── Hero ───────────────────────────────────────────────── */
+    .pl2-hero {
+        position: relative; min-height: calc(100vh - 64px); display: flex; flex-direction: column; justify-content: flex-start;
+        overflow: hidden; padding: clamp(280px, 19vw, 360px) 0 180px;
+        background: hsl(45 35% 99.5% / .78);
+    }
+    .pl2-hero-lens {
+        position: absolute; z-index: 0; pointer-events: none; border-radius: 50%;
+        width: 600px; height: 600px;
+        background: radial-gradient(circle, hsl(0 0% 0% / 0.03) 0%, transparent 70%);
+        transition: left .3s ease-out, top .3s ease-out;
+        transform: translate(-50%, -50%);
+    }
+    .pl2-hero > .pl2-shell { position: relative; z-index: 1; }
+    .pl2-eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 48px; }
+    .pl2-eyebrow::before { content: ""; width: 48px; height: 1px; background: var(--pl-accent); }
+    .pl2-hero h1 {
+        margin: 0 0 30px; font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(4.1rem, 6.4vw, 7rem);
+        line-height: .88; letter-spacing: 0; font-weight: 950; text-transform: uppercase;
+    }
+    .pl2-h1-row { display: flex; align-items: flex-end; justify-content: flex-start; flex-wrap: wrap; gap: clamp(44px, 8vw, 145px); }
+    .pl2-h1-side {
+        font: 800 clamp(.62rem, 1vw, .88rem) var(--pl-mono); letter-spacing: .18em;
+        text-transform: uppercase; color: hsl(76 92% 42%); padding-bottom: .7rem; white-space: normal; min-width: 0;
+    }
+    .pl2-hero-rule { height: 1px; width: 100%; background: var(--pl-line); margin-bottom: 32px; }
+    .pl2-hero-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px 72px; align-items: start; }
+    .pl2-lede { max-width: 560px; margin: 0 0 32px; color: hsl(0 0% 3.9% / 0.7); font-size: 1.125rem; line-height: 1.6; font-weight: 500; }
+    .pl2-hero-cta { display: flex; flex-wrap: wrap; gap: 16px; }
+    .pl2-btn {
+        min-height: 48px; display: inline-flex; align-items: center; justify-content: center;
+        padding: 0 32px; border: 1px solid var(--pl-line-dark); background: var(--pl-panel); color: var(--pl-ink);
+        text-decoration: none; font: 950 .66rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase;
+        transition: border-color .15s, background .15s;
+    }
+    .pl2-btn.primary { background: var(--pl-accent); border-color: var(--pl-accent); }
+    .pl2-btn:hover { border-color: var(--pl-ink); background: var(--pl-fill); }
+    .pl2-hero-note { margin-top: 16px; color: hsl(0 0% 3.9% / 0.3); }
+    .pl2-stats {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+        width: 100%; max-width: 580px; justify-self: end;
+        border: 1px solid var(--pl-line); background: var(--pl-line);
+    }
+    .pl2-stat { padding: 27px; background: hsl(45 25% 99% / .9); }
+    .pl2-stat b { display: block; font-size: 2.25rem; line-height: 1; font-weight: 950; letter-spacing: -.01em; }
+    .pl2-stat b .pl2-countup {
+        display: inline;
+        margin: 0;
+        color: inherit;
+        font: inherit;
+        letter-spacing: inherit;
+        text-transform: none;
+    }
+    .pl2-stat > span { display: block; margin-top: 9px; font: 800 .6rem var(--pl-mono); letter-spacing: .16em; text-transform: uppercase; color: hsl(0 0% 35%); }
+    .pl2-hero-scroll {
+        position: absolute; bottom: 32px; right: 32px; z-index: 1;
+        font: 800 .56rem var(--pl-mono); letter-spacing: .25em; text-transform: uppercase;
+        color: hsl(0 0% 3.9% / 0.25);
+    }
+
+    /* ── Data horizon line ──────────────────────────────────── */
+    .pl2-horizon {
+        position: fixed; z-index: 52; top: 56px; left: 0; right: 0; height: 1px;
+        background: var(--pl-accent); opacity: .48; pointer-events: none;
+        will-change: transform;
+    }
+
+    /* ── Editorial sections ─────────────────────────────────── */
+    .pl2-sec {
+        position: relative; z-index: 10; padding: 112px 0 104px;
+        border-bottom: 1px solid var(--pl-line);
+        background: hsl(45 25% 99% / .96);
+    }
+    .pl2-sec.band { background: hsl(45 18% 97% / .78); }
+    .pl2-sec-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 10px; }
+    .pl2-sec h2 {
+        margin: 14px 0 0; font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(3rem, 5.4vw, 5rem);
+        line-height: .92; font-weight: 950; letter-spacing: 0; max-width: 720px;
+    }
+    .pl2-sec-link {
+        flex: 0 0 auto; margin-top: 6px; padding: 10px 14px;
+        border: 1px solid var(--pl-line-dark); background: var(--pl-panel); color: var(--pl-ink);
+        text-decoration: none; font: 850 .62rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase;
+    }
+    .pl2-sec-link:hover { background: var(--pl-fill); }
+    .pl2-chip {
+        display: inline-block; padding: 4px 8px; background: var(--pl-fill); color: var(--pl-ink);
+        border: 1px solid var(--pl-line); font: 900 .58rem var(--pl-mono); letter-spacing: .12em; text-transform: uppercase;
+    }
+    .pl2-chip:not(.ghost) { background: var(--pl-accent); border-color: var(--pl-accent); }
+    .pl2-chip.ghost { background: var(--pl-panel); border: 1px solid var(--pl-line-dark); color: var(--pl-muted); }
+
+    /* Board rows */
+    .pl2-rows { border-top: 1px solid var(--pl-line-dark); margin-top: 30px; }
+    .pl2-row {
+        display: grid; grid-template-columns: 56px 92px 1fr auto; gap: 18px; align-items: center;
+        padding: 22px 4px; border-bottom: 1px solid var(--pl-line-dark); text-decoration: none; color: var(--pl-ink);
+    }
+    .pl2-row:hover { background: hsl(0 0% 96.1% / 0.65); }
+    .pl2-row-num { font: 900 .72rem var(--pl-mono); color: hsl(0 0% 26%); }
+    .pl2-row-main b { display: block; font-size: 1.18rem; font-weight: 900; line-height: 1.25; }
+    .pl2-row-main span { display: block; margin-top: 3px; color: hsl(0 0% 31%); font-size: .86rem; font-weight: 700; }
+    .pl2-row-val { display: flex; align-items: center; justify-content: flex-end; gap: 16px; text-align: right; }
+    .pl2-row-score { min-width: 88px; }
+    .pl2-row-val b { font-size: 1.5rem; font-weight: 950; border-bottom: 3px solid var(--pl-line-dark); }
+    .pl2-row-val span { display: block; margin-top: 4px; font: 850 .58rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; color: hsl(0 0% 32%); }
+    .pl2-copy { min-height: 42px; padding: 0 18px; border: 1px solid var(--pl-line-dark); background: var(--pl-panel); color: var(--pl-ink); font: 900 .6rem var(--pl-mono); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+    .pl2-copy:hover, .pl2-copy.copied { background: var(--pl-fill); border-color: var(--pl-ink); }
+    .pl2-board-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+    /* Homepage live prediction cards: compact moneyline-only preview of real pick cards. */
+    .pl2-live-board {
+        margin-top: 34px; padding: 14px; border: 1px solid var(--pl-line-dark);
+        background: hsl(0 0% 100% / .84); border-radius: 22px;
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    }
+    .pl2-pick-card {
+        position: relative; min-height: 248px; padding: 22px 18px 18px;
+        border: 1px solid hsl(0 88% 72% / .85); border-radius: 14px;
+        background: var(--pl-panel); color: var(--pl-ink); text-decoration: none;
+        display: flex; flex-direction: column; gap: 16px;
+    }
+    .pl2-pick-card:hover { box-shadow: 6px 6px 0 var(--pl-line); transform: translate(-1px,-1px); }
+    .pl2-pick-card-live {
+        position: absolute; top: 14px; right: 14px; padding: 4px 9px;
+        border: 1px solid hsl(0 84% 70%); border-radius: 999px;
+        color: hsl(0 78% 46%); background: hsl(0 100% 97%);
+        font: 900 .52rem var(--pl-mono); letter-spacing: .12em; text-transform: uppercase;
+    }
+    .pl2-pick-card-live::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: hsl(0 78% 54%); vertical-align: 1px; }
+    .pl2-pick-card-meta { font: 800 .58rem var(--pl-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--pl-faint); }
+    .pl2-pick-teams { display: grid; gap: 8px; margin-top: 8px; }
+    .pl2-pick-team { display: flex; align-items: center; gap: 10px; font-size: .88rem; font-weight: 900; }
+    .pl2-pick-team code { min-width: 32px; padding: 6px 0; text-align: center; background: hsl(194 88% 42%); color: #fff; font: 900 .56rem var(--pl-mono); }
+    .pl2-pick-market { font-size: .72rem; color: var(--pl-muted); font-weight: 700; }
+    .pl2-pick-probs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pl2-pick-prob { padding: 15px 10px; border: 1px solid var(--pl-line); border-radius: 6px; background: hsl(0 0% 97%); text-align: center; }
+    .pl2-pick-prob.is-pick { background: hsl(82 100% 89%); border-color: hsl(86 82% 55%); }
+    .pl2-pick-prob span { display: block; font: 900 .52rem var(--pl-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--pl-faint); }
+    .pl2-pick-prob b { display: block; margin-top: 5px; font-size: 1.6rem; line-height: 1; font-weight: 950; }
+    .pl2-pick-summary { margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--pl-line-dark); display: flex; justify-content: space-between; gap: 10px; color: var(--pl-muted); font: 750 .62rem var(--pl-mono); line-height: 1.45; }
+    .pl2-pick-summary strong { color: var(--pl-ink); }
+    .pl2-pick-details { padding-top: 9px; border-top: 1px solid var(--pl-line); text-align: right; color: hsl(88 70% 26%); font: 900 .58rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; }
+    .pl2-result-game { margin: 18px 0 24px; padding: 18px 0; border-top: 1px solid var(--pl-line); border-bottom: 1px solid var(--pl-line); }
+    .pl2-result-game-head, .pl2-result-team { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .pl2-result-game-head { margin-bottom: 12px; color: var(--pl-faint); font: 800 .6rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; }
+    .pl2-result-team { padding: 5px 0; font-weight: 850; }
+    .pl2-result-team strong { font-size: 1.3rem; }
+    .pl2-row-main { color: var(--pl-ink); text-decoration: none; }
+    .pl2-row-main:hover b { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+
+    .pl2-marquee {
+        margin: 34px calc((100vw - min(1180px, calc(100vw - 48px))) / -2) 0;
+        overflow: hidden; border-top: 1px solid var(--pl-line-dark); border-bottom: 1px solid var(--pl-line-dark);
+        background: hsl(0 0% 100% / .8);
+    }
+    .pl2-marquee-track {
+        display: flex; width: max-content; animation: pl2Tape 28s linear infinite;
+    }
+    .pl2-marquee-item {
+        min-width: 270px; padding: 18px 28px; border-right: 1px solid var(--pl-line-dark);
+        display: grid; grid-template-columns: 1fr auto; gap: 6px 22px; align-items: center;
+    }
+    .pl2-marquee-item b { font-size: .9rem; font-weight: 900; }
+    .pl2-marquee-item strong { grid-row: span 2; font-size: 1.4rem; font-weight: 950; }
+    .pl2-marquee-item span { font: 800 .58rem var(--pl-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--pl-faint); }
+    @keyframes pl2Tape { to { transform: translateX(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .pl2-marquee-track { animation: none; } }
+
+    /* Sport coverage */
+    .pl2-sports { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 34px; }
+    .pl2-sport {
+        border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 18px;
+        text-decoration: none; color: var(--pl-ink); display: flex; flex-direction: column; gap: 10px;
+        transition: transform .12s, box-shadow .12s;
+    }
+    .pl2-sport:hover { box-shadow: 6px 6px 0 var(--pl-line); transform: translate(-1px,-1px); }
+    .pl2-sport-top { display: flex; align-items: center; justify-content: space-between; }
+    .pl2-sport-top em { font-style: normal; font-size: 1.35rem; }
+    .pl2-live { display: inline-flex; align-items: center; gap: 6px; font: 850 .56rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--pl-muted); }
+    .pl2-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--pl-line-dark); }
+    .pl2-live.on { color: var(--pl-ink); }
+    .pl2-live.on i { background: #36c97a; }
+    .pl2-sport b { font-size: 1.02rem; font-weight: 900; }
+    .pl2-sport span.go { font: 850 .6rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--pl-muted); }
+
+    /* Research pillars */
+    .pl2-pillars { border-top: 1px solid var(--pl-line-dark); margin-top: 30px; }
+    .pl2-pillar {
+        display: grid; grid-template-columns: 46px 1fr 44px; gap: 18px; align-items: center;
+        padding: 26px 4px; border-bottom: 1px solid var(--pl-line-dark); text-decoration: none; color: var(--pl-ink);
+    }
+    .pl2-pillar:hover { background: hsl(0 0% 96.1% / 0.65); }
+    .pl2-pillar-num { font: 800 .68rem var(--pl-mono); color: var(--pl-faint); }
+    .pl2-pillar-main b { display: block; font-size: 1.45rem; font-weight: 900; letter-spacing: -.01em; }
+    .pl2-pillar-main p { margin: 7px 0 9px; color: var(--pl-muted); font-size: .9rem; line-height: 1.6; font-weight: 600; max-width: 660px; }
+    .pl2-pillar-plus {
+        width: 38px; height: 38px; display: grid; place-items: center;
+        border: 1px solid var(--pl-line-dark); background: var(--pl-panel); font-weight: 800;
+    }
+    .pl2-pillar:hover .pl2-pillar-plus { background: var(--pl-fill); }
+
+    /* Forecasting index */
+    .pl2-units { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
+    .pl2-unit { border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 20px; }
+    .pl2-unit-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .pl2-unit-top b { font-weight: 900; font-size: .95rem; }
+    .pl2-unit strong { display: block; margin-top: 12px; font-size: 2.1rem; font-weight: 950; letter-spacing: -.01em; }
+    .pl2-unit strong.pos { color: #1e7d45; }
+    .pl2-unit span { display: block; margin-top: 4px; font: 800 .6rem var(--pl-mono); letter-spacing: .14em; color: var(--pl-faint); text-transform: uppercase; }
+    .pl2-tape-note { margin-top: 26px; display: block; }
+
+    /* AI model results */
+    .pl2-models { display: grid; grid-template-columns: 1fr 1fr; gap: 0 56px; border-top: 1px solid var(--pl-line-dark); margin-top: 30px; }
+    .pl2-model { padding: 26px 0 22px; border-bottom: 1px solid var(--pl-line-dark); }
+    .pl2-model-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .pl2-model h3 { margin: 10px 0 0; font-size: 1.5rem; font-weight: 950; }
+    .pl2-model-meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px; }
+    .pl2-model-meta strong { font-size: 2rem; font-weight: 950; }
+    .pl2-meter { height: 4px; background: var(--pl-line); margin-top: 12px; }
+    .pl2-meter i { display: block; height: 100%; background: var(--pl-ink); }
+    .pl2-fineprint {
+        margin-top: 34px; display: flex; justify-content: space-between; gap: 20px; align-items: center;
+        border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 18px 20px;
+        color: var(--pl-muted); font: 700 .78rem var(--pl-mono); line-height: 1.7;
+    }
+
+    /* Why different */
+    .pl2-why { max-width: 720px; margin-top: 28px; color: var(--pl-muted); font-size: .95rem; line-height: 1.75; font-weight: 600; }
+    .pl2-why p { margin: 0 0 14px; }
+
+    /* Daily intel */
+    .pl2-intel { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; margin-top: 34px; }
+    .pl2-card { border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 26px; }
+    .pl2-card h3 { margin: 12px 0 8px; font-size: 1.5rem; font-weight: 950; letter-spacing: -.01em; }
+    .pl2-card p { margin: 0 0 18px; color: var(--pl-muted); font-size: .92rem; line-height: 1.7; font-weight: 600; }
+    .pl2-card time { font: 800 .62rem var(--pl-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--pl-faint); }
+    .pl2-minilinks { border-top: 1px solid var(--pl-line); margin-top: 16px; padding-top: 12px; }
+    .pl2-minilinks a { display: block; padding: 6px 0; color: var(--pl-ink); font-weight: 750; font-size: .88rem; text-decoration: none; }
+    .pl2-minilinks a:hover { text-decoration: underline; text-decoration-color: var(--pl-line-dark); text-decoration-thickness: 2px; }
+
+    /* How it works */
+    .pl2-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 34px; }
+    .pl2-step { border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 18px 18px 22px; overflow: hidden; }
+    .pl2-step-art {
+        position: relative; height: 92px; margin: -2px -2px 18px;
+        border: 1px solid hsl(0 0% 88%); background: linear-gradient(135deg, #f8fafc 0%, #fff 46%, #efffd8 100%);
+        overflow: hidden;
+    }
+    .pl2-step-art::before {
+        content: ""; position: absolute; inset: 0;
+        background-image:
+            linear-gradient(hsl(76 100% 45% / .18) 1px, transparent 1px),
+            linear-gradient(90deg, hsl(76 100% 45% / .18) 1px, transparent 1px);
+        background-size: 18px 18px;
+    }
+    .pl2-step-art i { position: absolute; display: block; background: var(--pl-ink); }
+    .pl2-step-art.data i:nth-child(1) { left: 18px; bottom: 18px; width: 18px; height: 24px; }
+    .pl2-step-art.data i:nth-child(2) { left: 46px; bottom: 18px; width: 18px; height: 44px; }
+    .pl2-step-art.data i:nth-child(3) { left: 74px; bottom: 18px; width: 18px; height: 32px; background: var(--pl-accent); }
+    .pl2-step-art.model i:nth-child(1) { width: 58px; height: 58px; border: 1px solid var(--pl-ink); border-radius: 50%; background: transparent; left: 24px; top: 16px; }
+    .pl2-step-art.model i:nth-child(2) { width: 12px; height: 12px; border-radius: 50%; left: 47px; top: 39px; background: var(--pl-accent); }
+    .pl2-step-art.model i:nth-child(3) { width: 86px; height: 1px; left: 86px; top: 45px; background: hsl(0 0% 10% / .35); }
+    .pl2-step-art.project i:nth-child(1) { left: 20px; right: 20px; top: 28px; height: 2px; background: hsl(0 0% 10% / .25); transform: rotate(-8deg); }
+    .pl2-step-art.project i:nth-child(2) { right: 34px; top: 20px; width: 14px; height: 14px; border-radius: 50%; background: var(--pl-accent); }
+    .pl2-step-art.project i:nth-child(3) { left: 28px; bottom: 24px; width: 120px; height: 10px; background: repeating-linear-gradient(90deg, var(--pl-ink) 0 10px, transparent 10px 18px); }
+    .pl2-step-art.consensus i:nth-child(1) { left: 22px; top: 20px; width: 22px; height: 22px; border-radius: 50%; background: var(--pl-ink); box-shadow: 38px 24px 0 var(--pl-accent), 86px 4px 0 hsl(0 0% 75%); }
+    .pl2-step-art.consensus i:nth-child(2) { left: 42px; top: 37px; width: 82px; height: 1px; background: hsl(0 0% 10% / .35); transform: rotate(-8deg); }
+    .pl2-step-art.consensus i:nth-child(3) { right: 18px; bottom: 18px; width: 42px; height: 42px; border: 1px solid var(--pl-ink); background: transparent; }
+    .pl2-step b { display: block; margin: 14px 0 7px; font-size: 1.05rem; font-weight: 900; }
+    .pl2-step p { margin: 0; color: var(--pl-muted); font-size: .85rem; line-height: 1.65; font-weight: 600; }
+
+    /* Access / pricing */
+    .pl2-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 34px; }
+    .pl2-plan { border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 28px; }
+    .pl2-plan.premium { border-top: 4px solid var(--pl-line-dark); }
+    .pl2-plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    .pl2-plan-head h3 { margin: 0; font-size: 1.4rem; font-weight: 950; }
+    .pl2-plan-price { font: 850 .72rem var(--pl-mono); letter-spacing: .1em; color: var(--pl-muted); text-transform: uppercase; }
+    .pl2-plan ul { list-style: none; margin: 20px 0 24px; padding: 0; }
+    .pl2-plan li { padding: 9px 0 9px 22px; position: relative; border-bottom: 1px solid var(--pl-line); font-size: .92rem; font-weight: 700; }
+    .pl2-plan li::before { content: "→"; position: absolute; left: 0; font-weight: 900; }
+    .pl2-plan.premium li::before { content: "+"; }
+
+    /* Homepage FAQ accordion: short question rows keep the main page light. */
+    .pl2-faq-heading { max-width: 840px; }
+    .pl2-faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; margin-top: 58px; }
+    .pl2-faq-item { border-bottom: 1px solid var(--pl-line-dark); background: transparent; }
+    .pl2-faq-item summary {
+        min-height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+        list-style: none; cursor: pointer; font-size: 1rem; font-weight: 900; color: var(--pl-ink);
+    }
+    .pl2-faq-item summary::-webkit-details-marker { display: none; }
+    .pl2-faq-item summary::after { content: "+"; color: hsl(86 82% 38%); font: 400 1.35rem/1 var(--pl-mono); }
+    .pl2-faq-item[open] summary::after { content: "−"; }
+    .pl2-faq-item p { margin: -4px 46px 24px 0; color: var(--pl-muted); font-size: .88rem; line-height: 1.7; font-weight: 650; }
+
+    /* Footer */
+    .pl2-footer {
+        position: relative; z-index: 10; padding: 76px 0 36px;
+        background: hsl(45 18% 97% / .96);
+    }
+    .pl2-footer h2 { margin: 12px 0 4px; font-size: clamp(2.4rem, 5vw, 4rem); font-weight: 950; letter-spacing: -.015em; }
+    .pl2-footer-sub { color: var(--pl-muted); font: 700 .8rem var(--pl-mono); }
+    .pl2-footer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin-top: 44px; padding-top: 30px; border-top: 1px solid var(--pl-line-dark); }
+    .pl2-footer-grid h5 { margin: 0 0 12px; font: 800 .6rem var(--pl-mono); letter-spacing: .18em; text-transform: uppercase; color: var(--pl-faint); }
+    .pl2-footer-grid a { display: block; padding: 5px 0; color: var(--pl-ink); text-decoration: none; font-weight: 700; font-size: .88rem; }
+    .pl2-footer-grid a:hover { text-decoration: underline; text-decoration-color: var(--pl-line-dark); text-decoration-thickness: 2px; }
+    .pl2-gloss-label { margin-top: 48px; display: block; }
+    .pl2-gloss { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+    .pl2-term { border: 1px solid var(--pl-line-dark); background: var(--pl-panel); padding: 18px; }
+    .pl2-term b { display: block; font: 900 .68rem var(--pl-mono); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px; }
+    .pl2-term b mark { background: var(--pl-fill); border: 1px solid var(--pl-line); padding: 2px 5px; }
+    .pl2-term p { margin: 0; color: var(--pl-muted); font-size: .82rem; line-height: 1.65; font-weight: 600; }
+    .pl2-footer-bottom {
+        display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px;
+        margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--pl-line-dark);
+        color: var(--pl-faint); font: 750 .68rem var(--pl-mono); letter-spacing: .1em; text-transform: uppercase;
+    }
+    .pl2-footer-bottom a { color: var(--pl-muted); text-decoration: none; margin-left: 16px; }
+    .pl2-footer-bottom a:hover { color: var(--pl-ink); }
+    .pl2-knowledge { background: hsl(45 25% 99% / .84); color: var(--pl-ink); }
+    .pl2-knowledge h2 { color: hsl(0 0% 2%); opacity: 1; }
+    .pl2-knowledge .pl2-mono { color: hsl(0 0% 32%); opacity: 1; }
+    .pl2-knowledge .pl2-sec-top .pl2-mono { color: hsl(0 0% 18%); }
+    .pl2-knowledge .pl2-term { background: hsl(0 0% 100% / .84); border-color: hsl(0 0% 76%); }
+    .pl2-knowledge .pl2-term b { display: inline-block; background: #0b0b0a; padding: 7px 9px; }
+    .pl2-knowledge .pl2-term b mark { color: var(--pl-accent); background: transparent; border: 0; padding: 0; }
+    .pl2-knowledge .pl2-term p { color: hsl(0 0% 30%); font-family: var(--pl-mono); }
+
+    /* Reference-driven contrast bands — LIGHT (no black backgrounds) */
+    #sec-forecasting,
+    #sec-pricing,
+    .pl2-footer {
+        background: hsl(45 18% 97% / .96);
+        border-top: 1px solid var(--pl-line-dark);
+        border-bottom: 1px solid var(--pl-line-dark);
+    }
+    #sec-forecasting .pl2-sec-top > div > .pl2-mono,
+    #sec-pricing .pl2-sec-top > div > .pl2-mono,
+    .pl2-footer > .pl2-shell > .pl2-mono {
+        color: var(--pl-ink); background: var(--pl-accent); padding: 3px 8px;
+    }
+    #sec-forecasting .pl2-marquee { background: var(--pl-panel); border-color: var(--pl-line-dark); }
+    #sec-forecasting .pl2-marquee-item { border-color: var(--pl-line); }
+    #sec-forecasting .pl2-marquee-item strong,
+    #sec-forecasting .pl2-unit strong.pos { color: hsl(145 60% 28%); }
+    #sec-pricing .pl2-plan { padding: 40px; }
+    #sec-pricing .pl2-plan.premium { border-top-color: var(--pl-accent); }
+    #sec-pricing .pl2-btn.primary { width: 100%; background: var(--pl-accent); }
+    .pl2-footer { padding-top: 104px; }
+    .pl2-footer h2 { font-family: Arial, Helvetica, sans-serif; font-size: clamp(3rem, 5vw, 4.8rem); }
+    .pl2-terminal-label { opacity: .42; }
+    .pl2-footer-grid { margin-top: 54px; padding-top: 42px; }
+    .pl2-footer-grid a { font-family: var(--pl-mono); font-size: .78rem; }
+    .pl2-term p { font-family: var(--pl-mono); font-size: .75rem; }
+
+    /* Technical typography and larger editorial rhythm */
+    .pl2-row { padding-top: 28px; padding-bottom: 28px; }
+    .pl2-pillar { padding-top: 34px; padding-bottom: 34px; }
+    .pl2-pillar-main b { font-family: Arial, Helvetica, sans-serif; font-size: clamp(1.55rem, 2.8vw, 2.35rem); }
+    .pl2-pillar-main .pl2-chip { color: var(--pl-ink); background: var(--pl-accent); border-color: var(--pl-accent); }
+    .pl2-model h3, .pl2-card h3, .pl2-plan-head h3 { font-family: Arial, Helvetica, sans-serif; }
+    .pl2-model { padding-top: 38px; padding-bottom: 34px; }
+    .pl2-model-meta strong { font-size: 2.5rem; }
+    .pl2-meter { height: 5px; }
+    .pl2-live.on i { background: var(--pl-accent); }
+    #sec-board .pl2-rows { background: hsl(0 0% 100% / .72); }
+    #sec-board .pl2-chip.ghost {
+        color: hsl(0 0% 25%);
+        background: hsl(0 0% 97%);
+        border-color: hsl(0 0% 72%);
+    }
+
+    @media (max-width: 980px) {
+        .pl2-page { overflow-x: hidden; }
+        .pl2-sec-top { flex-wrap: wrap; }
+        .pl2-sec-link { margin-top: 10px; }
+        .pl2-shell {
+            width: calc(100% - 80px);
+            margin-left: 64px;
+            margin-right: 16px;
+        }
+        .pl2-nav { display: none; }
+        .pl2-hero-grid, .pl2-models, .pl2-intel, .pl2-plans, .pl2-faq-grid { grid-template-columns: 1fr; }
+        .pl2-live-board { grid-template-columns: 1fr 1fr; }
+        .pl2-h1-side { display: none; }
+        .pl2-hero > .pl2-shell { padding-left: 0; }
+        .pl2-hero-scroll { display: none; }
+        .pl2-sports { grid-template-columns: repeat(2, 1fr); }
+        .pl2-units, .pl2-gloss, .pl2-footer-grid { grid-template-columns: repeat(2, 1fr); }
+        .pl2-steps { grid-template-columns: repeat(2, 1fr); }
+        .pl2-row { grid-template-columns: 40px 1fr auto; }
+        .pl2-row-league { display: none; }
+        .pl2-fineprint { flex-direction: column; align-items: flex-start; }
+    }
+    @media (max-width: 560px) {
+        .pl2-shell {
+            width: calc(100% - 32px);
+            margin-left: 16px;
+            margin-right: 16px;
+        }
+        .pl2-breadcrumb { display: none; }
+        .pl2-sports, .pl2-units, .pl2-steps, .pl2-gloss, .pl2-footer-grid { grid-template-columns: 1fr; }
+        .pl2-live-board { grid-template-columns: 1fr; }
+        .pl2-sec { padding: 56px 0 50px; }
+        .pl2-login { display: none; }
+        .pl2-hero { min-height: auto; padding: 88px 0 64px; background: hsl(45 25% 99% / .64); }
+        .pl2-hero h1 { font-size: clamp(2rem, 11vw, 3.25rem); overflow-wrap: break-word; hyphens: auto; }
+        .pl2-sec h2 { font-size: clamp(1.85rem, 7.5vw, 2.75rem); overflow-wrap: break-word; }
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pl2-page">
+
+    <!-- Fixed canvas — sections scroll on top -->
+    <div class="pl2-canvas" aria-hidden="true">
+        <div class="pl2-canvas-img"></div>
+        <div class="pl2-canvas-grid"></div>
+    </div>
+
+    <!-- Active section marker -->
+    <div class="pl2-breadcrumb" id="pl2Breadcrumb" aria-live="polite">
+        <span class="pl2-rail" aria-hidden="true">{% for _ in range(8) %}<i{% if loop.first %} class="active"{% endif %}></i>{% endfor %}</span>
+        <span id="pl2BreadcrumbText"></span>
+    </div>
+
+    <div class="pl2-scroll">
+        <!-- HeroSection -->
+        <section class="pl2-hero" id="picks" data-bc="01 · Hypothesis" data-rail="0">
+            <div class="pl2-hero-lens" id="pl2Lens"></div>
+            <div class="pl2-shell">
+                <div class="pl2-eyebrow pl2-mono">Research Index Vol. 2026</div>
+                <h1>
+                    <span class="block">Advanced</span>
+                    <span class="block pl2-h1-row">
+                        <span>Predictive</span>
+                        <span class="pl2-h1-side">AI Sports Analysis</span>
+                    </span>
+                    <span class="block">Modeling</span>
+                </h1>
+                <div class="pl2-hero-rule"></div>
+                <div class="pl2-hero-grid">
+                    <div>
+                        <p class="pl2-lede">Free daily AI picks for NBA, NFL, MLB, NHL, Soccer &amp; more. Multi-model consensus. Full transparency. Every result tracked. No opinions — only data.</p>
+                        <div class="pl2-hero-cta">
+                            <a class="pl2-btn primary" href="/ai-sports-betting-picks-today">Access Free Picks →</a>
+                            <a class="pl2-btn" href="/performance">View Model Performance</a>
+                        </div>
+                        <div class="pl2-hero-note pl2-mono">Free moneyline plays · No credit card required</div>
+                    </div>
+                    <div class="pl2-stats">
+                        <div class="pl2-stat">
+                            <b><span class="pl2-countup" data-target="{{ games_graded }}" data-suffix="+">0</span></b>
+                            <span>Games graded</span>
+                        </div>
+                        <div class="pl2-stat">
+                            <b><span class="pl2-countup" data-target="{{ sports_covered }}" data-suffix="">0</span></b>
+                            <span>Sports covered</span>
+                        </div>
+                        <div class="pl2-stat">
+                            <b><span class="pl2-countup" data-target="5" data-suffix="">0</span></b>
+                            <span>AI models</span>
+                        </div>
+                        <div class="pl2-stat">
+                            <b><span class="pl2-countup" data-target="100" data-suffix="%">0</span></b>
+                            <span>Transparent tracking</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <span class="pl2-hero-scroll pl2-mono">Scroll to explore thesis ↓</span>
+        </section>
+
+        <!-- DataHorizonLine -->
+        <div class="pl2-horizon" aria-hidden="true"></div>
+
+        <main>
+            <!-- 01 · Live moneyline board -->
+            <section class="pl2-sec" id="sec-board" data-bc="02 · Today's Board" data-rail="1">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">Free today · Live data</span>
+                            <h2>Live Predictions, Next Slate.</h2>
+                        </div>
+                    </div>
+                    <span class="pl2-mono">Moneyline-only preview. Green highlights the model's selection.</span>
+                    <div class="pl2-live-board">
+                        {% for tp in todays_picks[:6] %}
+                        <a class="pl2-pick-card" href="/{{ tp.slug }}">
+                            {% if tp.is_live %}<span class="pl2-pick-card-live">Live</span>{% endif %}
+                            <div>
+                                <div class="pl2-pick-card-meta">{{ tp.sport }} · Moneyline</div>
+                                <div class="pl2-pick-teams">
+                                    <div class="pl2-pick-team"><code>{{ tp.away[:2]|upper }}</code><span>{{ tp.away }}</span></div>
+                                    <div class="pl2-pick-team"><code>{{ tp.home[:2]|upper }}</code><span>{{ tp.home }}</span></div>
+                                </div>
+                            </div>
+                            <div class="pl2-pick-market">Match winner</div>
+                            <div class="pl2-pick-probs">
+                                <div class="pl2-pick-prob {% if tp.pick_side == 'away' %}is-pick{% endif %}">
+                                    <span>Away</span><b>{{ tp.away_prob }}%</b>
+                                </div>
+                                <div class="pl2-pick-prob {% if tp.pick_side == 'home' %}is-pick{% endif %}">
+                                    <span>Home</span><b>{{ tp.home_prob }}%</b>
+                                </div>
+                            </div>
+                            <div class="pl2-pick-summary">
+                                <span>AI pick · <strong>{{ tp.pick }}</strong></span>
+                                <span>Confidence <strong>{{ tp.prob }}%</strong></span>
+                            </div>
+                            <div class="pl2-pick-details">View Details →</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    <div class="pl2-board-actions">
+                        <a class="pl2-btn primary" href="/{{ active_sport_slug }}">See All Predictions →</a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 02 · Coverage -->
+            <section class="pl2-sec band" id="sec-coverage" data-bc="02 · Coverage" data-rail="1">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">02. Coverage</span>
+                            <h2>Picks by Sport</h2>
+                        </div>
+                        <a class="pl2-sec-link" href="/all-sports-results">Season Results →</a>
+                    </div>
+                    <span class="pl2-mono">Live model projections updated daily across every league we grade</span>
+                    <div class="pl2-sports">
+                        {% for s in landing_sports %}
+                        <a class="pl2-sport" href="/{{ s.seo_slug }}">
+                            <span class="pl2-sport-top"><em>{{ s.icon }}</em>
+                                <span class="pl2-live {% if s.is_live %}on{% endif %}"><i></i>{% if s.is_live %}Live now{% else %}Offseason{% endif %}</span>
+                            </span>
+                            <b>{{ s.name }}</b>
+                            <span class="go">View picks →</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+
+            <!-- 03 · MethodologyLedger -->
+            <section class="pl2-sec" id="sec-methodology" data-bc="03 · Methodology" data-rail="2">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">03. Methodology</span>
+                            <h2>Research Pillars</h2>
+                        </div>
+                        <a class="pl2-sec-link" href="/tutorial">How To Use →</a>
+                    </div>
+                    <div class="pl2-pillars">
+                        <a class="pl2-pillar" href="/ai-sports-betting-picks-today">
+                            <span class="pl2-pillar-num">01</span>
+                            <span class="pl2-pillar-main">
+                                <b>Moneyline Probability Engine</b>
+                                <p>Five independent models estimate every team's win probability from matchup data, ratings, and recent form — powering the free daily board.</p>
+                                <span class="pl2-chip ghost">AI Picks · Free Access</span>
+                            </span>
+                            <span class="pl2-pillar-plus">+</span>
+                        </a>
+                        <a class="pl2-pillar" href="/plans">
+                            <span class="pl2-pillar-num">02</span>
+                            <span class="pl2-pillar-main">
+                                <b>Spread &amp; Totals Modeling</b>
+                                <p>Projected margins, totals, and simulation-based final scores for premium markets — graded against the closing book lines.</p>
+                                <span class="pl2-chip ghost">Premium · Edge Access</span>
+                            </span>
+                            <span class="pl2-pillar-plus">+</span>
+                        </a>
+                        <a class="pl2-pillar" href="/our-model-vs-sportsbooks">
+                            <span class="pl2-pillar-num">03</span>
+                            <span class="pl2-pillar-main">
+                                <b>Market Movement Analysis</b>
+                                <p>Model consensus measured against the sportsbook's implied probability to surface where the market may be mispriced.</p>
+                                <span class="pl2-chip ghost">Consensus Signal</span>
+                            </span>
+                            <span class="pl2-pillar-plus">+</span>
+                        </a>
+                        <a class="pl2-pillar" href="/player-props">
+                            <span class="pl2-pillar-num">04</span>
+                            <span class="pl2-pillar-main">
+                                <b>Player Props Projections</b>
+                                <p>Per-player projections with real game-log hit rates across points, totals, strikeouts, combined props, and more.</p>
+                                <span class="pl2-chip ghost">Premium · Props Access</span>
+                            </span>
+                            <span class="pl2-pillar-plus">+</span>
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 04 · ForecastingIndex -->
+            <section class="pl2-sec band" id="sec-forecasting" data-bc="04 · Validation" data-rail="3">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">04. Validation</span>
+                            <h2>Forecasting Index</h2>
+                        </div>
+                    </div>
+                    <span class="pl2-mono">Season performance — all results tracked. No edits. Full transparency.</span>
+                    <div class="pl2-units">
+                        {% for item in units_banner_items %}
+                        <div class="pl2-unit">
+                            <div class="pl2-unit-top"><b>{{ item.label }}</b><span class="pl2-chip ghost">Moneyline</span></div>
+                            <strong class="{% if item.units and item.units.startswith('+') %}pos{% endif %}">{{ item.units }}</strong>
+                            <span>{{ item.record }} tracked</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <span class="pl2-tape-note pl2-mono">Units assume one flat unit per graded moneyline pick · full archive on the results pages</span>
+                </div>
+            </section>
+
+            <!-- 05 · ModelPerformance -->
+            <section class="pl2-sec" id="sec-performance" data-bc="05 · Performance" data-rail="4">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">05. Performance</span>
+                            <h2>AI Model Results</h2>
+                        </div>
+                        <a class="pl2-sec-link" href="/all-sports-results">Full Results Archive →</a>
+                    </div>
+                    <div class="pl2-models">
+                        {% for item in weekly_banner_messages %}
+                        <article class="pl2-model">
+                            <div class="pl2-model-top">
+                                <span class="pl2-mono">{{ item.label }}</span>
+                                <span class="pl2-chip ghost">{% if 'XSharp' in item.label %}Premium{% else %}Free{% endif %}</span>
+                            </div>
+                            <h3>{% if 'Grinder2' in item.label %}Grinder²{% elif 'XSharp' in item.label %}XSharp{% elif 'Consensus' in item.label %}Consensus{% else %}Edge{% endif %}</h3>
+                            <div class="pl2-model-meta">
+                                <span class="pl2-mono">Hit rate</span>
+                                <strong>{{ item.pct }}</strong>
+                            </div>
+                            <div class="pl2-meter"><i style="width:{{ item.pct.replace('%','') }}%"></i></div>
+                            <div class="pl2-model-meta" style="margin-top:9px;">
+                                <span class="pl2-mono">{{ item.record }}</span>
+                                <span class="pl2-mono">Tracked record</span>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </div>
+                    <div class="pl2-fineprint">
+                        <span>All results are logged in real time, timestamped, and publicly verifiable. No picks removed retroactively. Confidence buckets and sample sizes shown on the full performance page.</span>
+                        <a class="pl2-sec-link" href="/performance">Full Data →</a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- WhyDifferent -->
+            <section class="pl2-sec band" id="sec-why" data-bc="05 · Thesis" data-rail="4">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">Thesis</span>
+                            <h2>Why Our Picks Are Different</h2>
+                        </div>
+                    </div>
+                    <div class="pl2-why">
+                        <p>Most bettors rely on public trends, hot streaks, and guesswork. Our AI sports betting picks are built differently — a proprietary odds engine powered by five independent models analyzing matchups, player performance, advanced team metrics, and real-time market movement.</p>
+                        <p>Instead of following sportsbook lines, we generate our own probabilities to uncover +EV opportunities the market often misprices. Every pick is backed by data — not opinions. Every result is tracked publicly, with no cherry-picked wins or hidden losses.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 06 · Daily intel -->
+            <section class="pl2-sec" id="sec-intel" data-bc="06 · Daily Intel" data-rail="5">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">06. Daily Intel</span>
+                            <h2>Reports &amp; Research</h2>
+                        </div>
+                        <a class="pl2-sec-link" href="/blog">All Articles →</a>
+                    </div>
+                    <div class="pl2-intel">
+                        <div class="pl2-card">
+                            <span class="pl2-mono">Daily Betting Results Report</span>
+                            <p>Yesterday's performance across all sports and models</p>
+                            {% if latest_graded_game %}
+                            <h3>One completed game.</h3>
+                            <div class="pl2-result-game">
+                                <div class="pl2-result-game-head"><span>{{ latest_graded_game.sport }}</span><span>{{ latest_graded_game.date }}</span></div>
+                                <div class="pl2-result-game-head"><span>Model pick: {{ latest_graded_game.pick }}</span><span>{{ latest_graded_game.probability }}% · Correct</span></div>
+                                <div class="pl2-result-team"><span>{{ latest_graded_game.away }}</span><strong>{{ latest_graded_game.away_score }}</strong></div>
+                                <div class="pl2-result-team"><span>{{ latest_graded_game.home }}</span><strong>{{ latest_graded_game.home_score }}</strong></div>
+                            </div>
+                            {% else %}
+                            <h3>Latest results.</h3>
+                            <p>Completed games are graded automatically as final scores arrive.</p>
+                            {% endif %}
+                            <a class="pl2-btn primary" href="/daily-report">View Full Results →</a>
+                        </div>
+                        <div class="pl2-card">
+                            {% if latest_blog_post %}
+                            <span class="pl2-mono">Prediction Lab Blog</span>
+                            <p>Latest Daily Article:</p>
+                            <time>{{ latest_blog_post.display_date }}</time>
+                            <h3>{{ latest_blog_post.title }}</h3>
+                            <p>{{ latest_blog_post.excerpt }}</p>
+                            <a class="pl2-btn" href="/blog/{{ latest_blog_post.slug }}">Read Full Analysis →</a>
+                            {% if recent_blog_posts %}
+                            <div class="pl2-minilinks">
+                                {% for post in recent_blog_posts %}
+                                <a href="/blog/{{ post.slug }}">→ {{ post.title }}</a>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <a class="pl2-sec-link" href="/blog">View All Articles →</a>
+                            {% else %}
+                            <span class="pl2-mono">Prediction Lab Blog</span>
+                            <h3>Daily analysis, every day.</h3>
+                            <p>AI-generated betting insights, game previews, and model analysis — published daily.</p>
+                            <a class="pl2-btn" href="/blog">Open The Blog →</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 07 · Process -->
+            <section class="pl2-sec band" id="sec-process" data-bc="06 · Process" data-rail="5">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">07. Process</span>
+                            <h2>How It Works</h2>
+                        </div>
+                    </div>
+                    <div class="pl2-steps">
+                        <div class="pl2-step"><div class="pl2-step-art data" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 01</span><b>Live Data</b><p>Real-time stats, matchups, and historical performance across every covered league.</p></div>
+                        <div class="pl2-step"><div class="pl2-step-art model" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 02</span><b>AI Models</b><p>Five independent models generate win probabilities for every game — no human overrides.</p></div>
+                        <div class="pl2-step"><div class="pl2-step-art project" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 03</span><b>Projections</b><p>Predicted scores, spreads, and totals for each matchup, graded against the book.</p></div>
+                        <div class="pl2-step"><div class="pl2-step-art consensus" aria-hidden="true"><i></i><i></i><i></i></div><span class="pl2-mono">Step 04</span><b>Consensus</b><p>All models combine into one pick — highlighting real, measurable edges.</p></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 08 · PricingSection -->
+            <section class="pl2-sec" id="sec-pricing" data-bc="06 · Access" data-rail="5">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top">
+                        <div>
+                            <span class="pl2-mono">08. Access</span>
+                            <h2>Start Free. Unlock The Edge.</h2>
+                        </div>
+                        <a class="pl2-sec-link" href="/plans">All Plans →</a>
+                    </div>
+                    <div class="pl2-plans">
+                        <div class="pl2-plan">
+                            <div class="pl2-plan-head"><h3>Free Picks</h3><span class="pl2-plan-price">$0 — no credit card</span></div>
+                            <ul>
+                                <li>Moneyline picks across every covered sport</li>
+                                <li>Model-generated win probability for every game</li>
+                                <li>Multi-model consensus signal strength</li>
+                                <li>Fully tracked historical performance</li>
+                            </ul>
+                            <a class="pl2-btn" href="/ai-sports-betting-picks-today">View Free Picks →</a>
+                        </div>
+                        <div class="pl2-plan premium">
+                            <div class="pl2-plan-head"><h3>Premium Edge</h3><span class="pl2-plan-price">$4.99/wk · $19.99/mo · $149.99/yr</span></div>
+                            <ul>
+                                <li>Everything in Free, plus spread betting models</li>
+                                <li>Totals with projected game flow</li>
+                                <li>Predicted final scores (simulation-based)</li>
+                                <li>Player props picks and projections</li>
+                                <li>Model performance page access</li>
+                            </ul>
+                            <a class="pl2-btn primary" href="/plans">Try a Week — $4.99 →</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 09 · Homepage FAQ -->
+            <section class="pl2-sec band" id="sec-faq" data-bc="07 · Questions" data-rail="6">
+                <div class="pl2-shell">
+                    <div class="pl2-sec-top pl2-faq-heading">
+                        <div>
+                            <span class="pl2-mono">FAQ</span>
+                            <h2>Questions, answered honestly.</h2>
+                        </div>
+                        <a class="pl2-sec-link" href="/faq">Full FAQ →</a>
+                    </div>
+                    <div class="pl2-faq-grid">
+                        <details class="pl2-faq-item">
+                            <summary>How do your AI sports betting picks work?</summary>
+                            <p>Prediction Lab runs each matchup through multiple models that look at team strength, recent form, market odds, matchup data, and historical results. The page shows the model probability and the pick it sees as the strongest current edge.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>What makes your picks different from sportsbooks?</summary>
+                            <p>Sportsbooks set prices to balance risk and protect margin. Our model is trying to estimate the true probability of the game, then compare that number against the book price to find possible mispriced spots.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>How do you find value bets?</summary>
+                            <p>A value bet appears when our model probability is higher than the sportsbook's implied probability. That does not guarantee a win; it means the price may be better than the true risk if the model is right over time.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>What does the probability percentage mean?</summary>
+                            <p>The percentage is the model's estimated chance for that side to win the moneyline market. A 60% pick still loses about 40 times out of 100, so the number should be used for pricing and discipline, not certainty.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>Do your models agree on every pick?</summary>
+                            <p>No. Disagreement is normal. We show consensus and model percentages so users can see when signals are strong, mixed, or thin instead of hiding uncertainty behind one black-box answer.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>What sports do you cover?</summary>
+                            <p>We cover major team sports and selected individual sports, including MLB, NBA, NFL, NHL, soccer, college sports, WNBA, tennis, UFC, and golf when reliable data is available.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>Are your results tracked publicly?</summary>
+                            <p>Yes. Completed picks are graded against final outcomes and shown in the results archive. We keep wins and losses visible because model trust has to be earned over a real sample.</p>
+                        </details>
+                        <details class="pl2-faq-item">
+                            <summary>Are your picks guaranteed to win?</summary>
+                            <p>No. Nobody can guarantee sports betting results. These picks are for people who want data, transparency, and discipline. Bet responsibly, use bankroll limits, and never treat a model as a sure thing.</p>
+                        </details>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        {% include "partials/research_knowledge.html" %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pl2Drawer(open) {
+    document.body.classList.toggle('pl2-drawer-open', !!open);
+}
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') pl2Drawer(false);
+});
+
+/* CountUp — port of CountUp.jsx */
+(function () {
+    var started = new WeakSet();
+    function runCountUp(el) {
+        if (started.has(el)) return;
+        started.add(el);
+        var target = parseInt(el.getAttribute('data-target'), 10) || 0;
+        var suffix = el.getAttribute('data-suffix') || '';
+        var duration = 1500;
+        var steps = 60;
+        var increment = target / steps;
+        var current = 0;
+        var step = 0;
+        var timer = setInterval(function () {
+            step++;
+            current += increment;
+            if (current >= target) {
+                el.textContent = target.toLocaleString() + suffix;
+                clearInterval(timer);
+            } else {
+                el.textContent = Math.floor(current).toLocaleString() + suffix;
+            }
+        }, duration / steps);
+    }
+    var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting) runCountUp(entry.target);
+        });
+    }, { threshold: 0.5 });
+    document.querySelectorAll('.pl2-countup').forEach(function (el) { observer.observe(el); });
+})();
+
+/* Hero lens — port of HeroSection mouse effect */
+(function () {
+    var hero = document.getElementById('picks');
+    var lens = document.getElementById('pl2Lens');
+    if (!hero || !lens) return;
+    hero.addEventListener('mousemove', function (e) {
+        var rect = hero.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        lens.style.left = x + 'px';
+        lens.style.top = y + 'px';
+    });
+})();
+
+/* Fixed data canvas — the page scrolls over the research layer. */
+(function () {
+    var image = document.querySelector('.pl2-canvas-img');
+    var line = document.querySelector('.pl2-horizon');
+    if (!image || !line) return;
+    var ticking = false;
+    function render() {
+        var y = window.scrollY || 0;
+        image.style.transform = 'translate3d(0,' + Math.min(y * 0.025, 110) + 'px,0) scale(1.04)';
+        line.style.transform = 'translate3d(0,' + Math.min(y * 0.05, 150) + 'px,0)';
+        ticking = false;
+    }
+    window.addEventListener('scroll', function () {
+        if (!ticking) {
+            window.requestAnimationFrame(render);
+            ticking = true;
+        }
+    }, { passive: true });
+    render();
+})();
+
+/* Advertising copy controls. */
+(function () {
+    document.querySelectorAll('.pl2-copy').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var text = button.getAttribute('data-copy') || '';
+            function complete() {
+                button.textContent = 'Done';
+                button.classList.add('copied');
+                window.setTimeout(function () {
+                    button.textContent = 'Copy';
+                    button.classList.remove('copied');
+                }, 1400);
+            }
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(complete);
+                return;
+            }
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            document.execCommand('copy');
+            area.remove();
+            complete();
+        });
+    });
+})();
+
+/* ActiveBreadcrumb — scroll spy */
+(function () {
+    var crumb = document.getElementById('pl2Breadcrumb');
+    var crumbText = document.getElementById('pl2BreadcrumbText');
+    if (!crumb || !crumbText) return;
+    var sections = Array.prototype.slice.call(document.querySelectorAll('[data-bc]'));
+    function update() {
+        var mid = window.innerHeight * 0.35;
+        var current = sections[0];
+        sections.forEach(function (sec) {
+            var top = sec.getBoundingClientRect().top;
+            if (top <= mid) current = sec;
+        });
+        if (current) {
+            crumbText.textContent = current.getAttribute('data-bc');
+            crumb.classList.add('is-active');
+            var railIndex = parseInt(current.getAttribute('data-rail') || '0', 10);
+            crumb.querySelectorAll('.pl2-rail i').forEach(function (line, index) {
+                line.classList.toggle('active', index === railIndex);
+            });
+        }
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+})();
+</script>
+{% endblock %}

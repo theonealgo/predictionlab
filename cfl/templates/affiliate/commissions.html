@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Commissions | PredictionLab Affiliate{% endblock %}
+{% block extra_styles %}{% include "affiliate/_aff_styles.html" %}{% endblock %}
+{% block content %}
+<div class="aff-wrap">
+  <h1 style="margin:0 0 12px;">Commissions</h1>
+  {% set active = 'commissions' %}{% include "affiliate/_subnav.html" %}
+  <div class="aff-section">
+    <div class="aff-table-wrap">
+      <table class="aff-table">
+        <thead><tr>
+          <th>Date</th><th>Transaction</th><th>Amount</th><th>Rate</th><th>Commission</th><th>Status</th><th>Payable on</th>
+        </tr></thead>
+        <tbody>
+          {% for c in rows %}
+          <tr>
+            <td>{{ (c.created_at or '')[:10] }}</td>
+            <td>{{ c.billing_reason or 'payment' }}<br><span class="aff-note">{{ c.stripe_invoice_id }}</span></td>
+            <td>{{ money(c.amount_gross_cents, c.currency) }}{% if c.amount_refunded_cents %} <span class="aff-note">(-{{ money(c.amount_refunded_cents, c.currency) }})</span>{% endif %}</td>
+            <td>{{ '%.1f'|format(c.commission_bps/100.0) }}%</td>
+            <td>{{ money(c.commission_cents, c.currency) }}</td>
+            <td><span class="aff-badge {{ c.status }}">{{ c.status }}</span></td>
+            <td>{{ (c.eligible_at or '')[:10] }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:22px;">No commissions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

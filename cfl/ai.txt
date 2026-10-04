@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# AI discovery
+LLMs: https://predictionlab.io/llms.txt
+Sitemap: https://predictionlab.io/sitemap.xml
+
+# Canonical contact for AI indexing
+Contact: support.predictionlab@gmail.com

@@ -1,0 +1,8 @@
+# Copy to qa/.pagespeed_api_key (gitignored) and paste your key on one line:
+#   cp qa/.pagespeed_api_key.example qa/.pagespeed_api_key
+#
+# Or export instead:
+#   export PAGESPEED_API_KEY='yourAPIKey'
+#
+# Get a key: https://developers.google.com/speed/docs/insights/v5/get-started
+REPLACE_WITH_YOUR_PAGESPEED_API_KEY

@@ -1,0 +1,330 @@
+/* Golf tournament win-probability board */
+
+.golf-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 8px 16px 32px;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.golf-wrap h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.golf-status {
+  font-size: 0.72em;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.golf-lede,
+.golf-note {
+  color: #475569;
+  margin: 0 0 14px;
+  max-width: 52rem;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.golf-muted {
+  color: #64748b;
+}
+
+/* Active / recent tournament chips — pills, not bare blue links */
+.golf-active-list,
+.golf-recent-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.golf-active-kicker {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-right: 4px;
+}
+
+.golf-wrap a.golf-chip,
+a.golf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a !important;
+  font-weight: 700;
+  font-size: 0.86rem;
+  text-decoration: none !important;
+  line-height: 1.2;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.golf-wrap a.golf-chip:hover,
+a.golf-chip:hover {
+  border-color: #0c1e3a;
+  background: #f8fafc;
+  color: #0c1e3a !important;
+}
+
+.golf-wrap a.golf-chip.golf-chip-on,
+a.golf-chip.golf-chip-on {
+  background: #0c1e3a;
+  border-color: #0c1e3a;
+  color: #fff !important;
+}
+
+.golf-wrap a.golf-chip.golf-chip-live,
+a.golf-chip.golf-chip-live {
+  border-color: #067647;
+}
+
+.golf-chip-meta {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.golf-chip-on .golf-chip-meta {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* Tournament dropdown */
+.golf-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.golf-picker label {
+  font-weight: 800;
+  color: #64748b;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.golf-picker select {
+  flex: 1 1 320px;
+  min-width: 240px;
+  max-width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 11px 40px 11px 14px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #0f172a;
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")
+    no-repeat right 14px center;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.golf-picker select:focus {
+  outline: 2px solid #0c1e3a;
+  outline-offset: 2px;
+}
+
+/* Ranked field table */
+.golf-table-wrap {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.golf-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 860px;
+  table-layout: fixed;
+}
+
+.golf-table th {
+  text-align: left;
+  padding: 12px 10px;
+  color: #fff;
+  background: #0c1e3a;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #0c1e3a;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.golf-table th:nth-child(1) { width: 56px; }
+.golf-table th:nth-child(2) { width: 22%; }
+.golf-table th:nth-child(n+3) { text-align: center; width: 11%; }
+.golf-table th:last-child { width: 12%; }
+
+.golf-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+  font-size: 0.92rem;
+  vertical-align: middle;
+}
+
+.golf-table td:nth-child(n+3) {
+  text-align: center;
+}
+
+.golf-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.golf-table tbody tr:hover {
+  background: #eef6ff;
+}
+
+.golf-rank {
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.golf-player {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.golf-player strong {
+  color: #0f172a !important;
+  font-size: 0.98rem;
+  font-weight: 750;
+}
+
+.golf-headshot {
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e2e8f0;
+  vertical-align: middle;
+  margin-right: 10px;
+  width: 36px;
+  height: 36px;
+}
+
+.golf-model-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 2.6em;
+}
+
+.golf-mrank {
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+  line-height: 1.1;
+}
+
+.golf-mpct {
+  color: #64748b;
+  font-weight: 650;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.golf-winpct {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.golf-pct-suffix {
+  font-size: 0.7em;
+  color: #64748b;
+}
+
+.golf-empty {
+  padding: 20px 14px !important;
+  color: #475569;
+  font-weight: 600;
+  text-align: left !important;
+}
+
+.golf-model-detail {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.golf-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 4px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: transparent;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  padding: 0;
+  vertical-align: middle;
+}
+
+.golf-delta {
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+
+.golf-delta-up { color: #047857; }
+.golf-delta-down { color: #b91c1c; }
+.golf-delta-even { color: #0f172a; }
+
+/* Do not let global link blue leak onto the board */
+.golf-wrap a:not(.golf-chip):not(.tab) {
+  color: #0f172a;
+  font-weight: 650;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 800px) {
+  .golf-wrap {
+    padding: 8px 10px 28px;
+  }
+  .golf-table {
+    min-width: 760px;
+  }
+}

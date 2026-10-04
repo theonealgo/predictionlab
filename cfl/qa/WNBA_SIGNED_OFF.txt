@@ -1,0 +1,4 @@
+WNBA picks/results/chart UI signed off on :5052 (2026-09-08).
+Kickoff clocks, Portland Fire / Toronto Tempo logos, H2H Last 10, 4-model consensus.
+Do not modify unless owner says UNLOCK WNBA.
+Never push from this folder.
