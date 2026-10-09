@@ -126870,6 +126870,55 @@ def _banner_daily_results_for_range(sport, *args, **kwargs):
 
 
 _NHL_RESULTS_FAIL_TEXT = 'NHL results could not be loaded'
+_NHL_FINALS_SYNC = {'ts': 0.0}
+
+
+def _sync_nhl_espn_finals(days_back=21):
+    """Fill blank NHL final scores from the ESPN scoreboard (never overwrites a stored score)."""
+    today = datetime.now()
+    for i in range(days_back, -1, -1):
+        day = (today - timedelta(days=i)).strftime('%Y%m%d')
+        try:
+            resp = requests.get(
+                'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard',
+                params={'dates': day},
+                timeout=8,
+            )
+            events = resp.json().get('events') or []
+        except Exception:
+            continue
+        rows = []
+        for ev in events:
+            if not (((ev.get('status') or {}).get('type') or {}).get('completed')):
+                continue
+            comp = (ev.get('competitions') or [{}])[0]
+            sides = {c.get('homeAway'): c for c in comp.get('competitors') or []}
+            try:
+                rows.append((int(sides['home']['score']), int(sides['away']['score']), f"NHL_{ev['id']}"))
+            except (KeyError, TypeError, ValueError):
+                continue
+        if not rows:
+            continue
+        try:
+            conn = get_db_connection()
+            conn.executemany(
+                "UPDATE games SET home_score = ?, away_score = ?, status = 'final' "
+                "WHERE sport = 'NHL' AND game_id = ? AND home_score IS NULL",
+                rows,
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"NHL finals sync {day} skipped: {e}")
+
+
+def _start_nhl_finals_sync():
+    now_ts = _time.time()
+    if now_ts - _NHL_FINALS_SYNC['ts'] < 900:
+        return
+    _NHL_FINALS_SYNC['ts'] = now_ts
+    import threading as _thr
+    _thr.Thread(target=_sync_nhl_espn_finals, daemon=True, name='nhl-finals-sync').start()
 
 
 def _nhl_results_last_good_path():
@@ -126883,7 +126932,10 @@ def _nhl_results_keep_last_good(response):
     try:
         if response.status_code != 200 or 'html' not in (response.mimetype or '').lower():
             return response
-        if (request.path or '').rstrip('/') != '/nhl-results' or request.args:
+        if (request.path or '').rstrip('/') != '/nhl-results':
+            return response
+        _start_nhl_finals_sync()
+        if request.args:
             return response
         path = _nhl_results_last_good_path()
         html = response.get_data(as_text=True)
