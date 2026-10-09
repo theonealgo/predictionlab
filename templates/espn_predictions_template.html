@@ -145,7 +145,7 @@
             transition:opacity .2s ease;
             white-space:nowrap;
         }
-        .auth-btn.signup { background:#00C076; color:#ffffff; border:1px solid #00C076; }
+        .auth-btn.signup { background:#067647; color:#ffffff; border:1px solid #067647; }
         .auth-btn.login { border:1px solid #00529B; color:#00529B; background:#fff; }
         .auth-btn:hover { opacity:.9; }
         .nav-links {
@@ -265,13 +265,13 @@
         .league-badges { display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:860px; }
         .league-pill { background:#f8fafc; border:2px solid rgba(15,23,42,0.14); border-radius:20px; padding:6px 14px; font-size:0.8em; font-weight:600; white-space:nowrap; cursor:pointer; transition:all 0.2s; color:#334155; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
         .league-pill.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; }
-        .league-pill.live-league { border-color:#00C076; color:#059669; background:rgba(0,192,118,0.07); }
-        .league-pill.live-league.active { background:#00C076; border-color:#00C076; color:#fff; }
+        .league-pill.live-league { border-color:#067647; color:#059669; background:rgba(0,192,118,0.07); }
+        .league-pill.live-league.active { background:#067647; border-color:#067647; color:#fff; }
         .league-pill:hover { border-color:#fbbf24; }
-        .league-pill .live-dot { width:7px; height:7px; border-radius:50%; background:#00C076; flex-shrink:0; animation:livepulse 1.4s ease-in-out infinite; }
+        .league-pill .live-dot { width:7px; height:7px; border-radius:50%; background:#067647; flex-shrink:0; animation:livepulse 1.4s ease-in-out infinite; }
         @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.8);} }
-        .date-bubble.today-bubble { border-color:#00C076 !important; color:#059669 !important; font-weight:700; }
-        .date-bubble.today-bubble.active { background:#00C076 !important; color:#fff !important; }
+        .date-bubble.today-bubble { border-color:#067647 !important; color:#059669 !important; font-weight:700; }
+        .date-bubble.today-bubble.active { background:#067647 !important; color:#fff !important; }
         .date-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:14px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }
         .nav-arrow { background:rgba(146,64,14,0.12); border:2px solid #92400e; color:#92400e; font-size:1.3em; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; user-select:none; }
         .nav-arrow:hover { background:rgba(146,64,14,0.22); transform:scale(1.1); }
@@ -279,19 +279,21 @@
         .date-bubble { background:#fff; border:2px solid rgba(15,23,42,0.18); border-radius:22px; padding:9px 16px; min-width:105px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.86em; color:#0f172a; }
         .date-bubble:hover { border-color:#92400e; }
         .date-bubble.active { background:#f59e0b; border-color:#d97706; color:#0f172a; font-weight:700; }
-        .date-bubble.today { border-color:#00C076; color:#00C076; }
-        .date-bubble.active.today { background:#00C076; color:#fff; }
+        .date-bubble.today { border-color:#067647; color:#067647; }
+        .date-bubble.active.today { background:#067647; color:#fff; }
         .date-section { display:none; }
         .date-section.visible { display:block; }
         .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         .date-header { font-size:1.25em; margin-bottom:14px; color:#0F172A; font-weight:700; }
-        .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:22px; align-items:start; }
-        @media(max-width:400px){ .games-grid{grid-template-columns:1fr;} }
-        /* Matchup cards: 3 per desktop row. Golf tournament board is excluded. */
-        body:not(.sport-golf):not(.golf-board) .games-grid { grid-template-columns:repeat(3, minmax(0, 1fr)) !important; }
-        body:not(.sport-golf):not(.golf-board) .game-card-stack { max-width:none; }
-        @media(max-width:1100px){ body:not(.sport-golf):not(.golf-board) .games-grid{grid-template-columns:repeat(2, minmax(0, 1fr)) !important;} }
-        @media(max-width:768px){ body:not(.sport-golf):not(.golf-board) .games-grid{grid-template-columns:1fr !important;} }
+        .games-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; margin:0 auto 22px; align-items:start; max-width:1080px; }
+        @media(max-width:720px){ .games-grid{grid-template-columns:1fr;} }
+        /* Same card size on every team sport: 2 per row, not full-bleed. */
+        body:not(.sport-golf):not(.golf-board) .games-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); max-width:1080px; }
+        body:not(.sport-golf):not(.golf-board) .game-card-stack,
+        body:not(.sport-golf):not(.golf-board) .games-grid > .game-card {
+            max-width:none; width:100%; justify-self:stretch; grid-column:auto !important;
+        }
+        @media(max-width:720px){ body:not(.sport-golf):not(.golf-board) .games-grid{grid-template-columns:1fr;} }
         /* Soccer: league lives on the card badge. In-grid headings restart the row. */
         body.sport-soccer .games-grid > div[style*="grid-column:1/-1"],
         body.sport-soccer .games-grid > .slate-league-heading { display:none !important; }
@@ -337,9 +339,9 @@
         .model-tag { font-size:0.58em; font-weight:700; text-transform:uppercase; letter-spacing:0.35px; color:#64748b; margin-bottom:6px; }
         .win-pct { font-size:1.65em; font-weight:900; color:#94a3b8; line-height:1; margin-bottom:2px; }
         .win-pct span.unit { font-size:0.5em; font-weight:700; vertical-align:super; }
-        .team-slot.favored .win-pct { color:#00C076; }
+        .team-slot.favored .win-pct { color:#067647; }
         .book-ml { font-size:0.8em; font-weight:700; color:#475569; }
-        .book-ml.fav { color:#00C076; }
+        .book-ml.fav { color:#067647; }
         .book-ml.dog { color:#92400e; }
         .matchup-row .face-books-ml { margin-top:2px; }
         .matchup-row .face-ml-stack { margin-top:2px; gap:3px; }
@@ -383,11 +385,11 @@
         .ml-src.books { color:#0f766e; }
         .ml-src.pl { color:#92400e; }
         .ml-num { font-size:0.92em; font-weight:800; }
-        .ml-num.fav { color:#00C076; }
+        .ml-num.fav { color:#067647; }
         .ml-num.dog { color:#92400e; }
-        .pick-arrow { color:#00C076; font-weight:800; font-size:0.85em; margin-top:2px; }
+        .pick-arrow { color:#067647; font-weight:800; font-size:0.85em; margin-top:2px; }
         .final-score { font-size:1.2em; font-weight:800; color:#0f172a; }
-        .final-score.score-winner { color:#00C076; }
+        .final-score.score-winner { color:#067647; }
         .odds-pricing-table th.col-books, .val-books { color:#0f766e; }
         .proj-score-box { margin-top:8px; padding:8px 10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; }
         .proj-score-title { font-size:0.68em; text-transform:uppercase; font-weight:700; color:#0F172A; margin-bottom:6px; }
@@ -408,16 +410,16 @@
         .card-hero-ml-row .team-line-full { display:none; }
         @media(min-width:380px){ .card-hero-ml-row .team-line-full { display:inline; } .card-hero-ml-row .team-line-short { display:none; } }
         .card-hero-meta { font-size:0.7em; color:#64748b; text-transform:uppercase; font-weight:600; letter-spacing:0.4px; margin-bottom:8px; }
-        .card-hero-meta.final { color:#00C076; }
+        .card-hero-meta.final { color:#067647; }
         .card-hero-ml { display:flex; flex-direction:column; gap:5px; }
         .card-hero-ml-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.86em; font-weight:600; color:#0f172a; }
-        .card-hero-ml-row .ml-val.fav { color:#00C076; }
+        .card-hero-ml-row .ml-val.fav { color:#067647; }
         .card-hero-ml-row .ml-val.dog { color:#92400e; }
-        .card-hero-ml-row .pick-arrow { color:#00C076; font-weight:800; flex-shrink:0; }
+        .card-hero-ml-row .pick-arrow { color:#067647; font-weight:800; flex-shrink:0; }
         .card-hero-final-scores { margin-top:0; }
-        .card-hero-ml-row .score-winner { color:#00C076; font-weight:800; }
+        .card-hero-ml-row .score-winner { color:#067647; font-weight:800; }
         .card-final-score { font-size:1.05em; font-weight:800; color:#0f172a; flex-shrink:0; }
-        .card-final-score.score-winner { color:#00C076; }
+        .card-final-score.score-winner { color:#067647; }
         .card-legend { font-size:0.68em; color:#94a3b8; padding:4px 12px 10px; line-height:1.4; border-top:1px solid rgba(15,23,42,0.06); }
         .h2h-info-wrap { position:relative; display:flex; flex-direction:column; gap:1px; }
         .h2h-info-label { display:inline-flex; align-items:center; gap:5px; }
@@ -448,7 +450,7 @@
         .h2h-pop-row { font-size:0.76em; color:#334155; padding:5px 12px; border-top:1px solid #f1f5f9; line-height:1.35; }
         .h2h-pop-row:first-of-type { border-top:none; }
         .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#92400e; background:rgba(146,64,14,0.1); }
-        .game-status.final { color:#00C076; background:rgba(16,185,129,0.12); }
+        .game-status.final { color:#067647; background:rgba(16,185,129,0.12); }
         .game-body { display:flex; padding:10px 12px; gap:10px; }
         .teams-section { flex:1; min-width:0; }
         .team-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(15,23,42,0.06); }
@@ -456,9 +458,9 @@
         .team-name { font-size:0.94em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
         .team-name.winner { font-weight:700; }
         .team-odds { font-size:0.82em; font-weight:700; margin-left:6px; flex-shrink:0; }
-        .team-odds.fav { color:#00C076; }
+        .team-odds.fav { color:#067647; }
         .team-odds.dog { color:#92400e; }
-        .pick-indicator { color:#00C076; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
+        .pick-indicator { color:#067647; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
         .score-box { font-size:1.05em; font-weight:700; color:#92400e; margin-left:8px; flex-shrink:0; }
         .prediction-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:120px; max-width:168px; display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
         @media(max-width:400px){ .game-body{flex-direction:column;} .prediction-panel{max-width:none;min-width:0;border-left:none;border-top:3px solid #8b5cf6;} }
@@ -466,7 +468,7 @@
         .model-row { display:flex; justify-content:space-between; font-size:0.81em; padding:2px 0; }
         .model-lbl { opacity:0.85; }
         .model-val { font-weight:600; }
-        .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #00C076; color:#00C076; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
+        .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #067647; color:#067647; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
 
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
@@ -497,14 +499,16 @@
             letter-spacing:0.3px;
             width:100%;
             max-width:100%;
-            min-height:30px;
+            min-height:28px;
+            max-height:none;
             line-height:1.15;
             display:flex;
             align-items:flex-start;
             justify-content:center;
             text-align:center;
+            overflow:visible;
             word-break:break-word;
-            overflow-wrap:anywhere;
+            white-space:normal;
         }
         .pc-val {
             font-size:0.95em;
@@ -521,21 +525,23 @@
             font-weight:700;
             text-transform:uppercase;
             letter-spacing:0.3px;
-            padding:2px 6px;
+            padding:2px 4px;
             border-radius:4px;
             width:100%;
             max-width:100%;
-            min-height:30px;
+            min-height:22px;
+            max-height:28px;
             box-sizing:border-box;
             text-align:center;
             line-height:1.15;
             display:flex;
             align-items:center;
             justify-content:center;
-            word-break:break-word;
-            overflow-wrap:anywhere;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
         }
-        .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
+        .pc-side.home { color:#067647; background:rgba(16,185,129,0.15); }
         .pc-side.away { color:#92400e; background:rgba(146,64,14,0.1); }
 
         /* MLB premium picks side-panel (replaces Home Win % panel) */
@@ -563,7 +569,7 @@
         .odds-pricing-table .market-k { color:#64748b; font-weight:700; font-size:0.72em; text-transform:uppercase; }
         .odds-pricing-table .val-pl { color:#92400e; }
         .odds-pricing-table .val-xs { color:#1d4ed8; }
-        .odds-pricing-table .val-result { color:#00C076; font-weight:800; font-size:0.78em; line-height:1.35; word-break:break-word; }
+        .odds-pricing-table .val-result { color:#067647; font-weight:800; font-size:0.78em; line-height:1.35; word-break:break-word; }
         .odds-pricing-table .val-result-compact { font-size:0.76em; }
         .odds-pricing-locked { font-size:0.82em; color:#475569; padding:8px 0; }
         .odds-pricing-locked a { color:#00529B; font-weight:700; }
@@ -573,7 +579,7 @@
         .sf-item { display:flex; flex-direction:column; gap:1px; }
         .sf-label { color:#475569; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
         .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
-        .sf-fav { color:#00C076; }
+        .sf-fav { color:#067647; }
         .sf-xgb { color:#f87171; }
         .no-data { text-align:center; padding:60px; opacity:0.7; font-size:1.2em; }
         /* Injury badges */
@@ -601,6 +607,8 @@
         .social-image-link img{display:block;width:100%;height:100%;object-fit:cover;}
         @media (max-width: 768px) {
             .container { padding: 20px 10px; }
+        }
+        @media (max-width: 640px) {
             .games-grid { grid-template-columns:1fr !important; }
         }
         .nav-group { position: relative; }
@@ -680,7 +688,7 @@
             {% endfor %}
         </div>
     </div>
-    <div style="font-size:0.75em;color:#475569;text-align:center;margin:-6px 0 10px;"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#00C076;display:inline-block;"></span> Green = active fixtures</span></div>
+    <div style="font-size:0.75em;color:#475569;text-align:center;margin:-6px 0 10px;"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#067647;display:inline-block;"></span> Green = active fixtures</span></div>
     {% endif %}
 
     {% if prediction_error %}
@@ -705,7 +713,7 @@
         .pv-btn{border:0;background:transparent;color:#475569;font-size:0.8em;font-weight:700;padding:6px 14px;cursor:pointer;}
         .pv-btn.active{background:#00529B;color:#fff;}
         .pv-copy{margin-left:auto;border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 14px;font-size:0.8em;font-weight:800;cursor:pointer;}
-        .pv-copy.copied{background:#00C076;border-color:#00C076;color:#fff;}
+        .pv-copy.copied{background:#067647;border-color:#067647;color:#fff;}
         .chart-table-wrap{display:none;margin-top:4px;-webkit-overflow-scrolling:touch;}
         .date-section.chart-mode .games-grid{display:none !important;}
         .date-section.chart-mode .chart-table-wrap{display:block;max-height:78vh;overflow:auto;border:1px solid rgba(15,23,42,0.12);border-radius:10px;}
@@ -764,7 +772,7 @@
         </div>
         <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
         {% if _show_market_tabs %}
-        <nav class="picks-market-tabs" id="picksMarketTabs" aria-label="Pick market">
+        <nav class="picks-market-tabs" id="picksMarketTabs" role="tablist" aria-label="Pick market">
             {% if 'moneyline' in _pcm %}
             <button type="button" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
             {% endif %}
@@ -792,7 +800,7 @@
         <div class="date-section{% if date == (default_pick_date|default(today_date)) %} visible{% endif %}" id="date-{{ date }}">
             <div class="date-header">
                 📅 {{ date }}
-                {% if date == today_date %}<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
+                {% if date == today_date %}<span style="background:#067647;color:white;padding:3px 10px;border-radius:4px;font-size:0.68em;margin-left:8px;">TODAY</span>{% endif %}
             </div>
             <div class="games-grid">
                 {% if sport == 'SOCCER' %}
@@ -842,11 +850,12 @@
                 {% set _chart_result = '' %}
                 {% if is_final %}{% if (pred.predicted_winner == pred.home_team_id and home_wins) or (pred.predicted_winner == pred.away_team_id and away_wins) %}{% set _chart_result = 'WON' %}{% elif home_wins or away_wins %}{% set _chart_result = 'LOST' %}{% endif %}{% endif %}
                 <div class="game-card-stack" data-pick-card
-                    data-away="{{ team_short(pred.away_team_id) }}"
-                    data-home="{{ team_short(pred.home_team_id) }}"
+                    data-game-id="{{ pred.game_id if pred.game_id is defined and pred.game_id else (sport ~ '_' ~ (pred.away_team_id or '') ~ '_' ~ (pred.home_team_id or '') ~ '_' ~ (date or '')) }}"
+                    data-away="{{ pred.away_team_id }}"
+                    data-home="{{ pred.home_team_id }}"
                     {% if sport == 'SOCCER' %}data-away-full="{{ pred.away_team_id }}" data-home-full="{{ pred.home_team_id }}" data-date="{{ date }}"{% endif %}
                     data-league="{{ pred.league if pred.league else '' }}"
-                    data-time="{% if pred.game_time is defined and pred.game_time %}{{ pred.game_time }}{% elif is_final %}FINAL{% else %}Upcoming{% endif %}"
+                    data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
                     data-conf="{% if _chart_conf is not none %}{{ '%.1f'|format(_chart_conf) }}{% endif %}"
                     data-h2h="{{ _h2h_txt }}"{% if _h2h_reason %} data-h2h-reason="{{ _h2h_reason }}"{% endif %}{% if sport == 'SOCCER' %} data-plxg="{{ _plxg_txt }}"{% if _plxg_reason %} data-plxg-reason="{{ _plxg_reason }}"{% endif %}{% endif %}
@@ -856,16 +865,16 @@
                     data-pl-spread="{% if sport != 'TENNIS' and pred.disp_pl_spread is defined and pred.disp_pl_spread is not none %}{{ fmt_spread_line(pred.disp_pl_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-xs-spread="{% if sport != 'TENNIS' and pred.disp_xs_spread is defined and pred.disp_xs_spread is not none %}{{ fmt_spread_line(pred.disp_xs_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-total-ev="{% if sport != 'TENNIS' and sport != 'SOCCER' and pred.total_ev is defined and pred.total_ev is not none %}{{ '%.1f'|format(pred.total_ev) }}{% endif %}"
-                    {# Face chips (Consensus Historical / Edge / RL) need model attrs for all
-                       visitors. Odds & Lines / Pick Confidence stay behind is_premium below. #}
+                    {% if is_premium|default(false) %}
                     data-m-grinder2="{% if pred.glicko2_prob is defined and pred.glicko2_prob is not none %}{{ pred.glicko2_prob }}{% endif %}"
                     data-m-takedown="{% if pred.trueskill_prob is defined and pred.trueskill_prob is not none %}{{ pred.trueskill_prob }}{% endif %}"
                     data-m-edge="{% if pred.elo_prob is defined and pred.elo_prob is not none %}{{ pred.elo_prob }}{% endif %}"
                     data-m-xsharp="{% if pred.xgb_prob is defined and pred.xgb_prob is not none %}{{ pred.xgb_prob }}{% endif %}"
-                    data-m-efficiency="{% if pred.efficiency_prob is defined and pred.efficiency_prob is not none %}{{ pred.efficiency_prob }}{% elif sport != 'SOCCER' and pred.disp_ml_prob is defined and pred.disp_ml_prob is not none %}{{ pred.disp_ml_prob }}{% endif %}"
+                    data-m-efficiency="{% if pred.efficiency_prob is defined and pred.efficiency_prob is not none %}{{ pred.efficiency_prob }}{% endif %}"
                     data-m-consensus="{% if pred.ensemble_prob is defined and pred.ensemble_prob is not none %}{{ pred.ensemble_prob }}{% endif %}"
                     data-pl-proj="{% if pred.pl_proj_away_pts is not none and pred.pl_proj_home_pts is not none %}{{ fmt_half(pred.pl_proj_away_pts) }}–{{ fmt_half(pred.pl_proj_home_pts) }}{% endif %}"
                     data-xs-proj="{% if pred.xs_proj_away_pts is not none and pred.xs_proj_home_pts is not none %}{{ fmt_half(pred.xs_proj_away_pts) }}–{{ fmt_half(pred.xs_proj_home_pts) }}{% endif %}"
+                    {% endif %}
                     data-result="{{ _chart_result }}">
                 <div class="game-card pick-card is-expanded" data-league="{{ pred.league if pred.league else 'Other' }}">
                     {% set _force_rl = (sport == 'MLB') %}
@@ -879,8 +888,17 @@
                     {% set home_score = pred.home_score %}
                     {% set show_pick_arrow = (not is_final) and _odds_pass %}
                     {% set card_details_id = 'card-details-' ~ date ~ '-' ~ loop.index0 %}
-                    {% if sport == 'WNBA' or sport == 'TENNIS' %}
+                    {% if sport == 'TENNIS' %}
                     {% set conf_models = [
+                        {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
+                        {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
+                        {'name': 'Efficiency', 'prob': pred.efficiency_prob if (pred.efficiency_prob is defined and pred.efficiency_prob is not none) else (pred.disp_ml_prob if pred.disp_ml_prob is defined else none), 'key': 'efficiency'},
+                        {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
+                    ] %}
+                    {% elif sport == 'WNBA' %}
+                    {% set conf_models = [
+                        {'name': label_glicko2, 'prob': pred.glicko2_prob, 'key': 'glicko2'},
+                        {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
                         {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
                         {'name': 'Efficiency', 'prob': pred.efficiency_prob if (pred.efficiency_prob is defined and pred.efficiency_prob is not none) else (pred.disp_ml_prob if pred.disp_ml_prob is defined else none), 'key': 'efficiency'},
@@ -892,7 +910,7 @@
                         {'name': label_trueskill, 'prob': pred.trueskill_prob, 'key': 'trueskill'},
                         {'name': label_elo, 'prob': pred.elo_prob, 'key': 'elo'},
                         {'name': label_xgb, 'prob': pred.xgb_prob, 'key': 'xgb'},
-                        {'name': 'Efficiency', 'prob': pred.efficiency_prob if (pred.efficiency_prob is defined and pred.efficiency_prob is not none) else (none if sport == 'SOCCER' else (pred.disp_ml_prob if pred.disp_ml_prob is defined else none)), 'key': 'efficiency'},
+                        {'name': 'Efficiency', 'prob': pred.efficiency_prob if (pred.efficiency_prob is defined and pred.efficiency_prob is not none) else (none if sport == 'SOCCER' or sport == 'NFL' else (pred.disp_ml_prob if pred.disp_ml_prob is defined else none)), 'key': 'efficiency'},
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     {% endif %}

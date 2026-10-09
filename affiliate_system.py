@@ -134,6 +134,11 @@ def _ensure_affiliate_tables():
                 suspended_at TEXT
             )
         ''')
+        aff_cols = {r[1] for r in conn.execute('PRAGMA table_info(affiliates)').fetchall()}
+        if 'what_they_do' not in aff_cols:
+            conn.execute('ALTER TABLE affiliates ADD COLUMN what_they_do TEXT')
+        if 'follower_count' not in aff_cols:
+            conn.execute('ALTER TABLE affiliates ADD COLUMN follower_count INTEGER')
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_aff_user ON affiliates(user_id) WHERE user_id IS NOT NULL')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_aff_status ON affiliates(status)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_aff_email ON affiliates(email)')
@@ -1097,8 +1102,13 @@ def _notify_application_received(aff):
     )
     for adm in _admin_emails():
         _send_email(adm, 'New affiliate application',
-                    f"New affiliate application from {aff['email']} "
-                    f"(requested code {aff['affiliate_code']}). Review: {AFFILIATE_SITE_URL}/admin/affiliates")
+                    f"New affiliate application from {aff['name'] or ''} <{aff['email']}> "
+                    f"(requested code {aff['affiliate_code']}).\n\n"
+                    f"What they do: {aff['what_they_do'] or '—'}\n"
+                    f"Followers: {aff['follower_count'] if aff['follower_count'] is not None else '—'}\n"
+                    f"Promo method: {aff['promo_method'] or '—'}\n"
+                    f"Website/channel: {aff['website_url'] or '—'}\n\n"
+                    f"Review: {AFFILIATE_SITE_URL}/admin/affiliates/{aff['id']}")
 
 
 def _notify_status(aff, status):
@@ -1230,10 +1240,16 @@ def affiliate_apply():
             'website_url': (request.form.get('website_url') or '').strip()[:300],
             'promo_method': (request.form.get('promo_method') or '').strip()[:120],
             'application_note': (request.form.get('application_note') or '').strip()[:2000],
+            'what_they_do': (request.form.get('what_they_do') or '').strip()[:2000],
+            'follower_count': re.sub(r'[^0-9]', '', request.form.get('follower_count') or '')[:12],
         }
         agree = request.form.get('agree_terms') == 'on'
         if not form['name']:
             error = 'Please enter your name.'
+        elif len(form['what_they_do']) < 10:
+            error = 'Please describe what you do (at least 10 characters).'
+        elif not form['follower_count']:
+            error = 'Please enter how many followers or subscribers you have.'
         elif not _valid_code(form['code']):
             error = 'Choose a code with 3–32 letters/numbers (A–Z, 0–9, - or _), not reserved.'
         elif not agree:
@@ -1246,13 +1262,15 @@ def affiliate_apply():
                 else:
                     conn.execute(
                         'INSERT INTO affiliates (user_id, affiliate_code, status, name, email, '
-                        'country, website_url, promo_method, application_note, commission_bps, agreed_terms_at) '
-                        'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                        'country, website_url, promo_method, application_note, commission_bps, agreed_terms_at, '
+                        'what_they_do, follower_count) '
+                        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             current_user.id, form['code'], _A_PENDING, form['name'],
                             current_user.email, form['country'], form['website_url'],
                             form['promo_method'], form['application_note'],
                             AFFILIATE_COMMISSION_BPS, _now_iso(),
+                            form['what_they_do'], int(form['follower_count']),
                         ),
                     )
                     conn.commit()

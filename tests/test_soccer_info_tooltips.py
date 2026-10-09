@@ -18,7 +18,7 @@ _SEASON_SNIPPET = """
     <div class="roi-grid">
         <div>
             <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline (Sharp Consensus)</div>
-            <div style="font-size:2em;font-weight:bold;color:#00C076;">100.0%</div>
+            <div style="font-size:2em;font-weight:bold;color:#067647;">100.0%</div>
             <div style="font-size:0.85em;opacity:0.9;color:#334155;">6-0 <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
         </div>
         <div>
@@ -28,7 +28,7 @@ _SEASON_SNIPPET = """
         </div>
         <div>
             <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U (XSharp)</div>
-            <div style="font-size:2em;font-weight:bold;color:#00C076;">66.7%</div>
+            <div style="font-size:2em;font-weight:bold;color:#067647;">66.7%</div>
             <div style="font-size:0.85em;opacity:0.9;color:#334155;">2-1 <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
         </div>
     </div>

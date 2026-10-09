@@ -209,6 +209,26 @@ section#finals-wrap .cards {
   width: 100%;
 }
 
+/* NFL / NHL: two per row. A leftover card stays one cell — never full width. */
+body.sport-nfl .games-grid,
+body[data-sport="NFL"] .games-grid,
+body[data-sandbox-sport="nfl"] .games-grid,
+body.sport-nhl .games-grid,
+body[data-sport="NHL"] .games-grid,
+body[data-sandbox-sport="nhl"] .games-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+body.sport-nfl .games-grid > .game-card-stack,
+body.sport-nfl .games-grid > .game-card,
+body[data-sport="NFL"] .games-grid > .game-card-stack,
+body.sport-nhl .games-grid > .game-card-stack,
+body.sport-nhl .games-grid > .game-card,
+body[data-sport="NHL"] .games-grid > .game-card-stack {
+  grid-column: auto !important;
+  width: 100%;
+  max-width: none;
+}
+
 .game-card-stack {
   min-width: 0 !important;
   max-width: var(--pl-card-max) !important;

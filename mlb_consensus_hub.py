@@ -1282,7 +1282,7 @@ def _consensus_record_cell(
     rec = f"{w}-{l}" + (f"-{p}" if p else "")
     if pct is None:
         return rec
-    color = "#00C076" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
+    color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
     body = f"{rec} <span style='color:{color};font-weight:700'>({pct:.0f}%)</span>"
     if not bar:
         return body
@@ -2840,7 +2840,7 @@ def _wrap_results_markets(
 """
     return f"""
     <div class="pl-results-markets" id="pl-results-markets">
-      <nav class="picks-market-tabs pl-results-market-tabs" aria-label="Results market">
+      <nav class="picks-market-tabs pl-results-market-tabs" role="tablist" aria-label="Results market">
         {''.join(tabs)}
       </nav>
       {''.join(panel_html)}
@@ -3425,18 +3425,28 @@ def _apply_pl_xs_grades(row: dict[str, Any]) -> None:
 
 
 def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[str, Any] | None:
+    # Cards use team-col (MLB family) or team-slot (CFL and the shared card).
     away_m = re.search(
-        r'class="team-col away"[^>]*>.*?class="team-name">([^<]+)</div>'
+        r'class="(?:team-col away|team-slot\s*")[^>]*>.*?class="team-name">([^<]+)</div>'
         r'(?:.*?class="final-score[^"]*">\s*([^<]*?)\s*</div>)?',
         card_html,
         re.I | re.S,
     )
     home_m = re.search(
-        r'class="team-col home"[^>]*>.*?class="team-name">([^<]+)</div>'
+        r'class="(?:team-col home|team-slot favored")[^>]*>.*?class="team-name">([^<]+)</div>'
         r'(?:.*?class="final-score[^"]*">\s*([^<]*?)\s*</div>)?',
         card_html,
         re.I | re.S,
     )
+    if not away_m or not home_m:
+        slots = list(re.finditer(
+            r'class="team-slot[^"]*"[^>]*>.*?class="team-name">([^<]+)</div>'
+            r'(?:.*?class="final-score[^"]*">\s*([^<]*?)\s*</div>)?',
+            card_html,
+            re.I | re.S,
+        ))
+        if len(slots) >= 2:
+            away_m, home_m = slots[0], slots[1]
     if not away_m or not home_m:
         return None
     away = _clean_team_label(away_m.group(1))
@@ -3461,12 +3471,12 @@ def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[s
     spread, totals = _extract_spread_totals(card_html)
     gid_m = re.search(r'data-game-id="([^"]+)"', card_html, re.I)
     away_blk = re.search(
-        r'class="team-col away"([\s\S]*?)class="team-col home"',
+        r'class="(?:team-col away|team-slot\s*")([\s\S]*?)class="(?:team-col home|team-slot favored")',
         card_html,
         re.I,
     )
     home_blk = re.search(
-        r'class="team-col home"([\s\S]*?)(?:class="(?:team-col|card-footer|pick-conf)|$)',
+        r'class="(?:team-col home|team-slot favored")([\s\S]*?)(?:class="(?:team-col|team-slot|card-footer|pick-conf)|$)',
         card_html,
         re.I,
     )
@@ -4674,7 +4684,6 @@ def build_ufc_payload() -> dict[str, Any]:
             "season": season_ml,
         },
         "markets": {
-            # ML-only — moneyline market only (no empty Spread/Totals shells).
             "moneyline": {
                 "label": "Moneyline",
                 "tallies": {
@@ -4684,6 +4693,26 @@ def build_ufc_payload() -> dict[str, Any]:
                 },
                 "model_order": MODEL_ORDER,
                 "finals": show_finals,
+            },
+            "spread": {
+                "label": "Spread",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
+            },
+            "totals": {
+                "label": "Totals",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
             },
         },
         "ml_only": True,
@@ -4861,6 +4890,26 @@ def build_tennis_payload() -> dict[str, Any]:
                 },
                 "model_order": MODEL_ORDER,
                 "finals": show_finals,
+            },
+            "spread": {
+                "label": "Spread",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
+            },
+            "totals": {
+                "label": "Totals",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
             },
         },
         "ml_only": True,
@@ -5268,7 +5317,7 @@ def fill_blank_daily_model_rows(html: str, season_models: dict[str, Any]) -> str
         pct = mod.get("pct")
         rec = mod.get("record") or f"{mod.get('w') or 0}-{mod.get('l') or 0}"
         pct_s = f"{pct}%" if pct is not None else "—"
-        color = "#00C076" if (pct or 0) >= 55 else "#0c1e3a"
+        color = "#067647" if (pct or 0) >= 55 else "#0c1e3a"
         return (
             f'<div class="daily-model">{m.group(1)}</div>'
             f'<div class="daily-acc" style="color:{color};">{pct_s}</div>'

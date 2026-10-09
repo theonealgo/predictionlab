@@ -16,7 +16,9 @@
        <strong>Referral URL:</strong> <code>{{ link }}</code><br>
        <strong>Website/channel:</strong> {{ aff.website_url or '—' }}<br>
        <strong>Promo method:</strong> {{ aff.promo_method or '—' }}<br>
+       <strong>Followers:</strong> {{ '{:,}'.format(aff.follower_count) if aff.follower_count is not none else '—' }}<br>
        <strong>Commission rate:</strong> {{ '%.1f'|format((aff.commission_bps or 0)/100.0) }}%</p>
+    {% if aff.what_they_do %}<p><strong>What they do:</strong><br>{{ aff.what_they_do }}</p>{% endif %}
     {% if aff.application_note %}<p><strong>Notes:</strong><br>{{ aff.application_note }}</p>{% endif %}
     <form method="POST" action="/admin/affiliates/{{ aff.id }}/status" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

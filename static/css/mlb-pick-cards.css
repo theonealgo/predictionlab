@@ -49,9 +49,9 @@
         .model-tag { font-size:0.58em; font-weight:700; text-transform:uppercase; letter-spacing:0.35px; color:#64748b; margin-bottom:6px; }
         .win-pct { font-size:1.65em; font-weight:900; color:#94a3b8; line-height:1; margin-bottom:2px; }
         .win-pct span.unit { font-size:0.5em; font-weight:700; vertical-align:super; }
-        .team-slot.favored .win-pct { color:#00C076; }
+        .team-slot.favored .win-pct { color:#067647; }
         .book-ml { font-size:0.8em; font-weight:700; color:#475569; }
-        .book-ml.fav { color:#00C076; }
+        .book-ml.fav { color:#067647; }
         .book-ml.dog { color:#92400e; }
         .matchup-row .face-books-ml { margin-top:2px; }
         .matchup-row .face-ml-stack { margin-top:2px; gap:3px; }
@@ -95,11 +95,11 @@
         .ml-src.books { color:#0f766e; }
         .ml-src.pl { color:#92400e; }
         .ml-num { font-size:0.92em; font-weight:800; }
-        .ml-num.fav { color:#00C076; }
+        .ml-num.fav { color:#067647; }
         .ml-num.dog { color:#92400e; }
-        .pick-arrow { color:#00C076; font-weight:800; font-size:0.85em; margin-top:2px; }
+        .pick-arrow { color:#067647; font-weight:800; font-size:0.85em; margin-top:2px; }
         .final-score { font-size:1.2em; font-weight:800; color:#0f172a; }
-        .final-score.score-winner { color:#00C076; }
+        .final-score.score-winner { color:#067647; }
         .odds-pricing-table th.col-books, .val-books { color:#0f766e; }
         .proj-score-box { margin-top:8px; padding:8px 10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; }
         .proj-score-title { font-size:0.68em; text-transform:uppercase; font-weight:700; color:#0F172A; margin-bottom:6px; }
@@ -120,16 +120,16 @@
         .card-hero-ml-row .team-line-full { display:none; }
         @media(min-width:380px){ .card-hero-ml-row .team-line-full { display:inline; } .card-hero-ml-row .team-line-short { display:none; } }
         .card-hero-meta { font-size:0.7em; color:#64748b; text-transform:uppercase; font-weight:600; letter-spacing:0.4px; margin-bottom:8px; }
-        .card-hero-meta.final { color:#00C076; }
+        .card-hero-meta.final { color:#067647; }
         .card-hero-ml { display:flex; flex-direction:column; gap:5px; }
         .card-hero-ml-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.86em; font-weight:600; color:#0f172a; }
-        .card-hero-ml-row .ml-val.fav { color:#00C076; }
+        .card-hero-ml-row .ml-val.fav { color:#067647; }
         .card-hero-ml-row .ml-val.dog { color:#92400e; }
-        .card-hero-ml-row .pick-arrow { color:#00C076; font-weight:800; flex-shrink:0; }
+        .card-hero-ml-row .pick-arrow { color:#067647; font-weight:800; flex-shrink:0; }
         .card-hero-final-scores { margin-top:0; }
-        .card-hero-ml-row .score-winner { color:#00C076; font-weight:800; }
+        .card-hero-ml-row .score-winner { color:#067647; font-weight:800; }
         .card-final-score { font-size:1.05em; font-weight:800; color:#0f172a; flex-shrink:0; }
-        .card-final-score.score-winner { color:#00C076; }
+        .card-final-score.score-winner { color:#067647; }
         .card-legend { font-size:0.68em; color:#94a3b8; padding:4px 12px 10px; line-height:1.4; border-top:1px solid rgba(15,23,42,0.06); }
         .h2h-info-wrap { position:relative; display:flex; flex-direction:column; gap:1px; }
         .h2h-info-label { display:inline-flex; align-items:center; gap:5px; }
@@ -160,7 +160,7 @@
         .h2h-pop-row { font-size:0.76em; color:#334155; padding:5px 12px; border-top:1px solid #f1f5f9; line-height:1.35; }
         .h2h-pop-row:first-of-type { border-top:none; }
         .game-status { padding:4px 12px; font-size:0.72em; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:#92400e; background:rgba(146,64,14,0.1); }
-        .game-status.final { color:#00C076; background:rgba(16,185,129,0.12); }
+        .game-status.final { color:#067647; background:rgba(16,185,129,0.12); }
         .game-body { display:flex; padding:10px 12px; gap:10px; }
         .teams-section { flex:1; min-width:0; }
         .team-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(15,23,42,0.06); }
@@ -168,9 +168,9 @@
         .team-name { font-size:0.94em; white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; line-height:1.25; }
         .team-name.winner { font-weight:700; }
         .team-odds { font-size:0.82em; font-weight:700; margin-left:6px; flex-shrink:0; }
-        .team-odds.fav { color:#00C076; }
+        .team-odds.fav { color:#067647; }
         .team-odds.dog { color:#92400e; }
-        .pick-indicator { color:#00C076; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
+        .pick-indicator { color:#067647; font-size:1.05em; font-weight:700; margin-left:6px; flex-shrink:0; }
         .score-box { font-size:1.05em; font-weight:700; color:#92400e; margin-left:8px; flex-shrink:0; }
         .prediction-panel { background:rgba(139,92,246,0.12); border-left:3px solid #8b5cf6; padding:10px 12px; min-width:120px; max-width:168px; display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
         @media(max-width:400px){ .game-body{flex-direction:column;} .prediction-panel{max-width:none;min-width:0;border-left:none;border-top:3px solid #8b5cf6;} }
@@ -178,7 +178,7 @@
         .model-row { display:flex; justify-content:space-between; font-size:0.81em; padding:2px 0; }
         .model-lbl { opacity:0.85; }
         .model-val { font-weight:600; }
-        .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #00C076; color:#00C076; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
+        .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #067647; color:#067647; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
 
         /* Pick confidence strip (all sports — same footprint) */
         .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
@@ -247,7 +247,7 @@
             word-break:break-word;
             overflow-wrap:anywhere;
         }
-        .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
+        .pc-side.home { color:#067647; background:rgba(16,185,129,0.15); }
         .pc-side.away { color:#92400e; background:rgba(146,64,14,0.1); }
 
         /* MLB premium picks side-panel (replaces Home Win % panel) */
@@ -275,7 +275,7 @@
         .odds-pricing-table .market-k { color:#64748b; font-weight:700; font-size:0.72em; text-transform:uppercase; }
         .odds-pricing-table .val-pl { color:#92400e; }
         .odds-pricing-table .val-xs { color:#1d4ed8; }
-        .odds-pricing-table .val-result { color:#00C076; font-weight:800; font-size:0.78em; line-height:1.35; word-break:break-word; }
+        .odds-pricing-table .val-result { color:#067647; font-weight:800; font-size:0.78em; line-height:1.35; word-break:break-word; }
         .odds-pricing-table .val-result-compact { font-size:0.76em; }
         .odds-pricing-locked { font-size:0.82em; color:#475569; padding:8px 0; }
         .odds-pricing-locked a { color:#00529B; font-weight:700; }
@@ -285,7 +285,7 @@
         .sf-item { display:flex; flex-direction:column; gap:1px; }
         .sf-label { color:#475569; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
         .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
-        .sf-fav { color:#00C076; }
+        .sf-fav { color:#067647; }
         .sf-xgb { color:#f87171; }
         .no-data { text-align:center; padding:60px; opacity:0.7; font-size:1.2em; }
         /* Injury badges */

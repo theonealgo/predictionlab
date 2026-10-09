@@ -1,34 +1,13 @@
-# NBA UNLOCKED (:5052 / premerge) — results share image only
-
-Owner 2026-09-17: **UNLOCK NBA** for bottom Results Image on `/nba-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
-
-Prior lock notes preserved below for when this miss is closed.
-
 ---
-
-description: NBA picks/results UI locked on :5052 — do not edit unless UNLOCK NBA
+description: NBA locked — 3 UNLOCKS required
 alwaysApply: true
 ---
 
-# NBA LOCKED (:5052 / premerge)
+# NBA LOCKED
 
-NBA picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+Do not modify NBA unless the same owner message contains the word **UNLOCK**
+3 times, names NBA, and names the miss.
 
-Do **not** modify NBA unless the owner says:
-
-**UNLOCK NBA**
-
-Fixing NFL, MLB, soccer, chrome, or production outages is **not** an NBA unlock.
-
-## Do not touch
-
-- `/nba-picks`, `/nba-results`, `/nba-results?view=chart`
-- NBA Cards|Chart, card HTML, date nav
-- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NBA
-
-## Allowed without unlock
-
-- Other sports
-- Checker reports that only *read* NBA pages
+Locked. 3 UNLOCKS required.
 
 Do not put lock text on user-facing HTML.

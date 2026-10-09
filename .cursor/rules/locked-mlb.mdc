@@ -1,28 +1,15 @@
 ---
-description: MLB picks/results UI locked on :5052 — do not edit unless UNLOCK MLB
+description: MLB locked — 3 UNLOCKS required
 alwaysApply: true
 ---
 
-# MLB LOCKED (:5052 / premerge)
+# MLB LOCKED
 
-MLB picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+Do not modify MLB unless the same owner message contains the word **UNLOCK**
+3 times, names MLB, and names the miss.
 
-Do **not** modify MLB unless the owner says:
+Owner 2026-09-22: predictions image refreshed; Efficiency filled from the published spread. Miss closed — locked.
 
-**UNLOCK MLB**
-
-Owner 2026-09-17: picks cards were super wide from `minmax(520px)` inject.
-Restored shared 3-up grid (`repeat(3, minmax(0, 1fr))`) so MLB matches NFL
-and other team sports. Miss closed — lock again.
-
-Owner 2026-09-17: Consensus Historical for free users — dissent now
-reads `data-m-*` when Pick Confidence HTML is paywalled. Cache v39.
-Miss closed — lock again.
-
-## Do not touch
-
-- `/mlb-picks`, `/mlb-results`, `/mlb-results?view=chart`
-- MLB Cards|Chart, card HTML, date nav
-- Sport-only MLB branches whose job is the card face
+Owner 2026-10-08: picks game times from ESPN (midnight placeholder replaced; games ESPN no longer schedules dropped); graded 50% results boxes name the side they were graded on (after consensus split rows are counted). Equal stored PL / XSharp lines stay as stored. Miss closed — locked.
 
 Do not put lock text on user-facing HTML.

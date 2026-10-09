@@ -1,14 +1,13 @@
 ---
-description: NFL file-glob lock — refuse NFL path edits without UNLOCK NFL
-globs: "**/nfl*","**/NFL*","**/locked-nfl.mdc"
-alwaysApply: false
+description: NFL PATHS locked — 3 UNLOCKS required
+alwaysApply: true
 ---
 
-# NFL path lock (file-glob layer)
+# NFL PATHS LOCKED
 
-If you are editing a file matching these globs, stop unless the owner already
-said **UNLOCK NFL** in this conversation with a named miss.
+Do not modify NFL PATHS unless the same owner message contains the word **UNLOCK**
+3 times, names NFL PATHS, and names the miss.
 
-This is an extra lock layer on top of `locked-nfl.mdc` / AGENTS Rule 12.
-Shared files (`NHL77FINAL.py`, `team_results_charts.py`) are not matched here —
-those still require UNLOCK NFL before any NFL-only branch change.
+NFL paths are locked. 3 UNLOCKS required.
+
+Do not put lock text on user-facing HTML.

@@ -75,7 +75,7 @@ def _cfl_results_shell_html() -> str:
 <meta charset="utf-8">
 <title>CFL Results | Prediction Lab</title>
 <link rel="stylesheet" href="/static/css/team-results.css">
-<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-eqht-2">
+<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-2up-3">
 <style>
 .page-title {{ font-size:2.2em; margin-bottom:20px; text-align:center; padding:22px 18px; border:1px solid rgba(15,23,42,0.14); border-radius:12px; background:#fff; color:#0f172a; }}
 .date-nav {{ display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:12px 16px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }}
@@ -83,7 +83,7 @@ def _cfl_results_shell_html() -> str:
 .date-bubbles {{ display:flex; gap:8px; overflow-x:auto; padding:4px; max-width:820px; }}
 .date-bubble {{ background:#fff; border:2px solid rgba(15,23,42,0.2); border-radius:22px; padding:8px 15px; min-width:100px; text-align:center; cursor:pointer; font-weight:500; font-size:0.84em; color:#0f172a; }}
 .date-bubble.active {{ background:#fbbf24; border-color:#fbbf24; font-weight:700; }}
-.date-bubble.today {{ border-color:#00C076; color:#00C076; }}
+.date-bubble.today {{ border-color:#067647; color:#067647; }}
 .date-section {{ display:none; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }}
 .date-section.visible {{ display:block; }}
 .date-header {{ color:#0F172A; font-size:1.3em; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #E2E8F0; }}
@@ -788,7 +788,7 @@ def _date_sections_html(
     for day, cards in grouped.items():
         visible = " visible" if day == slate else ""
         today_badge = (
-            '<span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;'
+            '<span style="background:#067647;color:white;padding:3px 10px;border-radius:4px;'
             'font-size:0.68em;margin-left:8px;">TODAY</span>'
             if day == today
             else ""
@@ -1172,7 +1172,7 @@ def _ensure_cfl_result_css(html: str, render) -> str:
         flags=re.I,
     )
     if "cfl-pick-cards.css" not in html:
-        tag = '<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-eqht-2">'
+        tag = '<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-2up-3">'
         if re.search(r"</head>", html, re.I):
             html = re.sub(r"</head>", tag + "</head>", html, count=1, flags=re.I)
         else:

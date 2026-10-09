@@ -1,34 +1,13 @@
-# NCAAW UNLOCKED (:5052 / premerge) — results share image only
-
-Owner 2026-09-17: **UNLOCK NCAAW** for bottom Results Image on `/ncaaw-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
-
-Prior lock notes preserved below for when this miss is closed.
-
 ---
-
-description: NCAAW picks/results UI locked on :5052 — do not edit unless UNLOCK NCAAW
+description: NCAAW locked — 3 UNLOCKS required
 alwaysApply: true
 ---
 
-# NCAAW LOCKED (:5052 / premerge)
+# NCAAW LOCKED
 
-NCAAW picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+Do not modify NCAAW unless the same owner message contains the word **UNLOCK**
+3 times, names NCAAW, and names the miss.
 
-Do **not** modify NCAAW unless the owner says:
-
-**UNLOCK NCAAW**
-
-Fixing NFL, MLB, soccer, chrome, or production outages is **not** an NCAAW unlock.
-
-## Do not touch
-
-- `/ncaaw-picks`, `/ncaaw-results`, `/ncaaw-results?view=chart`
-- NCAAW Cards|Chart, card HTML, date nav
-- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NCAAW
-
-## Allowed without unlock
-
-- Other sports
-- Checker reports that only *read* NCAAW pages
+Locked. 3 UNLOCKS required.
 
 Do not put lock text on user-facing HTML.

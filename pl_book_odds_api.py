@@ -165,6 +165,12 @@ SOCCER_ODDS_API_KEYS = {
 
 _ODDS_API_SOCCER_CACHE: dict[str, dict[str, Any]] = {}
 _ODDS_API_SOCCER_TTL = 300.0
+_ODDS_API_NHL_CACHE: dict[str, dict[str, Any]] = {}
+_ODDS_API_NHL_TTL = 300.0
+_NHL_ODDS_API_KEYS = (
+    'icehockey_nhl_preseason',
+    'icehockey_nhl',
+)
 
 def build_pl_book_odds():
 
@@ -631,6 +637,167 @@ def _soccer_team_keys_match(a: str, b: str) -> bool:
     return len(shorter) >= 8 and shorter in longer
 
 
+def _odds_api_keys() -> list[str]:
+    keys: list[str] = []
+    for raw in (
+        os.getenv('ODDS_API_KEY'),
+        os.getenv('THEODDS_API_KEY'),
+        'fa5c07106b4e80c3f7cd7e418fe3a5cc',
+        '18cfd484126cfef3f271472d619e2319',
+    ):
+        key = (raw or '').strip()
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _nhl_team_keys_match(a: str, b: str) -> bool:
+    ka, kb = _normalize_team_key(a), _normalize_team_key(b)
+    if not ka or not kb:
+        return False
+    if ka == kb or ka in kb or kb in ka:
+        return True
+    aliases = {
+        'utahmammoth': {'utahhockeyclub', 'utah'},
+        'utahhockeyclub': {'utahmammoth', 'utah'},
+        'newyorkislanders': {'nyislanders', 'islanders'},
+        'newjerseydevils': {'njdevils', 'devils'},
+    }
+    return kb in aliases.get(ka, ()) or ka in aliases.get(kb, ())
+
+
+def _fetch_odds_api_events(sport_key: str) -> list[dict]:
+    now = time.time()
+    cached = _ODDS_API_NHL_CACHE.get(sport_key)
+    if cached and (now - float(cached.get('ts') or 0)) < _ODDS_API_NHL_TTL:
+        return list(cached.get('events') or [])
+    events: list[dict] = []
+    for api_key in _odds_api_keys():
+        try:
+            resp = requests.get(
+                f'https://api.the-odds-api.com/v4/sports/{sport_key}/odds',
+                params={
+                    'apiKey': api_key,
+                    'regions': 'us',
+                    'markets': 'h2h,spreads,totals',
+                    'oddsFormat': 'american',
+                    'dateFormat': 'iso',
+                },
+                timeout=10,
+            )
+        except Exception as exc:
+            logger.debug('nhl odds-api %s failed: %s', sport_key, exc)
+            continue
+        if resp.status_code == 401:
+            continue
+        if resp.status_code != 200:
+            logger.debug('nhl odds-api %s status %s', sport_key, resp.status_code)
+            break
+        payload = resp.json()
+        events = payload if isinstance(payload, list) else []
+        break
+    _ODDS_API_NHL_CACHE[sport_key] = {'ts': now, 'events': events}
+    return events
+
+
+def _build_row_from_odds_api_nhl(
+    sport: str,
+    game_id: str,
+    home_team: str,
+    away_team: str,
+    game_date: Optional[str],
+) -> Optional[dict[str, Any]]:
+    events: list[dict] = []
+    seen = set()
+    for sport_key in _NHL_ODDS_API_KEYS:
+        for ev in _fetch_odds_api_events(sport_key):
+            eid = ev.get('id') or (ev.get('home_team'), ev.get('away_team'), ev.get('commence_time'))
+            if eid in seen:
+                continue
+            seen.add(eid)
+            events.append(ev)
+    if not events:
+        return None
+    want_date = (game_date or '')[:10]
+    match = None
+    for ev in events:
+        ev_home = ev.get('home_team') or ''
+        ev_away = ev.get('away_team') or ''
+        sides_ok = (
+            (_nhl_team_keys_match(home_team, ev_home) and _nhl_team_keys_match(away_team, ev_away))
+            or (_nhl_team_keys_match(home_team, ev_away) and _nhl_team_keys_match(away_team, ev_home))
+        )
+        if not sides_ok:
+            continue
+        commence = str(ev.get('commence_time') or '')[:10]
+        if want_date and commence:
+            try:
+                if abs(
+                    (datetime.strptime(want_date, '%Y-%m-%d') - datetime.strptime(commence, '%Y-%m-%d')).days
+                ) > 1:
+                    continue
+            except ValueError:
+                pass
+        match = ev
+        if _nhl_team_keys_match(home_team, ev_home) and _nhl_team_keys_match(away_team, ev_away):
+            break
+    if not match:
+        return None
+    book = _pick_odds_api_book(match)
+    if not book:
+        return None
+    ev_home = match.get('home_team') or ''
+    home_is_event_home = _nhl_team_keys_match(home_team, ev_home)
+    home_ml = away_ml = spread = total = None
+    for out in _odds_api_market_outcomes(book, 'h2h'):
+        name = out.get('name') or ''
+        price = _to_int_american(out.get('price'))
+        if price is None:
+            continue
+        if _nhl_team_keys_match(name, home_team):
+            home_ml = price
+        elif _nhl_team_keys_match(name, away_team):
+            away_ml = price
+    for out in _odds_api_market_outcomes(book, 'spreads'):
+        point = _to_float(out.get('point'))
+        if point is None:
+            continue
+        if _nhl_team_keys_match(out.get('name') or '', home_team):
+            spread = point
+            break
+        if _nhl_team_keys_match(out.get('name') or '', away_team):
+            spread = -point
+            break
+    for out in _odds_api_market_outcomes(book, 'totals'):
+        if str(out.get('name') or '').lower() == 'over':
+            total = _to_float(out.get('point'))
+            if total is not None:
+                break
+    if spread is None and total is None and home_ml is None and away_ml is None:
+        return None
+    lines = _format_spread_line(home_team, away_team, spread or 0.0)
+    fav = lines.get('favorite_team') if spread is not None else None
+    return {
+        'sport': sport,
+        'game_id': game_id,
+        'game_date': game_date,
+        'home_team': home_team,
+        'away_team': away_team,
+        'spread': spread,
+        'total': total,
+        'home_moneyline': home_ml,
+        'away_moneyline': away_ml,
+        'favorite_team': fav,
+        'favorite_moneyline': home_ml if fav == home_team else (away_ml if fav == away_team else None),
+        'underdog_moneyline': away_ml if fav == home_team else (home_ml if fav == away_team else None),
+        'home_spread_line': lines.get('home_spread_line') if spread is not None else None,
+        'away_spread_line': lines.get('away_spread_line') if spread is not None else None,
+        'provider': 'sportsbook',
+        'source': 'pl_book_odds_api',
+        'as_of': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+    }
+
+
 def _fetch_odds_api_soccer_events(sport_key: str) -> list[dict]:
     now = time.time()
     cached = _ODDS_API_SOCCER_CACHE.get(sport_key)
@@ -828,6 +995,10 @@ def build_pl_book_odds(
         return _build_row_from_odds_api(
             sport, game_id, home_team, away_team, game_date, league_name,
         )
+    if not item and sport == 'NHL':
+        return _build_row_from_odds_api_nhl(
+            sport, game_id, home_team, away_team, game_date,
+        )
     if not item:
         return None
 
@@ -843,6 +1014,10 @@ def build_pl_book_odds(
         if sport == 'SOCCER':
             return _build_row_from_odds_api(
                 sport, game_id, home_team, away_team, game_date, league_name,
+            )
+        if sport == 'NHL':
+            return _build_row_from_odds_api_nhl(
+                sport, game_id, home_team, away_team, game_date,
             )
         return None
 

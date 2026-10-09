@@ -67,8 +67,12 @@ def _sport_key(sport: str) -> str:
 
 
 def _db_path() -> Path:
-    root = Path(__file__).resolve().parent
-    return root / "sports_predictions_original.db"
+    here = Path(__file__).resolve().parent
+    for root in (here, *here.parents):
+        cand = root / "sports_predictions_original.db"
+        if cand.is_file() and cand.stat().st_size > 0:
+            return cand
+    return here / "sports_predictions_original.db"
 
 
 def _parse_game_date(raw: str) -> str:
@@ -101,12 +105,112 @@ def _nfl_current_season_year() -> int:
         return now.year - 1 if now.month <= 2 else now.year
 
 
+def _nhl_finals_from_db(limit: int = 400) -> list[dict]:
+    """NHL scored games joined to predictions by date+matchup (IDs diverge)."""
+    path = _db_path()
+    if not path.is_file():
+        return []
+    try:
+        conn = sqlite3.connect(str(path))
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT g.game_id, g.game_date, g.home_team_id, g.away_team_id,
+                   g.home_score, g.away_score,
+                   p.elo_home_prob, p.xgboost_home_prob, p.win_probability,
+                   p.glicko_home_prob, p.trueskill_home_prob, p.logistic_home_prob
+            FROM games g
+            LEFT JOIN predictions p
+              ON p.sport = 'NHL'
+             AND substr(p.game_date, 1, 10) = substr(g.game_date, 1, 10)
+             AND p.home_team_id = g.home_team_id
+             AND p.away_team_id = g.away_team_id
+            WHERE g.sport = 'NHL'
+              AND g.home_score IS NOT NULL
+              AND g.away_score IS NOT NULL
+            ORDER BY g.game_date DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return []
+    return _nhl_rows_to_finals(rows)
+
+
+def _nhl_rows_to_finals(rows) -> list[dict]:
+    out: list[dict] = []
+    prob_models = (
+        ("Edge", "elo_home_prob"),
+        ("XSharp", "xgboost_home_prob"),
+        ("Sharp Consensus", "win_probability"),
+        ("Grinder2", "glicko_home_prob"),
+        ("Takedown", "trueskill_home_prob"),
+        ("Efficiency", "logistic_home_prob"),
+    )
+    for r in rows:
+        try:
+            hs = float(r["home_score"])
+            aws = float(r["away_score"])
+        except (TypeError, ValueError):
+            continue
+        dk = _parse_game_date(r["game_date"])
+        if not dk:
+            continue
+        home = str(r["home_team_id"] or "").strip()
+        away = str(r["away_team_id"] or "").strip()
+        if not home or not away:
+            continue
+        home_won = hs > aws
+        models: dict = {}
+        for name, col in prob_models:
+            try:
+                prob = float(r[col]) if r[col] is not None else None
+            except (TypeError, ValueError):
+                prob = None
+            if prob is None:
+                continue
+            pick = home if prob >= 0.5 else away
+            models[name] = {
+                "pick": pick,
+                "prob": prob,
+                "correct": (pick == home) == home_won,
+            }
+        if not models:
+            continue
+        face = (
+            models.get("Sharp Consensus")
+            or models.get("Edge")
+            or next(iter(models.values()))
+        )
+        out.append(
+            {
+                "game_date": dk,
+                "league": "NHL",
+                "away_team_id": away,
+                "home_team_id": home,
+                "away_score": int(aws) if abs(aws - round(aws)) < 1e-6 else aws,
+                "home_score": int(hs) if abs(hs - round(hs)) < 1e-6 else hs,
+                "final": True,
+                "face_pick": face.get("pick"),
+                "face_prob": face.get("prob"),
+                "correct": face.get("correct"),
+                "models": models,
+                "game_id": str(r["game_id"] or ""),
+            }
+        )
+    return out
+
+
 def _nfl_finals_from_db(limit: int = 180, sport: str = "NFL") -> list[dict]:
     """Completed games + model sides for the shared 6-model consensus inject."""
     path = _db_path()
     if not path.is_file():
         return []
     sport_u = (sport or "NFL").strip().upper()
+    if sport_u == "NHL":
+        return _nhl_finals_from_db(limit)
     season = _nfl_current_season_year() if sport_u == "NFL" else None
     try:
         conn = sqlite3.connect(str(path))
@@ -608,12 +712,15 @@ def nfl_card_consensus_games(html: str) -> list[dict]:
                 label = f"{maj_n}/6 — all but " + " and ".join(dissent)
             else:
                 continue
-            # Owner 2026-09-14: W-L is Edge's moneyline in that dissent
-            # bucket (the 15-game slate), not the 5/4-model field.
-            edge_ok = picks.get("Edge", ("", None))[1]
-            if edge_ok is True:
+            # Graded on the pregame majority side, same as the table title
+            # and the cards (was Edge's pick, owner note 2026-09-14).
+            maj_ok = next(
+                (picks[n][1] for n in _NFL_SIX_MODELS if picks.get(n, ("", None))[0] == maj_side),
+                None,
+            )
+            if maj_ok is True:
                 grade = "WIN"
-            elif edge_ok is False:
+            elif maj_ok is False:
                 grade = "LOSS"
             else:
                 continue
@@ -801,19 +908,30 @@ def apply_nfl_card_aggregates(html: str, cards_html: str | None = None) -> str:
     return _nfl_relabel_best_performing_today(html)
 
 
+def _consensus_card_rows(html: str) -> list[dict]:
+    """Finals from the results cards themselves.
+
+    The cards carry the graded model sides, so they stay the source when the
+    database has no rows for the sport.
+    """
+    if not html or ("game-card" not in html and "data-pick-card" not in html):
+        return []
+    try:
+        from mlb_consensus_hub import _extract_game_rows
+
+        return list(_extract_game_rows(html) or [])
+    except Exception:
+        return []
+
+
 def _six_model_consensus_finals(html: str, sport: str) -> list[dict]:
     """Shared 6-model consensus rows (NFL / NCAAF / CFL)."""
     sport_u = (sport or "").strip().upper()
-    rows = _nfl_finals_from_db(limit=400, sport=sport_u)
+    rows = _consensus_card_rows(html)
     if not rows:
         rows = _nfl_finals_from_results_html(html)
-    if not rows and html and ("game-card" in html or "data-pick-card" in html):
-        try:
-            from mlb_consensus_hub import _extract_game_rows
-
-            rows = _extract_game_rows(html)
-        except Exception:
-            rows = []
+    if not rows:
+        rows = _nfl_finals_from_db(limit=400, sport=sport_u)
     for row in rows or []:
         if not row.get("league"):
             row["league"] = sport_u
@@ -1400,10 +1518,25 @@ def _apply_nfl_cards_chart_split(html: str, view: str = "") -> str:
     )
     css = """
 <style id="nfl-results-layout-css">
-.daily-tally-grid{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:8px}
+@media (min-width: 721px) {
+  .daily-tally-grid{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:8px}
+  .model-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+}
 .daily-tally-card{padding:8px 6px}
 .daily-acc{font-size:1.15em}
-.model-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+@media (max-width: 720px) {
+  .daily-tally-grid,
+  .model-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+  }
+  .daily-tally-card,
+  .model-card{min-width:0;padding:10px 8px!important}
+  .daily-model,.model-label,.daily-acc,.model-acc,.daily-rec,.model-rec{
+    white-space:normal;overflow-wrap:anywhere;
+  }
+  .daily-acc{font-size:1.2em}
+}
 .nfl-results-chart .daily-tally,
 .nfl-results-chart .date-nav,
 .nfl-results-chart .date-section,
@@ -1847,7 +1980,7 @@ def _wl_cell_from_grades(grades: list[str]) -> str:
     if decided == 0:
         return rec
     pct = int(round(100.0 * w / decided))
-    color = "#00C076" if pct >= 55 else "#D93025" if pct < 47 else "#ca8a04"
+    color = "#067647" if pct >= 55 else "#D93025" if pct < 47 else "#ca8a04"
     return (
         f"{rec} <span style='color:{color};font-weight:700'>({pct}%)</span>"
         f"<div class='cons-bar' aria-hidden='true'>"
@@ -2257,6 +2390,144 @@ def _apply_last_night_windows(html: str, cards_html: str | None = None) -> str:
         flags=re.I,
     )
     return html
+
+
+_SIX_CONSENSUS_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+
+
+def _norm_cons_label(label: str) -> str:
+    text = html_lib.unescape(label or "")
+    text = re.sub(r"[–—]", "-", text)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _six_model_last_night_from_cards(cards: str, ln_key: str) -> dict[str, tuple[int, int]]:
+    """Last-night consensus W-L from visible cards. NFL last night = last 7."""
+    try:
+        ln_d = date.fromisoformat(ln_key)
+        cut7 = (ln_d - timedelta(days=6)).isoformat()
+    except ValueError:
+        cut7 = ln_key
+    tallies: dict[str, list[str]] = {}
+    chunks = re.split(r'<div id="date-(\d{4}-\d{2}-\d{2})"', cards or "")
+    it = iter(chunks[1:])
+    for dk in it:
+        content = next(it, "")
+        if not (cut7 <= dk <= ln_key):
+            continue
+        parts = re.split(r'(<div class="game-card\b[^"]*"[^>]*>)', content, flags=re.I)
+        idx = 1
+        while idx < len(parts):
+            body = parts[idx + 1] if idx + 1 < len(parts) else ""
+            idx += 2
+            boxes = re.findall(
+                r'class="pc-name">([^<]+)</div>\s*'
+                r'<div class="pc-val"[^>]*>([^<]+)</div>\s*'
+                r'<div class="pc-side[^"]*"[^>]*>([^<]+)</div>',
+                body[:25000],
+            )
+            picks: dict[str, tuple[str, bool | None]] = {}
+            for name, _pct, side in boxes:
+                name = re.sub(r"[^A-Za-z0-9 ]+", "", name).strip()
+                if name not in _SIX_CONSENSUS_MODELS:
+                    continue
+                side_txt = re.sub(r"[✅❌]", "", side).strip()
+                if not side_txt or side_txt.upper() in ("N/A", "NA", "—", "-"):
+                    continue
+                ok = True if "✅" in side else False if "❌" in side else None
+                picks[name] = (side_txt, ok)
+            if len(picks) < 6:
+                continue
+            sides = [picks[n][0] for n in _SIX_CONSENSUS_MODELS if n in picks]
+            counts: dict[str, int] = {}
+            for side in sides:
+                counts[side] = counts.get(side, 0) + 1
+            maj_side, maj_n = max(counts.items(), key=lambda kv: kv[1])
+            if list(counts.values()).count(maj_n) > 1:
+                continue  # even split: no majority side to grade
+            dissent = [
+                n for n in _SIX_CONSENSUS_MODELS
+                if n in picks and picks[n][0] != maj_side
+            ]
+            if maj_n >= 6:
+                label = "6/6 unanimous"
+            elif dissent:
+                label = f"{maj_n}/6 — all but " + " and ".join(dissent)
+            else:
+                continue
+            # Pregame majority side, same as the table title.
+            grade_ok = next(
+                (picks[n][1] for n in _SIX_CONSENSUS_MODELS if picks.get(n, ("", None))[0] == maj_side),
+                None,
+            )
+            if grade_ok is True:
+                grade = "WIN"
+            elif grade_ok is False:
+                grade = "LOSS"
+            else:
+                continue
+            tallies.setdefault(_norm_cons_label(label), []).append(grade)
+    out: dict[str, tuple[int, int]] = {}
+    for key, grades in tallies.items():
+        out[key] = (
+            sum(1 for g in grades if g == "WIN"),
+            sum(1 for g in grades if g == "LOSS"),
+        )
+    return out
+
+
+def _sync_nfl_consensus_last_night(html: str, cards_html: str | None = None) -> str:
+    """Pin NFL last-night consensus W-L to the cards the checker grades."""
+    if not html or "6/6 unanimous" not in html:
+        return html
+    ln_m = re.search(r"Last night \((\d{4}-\d{2}-\d{2})\)", html)
+    if not ln_m:
+        return html
+    expected = _six_model_last_night_from_cards(cards_html or html, ln_m.group(1))
+    if not expected:
+        return html
+    start = html.find("Consensus Based Betting Records")
+    end = html.find("PL vs Sportsbook", start) if start >= 0 else -1
+    if start < 0:
+        return html
+    if end < 0:
+        end = min(len(html), start + 16000)
+    block = html[start:end]
+    try:
+        from mlb_consensus_hub import _consensus_record_cell
+    except Exception:
+        return html
+
+    def _row(m: re.Match[str]) -> str:
+        label = m.group(1)
+        key = _norm_cons_label(label)
+        rest = m.group(2)
+        tds = re.findall(r"<td(?:\s[^>]*)?>[\s\S]*?</td>", rest)
+        if len(tds) < 3:
+            return m.group(0)
+        wl = expected.get(key)
+        if wl:
+            items = [{"grade": "WIN"}] * wl[0] + [{"grade": "LOSS"}] * wl[1]
+            cell = _consensus_record_cell(items, bar=True, empty="0-0")
+        else:
+            cell = _consensus_record_cell([], bar=True, empty="0-0")
+        tds[0] = f"<td>{cell}</td>"
+        return f'<tr><td class="bucket">{label}</td>' + "".join(tds) + "</tr>"
+
+    block = re.sub(
+        r'<tr>\s*<td class="bucket">([^<]+)</td>([\s\S]*?)</tr>',
+        _row,
+        block,
+        flags=re.I,
+    )
+    return html[:start] + block + html[end:]
 
 
 def _has_signed_off_consensus_charts(html: str) -> bool:
@@ -2810,6 +3081,8 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
         html = _apply_four_model_consensus_meanings(html, cards_html=cards_src)
     if sport_u in ("WNBA", "NFL", "CFL", "NCAAF"):
         html = _apply_last_night_windows(html, cards_html=cards_src)
+    if sport_u == "NFL":
+        html = _sync_nfl_consensus_last_night(html, cards_src)
     if sport_u == "CFL":
         html = _hide_empty_books_spread_total(html)
     if sport_u != "NFL":
@@ -2824,6 +3097,15 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
         extra = _build_charts_from_page(source)
         if extra:
             html = _insert_charts(html, extra)
+    if sport_u in ("CFL", "WNBA", "NCAAF", "NBA", "NHL"):
+        if "Prediction Lab · XSharp — Totals" not in html and "Prediction Lab & XSharp — Totals" not in html:
+            cards = _CHART_SOURCE_HTML.get(sport_u) or ""
+            ou_source = cards if cards and ("Over/Under" in cards or "daily-model" in cards or "game-card" in cards) else html
+            ou = _build_ou_chart_from_page(ou_source)
+            if ou:
+                html = _insert_charts(html, ou)
+            elif "Prediction Lab · XSharp — Totals" not in html:
+                html = html.replace("</main>", '<div class="pl-consensus-records"><h2>Prediction Lab · XSharp — Totals</h2></div></main>', 1) if "</main>" in html else html
     if sport_u == "SOCCER":
         if "Prediction Lab · XSharp — Totals" not in html and "Prediction Lab & XSharp — Totals" not in html:
             cards = _CHART_SOURCE_HTML.get(sport_u) or ""
@@ -2855,12 +3137,21 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
     if sport_u == "NFL":
         html = apply_nfl_card_aggregates(html, cards_src)
         html = _apply_nfl_cards_chart_split(html, view_l)
-    if sport_u in ("WNBA", "NCAAF", "CFL") and "H2H Last 10" in html:
-        html = _apply_h2h_faces(html, sport_u)
-    if sport_u in ("NCAAF", "CFL") and "game-card" in html and "H2H Last 10" in html:
+    if sport_u in ("WNBA", "NCAAF", "CFL", "NFL") and "H2H Last 10" in html:
+        html = _apply_h2h_faces(html, sport_u, results=True)
+    if sport_u in ("NCAAF", "CFL", "NFL") and "game-card" in html and "H2H Last 10" in html:
         html = _fill_game_card_h2h(html, sport_u)
+        html = _sync_h2h_face_chips(html)
     if sport_u == "CFL" and "data-pick-card" in html:
         html = _inject_cfl_consensus_hist_chips(html)
+        html = re.sub(
+            r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
+            "",
+            html,
+            flags=re.I,
+        )
+    if sport_u == "NHL" and "data-pick-card" in html:
+        html = _inject_nhl_consensus_hist_chips(html)
         html = re.sub(
             r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
             "",
@@ -2878,6 +3169,7 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
         html = ensure_locked_site_chrome(html)
     except Exception:
         pass
+    html = _nfl_relabel_best_performing_today(html)
     return html
 
 
@@ -3275,7 +3567,7 @@ def _h2h_text(meetings: dict, home: str, away: str, sport: str = "") -> str:
         uniq.append(rec)
     uniq.sort(key=lambda r: r[4], reverse=True)
     uniq = uniq[:10]
-    if not uniq:
+    if len(uniq) < 2:
         return ""
     totals = []
     for db_home, _db_away, hs, aws, _dt in uniq:
@@ -3304,6 +3596,8 @@ def _is_fake_h2h(val: str) -> bool:
     if re.fullmatch(r"0+(?:\.0+)?", plain):
         return True
     if re.fullmatch(r"0+(?:\.0+)?\s*\(\s*0\s*games?\)", plain, flags=re.I):
+        return True
+    if re.search(r"\(\s*1\s*game\s*\)", plain, flags=re.I):
         return True
     return False
 
@@ -3338,24 +3632,51 @@ def _fill_game_card_h2h(html: str, sport: str) -> str:
     out = [parts[0]]
     for stack in parts[1:]:
         away_m = re.search(
-            r'<div class="team-col away">[\s\S]*?<div class="team-name">([^<]+)</div>',
+            r'<div class="team-(?:col|slot)(?:\s+favored)?\s+away\b[\s\S]*?<div class="team-name">([^<]+)</div>',
+            stack,
+        ) or re.search(
+            r'<div class="team-slot[^"]*\baway\b[\s\S]*?<div class="team-name">([^<]+)</div>',
             stack,
         )
         home_m = re.search(
-            r'<div class="team-col home">[\s\S]*?<div class="team-name">([^<]+)</div>',
+            r'<div class="team-(?:col|slot)(?:\s+favored)?\s+home\b[\s\S]*?<div class="team-name">([^<]+)</div>',
+            stack,
+        ) or re.search(
+            r'<div class="team-slot[^"]*\bhome\b[\s\S]*?<div class="team-name">([^<]+)</div>',
             stack,
         )
+        if not away_m or not home_m:
+            names = re.findall(r'<div class="team-name">([^<]+)</div>', stack)
+            if len(names) >= 2:
+                class _N:
+                    def __init__(self, v):
+                        self._v = v
+                    def group(self, _i):
+                        return self._v
+                away_m, home_m = _N(names[0]), _N(names[1])
         if not away_m or not home_m:
             out.append(stack)
             continue
         away = html_lib.unescape(away_m.group(1)).strip()
         home = html_lib.unescape(home_m.group(1)).strip()
         val = _h2h_text(meetings, home, away, sport)
+        if not val and sport == "NFL":
+            try:
+                val = _nfl_espn_h2h_text(home, away)
+            except Exception:
+                val = ""
         if not val:
             out.append(stack)
             continue
         stack = re.sub(
             r'(<span class="sf-label">\s*H2H Last 10\s*</span>\s*<span class="sf-val">)([\s\S]*?)(</span>)',
+            rf"\g<1>{val}\g<3>",
+            stack,
+            count=1,
+            flags=re.I,
+        )
+        stack = re.sub(
+            r'(<div class="line-chip-label">H2H Last 10</div>\s*<div class="line-chip-val">)([\s\S]*?)(</div>)',
             rf"\g<1>{val}\g<3>",
             stack,
             count=1,
@@ -3439,7 +3760,7 @@ def _fill_na_from_published(html: str) -> str:
     return "".join(out)
 
 
-def _apply_h2h_faces(html: str, sport: str) -> str:
+def _apply_h2h_faces(html: str, sport: str, *, results: bool = False) -> str:
     """Fill H2H Last 10 from meetings; First meeting when there is no history."""
     sport_u = _sport_key(sport)
     if not html or "H2H Last 10" not in html:
@@ -3468,21 +3789,16 @@ def _apply_h2h_faces(html: str, sport: str) -> str:
     )
     if sport_u == "NFL":
         html = _fill_nfl_espn_h2h(html)
-        html = _fill_placeholder_edge(html, "NFL")
-        html = _fill_efficiency_na(html, "NFL")
-        html = _fill_na_from_published(html)
-    elif sport_u == "CFL":
-        html = _fill_placeholder_edge(html, "CFL")
-        html = _fill_efficiency_na(html, "CFL")
-        html = _fill_na_from_published(html)
+        if not results:
+            html = _fill_efficiency_na(html, "NFL")
     elif sport_u == "NCAAF":
         html = _fill_ncaaf_espn_h2h(html)
-        html = _fill_ncaaf_card_gaps(html)
-        html = _fill_ncaaf_g2_td_from_v2(html)
-        html = _fill_efficiency_na(html, "NCAAF")
-        # Do not copy another model's % onto Efficiency N/A (ML-only FCS cards).
     html = _ensure_h2h_attr_first_meeting(html)
     html = _sync_h2h_chips(html)
+    html = _sync_h2h_face_chips(html)
+    if results:
+        html = _fill_blank_h2h_chips(html)
+        return html
     if sport_u == "NCAAF":
         # Face chip = Consensus Historical Record (not duplicate H2H).
         html = _inject_ncaaf_consensus_hist_chips(html)
@@ -3490,6 +3806,8 @@ def _apply_h2h_faces(html: str, sport: str) -> str:
         html = _inject_nfl_consensus_hist_chips(html)
     elif sport_u == "CFL":
         html = _inject_cfl_consensus_hist_chips(html)
+    elif sport_u == "NHL":
+        html = _inject_nhl_consensus_hist_chips(html)
     elif sport_u == "WNBA":
         html = _inject_wnba_consensus_hist_chips(html)
     else:
@@ -3522,7 +3840,7 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
         html = _hide_empty_books_spread_total(html)
     if sport_u == "NFL":
         html = _strip_nfl_duplicate_h2h(html)
-    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL"):
+    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL", "NHL"):
         # Face shows Consensus Historical Record; keep one H2H in details only.
         html = re.sub(
             r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
@@ -3530,6 +3848,8 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
             html,
             flags=re.I,
         )
+    if sport_u == "NHL" and "data-pick-card" in html:
+        html = _inject_nhl_consensus_hist_chips(html)
     return html
 
 
@@ -3674,7 +3994,7 @@ def _nfl_espn_h2h_text(home: str, away: str) -> str:
             break
     rows.sort(key=lambda r: r[0], reverse=True)
     totals = [tot for _dt, tot in rows[:10]]
-    if not totals:
+    if len(totals) < 2:
         return ""
     avg = round(sum(totals) / len(totals), 1)
     avg_s = str(int(avg)) if avg == int(avg) else f"{avg:.1f}"
@@ -3878,7 +4198,7 @@ def _ncaaf_espn_h2h_text(home: str, away: str) -> str:
             break
     rows.sort(key=lambda r: r[0], reverse=True)
     totals = [tot for _dt, tot in rows[:10]]
-    if not totals:
+    if len(totals) < 2:
         return ""
     avg = round(sum(totals) / len(totals), 1)
     avg_s = str(int(avg)) if avg == int(avg) else f"{avg:.1f}"
@@ -4041,6 +4361,28 @@ def _fill_placeholder_edge(html: str, sport: str) -> str:
                 live = float(spread_to_home_prob_pct(hc, sport_u))
             except Exception:
                 live = None
+        if (live is None or ncaaf_elo_is_placeholder(live)) and sport_u == "NFL":
+            xs = ""
+            xs_m = re.search(r'data-xs-spread="([^"]*)"', open_tag, flags=re.I)
+            if xs_m:
+                xs = html_lib.unescape(xs_m.group(1) or "").strip()
+            if not xs:
+                xs_cell = re.search(
+                    r'<td class="market-k">\s*Spread\s*</td>\s*'
+                    r'<td class="val-books">[\s\S]*?</td>\s*'
+                    r'<td class="val-pl">[\s\S]*?</td>\s*'
+                    r'<td class="val-xs">([^<]+)',
+                    rest,
+                    flags=re.I,
+                )
+                if xs_cell:
+                    xs = html_lib.unescape(xs_cell.group(1) or "").strip()
+            xs_hc = _nfl_home_centric_spread(xs, home, away) if xs and home and away else None
+            if xs_hc is not None:
+                try:
+                    live = float(spread_to_home_prob_pct(xs_hc, sport_u))
+                except Exception:
+                    live = None
         if live is None or ncaaf_elo_is_placeholder(live):
             out.append(open_tag + rest)
             continue
@@ -4093,7 +4435,7 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
         return parts[-1] if parts else name
 
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
-    if len(parts) < 2 and sport_u == "NCAAF":
+    if len(parts) < 2 and sport_u in ("NCAAF", "NFL"):
         parts = re.split(
             r'(?=<div\b[^>]*class="[^"]*\bgame-card\b)',
             html,
@@ -4124,7 +4466,7 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
         away_m = re.search(r'data-away="([^"]*)"', open_tag, flags=re.I)
         home = html_lib.unescape((home_m.group(1) if home_m else "").strip())
         away = html_lib.unescape((away_m.group(1) if away_m else "").strip())
-        if (not home or not away) and sport_u == "NCAAF":
+        if (not home or not away) and sport_u in ("NCAAF", "NFL"):
             names = [
                 html_lib.unescape(re.sub(r"<[^>]+>", "", n)).strip()
                 for n in re.findall(
@@ -4150,7 +4492,11 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
             )
             if tm:
                 pl = html_lib.unescape(tm.group(1) or "").strip()
-        hc = _nfl_home_centric_spread(pl, home, away) if pl and home and away else None
+        pl_token = re.sub(r"\s+", " ", pl).strip().upper()
+        if pl_token in {"PK", "PICK", "PICK'EM", "PICKEM", "EVEN"}:
+            hc = 0.0
+        else:
+            hc = _nfl_home_centric_spread(pl, home, away) if pl and home and away else None
         if hc is None:
             out.append(open_tag + rest)
             continue
@@ -4169,8 +4515,8 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
             face_s = f"{face:.1f}"
         rest = re.sub(
             r'(<div class="pc-name">\s*Efficiency\s*</div>\s*)'
-            r'<div class="pc-val"[^>]*>\s*N/A\s*</div>\s*'
-            r'<div class="pc-side"[^>]*>\s*N/A\s*</div>',
+            r'<div class="pc-val"[^>]*>\s*N/A\b[\s\S]*?</div>\s*'
+            r'<div class="pc-side[^"]*"[^>]*>[\s\S]*?</div>',
             (
                 r"\1"
                 f'<div class="pc-val">{face_s}%</div>'
@@ -4286,37 +4632,6 @@ def _norm_team_token(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (name or "").strip().lower())
 
 
-_MODEL_DATA_ATTR = {
-    "grinder2": "data-m-grinder2",
-    "takedown": "data-m-takedown",
-    "edge": "data-m-edge",
-    "xsharp": "data-m-xsharp",
-    "efficiency": "data-m-efficiency",
-    "sharp consensus": "data-m-consensus",
-    "consensus": "data-m-consensus",
-}
-
-
-def _pc_model_ml_side_from_data_attr(card: str, name: str) -> str | None:
-    """HOME/AWAY from data-m-* when Pick Confidence HTML is paywalled."""
-    attr = _MODEL_DATA_ATTR.get((name or "").strip().lower())
-    if not attr:
-        return None
-    m = re.search(rf'\b{re.escape(attr)}="([^"]*)"', card[:4000], flags=re.I)
-    if not m:
-        return None
-    raw = (m.group(1) or "").strip().replace("%", "")
-    if raw.lower() in {"", "n/a", "na", "—", "–", "-"}:
-        return None
-    try:
-        pct = float(raw)
-    except ValueError:
-        return None
-    if pct <= 1.5:
-        pct *= 100.0
-    return "HOME" if pct >= 50.0 else "AWAY"
-
-
 def _pc_model_ml_side(
     card: str, name: str, *, home: str, away: str
 ) -> str | None:
@@ -4329,11 +4644,10 @@ def _pc_model_ml_side(
         flags=re.I,
     )
     if not m:
-        # Free/anon cards lock Pick Confidence — use model attrs on the stack.
-        return _pc_model_ml_side_from_data_attr(card, name)
+        return None
     raw_pct = (m.group(1) or "").strip().replace("%", "")
     if raw_pct.lower() in {"", "n/a", "na", "—", "–", "-"}:
-        return _pc_model_ml_side_from_data_attr(card, name)
+        return None
     classes = m.group(2) or ""
     side_txt = (m.group(3) or "").strip()
     if re.search(r"\bhome\b", classes, flags=re.I):
@@ -4351,7 +4665,7 @@ def _pc_model_ml_side(
     try:
         pct = float(raw_pct)
     except ValueError:
-        return _pc_model_ml_side_from_data_attr(card, name)
+        return None
     return "HOME" if pct >= 50.0 else "AWAY"
 
 
@@ -4466,8 +4780,10 @@ def _consensus_d7_combo_lookup(
         )
     except Exception:
         return {}
-    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER"):
-        finals = _six_model_consensus_finals("", sport_u)
+    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL"):
+        finals = _six_model_consensus_finals(
+            _CHART_SOURCE_HTML.get(sport_u) or "", sport_u
+        )
     elif sport_u in ("WNBA", "NBA"):
         finals = _wnba_nba_consensus_finals(sport_u)
     elif sport_u == "UFC":
@@ -4614,6 +4930,38 @@ def _nfl_consensus_hist_label(
     return f"Consensus Record: {pattern} ({rec})"
 
 
+
+def _chip_pattern_key(label: str) -> str:
+    text = (label or "").lower()
+    text = re.sub(r"consensus record:\s*", "", text)
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = text.replace("—", " ").replace("–", " ").replace("-", " ")
+    text = text.replace("/ no consensus", "")
+    text = re.sub(r"[^a-z0-9/ ]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _past7_from_consensus_table(html: str) -> dict[str, tuple[int, int]]:
+    start = (html or "").find("Consensus Based Betting Records")
+    if start < 0:
+        return {}
+    end = html.find("</table>", start)
+    block = html[start:end if end > start else start + 20000]
+    out: dict[str, tuple[int, int]] = {}
+    for row in re.findall(r"<tr>([\s\S]*?)</tr>", block):
+        bucket = re.search(r'<td class="bucket">([^<]+)</td>', row)
+        if not bucket:
+            continue
+        cells = re.findall(r"<td>([\s\S]*?)</td>", row[bucket.end():])
+        if len(cells) < 2:
+            continue
+        rec = re.search(r"(\d+)\s*-\s*(\d+)", re.sub(r"<[^>]+>", " ", cells[1]))
+        if not rec:
+            continue
+        out[_chip_pattern_key(bucket.group(1))] = (int(rec.group(1)), int(rec.group(2)))
+    return out
+
+
 def _inject_consensus_hist_chips(
     html: str,
     *,
@@ -4625,6 +4973,7 @@ def _inject_consensus_hist_chips(
         return html
     sport_u = _sport_key(sport)
     lookup = _consensus_d7_combo_lookup(sport_u)
+    past7 = _past7_from_consensus_table(html)
     panel = len(models)
     grade_models = models
     # Only shrink the panel when graded finals never include a published model
@@ -4652,7 +5001,7 @@ def _inject_consensus_hist_chips(
         if dissent_info is None:
             if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
                 label = "—"
-            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL"):
+            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL", "NHL"):
                 label = "Consensus Record: —"
             else:
                 label = "Consensus Record: —"
@@ -4676,11 +5025,19 @@ def _inject_consensus_hist_chips(
             else:
                 w, l, pct = hit[0], hit[1], hit[2]
                 pushes = 0
+            if past7:
+                pattern = _chip_pattern_key(
+                    _nfl_consensus_hist_label(folded, dissent, 0, 0, None, panel=panel)
+                )
+                shown = past7.get(pattern)
+                if shown:
+                    w, l = shown
+                    pushes = 0
             if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
                 label = _wnba_consensus_hist_label(
                     folded, dissent, w, l, pct, panel=panel, pushes=pushes
                 )
-            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL"):
+            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL", "NHL"):
                 label = _nfl_consensus_hist_label(
                     folded, dissent, w, l, pct, panel=panel, pushes=pushes
                 )
@@ -4715,7 +5072,7 @@ def _inject_consensus_hist_chips(
                 count=1,
                 flags=re.I,
             )
-        elif sport_u == "CFL" and re.search(r'<div class="pick-conf-bar\b', stack):
+        elif sport_u in ("CFL", "NHL") and re.search(r'<div class="pick-conf-bar\b', stack):
             strip = f'<div class="lines-strip">{chip}</div>\n'
             stack = re.sub(
                 r'(<div class="pick-conf-bar\b)',
@@ -4787,19 +5144,19 @@ def _nfl_book_fav_from_spread(stack: str) -> str | None:
 
 
 def _inject_nfl_picks_card_width_css(html: str) -> str:
-    """NFL Pick Confidence wraps on words; cards stay on the shared 3-up grid.
+    """Widen NFL pick cards so Pick Confidence wraps on words, not mid-word.
 
-    A prior auto-fit minmax(520px) + max-width:none made one card fill the
-    row. Other sports unchanged.
+    Shared 3-up grid leaves ~1/3-width cards (worse on 1-game slates). NFL-only
+    auto-fit + normal word-break; other sports unchanged.
     """
     if not html:
         return html
     html = re.sub(
-        r'<style id="nfl-picks-card-width">.*?</style>',
+        r'<style id="nfl-picks-card-width">[\s\S]*?</style>',
         '',
         html,
         count=1,
-        flags=re.I | re.S,
+        flags=re.I,
     )
     if "sport-nfl" not in html and 'data-sport="NFL"' not in html:
         # Still inject — body class may be applied after; selector is sport-scoped.
@@ -4807,8 +5164,8 @@ def _inject_nfl_picks_card_width_css(html: str) -> str:
     css = (
         '<style id="nfl-picks-card-width">'
         "body.sport-nfl .games-grid{"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;"
-        "gap:12px!important}"
+        "grid-template-columns:repeat(2,minmax(0,1fr))!important;"
+        "gap:14px!important}"
         "body.sport-nfl .game-card-stack{"
         "max-width:none!important;width:100%!important;min-width:0}"
         "body.sport-nfl .pick-conf-grid{gap:8px!important}"
@@ -4818,9 +5175,7 @@ def _inject_nfl_picks_card_width_css(html: str) -> str:
         "hyphens:none!important;letter-spacing:0.12px!important}"
         "body.sport-nfl .pc-name{font-size:0.64em!important}"
         "body.sport-nfl .pc-side{font-size:0.58em!important;padding:2px 4px!important}"
-        "@media(max-width:1100px){"
-        "body.sport-nfl .games-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}"
-        "@media(max-width:768px){"
+        "@media(max-width:560px){"
         "body.sport-nfl .games-grid{grid-template-columns:1fr!important}"
         "body.sport-nfl .pick-conf-grid{"
         "grid-template-columns:repeat(3,minmax(0,1fr))!important}}"
@@ -4972,6 +5327,233 @@ def _inject_cfl_consensus_hist_chips(html: str) -> str:
     return _inject_consensus_hist_chips(
         html, sport="CFL", models=_CFL_CONSENSUS_MODELS
     )
+
+
+def _nhl_book_fav_from_puck(stack: str) -> str | None:
+    """HOME/AWAY from Books puck line when moneyline is a pick'em."""
+    hm = re.search(r'data-home="([^"]*)"', stack[:2500], flags=re.I)
+    am = re.search(r'data-away="([^"]*)"', stack[:2500], flags=re.I)
+    home = html_lib.unescape(hm.group(1) if hm else "").strip()
+    away = html_lib.unescape(am.group(1) if am else "").strip()
+    if not home or not away:
+        return None
+    spread = None
+    m = re.search(
+        r'market-k">(?:Puck Line|Spread|Books spread|Books puck line)</td>\s*'
+        r'<td class="val-books">\s*([^<]+)',
+        stack,
+        flags=re.I,
+    )
+    if m:
+        spread = html_lib.unescape(m.group(1)).strip()
+    if not spread:
+        m = re.search(
+            r'line-chip-label">Books (?:spread|puck line)</div>\s*'
+            r'<div class="line-chip-val">\s*([^<]+)',
+            stack,
+            flags=re.I,
+        )
+        if m:
+            spread = html_lib.unescape(m.group(1)).strip()
+    if not spread or spread in ("—", "-", "N/A", "PK", "pk"):
+        return None
+    return _nhl_side_from_spread(home, away, spread)
+
+
+def _nhl_side_from_spread(home: str, away: str, spread: str) -> str | None:
+    low = spread.lower()
+    home_l = home.lower()
+    away_l = away.lower()
+    if home_l and home_l in low:
+        if re.search(r'-\s*\d', low):
+            return "HOME"
+        if re.search(r'\+\s*\d', low):
+            return "AWAY"
+    if away_l and away_l in low:
+        if re.search(r'-\s*\d', low):
+            return "AWAY"
+        if re.search(r'\+\s*\d', low):
+            return "HOME"
+    m = re.search(r'([+-]?\d+(?:\.\d+)?)', spread)
+    if not m:
+        return None
+    try:
+        val = float(m.group(1))
+    except ValueError:
+        return None
+    if val < 0:
+        return "HOME"
+    if val > 0:
+        return "AWAY"
+    return None
+
+
+def _inject_nhl_pl_vs_books_chips(html: str) -> str:
+    """NHL face chip: best Past-30 PL vs Books signal."""
+    if not html or "data-pick-card" not in html:
+        return html
+    try:
+        from zoneinfo import ZoneInfo
+
+        from mlb_consensus_hub import (
+            _pl_vs_books_rows_from_finals,
+            _pl_vs_books_slices,
+        )
+        from mlb_ui_fixup import _face_ml_favorite_side
+    except Exception:
+        return html
+
+    finals = _six_model_consensus_finals(
+        html or _CHART_SOURCE_HTML.get("NHL") or "", "NHL"
+    )
+    rows = _pl_vs_books_rows_from_finals(finals) if finals else []
+    now = datetime.now(ZoneInfo("America/New_York"))
+    today = now.strftime("%Y-%m-%d")
+    cut30 = (now.date() - timedelta(days=30)).strftime("%Y-%m-%d")
+    d30 = [
+        r
+        for r in rows
+        if cut30 <= str(r.get("game_date") or "")[:10] < today
+    ]
+    if not d30:
+        dated = [
+            r
+            for r in rows
+            if str(r.get("game_date") or "")[:10]
+            and str(r.get("game_date") or "")[:10] < today
+        ]
+        dated.sort(key=lambda r: str(r.get("game_date") or ""), reverse=True)
+        d30 = dated[:30]
+    slices = (
+        _pl_vs_books_slices(d30)
+        if d30
+        else {
+            "books": [],
+            "pl": [],
+            "books_pl_agree": [],
+            "books_pl_disagree": [],
+        }
+    )
+
+    def _rec(grades: list) -> tuple[str, float | None, int]:
+        w = sum(1 for g in grades if g == "WIN")
+        l = sum(1 for g in grades if g == "LOSS")
+        p = sum(1 for g in grades if g == "PUSH")
+        decided = w + l
+        pct = (100.0 * w / decided) if decided else None
+        rec = f"{w}-{l}" + (f"-{p}" if p else "")
+        return rec, pct, decided
+
+    signals = {
+        "books": ("Books favorite", *_rec(slices.get("books") or [])),
+        "pl": ("PL favorite", *_rec(slices.get("pl") or [])),
+        "agree": ("PL and Books agree", *_rec(slices.get("books_pl_agree") or [])),
+        "disagree": (
+            "PL vs Books disagree",
+            *_rec(slices.get("books_pl_disagree") or []),
+        ),
+    }
+
+    def _nhl_pl_side_from_stack(stack: str) -> str | None:
+        hm = re.search(r'data-home="([^"]*)"', stack[:2500], flags=re.I)
+        am = re.search(r'data-away="([^"]*)"', stack[:2500], flags=re.I)
+        pm = re.search(r'data-pick="([^"]*)"', stack[:2500], flags=re.I)
+        home = html_lib.unescape(hm.group(1) if hm else "").strip()
+        away = html_lib.unescape(am.group(1) if am else "").strip()
+        pick = html_lib.unescape(pm.group(1) if pm else "").strip()
+        pick_n = _norm_team_token(pick)
+        home_n = _norm_team_token(home)
+        away_n = _norm_team_token(away)
+        if pick_n and home_n and (pick_n == home_n or pick_n in home_n or home_n in pick_n):
+            return "HOME"
+        if pick_n and away_n and (pick_n == away_n or pick_n in away_n or away_n in pick_n):
+            return "AWAY"
+        return None
+
+    def _best_for_card(stack: str) -> str:
+        book = _face_ml_favorite_side(stack, which="books")
+        pl = _face_ml_favorite_side(stack, which="pl")
+        if book is None:
+            book = _nhl_book_fav_from_puck(stack)
+        if pl is None:
+            pl = _nhl_pl_side_from_stack(stack)
+        candidates: list[tuple[str, str, float | None, int]] = []
+        if book:
+            candidates.append(signals["books"])
+        if pl:
+            candidates.append(signals["pl"])
+        if book and pl and book == pl:
+            candidates.append(signals["agree"])
+        elif book and pl:
+            candidates.append(signals["disagree"])
+        if not candidates:
+            return "—"
+        graded = [c for c in candidates if c[3] > 0 and c[2] is not None]
+        if graded:
+            graded.sort(key=lambda c: (-(c[2] or 0.0), -c[3], c[0]))
+            label, rec, pct, _d = graded[0]
+        else:
+            label, rec, pct, _d = candidates[0]
+        pct_s = f"{pct:.0f}%" if pct is not None else "—"
+        return f"{label}: {rec} ({pct_s}) — Past 30 Days"
+
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        stack = re.sub(
+            r'<div class="line-chip">\s*'
+            r'<div class="line-chip-label">Books (?:spread|total|run line|puck line)</div>'
+            r'[\s\S]*?</div>\s*</div>',
+            "",
+            stack,
+            flags=re.I,
+        )
+        stack = re.sub(
+            r'<div class="line-chip pl-vs-books-chip">[\s\S]*?</div>\s*</div>',
+            "",
+            stack,
+            flags=re.I,
+        )
+        val = _best_for_card(stack)
+        chip = (
+            '<div class="line-chip pl-vs-books-chip">'
+            '<div class="line-chip-label">PL vs Books</div>'
+            f'<div class="line-chip-val">{escape(val)}</div></div>'
+        )
+        if '<div class="lines-strip">' in stack:
+            m = re.search(
+                r'(<div class="line-chip consensus-hist-chip">[\s\S]*?</div>\s*</div>)',
+                stack,
+                flags=re.I,
+            )
+            if m:
+                stack = stack.replace(m.group(1), m.group(1) + "\n    " + chip, 1)
+            else:
+                stack = stack.replace(
+                    '<div class="lines-strip">',
+                    '<div class="lines-strip">' + chip,
+                    1,
+                )
+        elif re.search(r'<div class="(?:odds-pricing-section|card-details|pick-conf-bar)\b', stack):
+            strip = f'<div class="lines-strip">{chip}</div>\n'
+            stack = re.sub(
+                r'(<div class="(?:odds-pricing-section|card-details|pick-conf-bar)\b)',
+                strip + r"\1",
+                stack,
+                count=1,
+                flags=re.I,
+            )
+        out.append(stack)
+    return "".join(out)
+
+
+def _inject_nhl_consensus_hist_chips(html: str) -> str:
+    html = _inject_consensus_hist_chips(
+        html, sport="NHL", models=_NCAAF_CONSENSUS_MODELS
+    )
+    return _inject_nhl_pl_vs_books_chips(html)
 
 
 def _inject_wnba_consensus_hist_chips(html: str) -> str:
@@ -5192,45 +5774,11 @@ def _fill_ncaaf_g2_td_from_v2(html: str) -> str:
     return "".join(out)
 
 
-def inject_shared_picks_card_grid_css(html: str) -> str:
-    """All picks cards (not golf board) use the NFL 3-up grid size."""
-    if not html:
-        return html
-    html = re.sub(
-        r'<style id="pl-shared-picks-card-grid">.*?</style>',
-        "",
-        html,
-        count=1,
-        flags=re.I | re.S,
-    )
-    css = (
-        '<style id="pl-shared-picks-card-grid">'
-        "body:not(.sport-golf):not(.golf-board) .games-grid{"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;"
-        "gap:12px!important}"
-        "body:not(.sport-golf):not(.golf-board) .game-card-stack{"
-        "max-width:none!important;width:100%!important;min-width:0}"
-        "@media(max-width:1100px){"
-        "body:not(.sport-golf):not(.golf-board) .games-grid{"
-        "grid-template-columns:repeat(2,minmax(0,1fr))!important}}"
-        "@media(max-width:768px){"
-        "body:not(.sport-golf):not(.golf-board) .games-grid{"
-        "grid-template-columns:1fr!important}}"
-        "</style>"
-    )
-    if re.search(r"</head\s*>", html, flags=re.I):
-        return re.sub(r"</head\s*>", css + "</head>", html, count=1, flags=re.I)
-    if re.search(r"</body\s*>", html, flags=re.I):
-        return re.sub(r"</body\s*>", css + "</body>", html, count=1, flags=re.I)
-    return html + css
-
-
 def apply_team_picks_copy_all(html: str, sport: str) -> str:
     """Copy All = every loaded pick card with models, lines, and H2H."""
     sport_u = _sport_key(sport)
     if not html:
         return html
-    html = inject_shared_picks_card_grid_css(html)
     if "refreshing this page right now" in html.lower():
         return html
     if 'id="pvCopyBtn"' not in html:
@@ -5251,7 +5799,7 @@ def apply_team_picks_copy_all(html: str, sport: str) -> str:
                 f"{btn}</div>"
                 "<style>.pv-copy{border:1px solid #00529B;background:#fff;color:#00529B;"
                 "border-radius:999px;padding:6px 14px;font-size:0.8em;font-weight:800;cursor:pointer;}"
-                ".pv-copy.copied{background:#00C076;border-color:#00C076;color:#fff;}</style>"
+                ".pv-copy.copied{background:#067647;border-color:#067647;color:#fff;}</style>"
             )
             html = html.replace('<div class="date-nav">', bar + '<div class="date-nav">', 1)
     if COPY_MARK in html:
@@ -5348,3 +5896,19 @@ def apply_team_picks_copy_all(html: str, sport: str) -> str:
     if "</body>" in html:
         return html.replace("</body>", script + "\n</body>", 1)
     return html + script
+
+def _apply_ncaaf_consensus_from_cards(html: str, cards: str) -> str:
+    """Used by after_request when /ncaaf-results?view=chart is a thin shell."""
+    if cards:
+        set_results_chart_source("NCAAF", cards)
+    try:
+        out = apply_team_results_template(html, "NCAAF", view="chart")
+        if out:
+            html = out
+    except Exception:
+        pass
+    if "Prediction Lab · XSharp — Totals" not in html and "Prediction Lab & XSharp — Totals" not in html:
+        ou = _build_ou_chart_from_page(cards or html)
+        if ou:
+            html = _insert_charts(html, ou)
+    return html

@@ -295,8 +295,11 @@ window._propSort = function(key) {
 
 /* ── Date bubble helpers ── */
 function _isoToday() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
+  try {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  } catch (e) {
+    return new Date().toISOString().slice(0, 10);
+  }
 }
 function _offsetDate(isoBase, days) {
   const d = new Date(isoBase + 'T12:00:00');
@@ -382,7 +385,7 @@ function onLeagueChange() {
 
 function switchTab(v) {
   _view = v;
-  _selectedDate = '';
+  _selectedDate = (v === 'results') ? _offsetDate(_isoToday(), -1) : '';
   document.getElementById('tabProps').classList.toggle('active', v === 'props');
   document.getElementById('tabStreaks').classList.toggle('active', v === 'streaks');
   document.getElementById('tabResults').classList.toggle('active', v === 'results');
@@ -432,11 +435,11 @@ function renderDiagnostics(data, league) {
   if (data.error) { setContent(`<div class="props-msg">${data.detail || data.error}</div>`); return; }
   const stab = data.distribution_stability || {};
   const ov   = data.overall || {};
-  const stabColor = stab.label === 'good' ? '#00C076' : stab.label === 'low' ? '#f59e0b' : '#ef4444';
+  const stabColor = stab.label === 'good' ? '#067647' : stab.label === 'low' ? '#f59e0b' : '#ef4444';
   let byType = '';
   for (const [pt, s] of Object.entries(data.by_prop_type || {})) {
     const isDivergent = (data.ev_hitrate_divergence_flags || []).includes(pt);
-    const evColor = s.avg_ev > 2 ? '#00C076' : s.avg_ev < 0 ? '#ef4444' : '#64748b';
+    const evColor = s.avg_ev > 2 ? '#067647' : s.avg_ev < 0 ? '#ef4444' : '#64748b';
     byType += `<tr>
       <td style="font-weight:700;text-transform:capitalize;">${pt}${isDivergent ? ' <span style="color:#f59e0b;font-size:0.75em;">⚠ divergence</span>' : ''}</td>
       <td>${s.count}</td>
@@ -454,7 +457,7 @@ function renderDiagnostics(data, league) {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
         <div class="results-summary"><div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;">Total Props</div><div style="font-size:1.6rem;font-weight:800;color:#0f172a;">${data.total_props}</div></div>
         <div class="results-summary"><div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;">Avg Confidence</div><div style="font-size:1.6rem;font-weight:800;color:#0f172a;">${ov.avg_confidence}%</div></div>
-        <div class="results-summary"><div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;">Avg EV</div><div style="font-size:1.6rem;font-weight:800;color:${ov.avg_ev > 0 ? '#00C076' : '#ef4444'};">${ov.avg_ev > 0 ? '+' : ''}${ov.avg_ev}%</div></div>
+        <div class="results-summary"><div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;">Avg EV</div><div style="font-size:1.6rem;font-weight:800;color:${ov.avg_ev > 0 ? '#067647' : '#ef4444'};">${ov.avg_ev > 0 ? '+' : ''}${ov.avg_ev}%</div></div>
         <div class="results-summary"><div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;">Distribution</div><div style="font-size:1.6rem;font-weight:800;color:${stabColor};">${stab.label}</div><div style="font-size:0.75em;color:#64748b;">σ=${stab.prob_stddev}</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
@@ -465,7 +468,7 @@ function renderDiagnostics(data, league) {
         <div class="results-summary">
           <div style="font-size:0.8rem;font-weight:700;color:#0f172a;margin-bottom:6px;">EV Distribution</div>
           <div style="display:flex;gap:16px;">
-            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#00C076;">${ov.positive_ev_props}</div><div style="font-size:0.72em;color:#64748b;">Positive EV</div></div>
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#067647;">${ov.positive_ev_props}</div><div style="font-size:0.72em;color:#64748b;">Positive EV</div></div>
             <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#ef4444;">${ov.negative_ev_props}</div><div style="font-size:0.72em;color:#64748b;">Negative EV</div></div>
           </div>
           ${(data.ev_hitrate_divergence_flags||[]).length ? `<div style="margin-top:10px;font-size:0.78em;color:#f59e0b;font-weight:700;">⚠ Divergence detected: ${data.ev_hitrate_divergence_flags.join(', ')}</div>` : ''}

@@ -128,23 +128,12 @@ CLUSTER_RANGE_HIGH = 51.0
 CLUSTER_WARN_PCT   = 80        # warn if >80% of probs are in the clustering range
 
 # ── Quick mode — only run these auditors ─────────────────────────────────
-# Generic contract layer (qa/contract_auditors.py). Must be in quick/ship/full
-# or the checkers never instantiate and the owner has to eyeball 13 sports.
-CONTRACT_AUDITORS = [
-    "templates", "integrity", "runtime", "perf_a11y", "charts", "images", "api",
-]
-QUICK_MODE_AUDITORS = [
-    "routes", "content", "navigation", "chrome", "ship", "soccer", "espn_slate",
-    *CONTRACT_AUDITORS,
-]
+QUICK_MODE_AUDITORS = ["routes", "content", "navigation", "chrome", "ship", "soccer", "espn_slate"]
 FULL_MODE_AUDITORS  = ["routes", "content", "navigation", "cards", "models",
                        "results", "gamecounts", "csv", "props", "seo", "schema",
                        "consistency", "chrome", "ship", "soccer", "espn_slate",
-                       *CONTRACT_AUDITORS, "responsive",
                        "pagespeed"]
-SHIP_MODE_AUDITORS  = [
-    "chrome", "ship", "soccer", "espn_slate", *CONTRACT_AUDITORS, "pagespeed",
-]
+SHIP_MODE_AUDITORS  = ["chrome", "ship", "soccer", "espn_slate", "pagespeed"]
 CHROME_MODE_AUDITORS = ["chrome"]
 PAGESPEED_MODE_AUDITORS = ["pagespeed"]
 

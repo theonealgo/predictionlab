@@ -308,6 +308,11 @@ def render_ncaaf_results_chart_page():
             if html and len(html) > 500:
                 cards = html
                 break
+    if not cards:
+        try:
+            cards = render_sport_results_page("NCAAF") or ""
+        except Exception:
+            cards = ""
     payload = None
     if cards:
         try:
@@ -328,6 +333,11 @@ def render_ncaaf_results_chart_page():
         )
     html = _ncaaf_chart_best_width(html)
     html = _ncaaf_chart_sou_compare(html, payload, market)
+    try:
+        from team_results_charts import apply_team_results_template
+        html = apply_team_results_template(html, "NCAAF", view="chart")
+    except Exception:
+        pass
     return html
 
 

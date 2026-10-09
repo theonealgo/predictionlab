@@ -953,7 +953,7 @@ def _rewrite_pc_box(box: str, pct: float, side: str, team: str) -> str:
     )
     box = re.sub(
         r'(<div class="pc-side)[^"]*("[^>]*>)[^<]*(</div>)',
-        rf"\g<1> {side}\g<2>{team}\g<3>",
+        rf"\g<1> {side}\g<2>{(team or '').split()[-1] if team else team}\g<3>",
         box,
         count=1,
     )
@@ -1116,7 +1116,7 @@ def _fill_one_wnba_stack(stack: str) -> str:
             f'<div class="pc-box ">'
             f'<div class="pc-name">Efficiency</div>'
             f'<div class="pc-val">{_fmt_pct(pct)}%</div>'
-            f'<div class="pc-side {side}">{team}</div>'
+            f'<div class="pc-side {side}">{(team or "").split()[-1] if team else team}</div>'
             f"</div>"
         )
         stack = re.sub(
@@ -1443,7 +1443,7 @@ def apply_wnba_best_ml_face(payload: dict[str, Any] | None) -> dict[str, Any]:
 
 def _wnba_banner_color(pct: float) -> str:
     if pct >= 55:
-        return "#00C076"
+        return "#067647"
     if pct >= 50:
         return "#fbbf24"
     return "#D93025"

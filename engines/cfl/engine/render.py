@@ -180,7 +180,7 @@ GRID_CSS = """
 .teams-at { font-weight:800; color:#94a3b8; padding:0 4px; }
 .team-col .team-name { font-size:.92rem; font-weight:700; color:#0f172a; margin:6px 0 4px; line-height:1.2; }
 .final-score { font-size:1.35em; font-weight:800; color:#0f172a; }
-.final-score.score-winner { color:#00C076; }
+.final-score.score-winner { color:#067647; }
 .cfl-result-strip { display:flex; flex-wrap:wrap; gap:8px; padding:0 12px 12px; }
 .cfl-result-chip { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 10px; min-width:100px; }
 .cfl-result-chip .lbl { font-size:.68rem; text-transform:uppercase; letter-spacing:.04em; color:#64748b; font-weight:700; }
@@ -662,7 +662,7 @@ def render_result_card(card: dict[str, Any], idx: int) -> str:
         pick = str(card.get("pick_ml") or "")
         pl_h = american_from_prob(hp)
         pl_a = american_from_prob(ap)
-        gcol = "#00C076" if grade == "WIN" else ("#94a3b8" if grade == "PUSH" else "#ef4444")
+        gcol = "#067647" if grade == "WIN" else ("#94a3b8" if grade == "PUSH" else "#ef4444")
         grade_txt = html_lib.escape(str(grade or "—"))
         spread = card.get("model_spread")
         total = card.get("model_total")
@@ -818,7 +818,7 @@ def _acc_color(acc: float | None, *, spread_ou: bool) -> str:
     if not spread_ou:
         return "#0f172a"
     if acc >= 52:
-        return "#00C076"
+        return "#067647"
     if acc >= 48:
         return "#fbbf24"
     return "#D93025"
@@ -924,7 +924,7 @@ def _season_performance_block(rows: list[dict[str, Any]]) -> str:
     ml_face = face("🎯 Moneyline (Sharp Consensus)", s_acc, s_rec, sw + sl, spread_ou=False)
     # Season ML face uses MLB color bands (>=55 green, >=50 yellow).
     if sw + sl > 0 and s_acc is not None:
-        ml_c = "#00C076" if s_acc >= 55 else ("#fbbf24" if s_acc >= 50 else "#D93025")
+        ml_c = "#067647" if s_acc >= 55 else ("#fbbf24" if s_acc >= 50 else "#D93025")
         ml_face = (
             '<div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">'
             '<div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline (Sharp Consensus)</div>'

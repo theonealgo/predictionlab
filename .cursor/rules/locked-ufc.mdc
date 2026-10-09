@@ -1,28 +1,13 @@
-# UFC UNLOCKED (:5052 / premerge) — results share image only
-
-Owner 2026-09-17: **UNLOCK UFC** for bottom Results Image on `/ufc-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
-
-Prior lock notes preserved below for when this miss is closed.
-
 ---
-
-description: UFC picks/results UI locked on :5052 — do not edit unless UNLOCK UFC
+description: UFC locked — 3 UNLOCKS required
 alwaysApply: true
 ---
 
-# UFC LOCKED (:5052 / premerge)
+# UFC LOCKED
 
-UFC **picks and results** on `:5052` (`predictionlabfix_work2`) are signed off.
+Do not modify UFC unless the same owner message contains the word **UNLOCK**
+3 times, names UFC, and names the miss.
 
-Do **not** change `/ufc-picks`, `/ufc-results`, `/ufc-results?view=chart`,
-`ufc_live.py`, vendored `_sandbox_hub_run/hub/ufc_*`, UFC Cards|Chart, share
-image, or card HTML unless the owner says **UNLOCK UFC**.
-
-Owner 2026-09-15: Consensus Historical Record face chip on UFC cards
-(`Unanimous: W-L` / `All but …: W-L`). Miss closed — lock again.
-
-This replaces the older picks-only lock. Results are locked too.
-
-Source of truth for UFC UI: `:5081` hub (`independent_sports/hub`).
+Locked. 3 UNLOCKS required.
 
 Do not put lock text on user-facing HTML.

@@ -1,37 +1,17 @@
-# NHL UNLOCKED (:5052 / premerge) — results share image only
-
-Owner 2026-09-17: **UNLOCK NHL** for bottom Results Image on `/nhl-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
-
-Prior lock notes preserved below for when this miss is closed.
-
 ---
-
-description: NHL LOCKED (:5052 / premerge)
+description: NHL locked — 3 UNLOCKS required
 alwaysApply: true
 ---
 
-# NHL LOCKED (:5052 / premerge)
+# NHL LOCKED
 
-NHL picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+Do not modify NHL unless the same owner message contains the word **UNLOCK**
+3 times, names NHL, and names the miss.
 
-Do **not** modify NHL unless the owner says:
+Owner 2026-09-22: Efficiency on the picks cards filled from the published spread, including pick'em lines. Miss closed — locked.
 
-**UNLOCK NHL**
+Owner 2026-10-08: results chart opens fast (stale page served, rebuilt in background). Miss closed — locked.
 
-Owner 2026-09-16: briefly unlocked for Books odds + Consensus Historical
-face chip — paused. Owner redirected to CFL header miss first. Lock again.
-
-Fixing CFL, NFL, MLB, soccer, chrome, or production outages is **not** an NHL unlock.
-
-## Do not touch
-
-- `/nhl-picks`, `/nhl-results`, `/nhl-results?view=chart`
-- NHL Cards|Chart, card HTML, date nav
-- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NHL
-
-## Allowed without unlock
-
-- Other sports
-- Checker reports that only *read* NHL pages
+Owner 2026-10-08 (all-sports pass): three-way chart tables sit inside the page, above the footer. Efficiency 50% on a PK puck line and equal stored model values stay. Miss closed — locked.
 
 Do not put lock text on user-facing HTML.

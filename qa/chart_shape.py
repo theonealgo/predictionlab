@@ -22,6 +22,8 @@ PL_VS_ROWS = (
     "PL vs Books disagree",
     "PL and Books agree",
 )
+# Match sports: moneyline only — no spread / totals books or chart markets.
+_ML_ONLY_LINE_SPORTS = frozenset({"tennis", "ufc", "golf"})
 
 
 def has_dissent_consensus(html: str) -> bool:
@@ -121,23 +123,31 @@ def missing_signed_off_charts(
     return missing
 
 
-def has_three_cards_per_row(html: str) -> bool:
-    """Desktop pick/results cards sit 3 across (games-grid / results-grid)."""
+def has_two_cards_per_row(html: str) -> bool:
+    """Desktop pick/results cards sit 2 across, not full-bleed 3-up."""
     html = html or ""
     compact = re.sub(r"\s+", "", html)
     if re.search(
-        r"(?:games-grid|results-grid)[^{]{0,180}\{[^}]{0,400}grid-template-columns:repeat\(3",
+        r"(?:games-grid|results-grid)[^{]{0,220}\{[^}]{0,500}"
+        r"grid-template-columns:repeat\(2",
         compact,
         flags=re.I,
     ):
         return True
+    if 'id="pl-two-card-row"' in html:
+        return True
     return bool(
         re.search(
-            r"(?:games-grid|results-grid)[^{;]{0,80}repeat\(\s*3",
+            r"(?:games-grid|results-grid)[^{;]{0,80}repeat\(\s*2",
             html,
             flags=re.I,
         )
     )
+
+
+def has_three_cards_per_row(html: str) -> bool:
+    """Back-compat alias — product is 2 per row now."""
+    return has_two_cards_per_row(html)
 
 
 def _plain_cell(raw: str) -> str:
@@ -691,7 +701,13 @@ def results_card_parameter_issues(html: str, sport: str = "") -> list[str]:
                 continue
             val = val_html.lower().replace("&mdash;", "—").replace("&ndash;", "–")
             if val in {"", "n/a", "na", "—", "–", "-"}:
-                blank_eff += 1
+                titled = re.search(
+                    rf'class="pc-val"[^>]*title="[^"]*is not available[^"]*"[^>]*>\s*{re.escape(val_html)}\s*</div>',
+                    card,
+                    flags=re.I,
+                )
+                if not titled:
+                    blank_eff += 1
         if "Odds" not in card and "odds-pricing" not in card:
             missing_odds += 1
         if "H2H Last 10" not in card:
@@ -737,7 +753,9 @@ def team_chart_leftover_board_issues(html: str, sport: str = "") -> list[str]:
                 f"{sport_u} chart view still shows leftover cards chrome "
                 f"({marker}) — Chart must be the shared consensus table"
             )
-    n_cards = html.count("game-card") + html.count("data-pick-card")
+    visible = re.sub(r"<style\b[^>]*>[\s\S]*?</style>", " ", html, flags=re.I)
+    visible = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", " ", visible, flags=re.I)
+    n_cards = visible.count("game-card") + visible.count("data-pick-card")
     if n_cards >= 3:
         issues.append(
             f"{sport_u} chart view still has {n_cards} game cards "
@@ -1087,15 +1105,19 @@ def _six_model_games_from_cards(html: str, sport: str = "") -> list[dict]:
             boxes = re.findall(
                 r'class="pc-name">([^<]+)</div>\s*'
                 r'<div class="pc-val"[^>]*>([^<]+)</div>\s*'
-                r'<div class="pc-side[^"]*"[^>]*>([^<]+)</div>',
+                r'<div class="pc-side([^"]*)"[^>]*>([^<]+)</div>',
                 body[:25000],
             )
             picks: dict[str, tuple[str, bool | None]] = {}
-            for name, _pct, side in boxes:
+            for name, _pct, side_cls, side in boxes:
                 name = re.sub(r"[^A-Za-z0-9 ]+", "", name).strip()
                 if name not in _SIX_CONSENSUS_MODELS:
                     continue
                 side_txt = re.sub(r"[✅❌]", "", side).strip()
+                if not side_txt:
+                    # MLB-style box: only a ✅/❌ mark; the pick side is the class.
+                    cls_m = re.search(r"\b(home|away)\b", side_cls or "")
+                    side_txt = cls_m.group(1).upper() if cls_m else ""
                 if not side_txt or side_txt.upper() in ("N/A", "NA", "—", "-"):
                     continue
                 ok = True if "✅" in side else False if "❌" in side else None
@@ -1107,6 +1129,14 @@ def _six_model_games_from_cards(html: str, sport: str = "") -> list[dict]:
             for side in sides:
                 counts[side] = counts.get(side, 0) + 1
             maj_side, maj_n = max(counts.items(), key=lambda kv: kv[1])
+            if list(counts.values()).count(maj_n) > 1:
+                # Even split: no majority side. NFL prints one Split row
+                # graded as a push; every other sport omits these.
+                if (sport or "").strip().upper() in ("NFL", "CFL"):
+                    games.append(
+                        {"date": dk, "label": "3/6 Split / no consensus", "grade": "PUSH"}
+                    )
+                continue
             dissent = [
                 n for n in _SIX_CONSENSUS_MODELS
                 if n in picks and picks[n][0] != maj_side
@@ -1117,19 +1147,16 @@ def _six_model_games_from_cards(html: str, sport: str = "") -> list[dict]:
                 label = f"{maj_n}/6 — all but " + " and ".join(dissent)
             else:
                 continue
-            # NFL Last Night W-L is Edge's pick in the bucket. Other 6-model
-            # sports still grade the majority side.
-            if (sport or "").strip().upper() == "NFL":
-                grade_ok = picks.get("Edge", ("", None))[1]
-            else:
-                grade_ok = next(
-                    (
-                        picks[n][1]
-                        for n in _SIX_CONSENSUS_MODELS
-                        if picks.get(n, ("", None))[0] == maj_side
-                    ),
-                    None,
-                )
+            # Every sport grades the pregame majority side (the table's
+            # "Moneyline on the pregame majority"), NFL included.
+            grade_ok = next(
+                (
+                    picks[n][1]
+                    for n in _SIX_CONSENSUS_MODELS
+                    if picks.get(n, ("", None))[0] == maj_side
+                ),
+                None,
+            )
             if grade_ok is True:
                 grade = "WIN"
             elif grade_ok is False:
@@ -1173,16 +1200,8 @@ def six_model_consensus_from_cards_issues(
     ln_key = _last_night_consensus_date(html)
     if not games or not ln_key:
         return []
-    try:
-        ln_d = date.fromisoformat(ln_key)
-        cut7 = (ln_d - timedelta(days=6)).isoformat()
-    except ValueError:
-        cut7 = ln_key
-    # NFL Last night column is the Last 7 slate (Sun + Thu/Mon), not Sunday only.
-    if (sport or "").strip().upper() == "NFL":
-        ln_games = [g for g in games if cut7 <= g["date"] <= ln_key]
-    else:
-        ln_games = [g for g in games if g["date"] == ln_key]
+    # Last night is the games on that date. The week belongs in Past 7.
+    ln_games = [g for g in games if g["date"] == ln_key]
     if len(ln_games) < 3:
         return []
     expected: dict[str, list[str]] = {}
@@ -1599,6 +1618,9 @@ def card_missing_model_value_issues(html: str, sport: str = "") -> list[str]:
     required = _CARD_MODELS
     if (sport or "").strip().lower() == "soccer":
         required = ("Edge", "XSharp", "Sharp Consensus")
+    # Owner 2026-10-08: WNBA has only these 4 models.
+    if (sport or "").strip().lower() == "wnba":
+        required = ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
     for card in cards:
         names = [
             re.sub(r"<[^>]+>", "", n).strip()
@@ -1633,11 +1655,39 @@ def card_missing_model_value_issues(html: str, sport: str = "") -> list[str]:
     if missing_box:
         issues.append(
             f"{label}: {missing_box}/{len(cards)} cards are missing a model box "
-            "(Edge / XSharp / Sharp Consensus / Efficiency / Grinder2 / Takedown)"
+            f"({' / '.join(required)})"
         )
     if blank_val:
         issues.append(
             f"{label}: {blank_val}/{len(cards)} cards have a blank, N/A, or 50% Edge model value"
+        )
+    nested = 0
+    long_side = 0
+    for card in cards:
+        if re.search(
+            r'class="pc-name">[^<]*<div class="pc-side',
+            card,
+            flags=re.I,
+        ):
+            nested += 1
+        for side in re.findall(
+            r'class="pc-side[^"]*"[^>]*>\s*([^<]+)',
+            card,
+            flags=re.I,
+        ):
+            text = re.sub(r"[✅❌]", "", side).strip()
+            if len(text.split()) >= 3:
+                long_side += 1
+                break
+    if nested:
+        issues.append(
+            f"{label}: {nested}/{len(cards)} cards nest the team name inside the "
+            "model label (team name in the %)"
+        )
+    if long_side:
+        issues.append(
+            f"{label}: {long_side}/{len(cards)} cards put a full team name in "
+            "Pick Confidence instead of a short nickname"
         )
     return issues
 
@@ -1699,6 +1749,64 @@ def card_blank_market_line_issues(html: str, sport: str = "") -> list[str]:
         issues.append(f"{label}: {xs_tot}/{n} cards have a blank XSharp total")
     if xs_proj:
         issues.append(f"{label}: {xs_proj}/{n} cards have a blank XSharp projected score")
+    return issues
+
+
+def results_missing_pl_line_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when a results card has a books line and a blank Prediction Lab line.
+
+    XSharp having a number does not fill Prediction Lab. The books number
+    does not either.
+    """
+    html = html or ""
+    sport_u = (sport or "").strip().upper()
+    if sport_u in {"CFL", "TENNIS", "UFC", "GOLF"}:
+        return []
+    if "val-pl" not in html or "val-books" not in html:
+        return []
+    dash = {"", "—", "–", "-", "n/a", "N/A"}
+    missing_spread = 0
+    missing_total = 0
+    missing_proj = 0
+    cards = re.split(r'class="game-card\b', html)
+    for card in cards[1:]:
+        rows = re.findall(
+            r'class="market-k">\s*([^<]*)</td>\s*<td class="val-books">([^<]*)</td>\s*'
+            r'<td class="val-pl">([^<]*)</td>\s*<td class="val-xs">([^<]*)</td>',
+            card,
+        )
+        for market, books, pl, _xs in rows:
+            market = re.sub(r"\s+", " ", market).strip().lower()
+            books = re.sub(r"\s+", " ", books).strip()
+            pl = re.sub(r"\s+", " ", pl).strip()
+            if books in dash or pl not in dash:
+                continue
+            if market == "spread":
+                missing_spread += 1
+            elif market == "total":
+                missing_total += 1
+        proj = re.search(
+            r'class="proj-model pl"[^>]*>[\s\S]{0,200}?class="proj-val">\s*([^<]*)',
+            card,
+            flags=re.I,
+        )
+        if proj and re.sub(r"\s+", " ", proj.group(1)).strip() in dash:
+            if any(re.sub(r"\s+", " ", b).strip() not in dash for _m, b, _p, _x in rows):
+                missing_proj += 1
+    issues = []
+    label = sport_u or "results"
+    if missing_spread:
+        issues.append(
+            f"{label}: {missing_spread} results cards have a books spread and no Prediction Lab spread"
+        )
+    if missing_total:
+        issues.append(
+            f"{label}: {missing_total} results cards have a books total and no Prediction Lab total"
+        )
+    if missing_proj:
+        issues.append(
+            f"{label}: {missing_proj} results cards have a books line and no Prediction Lab projected score"
+        )
     return issues
 
 
@@ -1820,15 +1928,22 @@ def nfl_chart_window_tally_issues(chart_html: str) -> list[str]:
 
 
 def team_chart_api_issues(payload: dict | None, sport: str) -> list[str]:
-    """FAIL when /{sport}/api/picks cannot hydrate Moneyline | Spread | Totals."""
+    """FAIL when /{sport}/api/picks cannot hydrate the markets that sport posts."""
     sport_l = (sport or "").strip().lower()
+    if sport_l == "golf":
+        return []
     label = sport_l.upper() or "TEAM"
     path = f"/{sport_l}/api/picks"
     if not isinstance(payload, dict) or not payload.get("ok"):
         return [f"{label} chart API {path} did not return ok"]
     issues: list[str] = []
     markets = payload.get("markets") or {}
-    for key in ("moneyline", "spread", "totals"):
+    keys = (
+        ("moneyline",)
+        if sport_l in _ML_ONLY_LINE_SPORTS
+        else ("moneyline", "spread", "totals")
+    )
+    for key in keys:
         market = markets.get(key) or {}
         if not market:
             issues.append(f"{label} chart API missing {key} market")
@@ -2526,14 +2641,18 @@ def tennis_picks_slate_issues(html: str) -> list[str]:
     return issues
 
 
-def results_math_issues(html: str, cards_html: str | None = None) -> list[str]:
+def results_math_issues(
+    html: str, cards_html: str | None = None, sport: str = ""
+) -> list[str]:
     """2/4 chart vs cards, Past 7 dropping last night, empty spread/totals,
     blank G2/TD/Efficiency tallies, 0-0 last-night charts on a graded slate,
     and Last Night date mismatches across moneyline / spread / totals."""
     html = html or ""
-    is_nfl = bool(
+    sport_u = (sport or "").strip().upper()
+    is_nfl = sport_u == "NFL" or bool(
         re.search(
-            r'rel=["\']canonical["\'][^>]+/nfl-results|Last Night\'s NFL Results|class="sport-nfl"',
+            r'rel=["\']canonical["\'][^>]+/nfl-results|Last Night\'s NFL Results|'
+            r'class="sport-nfl"|nfl-results-chart|/nfl-results\b',
             html,
             flags=re.I,
         )
@@ -2544,7 +2663,11 @@ def results_math_issues(html: str, cards_html: str | None = None) -> list[str]:
     issues.extend(consensus_empty_vs_tally_issues(html))
     issues.extend(pl_vs_books_empty_vs_tally_issues(html))
     issues.extend(pl_vs_books_partition_issues(html))
-    issues.extend(six_model_consensus_from_cards_issues(html, cards_html))
+    issues.extend(
+        six_model_consensus_from_cards_issues(
+            html, cards_html, sport_u or ("NFL" if is_nfl else "")
+        )
+    )
     issues.extend(best_performing_today_issues(html))
     issues.extend(empty_last_night_spread_tally_issues(html))
     if is_nfl:
@@ -2581,6 +2704,82 @@ def efficiency_copied_na_issues(html: str) -> list[str]:
     return []
 
 
+def picks_chart_view_css_issues(html: str) -> list[str]:
+    """FAIL when Chart on the predictions page cannot hide the card grid."""
+    html = html or ""
+    if "pvChartBtn" not in html and "setPicksView" not in html:
+        return []
+    block = re.search(
+        r'<style id="pl-two-card-row">([\s\S]*?)</style>',
+        html,
+        flags=re.I,
+    )
+    if not block:
+        return []
+    css = block.group(1)
+    if "display:grid" not in css.replace(" ", ""):
+        return []
+    compact = re.sub(r"\s+", "", css)
+    if "chart-mode.games-grid{display:none" in compact or "chart-mode .games-grid{display:none" in compact:
+        return []
+    return [
+        "Predictions Chart view still shows the card grid "
+        "(the 2-column layout overrides Chart)"
+    ]
+
+
+def predictions_share_image_issues(
+    html: str,
+    image_bytes: bytes | None,
+    status: int,
+    content_type: str = "",
+) -> list[str]:
+    """FAIL when the bottom predictions image is missing or has no picks drawn."""
+    html = html or ""
+    if "social-export-wrap" not in html and "Predictions Image" not in html:
+        return ["Predictions page is missing the bottom predictions image"]
+    if status != 200 or "image" not in (content_type or "").lower():
+        return [
+            f"Predictions image did not load (HTTP {status}) — nothing is displayed on it"
+        ]
+    data = image_bytes or b""
+    if len(data) < 8000:
+        return ["Predictions image is blank — no picks are drawn on it"]
+    try:
+        import io
+
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(data)).convert("RGB")
+        w, h = im.size
+        if w < 200 or h < 200:
+            return ["Predictions image is blank — no picks are drawn on it"]
+        crop = im.crop((30, int(h * 0.16), w - 30, int(h * 0.88)))
+        dark = 0
+        step = 6
+        pixels = crop.getdata()
+        for i in range(0, len(pixels), step):
+            r, g, b = pixels[i]
+            if r < 90 and g < 100 and b < 120:
+                dark += 1
+        if dark < 40:
+            return ["Predictions image has no picks drawn on it"]
+        # A header bar can supply the dark pixels above. The middle of a
+        # blank card is one flat color.
+        mid = im.crop((int(w * 0.15), int(h * 0.35), int(w * 0.85), int(h * 0.75)))
+        sample = list(mid.getdata())[::12]
+        if len(sample) >= 20:
+            avg = tuple(sum(px[i] for px in sample) / len(sample) for i in range(3))
+            spread = 0
+            for r, g, b in sample:
+                spread += abs(r - avg[0]) + abs(g - avg[1]) + abs(b - avg[2])
+            if spread / len(sample) < 12:
+                return ["Predictions image is blank — the middle of the card has no picks"]
+    except Exception:
+        return ["Predictions image could not be read, so a blank card would pass"]
+    return []
+
+
 def share_ad_card_issues(html: str, min_picks: int = 2) -> list[str]:
     """FAIL when the bottom advertising / share card is missing or has <2 picks."""
     html = html or ""
@@ -2590,13 +2789,16 @@ def share_ad_card_issues(html: str, min_picks: int = 2) -> list[str]:
     if not m:
         return ["Share card does not report how many picks it drew"]
     n = int(m.group(1))
-    if n < min_picks:
+    on_page = len(re.findall(r'<div\b[^>]*\bdata-pick-card\b', html, flags=re.I))
+    if n < min_picks and not (on_page == n and on_page >= 1):
         return [f"Share card has {n} pick(s); need at least {min_picks}"]
     return []
 
 
-def team_chart_sou_table_issues(html: str, market: str) -> list[str]:
+def team_chart_sou_table_issues(html: str, market: str, sport: str = "") -> list[str]:
     """FAIL when Spread/Totals still show the moneyline table or omit line compare."""
+    if (sport or "").strip().lower() in _ML_ONLY_LINE_SPORTS:
+        return []
     html = html or ""
     market = (market or "").lower()
     if market not in ("spread", "totals"):
@@ -2733,4 +2935,450 @@ def picks_pagespeed_a11y_issues(html: str, sport: str | None = None) -> list[str
                 issues.append(f"render-blocking stylesheet: {href}")
             break
 
+    return issues
+
+
+_ASR_SPORT_ALIASES = {
+    "nhl": "NHL",
+    "nba": "NBA",
+    "mlb": "MLB",
+    "nfl": "NFL",
+    "ncaab": "NCAAB",
+    "ncaa basketball": "NCAAB",
+    "ncaaw": "NCAAW",
+    "ncaa women's basketball": "NCAAW",
+    "ncaa womens basketball": "NCAAW",
+    "ncaaf": "NCAAF",
+    "ncaa football": "NCAAF",
+    "wnba": "WNBA",
+    "soccer": "SOCCER",
+}
+_ASR_DASHBOARD = frozenset(_ASR_SPORT_ALIASES.values())
+_ASR_ML_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+    "Efficiency",
+)
+_ASR_ML_ONLY = frozenset({"TENNIS", "UFC", "GOLF"})
+
+
+def _asr_norm_sport(name: str) -> str:
+    text = html_lib.unescape(re.sub(r"<[^>]+>", " ", name or ""))
+    text = re.sub(r"['’]", "", text)
+    text = re.sub(r"[^\w\s]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    if text in _ASR_SPORT_ALIASES:
+        return _ASR_SPORT_ALIASES[text]
+    for key, sport in _ASR_SPORT_ALIASES.items():
+        if key in text:
+            return sport
+    return text.upper()
+
+
+def parse_all_sports_results(html: str) -> dict[str, dict]:
+    """Sport → {ml, spread, ou} records from /all-sports-results."""
+    html = html or ""
+    out: dict[str, dict] = {}
+    if "All Sports Prediction Results" not in html and "asr-table" not in html:
+        return out
+
+    def _section(title: str) -> str:
+        m = re.search(
+            rf"<h2>\s*{re.escape(title)}\s*</h2>([\s\S]{{0,80000}}?)</table>",
+            html,
+            flags=re.I,
+        )
+        return (m.group(0) if m else "")
+
+    def _cells(block: str) -> list[tuple[str, list[tuple[int, int, float | None]]]]:
+        rows = []
+        for tr in re.findall(r"<tr>([\s\S]*?)</tr>", block, flags=re.I):
+            link = re.search(
+                r'class="sport-link"[^>]*>([\s\S]*?)</a>', tr, flags=re.I
+            )
+            if not link:
+                continue
+            sport = _asr_norm_sport(link.group(1))
+            recs: list[tuple[int, int, float | None]] = []
+            tds = re.findall(r"<td>([\s\S]*?)</td>", tr, flags=re.I)
+            for td in tds[1:]:
+                pct_m = re.search(r'class="asr-pct">\s*([\d.]+)\s*%', td, flags=re.I)
+                rec_m = re.search(r'class="asr-rec">\s*(\d+)\s*-\s*(\d+)', td, flags=re.I)
+                if rec_m:
+                    pct = float(pct_m.group(1)) if pct_m else None
+                    recs.append((int(rec_m.group(1)), int(rec_m.group(2)), pct))
+                else:
+                    recs.append((-1, -1, None))
+            rows.append((sport, recs))
+        return rows
+
+    for sport, recs in _cells(_section("Moneyline")):
+        row = out.setdefault(sport, {"ml": {}, "spread": {}, "ou": {}})
+        for name, rec in zip(_ASR_ML_MODELS, recs):
+            if rec[0] >= 0:
+                row["ml"][name] = rec
+    for sport, recs in _cells(_section("Spread vs book")):
+        row = out.setdefault(sport, {"ml": {}, "spread": {}, "ou": {}})
+        for name, rec in zip(("XSharp", "PL"), recs):
+            if rec[0] >= 0:
+                row["spread"][name] = rec
+    for sport, recs in _cells(_section("Over / Under vs book")):
+        row = out.setdefault(sport, {"ml": {}, "spread": {}, "ou": {}})
+        for name, rec in zip(("XSharp", "PL"), recs):
+            if rec[0] >= 0:
+                row["ou"][name] = rec
+    return out
+
+
+def _season_ml_from_results(html: str) -> dict[str, tuple[int, int]]:
+    """Season moneyline W-L by model from /{sport}-results tally boards."""
+    found: dict[str, tuple[int, int]] = {}
+    text = _plain_results_text(html)
+    for label, chunk in _tally_sections(text):
+        if not re.search(r"Season|Moneyline Accuracy", label, flags=re.I):
+            continue
+        for name, pair in _models_in_tally_chunk(chunk).items():
+            a, b = pair
+            rec = a if _has_wl_rec(a) else b
+            parts = _wl_parts(rec)
+            if parts:
+                found[name] = (parts[0], parts[1])
+    return found
+
+
+def _card_grade_vs_score_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when a results card checkmark does not match the final score."""
+    html = html or ""
+    wrong = 0
+    checked = 0
+    parts = re.split(r'(<div class="game-card\b[^"]*"[^>]*>)', html, flags=re.I)
+    idx = 1
+    while idx < len(parts):
+        open_tag = parts[idx]
+        body = parts[idx + 1] if idx + 1 < len(parts) else ""
+        idx += 2
+        stack = open_tag + body[:20000]
+        scores = re.findall(r'class="(?:card-)?final-score[^"]*">\s*(\d+)', stack)
+        if len(scores) < 2:
+            hs = re.search(r'data-home-score="(\d+)"', stack)
+            as_ = re.search(r'data-away-score="(\d+)"', stack)
+            if hs and as_:
+                scores = [as_.group(1), hs.group(1)]
+        if len(scores) < 2:
+            continue
+        try:
+            away_s, home_s = int(scores[0]), int(scores[1])
+        except ValueError:
+            continue
+        if away_s == home_s:
+            continue
+        home_won = home_s > away_s
+        for box in re.findall(
+            r'<div class="pc-box[^"]*">([\s\S]*?)</div>\s*</div>',
+            stack,
+            flags=re.I,
+        ):
+            mark = "✅" if "✅" in box else ("❌" if "❌" in box else "")
+            if not mark:
+                continue
+            side = re.search(r'class="pc-side\s+(home|away)"', box, flags=re.I)
+            if not side:
+                continue
+            picked_home = side.group(1).lower() == "home"
+            correct = picked_home == home_won
+            checked += 1
+            if mark == "✅" and not correct:
+                wrong += 1
+            if mark == "❌" and correct:
+                wrong += 1
+    if checked < 3:
+        return []
+    if wrong:
+        label = (sport or "Results").strip() or "Results"
+        return [
+            f"{label}: {wrong}/{checked} graded model boxes do not match the final score"
+        ]
+    return []
+
+
+def all_sports_results_issues(
+    asr_html: str,
+    sport: str = "",
+    results_html: str = "",
+) -> list[str]:
+    """FAIL when /all-sports-results is missing, mis-math'd, or not the live season.
+
+    Also fail when results-card checkmarks disagree with the posted final score.
+    Tennis / UFC / Golf have no spread or totals on this page.
+    """
+    html = asr_html or ""
+    sport_u = (sport or "").strip().upper()
+    issues: list[str] = []
+    if "All Sports Prediction Results" not in html:
+        return ["All Sports Prediction Results page is missing its title"]
+    if "Moneyline" not in html:
+        issues.append("All Sports Results missing the Moneyline table")
+    if sport_u not in _ASR_ML_ONLY:
+        if not re.search(r"Spread vs book", html, flags=re.I):
+            issues.append("All Sports Results missing Spread vs book")
+        if not re.search(r"Over\s*/\s*Under vs book", html, flags=re.I):
+            issues.append("All Sports Results missing Over / Under vs book")
+    parsed = parse_all_sports_results(html)
+    if sport_u in _ASR_DASHBOARD:
+        row = parsed.get(sport_u)
+        if not row or not row.get("ml"):
+            issues.append(f"All Sports Results has no Moneyline row for {sport_u}")
+        else:
+            for name, (w, l, pct) in row["ml"].items():
+                n = w + l
+                if n < 5 or pct is None:
+                    continue
+                calc = round(100.0 * w / n, 1)
+                if abs(calc - pct) > 1.0:
+                    issues.append(
+                        f"All Sports Results {sport_u} {name} shows {pct}% "
+                        f"for {w}-{l} ({calc}%)"
+                    )
+            if sport_u not in _ASR_ML_ONLY:
+                for market in ("spread", "ou"):
+                    for name, (w, l, pct) in (row.get(market) or {}).items():
+                        n = w + l
+                        if n < 5 or pct is None:
+                            continue
+                        calc = round(100.0 * w / n, 1)
+                        if abs(calc - pct) > 1.0:
+                            label = "Spread" if market == "spread" else "Totals"
+                            issues.append(
+                                f"All Sports Results {sport_u} {label} {name} "
+                                f"shows {pct}% for {w}-{l} ({calc}%)"
+                            )
+            live = _season_ml_from_results(results_html or "")
+            for name, (aw, al, _p) in row["ml"].items():
+                if name not in live:
+                    continue
+                lw, ll = live[name]
+                an, ln = aw + al, lw + ll
+                if an < 8 or ln < 8:
+                    continue
+                if an > ln * 2 or ln > an * 2:
+                    issues.append(
+                        f"All Sports Results {sport_u} {name} is {aw}-{al} "
+                        f"({an} games) but /{sport_u.lower()}-results Season "
+                        f"is {lw}-{ll} ({ln} games) — not the same slate"
+                    )
+                elif aw != lw or al != ll:
+                    issues.append(
+                        f"All Sports Results {sport_u} {name} is {aw}-{al}; "
+                        f"Season board grades {lw}-{ll}"
+                    )
+    issues.extend(_card_grade_vs_score_issues(results_html or "", sport_u))
+    return issues
+
+_PERF_ALL_SPORTS = (
+    "NBA",
+    "NHL",
+    "MLB",
+    "NFL",
+    "NCAAB",
+    "NCAAF",
+    "NCAAW",
+    "WNBA",
+    "CFL",
+    "SOCCER",
+    "TENNIS",
+    "UFC",
+    "GOLF",
+)
+_PERF_CORE_MODELS = (
+    "Grinder2",
+    "Takedown",
+    "Edge",
+    "XSharp",
+    "Sharp Consensus",
+)
+
+
+def picks_recent_results_issues(html: str) -> list[str]:
+    """FAIL when picks is missing Last Night / Last 7 / Last 30 above the explainer."""
+    html = html or ""
+    if "How These AI Picks Are Generated" not in html and "seo-picks-footer" not in html:
+        if "data-pick-card" not in html and "pick-card" not in html:
+            if "golf-board" not in html:
+                return []
+    issues: list[str] = []
+    if 'id="picks-recent-results"' not in html or "picks-recent-grid" not in html:
+        issues.append(
+            "Picks page missing Last Night / Last 7 / Last 30 above "
+            "How These AI Picks Are Generated"
+        )
+        return issues
+    for label in ("Last Night", "Last 7 days", "Last 30 days"):
+        if label not in html:
+            issues.append(f"Picks recent-results strip missing {label}")
+    for market in ("Moneyline", "Spread", "Totals"):
+        if market not in html:
+            issues.append(f"Picks recent-results strip missing {market} grades")
+    for m in re.finditer(
+        r"<h4 class=\"picks-recent-mkt\">(Spread|Totals)</h4>\s*"
+        r"<table><tbody>([\s\S]*?)</tbody></table>",
+        html,
+        flags=re.I,
+    ):
+        body = m.group(2)
+        pl = re.search(r"<th>Prediction Lab</th><td>([^<]+)</td>", body, flags=re.I)
+        xs = re.search(r"<th>XSharp</th><td>([^<]+)</td>", body, flags=re.I)
+        pl_v = (pl.group(1) if pl else "").strip()
+        xs_v = (xs.group(1) if xs else "").strip()
+        if xs_v and xs_v not in {"—", "-", "N/A"} and re.search(r"\d+-\d+", xs_v):
+            if not pl_v or pl_v in {"—", "-", "N/A"} or not re.search(r"\d+-\d+", pl_v):
+                issues.append(
+                    f"Picks recent-results {m.group(1)} is missing Prediction Lab "
+                    "while XSharp has a graded record"
+                )
+    return issues
+
+
+def performance_page_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when /performance is thin, paywalled, or team cards omit models."""
+    html = html or ""
+    issues: list[str] = []
+    if "/plans" in html and "Model Performance" not in html:
+        return ["Model Performance redirected to plans / paywall"]
+    if "Model Performance" not in html:
+        return ["Model Performance page is missing its title"]
+    missing = [s for s in _PERF_ALL_SPORTS if not re.search(rf'value="{s}"', html)]
+    if missing:
+        issues.append("Model Performance sport list missing " + ", ".join(missing))
+    if re.search(r">\s*(?:45-49%|40-44%|<20%)\s*<", html):
+        issues.append(
+            "Model Performance still shows sub-50% confidence buckets "
+            "(pick-side confidence is always 50%+)"
+        )
+    cards = re.findall(
+        r'<div class="team-card">([\s\S]*?)</table>\s*</div>',
+        html,
+        flags=re.I,
+    )
+    sport_u = (sport or "").strip().upper()
+    if sport_u and not cards:
+        issues.append(f"Model Performance has no team cards for {sport_u}")
+        return issues
+    empty_core = 0
+    checked = 0
+    for card in cards[:40]:
+        checked += 1
+        present = []
+        missing_m = []
+        for name in _PERF_CORE_MODELS:
+            m = re.search(
+                rf"<td>\s*{re.escape(name)}\s*</td>\s*<td>([^<]+)</td>",
+                card,
+                flags=re.I,
+            )
+            rec = (m.group(1) if m else "").strip()
+            if rec and rec not in {"—", "&mdash;", "-", "0"} and re.search(r"\d+-\d+", rec):
+                present.append(name)
+            else:
+                missing_m.append(name)
+        if len(present) <= 2 and len(missing_m) >= 3:
+            empty_core += 1
+    if checked and empty_core == checked:
+        issues.append(
+            "Team Model Performance only fills XSharp/Efficiency — "
+            "Grinder2, Takedown, Edge, and Sharp Consensus are 0"
+        )
+    elif checked and empty_core > max(2, checked // 3):
+        issues.append(
+            f"Team Model Performance: {empty_core}/{checked} team cards "
+            "are missing most model records"
+        )
+    return issues
+
+
+
+def _pagespeed_tabs_ok(html: str) -> bool:
+    """role=tab must sit inside a still-open role=tablist."""
+    for match in re.finditer(r"\brole=[\"']tab[\"']", html, flags=re.I):
+        window = html[max(0, match.start() - 5000) : match.start()]
+        low = window.lower()
+        open_at = max(low.rfind('role="tablist"'), low.rfind("role='tablist'"))
+        if open_at < 0:
+            return False
+        if re.search(r"</(?:nav|div|ul)\s*>", window[open_at:], flags=re.I):
+            return False
+    return True
+
+
+def pagespeed_insight_issues(html: str) -> list[str]:
+    """Audits from the PageSpeed report for /nhl-results (Lighthouse 13, mobile).
+
+    Scored misses in that report: tab parent, #00C076 contrast, no main
+    landmark, and Agentic Browsing (the same tab parent). Also the insights
+    named in the report: render-blocking chrome CSS, unused font preconnect,
+    gtag.js in the first HTML, and the SEO tags that scored 100 when present.
+
+    Lab Slow 4G numbers are not re-measured here. Budgets named on a pass
+    are FCP ≤ 1.8s, LCP ≤ 2.5s, TBT ≤ 200ms, CLS ≤ 0.1, Speed Index ≤ 3.4s.
+    The desktop golf report also fails full-size headshot files. CSP, HSTS,
+    COOP, and Trusted Types are response headers and are checked separately.
+    """
+    html = html or ""
+    if "<html" not in html.lower():
+        return ["PageSpeed: response is not an HTML document"]
+    issues: list[str] = []
+    if not re.search(r"<main\b", html, flags=re.I):
+        issues.append("accessibility: document has no <main> landmark")
+    if re.search(r"\brole=[\"']tab[\"']", html, flags=re.I) and not _pagespeed_tabs_ok(html):
+        issues.append(
+            "accessibility: role=tab is not inside role=tablist "
+            "(Moneyline, Spread, Totals). Agentic Browsing fails on the same markup"
+        )
+    if re.search(r"#00[Cc]076", html):
+        issues.append(
+            "accessibility: #00C076 on white is about 2.4:1 (needs 4.5:1)"
+        )
+    blocking: list[str] = []
+    for name in ("picks-nav-overrides.css", "research-theme.css"):
+        for match in re.finditer(rf"<link\b[^>]*{re.escape(name)}[^>]*>", html, flags=re.I):
+            tag = match.group(0).lower()
+            if "stylesheet" in tag and "onload=" not in tag and "media=\"print\"" not in tag:
+                blocking.append(name)
+                break
+    if blocking:
+        issues.append("performance: render-blocking CSS " + ", ".join(blocking))
+    has_preconnect = re.search(
+        r"<link\b[^>]*(?:rel=[\"']preconnect[\"'][^>]*fonts\.(?:googleapis|gstatic)\.com|"
+        r"fonts\.(?:googleapis|gstatic)\.com[^>]*rel=[\"']preconnect[\"'])",
+        html,
+        flags=re.I,
+    )
+    if has_preconnect and "fonts.googleapis.com/css" not in html:
+        issues.append(
+            "performance: unused preconnect to fonts.googleapis.com / fonts.gstatic.com"
+        )
+    has_google_tag = (
+        "googletagmanager.com" in html
+        or "G-R4XM0WKTGG" in html
+        or "AW-183" in html
+        or "gtag(" in html
+    )
+    if not has_google_tag:
+        issues.append("performance: Google tag is missing from this page")
+    if not re.search(r"<title>\s*[^<]{3,}\s*</title>", html, flags=re.I):
+        issues.append("SEO: missing title")
+    if not re.search(
+        r"<meta\b[^>]*name=[\"']description[\"'][^>]*content=[\"'][^\"']+",
+        html,
+        flags=re.I,
+    ):
+        issues.append("SEO: missing meta description")
+    if not re.search(r"<html\b[^>]*\blang=", html, flags=re.I):
+        issues.append("SEO: html element is missing lang")
+    if "application/ld+json" not in html:
+        issues.append("SEO: structured data missing")
+    if not re.search(r"<link\b[^>]*rel=[\"']canonical[\"']", html, flags=re.I):
+        issues.append("SEO: canonical link missing")
     return issues

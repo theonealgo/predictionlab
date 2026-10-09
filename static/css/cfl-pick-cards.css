@@ -1,12 +1,12 @@
-/* CFL isolation only — Pick Confidence: 6 boxes, one row, no horizontal slider.
-   3 matchup cards per desktop row (same as other team sports). Golf excluded.
+/* CFL isolation only — Pick Confidence: 6 boxes in two rows of 3, no horizontal slider.
+   2 matchup cards per desktop row (same as other team sports). Golf excluded.
    Equal-height cards in each row. */
 html body[data-sandbox-sport="cfl"] .games-grid,
 html body[data-sport="cfl"] .games-grid,
 html body.research-site[data-sandbox-sport="cfl"] .date-section:not(.chart-mode) .games-grid,
 html body.research-site[data-sport="cfl"] .date-section:not(.chart-mode) .games-grid {
   display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 12px !important;
   align-items: stretch !important;
   justify-items: stretch !important;
@@ -69,7 +69,7 @@ html body[data-sport="cfl"] .pick-conf-bar {
 html body[data-sandbox-sport="cfl"] .pick-conf-grid,
 html body[data-sport="cfl"] .pick-conf-grid {
   display: grid !important;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 6px !important;
   align-items: stretch !important;
   min-width: 0 !important;
@@ -161,7 +161,7 @@ html body[data-sandbox-sport="cfl"] .pick-no { color: #b91c1c; }
   color: #0f172a;
 }
 .game-card[data-league="CFL"] .final-score.score-winner {
-  color: #00c076;
+  color: #067647;
 }
 
 html body[data-sport="cfl"] .pl-analytics-title,

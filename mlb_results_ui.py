@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -237,6 +237,97 @@ def _honestize_model_block(m: dict[str, Any]) -> dict[str, Any]:
     if out.get("units") is None:
         out["units"] = _units_from_wl(w, l)
     return out
+
+
+_MLB_CARDS_LAST_NIGHT_RE = re.compile(
+    r"Last Night'?s MLB Results\s*[—\-]\s*(\d{4}-\d{2}-\d{2})",
+    re.I,
+)
+
+
+def mlb_last_night_date_from_cards_html(html: str) -> str | None:
+    m = _MLB_CARDS_LAST_NIGHT_RE.search(html or "")
+    return m.group(1) if m else None
+
+
+def mlb_chart_cards_cache_stale(html: str) -> bool:
+    """True when cached cards HTML Last Night is older than yesterday ET."""
+    ln = mlb_last_night_date_from_cards_html(html)
+    if not ln:
+        return True
+    yesterday = (
+        datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
+    ).isoformat()
+    return ln < yesterday
+
+
+def _mlb_scored_finals_on_date(finals: list[dict[str, Any]], day: str) -> int:
+    d = str(day or "")[:10]
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+        return 0
+    n = 0
+    for g in finals or []:
+        if str(g.get("game_date") or "")[:10] != d:
+            continue
+        if g.get("home_score") is None or g.get("away_score") is None:
+            continue
+        n += 1
+    return n
+
+
+def _mlb_latest_scored_finals_date(
+    finals: list[dict[str, Any]], *, before: str | None = None
+) -> str | None:
+    today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    cap = str(before or today)[:10]
+    dates = sorted(
+        {
+            str(g.get("game_date") or "")[:10]
+            for g in finals or []
+            if str(g.get("game_date") or "")[:10]
+            and str(g.get("game_date") or "")[:10] < cap
+            and g.get("home_score") is not None
+            and g.get("away_score") is not None
+        }
+    )
+    return dates[-1] if dates else None
+
+
+def resolve_mlb_chart_last_night_key(
+    *,
+    cards_html: str | None,
+    payload: dict[str, Any] | None,
+    finals: list[dict[str, Any]] | None,
+) -> str | None:
+    """Match chart Last Night to cards when that date has stored final scores."""
+    rows = list(finals or [])
+    cards_ln = mlb_last_night_date_from_cards_html(cards_html or "")
+    payload_ln = ((payload or {}).get("tallies") or {}).get("last_night") or {}
+    tally_ln = str(payload_ln.get("date") or "")[:10] if isinstance(payload_ln, dict) else ""
+    candidate = cards_ln or tally_ln or None
+    if candidate and _mlb_scored_finals_on_date(rows, candidate) > 0:
+        return candidate
+    return _mlb_latest_scored_finals_date(rows)
+
+
+def _apply_mlb_chart_last_night(payload: dict[str, Any], ln_key: str | None) -> None:
+    if not ln_key or not isinstance(payload, dict):
+        return
+    tallies = payload.get("tallies")
+    if isinstance(tallies, dict) and isinstance(tallies.get("last_night"), dict):
+        tallies["last_night"]["date"] = ln_key
+    markets = payload.get("markets") or {}
+    if not isinstance(markets, dict):
+        return
+    for mk in ("moneyline", "spread", "totals"):
+        block = markets.get(mk)
+        if not isinstance(block, dict):
+            continue
+        mt = block.get("tallies")
+        if not isinstance(mt, dict):
+            continue
+        if isinstance(mt.get("last_night"), dict):
+            mt["last_night"]["date"] = ln_key
 
 
 def _honestize_tally(block: dict[str, Any]) -> dict[str, Any]:
@@ -2010,6 +2101,66 @@ def inject_mlb_results_view_toggle(html: str, *, active: str = "normal") -> str:
     return bar + html
 
 
+def _mlb_models_cell(c: dict[str, Any]) -> str:
+    """Graded model sides from the result card. Empty when the card has no pick."""
+    bits = []
+    models = c.get("models") or {}
+    for name in MODEL_ORDER:
+        row = models.get(name) or {}
+        pick = row.get("pick")
+        if not pick:
+            continue
+        if row.get("correct") is True:
+            mark = "✓"
+        elif row.get("correct") is False:
+            mark = "✗"
+        else:
+            mark = ""
+        bits.append(f"{name} {pick} {mark}".strip())
+    return " ".join(bits)
+
+
+def _mlb_sou_games_section(finals: list[dict[str, Any]], market: str) -> str:
+    """Spread or totals game table, same markup as the moneyline games table."""
+    mk = "spread" if market == "spread" else "totals"
+    title = "Spread games" if mk == "spread" else "Totals games"
+    rows = []
+    for c in finals:
+        home = _chart_team_name(c, "home")
+        away = _chart_team_name(c, "away")
+        hs, aws = c.get("home_score"), c.get("away_score")
+        score = f"{aws}–{hs}" if hs is not None and aws is not None else "—"
+        row = c.get(mk) if isinstance(c.get(mk), dict) else {}
+        book = row.get("book") or row.get("book_line") or "—"
+        pl = row.get("pl_pick") or row.get("pl_line") or row.get("pick") or "—"
+        xs = row.get("xs_pick") or row.get("xs_line") or "—"
+        ok = row.get("correct")
+        push = row.get("push")
+        res = "Push" if push else ("Correct" if ok is True else "Wrong" if ok is False else "—")
+        h2h = c.get("h2h10") or c.get("h2h_l10") or "—"
+        rows.append(
+            "<tr>"
+            f"<td>{_esc_html(str(c.get('game_date') or '')[:10])}</td>"
+            f"<td>{_esc_html(away)} @ {_esc_html(home)}</td>"
+            f"<td>{_esc_html(score)}</td>"
+            f"<td>{_esc_html(str(book))}</td>"
+            f"<td>{_esc_html(str(h2h))}</td>"
+            f"<td>{_esc_html(str(pl))}</td>"
+            f"<td>{_esc_html(str(xs))}</td>"
+            f"<td>{_esc_html(res)}</td>"
+            "</tr>"
+        )
+    body = "".join(rows) or '<tr><td colspan=8 class=muted>No finals.</td></tr>'
+    return (
+        f'<section data-ssr-market="{mk}">'
+        f'<h2 class="sec-title">{title} <span class="tag">({len(rows)})</span></h2>'
+        '<div class="table-wrap"><table class="results-table">'
+        "<thead><tr><th>Date</th><th>Match</th><th>Score</th>"
+        "<th>Book</th><th>H2H L10</th><th>PL</th><th>XSharp</th><th>Result</th></tr></thead>"
+        f"<tbody>{body}</tbody></table></div></section>"
+    )
+
+
 def _chart_team_name(c: dict[str, Any], side: str) -> str:
     if side == "home":
         return str(
@@ -2157,9 +2308,21 @@ def inject_ssr_chart_bootstrap(
                 {"pct": None, "record": "—"},
             )
         games = block.get("games") or block.get("n") or 0
+        heading = title
+        if key == "last_night":
+            day = str(block.get("date") or "")[:10]
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+                heading = f"Last Night's Results — {day}"
+                on_day = sum(
+                    1
+                    for game in finals
+                    if str(game.get("game_date") or "")[:10] == day
+                )
+                if on_day > int(games or 0):
+                    games = on_day
         return (
-            f'<section class="tally"><h2>{_esc_html(title)} '
-            f'<span class="tag">({games} games)</span></h2>'
+            f'<section class="tally"><h2>{_esc_html(heading)} '
+            f'({int(games)} games)</h2>'
             f'<div class="tally-grid daily-tally-grid">{cards}</div></section>'
         )
 
@@ -2204,7 +2367,12 @@ def inject_ssr_chart_bootstrap(
             fp_s = f"{fp}%" if fp is not None else "—"
             ok = c.get("correct")
             res = "Correct" if ok is True else "Wrong" if ok is False else "—"
-            pick_td = "" if is_mlb else f"<td>{_esc_html(face)}</td>"
+            if is_mlb:
+                pick_td = f"<td>{_esc_html(face)}</td>"
+                models_cell = _esc_html(_mlb_models_cell(c) or "—")
+            else:
+                pick_td = f"<td>{_esc_html(face)}</td>"
+                models_cell = "Edge"
             rows.append(
                 "<tr>"
                 f"<td>{_esc_html(str(c.get('game_date') or '')[:10])}</td>"
@@ -2214,16 +2382,16 @@ def inject_ssr_chart_bootstrap(
                 f"{pick_td}"
                 f"<td>{_esc_html(fp_s)}</td>"
                 f"<td>{_esc_html(res)}</td>"
-                "<td class=\"mono-models\">Edge</td>"
+                f"<td class=\"mono-models\">{models_cell}</td>"
                 "</tr>"
             )
-        pick_th = "" if is_mlb else "<th>Edge pick</th>"
+        pick_th = "<th>Edge pick</th>"
         head = (
             "<thead><tr><th>Date</th><th>League</th><th>Match</th><th>Score</th>"
             f"{pick_th}<th>%</th><th>Result</th><th>Models</th></tr></thead>"
         )
         title = "Moneyline games"
-        colspan = 7 if is_mlb else 8
+        colspan = 8
     else:
         sou_key = "spread" if mk == "spread" else "totals"
         for c in finals:
@@ -2275,6 +2443,9 @@ def inject_ssr_chart_bootstrap(
         f"<tbody>{''.join(rows) or f'<tr><td colspan={colspan} class=muted>No finals.</td></tr>'}</tbody>"
         "</table></div></section>"
     )
+    if is_mlb and mk == "moneyline" and finals:
+        ssr_finals += _mlb_sou_games_section(finals, "spread")
+        ssr_finals += _mlb_sou_games_section(finals, "totals")
 
     # Keep games OUTSIDE #tallies — team-results.js wipes tallies on hydrate.
     # Place games AFTER #pl-consensus-slot (consensus above Moneyline games).
@@ -2415,6 +2586,7 @@ def render_mlb_results_chart_page(
     payload: dict[str, Any] | None = None,
     *,
     market: str | None = None,
+    cards_html: str | None = None,
 ) -> str:
     """Sandbox-parity MLB results chart page (team-results.js + SSR bootstrap)."""
     from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -2447,15 +2619,19 @@ def render_mlb_results_chart_page(
     if 'id="league-controls" hidden' not in html:
         html = html.replace('id="league-controls"', 'id="league-controls" hidden')
     if payload:
+        ln_key = resolve_mlb_chart_last_night_key(
+            cards_html=cards_html,
+            payload=payload,
+            finals=list(payload.get("finals") or []),
+        )
+        _apply_mlb_chart_last_night(payload, ln_key)
         try:
             html = inject_ssr_chart_bootstrap(html, payload, "mlb", market=market)
         except Exception as e:
             print(f"[mlb_results_ui] chart SSR bootstrap: {e}", flush=True)
         # Consensus tables belong on Chart too (same as Cards / staging :5081).
         try:
-            from datetime import datetime
             from pathlib import Path
-            from zoneinfo import ZoneInfo
 
             from mlb_consensus_hub import (
                 _dedupe_finals_by_game,
@@ -2484,18 +2660,12 @@ def render_mlb_results_chart_page(
                     _merge_consensus_finals(finals, snap_finals)
                 )
 
-            ln_key = ((payload.get("tallies") or {}).get("last_night") or {}).get("date")
-            if not ln_key and finals:
-                today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
-                past = sorted(
-                    {
-                        str(g.get("game_date") or "")[:10]
-                        for g in finals
-                        if str(g.get("game_date") or "")[:10]
-                        and str(g.get("game_date") or "")[:10] < today
-                    }
-                )
-                ln_key = past[-1] if past else None
+            ln_key = resolve_mlb_chart_last_night_key(
+                cards_html=cards_html,
+                payload=payload,
+                finals=finals,
+            )
+            _apply_mlb_chart_last_night(payload, ln_key)
 
             html = inject_consensus_records_html(
                 html,

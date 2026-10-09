@@ -38,33 +38,52 @@ MLB_FLIP_SPREAD = os.environ.get("MLB_FLIP_SPREAD", "0").strip().lower() in (
     "yes",
 )
 
-
-def mlb_et_today_str() -> str:
-    """MLB game-day in America/New_York (not Render UTC)."""
-    from datetime import datetime
-    try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
-    except Exception:
-        return datetime.now().strftime("%Y-%m-%d")
+MLB_BOOKS_NA_TIP = "Odds are posted the day before or the day of the contest."
+MLB_BOOKS_NA_TIP_OLD = "Odds will be here on the same day as the game."
 
 
-def mlb_slate_has_et_today(predictions) -> bool:
-    """True when any card is dated today ET — yesterday-only cache is stale."""
-    today = mlb_et_today_str()
-    for pred in predictions or []:
-        if not isinstance(pred, dict):
-            continue
-        if str(pred.get("game_date") or "")[:10] == today:
-            return True
-    return False
-
-
-def mlb_html_has_et_today(html: str) -> bool:
-    """True when rendered picks HTML has today's date section."""
+def normalize_mlb_books_na_markup(html: str) -> str:
+    """Missing Books ML/spread/total → N/A + owner hover (cards + picks HTML)."""
     if not html:
-        return False
-    return f'id="date-{mlb_et_today_str()}"' in html
+        return html
+    tip = MLB_BOOKS_NA_TIP
+    html = html.replace(MLB_BOOKS_NA_TIP_OLD, tip)
+    info_btn = (
+        f'<button type="button" class="h2h-info-btn" title="{tip}" '
+        f'aria-label="{tip}">i</button>'
+    )
+
+    def _ml_dash(m: re.Match[str]) -> str:
+        block = m.group(0)
+        if "h2h-info-btn" in block:
+            return block
+        return re.sub(
+            r'(<span class="ml-num[^"]*">)—(</span>)',
+            r"\1N/A\2" + info_btn,
+            block,
+            count=1,
+            flags=re.I,
+        )
+
+    html = re.sub(
+        r'<div class="ml-line face-books-ml">[\s\S]*?</div>',
+        _ml_dash,
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(<td class="val-books">)—(</td>)',
+        lambda _m: f'<td class="val-books">N/A {info_btn}</td>',
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'(<div class="line-chip-val">)—(</div>)',
+        lambda _m: f'<div class="line-chip-val">N/A {info_btn}</div>',
+        html,
+        flags=re.I,
+    )
+    return html
 
 
 def ensure_pl2_header_css(html: str) -> str:
@@ -825,7 +844,7 @@ def inject_mlb_run_line_confidence(html: str) -> str:
     if not html or ("game-card-stack" not in html and "game-card" not in html):
         return html
     # Live paywall: anon pages lock View Details — do not inject RL confidence teaser.
-    if "odds-pricing-locked" in html:
+    if "odds-pricing-locked" in html and 'data-m-consensus="' not in html:
         return html
     if html.count("Run Line Confidence") >= 3:
         return html
@@ -1018,22 +1037,17 @@ def strip_mlb_picks_chart_total_ev(html: str) -> str:
 
 
 def ensure_mlb_pick_conf_no_scroll(html: str) -> str:
-    """MLB picks: same 3-up card size as NFL; Pick Confidence 3×2, no 520px blowup."""
-    if not html:
+    """MLB picks: readable cards — 3×2 Pick Confidence, no body-grid blowup."""
+    if not html or 'id="mlb-pick-conf-no-scroll"' in html:
         return html
-    html = re.sub(
-        r'<style id="mlb-pick-conf-no-scroll">.*?</style>',
-        "",
-        html,
-        count=1,
-        flags=re.I | re.S,
-    )
     # Keep CSS braces in non-f-string fragments so we do not emit `}}`.
     css = (
         '<style id="mlb-pick-conf-no-scroll">'
+        f"{_mlb_sel('')}{{--pl-card-min:520px!important;--pl-card-max:none!important;}}"
         f"{_mlb_sel('.games-grid')}{{display:grid!important;"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;"
-        "gap:12px!important;align-items:start!important;}"
+        "grid-template-columns:repeat(2,minmax(0,1fr))!important;"
+        "gap:14px!important;align-items:start!important;max-width:1080px!important;"
+        "margin-left:auto!important;margin-right:auto!important;}"
         f"{_mlb_sel('.games-grid>.game-card-stack')}{{max-width:none!important;"
         "width:100%!important;min-width:0!important;margin:0!important;"
         "overflow:visible!important;}"
@@ -1046,17 +1060,15 @@ def ensure_mlb_pick_conf_no_scroll(html: str) -> str:
         f"{_mlb_sel('.pc-box')}{{min-width:0!important;width:100%!important;"
         "box-sizing:border-box!important;overflow:visible!important;"
         "padding:8px 6px!important;min-height:88px!important;}"
-        f"{_mlb_sel('.pc-name')},{_mlb_sel('.pc-side')}{{word-break:normal!important;"
-        "overflow-wrap:break-word!important;hyphens:none!important;}"
+        f"{_mlb_sel('.pc-name')},{_mlb_sel('.pc-side')}{{overflow:hidden!important;"
+        "text-overflow:ellipsis!important;white-space:nowrap!important;"
+        "max-height:28px!important;}"
         f"{_mlb_sel('.pc-name')}{{font-size:0.7em!important;line-height:1.2!important;}}"
         f"{_mlb_sel('.pc-side')}{{font-size:0.62em!important;padding:2px 4px!important;}}"
         f"{_mlb_sel('.pc-val')}{{font-size:0.95em!important;}}"
-        "@media(max-width:1100px){"
-        f"{_mlb_sel('.games-grid')}{{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}"
-        "}"
-        "@media(max-width:768px){"
+        "@media(max-width:700px){"
         f"{_mlb_sel('.games-grid')}{{grid-template-columns:1fr!important;}}"
-        f"{_mlb_sel('.pick-conf-grid')}{{grid-template-columns:repeat(3,minmax(0,1fr))!important;}}"
+        f"{_mlb_sel('.pick-conf-grid')}{{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}"
         "}"
         "</style>"
     )
@@ -1096,7 +1108,8 @@ def ensure_mlb_results_card_layout(html: str) -> str:
     css = (
         '<style id="mlb-results-card-layout">'
         f"{_mlb_sel('.games-grid')},{_mlb_sel('.results-grid')}{{display:grid!important;"
-        "grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;}"
+        "grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important;"
+        "max-width:1080px!important;margin-left:auto!important;margin-right:auto!important;}"
         f"{_mlb_sel('.games-grid>.game-card')},{_mlb_sel('.games-grid>.game-card-stack')}{{"
         "width:100%!important;min-width:0!important;overflow:hidden!important;}"
         f"{_mlb_sel('.pick-conf-grid')}{{display:grid!important;"
@@ -1420,6 +1433,32 @@ def _parse_amer_ml(raw: str) -> int | None:
         return None
 
 
+def _book_fav_from_named_spread(stack: str) -> str | None:
+    """HOME/AWAY when Books moneyline is a pick'em but the run line names a side."""
+    hm = re.search(r'data-home="([^"]*)"', stack[:2500], flags=re.I)
+    am = re.search(r'data-away="([^"]*)"', stack[:2500], flags=re.I)
+    sm = re.search(r'data-books-spread="([^"]*)"', stack[:2500], flags=re.I)
+    if not hm or not am or not sm:
+        return None
+    home = html_lib.unescape(hm.group(1) or "").strip().lower()
+    away = html_lib.unescape(am.group(1) or "").strip().lower()
+    spread = html_lib.unescape(sm.group(1) or "").strip()
+    if not spread or spread.lower() in {"—", "–", "-", "n/a", "pk", "pick", "pick'em"}:
+        return None
+    low = spread.lower()
+    if away and away in low and (not home or home not in low):
+        return "AWAY"
+    if home and home in low and (not away or away not in low):
+        return "HOME"
+    away_nick = away.split()[-1] if away else ""
+    home_nick = home.split()[-1] if home else ""
+    if away_nick and len(away_nick) > 3 and away_nick in low and away_nick != home_nick:
+        return "AWAY"
+    if home_nick and len(home_nick) > 3 and home_nick in low and home_nick != away_nick:
+        return "HOME"
+    return None
+
+
 def _face_ml_favorite_side(stack: str, *, which: str) -> str | None:
     """HOME/AWAY from face Books or Prediction Lab moneylines (more negative = fav)."""
     cls = "face-books-ml" if which == "books" else "face-pl-ml"
@@ -1587,6 +1626,8 @@ def inject_mlb_consensus_and_pl_vs_books_chips(html: str) -> str:
                 return stack
             book = _face_ml_favorite_side(stack, which="books")
             pl = _face_ml_favorite_side(stack, which="pl")
+            if book is None:
+                book = _book_fav_from_named_spread(stack)
             if book and pl and book == pl:
                 rec = f"{aw}-{al}"
                 pct_s = f"{ap:.0f}%" if ap is not None else "—"
@@ -1595,6 +1636,14 @@ def inject_mlb_consensus_and_pl_vs_books_chips(html: str) -> str:
                 rec = f"{dw}-{dl}"
                 pct_s = f"{dp:.0f}%" if dp is not None else "—"
                 val = f"Disagree: {rec} ({pct_s}) — Last 7 Days"
+            elif pl and not book:
+                # Books is a pick'em, so there is no side to agree with.
+                pw, ploss, pp = _wl_pct(slices.get("pl") or [])
+                rec = f"{pw}-{ploss}"
+                pct_s = f"{pp:.0f}%" if pp is not None else "—"
+                val = f"PL favorite: {rec} ({pct_s}) — Last 7 Days"
+            elif "check back on game date" in stack.casefold() or "on the same day as the game" in stack.casefold():
+                val = "N/A"
             else:
                 val = "—"
             tip = html_lib.escape(
@@ -1769,6 +1818,7 @@ def apply_mlb_picks_fixups(html: str) -> str:
     """
     if not html:
         return html
+    html = normalize_mlb_books_na_markup(html)
     html = ensure_pl2_header_css(html)
     if "data-pick-card" not in html:
         return html
@@ -1879,6 +1929,7 @@ def apply_mlb_results_fixups(html: str, market: str | None = None) -> str:
             market = None
     if market not in ("moneyline", "spread", "totals"):
         market = "moneyline"
+    html = normalize_mlb_books_na_markup(html)
     html = ensure_pl2_header_css(html)
     try:
         from mlb_results_ui import (

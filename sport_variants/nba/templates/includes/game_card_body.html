@@ -1,0 +1,394 @@
+{# Shared game card: predictions (card=pred) and results (card=game). #}
+{% from 'includes/score_macros.html' import fmt_half, fmt_labeled_proj, team_short, fmt_spread_line %}
+{% set away_id = card.away_team_id if card.away_team_id is defined else card.away %}
+{% set home_id = card.home_team_id if card.home_team_id is defined else card.home %}
+{% set bk_away = (card.book_away_moneyline if card.book_away_moneyline is defined and card.book_away_moneyline else none) or (card.away_odds if sport == 'SOCCER' and card.away_odds is defined and card.away_odds else none) or (card.away_moneyline if sport == 'SOCCER' and card.away_moneyline is defined and card.away_moneyline else none) %}
+{% set bk_home = (card.book_home_moneyline if card.book_home_moneyline is defined and card.book_home_moneyline else none) or (card.home_odds if sport == 'SOCCER' and card.home_odds is defined and card.home_odds else none) or (card.home_moneyline if sport == 'SOCCER' and card.home_moneyline is defined and card.home_moneyline else none) %}
+{% set pl_away = card.pl_model_away_ml if card.pl_model_away_ml is defined else none %}
+{% set pl_home = card.pl_model_home_ml if card.pl_model_home_ml is defined else none %}
+{% set _disp_bs = card.disp_book_spread if card.disp_book_spread is defined else none %}
+{% set _disp_ps = card.disp_pl_spread if card.disp_pl_spread is defined else none %}
+{% set _disp_xs = card.disp_xs_spread if card.disp_xs_spread is defined else none %}
+{% set _disp_bt = card.disp_book_total if card.disp_book_total is defined else none %}
+{% set _disp_pt = card.disp_pl_total if card.disp_pl_total is defined else none %}
+{% set _disp_xt = card.disp_xs_total if card.disp_xs_total is defined else none %}
+{% set _pl_ah = card.pl_proj_away_pts if card.pl_proj_away_pts is defined else none %}
+{% set _pl_hh = card.pl_proj_home_pts if card.pl_proj_home_pts is defined else none %}
+{% set _xs_ah = card.xs_proj_away_pts if card.xs_proj_away_pts is defined else none %}
+{% set _xs_hh = card.xs_proj_home_pts if card.xs_proj_home_pts is defined else none %}
+{% set _show_odds_tbl = _disp_bs is not none or _disp_ps is not none or _disp_xs is not none or _disp_bt is not none or _disp_pt is not none or _disp_xt is not none or _pl_ah is not none or _xs_ah is not none %}
+
+{% if false %}
+{# Results now use the shared pick-card face below (scores + checkmarks). #}
+<div class="card-hero">
+    <div class="card-hero-meta-line">{% if is_final %}FINAL{% else %}UPCOMING{% if card.game_time is defined and card.game_time is not none %} · {{ card.game_time }}{% endif %}{% endif %}</div>
+    <div class="teams-split">
+        <div class="team-col away">
+            <img class="team-logo" src="{{ team_logo_url(sport, away_id) }}" alt="" width="48" height="48" loading="lazy">
+            <div class="team-name">{{ team_short(away_id) }}</div>
+            {% if is_final %}
+            <div class="final-score {% if away_wins %}score-winner{% endif %}">{{ away_score }}</div>
+            {% else %}
+            <div class="ml-stack">
+                <div class="ml-line">
+                    <span class="ml-src books">Books{% if card.book_ml_estimated is defined and card.book_ml_estimated %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+                    <span class="ml-num {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% elif _books_later %}N/A{% else %}—{% endif %}</span>{% if bk_away is none and _books_later %}<button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% endif %}
+                </div>
+                <div class="ml-line">
+                    <span class="ml-src pl">Prediction Lab</span>
+                    <span class="ml-num {% if pl_away is not none and pl_away < 0 %}fav{% elif pl_away is not none %}dog{% endif %}">{% if pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</span>
+                </div>
+            </div>
+            {% if show_pick_arrow and not home_picked %}<span class="pick-arrow">▶</span>{% endif %}
+            {% endif %}
+        </div>
+        <div class="teams-at">@</div>
+        <div class="team-col home">
+            <img class="team-logo" src="{{ team_logo_url(sport, home_id) }}" alt="" width="48" height="48" loading="lazy">
+            <div class="team-name">{{ team_short(home_id) }}</div>
+            {% if is_final %}
+            <div class="final-score {% if home_wins %}score-winner{% endif %}">{{ home_score }}</div>
+            {% else %}
+            <div class="ml-stack">
+                <div class="ml-line">
+                    <span class="ml-src books">Books{% if card.book_ml_estimated is defined and card.book_ml_estimated %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+                    <span class="ml-num {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% elif _books_later %}N/A{% else %}—{% endif %}</span>{% if bk_home is none and _books_later %}<button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% endif %}
+                </div>
+                <div class="ml-line">
+                    <span class="ml-src pl">Prediction Lab</span>
+                    <span class="ml-num {% if pl_home is not none and pl_home < 0 %}fav{% elif pl_home is not none %}dog{% endif %}">{% if pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</span>
+                </div>
+            </div>
+            {% if show_pick_arrow and home_picked %}<span class="pick-arrow">▶</span>{% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if _show_odds_tbl %}
+<div class="odds-pricing-section">
+    <div class="odds-pricing-title">Odds &amp; Lines</div>
+    <table class="odds-pricing-table">
+        <thead>
+            <tr>
+                <th>Market</th>
+                <th class="col-books">Books</th>
+                <th class="col-pl">Prediction Lab Odds</th>
+                <th class="col-xs">XSharp</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="market-k">{{ spread_label }}</td>
+                <td class="val-books">{% if _disp_bs is not none %}{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}{% elif _books_later %}N/A <button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% else %}—{% endif %}</td>
+                <td class="val-pl">{{ fmt_spread_line(_disp_ps, home_id, away_id, force_rl) }}</td>
+                <td class="val-xs">{{ fmt_spread_line(_disp_xs, home_id, away_id, force_rl) }}</td>
+            </tr>
+            <tr>
+                <td class="market-k">Total</td>
+                <td class="val-books">{% if _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% elif _books_later %}N/A <button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% else %}—{% endif %}</td>
+                <td class="val-pl">{% if _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
+                <td class="val-xs">{% if _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="proj-score-box">
+        <div class="proj-score-title">Projected Score</div>
+        <div class="proj-row">
+            <span class="proj-model pl">Prediction Lab</span>
+            <span class="proj-val">{% if _pl_ah is not none and _pl_hh is not none %}{{ fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) }}{% else %}—{% endif %}</span>
+        </div>
+        <div class="proj-row">
+            <span class="proj-model xs">XSharp</span>
+            <span class="proj-val">{% if _xs_ah is not none and _xs_hh is not none %}{{ fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) }}{% else %}—{% endif %}</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="pick-conf-bar">
+    <div class="pick-conf-title">Pick Confidence</div>
+    <div class="pick-conf-grid">
+        {% for m in conf_models %}
+        <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %}{% if m.correct == true %} correct{% elif m.correct == false %} wrong{% endif %}">
+            <div class="pc-name">{{ m.name }}</div>
+            {% if m.prob is not none %}
+            <div class="pc-val">{% if m.prob >= 50 %}{{ m.prob }}{% else %}{{ "%.1f"|format(100 - m.prob) }}{% endif %}%</div>
+            <div class="pc-side {% if m.prob >= 50 %}home{% else %}away{% endif %}" title="{% if m.prob >= 50 %}{{ home_id }}{% else %}{{ away_id }}{% endif %}">{% if m.prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}{% if m.correct == true %} ✅{% elif m.correct == false %} ❌{% endif %}</div>
+            {% else %}
+            {% set _na_reason = m.reason if (m.reason is defined and m.reason) else (m.name ~ ' rating is not available for ' ~ (sport_info.name if (sport_info is defined and sport_info) else sport) ~ ' yet') %}
+            <div class="pc-val" style="color:#64748b;" title="{{ _na_reason }}">N/A</div>
+            <div class="pc-side" style="color:#64748b;background:transparent;" title="{{ _na_reason }}">N/A</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="odds-extras-footer">
+    <div class="sf-item">
+        <span class="sf-label">Spread pick</span>
+        <span class="sf-val">{% if card.spread_pick_label %}{{ card.spread_pick_label }}{% elif card.spread_pick_reason is defined and card.spread_pick_reason %}{{ card.spread_pick_reason }}{% else %}—{% endif %}{% if card.spread_correct is not none %} <span class="{{ 'pick-ok' if card.spread_correct else 'pick-no' }}">{{ '✅' if card.spread_correct else '❌' }}</span>{% endif %}</span>
+    </div>
+    <div class="sf-item">
+        <span class="sf-label">Total pick</span>
+        <span class="sf-val">{% if card.total_pick_label %}{{ card.total_pick_label }}{% elif card.total_pick_reason is defined and card.total_pick_reason %}{{ card.total_pick_reason }}{% else %}—{% endif %}{% if card.total_correct is not none %} <span class="{{ 'pick-ok' if card.total_correct else 'pick-no' }}">{{ '✅' if card.total_correct else '❌' }}</span>{% endif %}</span>
+    </div>
+    <div class="sf-item">
+        <span class="sf-label">H2H Last 10</span>
+        <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games %} ({{ card.h2h_last10_games }} games){% endif %}{% elif card.h2h_missing_reason is defined and card.h2h_missing_reason %}First meeting{% elif card.our_total is defined and card.our_total is not none %}{{ fmt_half(card.our_total) }}{% if card.our_total_games %} ({{ card.our_total_games }} games){% endif %}{% else %}—{% endif %}</span>
+    </div>
+    {% if sport == 'SOCCER' %}
+    <div class="sf-item">
+        <span class="sf-label">PL Expected Goals</span>
+        <span class="sf-val">{% if card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face %}{{ card.soccer_pl_expected_face }}{% else %}—{% endif %}</span>
+        {% if not (card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face) %}
+        <button type="button" class="pl-info-btn" data-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" data-pl-info-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" title="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-label="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-expanded="false" aria-haspopup="true">ⓘ</button>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="sf-item">
+        <span class="sf-label">Actual total</span>
+        <span class="sf-val">{{ actual_total }}</span>
+    </div>
+    {% set _res_edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
+    {% if _res_edge is none and card.edge_pct is defined %}{% set _res_edge = card.edge_pct %}{% endif %}
+    {% if _res_edge is not none %}
+    <div class="sf-item">
+        <span class="sf-label">Edge</span>
+        <span class="sf-val" style="color:{% if _res_edge > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if _res_edge > 0 %}+{% endif %}{{ "%.1f"|format(_res_edge) }}%</span>
+    </div>
+    {% endif %}
+</div>
+
+{% else %}
+{# ── Picks cards: new face + expandable details ── #}
+{% set _face_raw = card.face_model_label if card.face_model_label is defined and card.face_model_label is not none else '' %}{% set _face_label = '' if (_face_raw|string)|trim|lower in ['none', 'null', 'n/a', 'nan'] else _face_raw %}
+{% set _fh = card.face_home_prob if card.face_home_prob is defined and card.face_home_prob is not none else none %}
+{% set _fa = card.face_away_prob if card.face_away_prob is defined and card.face_away_prob is not none else none %}
+{% if _fh is none and card.ens_prob is defined and card.ens_prob is not none %}
+{% set _ens_pct = card.ens_prob|float %}
+{% set _fh = (_ens_pct * 100) if _ens_pct <= 1 else _ens_pct %}
+{% endif %}
+{% if _fa is none and _fh is not none %}
+{% set _fa = (100 - _fh|float)|round(1) %}
+{% endif %}
+{% set _ens_ok = card.ens_correct if card.ens_correct is defined else none %}
+{% set _away_favored = _fa is not none and _fh is not none and _fa > _fh %}
+{% set _home_favored = _fh is not none and _fa is not none and _fh > _fa %}
+{% set _book_spread_lbl = 'Books run line' if sport == 'MLB' else ('Books puck line' if sport == 'NHL' else 'Books spread') %}
+{% set _books_src = 'Books · DK' if card.book_provider is defined and card.book_provider and 'draftkings' in card.book_provider|lower else 'Books' %}
+{% set _book_ml_est = card.book_ml_estimated is defined and card.book_ml_estimated %}
+{% set _details_id = card_details_id if card_details_id is defined else ('card-details-' ~ loop.index0 if loop is defined else 'card-details') %}
+{% set _game_day = (card.game_date|string)[:10] if card.game_date is defined and card.game_date else '' %}
+{% set _books_later = (not is_final) and _game_day|length == 10 and today_date is defined and _game_day != (today_date|string)[:10] %}
+{% set _books_na_tip = 'Odds will be here on the same day as the game.' %}
+
+<header class="pick-card-header">
+    {% if sport == 'SOCCER' and card.league is defined and card.league %}
+    <span class="league-badge">{{ card.league }}</span>
+    {% else %}
+    <span class="league-badge">{{ sport_info.icon if sport_info is defined else '' }} {{ sport_info.name if sport_info is defined else sport }}</span>
+    {% endif %}
+    <span class="game-time">{% if card.game_time is defined and card.game_time %}{{ card.game_time }}{% elif is_final %}FINAL{% else %}Upcoming{% endif %}</span>
+</header>
+
+<div class="matchup-row">
+    <div class="team-slot {% if _away_favored %}favored{% endif %}">
+        <img class="team-logo" src="{{ team_logo_url(sport, away_id) }}" alt="" width="52" height="52" loading="lazy">
+        <div class="team-name">{{ team_short(away_id) }}</div>
+        {% if _face_label %}<div class="model-tag">{{ _face_label }}</div>{% endif %}
+        {% if _fa is not none %}<div class="win-pct">{{ _fa }}<span class="unit">%</span>{% if is_results and _ens_ok == true and _away_favored %} <span class="pick-ok">✅</span>{% elif is_results and _ens_ok == false and _away_favored %} <span class="pick-no">❌</span>{% endif %}</div>{% endif %}
+        {% if is_results and is_final %}
+        <div class="final-score {% if away_wins %}score-winner{% endif %}">{{ away_score }}</div>
+        {% endif %}
+        <div class="ml-stack face-ml-stack">
+            <div class="ml-line face-books-ml">
+                <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+                <span class="ml-num {% if bk_away is not none and bk_away < 0 %}fav{% elif bk_away is not none %}dog{% endif %}">{% if bk_away is not none %}{% if bk_away > 0 %}+{% endif %}{{ bk_away }}{% elif _books_later %}N/A{% else %}—{% endif %}</span>{% if bk_away is none and _books_later %}<button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% endif %}
+            </div>
+            <div class="ml-line face-pl-ml">
+                <span class="ml-src pl">Prediction Lab</span>
+                <span class="ml-num {% if pl_away is not none and pl_away < 0 %}fav{% elif pl_away is not none %}dog{% endif %}">{% if pl_away is not none %}{% if pl_away > 0 %}+{% endif %}{{ pl_away }}{% else %}—{% endif %}</span>
+            </div>
+        </div>
+    </div>
+    <div class="matchup-at">@</div>
+    <div class="team-slot {% if _home_favored %}favored{% endif %}">
+        <img class="team-logo" src="{{ team_logo_url(sport, home_id) }}" alt="" width="52" height="52" loading="lazy">
+        <div class="team-name">{{ team_short(home_id) }}</div>
+        {% if _face_label %}<div class="model-tag">{{ _face_label }}</div>{% endif %}
+        {% if _fh is not none %}<div class="win-pct">{{ _fh }}<span class="unit">%</span>{% if is_results and _ens_ok == true and _home_favored %} <span class="pick-ok">✅</span>{% elif is_results and _ens_ok == false and _home_favored %} <span class="pick-no">❌</span>{% endif %}</div>{% endif %}
+        {% if is_results and is_final %}
+        <div class="final-score {% if home_wins %}score-winner{% endif %}">{{ home_score }}</div>
+        {% endif %}
+        <div class="ml-stack face-ml-stack">
+            <div class="ml-line face-books-ml">
+                <span class="ml-src books">{{ _books_src }}{% if _book_ml_est %} <span style="font-size:0.85em;opacity:0.7;">Est.</span>{% endif %}</span>
+                <span class="ml-num {% if bk_home is not none and bk_home < 0 %}fav{% elif bk_home is not none %}dog{% endif %}">{% if bk_home is not none %}{% if bk_home > 0 %}+{% endif %}{{ bk_home }}{% elif _books_later %}N/A{% else %}—{% endif %}</span>{% if bk_home is none and _books_later %}<button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% endif %}
+            </div>
+            <div class="ml-line face-pl-ml">
+                <span class="ml-src pl">Prediction Lab</span>
+                <span class="ml-num {% if pl_home is not none and pl_home < 0 %}fav{% elif pl_home is not none %}dog{% endif %}">{% if pl_home is not none %}{% if pl_home > 0 %}+{% endif %}{{ pl_home }}{% else %}—{% endif %}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if sport == 'SOCCER' and card.face_draw_prob is defined and card.face_draw_prob is not none %}
+{% set pl_draw = card.pl_model_draw_ml if card.pl_model_draw_ml is defined else none %}
+<div class="soccer-draw-row">
+    <div class="draw-slot">
+        {% if _face_label %}<div class="model-tag">{{ _face_label }}</div>{% endif %}
+        <div class="draw-label">Draw</div>
+        <div class="win-pct draw-pct">{{ card.face_draw_prob }}<span class="unit">%</span></div>
+        <div class="ml-line face-pl-ml">
+            <span class="ml-src pl">Prediction Lab</span>
+            <span class="ml-num">{% if pl_draw is not none %}{% if pl_draw > 0 %}+{% endif %}{{ pl_draw }}{% else %}—{% endif %}</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="lines-strip">
+    {% if sport == 'SOCCER' or sport == 'NHL' or (is_results and sport == 'NFL') %}
+    <div class="line-chip h2h-face-chip">
+        <div class="line-chip-label">H2H Last 10</div>
+        <div class="line-chip-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% elif card.h2h_last10_record is defined and card.h2h_last10_record %}{{ card.h2h_last10_record }}{% elif card.h2h_missing_reason is defined and card.h2h_missing_reason %}First meeting{% else %}—{% endif %}</div>
+    </div>
+    {% endif %}
+    {% if sport != 'TENNIS' and sport != 'MLB' and sport != 'NFL' and sport != 'NHL' %}
+    <div class="line-chip">
+        <div class="line-chip-label">{{ _book_spread_lbl }}</div>
+        <div class="line-chip-val">{% if _disp_bs is not none %}{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}{% elif _books_later %}N/A <button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% else %}—{% endif %}</div>
+    </div>
+    <div class="line-chip">
+        <div class="line-chip-label">Books total</div>
+        <div class="line-chip-val">{% if _disp_bt is not none %}O/U {{ fmt_half(_disp_bt) }}{% elif _books_later %}N/A <button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% else %}—{% endif %}</div>
+    </div>
+    {% endif %}
+    {% set _edge = card.face_edge_pct if card.face_edge_pct is defined else none %}
+    {% if _edge is none and card.edge_pct is defined %}{% set _edge = card.edge_pct %}{% endif %}
+    {% if _edge is not none %}
+    <div class="line-chip edge-chip {% if _edge > 0 %}pos{% elif _edge < 0 %}neg{% endif %}">
+        <div class="line-chip-label">Edge</div>
+        <div class="line-chip-val">{% if _edge > 0 %}+{% endif %}{{ "%.1f"|format(_edge) }}%</div>
+    </div>
+    {% endif %}
+</div>
+
+<footer class="card-footer">
+    <button type="button" class="view-details-btn" aria-expanded="{% if is_results %}false{% else %}true{% endif %}" aria-controls="{{ _details_id }}" onclick="togglePickDetails(this)">
+        {% if is_results %}More details{% else %}Less details{% endif %} <span class="chevron">▾</span>
+    </button>
+</footer>
+
+<div class="card-details" id="{{ _details_id }}"{% if is_results %} hidden{% endif %}>
+    {% if is_premium %}
+    {% if _show_odds_tbl and sport != 'TENNIS' %}
+    <div class="odds-pricing-section">
+        <div class="odds-pricing-title">Odds &amp; Lines</div>
+        <table class="odds-pricing-table">
+            <thead>
+                <tr>
+                    <th>Market</th>
+                    <th class="col-books">Books</th>
+                    <th class="col-pl">Prediction Lab</th>
+                    <th class="col-xs">XSharp</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="market-k">{{ spread_label }}</td>
+                    <td class="val-books">{% if _disp_bs is not none %}{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}{% elif _books_later %}N/A <button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% else %}—{% endif %}</td>
+                    <td class="val-pl">{{ fmt_spread_line(_disp_ps, home_id, away_id, force_rl) }}</td>
+                    <td class="val-xs">{{ fmt_spread_line(_disp_xs, home_id, away_id, force_rl) }}</td>
+                </tr>
+                <tr>
+                    <td class="market-k">Total</td>
+                    <td class="val-books">{% if _disp_bt is not none %}{{ fmt_half(_disp_bt) }}{% elif _books_later %}N/A <button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% else %}—{% endif %}</td>
+                    <td class="val-pl">{% if _disp_pt is not none %}{{ fmt_half(_disp_pt) }}{% else %}—{% endif %}</td>
+                    <td class="val-xs">{% if _disp_xt is not none %}{{ fmt_half(_disp_xt) }}{% else %}—{% endif %}</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="proj-score-box">
+            <div class="proj-score-title">Projected Score</div>
+            <div class="proj-row">
+                <span class="proj-model pl">Prediction Lab</span>
+                <span class="proj-val">{% if _pl_ah is not none and _pl_hh is not none %}{{ fmt_labeled_proj(away_id, _pl_ah, home_id, _pl_hh) }}{% else %}—{% endif %}</span>
+            </div>
+            <div class="proj-row">
+                <span class="proj-model xs">XSharp</span>
+                <span class="proj-val">{% if _xs_ah is not none and _xs_hh is not none %}{{ fmt_labeled_proj(away_id, _xs_ah, home_id, _xs_hh) }}{% else %}—{% endif %}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="pick-conf-bar">
+        <div class="pick-conf-title">Pick Confidence</div>
+        <div class="pick-conf-grid">
+            {% for m in conf_models %}
+            <div class="pc-box {% if m.key == 'consensus' %}consensus{% endif %}{% if is_results and m.correct == true %} correct{% elif is_results and m.correct == false %} wrong{% endif %}">
+                <div class="pc-name">{{ m.name }}</div>
+                {% if m.prob is not none %}
+                {% set _prob = m.prob|float %}
+                {% if _prob <= 1 %}{% set _prob = _prob * 100 %}{% endif %}
+                <div class="pc-val">{% if _prob >= 50 %}{{ "%.1f"|format(_prob) if _prob != (_prob|int) else (_prob|int) }}{% else %}{{ "%.1f"|format(100 - _prob) }}{% endif %}%</div>
+                <div class="pc-side {% if _prob >= 50 %}home{% else %}away{% endif %}">{% if _prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}{% if is_results and m.correct == true %} ✅{% elif is_results and m.correct == false %} ❌{% endif %}</div>
+                {% else %}
+                {% set _na_reason = m.reason if (m.reason is defined and m.reason) else (m.name ~ ' rating is not available for ' ~ (sport_info.name if (sport_info is defined and sport_info) else sport) ~ ' yet') %}
+                <div class="pc-val" style="color:#64748b;" title="{{ _na_reason }}">N/A</div>
+                <div class="pc-side" style="color:#64748b;background:transparent;" title="{{ _na_reason }}">N/A</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="odds-extras-footer">
+        {% if sport != 'TENNIS' and sport != 'UFC' and sport != 'GOLF' %}
+        <div class="sf-item">
+            <span class="sf-label">H2H Last 10</span>
+            <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% elif card.h2h_missing_reason is defined and card.h2h_missing_reason %}First meeting{% else %}—{% endif %}</span>
+        </div>
+        {% endif %}
+        {% if sport == 'SOCCER' %}
+        <div class="sf-item">
+            <span class="sf-label">PL Expected Goals</span>
+            <span class="sf-val">{% if card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face %}{{ card.soccer_pl_expected_face }}{% else %}—{% endif %}</span>
+            {% if not (card.soccer_pl_expected_face is defined and card.soccer_pl_expected_face) %}
+            <button type="button" class="pl-info-btn" data-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" data-pl-info-tip="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" title="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-label="{{ card.soccer_pl_expected_missing_reason if card.soccer_pl_expected_missing_reason is defined and card.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' }}" aria-expanded="false" aria-haspopup="true">ⓘ</button>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if card.ml_ev is defined and card.ml_ev is not none %}
+        <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
+        {% endif %}
+        {% if sport != 'SOCCER' and card.total_ev is defined and card.total_ev is not none %}
+        <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if card.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.total_ev) }}%</span></div>
+        {% endif %}
+        {% if card.best_ev_pick is defined and card.best_ev_pick %}
+        <div class="sf-item"><span class="sf-label">Best EV</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ card.best_ev_pick }}</span></div>
+        {% endif %}
+        {% if is_results %}
+        <div class="sf-item">
+            <span class="sf-label">Spread pick</span>
+            <span class="sf-val">{% if card.spread_pick_label %}{{ card.spread_pick_label }}{% elif card.spread_pick_reason is defined and card.spread_pick_reason %}{{ card.spread_pick_reason }}{% else %}—{% endif %}{% if card.spread_correct is not none %} <span class="{{ 'pick-ok' if card.spread_correct else 'pick-no' }}">{{ '✅' if card.spread_correct else '❌' }}</span>{% endif %}</span>
+        </div>
+        <div class="sf-item">
+            <span class="sf-label">Total pick</span>
+            <span class="sf-val">{% if card.total_pick_label %}{{ card.total_pick_label }}{% elif card.total_pick_reason is defined and card.total_pick_reason %}{{ card.total_pick_reason }}{% else %}—{% endif %}{% if card.total_correct is not none %} <span class="{{ 'pick-ok' if card.total_correct else 'pick-no' }}">{{ '✅' if card.total_correct else '❌' }}</span>{% endif %}</span>
+        </div>
+        <div class="sf-item">
+            <span class="sf-label">Actual total</span>
+            <span class="sf-val">{{ actual_total }}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="odds-pricing-locked" style="padding:14px;font-size:0.84em;text-align:center;">🔒 Lines &amp; projections locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.</div>
+    {% endif %}
+</div>
+{% endif %}

@@ -16,10 +16,17 @@ const API = (window.TEAM_API_BASE || window.SOCCER_API_BASE || "/api").replace(
 let STATE = {
   markets: null,
   analytics: null,
-  active: "moneyline",
+  active: initialMarket(),
   league: "ALL",
   mlOnly: false,
 };
+
+function initialMarket() {
+  const requested = new URLSearchParams(location.search).get("market");
+  const rendered = document.body && document.body.dataset.market;
+  return MARKET_ORDER.includes(requested) ? requested :
+    (MARKET_ORDER.includes(rendered) ? rendered : "moneyline");
+}
 
 function teamName(c, side) {
   if (side === "home") {
@@ -377,8 +384,12 @@ function tallyBlock(title, block, order) {
 }
 
 function setActiveTab(market) {
+  if (!MARKET_ORDER.includes(market)) return;
   STATE.active = market;
   document.body.dataset.market = market;
+  const url = new URL(location.href);
+  url.searchParams.set("market", market);
+  history.replaceState(null, "", url);
   document.querySelectorAll(".market-tab").forEach((btn) => {
     const on = btn.dataset.market === market;
     btn.classList.toggle("active", on);
@@ -576,7 +587,17 @@ function renderActiveMarket() {
     cards.setAttribute("aria-hidden", "true");
   }
   // Non-ML markets: hide moneyline SSR so Spread/Totals CSR table is the only list.
-  if (ssrFinals && key !== "moneyline") {
+  // When the server already printed this market's graded games and the API sent
+  // none, keep the server table and drop the empty "(0)" list instead.
+  const ssrSameMarket = !!(ssrFinals && ssrFinals.dataset && ssrFinals.dataset.ssrMarket === key);
+  if (ssrSameMarket && key !== "moneyline" && !finals.length) {
+    ssrFinals.hidden = false;
+    ssrFinals.removeAttribute("hidden");
+    if (finalsWrap) {
+      finalsWrap.hidden = true;
+      finalsWrap.setAttribute("hidden", "");
+    }
+  } else if (ssrFinals && key !== "moneyline") {
     ssrFinals.hidden = true;
     ssrFinals.setAttribute("hidden", "");
   }
@@ -717,7 +738,7 @@ async function populateLeagues(preferred, fallbackNames, liveNames) {
   if (![...sel.options].some((o) => o.value === sel.value)) sel.value = "ALL";
 }
 
-async function loadResults() {
+async function loadResults(useRenderedData = false) {
   const leagueEl = document.getElementById("league");
   const league = (leagueEl && leagueEl.value) || "ALL";
   const status = document.getElementById("status");
@@ -725,11 +746,19 @@ async function loadResults() {
   if (status) status.textContent = "Loading results…";
   if (runBtn) runBtn.disabled = true;
   try {
-    await populateLeagues(league);
-
-    const qs = window.TEAM_HIDE_LEAGUE ? "" : `?league=${encodeURIComponent(league)}`;
-    const res = await fetch(`${API}/picks${qs}`);
-    const data = await res.json();
+    const initial = useRenderedData && document.getElementById("team-results-data");
+    let data;
+    if (initial) {
+      data = JSON.parse(initial.textContent);
+    } else {
+      if (!window.TEAM_HIDE_LEAGUE) await populateLeagues(league);
+      const qs = new URLSearchParams(location.search);
+      qs.delete("view");
+      qs.delete("market");
+      if (!window.TEAM_HIDE_LEAGUE) qs.set("league", league);
+      const res = await fetch(`${API}/picks${qs.size ? "?" + qs : ""}`);
+      data = await res.json();
+    }
     if (!data.ok) throw new Error(data.error || "Failed");
 
     const liveNames = collectLiveLeagueNames(data);
@@ -769,13 +798,15 @@ async function loadResults() {
 
 const runBtn = document.getElementById("run");
 const leagueEl = document.getElementById("league");
-if (runBtn) runBtn.addEventListener("click", loadResults);
+if (runBtn) runBtn.addEventListener("click", () => loadResults());
 if (leagueEl && !window.TEAM_HIDE_LEAGUE) {
-  leagueEl.addEventListener("change", loadResults);
+  leagueEl.addEventListener("change", () => loadResults());
 }
-document.getElementById("market-tabs").addEventListener("click", (ev) => {
+const marketTabs = document.getElementById("market-tabs");
+if (marketTabs) marketTabs.addEventListener("click", (ev) => {
   const btn = ev.target.closest(".market-tab");
   if (!btn || !btn.dataset.market) return;
+  if (btn.tagName === "A") return;
   setActiveTab(btn.dataset.market);
 });
-loadResults();
+loadResults(true);

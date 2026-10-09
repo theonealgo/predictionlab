@@ -1457,13 +1457,13 @@ _HEADSHOT_OK_CACHE: dict[str, bool] = {}
 
 
 def scrub_broken_espn_headshots(html: str) -> str:
-    """Replace ESPN headshot URLs that 404 with a local placeholder (checker + UX)."""
+    """Replace ESPN headshot URLs that 404 with the Prediction Lab logo."""
     if not html or "espncdn.com" not in html:
         return html
     import ssl
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    placeholder = "/static/img/athlete-placeholder.svg"
+    placeholder = "/static/pl-logo.svg"
     urls = sorted(
         set(
             re.findall(

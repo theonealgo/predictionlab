@@ -672,7 +672,7 @@ def render_tennis_picks_html(payload: dict[str, Any] | None = None) -> str:
         for i, day in enumerate(days):
             visible = "visible" if i == 0 else "seo-hidden"
             today_badge = (
-                ' <span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;'
+                ' <span style="background:#067647;color:white;padding:3px 10px;border-radius:4px;'
                 'font-size:0.68em;margin-left:8px;">TODAY</span>'
                 if day == today
                 else ""

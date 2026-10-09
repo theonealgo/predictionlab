@@ -28,7 +28,6 @@ venv/
 # ── Trained model binaries (large, regeneratable) ─────────────────────
 *.pkl
 !models/**/*.pkl
-!data/prediction_slates/*.pkl
 *.h5
 *.joblib
 catboost_info/
@@ -99,3 +98,6 @@ qa/lighthouse_reports/
 qa/pagespeed_reports/
 qa/.pagespeed_api_key
 data/ncaaf_espn_schedule_cache.json
+
+# Local-only test login (2026-10-08)
+LOCAL_TEST_LOGIN.txt

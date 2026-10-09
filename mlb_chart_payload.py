@@ -15,7 +15,7 @@ CHART_FINALS_LIMIT = 200
 
 def extract_chart_finals(html: str, *, limit: int = CHART_FINALS_LIMIT) -> list[dict[str, Any]]:
     # Premerge: mlb_consensus_hub (staging team_tabbed extractors).
-    from mlb_consensus_hub import _extract_game_rows, synthesize_missing_ml_models
+    from mlb_results_ui import _extract_game_rows, synthesize_missing_ml_models
 
     if not html:
         return []

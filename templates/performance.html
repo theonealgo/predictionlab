@@ -94,9 +94,7 @@
                     {% for model in model_order %}
                         {% set cell = main_table[bucket][model] %}
                         {% if not cell %}
-                        <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
-                        {% elif cell.n < 10 %}
-                        <td><div class="perf-stat perf-gray" title="Small sample ({{ cell.n }} games) — interpret with caution"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                        <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div></div></td>
                         {% else %}
                             {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
                         <td><div class="perf-stat {{ cls }}"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
@@ -136,9 +134,7 @@
                         {% for model in model_order %}
                             {% set cell = table_data[bucket][model] %}
                             {% if not cell %}
-                            <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div><div class="perf-rec">&mdash;</div><div class="perf-n">Sample Size: 0</div></div></td>
-                            {% elif cell.n < 10 %}
-                            <td><div class="perf-stat perf-gray" title="Small sample ({{ cell.n }} games) — interpret with caution"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
+                            <td><div class="perf-stat perf-gray"><div class="perf-win">&mdash;</div></div></td>
                             {% else %}
                                 {% set cls = 'perf-red' if cell.win_pct < 52 else ('perf-yellow' if cell.win_pct < 55 else 'perf-green') %}
                             <td><div class="perf-stat {{ cls }}"><div class="perf-win">{{ cell.win_pct }}%</div><div class="perf-rec">{{ cell.wins }}-{{ cell.losses }}</div><div class="perf-n">Sample Size: {{ cell.n }}</div></div></td>
@@ -158,10 +154,8 @@
     <div class="perf-card sport-block">
         <h2 class="sport-title">Team Model Performance</h2>
         <p class="team-explainer">
-            This table shows how each model has performed on all predictions involving each team.
-            Includes spreads, totals, and moneyline picks.
-            Timeframe: current season (regular season + playoffs).
-            Multiple picks per game may result in sample sizes greater than 82.
+            Moneyline only for the current season — the same Grinder2 / Takedown / Edge / XSharp / Sharp Consensus grades as the results Season board.
+            Spreads and totals are not mixed into these records.
         </p>
         {% if team_chart_rows %}
         <div class="team-grid">

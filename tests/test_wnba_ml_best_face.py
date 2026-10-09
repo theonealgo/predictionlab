@@ -181,7 +181,7 @@ def test_cards_season_headline_moves_off_edge_and_sc():
     <div class="model-label">Sharp Consensus</div><div class="model-acc">56.5%</div><div class="model-rec">39-30</div>
     <div class="model-label">Efficiency</div><div class="model-acc">65.2%</div><div class="model-rec">45-24</div>
     <div>🎯 Moneyline (Sharp Consensus)</div>
-                    <div style="font-size:2em;font-weight:bold;color:#00C076;">56.5%</div>
+                    <div style="font-size:2em;font-weight:bold;color:#067647;">56.5%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">39-30 <span>
     <div class="daily-tally-card highlight"><div class="daily-model">🏆 Sharp Consensus</div></div>
     <div class="daily-tally-card "><div class="daily-model">⚡ Efficiency</div></div>
@@ -204,7 +204,7 @@ def test_cards_banner_cleans_double_close_when_already_efficiency():
     <div class="model-label">Edge</div><div class="model-acc">40.6%</div><div class="model-rec">28-41</div>
     <div class="model-label">Efficiency</div><div class="model-acc">65.2%</div><div class="model-rec">45-24</div>
     <div>🎯 Moneyline (Efficiency)</div>
-                    <div style="font-size:2em;font-weight:bold;color:#00C076;">65.2%</div></div>
+                    <div style="font-size:2em;font-weight:bold;color:#067647;">65.2%</div></div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">45-24 <span>
     """
     out = patch_wnba_cards_ml_face(html)

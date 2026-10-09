@@ -1,41 +1,15 @@
-# SOCCER UNLOCKED (:5052 / premerge) — results share image only
-
-Owner 2026-09-17: **UNLOCK SOCCER** for bottom Results Image on `/soccer-results` (ML / Spread / Total for Last Night + Last 7 — same ad chrome as picks). Owner will check each sport together. Do not change card faces / Books / Consensus for other misses under this unlock.
-
-Prior lock notes preserved below for when this miss is closed.
-
 ---
-
-description: SOCCER LOCKED (:5052 / premerge)
+description: SOCCER locked — 3 UNLOCKS required
 alwaysApply: true
 ---
 
-# SOCCER LOCKED (:5052 / premerge)
+# SOCCER LOCKED
 
-Soccer picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+Do not modify SOCCER unless the same owner message contains the word **UNLOCK**
+3 times, names SOCCER, and names the miss.
 
-Do **not** modify Soccer unless the owner says:
+Locked. 3 UNLOCKS required.
 
-**UNLOCK SOCCER**
-
-Owner 2026-09-16: chart duplicate header (`header.top` + `pl2-header`) —
-page title is now `h1.page-title`. Miss closed — lock again.
-
-Owner 2026-09-16: market-vs-model audit (isolation) + taxonomy labeling
-(display only). Historical 1X2 ingest continues in isolation only.
-
-## Do not touch
-
-- `/soccer-picks`, `/soccer-results`, `/soccer-results?view=chart`
-- Soccer Cards|Chart, card HTML, week/league nav
-- `soccer_ui_fixup.py`, `soccer_pl_xg.py`, `soccer_models.py` prediction math
-- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is Soccer
-
-## Allowed without unlock
-
-- Other sports
-- Checker reports that only *read* Soccer pages
-- Isolation research under `~/Documents/Personal/soccer/` when the owner
-  asks for research only (no merge / no site edits)
+Owner 2026-10-08: picks window is today-2 .. today+7 (league filters too); next page starts the day after and never repeats; level-score PL line shows PK; results chart grades the Edge row. Books N/A with no posted odds, equal stored percents, a 50% pick'em, and old weeks are not errors. Miss closed — locked.
 
 Do not put lock text on user-facing HTML.

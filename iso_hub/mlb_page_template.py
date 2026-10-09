@@ -109,8 +109,8 @@ padding:9px 16px;min-width:105px;text-align:center;cursor:pointer;transition:all
 white-space:nowrap;font-weight:500;font-size:.86em;color:#0f172a;}}
 .date-bubble:hover{{border-color:#92400e;}}
 .date-bubble.active{{background:#f59e0b;border-color:#d97706;color:#0f172a;font-weight:700;}}
-.date-bubble.today,.date-bubble.today-bubble{{border-color:#00C076;color:#059669;font-weight:700;}}
-.date-bubble.active.today,.date-bubble.active.today-bubble{{background:#00C076;color:#fff;border-color:#00C076;}}
+.date-bubble.today,.date-bubble.today-bubble{{border-color:#067647;color:#059669;font-weight:700;}}
+.date-bubble.active.today,.date-bubble.active.today-bubble{{background:#067647;color:#fff;border-color:#067647;}}
 .date-section.seo-hidden{{display:none!important;}}
 .date-section.visible{{display:block;}}
 </style>

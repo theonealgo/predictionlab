@@ -9842,7 +9842,7 @@ BASE_TEMPLATE = """
         .tv-today-pick{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;text-decoration:none;color:inherit;}
         .tv-today-pick:hover{border-color:#00529B;background:#f0f7ff;}
         .tv-pick-match{font-size:0.78em;font-weight:700;color:#0f172a;}
-        .tv-pick-edge{font-size:0.72em;font-weight:800;color:#00C076;background:#f0fdf4;border-radius:6px;padding:2px 7px;}
+        .tv-pick-edge{font-size:0.72em;font-weight:800;color:#067647;background:#f0fdf4;border-radius:6px;padding:2px 7px;}
         .tv-menu-list{padding:8px;}
         .tv-menu-btn{width:100%;display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;cursor:pointer;border-radius:8px;text-align:left;transition:background .15s;}
         .tv-menu-btn:hover{background:#f1f5f9;}
@@ -10426,7 +10426,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     .rpt-card.hl{border:2px solid #fbbf24;}
     .rpt-model{font-size:0.72em;opacity:0.85;margin-bottom:3px;}
     .rpt-acc{font-size:1.35em;font-weight:800;}
-    .rpt-acc.g{color:#00C076;}.rpt-acc.y{color:#fbbf24;}.rpt-acc.r{color:#D93025;}.rpt-acc.x{color:#94a3b8;}
+    .rpt-acc.g{color:#067647;}.rpt-acc.y{color:#fbbf24;}.rpt-acc.r{color:#D93025;}.rpt-acc.x{color:#94a3b8;}
     .rpt-rec{font-size:0.78em;opacity:0.8;}
     .rpt-sou-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
     .rpt-total{text-align:center;font-size:0.9em;color:#334155;margin-bottom:18px;}
@@ -10435,7 +10435,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
     .rpt-btn{padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:0.88em;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;border:none;}
     .rpt-btn:hover{opacity:0.85;transform:translateY(-1px);}
     .rpt-btn-copy{background:#ffffff;color:#0f172a;border:1px solid rgba(15,23,42,0.25);cursor:pointer;}
-    .rpt-btn-copy.copied{background:#00C076;border-color:#00C076;}
+    .rpt-btn-copy.copied{background:#067647;border-color:#067647;}
     .rpt-btn-cta{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;}
     .rpt-share-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
     .rpt-btn-group{display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px;}
@@ -10536,13 +10536,13 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
     .tab.active { background: #bfdbfe; color: #0f172a; border: 1px solid #93c5fd; }
     .value-picks-container { background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 25px; }
     .pick-card { background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px; border-left: 4px solid; }
-    .pick-card.HIGH { border-left-color: #00C076; }
+    .pick-card.HIGH { border-left-color: #067647; }
     .pick-card.MEDIUM { border-left-color: #fbbf24; }
     .pick-card.LOW { border-left-color: #3b82f6; }
     .matchup { font-size: 1.4em; font-weight: bold; margin-bottom: 10px; }
-    .pick-team { color: #00C076; font-size: 1.2em; font-weight: bold; }
+    .pick-team { color: #067647; font-size: 1.2em; font-weight: bold; }
     .edge-badge { display: inline-block; padding: 6px 14px; border-radius: 6px; font-weight: bold; margin: 5px; }
-    .edge-badge.HIGH { background: #00C076; color: white; }
+    .edge-badge.HIGH { background: #067647; color: white; }
     .edge-badge.MEDIUM { background: #fbbf24; color: black; }
     .edge-badge.LOW { background: #3b82f6; color: white; }
     .situational { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; font-size: 0.9em; opacity: 0.9; }
@@ -10755,7 +10755,7 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
         font-weight: bold;
     }
     .high-conf {
-        color: #00C076;
+        color: #067647;
     }
     .med-conf {
         color: #fbbf24;
@@ -10790,7 +10790,7 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
             <div id="date-{{ date }}" style="margin-bottom: 40px;">
                 <h2 style="color: #fbbf24; margin-bottom: 15px; padding-left: 10px; {% if date == today_date %}background: rgba(251, 191, 36, 0.1); padding: 10px; border-radius: 8px;{% endif %}">
                     {% if group_by == 'week' %}Week {{ date }}{% else %}📅 {{ date }}{% endif %}
-                    {% if date == today_date %} <span style="background: #00C076; color: white; padding: 4px 12px; border-radius: 4px; font-size: 0.8em; margin-left: 10px;">TODAY</span>{% endif %}
+                    {% if date == today_date %} <span style="background: #067647; color: white; padding: 4px 12px; border-radius: 4px; font-size: 0.8em; margin-left: 10px;">TODAY</span>{% endif %}
                 </h2>
                 <table style="margin-bottom: 20px;">
                     <thead>
@@ -10895,7 +10895,7 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         background: rgba(255, 255, 255, 0.05);
     }
     .prob-high {
-        color: #00C076;
+        color: #067647;
         font-weight: bold;
     }
     .prob-low {
@@ -11118,8 +11118,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .date-bubble { background:#ffffff; border:2px solid rgba(15,23,42,0.2); border-radius:22px; padding:8px 15px; min-width:100px; text-align:center; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-weight:500; font-size:0.84em; color:#0f172a; }
     .date-bubble:hover { border-color:#fbbf24; }
     .date-bubble.active { background:#fbbf24; border-color:#fbbf24; color:#0f172a; font-weight:700; }
-    .date-bubble.today { border-color:#00C076; color:#00C076; }
-    .date-bubble.active.today { background:#00C076; color:white; }
+    .date-bubble.today { border-color:#067647; color:#067647; }
+    .date-bubble.active.today { background:#067647; color:white; }
     /* Date sections */
     .date-section { display:none; background:#ffffff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; padding:20px; margin-bottom:20px; }
     .date-section.visible { display:block; }
@@ -11148,10 +11148,10 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .ml-src.books { color:#0f766e; }
     .ml-src.pl { color:#92400e; }
     .ml-num { font-size:0.92em; font-weight:800; }
-    .ml-num.fav { color:#00C076; }
+    .ml-num.fav { color:#067647; }
     .ml-num.dog { color:#92400e; }
     .final-score { font-size:1.2em; font-weight:800; color:#0f172a; }
-    .final-score.score-winner { color:#00C076; }
+    .final-score.score-winner { color:#067647; }
     .odds-pricing-section { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:#f8fafc; }
     .odds-pricing-title { font-size:0.68em; color:#0F172A; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:8px; }
     .odds-pricing-table { width:100%; border-collapse:collapse; font-size:0.8em; }
@@ -11177,12 +11177,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .model-lbl { opacity:0.85; }
     .model-right { display:flex; align-items:center; gap:6px; }
     .model-val { font-weight:600; }
-    .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #00C076; color:#00C076; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
+    .ensemble-badge { background:rgba(16,185,129,0.2); border:1px solid #067647; color:#067647; padding:5px; border-radius:5px; text-align:center; font-weight:700; margin-top:4px; font-size:0.8em; }
     .result-footer { border-top:1px solid rgba(15,23,42,0.09); padding:8px 12px; display:flex; gap:14px; flex-wrap:wrap; background:#ffffff; }
     .sf-item { display:flex; flex-direction:column; gap:1px; }
     .sf-label { color:#94a3b8; font-size:0.72em; text-transform:uppercase; letter-spacing:0.3px; }
     .sf-val { font-weight:600; font-size:0.85em; color:#0f172a; }
-    .pick-ok { color:#00C076; font-weight:700; }
+    .pick-ok { color:#067647; font-weight:700; }
     .pick-no { color:#D93025; font-weight:700; }
     /* Pick confidence grid (results cards) */
     .pick-conf-bar { border-top:1px solid rgba(15,23,42,0.08); padding:10px 12px 12px; background:rgba(15,23,42,0.03); }
@@ -11196,7 +11196,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .pc-name { font-size:0.68em; font-weight:700; color:#0F172A; text-transform:uppercase; letter-spacing:0.3px; white-space:normal; overflow:visible; text-overflow:clip; max-width:100%; width:100%; line-height:1.15; word-break:break-word; min-height:28px; display:flex; align-items:center; justify-content:center; }
     .pc-val { font-size:0.95em; font-weight:800; color:#0f172a; }
     .pc-side { font-size:0.6em; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:3px; white-space:normal; overflow:visible; text-overflow:clip; max-width:100%; width:100%; box-sizing:border-box; text-align:center; line-height:1.15; word-break:break-word; min-height:24px; }
-    .pc-side.home { color:#00C076; background:rgba(16,185,129,0.15); }
+    .pc-side.home { color:#067647; background:rgba(16,185,129,0.15); }
     .pc-side.away { color:#fbbf24; background:rgba(251,191,36,0.15); }
     .section-ml, .section-spread, .section-total { display:block; }
     .model-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
@@ -11204,7 +11204,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     .model-card { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:12px; text-align:center; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
     .model-card.highlight { border:2px solid #fbbf24; }
     .model-label { font-size:0.78em; opacity:0.8; margin-bottom:4px; }
-    .model-acc { font-size:1.4em; font-weight:700; color:#00C076; }
+    .model-acc { font-size:1.4em; font-weight:700; color:#067647; }
     .model-rec { font-size:0.82em; opacity:0.85; }
     .daily-tally { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
     .daily-tally h2 { text-align:center; margin:0 0 12px 0; font-size:1.15em; color:#0F172A; font-weight:700; }
@@ -11272,7 +11272,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
                     <div class="daily-model">📈 Spread</div>
                     {% if daily_tally.spread.total > 0 %}
-                    <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy >= 52 %}#00C076{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ daily_tally.spread.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ daily_tally.spread.accuracy }}%</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -11282,7 +11282,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
                     <div class="daily-model">🎲 Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
-                    <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy >= 52 %}#00C076{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ daily_tally.total_ou.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ daily_tally.total_ou.accuracy }}%</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -11323,7 +11323,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
                     <div class="daily-model">📈 Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
-                    <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy >= 52 %}#00C076{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ weekly_tally.spread.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ weekly_tally.spread.accuracy }}%</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -11333,7 +11333,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
                     <div class="daily-model">🎲 Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
-                    <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy >= 52 %}#00C076{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ weekly_tally.total_ou.accuracy }}%</div>
+                    <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{{ weekly_tally.total_ou.accuracy }}%</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
                     {% else %}
                     <div class="daily-acc" style="color:#94a3b8;">—</div>
@@ -11360,8 +11360,8 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:8px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
-                        <div><div style="opacity:0.8;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi != '—' and '-' not in c.weekly.roi %}#00C076{% elif c.weekly.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
-                        <div><div style="opacity:0.8;">Season</div><div style="font-weight:700;color:{% if c.total.roi != '—' and '-' not in c.total.roi %}#00C076{% elif c.total.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.total.detail }}</div></div>
+                        <div><div style="opacity:0.8;">7 Days</div><div style="font-weight:700;color:{% if c.weekly.roi != '—' and '-' not in c.weekly.roi %}#067647{% elif c.weekly.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.weekly.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.weekly.detail }}</div></div>
+                        <div><div style="opacity:0.8;">Season</div><div style="font-weight:700;color:{% if c.total.roi != '—' and '-' not in c.total.roi %}#067647{% elif c.total.roi != '—' %}#D93025{% else %}#94a3b8{% endif %};">{{ c.total.roi }}</div><div style="opacity:0.85;font-size:0.9em;">{{ c.total.detail }}</div></div>
                     </div>
                 </div>
                 {% endfor %}
@@ -11381,7 +11381,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
-                    <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#00C076{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
+                    <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
@@ -11391,7 +11391,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 and sp.spread_pct is not none %}
-                    <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#00C076{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
+                    <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
@@ -11401,7 +11401,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 and sp.ou_pct is not none %}
-                    <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#00C076{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
+                    <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
                     {% else %}
                     <div style="font-size:1.5em;color:#94a3b8;">—</div>
@@ -11423,21 +11423,21 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
                     {% if sp.ml_total > 0 %}
-                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#00C076{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
+                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
-                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#00C076{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
+                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
                     <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
-                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#00C076{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
+                    <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
@@ -11481,7 +11481,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% for date in sorted_dates %}
         {% set date_data = daily_results[date] %}
         <div id="date-{{ date }}" class="date-section">
-            <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#00C076;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
+            <div class="date-header">📅 {{ date }}{% if date == today_date %} <span style="background:#067647;color:white;padding:3px 10px;border-radius:4px;font-size:0.65em;margin-left:8px;">TODAY</span>{% endif %}</div>
 
             <div class="games-grid">
                 {% for game in date_data.games %}
@@ -11647,7 +11647,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         text-align: center;
     }
     .week-model-card.best {
-        border: 2px solid #00C076;
+        border: 2px solid #067647;
         background: rgba(16, 185, 129, 0.1);
     }
     .daily-tally { background:#ffffff; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:20px; box-shadow:0 4px 18px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06); }
@@ -11698,13 +11698,13 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         font-weight: bold;
     }
     .winner {
-        color: #00C076;
+        color: #067647;
     }
     .loser {
         color: #D93025;
     }
     .prob-correct {
-        color: #00C076;
+        color: #067647;
         font-weight: bold;
     }
     .prob-wrong {
@@ -11783,7 +11783,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 {% set m = overall_stats[m_key] %}
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:15px;text-align:center;{% if m_key == 'ensemble' %}border:2px solid #fbbf24; grid-column: span 4;{% endif %}">
                     <div style="font-size:0.9em;opacity:0.9;margin-bottom:4px;color:#334155;">{{ m_label }}</div>
-                    <div style="font-size: {% if m_key == 'ensemble' %}2.8em{% else %}1.9em{% endif %}; font-weight: bold; color: {% if m.accuracy >= 55 %}#00C076{% elif m.accuracy >= 50 %}#fbbf24{% else %}#D93025{% endif %};">{{ m.accuracy }}%</div>
+                    <div style="font-size: {% if m_key == 'ensemble' %}2.8em{% else %}1.9em{% endif %}; font-weight: bold; color: {% if m.accuracy >= 55 %}#067647{% elif m.accuracy >= 50 %}#fbbf24{% else %}#D93025{% endif %};">{{ m.accuracy }}%</div>
                     <div style="font-size:0.9em;opacity:0.9;color:#334155;">{{ m.correct }}-{{ m.total - m.correct }}</div>
                 </div>
                 {% endfor %}
@@ -14963,7 +14963,7 @@ PROMO_TOP_PICKS_TEMPLATE = """<!DOCTYPE html>
         .sport { font-size: 0.65rem; color: #f59e0b; text-transform: uppercase; font-weight: 800; letter-spacing: 0.55px; margin-bottom: 8px; }
         .match { font-weight: 800; font-size: 0.98rem; line-height: 1.35; margin-bottom: 10px; }
         .row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-        .pick { color: #00C076; font-weight: 800; font-size: 0.88rem; }
+        .pick { color: #067647; font-weight: 800; font-size: 0.88rem; }
         .pct { font-weight: 800; font-size: 0.95rem; }
         .ml { font-size: 0.74rem; color: #64748b; font-weight: 600; }
         .foot { text-align: center; margin-top: 22px; font-size: 0.78rem; color: #94a3b8; }

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import re
+from pathlib import Path
 from typing import Any
 
 
@@ -256,52 +257,36 @@ def _get_font(size: int, bold: bool = True):
     return ImageFont.load_default()
 
 
-_MONTHS = (
-    "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-)
-
-
-def _short_date_label(raw: str) -> str:
-    """Turn ISO date ranges into short labels that fit the card width."""
-    t = re.sub(r"\s+", " ", (raw or "").strip())
-    if not t:
+def _pretty_date_label(raw: str) -> str:
+    raw = (raw or "").strip()
+    if not raw:
         return ""
-    m = re.match(
-        r"(20\d{2})-(\d{2})-(\d{2})\s+to\s+(20\d{2})-(\d{2})-(\d{2})$",
-        t,
+    months = (
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    )
+
+    def _one(iso: str) -> str:
+        m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", iso.strip())
+        if not m:
+            return iso.strip()
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        try:
+            return f"{months[mo - 1]} {d}"
+        except Exception:
+            return iso.strip()
+
+    span = re.match(
+        r"(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})",
+        raw,
         flags=re.I,
     )
-    if m:
-        y1, mo1, d1, y2, mo2, d2 = m.groups()
-        a = f"{_MONTHS[int(mo1)]} {int(d1)}"
-        b = f"{_MONTHS[int(mo2)]} {int(d2)}"
-        if y1 != y2:
-            return f"{a}, {y1} – {b}, {y2}"
-        return f"{a} – {b}"
-    m = re.match(r"(20\d{2})-(\d{2})-(\d{2})$", t)
-    if m:
-        _y, mo, d = m.groups()
-        return f"{_MONTHS[int(mo)]} {int(d)}"
-    return t
-
-
-def _fit_text(
-    draw,
-    text: str,
-    font,
-    max_width: int,
-) -> str:
-    """Shrink text with ellipsis so it never clips the card edge."""
-    t = (text or "").strip()
-    if not t:
-        return ""
-    if draw.textbbox((0, 0), t, font=font)[2] <= max_width:
-        return t
-    ell = "…"
-    while t and draw.textbbox((0, 0), t + ell, font=font)[2] > max_width:
-        t = t[:-1].rstrip(" —–-")
-    return (t + ell) if t else ell
+    if span:
+        return f"{_one(span.group(1))} – {_one(span.group(2))}"
+    one = re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw)
+    if one:
+        return _one(raw)
+    return raw
 
 
 def render_results_summary_share_image(
@@ -317,110 +302,113 @@ def render_results_summary_share_image(
     if not payload or payload.get("type") != "results-summary":
         return None, None
 
-    width, height = 1080, 1920
+    width = 1080
     pad = 56
-    inner = width - (pad * 2)
+    title_font = _get_font(96, True)
+    sub_font = _get_font(44, False)
+    section_font = _get_font(62, True)
+    meta_font = _get_font(42, False)
+    label_font = _get_font(48, False)
+    rec_font = _get_font(54, True)
+    acc_font = _get_font(62, True)
+    col_font = _get_font(34, True)
+    foot_font = _get_font(36, False)
+
+    # Measure first, then crop the canvas to the content.
+    box_h = 560
+    gap = 56
+    header_h = 300
+    footer_h = 110
+    height = header_h + box_h * 2 + gap + footer_h + pad
     image = Image.new("RGB", (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
 
     sport = str(payload.get("sport_name") or "Results")
-    title_font = _get_font(72, True)
-    sub_font = _get_font(34, True)
-    section_font = _get_font(42, True)
-    meta_font = _get_font(30, True)
-    label_font = _get_font(36, True)
-    rec_font = _get_font(38, True)
-    val_font = _get_font(52, True)
-    foot_font = _get_font(30, True)
+    y = 80
+    _title = f"{sport} Results"
+    _tsz = 96
+    while _tsz > 48 and draw.textlength(_title, font=_get_font(_tsz, True)) > width - 2 * pad:
+        _tsz -= 4
+    draw.text((pad, y), _title, fill=(15, 23, 42), font=_get_font(_tsz, True))
+    y += 130
+    draw.text((pad, y), "predictionlab.io", fill=(0, 82, 155), font=sub_font)
+    y += 84
 
-    footer_h = 120
-    header_h = 200
-    avail = height - header_h - footer_h
-    gap = 36
-    # Fill the frame — large cards, minimal dead air under the header.
-    box_h = (avail - gap) // 2
-    y = header_h + 8
-
-    draw.text((pad, 72), f"{sport} Results", fill=(15, 23, 42), font=title_font)
-    draw.text((pad, 160), "predictionlab.io", fill=(0, 82, 155), font=sub_font)
-
-    def _draw_window(title: str, window: dict | None) -> int:
+    def _draw_window(title: str, window: dict | None) -> None:
         nonlocal y
         window = window or {}
         games = int(window.get("games") or 0)
-        date_lbl = _short_date_label(str(window.get("label") or ""))
-        meta_bits = []
-        if date_lbl:
-            meta_bits.append(date_lbl)
-        if games:
-            meta_bits.append(f"{games} games")
-        meta = " · ".join(meta_bits)
+        pretty = _pretty_date_label(str(window.get("label") or ""))
+        if games == 1:
+            meta = f"{pretty} · 1 game" if pretty else "1 game"
+        elif games:
+            meta = f"{pretty} · {games} games" if pretty else f"{games} games"
+        else:
+            meta = pretty
 
         box_top = y
         draw.rounded_rectangle(
             (pad, box_top, width - pad, box_top + box_h),
-            radius=28,
-            outline=(203, 213, 225),
-            width=3,
+            radius=20,
+            outline=(226, 232, 240),
+            width=2,
             fill=(248, 250, 252),
         )
-        text_max = inner - 56
-        head = _fit_text(draw, title, section_font, text_max)
-        draw.text((pad + 28, box_top + 32), head, fill=(15, 23, 42), font=section_font)
+        draw.text((pad + 32, box_top + 40), title, fill=(15, 23, 42), font=section_font)
         if meta:
-            meta_fit = _fit_text(draw, meta, meta_font, text_max)
-            draw.text(
-                (pad + 28, box_top + 88),
-                meta_fit,
-                fill=(100, 116, 139),
-                font=meta_font,
-            )
+            draw.text((pad + 32, box_top + 120), meta, fill=(100, 116, 139), font=meta_font)
 
+        col_rec_x = 560
+        col_acc_x = width - pad - 36
+        draw.text((pad + 32, box_top + 205), "MARKET", fill=(148, 163, 184), font=col_font)
+        rec_lab = "REC"
+        rec_bb = draw.textbbox((0, 0), rec_lab, font=col_font)
+        draw.text((col_rec_x, box_top + 205), rec_lab, fill=(148, 163, 184), font=col_font)
+        acc_lab = "ACC"
+        acc_bb = draw.textbbox((0, 0), acc_lab, font=col_font)
+        draw.text(
+            (col_acc_x - (acc_bb[2] - acc_bb[0]), box_top + 205),
+            acc_lab,
+            fill=(148, 163, 184),
+            font=col_font,
+        )
         rows = (
             ("Moneyline", window.get("ml") or {}),
             ("Spread", window.get("spread") or {}),
             ("Total", window.get("total") or {}),
         )
-        row_top = box_top + 150
-        row_h = (box_h - 170) // 3
-        for i, (name, mkt) in enumerate(rows):
+        row_y = box_top + 270
+        for name, mkt in rows:
             acc = str((mkt or {}).get("acc") or "—")
             rec = str((mkt or {}).get("record") or "—")
-            row_y = row_top + i * row_h
-            # One line: Market left, record center-left, % right — no cramped stack
-            mid_y = row_y + max(0, (row_h - 52) // 2)
-            draw.text((pad + 36, mid_y), name, fill=(51, 65, 85), font=label_font)
-            rec_x = pad + 280
-            draw.text((rec_x, mid_y), rec, fill=(71, 85, 105), font=rec_font)
-            acc_bb = draw.textbbox((0, 0), acc, font=val_font)
+            draw.text((pad + 32, row_y), name, fill=(51, 65, 85), font=label_font)
+            draw.text((col_rec_x, row_y - 2), rec, fill=(15, 23, 42), font=rec_font)
+            acc_w = draw.textbbox((0, 0), acc, font=acc_font)
             draw.text(
-                (width - pad - 36 - (acc_bb[2] - acc_bb[0]), mid_y - 4),
+                (col_acc_x - (acc_w[2] - acc_w[0]), row_y - 4),
                 acc,
                 fill=(15, 23, 42),
-                font=val_font,
+                font=acc_font,
             )
-            if i < 2:
-                sep_y = row_y + row_h - 2
-                draw.line(
-                    (pad + 28, sep_y, width - pad - 28, sep_y),
-                    fill=(226, 232, 240),
-                    width=2,
-                )
+            row_y += 82
         y = box_top + box_h + gap
-        return y
 
     _draw_window("Last Night", payload.get("last_night"))
     _draw_window("Last 7 Days", payload.get("last_7"))
-
-    note = "Sharp Consensus · ML / Spread / Total"
-    draw.text((pad, height - 110), note, fill=(100, 116, 139), font=foot_font)
     draw.text(
-        (pad, height - 68),
-        "Transparent results you can advertise",
+        (pad, y + 8),
+        "Sharp Consensus  ·  moneyline, spread, total",
         fill=(148, 163, 184),
         font=foot_font,
     )
 
+    # Always a 1080x1920 (9:16) canvas, the same as the Predictions image.
+    # The content block sits in the vertical middle of the canvas.
+    _canvas_h = 1920
+    if height < _canvas_h:
+        _canvas = Image.new("RGB", (width, _canvas_h), color=(255, 255, 255))
+        _canvas.paste(image, (0, (_canvas_h - height) // 2))
+        image, height = _canvas, _canvas_h
     try:
         mw = int(max_width) if max_width is not None else None
     except (TypeError, ValueError):
@@ -447,14 +435,14 @@ def render_results_summary_share_image(
 
 
 _SOCIAL_EXPORT_CSS = """
-.social-export-wrap{max-width:960px;margin:24px auto 0;padding:0 8px;}
-.social-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.social-export-wrap{max-width:960px;margin:28px auto 8px;padding:0 12px;}
+.social-export-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
 .social-export-title{font-size:0.9em;font-weight:800;color:#0f172a;letter-spacing:0.2px;}
 .social-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .social-export-btn{border:1px solid #00529B;background:#fff;color:#00529B;border-radius:999px;padding:6px 12px;font-size:0.76em;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;}
 .social-export-btn.primary{background:#00529B;color:#fff;}
-.social-image-link{display:block;max-width:420px;margin:0 auto;}
-.social-image-link img{width:100%;height:auto;border-radius:12px;border:1px solid #e2e8f0;display:block;}
+.social-image-link{display:block;max-width:400px;margin:0 auto;}
+.social-image-link img{width:100%;height:auto;object-fit:contain;border-radius:16px;border:1px solid #e2e8f0;box-shadow:0 8px 24px rgba(15,23,42,0.08);display:block;background:#fff;}
 .cfl-results-share{display:none!important;}
 """
 
@@ -466,11 +454,7 @@ def results_share_wrap_html(
     view_url: str,
 ) -> str:
     sport = sport_name or "Results"
-    preview = share_src
-    if "w=" not in preview and "?" not in preview:
-        preview = f"{preview}?w=640"
-    elif "w=" not in preview:
-        preview = f"{preview}&w=640"
+    preview = share_src  # full 1080x1920 image, same as the Predictions image
     return (
         f'<div class="social-export-wrap" data-results-share="1">'
         f'<div class="social-export-head">'
@@ -481,8 +465,69 @@ def results_share_wrap_html(
         f"</div></div>"
         f'<a class="social-image-link" href="{view_url}" target="_blank" rel="nofollow noopener" '
         f'aria-label="Open {sport} results share image">'
-        f'<img src="{preview}" alt="{sport} results share image" width="640" height="1138" loading="lazy" decoding="async">'
+        f'<img src="{preview}" alt="{sport} results share image" width="1080" height="1920" loading="lazy" decoding="async">'
         f"</a></div>"
+    )
+
+
+
+def _insert_after_share_strip(html: str, wrap_html: str) -> str:
+    """Share bar first, results image second."""
+    marker = '<div class="share-strip"'
+    start = html.find(marker)
+    if start < 0:
+        return html + wrap_html
+    pos = html.find(">", start)
+    if pos < 0:
+        return html
+    pos += 1
+    depth = 1
+    while pos < len(html) and depth:
+        nxt_open = html.find("<div", pos)
+        nxt_close = html.find("</div>", pos)
+        if nxt_close < 0:
+            return html + wrap_html
+        if nxt_open != -1 and nxt_open < nxt_close:
+            depth += 1
+            pos = nxt_open + 4
+        else:
+            depth -= 1
+            pos = nxt_close + len("</div>")
+    return html[:pos] + "\n" + wrap_html + html[pos:]
+
+
+
+def _full_share_strip() -> str:
+    """Standard Share on social media strip (label + icons), same as the cards page."""
+    from urllib.parse import quote
+
+    try:
+        from flask import request
+
+        path = request.path or ""
+    except Exception:
+        path = ""
+    page = quote("https://predictionlab.io" + path, safe="")
+    links = (
+        ("https://x.com/intent/post?url=" + page, "Share on X", "x.svg", "X"),
+        ("https://www.facebook.com/sharer/sharer.php?u=" + page, "Share on Facebook", "facebook.svg", "Facebook"),
+        ("https://instagram.com/predictionlab.io", "Instagram", "instagram.svg", "Instagram"),
+        ("https://predictionlab.io", "TikTok", "tiktok.svg", "TikTok"),
+        ("https://www.linkedin.com/sharing/share-offsite/?url=" + page, "Share on LinkedIn", "linkedin.svg", "LinkedIn"),
+        ("https://www.reddit.com/submit?url=" + page, "Share on Reddit", "reddit.svg", "Reddit"),
+        ("https://www.tumblr.com/widgets/share/tool?canonicalUrl=" + page, "Share on Tumblr", "tumblr.svg", "Tumblr"),
+        ("https://api.whatsapp.com/send?text=" + page, "Share on WhatsApp", "whatsapp.svg", "WhatsApp"),
+        ("https://telegram.me/share/url?url=" + page, "Share on Telegram", "telegram.svg", "Telegram"),
+    )
+    icons = "".join(
+        f'<a class="share-icon" href="{href}" target="_blank" rel="noopener" aria-label="{label}">'
+        f'<img src="/static/icons/social/{icon}" alt="{alt}"></a>'
+        for href, label, icon, alt in links
+    )
+    return (
+        '<style id="pl-share-strip-css">.share-strip{max-width:1200px;margin:12px auto 10px;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;background:rgba(244,247,249,.7);border:1px solid rgba(15,23,42,.1);border-radius:12px;box-sizing:border-box}.share-strip .share-strip-label{font-size:.82em;font-weight:800;color:#0f172a}.share-strip .share-icons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.share-strip .share-icon{width:30px!important;height:30px!important;display:inline-flex!important;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(15,23,42,.14);background:#fff}.share-strip .share-icon img{width:16px!important;height:16px!important;display:block}</style>'
+        '<div class="share-strip"><span class="share-strip-label">Share on social media</span>'
+        f'<div class="share-icons">{icons}</div></div>'
     )
 
 
@@ -519,7 +564,32 @@ def inject_results_share_block(html: str, wrap_html: str) -> str:
     if 'data-results-share="1"' in html:
         return html
     if 'class="share-strip"' in html:
-        return html.replace('<div class="share-strip"', wrap_html + '\n<div class="share-strip"', 1)
+        marker = re.search(r'<div class="share-strip"', html)
+        if not marker:
+            return html + wrap_html
+        return html[: marker.start()] + wrap_html + "\n" + html[marker.start() :]
+    share = _full_share_strip()
     if "</main>" in html:
-        return html.replace("</main>", wrap_html + "\n</main>", 1)
-    return html + wrap_html
+        return html.replace("</main>", share + "\n" + wrap_html + "\n</main>", 1)
+        return html + share + wrap_html
+
+
+def recover_results_share_payload(token: str, sport_name: str = "") -> dict | None:
+    """Rebuild a results image after its token file expired but the page still links it."""
+    token = (token or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", token):
+        return None
+    root = Path(__file__).resolve().parent / ".cache"
+    if not root.is_dir():
+        return None
+    for path in root.glob("served_*.html"):
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if token not in text:
+            continue
+        payload = payload_from_results_html(text, sport_name or "Results")
+        if payload:
+            return payload
+    return None

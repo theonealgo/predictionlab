@@ -1,40 +1,17 @@
-# NFL LOCKED (:5052 / premerge)
+---
+description: NFL locked — 3 UNLOCKS required
+alwaysApply: true
+---
 
-NFL picks and results on `:5052` (`predictionlabfix_work2`) are signed off.
+# NFL LOCKED
 
-Do **not** modify NFL unless the owner says:
+Do not modify NFL unless the same owner message contains the word **UNLOCK**
+3 times, names NFL, and names the miss.
 
-**UNLOCK NFL**
+Locked. 3 UNLOCKS required.
 
-Owner 2026-09-17: picks cards were super wide from `auto-fit minmax(520px)` +
-`max-width:none`. Restored shared 3-up grid; Pick Confidence still wraps on
-words. Miss closed — lock again.
+Owner 2026-09-29: the fail-list layout misses are closed. Equal stored lines and percents stay as stored. Locked.
 
-Owner 2026-09-16: unlocked for Pick Confidence card width
-(`auto-fit minmax(520px)` + word-break normal). Miss paused when
-owner redirected to MLB — CSS inject remains; do not resume without
-a fresh **UNLOCK NFL**.
-
-Owner 2026-09-16: unlocked for Consensus Historical face chip copy —
-`Consensus Record: 3/6 Split (0-0)` (pattern + record only; drop
-Last 7 Days / pct clutter). Miss closed — lock again.
-
-Owner 2026-09-16: 3/6 Split row in Consensus Based Betting Records (pushes),
-face Consensus Historical matches that row, face Books spread/total replaced
-with best Past-30 PL vs Books signal (e.g. Books favorite 24-19-1). Miss
-closed — lock again.
-
-Fixing MLB, NCAAF, soccer, chrome, or production outages is **not** an NFL unlock.
-
-## Do not touch
-
-- `/nfl-picks`, `/nfl-results`, `/nfl-results?view=chart`
-- NFL Cards|Chart, card HTML, date nav
-- Any `NHL77FINAL.py` / `team_results_charts.py` branch whose job is NFL
-
-## Allowed without unlock
-
-- Other sports
-- Checker reports that only *read* NFL pages
+Owner 2026-10-08: results totals chart Last 7 / Last 30 vs picks Recent results — verified matching on both results views. Miss closed — locked.
 
 Do not put lock text on user-facing HTML.

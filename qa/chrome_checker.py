@@ -58,6 +58,7 @@ from chart_shape import (  # noqa: E402
     PL_VS_BOOKS,
     card_blank_market_line_issues,
     card_missing_model_value_issues,
+    has_two_cards_per_row,
     h2h_gap_issues,
     missing_signed_off_charts,
     nba_last_season_gap_issues,
@@ -68,8 +69,11 @@ from chart_shape import (  # noqa: E402
     pl_vs_books_partition_issues,
     efficiency_copied_na_issues,
     share_ad_card_issues,
+    picks_chart_view_css_issues,
+    predictions_share_image_issues,
     team_chart_sou_table_issues,
     results_card_parameter_issues,
+    results_missing_pl_line_issues,
     team_chart_leftover_board_issues,
     team_chart_same_as_cards_issues,
     team_chart_window_tally_issues,
@@ -93,6 +97,10 @@ from chart_shape import (  # noqa: E402
     six_model_chart_issues,
     team_chart_template_issues,
     team_picks_template_issues,
+    all_sports_results_issues,
+    performance_page_issues,
+    picks_recent_results_issues,
+    pagespeed_insight_issues,
     team_results_template_issues,
     tennis_chart_same_as_cards_issues,
     tennis_picks_slate_issues,
@@ -162,12 +170,14 @@ IN_SEASON_MUST = ("NFL", "MLB", "Soccer", "NCAAF", "CFL", "Tennis", "UFC", "Golf
 # WNBA is still live / playoffs — a blank /wnba-picks is a FAIL.
 OFFSEASON_OK_EMPTY = frozenset({"NBA", "NHL", "NCAAB", "NCAAW"})
 
+# Signed-off face is Consensus Historical Record; H2H stays in details.
+_CONSENSUS_HIST_FACE_SPORTS = frozenset({"MLB", "NFL", "NCAAF", "CFL", "WNBA", "NHL"})
+
 # 302 is OK (login / plans / auth-gated tools). Everything else must 200.
 ALLOW_302 = {
     "/plans",
     "/login",
     "/signup",
-    "/performance",
     "/player-props",
     "/logout",
     "/account",
@@ -287,16 +297,16 @@ def _face_pl_ml_has_values(html: str) -> bool:
 
 def _has_pick_cards(html: str) -> bool:
     html = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html or "", flags=re.I)
+    html = re.sub(r"<style\b[^>]*>[\s\S]*?</style>", "", html, flags=re.I)
     low = html.lower()
-    # Require a real card node — do not treat leftover "H2H Last 10" copy in
-    # chrome/CSS as proof of a slate (that hid blank MLB pages).
+    # Require a real card node — leftover "H2H Last 10" / .game-card-stack CSS
+    # is not a slate (that hid blank MLB / off-season pages).
     return bool(
-        "data-pick-card" in low
+        re.search(r"<[^>]*\bdata-pick-card\b", low)
         or "pl2-pick-card" in low
-        or "data-game-card" in low
-        or 'class="pick-card"' in low
-        or "class='pick-card'" in low
-        or "game-card-stack" in low
+        or re.search(r"<[^>]*\bdata-game-card\b", low)
+        or re.search(r'class=["\'][^"\']*\bpick-card\b', low)
+        or re.search(r"<[^>]*\bgame-card-stack\b", low)
     )
 
 
@@ -772,8 +782,24 @@ class ChromeChecker:
                 self.add(label, FAIL, "Won't open — HTTP 500 error page", url=url)
                 fails.append(f"{path} 500-page")
                 continue
-            # Slow 200s are a speed fail (already recorded). They still opened.
-            self.add(label, PASS, f"HTTP {status} ({len(body):,} bytes)", url=url)
+            elapsed = float(getattr(self, "_last_elapsed", 0) or 0)
+            try:
+                from page_speed import is_results_path, results_wont_open_message
+            except Exception:
+                is_results_path = lambda p: "-results" in (p or "")
+                results_wont_open_message = lambda p, e, b=None: (
+                    f"Won't open — took {e:.1f}s"
+                )
+            if status == 200 and is_results_path(path) and elapsed > self.speed_budget:
+                self.add(
+                    label,
+                    FAIL,
+                    results_wont_open_message(path, elapsed, self.speed_budget),
+                    url=url,
+                )
+                fails.append(f"{path} hung")
+            else:
+                self.add(label, PASS, f"HTTP {status} ({len(body):,} bytes)", url=url)
             if status == 200 and self._check_shared_chrome(path, body, url) is False:
                 chrome_fails.append(path)
 
@@ -837,6 +863,8 @@ class ChromeChecker:
         st, body, url = self.fetch(picks)
         if (st != 200 or not _has_pick_cards(body)) and sport not in OFFSEASON_OK_EMPTY:
             st, body, url = self.fetch(picks)
+        if st == 200 and "<html" in (body or "").lower():
+            self._check_pagespeed(sport, body, url, "picks")
         if st != 200:
             self.add(
                 f"{sport} picks slate",
@@ -946,6 +974,55 @@ class ChromeChecker:
                     "Bottom advertising card has at least 2 picks",
                     url=url,
                 )
+            chart_css = picks_chart_view_css_issues(body)
+            if chart_css:
+                self.add(
+                    f"{sport} predictions chart view",
+                    FAIL,
+                    "; ".join(chart_css),
+                    url=url,
+                )
+            elif "pvChartBtn" in (body or ""):
+                self.add(
+                    f"{sport} predictions chart view",
+                    PASS,
+                    "Chart view hides the card grid",
+                    url=url,
+                )
+            img_src = re.search(
+                r'class="social-export-wrap"[\s\S]{0,1800}?src="([^"]+)"',
+                body or "",
+                flags=re.I,
+            )
+            img_bytes = b""
+            img_status = 0
+            img_type = ""
+            if img_src:
+                img_url = urljoin(self.base + "/", img_src.group(1).lstrip("/"))
+                try:
+                    img_resp = self.s.get(img_url, timeout=20)
+                    img_status = img_resp.status_code
+                    img_type = img_resp.headers.get("content-type") or ""
+                    img_bytes = img_resp.content or b""
+                except Exception:
+                    img_status = 0
+            image_issues = predictions_share_image_issues(
+                body, img_bytes, img_status, img_type
+            )
+            if image_issues:
+                self.add(
+                    f"{sport} predictions image",
+                    FAIL,
+                    "; ".join(image_issues),
+                    url=url,
+                )
+            elif img_status == 200:
+                self.add(
+                    f"{sport} predictions image",
+                    PASS,
+                    "Bottom predictions image shows the picks",
+                    url=url,
+                )
             return
         if sport in OFFSEASON_OK_EMPTY or "is in the off-season" in (body or ""):
             return
@@ -1011,7 +1088,7 @@ class ChromeChecker:
                 "; ".join(gaps),
                 url=url,
             )
-        elif required and sport != "MLB" and not _h2h_on_card_face(body):
+        elif required and sport not in _CONSENSUS_HIST_FACE_SPORTS and not _h2h_on_card_face(body):
             self.add(
                 f"{sport} H2H Last 10",
                 FAIL,
@@ -1093,6 +1170,31 @@ class ChromeChecker:
         else:
             self.add(label, PASS, "Scored game-log rows have a pick and result", url=url)
 
+
+    def _check_pagespeed(self, sport: str, html: str, url: str, surface: str) -> None:
+        """PageSpeed Insights audits that can be read from the HTML.
+
+        Covers the report's accessibility fails, the Agentic Browsing fail,
+        SEO tags, render-blocking chrome CSS, unused font preconnect, and
+        gtag.js in the first document. Slow 4G lab metrics are a separate
+        emulation and are named in the pass line.
+        """
+        issues = pagespeed_insight_issues(html or "")
+        label = f"{sport} PageSpeed {surface}"
+        if issues:
+            self.add(label, FAIL, "; ".join(issues), url=url)
+            return
+        self.add(
+            label,
+            PASS,
+            "Main landmark, tab roles, contrast, SEO tags, inlined chrome CSS, "
+            "resized headshots, and deferred analytics match the PageSpeed report. "
+            "Slow 4G lab budgets (not emulated here): FCP 1.8s, LCP 2.5s, "
+            "TBT 200ms, CLS 0.1, Speed Index 3.4s. "
+            "CSP, HSTS, COOP, and Trusted Types are checked on the response.",
+            url=url,
+        )
+
     def _check_results_template(
         self,
         sport: str,
@@ -1102,6 +1204,8 @@ class ChromeChecker:
         require_chart_view: bool,
     ) -> None:
         rst, rhtml, rurl = self.fetch(results)
+        if rst == 200:
+            self._check_pagespeed(sport, rhtml, rurl, "results")
         if sport in OFFSEASON_OK_EMPTY:
             if rst != 200:
                 self.add(
@@ -1271,6 +1375,7 @@ class ChromeChecker:
                     url=rurl,
                 )
             card_params = results_card_parameter_issues(rhtml, sport)
+            card_params = list(card_params or []) + results_missing_pl_line_issues(rhtml, sport)
             if card_params:
                 self.add(
                     f"{sport} results card parameters",
@@ -1372,7 +1477,7 @@ class ChromeChecker:
                     "; ".join(panel_issues),
                     url=rurl,
                 )
-            math_issues = results_math_issues(rhtml)
+            math_issues = results_math_issues(rhtml, sport=sport)
             if math_issues:
                 self.add(
                     f"{sport} results math",
@@ -1432,7 +1537,7 @@ class ChromeChecker:
         self._check_xsharp_values(
             sport, chtml, curl, f"{sport} chart-view consensus XSharp"
         )
-        if sport != "Soccer":
+        if sport != "Soccer" and sport.lower() not in ("tennis", "ufc", "golf"):
             xs = team_xsharp_totals_issues(rhtml, chtml, sport)
             if xs:
                 self.add(
@@ -1467,7 +1572,7 @@ class ChromeChecker:
                     "; ".join(chart_panel),
                     url=curl,
                 )
-            chart_math = results_math_issues(chtml, cards_html=rhtml)
+            chart_math = results_math_issues(chtml, cards_html=rhtml, sport=sport)
             if chart_math:
                 self.add(
                     f"{sport} chart-view results math",
@@ -1508,6 +1613,98 @@ class ChromeChecker:
                 )
         if sport != "Soccer":
             self._check_team_chart_contract(sport, results, rhtml, chtml, curl)
+
+    def _check_picks_recent_results(self, sport: str, picks: str) -> None:
+        st, html, url = self.fetch(picks)
+        if st != 200:
+            self.add(
+                f"{sport} picks recent results",
+                FAIL,
+                f"{picks} won't open ({st})",
+                url=url,
+            )
+            return
+        issues = picks_recent_results_issues(html)
+        if issues:
+            self.add(
+                f"{sport} picks recent results",
+                FAIL,
+                "; ".join(issues),
+                url=url,
+            )
+        else:
+            self.add(
+                f"{sport} picks recent results",
+                PASS,
+                "Last Night / Last 7 / Last 30 sit above the explainer",
+                url=url,
+            )
+
+    def _check_model_performance(self, sport: str) -> None:
+        slug = "soccer" if sport == "Soccer" else sport
+        path = f"/performance?sport={slug}&last_n=50"
+        st, html, url = self.fetch(path)
+        if st in (301, 302) or (html and "/plans" in html and "Model Performance" not in html):
+            self.add(
+                f"{sport} Model Performance",
+                FAIL,
+                "/performance is paywalled or redirected",
+                url=url,
+            )
+            return
+        if st != 200:
+            self.add(
+                f"{sport} Model Performance",
+                FAIL,
+                f"/performance won't open ({st})",
+                url=url,
+            )
+            return
+        issues = performance_page_issues(html, sport=slug)
+        if issues:
+            self.add(
+                f"{sport} Model Performance",
+                FAIL,
+                "; ".join(issues),
+                url=url,
+            )
+        else:
+            self.add(
+                f"{sport} Model Performance",
+                PASS,
+                "All sports listed; team cards grade every moneyline model",
+                url=url,
+            )
+
+    def _check_all_sports_results(self, sport: str, results_html: str, rurl: str) -> None:
+        """Season dashboard vs actual finals on this sport's results cards."""
+        ast, ahtml, aurl = self.fetch("/all-sports-results")
+        if ast != 200 or not ahtml:
+            self.add(
+                f"{sport} All Sports Results",
+                FAIL,
+                "/all-sports-results won't open",
+                url=aurl,
+            )
+            return
+        issues = all_sports_results_issues(
+            ahtml, sport=sport, results_html=results_html
+        )
+        if issues:
+            self.add(
+                f"{sport} All Sports Results",
+                FAIL,
+                "; ".join(issues),
+                url=aurl,
+            )
+        else:
+            self.add(
+                f"{sport} All Sports Results",
+                PASS,
+                "Moneyline / spread / totals records match the math and "
+                "card grades match final scores",
+                url=aurl,
+            )
 
     def _check_team_chart_contract(
         self, sport: str, results: str, cards: str, chtml: str, curl: str
@@ -1595,49 +1792,56 @@ class ChromeChecker:
                 "Best Performing Model is as wide as the other boxes",
                 url=curl,
             )
-        for mk in ("spread", "totals"):
-            mst, mhtml, murl = self.fetch(f"{results}?view=chart&market={mk}")
-            sou = [] if mst != 200 else team_chart_sou_table_issues(mhtml, mk)
-            if mst != 200:
-                sou = [f"{sport} {mk} chart HTTP {mst}"]
-            if sou:
+        ml_only = sport.lower() in ("tennis", "ufc", "golf")
+        if not ml_only:
+            for mk in ("spread", "totals"):
+                mst, mhtml, murl = self.fetch(f"{results}?view=chart&market={mk}")
+                sou = [] if mst != 200 else team_chart_sou_table_issues(mhtml, mk, sport)
+                if mst != 200:
+                    sou = [f"{sport} {mk} chart HTTP {mst}"]
+                if sou:
+                    self.add(
+                        f"{sport} {mk} chart table",
+                        FAIL,
+                        "; ".join(sou),
+                        url=murl,
+                    )
+                else:
+                    self.add(
+                        f"{sport} {mk} chart table",
+                        PASS,
+                        f"{mk} compares actual score to books / PL lines",
+                        url=murl,
+                    )
+        if sport.lower() != "golf":
+            ast, atext, aurl = self.fetch(f"/{slug}/api/picks")
+            api_body = None
+            if ast == 200 and atext:
+                try:
+                    api_body = _json.loads(atext)
+                except Exception:
+                    api_body = None
+            api = team_chart_api_issues(api_body, slug)
+            if ast != 200:
+                api = [f"{sport} chart API HTTP {ast}"] + api
+            if api:
                 self.add(
-                    f"{sport} {mk} chart table",
+                    f"{sport} chart API",
                     FAIL,
-                    "; ".join(sou),
-                    url=murl,
+                    "; ".join(api),
+                    url=aurl,
                 )
             else:
                 self.add(
-                    f"{sport} {mk} chart table",
+                    f"{sport} chart API",
                     PASS,
-                    f"{mk} compares actual score to books / PL lines",
-                    url=murl,
+                    (
+                        f"/{slug}/api/picks hydrates moneyline"
+                        if ml_only
+                        else f"/{slug}/api/picks hydrates Moneyline | Spread | Totals"
+                    ),
+                    url=aurl,
                 )
-        ast, atext, aurl = self.fetch(f"/{slug}/api/picks")
-        api_body = None
-        if ast == 200 and atext:
-            try:
-                api_body = _json.loads(atext)
-            except Exception:
-                api_body = None
-        api = team_chart_api_issues(api_body, slug)
-        if ast != 200:
-            api = [f"{sport} chart API HTTP {ast}"] + api
-        if api:
-            self.add(
-                f"{sport} chart API",
-                FAIL,
-                "; ".join(api),
-                url=aurl,
-            )
-        else:
-            self.add(
-                f"{sport} chart API",
-                PASS,
-                f"/{slug}/api/picks hydrates Moneyline | Spread | Totals",
-                url=aurl,
-            )
 
     def _check_copy_all(self, sport: str, picks: str) -> None:
         """In-season team picks with cards must have Copy All.
@@ -1681,13 +1885,29 @@ class ChromeChecker:
             url=url,
         )
 
-    def check_all_sport_template_gaps(self) -> None:
+    def check_all_sport_template_gaps(self, only: str | None = None) -> None:
         """Every sport: H2H values, consensus, PL vs sportsbook, chart view."""
+        want = (only or "").strip().upper()
+        aliases = {"SOCCER": "SOCCER", "TENNIS": "TENNIS"}
         print(
-            "  Chrome checker: all-sports H2H + consensus + PL vs sportsbook + chart view + Copy All"
+            "  Chrome checker: "
+            + (f"{want} only" if want else "all-sports")
+            + " H2H + consensus + PL vs sportsbook + chart view + Copy All"
         )
-        for sport, picks, results in TEAM_TEMPLATE_SPORTS:
+        team_rows = TEAM_TEMPLATE_SPORTS
+        ml_rows = ML_ONLY_SPORTS
+        if want:
+            team_rows = tuple(
+                row for row in TEAM_TEMPLATE_SPORTS
+                if row[0].upper() == want or row[0].upper() == aliases.get(want, want)
+            )
+            ml_rows = tuple(
+                row for row in ML_ONLY_SPORTS
+                if row[0].upper() == want
+            )
+        for sport, picks, results in team_rows:
             self._check_picks_slate(sport, picks)
+            self._check_picks_recent_results(sport, picks)
             # Soccer cards use PL-xG, not H2H Last 10.
             self._check_h2h(sport, picks, required=sport != "Soccer")
             self._check_copy_all(sport, picks)
@@ -1728,6 +1948,20 @@ class ChromeChecker:
                             f"{sport} cards have model boxes with values",
                             url=purl,
                         )
+                    if has_two_cards_per_row(phtml):
+                        self.add(
+                            f"{sport} card row",
+                            PASS,
+                            "Pick cards are 2 per row, not overly wide",
+                            url=purl,
+                        )
+                    else:
+                        self.add(
+                            f"{sport} card row",
+                            FAIL,
+                            "Pick cards are not 2 per row (or still 3-up / full-bleed)",
+                            url=purl,
+                        )
             if sport in ("MLB", "NFL", "NCAAF", "CFL") and _has_pick_cards(phtml):
                 hist = compact_consensus_hist_face_issues(phtml, sport)
                 if hist:
@@ -1746,7 +1980,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "WNBA":
-                from chart_shape import wnba_consensus_hist_face_issues
+                from qa.chart_shape import wnba_consensus_hist_face_issues
 
                 hist = wnba_consensus_hist_face_issues(phtml)
                 if hist:
@@ -1765,7 +1999,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "UFC":
-                from chart_shape import ufc_consensus_hist_face_issues
+                from qa.chart_shape import ufc_consensus_hist_face_issues
 
                 hist = ufc_consensus_hist_face_issues(phtml)
                 if hist:
@@ -1783,7 +2017,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "Golf":
-                from chart_shape import golf_picks_board_issues
+                from qa.chart_shape import golf_picks_board_issues
 
                 giss = golf_picks_board_issues(phtml)
                 if giss:
@@ -1822,7 +2056,7 @@ class ChromeChecker:
                             "WNBA results cards have H2H Last 10",
                             url=rurl,
                         )
-                    from chart_shape import wnba_results_graded_clarity_issues
+                    from qa.chart_shape import wnba_results_graded_clarity_issues
 
                     clarity = wnba_results_graded_clarity_issues(rhtml)
                     self.add(
@@ -1836,7 +2070,11 @@ class ChromeChecker:
             self._check_results_template(
                 sport, results, require_both_charts=True, require_chart_view=True
             )
-        for sport, picks, results in ML_ONLY_SPORTS:
+            rst, rhtml, rurl = self.fetch(results)
+            self._check_all_sports_results(sport, rhtml if rst == 200 else "", rurl)
+            self._check_model_performance(sport)
+        for sport, picks, results in ml_rows:
+            self._check_picks_recent_results(sport, picks)
             st, body, url = self.fetch(picks)
             if st == 200 and _has_pick_cards(body):
                 self._check_picks_clock_and_logos(sport, body, url)
@@ -1900,6 +2138,14 @@ class ChromeChecker:
                         url=curl,
                     )
 
+    def run_sport(self, sport: str) -> None:
+        """Check one sport's picks/results only (isolate folders)."""
+        status, html, url = self.fetch("/")
+        if status != 200 or len(html) < 800:
+            self.add("homepage", FAIL, f"Homepage failed ({status})", url=url)
+            return
+        self.check_all_sport_template_gaps(only=sport)
+
     def run(self):
         print("  Chrome checker: locked header/footer + actually open every link")
         status, html, url = self.fetch("/")
@@ -1934,6 +2180,11 @@ def main(argv: list[str] | None = None) -> int:
         "--url",
         default=os.environ.get("AUDIT_BASE_URL", "https://predictionlab.io"),
     )
+    parser.add_argument(
+        "--sport",
+        default="",
+        help="Check only this sport's picks/results (isolate mode)",
+    )
     args = parser.parse_args(argv)
 
     class _R:
@@ -1957,10 +2208,20 @@ def main(argv: list[str] | None = None) -> int:
     session = requests.Session()
     session.headers["User-Agent"] = "predictionlab-chrome-checker"
     report = _R()
-    ChromeChecker(session, args.url, report, _C).run()
-    fails = sum(1 for r in report.rows if r.status == FAIL)
-    print(f"\nChrome checker: {len(report.rows) - fails} pass / {fails} fail")
-    return 1 if fails else 0
+    checker = ChromeChecker(session, args.url, report, _C)
+    if args.sport:
+        checker.run_sport(args.sport)
+    else:
+        checker.run()
+    fails_rows = [r for r in report.rows if r.status == FAIL]
+    print(f"\nChrome checker: {len(report.rows) - len(fails_rows)} pass / {len(fails_rows)} fail")
+    if fails_rows:
+        print("FAILS:")
+        for r in fails_rows:
+            print(f"- {r.label}: {r.message}")
+    else:
+        print("FAILS: none")
+    return 1 if fails_rows else 0
 
 
 if __name__ == "__main__":

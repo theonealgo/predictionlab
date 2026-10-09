@@ -34,6 +34,13 @@
         {% endfor %}
       </select>
 
+      <label for="what_they_do">Describe what you do *</label>
+      <textarea id="what_they_do" name="what_they_do" required minlength="10" maxlength="2000" placeholder="e.g. I run a sports betting YouTube channel with weekly NFL picks.">{{ form.what_they_do or '' }}</textarea>
+
+      <label for="follower_count">How many followers / subscribers do you have? *</label>
+      <input id="follower_count" name="follower_count" type="number" required min="0" step="1" inputmode="numeric" value="{{ form.follower_count or '' }}" placeholder="e.g. 12000">
+      <div class="hint">Total across your main platform(s).</div>
+
       <label for="country">Country</label>
       <input id="country" name="country" type="text" value="{{ form.country or '' }}" maxlength="80" placeholder="e.g. Canada">
 

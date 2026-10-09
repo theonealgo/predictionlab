@@ -45,9 +45,6 @@ _SITE_SPORT_HREFS = (
 SKIP_PATHS = frozenset(
     {
         "/mlb-picks",
-        "/tennis-picks",
-        "/tennis-results",
-        "/ufc-picks",
     }
 )
 
@@ -83,6 +80,13 @@ def header_matches_site_chrome(html: str) -> bool:
 
 def footer_matches_site_chrome(html: str) -> bool:
     if "site-directory-footer" not in (html or ""):
+        return False
+    if "AI Picks by Sport" not in (html or ""):
+        return False
+    start = (html or "").find("AI Picks by Sport")
+    nxt = (html or "").find("footer-heading", start + len("AI Picks by Sport"))
+    column = (html or "")[start: nxt if nxt > start else start + 4000]
+    if any(href not in column for href in _SITE_SPORT_HREFS):
         return False
     return "/affiliate" in html and "Affiliate Program" in html
 
@@ -159,6 +163,49 @@ def skip_path(path: str) -> bool:
     return False
 
 
+
+_LEFT_DRAWER = """
+<div class="tv-overlay" id="tvOverlay" onclick="tvClose()"></div>
+<div class="tv-drawer" id="tvDrawer">
+  <div class="tv-drawer-header">
+    <div class="tv-header-btns"><button type="button" class="tv-back-btn" id="tvBackBtn" onclick="tvBack()" style="display:none">&#8249;</button><span class="tv-drawer-title" id="tvDrawerTitle">Menu</span></div>
+    <button type="button" class="tv-close-btn" onclick="tvClose()">&#x2715;</button>
+  </div>
+  <div class="tv-panels">
+    <div class="tv-panel visible" id="tvMain">
+      <div class="tv-menu-list">
+        <button type="button" class="tv-menu-btn" onclick="tvSub('picks')"><span class="tv-menu-label">Picks &amp; Predictions</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('props')"><span class="tv-menu-label">Props &amp; Models</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <button type="button" class="tv-menu-btn" onclick="tvSub('results')"><span class="tv-menu-label">Results &amp; Tracking</span><span class="tv-menu-arrow">&#8250;</span></button>
+        <a href="/login" class="tv-menu-btn" style="text-decoration:none;"><span class="tv-menu-label">Account</span></a>
+      </div>
+    </div>
+    <div class="tv-panel hidden-right" id="tvSub"></div>
+  </div>
+</div>
+<script>
+var TV_MENUS={
+ picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'CFL',h:'/cfl-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},
+ props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
+ results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'},{l:'Soccer',h:'/soccer-results'},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'CFL',h:'/cfl-results'},{l:'Tennis',h:'/tennis-results'},{l:'UFC',h:'/ufc-results'},{l:'Golf',h:'/golf-results'}]}
+};
+function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
+function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');}
+function tvToggle(){var d=document.getElementById('tvDrawer');if(d&&d.classList.contains('open'))tvClose();else tvOpen();}
+function tvSub(key){var menu=TV_MENUS[key];if(!menu)return;var html='';menu.items.forEach(function(item){html+='<a href="'+item.h+'" class="tv-sub-link">'+item.l+'</a>';});var sub=document.getElementById('tvSub');if(sub)sub.innerHTML=html;var t=document.getElementById('tvDrawerTitle');if(t)t.textContent=menu.title;var b=document.getElementById('tvBackBtn');if(b)b.style.display='';var m=document.getElementById('tvMain');if(m)m.className='tv-panel hidden-left';if(sub)sub.className='tv-panel visible';}
+function tvBack(){var m=document.getElementById('tvMain'),s=document.getElementById('tvSub'),b=document.getElementById('tvBackBtn'),t=document.getElementById('tvDrawerTitle');if(m)m.className='tv-panel visible';if(s)s.className='tv-panel hidden-right';if(b)b.style.display='none';if(t)t.textContent='Menu';}
+</script>
+"""
+
+
+def _ensure_left_drawer(html: str) -> str:
+    if not html or "tvDrawer" in html or "Picks & Predictions" in html or "Picks &amp; Predictions" in html:
+        return html
+    if "</body>" not in html.lower():
+        return html + _LEFT_DRAWER
+    return re.sub(r"</body\s*>", _LEFT_DRAWER + "</body>", html, count=1, flags=re.I)
+
+
 def ensure_locked_site_chrome(html: str, *, path: str = "") -> str:
     """Replace a thin/isolation header/footer with locked research chrome."""
     if not html or "<html" not in html.lower():
@@ -170,7 +217,7 @@ def ensure_locked_site_chrome(html: str, *, path: str = "") -> str:
     need_h = not header_matches_site_chrome(html)
     need_f = not footer_matches_site_chrome(html)
     if not need_h and not need_f:
-        return html
+        return _ensure_left_drawer(html)
     try:
         header = _render_partial("partials/research_header.html") if need_h else ""
         footer = _render_partial("partials/site_directory_footer.html") if need_f else ""
@@ -203,7 +250,7 @@ def ensure_locked_site_chrome(html: str, *, path: str = "") -> str:
             count=1,
             flags=re.I,
         )
-    return html
+    return _ensure_left_drawer(html)
 
 
 # Google Ads landing-page copy: 21+, helpline, not a sportsbook.

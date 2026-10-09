@@ -1,6 +1,8 @@
 {# Shared score / line display helpers — used by predictions + results cards #}
 {% macro team_short(name) -%}
-{{ name|string }}
+{%- set raw = name|string -%}
+{%- set parts = raw.split() -%}
+{%- if parts|length >= 2 -%}{{ parts[-1] }}{%- else -%}{{ raw }}{%- endif -%}
 {%- endmacro %}
 {% macro fmt_half(v) -%}
 {%- if v is defined and v is not none -%}

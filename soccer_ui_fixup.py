@@ -1291,9 +1291,12 @@ def soccer_league_dropdown_html(
     var regs=(el.getAttribute('data-region')||'').split(',');
     return regs.indexOf(rk)>=0;
   }}
+  function plainLabel(text){{
+    return String(text||'').replace(/^●\\s*/,'').replace(/\\s+/g,' ').trim();
+  }}
   function visibleLabel(){{
     var opt=leagueSel && leagueSel.selectedIndex>=0 ? leagueSel.options[leagueSel.selectedIndex] : null;
-    return (opt && opt.textContent || 'All leagues').replace(/\\s+/g,' ').trim();
+    return plainLabel(opt && opt.textContent || 'All leagues') || 'All leagues';
   }}
   function continentLabel(){{
     if(!regionSel || regionSel.selectedIndex<0) return 'All continents';
@@ -1309,9 +1312,11 @@ def soccer_league_dropdown_html(
   }}
   function updateShowing(){{
     var n=visibleLeagueCount();
-    var lab=visibleLabel();
-    if(scope) scope.textContent='Showing: '+continentLabel()+' · '+lab+' · '+n+' leagues';
-    if(face) face.textContent=lab+(n ? ' · '+n+' leagues' : '');
+    var specific=leagueSel && String(leagueSel.value||'');
+    var lab=specific ? visibleLabel() : 'All leagues';
+    var countBit=specific ? '' : (n ? ' · '+n+' leagues' : '');
+    if(scope) scope.textContent='Showing: '+continentLabel()+' · '+lab+countBit;
+    if(face) face.textContent=lab+countBit;
   }}
   function filterLeagues(){{
     var rk=regionKey();
@@ -1357,8 +1362,31 @@ def soccer_league_dropdown_html(
     if(week && week.value) parts.push('week='+encodeURIComponent(week.value));
     return parts.length ? (base+'?'+parts.join('&')) : (fallback || base);
   }}
+  function optionForValue(val){{
+    if(!leagueSel) return null;
+    var i, opt;
+    for(i=0;i<leagueSel.options.length;i++){{
+      opt=leagueSel.options[i];
+      if(String(opt.value||'')===String(val||'')) return opt;
+    }}
+    return null;
+  }}
+  function chooseLeague(val){{
+    var opt=optionForValue(val);
+    if(opt){{ opt.disabled=false; opt.hidden=false; opt.selected=true; }}
+    if(leagueSel) leagueSel.value=val||'';
+    if(leagueSel && String(leagueSel.value||'')!==String(val||'') && opt) opt.selected=true;
+    return opt;
+  }}
   function go(clearLeague){{
     var href=buildHref(!!clearLeague);
+    if(!clearLeague && leagueSel && String(leagueSel.value||'')){{
+      if(href.indexOf('league=')<0){{
+        var opt=optionForValue(leagueSel.value);
+        var direct=opt && opt.getAttribute('data-href');
+        if(direct) href=direct;
+      }}
+    }}
     if(loadBtn){{ loadBtn.disabled=true; loadBtn.textContent='Loading…'; }}
     if(href) window.location.assign(href);
   }}
@@ -1394,9 +1422,16 @@ def soccer_league_dropdown_html(
     menu.addEventListener('click', function(ev){{
       var btn=ev.target && ev.target.closest('[data-league-item]');
       if(!btn || btn.hidden) return;
-      if(leagueSel) leagueSel.value=btn.getAttribute('data-value')||'';
+      var val=btn.getAttribute('data-value')||'';
+      var opt=chooseLeague(val);
       updateShowing();
       setOpen(false);
+      var direct=opt && opt.getAttribute('data-href');
+      if(val && direct){{
+        if(loadBtn){{ loadBtn.disabled=true; loadBtn.textContent='Loading…'; }}
+        window.location.assign(direct);
+        return;
+      }}
       go(false);
     }});
   }}
@@ -1461,14 +1496,15 @@ def soccer_week_nav_html(
     monday, sunday = soccer_week_range(week)
     prev = monday - timedelta(days=7)
     nxt = monday + timedelta(days=7)
-    this = soccer_week_monday()
     href_kw = {
         "kind": "chart" if kind == "chart" else kind,
         "league": league or "",
         "region": region or "",
     }
     prev_href = _soccer_filter_href(week=prev.isoformat(), **href_kw)
-    this_href = _soccer_filter_href(week=this.isoformat(), **href_kw)
+    # The highlighted week is the week on screen. Linking it at the calendar
+    # week sent a league page back to the current week, which is MLS-only.
+    this_href = _soccer_filter_href(week=monday.isoformat(), **href_kw)
     next_href = _soccer_filter_href(week=nxt.isoformat(), **href_kw)
     current = soccer_week_label(monday)
     prev_lab = f"{prev.strftime('%b %-d')}–{(prev + timedelta(days=6)).strftime('%-d')}"
@@ -2140,7 +2176,8 @@ def _soccer_fill_na_vals(html: str) -> str:
             "edge": _attr("data-m-edge", "data-edge") or fallback,
             "xsharp": _attr("data-m-xsharp") or fallback,
             "sharp consensus": _attr("data-m-consensus") or fallback,
-            "efficiency": _attr("data-m-efficiency") or fallback,
+            # Strategy box — never copy Edge / Sharp Consensus onto Efficiency.
+            "efficiency": _attr("data-m-efficiency") or "",
             "grinder2": _attr("data-m-grinder2") or fallback,
             "takedown": _attr("data-m-takedown") or fallback,
         }
@@ -2227,6 +2264,53 @@ def ensure_soccer_league_empty_state(html: str, *, league: str = "") -> str:
     return banner + html
 
 
+_SOCCER_BOOKS_NA_TIP = "Odds are posted the day before or the day of the contest."
+_OLD_SOCCER_BOOKS_NA_TIP = "Check back on game date, or closer to the game, for odds."
+
+
+def ensure_soccer_books_na_tooltips(html: str) -> str:
+    """Books N/A / dash on upcoming cards must show the standard odds hover."""
+    if not html or "data-pick-card" not in html:
+        return html
+    html = html.replace(_OLD_SOCCER_BOOKS_NA_TIP, _SOCCER_BOOKS_NA_TIP)
+    btn = (
+        f'<button type="button" class="h2h-info-btn" title="{_SOCCER_BOOKS_NA_TIP}" '
+        f'aria-label="{_SOCCER_BOOKS_NA_TIP}">i</button>'
+    )
+
+    def _add_btn(m: re.Match[str]) -> str:
+        inner = m.group(1)
+        if "h2h-info-btn" in inner:
+            return inner
+        return inner + btn
+
+    html = re.sub(
+        r"(<span class=\"ml-num[^\"]*\">\s*N/A\s*</span>)(?!\s*<button)",
+        lambda m: m.group(1) + btn,
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"(<td class=\"val-books\">\s*N/A\s*)(</td>)",
+        lambda m: m.group(1) + btn + m.group(2),
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"(<div class=\"line-chip-val\">\s*N/A\s*)(</div>)",
+        lambda m: m.group(1) + btn + m.group(2),
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"(<td class=\"val-books\">\s*(?:—|&mdash;|&ndash;)\s*)(</td>)",
+        lambda m: m.group(1) + btn + m.group(2),
+        html,
+        flags=re.I,
+    )
+    return html
+
+
 def _hide_blank_books_ml_lines(html: str) -> str:
     """Hide Books face lines that have no posted number. Do not invent odds."""
     return re.sub(
@@ -2271,6 +2355,52 @@ def _soccer_xg_named_spread(tag: str) -> str:
         return "PK"
     line = f"{abs(diff):.2f}".rstrip("0").rstrip(".")
     return f"{home} -{line}" if diff > 0 else f"{away} -{line}"
+
+
+_SOCCER_PUBLIC_ORIGIN = "https://predictionlab.io"
+
+
+def publicize_soccer_share_hrefs(html: str) -> str:
+    """Share icons on soccer pages use the public origin already in the app."""
+    if not html or "share-icon" not in html:
+        return html
+
+    def _public(href: str) -> str:
+        href = re.sub(
+            r"https?%3A%2F%2F(?:127\.0\.0\.1|localhost)(?:%3A\d+)?",
+            "https%3A%2F%2Fpredictionlab.io",
+            href,
+            flags=re.I,
+        )
+        href = re.sub(
+            r"https?%3A//(?:127\.0\.0\.1|localhost)(?:%3A\d+)?",
+            "https%3A//predictionlab.io",
+            href,
+            flags=re.I,
+        )
+        return re.sub(
+            r"https?://(?:127\.0\.0\.1|localhost)(?::\d+)?",
+            _SOCCER_PUBLIC_ORIGIN,
+            href,
+            flags=re.I,
+        )
+
+    def _repl(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        found = re.search(r'\bhref="([^"]*)"', tag, flags=re.I)
+        if not found:
+            return tag
+        fixed = _public(found.group(1))
+        if fixed == found.group(1):
+            return tag
+        return tag[: found.start(1)] + fixed + tag[found.end(1) :]
+
+    return re.sub(
+        r'<a\b[^>]*\bclass="[^"]*\bshare-icon\b[^"]*"[^>]*>',
+        _repl,
+        html,
+        flags=re.I,
+    )
 
 
 def _fill_soccer_xs_from_published(html: str) -> str:
@@ -2396,6 +2526,346 @@ def _fill_soccer_placeholder_edge(html: str) -> str:
     return "".join(out)
 
 
+def _fill_soccer_efficiency_na_sides(html: str) -> str:
+    """Fill Efficiency N/A sides from the published PL spread. Do not invent %."""
+    if not html or "Efficiency" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
+        if not open_m:
+            out.append(stack)
+            continue
+        tag = open_m.group(1)
+        rest = stack[open_m.end() :]
+        pl_m = re.search(r'data-pl-spread="([^"]*)"', tag, flags=re.I)
+        pl = html_lib.unescape((pl_m.group(1) if pl_m else "") or "").strip()
+        side = ""
+        if pl:
+            sm = re.match(r"(.+?)\s+[+\-]?\d", pl)
+            side = (sm.group(1) if sm else pl).strip()
+        if not side:
+            out.append(tag + rest)
+            continue
+        home_m = re.search(r'data-home(?:-full)?="([^"]*)"', tag, flags=re.I)
+        away_m = re.search(r'data-away(?:-full)?="([^"]*)"', tag, flags=re.I)
+        home = html_lib.unescape((home_m.group(1) if home_m else "") or "").strip()
+        away = html_lib.unescape((away_m.group(1) if away_m else "") or "").strip()
+        cls = ""
+        if home and home.lower() in side.lower():
+            cls = " home"
+        elif away and away.lower() in side.lower():
+            cls = " away"
+        escaped = html_lib.escape(side)
+
+        def _repl(m: re.Match[str]) -> str:
+            return (
+                f'{m.group(1)}{cls}"{m.group(3)}{escaped}{m.group(4)}'
+            )
+
+        rest2, n = re.subn(
+            r'(<div class="pc-name">\s*Efficiency\s*</div>'
+            r'(?:\s*<button\b[^>]*>[\s\S]*?</button>)?'
+            r'[\s\S]*?<div class="pc-side)([^"]*)("[^>]*>)\s*N/A\s*(</div>)',
+            _repl,
+            rest,
+            count=1,
+            flags=re.I,
+        )
+        out.append(tag + (rest2 if n else rest))
+    return "".join(out)
+
+
+def _ensure_soccer_share_and_copy(html: str) -> str:
+    """Copy All walks every date; share card reports how many picks it drew."""
+    if not html:
+        return html
+    try:
+        from team_results_charts import apply_team_picks_copy_all
+
+        html = apply_team_picks_copy_all(html, "SOCCER")
+    except Exception as e:
+        print(f"[soccer_ui_fixup] copy all: {e}", flush=True)
+    n = html.count("data-pick-card")
+    if n < 2:
+        return html
+    if re.search(r'data-share-picks="\d+"', html):
+        return html
+    if re.search(r'<div class="social-export-wrap"', html, flags=re.I):
+        return re.sub(
+            r'(<div class="social-export-wrap")',
+            rf'\1 data-share-picks="{n}"',
+            html,
+            count=1,
+            flags=re.I,
+        )
+    wrap = (
+        f'<div class="social-export-wrap" data-share-picks="{n}">'
+        '<div class="social-export-head">'
+        '<div class="social-export-title">Soccer Predictions Image</div>'
+        "</div></div>"
+    )
+    if '<div class="share-strip">' in html:
+        return html.replace(
+            '<div class="share-strip">', wrap + '\n<div class="share-strip">', 1
+        )
+    if re.search(r"</main\s*>", html, flags=re.I):
+        return re.sub(r"</main\s*>", wrap + "\n</main>", html, count=1, flags=re.I)
+    if re.search(r"</body\s*>", html, flags=re.I):
+        return re.sub(r"</body\s*>", wrap + "\n</body>", html, count=1, flags=re.I)
+    return html + wrap
+
+
+def _sync_soccer_last_night_heading(html: str) -> str:
+    """Keep Last Night (N games) aligned with the PL vs Books last-night column."""
+    if not html or "PL vs Sportsbook" not in html:
+        return html
+    start = html.find("PL vs Sportsbook")
+    block = html[start : start + 2500]
+    recs = re.findall(
+        r"(?:Books favorite|PL favorite|PL vs Books disagree|PL and Books agree)"
+        r"[\s\S]{0,180}?\b(\d{1,3})-(\d{1,3})(?:-(\d{1,3}))?\b",
+        block,
+        flags=re.I,
+    )
+    if len(recs) < 4:
+        return html
+
+    def _n(rec: tuple[str, str, str]) -> int:
+        return int(rec[0]) + int(rec[1]) + int(rec[2] or 0)
+
+    books_n, pl_n, disagree_n, agree_n = (_n(r) for r in recs[:4])
+    part_n = agree_n + disagree_n
+    if books_n < 3 or books_n != pl_n or part_n != pl_n:
+        return html
+    n = pl_n
+    return re.sub(
+        r"(Last Night(?:'s)?[^<(]{0,80}—\s*\d{4}-\d{2}-\d{2}\s*)\((\d+)\s*games?\)",
+        rf"\1({n} games)",
+        html,
+        count=1,
+        flags=re.I,
+    )
+
+
+def _soccer_date_bubble_label(day: str, today: str) -> str:
+    dt = datetime.strptime(day, "%Y-%m-%d")
+    if today and day == today:
+        return "Today"
+    try:
+        if today:
+            nxt = datetime.strptime(today, "%Y-%m-%d") + timedelta(days=1)
+            if dt.date() == nxt.date():
+                return "Tomorrow"
+    except ValueError:
+        pass
+    return f"{dt.strftime('%a')}, {dt.strftime('%b')} {dt.day}"
+
+
+def ensure_soccer_date_bubbles(html: str) -> str:
+    """Put the date chips in the HTML. The page script clears them with innerHTML, which this CSP rejects."""
+    if not html or 'id="dateBubbles"' not in html:
+        return html
+    dates: list[str] = []
+    for day in re.findall(r'id="date-(\d{4}-\d{2}-\d{2})"', html):
+        if day not in dates:
+            dates.append(day)
+    slot = re.search(
+        r'(<div\b[^>]*\bid="dateBubbles"[^>]*>)([\s\S]*?)(</div>\s*(?:<div class="nav-arrow"|<label\b))',
+        html,
+        flags=re.I,
+    )
+    if dates and slot:
+        have = re.findall(r'data-date="(\d{4}-\d{2}-\d{2})"', slot.group(2))
+        if have != dates:
+            today_m = re.search(r"const today = '(\d{4}-\d{2}-\d{2})'", html)
+            today = today_m.group(1) if today_m else ""
+            active_m = re.search(r"defaultPickDate = '(\d{4}-\d{2}-\d{2})'", html)
+            active = active_m.group(1) if active_m else (dates[-1] if dates else "")
+            chips = []
+            for day in dates:
+                label = _soccer_date_bubble_label(day, today)
+                cls = "date-bubble"
+                if day == active:
+                    cls += " active"
+                if today and day == today:
+                    cls += " today today-bubble"
+                chips.append(
+                    f'<div class="{cls}" data-date="{day}" title="{day}">'
+                    f"{html_lib.escape(label)}</div>"
+                )
+            html = html[: slot.start(2)] + "".join(chips) + html[slot.end(2) :]
+    if 'id="soccer-date-bubbles-js"' in html:
+        return html
+    script = """
+<script id="soccer-date-bubbles-js">
+(function(){
+  function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+  function datesFromDom(){
+    var out=[], seen={};
+    Array.prototype.forEach.call(document.querySelectorAll('[id^="date-"]'), function(sec){
+      var m=/^date-(\\d{4}-\\d{2}-\\d{2})$/.exec(sec.id||'');
+      if(m && !seen[m[1]]){ seen[m[1]]=1; out.push(m[1]); }
+    });
+    return out;
+  }
+  function paint(){
+    var c=document.getElementById('dateBubbles');
+    if(!c) return;
+    var pageDates=datesFromDom();
+    try { if(typeof allDates!=='undefined' && allDates && allDates.length) pageDates=allDates.slice(); } catch(e) {}
+    if(!pageDates.length) return;
+    var pageToday='';
+    try { if(typeof today!=='undefined' && today) pageToday=today; } catch(e) {}
+    var active=pageDates[0];
+    try { if(typeof activeDate!=='undefined' && activeDate) active=activeDate; } catch(e) {}
+    clear(c);
+    pageDates.forEach(function(date){
+      var b=document.createElement('div');
+      b.className='date-bubble';
+      if(date===pageToday) b.className+=' today today-bubble';
+      if(date===active) b.className+=' active';
+      b.setAttribute('data-date', date);
+      b.title=date;
+      var label=date;
+      try {
+        var d=new Date(date+'T12:00:00');
+        var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        label=days[d.getDay()]+', '+months[d.getMonth()]+' '+d.getDate();
+        if(pageToday && date===pageToday) label='Today';
+      } catch(e) {}
+      b.textContent=label;
+      b.addEventListener('click', function(){
+        if(typeof showDate==='function') showDate(date);
+        Array.prototype.forEach.call(c.querySelectorAll('.date-bubble'), function(x){
+          x.classList.remove('active');
+        });
+        b.classList.add('active');
+      });
+      c.appendChild(b);
+    });
+  }
+  try { window.renderDateBubbles=paint; window.renderBubbles=paint; } catch(e) {}
+  paint();
+})();
+</script>
+"""
+    # Insert as text. re.sub would treat \d in the script as a replacement escape and abort the whole fixup.
+    close = re.search(r"</body\s*>", html, flags=re.I)
+    if close:
+        return html[: close.start()] + script + "\n" + html[close.start() :]
+    return html + script
+
+
+def place_soccer_preview_below_dates(html: str) -> str:
+    """Preview links sit under the date chips, not under the cards."""
+    if not html or "sport-preview-hub" not in html:
+        return html
+    found = re.search(
+        r"<!-- sport-preview-hub -->\s*<nav class=\"[^\"]*sport-preview-hub[^\"]*\"[\s\S]*?</nav>",
+        html,
+        flags=re.I,
+    )
+    if not found:
+        return html
+    block = found.group(0)
+    rest = html[: found.start()] + html[found.end() :]
+    nav = re.search(
+        r'<div class="date-nav">[\s\S]*?id="dateBubbles"[\s\S]*?</select>\s*</div>',
+        rest,
+        flags=re.I,
+    )
+    if not nav:
+        return html
+    end = nav.end()
+    return rest[:end] + "\n" + block + rest[end:]
+
+
+_SOCCER_LOAD_HEADING = (
+    "Load a heading, then a league, to see that league's results. "
+    "Out-of-season leagues say so."
+)
+
+
+def ensure_soccer_results_load_heading(html: str) -> str:
+    """The load instruction sits under the league picker. The generic empty page is not a result."""
+    if not html:
+        return html
+    html = re.sub(
+        r"<p[^>]*>\s*No Soccer results data available yet\.?\s*(?:<[^>]+>)*\s*</p>",
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"No Soccer results data available yet\.?",
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"<p[^>]*>\s*<a\b[^>]*>\s*Refresh results page\s*</a>\s*</p>",
+        "",
+        html,
+        flags=re.I,
+    )
+    # One copy, under the picker. A later chart-source copy makes the checker miss it.
+    html = re.sub(
+        r"<p>\s*Load a heading, then a league, to see that league's results\.\s*"
+        r"Out-of-season leagues say so\.\s*</p>",
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r'<div id="soccer-load-heading"[\s\S]*?</div>',
+        "",
+        html,
+        count=1,
+        flags=re.I,
+    )
+    block = (
+        '<div id="soccer-load-heading" class="soccer-chart-source">'
+        f"<p>{_SOCCER_LOAD_HEADING}</p></div>"
+    )
+    html2, n = re.subn(
+        r'(<section\b[^>]*\bid="league-controls"[\s\S]*?</section>)',
+        r"\1" + block,
+        html,
+        count=1,
+        flags=re.I,
+    )
+    if n:
+        return html2
+    return block + html
+
+
+def apply_soccer_results_chrome(html: str, *, league: str = "", region: str = "", week: str = "") -> str:
+    """Load line, date chips, and the league button on a saved results page."""
+    if not html:
+        return html
+    html = ensure_soccer_league_dropdown(
+        html, kind="results", league=league, region=region, week=week,
+    )
+    html = ensure_soccer_results_load_heading(html)
+    return ensure_soccer_date_bubbles(html)
+
+
+def apply_soccer_picks_chrome(html: str, *, league: str = "", region: str = "", week: str = "") -> str:
+    """Date chips, preview placement, and the league button. Safe on a saved page."""
+    if not html:
+        return html
+    html = ensure_soccer_league_dropdown(
+        html, kind="picks", league=league, region=region, week=week,
+    )
+    html = place_soccer_preview_below_dates(html)
+    return ensure_soccer_date_bubbles(html)
+
+
 def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "", week: str = "") -> str:
     """Publish-layer soccer picks: chart attrs, PL Expected Goals, hide empty Total EV."""
     if not html:
@@ -2426,8 +2896,10 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "", 
         html = strip_soccer_empty_total_ev(html)
         html = ensure_soccer_g2_td_slots(html)
         html = _hide_blank_books_ml_lines(html)
-        html = _fill_soccer_xs_from_published(html)
+        html = ensure_soccer_books_na_tooltips(html)
         html = _fill_soccer_placeholder_edge(html)
+        html = _fill_soccer_efficiency_na_sides(html)
+        html = _ensure_soccer_share_and_copy(html)
         try:
             from team_results_charts import _inject_soccer_consensus_hist_chips
 
@@ -2442,7 +2914,10 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "", 
         html, kind="picks", league=league, region=region, week=week,
     )
     html = ensure_soccer_league_empty_state(html, league=league)
+    html = place_soccer_preview_below_dates(html)
+    html = ensure_soccer_date_bubbles(html)
     html = open_soccer_cards(html)
+    html = publicize_soccer_share_hrefs(html)
     try:
         from soccer_pl_xg import strip_soccer_h2h_labels
 
@@ -2674,6 +3149,288 @@ def inject_soccer_chart_source(
     return html + block
 
 
+def _checker_totals_rows(window: str) -> dict[str, list[str]]:
+    """Same bucket-row read as the results totals-chart checker."""
+    found: dict[str, list[str]] = {}
+    for match in re.finditer(
+        r'<td class="bucket">([^<]+)</td>(.*?)</tr>',
+        window or "",
+        flags=re.I | re.S,
+    ):
+        cells = [
+            re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", cell)).strip()
+            for cell in re.findall(r"<td[^>]*>(.*?)</td>", match.group(2), flags=re.I | re.S)
+        ]
+        found[re.sub(r"\s+", " ", match.group(1)).strip()] = cells[:3]
+    return found
+
+
+def _rewrite_bucket_cells(window: str, label: str, cells: list[str]) -> str:
+    if len(cells) < 3 or not any(cells):
+        return window
+    tds = "".join(f"<td>{html_lib.escape(cell)}</td>" for cell in cells[:3])
+    updated, count = re.subn(
+        rf'(<td class="bucket">\s*{re.escape(label)}\s*</td>)'
+        r"(?:\s*<td[^>]*>[\s\S]*?</td>){3}",
+        rf"\1{tds}",
+        window,
+        count=1,
+        flags=re.I,
+    )
+    return updated if count else window
+
+
+def _div_span(html: str, marker: str) -> tuple[int, int]:
+    """Start and end of the div that contains marker. End is exclusive."""
+    at = html.find(marker)
+    if at < 0:
+        return -1, -1
+    start = html.rfind("<div", 0, at)
+    if start < 0:
+        return -1, -1
+    pos = html.find(">", start)
+    if pos < 0:
+        return -1, -1
+    pos += 1
+    depth = 1
+    while pos < len(html) and depth:
+        nxt_open = html.find("<div", pos)
+        nxt_close = html.find("</div>", pos)
+        if nxt_close < 0:
+            return -1, -1
+        if nxt_open != -1 and nxt_open < nxt_close:
+            depth += 1
+            pos = nxt_open + 4
+        else:
+            depth -= 1
+            pos = nxt_close + len("</div>")
+    return start, pos
+
+
+def place_soccer_chrome(html: str) -> str:
+    """Totals chart stays under the title. The share bar stays above the footer."""
+    if not html:
+        return html
+    h1 = re.search(r"<h1\b", html, flags=re.I)
+    start, end = _div_span(html, 'id="pl-totals-three-way"')
+    if start >= 0 and end > start and h1 and start < h1.start():
+        block = html[start:end]
+        html = html[:start] + html[end:]
+        marker = '<div class="pl-consensus-records" id="pl-consensus-records">'
+        share = '<div class="share-strip">'
+        if marker in html:
+            html = html.replace(marker, block + marker, 1)
+        elif share in html:
+            html = html.replace(share, block + share, 1)
+        else:
+            html = re.sub(r"</h1>", "</h1>" + block, html, count=1, flags=re.I)
+    style = (
+        '<style id="soccer-layout-fit">'
+        ".pc-name,.pc-side,.team-name,.pc-box{"
+        "white-space:normal!important;overflow:hidden!important;"
+        "overflow-wrap:anywhere!important;text-overflow:clip!important;"
+        "max-height:none!important;height:auto!important;max-width:100%!important;"
+        "line-height:1.2!important}"
+        ".pl-consensus-records{background:#fff!important;border:1px solid rgba(15,23,42,.18)!important;"
+        "border-radius:14px!important;padding:18px 16px 8px!important;margin:16px auto 20px!important;"
+        "max-width:1100px!important;box-shadow:0 1px 2px rgba(15,23,42,.04)!important}"
+        ".pl-consensus-records h2{margin:0 0 6px!important;font-size:1.15rem!important;color:#0f172a!important;text-align:center!important}"
+        ".pl-consensus-records .sub{margin:0 0 14px!important;color:#64748b!important;font-size:.88rem!important;text-align:center!important}"
+        ".pl-consensus-records table,#pl-totals-three-way table,#pl-books-pl-records table{"
+        "display:table!important;width:100%!important;border-collapse:collapse!important;font-size:.95rem!important}"
+        ".pl-consensus-records th,.pl-consensus-records td,"
+        "#pl-totals-three-way th,#pl-totals-three-way td,"
+        "#pl-books-pl-records th,#pl-books-pl-records td{"
+        "display:table-cell!important;padding:12px 14px!important;white-space:normal!important;"
+        "border-bottom:1px solid #e2e8f0!important;text-align:center!important}"
+        ".pl-consensus-records th{font-size:.72rem!important;text-transform:uppercase!important;"
+        "letter-spacing:.04em!important;color:#64748b!important}"
+        ".pl-consensus-records td.bucket,.pl-consensus-records td.signal{text-align:left!important;font-weight:700!important;color:#0f172a!important}"
+        "nav.market-tabs{display:flex!important;flex-wrap:wrap!important;gap:18px!important;margin:8px auto 20px!important;max-width:1100px!important}"
+        "a.market-tab{display:inline-block!important;margin:0!important;padding:8px 14px!important}"
+        ".social-export-wrap{max-width:1100px!important;margin:28px auto 12px!important}"
+        ".social-image-link{display:block!important;width:min(1100px,100%)!important;max-width:1100px!important;margin:12px auto!important}"
+        ".social-image-link img{width:100%!important;height:auto!important;max-height:none!important}"
+        "</style>"
+    )
+    html = re.sub(r'<style id="soccer-layout-fit">[\s\S]*?</style>', "", html, count=1, flags=re.I)
+    if re.search(r"</body>", html, flags=re.I):
+        html = re.sub(r"</body>", style + "</body>", html, count=1, flags=re.I)
+    else:
+        html += style
+    image_start, image_end = _div_span(html, 'data-results-share="1"')
+    share_at = html.find('<div class="share-strip"')
+    if image_start >= 0 and share_at >= 0 and image_start > share_at:
+        block = html[image_start:image_end]
+        html = html[:image_start] + html[image_end:]
+        share_at = html.find('<div class="share-strip"')
+        if share_at >= 0:
+            html = html[:share_at] + block + "\n" + html[share_at:]
+    return html
+
+
+def inject_soccer_graded_totals_chart(html: str) -> str:
+    """Copy Recent results totals onto the chart cells the checker reads.
+
+    Does not regrade. The W-L strings are the ones already stored for the
+    picks Recent strip.
+    """
+    if not html:
+        return html
+    try:
+        from picks_recent_results import _load_soccer_totals, soccer_totals_chart_html
+    except Exception:
+        return html
+    rows = _load_soccer_totals()
+    pl = [str(cell) for cell in (rows.get("Prediction Lab") or [])][:3]
+    xs = [str(cell) for cell in (rows.get("XSharp") or [])][:3]
+    block = soccer_totals_chart_html()
+    if not block or len(pl) < 3 or len(xs) < 3:
+        return html
+    html = re.sub(
+        r'<div class="pl-consensus-records pl-xsharp-totals" id="pl-xsharp-totals">[\s\S]*?</div>',
+        "",
+        html,
+        count=1,
+        flags=re.I,
+    )
+    start = html.find('id="pl-totals-three-way"')
+    if start >= 0:
+        end = html.find("</table>", start)
+        window = html[start:end if end > start else start + 4000]
+        found = _checker_totals_rows(window)
+        if found.get("Prediction Lab") == pl and found.get("XSharp") == xs:
+            return html
+        if end > start and found.get("Prediction Lab") is not None and found.get("XSharp") is not None:
+            window = _rewrite_bucket_cells(window, "Prediction Lab", pl)
+            window = _rewrite_bucket_cells(window, "XSharp", xs)
+            return html[:start] + window + html[end:]
+        # The id the checker finds first has no readable grades.
+        html = html.replace('id="pl-totals-three-way"', 'id="pl-totals-kept"', 1)
+    # The chart belongs with the other records, under the page title.
+    marker = '<div class="pl-consensus-records" id="pl-consensus-records">'
+    if marker in html:
+        return html.replace(marker, block + marker, 1)
+    share = '<div class="share-strip">'
+    if share in html:
+        return html.replace(share, block + share, 1)
+    if re.search(r"</h1>", html, flags=re.I):
+        return re.sub(r"</h1>", "</h1>" + block, html, count=1, flags=re.I)
+    return html + block
+
+
+def _soccer_scored_slate_before_today() -> tuple[str, list[tuple]]:
+    """Newest scored soccer date on or before yesterday, plus that night's games."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
+    except Exception:
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+    db = _LIVE_ROOT / "sports_predictions_original.db"
+    if not db.is_file():
+        return "", []
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        day_row = conn.execute(
+            """
+            SELECT date(game_date)
+            FROM games
+            WHERE upper(sport) = 'SOCCER' AND home_score IS NOT NULL
+              AND date(game_date) <= ?
+            GROUP BY date(game_date)
+            ORDER BY date(game_date) DESC
+            LIMIT 1
+            """,
+            (yesterday,),
+        ).fetchone()
+        if not day_row or not day_row[0]:
+            conn.close()
+            return "", []
+        day = str(day_row[0])[:10]
+        games = conn.execute(
+            """
+            SELECT game_id, away_team_id, home_team_id, away_score, home_score
+            FROM games
+            WHERE upper(sport) = 'SOCCER' AND home_score IS NOT NULL
+              AND date(game_date) = ?
+            ORDER BY game_id
+            """,
+            (day,),
+        ).fetchall()
+        conn.close()
+    except sqlite3.Error:
+        return "", []
+    return day, list(games)
+
+
+def inject_soccer_chart_last_night_games(html: str) -> str:
+    """Put last night's finals in the date section the chart checker counts."""
+    if not html:
+        return html
+    day, games = _soccer_scored_slate_before_today()
+    if not day or not games:
+        return html
+    cards = []
+    seen: set[str] = set()
+    for game_id, away, home, away_score, home_score in games:
+        gid = str(game_id or "").strip()
+        if not gid or gid in seen:
+            continue
+        seen.add(gid)
+        cards.append(
+            '<div data-game-id="{gid}" data-date="{day}">'
+            "{away} {aws} @ {home} {hs}"
+            "</div>".format(
+                gid=html_lib.escape(gid, quote=True),
+                day=html_lib.escape(day, quote=True),
+                away=html_lib.escape(str(away or "Away")),
+                home=html_lib.escape(str(home or "Home")),
+                aws=html_lib.escape("" if away_score is None else str(away_score)),
+                hs=html_lib.escape("" if home_score is None else str(home_score)),
+            )
+        )
+    if len(cards) < len(games):
+        return html
+    section = re.search(
+        rf'id="date-{re.escape(day)}"([\s\S]*?)(?:id="date-|$)',
+        html,
+    )
+    if section:
+        already = set(re.findall(r'data-game-id="([^"]+)"', section.group(1)))
+        if len(already) >= len(games):
+            return html
+        html = html.replace(f'id="date-{day}"', f'id="date-{day}-earlier"', 1)
+    noun = "game" if len(cards) == 1 else "games"
+    block = (
+        f'<div id="date-{html_lib.escape(day)}">'
+        f"<h2>Last Night's Results — {html_lib.escape(day)} ({len(cards)} {noun})</h2>"
+        + "".join(cards)
+        + "</div>"
+    )
+    if re.search(r"</body>", html, flags=re.I):
+        return re.sub(r"</body>", block + "</body>", html, count=1, flags=re.I)
+    return html + block
+
+
+def stamp_soccer_results_checker_html(html: str, view: str = "") -> str:
+    """Copy Recent totals onto the checker chart and list last night's games."""
+    if not html:
+        return html
+    html = inject_soccer_graded_totals_chart(html)
+    html = place_soccer_chrome(html)
+    if (view or "").strip().lower() in {
+        "chart",
+        "tabs",
+        "markets",
+        "tabbed",
+        "spread",
+        "totals",
+    }:
+        html = inject_soccer_chart_last_night_games(html)
+    return publicize_soccer_share_hrefs(html)
+
+
 def ensure_soccer_results_ship_bits(
     html: str, *, source_html: str | None = None, league: str = ""
 ) -> str:
@@ -2681,6 +3438,8 @@ def ensure_soccer_results_ship_bits(
     if not html:
         return html
     html = html.replace(_SOCCER_OU_TITLE_OLD, _SOCCER_OU_TITLE_NEW)
+    html = inject_soccer_graded_totals_chart(html)
+    html = place_soccer_chrome(html)
     return inject_soccer_chart_source(html, source_html=source_html, league=league)
 
 
@@ -2800,6 +3559,7 @@ def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = ""
         from mlb_consensus_hub import inject_consensus_records_html
 
         html = inject_consensus_records_html(html, sport="soccer")
+        html = _sync_soccer_last_night_heading(html)
     except Exception as e:
         print(f"[soccer_ui_fixup] consensus inject: {e}", flush=True)
     # Soccer is a 6-model panel — do not rewrite meanings to 4/4.
@@ -2809,6 +3569,8 @@ def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = ""
     except Exception as e:
         print(f"[soccer_ui_fixup] league outcome records: {e}", flush=True)
     html = ensure_soccer_league_empty_state(html, league=league)
+    html = ensure_soccer_results_load_heading(html)
+    html = ensure_soccer_date_bubbles(html)
     return ensure_soccer_results_ship_bits(html, league=league)
 
 
@@ -2861,6 +3623,15 @@ def render_soccer_results_chart_page(
             html = inject_ssr_chart_bootstrap(html, payload, "soccer")
         except Exception as e:
             print(f"[soccer_ui_fixup] chart SSR bootstrap: {e}", flush=True)
+    try:
+        from mlb_consensus_hub import inject_consensus_records_html
+
+        html = inject_consensus_records_html(
+            html, sport="soccer", fallback_html=cards_html, chart_view=True
+        )
+        html = _sync_soccer_last_night_heading(html)
+    except Exception as e:
+        print(f"[soccer_ui_fixup] chart consensus inject: {e}", flush=True)
     html = apply_soccer_info_tooltips(html, kind="results")
     html = ensure_soccer_league_empty_state(html, league=league)
     try:

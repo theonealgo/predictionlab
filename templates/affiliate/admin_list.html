@@ -74,7 +74,11 @@
           {% for row in rows %}
           {% set a = row.a %}{% set s = row.s %}
           <tr>
-            <td><a href="/admin/affiliates/{{ a.id }}"><strong>{{ a.affiliate_code }}</strong></a><br><span class="aff-note">{{ a.email }}</span></td>
+            <td><a href="/admin/affiliates/{{ a.id }}"><strong>{{ a.affiliate_code }}</strong></a><br><span class="aff-note">{{ a.name or '' }} · {{ a.email }}</span>
+              <br><span class="aff-note"><strong>Followers:</strong> {{ '{:,}'.format(a.follower_count) if a.follower_count is not none else '—' }}{% if a.promo_method %} · {{ a.promo_method }}{% endif %}</span>
+              {% if a.website_url %}<br><span class="aff-note">{{ a.website_url }}</span>{% endif %}
+              {% if a.what_they_do %}<br><span class="aff-note" style="display:block;max-width:320px;white-space:normal;">{{ a.what_they_do }}</span>{% endif %}
+            </td>
             <td><span class="aff-badge {{ a.status }}">{{ a.status }}</span></td>
             <td>{{ s.clicks }}</td>
             <td>{{ s.signups }}</td>

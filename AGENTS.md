@@ -137,19 +137,22 @@ weekly frankenstein, chart still showing cards), that is an error — fix the
 page. See [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) and
 `.cursor/rules/ui-architecture.mdc`.
 
-### 12. All sports and results cards are LOCKED — unlock one at a time
+### 12. Entire site READ-ONLY — triple UNLOCK to edit
 
-**Default before any site work:** every sport is locked. Every picks card and
-every results card is locked.
+**Default:** this Sept 12 backup is locked read-only. Sports, results cards,
+header, footer, and hamburger are locked.
+
+The owner must say **UNLOCK** three times in the same message, name the
+surface, and name the miss. One unlock is not enough.
 
 This includes MLB, NHL, NBA, NFL, NCAAF, NCAAB, NCAAW, WNBA, CFL, soccer,
-tennis, UFC, golf, and any sport added later.
+tennis, UFC, golf, and any sport added later — plus HEADER / FOOTER / HAMBURGER.
 
 Do **not** change a sport’s picks page, results page, chart view, card HTML,
 Books / H2H / model lines, or the shared functions that render those cards
 unless the owner says:
 
-**UNLOCK &lt;SPORT&gt;**
+**UNLOCK UNLOCK UNLOCK &lt;SPORT&gt;**
 
 and names the miss.
 
@@ -168,3 +171,12 @@ Do not edit `NHL77FINAL.py`, `team_results_charts.py`, or `mlb_*` /
 sport-named files “incidentally” while working on something else.
 
 When the miss is done, that sport is locked again. Wait for the next unlock.
+
+### NFL two-miss fix (owner, 2026-10-04 evening)
+
+The owner named exactly two NFL misses. Fix only these two. Do not touch any other sport.
+
+- MODELS (`/nfl-picks`): "cards copy a model percent." Efficiency is our own model and works from the Prediction Lab spread: a negative PL spread means Efficiency picks that team to win, a positive one means it picks them to lose. Efficiency must show the minus-spread team at the spread-formula percent. Do not copy another model's percent into Efficiency, and do not invent a different number when two models really store the same value.
+- RESULTS (`/nfl-results`): "finished cards are missing a score or a grade." Every NFL game marked FINAL, including today's Sunday games, must show its final score and a grade.
+
+When these two are done, NFL is locked again.

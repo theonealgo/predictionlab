@@ -70,7 +70,7 @@ def _record_cell(items: list[dict[str, Any]], *, empty: str = "0-0") -> str:
     if decided == 0:
         return rec
     pct = 100.0 * w / decided
-    color = "#00C076" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
+    color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
     width = max(4, min(100, int(round(pct))))
     return (
         f"{rec} <span style='color:{color};font-weight:700'>({pct:.0f}%)</span>"

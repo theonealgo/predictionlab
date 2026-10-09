@@ -1231,7 +1231,7 @@ def _consensus_record_cell(
     rec = f"{w}-{l}" + (f"-{p}" if p else "")
     if pct is None:
         return rec
-    color = "#00C076" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
+    color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
     body = f"{rec} <span style='color:{color};font-weight:700'>({pct:.0f}%)</span>"
     if not bar:
         return body
@@ -3790,7 +3790,6 @@ def build_ufc_payload() -> dict[str, Any]:
             "season": season_ml,
         },
         "markets": {
-            # ML-only — moneyline market only (no empty Spread/Totals shells).
             "moneyline": {
                 "label": "Moneyline",
                 "tallies": {
@@ -3800,6 +3799,26 @@ def build_ufc_payload() -> dict[str, Any]:
                 },
                 "model_order": MODEL_ORDER,
                 "finals": show_finals,
+            },
+            "spread": {
+                "label": "Spread",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
+            },
+            "totals": {
+                "label": "Totals",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
             },
         },
         "ml_only": True,
@@ -3977,6 +3996,26 @@ def build_tennis_payload() -> dict[str, Any]:
                 },
                 "model_order": MODEL_ORDER,
                 "finals": show_finals,
+            },
+            "spread": {
+                "label": "Spread",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
+            },
+            "totals": {
+                "label": "Totals",
+                "tallies": {
+                    "last_night": ln_ml,
+                    "last_7": l7_ml,
+                    "season": season_ml,
+                },
+                "model_order": MODEL_ORDER,
+                "finals": [],
             },
         },
         "ml_only": True,
@@ -4345,7 +4384,7 @@ def fill_blank_daily_model_rows(html: str, season_models: dict[str, Any]) -> str
         pct = mod.get("pct")
         rec = mod.get("record") or f"{mod.get('w') or 0}-{mod.get('l') or 0}"
         pct_s = f"{pct}%" if pct is not None else "—"
-        color = "#00C076" if (pct or 0) >= 55 else "#0c1e3a"
+        color = "#067647" if (pct or 0) >= 55 else "#0c1e3a"
         return (
             f'<div class="daily-model">{m.group(1)}</div>'
             f'<div class="daily-acc" style="color:{color};">{pct_s}</div>'

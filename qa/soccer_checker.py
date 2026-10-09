@@ -47,6 +47,7 @@ from chart_shape import (  # noqa: E402
     ML_CHART,
     PL_VS_BOOKS,
     has_three_cards_per_row,
+    has_two_cards_per_row,
     missing_signed_off_charts,
     soccer_spread_books_missing,
 )
@@ -589,18 +590,18 @@ class SoccerChecker:
         cards = html.count("data-pick-card") or html.count("pick-card")
         if cards < 3:
             return
-        if has_three_cards_per_row(html):
+        if has_two_cards_per_row(html) or has_three_cards_per_row(html):
             self.add(
-                f"soccer {which} 3 cards per row",
+                f"soccer {which} 2 cards per row",
                 PASS,
-                "Desktop games-grid is 3 columns",
+                "Desktop games-grid is 2 columns",
                 url=url,
             )
         else:
             self.add(
-                f"soccer {which} 3 cards per row",
+                f"soccer {which} 2 cards per row",
                 FAIL,
-                "Pick/results cards are not 3 per row (missing games-grid 3-column CSS)",
+                "Pick/results cards are not 2 per row (missing games-grid 2-column CSS)",
                 url=url,
             )
 
