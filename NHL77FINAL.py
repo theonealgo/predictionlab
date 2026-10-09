@@ -4868,10 +4868,19 @@ def _pred_needs_book_fetch(pred: dict) -> bool:
     )
 
 
+_BOOK_FETCH_REQUEST_BUDGET_S = 1.5
+
+
+def _book_fetch_budget_spent(t0) -> bool:
+    """Live book fetches on a visitor request stop after a short budget; DB lines still apply."""
+    return has_request_context() and (_time.time() - t0) > _BOOK_FETCH_REQUEST_BUDGET_S
+
+
 def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30, prioritize=None):
     """Attach sportsbook lines (DB cache first, then ESPN Core / DraftKings) for card display."""
     if not predictions:
         return
+    _book_budget_t0 = _time.time()
     try:
         from pl_book_odds_api import build_pl_book_odds
     except ImportError:
@@ -4931,6 +4940,10 @@ def _attach_pl_book_odds_to_predictions(sport, predictions, limit=30, prioritize
     attempts = 0
     for pred in ordered:
         if attempts >= limit:
+            break
+        if _book_fetch_budget_spent(_book_budget_t0):
+            if has_request_context():
+                _start_background_book_refresh(sport, predictions)
             break
         if not _pred_needs_book_fetch(pred):
             continue
@@ -5114,6 +5127,7 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
     by_key = _bulk_load_book_lines_by_matchup(sport)
     games.sort(key=lambda g: (g.get('date') or ''), reverse=True)
     api_attempts = 0
+    _book_budget_t0 = _time.time()
     try:
         from pl_book_odds_api import build_pl_book_odds
     except ImportError:
@@ -5139,6 +5153,8 @@ def _attach_book_odds_to_daily_results(sport, daily_results, api_limit=25):
         if g.get('book_total') is not None:
             continue
         if not build_pl_book_odds or api_attempts >= api_limit:
+            continue
+        if _book_fetch_budget_spent(_book_budget_t0):
             continue
         raw_eid = gid.split('_')[-1]
         if not raw_eid.isdigit():
@@ -15041,6 +15057,107 @@ app = Flask(__name__)
 _sport_variant.install_app(app)
 
 _SITE_GTAG_IDS = ('G-R4XM0WKTGG', 'AW-18345189026')
+def _viewer_is_paid() -> bool:
+    """Saved sport pages are the paid version; free visitors get a page built for them."""
+    try:
+        from auth_system import is_premium_user as _ipu
+        return bool(_ipu())
+    except Exception:
+        return False
+
+
+_PAGE_HTTP_BUDGET_S = 2.5
+_PAGE_HTTP_RE = re.compile(
+    r'^/(?:mlb|nba|nfl|nhl|ncaab|ncaaf|ncaaw|wnba|cfl|soccer|tennis|ufc|golf)-(?:picks|results)/?$'
+)
+
+
+@app.after_request
+def _free_visitor_paywall(response):
+    """Registered first so it runs last: nothing after it can re-add paid values."""
+    try:
+        if request.method != 'GET' or response.status_code != 200:
+            return response
+        if 'text/html' not in (response.content_type or '') or response.direct_passthrough:
+            return response
+        import paywall as _pw
+        if _viewer_is_paid():
+            html = response.get_data(as_text=True)
+            if 'joinPremiumBar' in html or 'premium-upsell-strip' in html or 'Join Premium' in html:
+                response.set_data(_pw.strip_upsell_for_paid(html))
+            return response
+        if _pw.is_results_path(request.path):
+            return response
+        html = response.get_data(as_text=True)
+        if not _pw.has_locked_content(html):
+            return response
+        response.set_data(_pw.lock_free_picks_html(html))
+        response.headers['Cache-Control'] = 'private, no-store'
+    except Exception as _pw_e:
+        logger.warning(f"[paywall] free lock failed on {request.path}: {_pw_e}")
+    return response
+
+
+@app.before_request
+def _page_http_budget_start():
+    from flask import g as _g
+    if request.method == 'GET' and _PAGE_HTTP_RE.match(request.path or ''):
+        _g._pl_http_t0 = _time.time()
+
+
+def _install_page_http_budget():
+    """Sport pages serve saved data; live HTTP on the visitor's request is capped.
+
+    Background threads have no request context and are not limited, so they keep
+    refreshing the DB / caches for the next visit. Auth, Stripe and API routes are
+    never limited.
+    """
+    _orig = requests.sessions.Session.request
+    if getattr(_orig, '_pl_budget', False):
+        return
+
+    def _budgeted(self, method, url, *args, **kwargs):
+        if has_request_context():
+            from flask import g as _g
+            t0 = getattr(_g, '_pl_http_t0', None)
+            if t0 is not None:
+                left = _PAGE_HTTP_BUDGET_S - (_time.time() - t0)
+                if left <= 0:
+                    raise requests.exceptions.ConnectTimeout(f'page budget spent: {url}')
+                cap = max(0.3, left)
+                given = kwargs.get('timeout')
+                if isinstance(given, (int, float)) and given > 0:
+                    cap = min(float(given), cap)
+                kwargs['timeout'] = cap
+        return _orig(self, method, url, *args, **kwargs)
+
+    _budgeted._pl_budget = True
+    requests.sessions.Session.request = _budgeted
+
+    import urllib.request as _ureq
+    _orig_open = _ureq.urlopen
+
+    def _budgeted_open(url, *args, **kwargs):
+        if has_request_context():
+            from flask import g as _g
+            t0 = getattr(_g, '_pl_http_t0', None)
+            if t0 is not None:
+                left = _PAGE_HTTP_BUDGET_S - (_time.time() - t0)
+                if left <= 0:
+                    import urllib.error as _uerr
+                    raise _uerr.URLError('page budget spent')
+                given = kwargs.get('timeout')
+                cap = max(0.3, left)
+                if isinstance(given, (int, float)) and given > 0:
+                    cap = min(float(given), cap)
+                kwargs['timeout'] = cap
+        return _orig_open(url, *args, **kwargs)
+
+    _ureq.urlopen = _budgeted_open
+
+
+_install_page_http_budget()
+
 _SPORT_PAGE_RE = re.compile(
     r'^/(?:mlb|nba|nfl|nhl|ncaab|ncaaf|ncaaw|wnba|cfl|soccer|tennis|ufc|golf)[-/](?:picks|results)/?$'
 )
@@ -16629,6 +16746,8 @@ def _nfl_results_upcoming_from_picks(out):
     The results card template has no model data for a game that has not been played,
     which left Pick Confidence N/A and swapped projected scores.
     """
+    if not _viewer_is_paid():
+        return out
     try:
         from isolate_checker_fixes import _served_picks_path
 
@@ -94612,7 +94731,7 @@ def _soccer_redirect_if_current_league_week_empty(kind):
 
 def sport_predictions__ncaaf(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
-    if not filter_date and str(sport or "").upper() == "NCAAF":
+    if not filter_date and str(sport or "").upper() == "NCAAF" and _viewer_is_paid():
         # The saved page is the first response. Rebuilding the slate on that
         # request loads every model and misses the load budget.
         try:
@@ -94699,10 +94818,11 @@ def sport_predictions__ncaaf(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -95565,10 +95685,11 @@ def sport_predictions__mlb(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -96441,10 +96562,11 @@ def sport_predictions__nhl(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -97305,10 +97427,11 @@ def sport_predictions__nba(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -98169,10 +98292,11 @@ def sport_predictions__ncaab(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -99033,10 +99157,11 @@ def sport_predictions__ncaaw(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -99908,10 +100033,11 @@ def sport_predictions__wnba(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -100776,10 +100902,11 @@ def sport_predictions__cfl(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -101665,10 +101792,11 @@ def sport_predictions__soccer(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -102596,10 +102724,11 @@ def sport_predictions__tennis(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -103460,10 +103589,11 @@ def sport_predictions__ufc(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -104326,10 +104456,11 @@ def sport_predictions__golf(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
@@ -105194,10 +105325,11 @@ def sport_predictions(sport, filter_date=None):
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
             f"::{_soccer_request_week_slug() if sport == 'SOCCER' else ''}"
         )
-        if str(sport or '').upper() == 'NFL':
-            cache_key += (
-                '::prem' if current_user.is_authenticated else '::anon'
-            )
+        try:
+            _viewer_paid = bool(is_premium_user())
+        except Exception:
+            _viewer_paid = False
+        cache_key += '::paid' if _viewer_paid else '::free'
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)

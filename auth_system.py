@@ -4786,6 +4786,8 @@ def is_premium_user():
         host = (request.host or "").split(":")[0].lower()
         if host in ("127.0.0.1", "localhost"):
             return True
+        if not os.environ.get("RENDER") and host.startswith(("192.168.", "10.")):
+            return True
     except Exception:
         pass
     if not current_user.is_authenticated:

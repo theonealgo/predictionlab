@@ -30,7 +30,7 @@ def _load_cards_html(sport: str) -> str:
     try:
         path = _CARDS_CACHE_DIR / f"chart_src_{(sport or '').strip().upper()}.html"
         text = path.read_text(encoding="utf-8")
-        if text.count("game-card") >= 3:
+        if text.count("game-card") >= 3 and not _served_results_are_stale(sport, text):
             return text
     except Exception:
         pass
@@ -39,6 +39,41 @@ def _load_cards_html(sport: str) -> str:
 
 _REPAIRED_MARK = "<!-- pl-isolate-repaired v2 -->"
 _SERVED: dict[str, tuple[float, str]] = {}
+
+
+def _viewer_tier() -> str:
+    """Saved pages differ for paying and free visitors; keep them apart."""
+    try:
+        from flask import has_request_context
+        if has_request_context():
+            from auth_system import is_premium_user
+            return "paid" if is_premium_user() else "free"
+    except Exception:
+        pass
+    return "paid"
+
+
+class _TieredServed(dict):
+    def _k(self, key):
+        return f"{key}#{_viewer_tier()}"
+
+    def get(self, key, default=None):
+        return super().get(self._k(key), default)
+
+    def __getitem__(self, key):
+        return super().__getitem__(self._k(key))
+
+    def __setitem__(self, key, value):
+        super().__setitem__(self._k(key), value)
+
+    def __contains__(self, key):
+        return super().__contains__(self._k(key))
+
+    def pop(self, key, *default):
+        return super().pop(self._k(key), *default)
+
+
+_SERVED = _TieredServed()
 _SERVED_TTL = 1200.0
 
 
@@ -64,7 +99,7 @@ def results_serve_key(
 
 def _served_path(key: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", key)[:180]
-    return _CARDS_CACHE_DIR / f"served_{safe}.html"
+    return _CARDS_CACHE_DIR / (f"served_{safe}.html" if _viewer_tier() == "paid" else f"served_{safe}__free.html")
 
 
 _PICKS_FORCE = threading.local()
@@ -102,6 +137,8 @@ def _picks_clock_is_old(text: str) -> bool:
 
 def lookup_served_picks(sport: str, schedule: bool = True) -> str:
     """Last rendered picks page. The request the checker times must not rebuild it."""
+    if _viewer_tier() != "paid":
+        return ""
     if picks_refresh_forced():
         return ""
     sport_u = (sport or "").strip().upper()
@@ -138,6 +175,8 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
 
 
 def store_served_picks(sport: str, html: str) -> None:
+    if _viewer_tier() != "paid":
+        return
     if not html or len(html) < 8000 or "<html" not in html.lower():
         return
     low = html.lower()
@@ -315,7 +354,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
     parts = (key.split("|") + [""] * 6)[:6]
     sport = (parts[0] or "").strip().upper()
     view = (parts[1] or "").strip().lower()
-    if view or not sport or not html:
+    if view not in ("", "chart") or not sport or not html:
         return False
     from datetime import datetime, timedelta
     try:
@@ -332,14 +371,14 @@ def _served_results_are_stale(key: str, html: str) -> bool:
                 return True
         except ValueError:
             pass
-    night = re.search(r"Last Night's [^<]{0,80}?(\d{4}-\d{2}-\d{2})", html)
+    night = re.search(r"Last Night(?:'s)?(?:[^<0-9]|<[^>]*>){0,120}?(\d{4}-\d{2}-\d{2})", html)
     if not night:
         return False
     try:
         shown = datetime.strptime(night.group(1), "%Y-%m-%d").date()
     except ValueError:
         return False
-    path = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
     if not path.is_file():
         return False
     try:

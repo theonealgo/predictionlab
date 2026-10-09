@@ -101,3 +101,6 @@ data/ncaaf_espn_schedule_cache.json
 
 # Local-only test login (2026-10-08)
 LOCAL_TEST_LOGIN.txt
+
+# UFC pipeline database (small, needed on server)
+!ufc_pipeline/database/ufc_sandbox.db

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 _ROOT = Path(__file__).resolve().parent
-_UFC_ISO = Path.home() / "Documents/Personal/ufc"
+_UFC_ISO = next((p for p in (_ROOT / "ufc_pipeline", _ROOT.parents[1] / "ufc_pipeline") if p.is_dir()), _ROOT / "ufc_pipeline")
 _LOCKED = _ROOT / "locked_pages" / "ufc"
 _ISO = _ROOT / "iso_hub"
 _HUB_FALLBACK = _ROOT / "_sandbox_hub_run"
