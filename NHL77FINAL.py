@@ -126858,6 +126858,58 @@ def _build_fast_landing_preview_context():
         'recent_blog_posts': [],
     }
 
+
+_nhl_banner_range_once = _banner_daily_results_for_range
+
+
+def _banner_daily_results_for_range(sport, *args, **kwargs):
+    out = _nhl_banner_range_once(sport, *args, **kwargs)
+    if sport == 'NHL' and not out:
+        out = _nhl_banner_range_once(sport, *args, **kwargs)
+    return out
+
+
+_NHL_RESULTS_FAIL_TEXT = 'NHL results could not be loaded'
+
+
+def _nhl_results_last_good_path():
+    base = '/data' if _os.path.isdir('/data') else '.cache'
+    return _os.path.join(base, 'nhl_results_last_good.html')
+
+
+@app.after_request
+def _nhl_results_keep_last_good(response):
+    """/nhl-results: never show the empty-slate message when a good page was built before."""
+    try:
+        if response.status_code != 200 or 'html' not in (response.mimetype or '').lower():
+            return response
+        if (request.path or '').rstrip('/') != '/nhl-results' or request.args:
+            return response
+        path = _nhl_results_last_good_path()
+        html = response.get_data(as_text=True)
+        if _NHL_RESULTS_FAIL_TEXT in html:
+            if _os.path.isfile(path):
+                with open(path, encoding='utf-8') as fh:
+                    good = fh.read()
+                if good:
+                    response.set_data(good)
+            return response
+        if 'game-card' in html and len(html) > 20000:
+            try:
+                fresh = _time.time() - _os.path.getmtime(path) < 300
+            except OSError:
+                fresh = False
+            if not fresh:
+                _os.makedirs(_os.path.dirname(path), exist_ok=True)
+                tmp = path + '.tmp'
+                with open(tmp, 'w', encoding='utf-8') as fh:
+                    fh.write(html)
+                _os.replace(tmp, path)
+    except Exception as e:
+        logger.debug(f"NHL results last-good page skipped: {e}")
+    return response
+
+
 if __name__ == '__main__':
     import os, socket
     # Use $PORT from Railway/Render, fall back to auto-finding a local port
