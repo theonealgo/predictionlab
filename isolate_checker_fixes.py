@@ -408,7 +408,7 @@ def schedule_asr_refresh() -> None:
 
 
 def _served_results_usable(html: str) -> bool:
-    if _REPAIRED_MARK not in html or len(html) <= 500:
+    if _REPAIRED_MARK not in html or len(html) <= 500 or "NHL results could not be loaded" in html:
         return False
     if "/static/js/team-results.js" in html and 'id="team-results-data"' not in html:
         return False

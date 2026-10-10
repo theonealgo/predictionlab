@@ -126876,8 +126876,11 @@ _NHL_FINALS_SYNC = {'ts': 0.0}
 def _sync_nhl_espn_finals(days_back=21):
     """Fill blank NHL final scores from the ESPN scoreboard (never overwrites a stored score)."""
     today = datetime.now()
+    filled = 0
     for i in range(days_back, -1, -1):
-        day = (today - timedelta(days=i)).strftime('%Y%m%d')
+        day_dt = today - timedelta(days=i)
+        day = day_dt.strftime('%Y%m%d')
+        day_iso = day_dt.strftime('%Y-%m-%d')
         try:
             resp = requests.get(
                 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard',
@@ -126894,22 +126897,35 @@ def _sync_nhl_espn_finals(days_back=21):
             comp = (ev.get('competitions') or [{}])[0]
             sides = {c.get('homeAway'): c for c in comp.get('competitors') or []}
             try:
-                rows.append((int(sides['home']['score']), int(sides['away']['score']), f"NHL_{ev['id']}"))
+                rows.append((
+                    int(sides['home']['score']), int(sides['away']['score']), f"NHL_{ev['id']}",
+                    sides['home']['team']['displayName'], sides['away']['team']['displayName'],
+                ))
             except (KeyError, TypeError, ValueError):
                 continue
         if not rows:
             continue
         try:
             conn = get_db_connection()
-            conn.executemany(
-                "UPDATE games SET home_score = ?, away_score = ?, status = 'final' "
-                "WHERE sport = 'NHL' AND game_id = ? AND home_score IS NULL",
-                rows,
-            )
+            for hs, aws, gid, home, away in rows:
+                cur = conn.execute(
+                    "UPDATE games SET home_score = ?, away_score = ?, status = 'final' "
+                    "WHERE sport = 'NHL' AND game_id = ? AND home_score IS NULL",
+                    (hs, aws, gid),
+                )
+                if not cur.rowcount:
+                    cur = conn.execute(
+                        "UPDATE games SET home_score = ?, away_score = ?, status = 'final' "
+                        "WHERE sport = 'NHL' AND home_score IS NULL AND date(game_date) = ? "
+                        "AND home_team_id = ? AND away_team_id = ?",
+                        (hs, aws, day_iso, home, away),
+                    )
+                filled += cur.rowcount or 0
             conn.commit()
             conn.close()
         except Exception as e:
             logger.warning(f"NHL finals sync {day} skipped: {e}")
+    logger.warning(f"NHL finals sync filled {filled} scores")
 
 
 def _start_nhl_finals_sync():

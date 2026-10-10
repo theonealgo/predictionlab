@@ -422,7 +422,7 @@ def lookup_served_results(key: str) -> str:
         return ""
     now = time.time()
     hit = _SERVED.get(key)
-    if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1]:
+    if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1] and _NHL_EMPTY_SLATE not in hit[1]:
         if _served_results_are_stale(key, hit[1]):
             _schedule_served_refresh(key)
         return hit[1]
@@ -431,7 +431,7 @@ def lookup_served_results(key: str) -> str:
         if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
             text = path.read_text(encoding="utf-8")
             age = now - path.stat().st_mtime
-            if _REPAIRED_MARK in text and len(text) > 500:
+            if _REPAIRED_MARK in text and len(text) > 500 and _NHL_EMPTY_SLATE not in text:
                 _SERVED[key] = (now, text)
                 if age >= _SERVED_REFRESH_AFTER or _served_results_are_stale(key, text):
                     _schedule_served_refresh(key)
@@ -441,8 +441,11 @@ def lookup_served_results(key: str) -> str:
     return ""
 
 
+_NHL_EMPTY_SLATE = "NHL results could not be loaded"
+
+
 def store_served_results(key: str, html: str) -> None:
-    if not key or not html or _REPAIRED_MARK not in html or len(html) < 500:
+    if not key or not html or _REPAIRED_MARK not in html or len(html) < 500 or _NHL_EMPTY_SLATE in html:
         return
     _SERVED[key] = (time.time(), html)
     try:
