@@ -126862,7 +126862,40 @@ def _build_fast_landing_preview_context():
 _nhl_banner_range_once = _banner_daily_results_for_range
 
 
+import threading as _nhl_threading
+
+# The NHL results chart reads the app-folder DB (team_results_charts._db_path);
+# on Render DATABASE is the /data copy, so the NHL slate must read the same file.
+_NHL_APP_DB = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'sports_predictions_original.db')
+_nhl_db_local = _nhl_threading.local()
+_get_db_connection_default = get_db_connection
+
+
+def get_db_connection():
+    if getattr(_nhl_db_local, 'app_db', False):
+        conn = sqlite3.connect(f'file:{_NHL_APP_DB}?mode=ro', uri=True, timeout=8)
+        conn.row_factory = sqlite3.Row
+        return conn
+    return _get_db_connection_default()
+
+
 def _banner_daily_results_for_range(sport, *args, **kwargs):
+    if (
+        sport == 'NHL'
+        and _os.path.abspath(DATABASE) != _NHL_APP_DB
+        and _os.path.isfile(_NHL_APP_DB)
+    ):
+        _predictions_prob_select_sql()
+        _nhl_db_local.app_db = True
+        try:
+            out = _nhl_banner_range_once(sport, *args, **kwargs)
+        except Exception as e:
+            logger.warning(f"NHL results app-db lookup failed: {e}")
+            out = None
+        finally:
+            _nhl_db_local.app_db = False
+        if out:
+            return out
     out = _nhl_banner_range_once(sport, *args, **kwargs)
     if sport == 'NHL' and not out:
         out = _nhl_banner_range_once(sport, *args, **kwargs)
@@ -126870,71 +126903,6 @@ def _banner_daily_results_for_range(sport, *args, **kwargs):
 
 
 _NHL_RESULTS_FAIL_TEXT = 'NHL results could not be loaded'
-_NHL_FINALS_SYNC = {'ts': 0.0}
-
-
-def _sync_nhl_espn_finals(days_back=21):
-    """Fill blank NHL final scores from the ESPN scoreboard (never overwrites a stored score)."""
-    today = datetime.now()
-    filled = 0
-    for i in range(days_back, -1, -1):
-        day_dt = today - timedelta(days=i)
-        day = day_dt.strftime('%Y%m%d')
-        day_iso = day_dt.strftime('%Y-%m-%d')
-        try:
-            resp = requests.get(
-                'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard',
-                params={'dates': day},
-                timeout=8,
-            )
-            events = resp.json().get('events') or []
-        except Exception:
-            continue
-        rows = []
-        for ev in events:
-            if not (((ev.get('status') or {}).get('type') or {}).get('completed')):
-                continue
-            comp = (ev.get('competitions') or [{}])[0]
-            sides = {c.get('homeAway'): c for c in comp.get('competitors') or []}
-            try:
-                rows.append((
-                    int(sides['home']['score']), int(sides['away']['score']), f"NHL_{ev['id']}",
-                    sides['home']['team']['displayName'], sides['away']['team']['displayName'],
-                ))
-            except (KeyError, TypeError, ValueError):
-                continue
-        if not rows:
-            continue
-        try:
-            conn = get_db_connection()
-            for hs, aws, gid, home, away in rows:
-                cur = conn.execute(
-                    "UPDATE games SET home_score = ?, away_score = ?, status = 'final' "
-                    "WHERE sport = 'NHL' AND game_id = ? AND home_score IS NULL",
-                    (hs, aws, gid),
-                )
-                if not cur.rowcount:
-                    cur = conn.execute(
-                        "UPDATE games SET home_score = ?, away_score = ?, status = 'final' "
-                        "WHERE sport = 'NHL' AND home_score IS NULL AND date(game_date) = ? "
-                        "AND home_team_id = ? AND away_team_id = ?",
-                        (hs, aws, day_iso, home, away),
-                    )
-                filled += cur.rowcount or 0
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.warning(f"NHL finals sync {day} skipped: {e}")
-    logger.warning(f"NHL finals sync filled {filled} scores")
-
-
-def _start_nhl_finals_sync():
-    now_ts = _time.time()
-    if now_ts - _NHL_FINALS_SYNC['ts'] < 900:
-        return
-    _NHL_FINALS_SYNC['ts'] = now_ts
-    import threading as _thr
-    _thr.Thread(target=_sync_nhl_espn_finals, daemon=True, name='nhl-finals-sync').start()
 
 
 def _nhl_results_last_good_path():
@@ -126948,10 +126916,7 @@ def _nhl_results_keep_last_good(response):
     try:
         if response.status_code != 200 or 'html' not in (response.mimetype or '').lower():
             return response
-        if (request.path or '').rstrip('/') != '/nhl-results':
-            return response
-        _start_nhl_finals_sync()
-        if request.args:
+        if (request.path or '').rstrip('/') != '/nhl-results' or request.args:
             return response
         path = _nhl_results_last_good_path()
         html = response.get_data(as_text=True)
