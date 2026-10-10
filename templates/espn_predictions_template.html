@@ -1644,7 +1644,7 @@
                 {% if sport == 'SOCCER' %}
                 rows += '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="num">'+_esc(tot)+'</td><td class="ctr h2h-cell">'+textCell(st,'data-plxg')+'</td><td class="proj-col proj-cell">'+plProj+'</td><td class="proj-col proj-cell">'+xsProj+'</td>'+(showTotalEvCol ? '<td class="num">'+tev+'</td>' : '')+'</tr>';
                 {% else %}
-                rows += '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="num">'+_esc(tot)+'</td><td class="ctr h2h-cell">'+textCell(st,'data-h2h')+'</td><td class="proj-col proj-cell">'+plProj+'</td><td class="proj-col proj-cell">'+xsProj+'</td>'+(showTotalEvCol ? '<td class="num">'+tev+'</td>' : '')+'</tr>';
+                rows += '<tr><td class="mu-col"><span class="mu-away">'+away+'</span><span class="mu-home">'+home+'</span></td><td class="ctr t-time">'+time+'</td><td class="num">'+_esc(tot)+'</td><td class="ctr h2h-cell">'+(IS_PREMIUM ? textCell(st,'data-h2h') : '🔒')+'</td><td class="proj-col proj-cell">'+plProj+'</td><td class="proj-col proj-cell">'+xsProj+'</td>'+(showTotalEvCol ? '<td class="num">'+tev+'</td>' : '')+'</tr>';
                 {% endif %}
                 return;
             }

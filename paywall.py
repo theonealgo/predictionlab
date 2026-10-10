@@ -91,6 +91,47 @@ def _drop_div(html: str, opener: str) -> str:
         html = html[:start] + html[pos:]
 
 
+_ACCOUNT_MENU_OPENER = '<div class="tv-menu-auth">'
+_DESKTOP_ACCOUNT_MENU_OPENER = '<div class="pl2-account-menu" id="pl2AccountMenu" hidden>'
+
+
+def find_div(html: str, opener: str) -> str:
+    """The first <div ...opener...> element with its nested divs, or ''."""
+    start = html.find(opener) if html else -1
+    if start < 0:
+        return ""
+    depth = 0
+    for m in re.compile(r"<div\b|</div>").finditer(html, start):
+        depth += 1 if m.group(0) != "</div>" else -1
+        if depth == 0:
+            return html[start:m.end()]
+    return ""
+
+
+def swap_account_menu(html: str, fresh_block: str, opener: str = _ACCOUNT_MENU_OPENER) -> str:
+    """Replace every saved account menu with one rendered for this visitor."""
+    if not html or opener not in html or not fresh_block:
+        return html
+    parts, pos = [], 0
+    while True:
+        start = html.find(opener, pos)
+        if start < 0:
+            break
+        depth, end = 0, -1
+        for m in re.compile(r"<div\b|</div>").finditer(html, start):
+            depth += 1 if m.group(0) != "</div>" else -1
+            if depth == 0:
+                end = m.end()
+                break
+        if end < 0:
+            break
+        parts.append(html[pos:start])
+        parts.append(fresh_block)
+        pos = end
+    parts.append(html[pos:])
+    return "".join(parts)
+
+
 _JOIN_TAB_RE = re.compile(r'<a href="/plans" class="tab"[^>]*>[^<]*Join Premium[^<]*</a>')
 
 

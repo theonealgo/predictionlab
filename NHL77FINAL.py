@@ -15081,6 +15081,27 @@ def _free_visitor_paywall(response):
         if 'text/html' not in (response.content_type or '') or response.direct_passthrough:
             return response
         import paywall as _pw
+        # Saved pages carry the account menu of whoever built them; rebuild it per visitor.
+        _html_now = response.get_data(as_text=True)
+        _has_mobile = _pw._ACCOUNT_MENU_OPENER in _html_now
+        _has_desktop = _pw._DESKTOP_ACCOUNT_MENU_OPENER in _html_now
+        if _has_mobile or _has_desktop:
+            from flask_login import current_user as _cu
+            _logged_in = bool(getattr(_cu, 'is_authenticated', False))
+            _swapped = _html_now
+            if _has_mobile:
+                _menu = render_template('includes/tv_burger_auth.html', is_logged_in=_logged_in).strip()
+                _swapped = _pw.swap_account_menu(_swapped, _menu)
+            if _has_desktop:
+                try:
+                    _hdr = render_template('partials/research_header.html', is_logged_in=_logged_in)
+                    _dmenu = _pw.find_div(_hdr, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
+                    _swapped = _pw.swap_account_menu(_swapped, _dmenu, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
+                except Exception as _hdr_e:
+                    logger.warning(f"[auth] desktop account menu refresh failed on {request.path}: {_hdr_e}")
+            if _swapped != _html_now:
+                response.set_data(_swapped)
+            response.headers['Cache-Control'] = 'private, no-store'
         if _viewer_is_paid():
             html = response.get_data(as_text=True)
             if 'joinPremiumBar' in html or 'premium-upsell-strip' in html or 'Join Premium' in html:
