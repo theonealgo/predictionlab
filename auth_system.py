@@ -507,10 +507,7 @@ def init_auth(app, db_path=None):
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['REMEMBER_COOKIE_HTTPONLY'] = True
     app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=90)
-    # A slow page that started before login/logout must not re-send the old
-    # cookies over the new ones, so cookies are only sent when they change.
-    app.config['REMEMBER_COOKIE_REFRESH_EACH_REQUEST'] = False
-    app.config['SESSION_REFRESH_EACH_REQUEST'] = False
+    app.config['REMEMBER_COOKIE_REFRESH_EACH_REQUEST'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
     if _running_on_render():
@@ -526,8 +523,7 @@ def init_auth(app, db_path=None):
 
     @app.before_request
     def _make_session_permanent():
-        if not session.permanent:
-            session.permanent = True
+        session.permanent = True
 
     # Flask-Login setup
     _login_manager.init_app(app)

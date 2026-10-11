@@ -654,6 +654,34 @@ def _picks_display_dates(grouped_predictions, today_date):
     return all_dates, default
 
 
+_picks_display_dates_for_sport = _picks_display_dates
+
+
+def _picks_display_dates(grouped_predictions, today_date):
+    """Picks nav inside the sport's _PICKS_DISPLAY_WINDOW, recent finals days included."""
+    dates, default = _picks_display_dates_for_sport(grouped_predictions, today_date)
+    win = _PICKS_DISPLAY_WINDOW.get(str(_sport_variant.current_sport() or '').upper())
+    if not win or not today_date:
+        return dates, default
+    try:
+        today = datetime.strptime(today_date, '%Y-%m-%d')
+    except ValueError:
+        return dates, default
+    floor = (today - timedelta(days=int(win['past']))).strftime('%Y-%m-%d')
+    ceiling = (today + timedelta(days=int(win['future']))).strftime('%Y-%m-%d')
+    finals_days = {
+        d for d, games in (grouped_predictions or {}).items()
+        if d and d != 'TBD' and d < today_date and games
+    }
+    kept = sorted(d for d in set(dates) | finals_days if floor <= d <= ceiling)
+    if not kept:
+        return dates, default
+    if default not in kept:
+        later = [d for d in kept if d >= today_date]
+        default = later[0] if later else kept[-1]
+    return kept, default
+
+
 _PICKS_ROBOTS_INDEX = 'index,follow,max-image-preview:large,max-snippet:-1'
 _PICKS_ROBOTS_NOINDEX = 'noindex,follow'
 
@@ -1291,17 +1319,20 @@ def _merge_recent_final_predictions__wnba(sport, predictions):
         conn = get_db_connection()
         rows = conn.execute(
             """
-            SELECT game_id, game_date, home_team_id, away_team_id,
-                   elo_home_prob, xgboost_home_prob, win_probability,
-                   glicko_home_prob, trueskill_home_prob,
-                   actual_home_score, actual_away_score,
-                   lock_card_json
-            FROM predictions
-            WHERE sport = ?
-              AND actual_home_score IS NOT NULL
-              AND date(game_date) >= date(?)
-              AND date(game_date) < date(?)
-            ORDER BY date(game_date)
+            SELECT p.game_id, p.game_date, p.home_team_id, p.away_team_id,
+                   p.elo_home_prob, p.xgboost_home_prob, p.win_probability,
+                   p.glicko_home_prob, p.trueskill_home_prob,
+                   COALESCE(p.actual_home_score, g.home_score) AS actual_home_score,
+                   COALESCE(p.actual_away_score, g.away_score) AS actual_away_score,
+                   p.lock_card_json
+            FROM predictions p
+            LEFT JOIN games g ON g.game_id = p.game_id AND g.sport = p.sport
+            WHERE p.sport = ?
+              AND COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
+              AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
+              AND date(p.game_date) >= date(?)
+              AND date(p.game_date) < date(?)
+            ORDER BY date(p.game_date)
             """,
             (sport_u, floor, today),
         ).fetchall()
@@ -1380,17 +1411,20 @@ def _merge_recent_final_predictions(sport, predictions):
         conn = get_db_connection()
         rows = conn.execute(
             """
-            SELECT game_id, game_date, home_team_id, away_team_id,
-                   elo_home_prob, xgboost_home_prob, win_probability,
-                   glicko_home_prob, trueskill_home_prob,
-                   actual_home_score, actual_away_score,
-                   lock_card_json
-            FROM predictions
-            WHERE sport = ?
-              AND actual_home_score IS NOT NULL
-              AND date(game_date) >= date(?)
-              AND date(game_date) < date(?)
-            ORDER BY date(game_date)
+            SELECT p.game_id, p.game_date, p.home_team_id, p.away_team_id,
+                   p.elo_home_prob, p.xgboost_home_prob, p.win_probability,
+                   p.glicko_home_prob, p.trueskill_home_prob,
+                   COALESCE(p.actual_home_score, g.home_score) AS actual_home_score,
+                   COALESCE(p.actual_away_score, g.away_score) AS actual_away_score,
+                   p.lock_card_json
+            FROM predictions p
+            LEFT JOIN games g ON g.game_id = p.game_id AND g.sport = p.sport
+            WHERE p.sport = ?
+              AND COALESCE(p.actual_home_score, g.home_score) IS NOT NULL
+              AND COALESCE(p.actual_away_score, g.away_score) IS NOT NULL
+              AND date(p.game_date) >= date(?)
+              AND date(p.game_date) < date(?)
+            ORDER BY date(p.game_date)
             """,
             (sport_u, floor, today),
         ).fetchall()
@@ -1649,7 +1683,12 @@ def _register_share_image__wnba(payload: dict) -> str:
 @_sport_variant.per_sport(wnba="_register_share_image__wnba")
 def _register_share_image(payload: dict) -> str:
     _cleanup_share_image_cache()
-    token = uuid.uuid4().hex
+    # Same payload -> same token, so a re-rendered page reuses its image file.
+    try:
+        import hashlib as _hl_share
+        token = _hl_share.md5(json.dumps(payload, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+    except Exception:
+        token = uuid.uuid4().hex
     try:
         _os.makedirs(_SHARE_IMAGE_CACHE_DIR, exist_ok=True)
     except OSError:
@@ -15081,27 +15120,6 @@ def _free_visitor_paywall(response):
         if 'text/html' not in (response.content_type or '') or response.direct_passthrough:
             return response
         import paywall as _pw
-        # Saved pages carry the account menu of whoever built them; rebuild it per visitor.
-        _html_now = response.get_data(as_text=True)
-        _has_mobile = _pw._ACCOUNT_MENU_OPENER in _html_now
-        _has_desktop = _pw._DESKTOP_ACCOUNT_MENU_OPENER in _html_now
-        if _has_mobile or _has_desktop:
-            from flask_login import current_user as _cu
-            _logged_in = bool(getattr(_cu, 'is_authenticated', False))
-            _swapped = _html_now
-            if _has_mobile:
-                _menu = render_template('includes/tv_burger_auth.html', is_logged_in=_logged_in).strip()
-                _swapped = _pw.swap_account_menu(_swapped, _menu)
-            if _has_desktop:
-                try:
-                    _hdr = render_template('partials/research_header.html', is_logged_in=_logged_in)
-                    _dmenu = _pw.find_div(_hdr, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
-                    _swapped = _pw.swap_account_menu(_swapped, _dmenu, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
-                except Exception as _hdr_e:
-                    logger.warning(f"[auth] desktop account menu refresh failed on {request.path}: {_hdr_e}")
-            if _swapped != _html_now:
-                response.set_data(_swapped)
-            response.headers['Cache-Control'] = 'private, no-store'
         if _viewer_is_paid():
             html = response.get_data(as_text=True)
             if 'joinPremiumBar' in html or 'premium-upsell-strip' in html or 'Join Premium' in html:
@@ -15117,6 +15135,60 @@ def _free_visitor_paywall(response):
     except Exception as _pw_e:
         logger.warning(f"[paywall] free lock failed on {request.path}: {_pw_e}")
     return response
+
+
+@app.after_request
+def _account_menu_for_visitor(response):
+    """Saved pages carry the account menu of whoever built them; rebuild it for this visitor."""
+    try:
+        if request.method != 'GET' or response.status_code != 200 or response.direct_passthrough:
+            return response
+        if 'text/html' not in (response.content_type or ''):
+            return response
+        import paywall as _pw
+        html = response.get_data(as_text=True)
+        has_mobile = _pw._ACCOUNT_MENU_OPENER in html
+        has_desktop = _pw._DESKTOP_ACCOUNT_MENU_OPENER in html
+        if not (has_mobile or has_desktop):
+            return response
+        from flask_login import current_user as _cu
+        logged_in = bool(getattr(_cu, 'is_authenticated', False))
+        out = html
+        if has_mobile:
+            menu = render_template('includes/tv_burger_auth.html', is_logged_in=logged_in).strip()
+            out = _pw.swap_account_menu(out, menu)
+        if has_desktop:
+            header = render_template('partials/research_header.html', is_logged_in=logged_in)
+            menu = _pw.find_div(header, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
+            out = _pw.swap_account_menu(out, menu, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
+        if out != html:
+            response.set_data(out)
+        cc = response.headers.get('Cache-Control', '')
+        if 'private' not in cc and 'no-store' not in cc:
+            response.headers['Cache-Control'] = 'private, no-cache'
+    except Exception as _menu_e:
+        logger.warning(f"[auth] account menu refresh failed on {request.path}: {_menu_e}")
+    return response
+
+
+@app.after_request
+def _api_picks_paywall(response):
+    """/api/picks returns model values; a free visitor gets only what the card face shows."""
+    if not (request.path or '').startswith('/api/picks/') or response.status_code != 200:
+        return response
+    try:
+        if _viewer_is_paid():
+            return response
+        import paywall as _pw
+        data = response.get_json(silent=True)
+        if data is None:
+            return response
+        response.set_data(json.dumps(_pw.lock_api_picks(data)))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except Exception as _api_e:
+        logger.warning(f"[paywall] api picks lock failed on {request.path}: {_api_e}")
+        return app.response_class(json.dumps({'picks': [], 'count': 0}), status=503, mimetype='application/json')
 
 
 @app.before_request
@@ -16775,6 +16847,8 @@ def _nfl_results_upcoming_from_picks(out):
         _pp = _served_picks_path("NFL")
         picks = _pp.read_text(encoding="utf-8") if _pp.is_file() else ""
         if len(picks) < 8000 or "upstream data/model dependency failed" in picks.lower():
+            return out
+        if "const IS_PREMIUM = false" in picks:
             return out
         if not picks or "pick-conf-grid" not in picks:
             return out
@@ -24442,6 +24516,150 @@ def _sync_soccer_last_night_scoreboard(night_date=None, force=False):
             _SPORT_RESULTS_CACHE.pop(key, None)
         logger.info(f"[soccer] last-night {night}: upserted {changed} finals ({len(games)} board rows)")
     return changed
+
+
+_SOCCER_FINALS_SYNC_STATE = {'ts': 0.0, 'running': False}
+_SOCCER_FINALS_SYNC_EVERY_S = 600
+_SOCCER_FINALS_SYNC_MAX_DAYS = 7
+
+
+def _soccer_finals_sync_dates():
+    """Today back to the latest stored final (at least two nights, at most a week)."""
+    today_s = _soccer_et_today_str()
+    today = datetime.strptime(today_s, '%Y-%m-%d').date()
+    start = today - timedelta(days=2)
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT MAX(date(game_date)) FROM games WHERE sport = 'SOCCER' "
+            "AND home_score IS NOT NULL AND date(game_date) <= ?",
+            (today_s,),
+        ).fetchone()
+        conn.close()
+        if row and row[0]:
+            start = min(start, datetime.strptime(row[0], '%Y-%m-%d').date())
+    except Exception as exc:
+        logger.debug(f"[soccer] finals sync start date: {exc}")
+    start = max(start, today - timedelta(days=_SOCCER_FINALS_SYNC_MAX_DAYS))
+    days = (today - start).days
+    return [(start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(days + 1)]
+
+
+def _drop_saved_soccer_results_pages(keep_cards=False):
+    """New finals: the saved soccer results pages are stale."""
+    if not keep_cards:
+        for key in [k for k in _SPORT_RESULTS_CACHE if str(k).startswith('SOCCER_daily_results_html')]:
+            _SPORT_RESULTS_CACHE.pop(key, None)
+    try:
+        import isolate_checker_fixes as _icf
+        with _sport_variant.sport_scope('soccer'):
+            served = _icf._SERVED
+            cache_dir = _icf._CARDS_CACHE_DIR
+        for key in [k for k in list(dict.keys(served)) if str(k).startswith('SOCCER|')]:
+            dict.pop(served, key, None)
+        for path in cache_dir.glob('served_SOCCER_*.html'):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+    except Exception as exc:
+        logger.debug(f"[soccer] drop served results: {exc}")
+    if keep_cards:
+        return
+    try:
+        if _os_v2.path.isfile(_SOCCER_RESULTS_DISK_PATH):
+            _os_v2.remove(_SOCCER_RESULTS_DISK_PATH)
+    except OSError:
+        pass
+
+
+_SOCCER_RESULTS_REBUILD_STATE = {'ts': 0.0, 'running': False}
+_SOCCER_RESULTS_REBUILD_EVERY_S = 600
+
+
+def _rebuild_soccer_results_pages():
+    """Build fresh soccer results off the request, then retire the saved pages."""
+    try:
+        import isolate_checker_fixes as _icf
+        with _sport_variant.sport_scope('soccer'):
+            force = _icf._RESULTS_REFRESH_FORCE
+    except Exception:
+        force = None
+    for key in [k for k in _SPORT_RESULTS_CACHE if str(k).startswith('SOCCER_daily_results_html')]:
+        _SPORT_RESULTS_CACHE.pop(key, None)
+    try:
+        if _os_v2.path.isfile(_SOCCER_RESULTS_DISK_PATH):
+            _os_v2.remove(_SOCCER_RESULTS_DISK_PATH)
+    except OSError:
+        pass
+    try:
+        if force is not None:
+            force.on = True
+        with app.test_request_context('/soccer-results'):
+            sport_results('SOCCER')
+    except Exception as exc:
+        logger.warning(f"[soccer] results rebuild failed: {exc}")
+        return
+    finally:
+        if force is not None:
+            force.on = False
+    _drop_saved_soccer_results_pages(keep_cards=True)
+
+
+def _start_soccer_results_rebuild(wait=False):
+    """Serve the saved soccer results while a rebuild runs; at most once every 10 minutes."""
+    state = _SOCCER_RESULTS_REBUILD_STATE
+    now_ts = _time.time()
+    if state['running'] or (now_ts - state['ts']) < _SOCCER_RESULTS_REBUILD_EVERY_S:
+        return True
+    state['ts'] = now_ts
+    state['running'] = True
+
+    def _run():
+        try:
+            _rebuild_soccer_results_pages()
+        finally:
+            state['running'] = False
+
+    if wait:
+        _run()
+    else:
+        threading.Thread(target=_run, daemon=True, name='results-rebuild-SOCCER').start()
+    return True
+
+
+try:
+    import isolate_checker_fixes as _icf_soccer_stale
+    _icf_soccer_stale._pv_for('soccer').STALE_REBUILD = _start_soccer_results_rebuild
+except Exception as _soccer_stale_e:
+    logger.debug(f"[soccer] stale rebuild hook not set: {_soccer_stale_e}")
+
+
+def _start_soccer_finals_sync():
+    """Pull soccer finals off the request thread; at most once every 10 minutes."""
+    state = _SOCCER_FINALS_SYNC_STATE
+    now_ts = _time.time()
+    if state['running'] or (now_ts - state['ts']) < _SOCCER_FINALS_SYNC_EVERY_S:
+        return
+    state['ts'] = now_ts
+    state['running'] = True
+
+    def _run():
+        changed = 0
+        try:
+            for night in _soccer_finals_sync_dates():
+                try:
+                    changed += _sync_soccer_last_night_scoreboard(night_date=night, force=True) or 0
+                except Exception as exc:
+                    logger.debug(f"[soccer] finals sync {night}: {exc}")
+            if changed:
+                logger.info(f"[soccer] finals sync stored {changed} finals")
+                _SOCCER_RESULTS_REBUILD_STATE['ts'] = 0.0
+                _start_soccer_results_rebuild(wait=True)
+        finally:
+            state['running'] = False
+
+    threading.Thread(target=_run, daemon=True, name='score-sync-SOCCER').start()
 
 
 def _fetch_soccer_region_scoreboard_games(region_slug, max_leagues=6, days_back=0, days_forward=2):
@@ -33473,16 +33691,17 @@ def _sync_wnba_espn_finals_into_db():
 
 
 _PICKS_DISPLAY_WINDOW = {
-    # Daily-cadence sports: recent finals + a few days of upcoming games.
-    'MLB':   {'past': 3, 'future': 3},
-    'NBA':   {'past': 3, 'future': 5},
-    # future=7 so real games still show during All-Star week gaps
-    'WNBA':  {'past': 3, 'future': 7},
-    'NCAAB': {'past': 3, 'future': 5},
-    'NCAAW': {'past': 3, 'future': 5},
-    # Owner-approved NFL window: two weeks back and two weeks ahead.
-    'NFL':   {'past': 14, 'future': 14},
-    'NCAAF': {'past': 3, 'future': 10},
+    # Owner: daily team sports show two days back and three days ahead.
+    'MLB':   {'past': 2, 'future': 3},
+    'NHL':   {'past': 2, 'future': 3},
+    'NBA':   {'past': 2, 'future': 3},
+    'WNBA':  {'past': 2, 'future': 3},
+    'NCAAB': {'past': 2, 'future': 3},
+    'NCAAW': {'past': 2, 'future': 3},
+    # Owner: football is weekly — one week back and one week ahead.
+    'NFL':   {'past': 7, 'future': 7},
+    'NCAAF': {'past': 7, 'future': 7},
+    'CFL':   {'past': 7, 'future': 7},
 }
 
 
@@ -37560,7 +37779,10 @@ def get_upcoming_predictions__nhl(sport, days=365, _force_rebuild=False):
             nhl_api = NHLAPI()
             # Keep NHL predictions responsive in production (avoid timeout on huge windows).
             # This route must stay below common reverse-proxy timeout budgets.
-            api_games = nhl_api.get_recent_and_upcoming_games(days_back=2, days_forward=14)
+            api_games = nhl_api.get_recent_and_upcoming_games(
+                days_back=_PICKS_DISPLAY_WINDOW['NHL']['past'],
+                days_forward=_PICKS_DISPLAY_WINDOW['NHL']['future'],
+            )
             
             # For each API game, check if prediction exists in DB
             conn = get_db_connection()
@@ -90118,10 +90340,14 @@ def _picks_page_html_usable(sport: str, html: str) -> bool:
 def _cached_usable_picks_html(sport, filter_date=None):
     """Last good rendered picks HTML (memory). Prefer this over the black stub."""
     prefix = f"pred_page::v37::{sport}::{filter_date or 'all'}::"
+    # A paying user must never get a page built for a free visitor.
+    skip_free = _viewer_is_paid()
     best_html = None
     best_ts = -1.0
     for key, entry in list(_SPORT_PREDICTIONS_PAGE_CACHE.items()):
         if not isinstance(key, str) or not key.startswith(prefix):
+            continue
+        if skip_free and '::free' in key:
             continue
         if not isinstance(entry, dict):
             continue
@@ -94522,6 +94748,8 @@ def _read_soccer_picks_disk():
             return "", age
         if not _soccer_disk_page_is_all_leagues(text):
             return "", age
+        if "const IS_PREMIUM = true" not in text:
+            return "", age
         return text, age
     except Exception:
         return "", None
@@ -94531,6 +94759,8 @@ def _write_soccer_picks_disk(html):
     if not _picks_page_html_usable("SOCCER", html or ""):
         return
     if not _soccer_disk_page_is_all_leagues(html):
+        return
+    if "const IS_PREMIUM = true" not in html:
         return
     if "<!-- pl-isolate-repaired v2 -->" not in html:
         html = html + "\n<!-- pl-isolate-repaired v2 -->"
@@ -94769,6 +94999,7 @@ def sport_predictions__ncaaf(sport, filter_date=None):
                     and "<html" in _ncaaf_html.lower()
                     and "data-pick-card" in _ncaaf_html
                     and "upstream data/model dependency failed" not in _ncaaf_html.lower()
+                    and "const IS_PREMIUM = false" not in _ncaaf_html
                 ):
                     try:
                         from isolate_checker_fixes import keep_printed_predictions_share
@@ -94939,6 +95170,7 @@ def sport_predictions__ncaaf(sport, filter_date=None):
                 )
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    predictions = _merge_recent_final_predictions(sport, predictions)
     if str(sport or '').upper() == 'SOCCER' and not filter_date:
         _today_s = _soccer_et_today_str()
         _seen_today = {
@@ -95806,6 +96038,7 @@ def sport_predictions__mlb(sport, filter_date=None):
                 )
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    predictions = _merge_recent_final_predictions(sport, predictions)
     if str(sport or '').upper() == 'MLB':
         predictions = _merge_mlb_previous_final_slate(predictions)
         predictions = [
@@ -96683,6 +96916,7 @@ def sport_predictions__nhl(sport, filter_date=None):
                 )
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    predictions = _merge_recent_final_predictions(sport, predictions)
     if str(sport or '').upper() == 'SOCCER' and not filter_date:
         _today_s = _soccer_et_today_str()
         _seen_today = {
@@ -97548,6 +97782,7 @@ def sport_predictions__nba(sport, filter_date=None):
                 )
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    predictions = _merge_recent_final_predictions(sport, predictions)
     if str(sport or '').upper() == 'SOCCER' and not filter_date:
         _today_s = _soccer_et_today_str()
         _seen_today = {
@@ -98413,6 +98648,7 @@ def sport_predictions__ncaab(sport, filter_date=None):
                 )
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    predictions = _merge_recent_final_predictions(sport, predictions)
     if str(sport or '').upper() == 'SOCCER' and not filter_date:
         _today_s = _soccer_et_today_str()
         _seen_today = {
@@ -99278,6 +99514,7 @@ def sport_predictions__ncaaw(sport, filter_date=None):
                 )
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    predictions = _merge_recent_final_predictions(sport, predictions)
     if str(sport or '').upper() == 'SOCCER' and not filter_date:
         _today_s = _soccer_et_today_str()
         _seen_today = {
@@ -101023,6 +101260,7 @@ def sport_predictions__cfl(sport, filter_date=None):
                 )
     predictions = _filter_exhibition_predictions(predictions)
     predictions = _merge_stored_upcoming_predictions(sport, predictions)
+    predictions = _merge_recent_final_predictions(sport, predictions)
     if str(sport or '').upper() == 'SOCCER' and not filter_date:
         _today_s = _soccer_et_today_str()
         _seen_today = {
@@ -101727,6 +101965,8 @@ def sport_predictions__cfl(sport, filter_date=None):
 
 def sport_predictions__soccer(sport, filter_date=None):
     """Show upcoming predictions for a sport"""
+    if str(sport or '').upper() == 'SOCCER':
+        _start_soccer_finals_sync()
     if not filter_date:
         try:
             from isolate_checker_fixes import lookup_served_picks
@@ -102677,7 +102917,9 @@ def sport_predictions__soccer(sport, filter_date=None):
     ):
         _trim_cache(_SPORT_PREDICTIONS_PAGE_CACHE, _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180), max_entries=50)
         _SPORT_PREDICTIONS_PAGE_CACHE[cache_key] = {'ts': _time.time(), 'html': rendered}
-        if sport == 'SOCCER' and _soccer_saved_picks_request():
+        # The disk page is served to every visitor (free visitors get it locked), so
+        # only a paid render may replace it.
+        if sport == 'SOCCER' and _soccer_saved_picks_request() and cache_key.endswith('::paid'):
             _write_soccer_picks_disk(rendered)
     return rendered
 
@@ -117294,6 +117536,7 @@ def sport_results__soccer(sport):
         if sport == 'SOCCER' and not SOCCER_ENABLED:
             return "Soccer results are temporarily hidden while data loads.", 404
         if sport == 'SOCCER':
+            _start_soccer_finals_sync()
             _soc_res_jump = _soccer_redirect_if_current_league_week_empty('results')
             if _soc_res_jump is not None:
                 return _soc_res_jump
@@ -126139,11 +126382,20 @@ def _generate_game_day_blog_posts(today=None, sports=None, existing=None, *, all
     return posts
 
 
+_PREVIEW_POSTS_LAST_RUN: dict = {}
+_PREVIEW_POSTS_EVERY_S = 600
+
+
 def _ensure_preview_posts_for_sport(sport: str) -> None:
     """Merge this sport's cache-backed previews into blog JSON so the picks hub has links."""
     sport_u = str(sport or '').upper()
     if sport_u not in _BLOG_GAME_DAY_SPORTS:
         return
+    # Rewriting the whole blog file costs up to 0.4s of CPU; once per sport per 10 minutes.
+    _now = _time.time()
+    if _now - _PREVIEW_POSTS_LAST_RUN.get(sport_u, 0.0) < _PREVIEW_POSTS_EVERY_S:
+        return
+    _PREVIEW_POSTS_LAST_RUN[sport_u] = _now
     try:
         today_dt = _blog_today_et()
         today_str = today_dt.strftime('%Y-%m-%d')
@@ -126962,6 +127214,45 @@ def _nhl_results_keep_last_good(response):
     except Exception as e:
         logger.debug(f"NHL results last-good page skipped: {e}")
     return response
+
+
+def _page_pass_viewer():
+    from flask_login import current_user as _cu
+    return (_viewer_is_paid(), bool(getattr(_cu, 'is_authenticated', False)))
+
+
+try:
+    import response_memo as _response_memo
+    _response_memo.install(app, {
+        '_isolate_checker_repair_hook',
+        '_apply_team_template_gaps',
+        '_served_layout_last',
+        '_final_record_consistency',
+        '_graft_locked_site_chrome',
+    }, _page_pass_viewer)
+except Exception as _memo_e:
+    logger.warning(f"page pass memo not installed: {_memo_e}")
+
+def _results_window_finals_dates(sport, today):
+    start = (datetime.strptime(today, '%Y-%m-%d') - timedelta(days=60)).strftime('%Y-%m-%d')
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT date(game_date) FROM games WHERE sport = ? "
+            "AND home_score IS NOT NULL AND away_score IS NOT NULL "
+            "AND date(game_date) BETWEEN ? AND ?",
+            (sport, start, today),
+        ).fetchall()
+    finally:
+        conn.close()
+    return {str(r[0]) for r in rows if r[0]}
+
+
+try:
+    import results_window as _results_window
+    _results_window.install(app, _results_window_finals_dates)
+except Exception as _rw_e:
+    logger.warning(f"results window not installed: {_rw_e}")
 
 
 if __name__ == '__main__':

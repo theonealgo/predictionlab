@@ -13,9 +13,15 @@ FAIL when:
     projected scores, Prediction Lab / XSharp odds and lines, page source)
   - a paying user sees any lock or Join Premium upsell
   - a results page is locked for anyone (results are free)
+  - a free visitor sees paid values on a picks page right after a paying
+    user opened it (a saved page built for one visitor served to another)
+  - a logged-out visitor sees Sign out, or a paying user sees Login
+  - /api/picks/<sport> gives a free visitor XSharp / Grinder2 / Edge /
+    Takedown values, or gives a paying user none
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -32,6 +38,8 @@ SPORTS = ("mlb", "nhl", "nba", "nfl", "ncaaf", "ncaab", "ncaaw", "wnba", "cfl",
           "soccer", "tennis", "ufc", "golf")
 PUBLIC_HOST = "predictionlab.io"
 HEADERS = {"Host": PUBLIC_HOST, "X-Forwarded-Proto": "https", "User-Agent": "pl-paywall-check"}
+SIGN_OUT = 'href="/logout"'
+API_MODEL_FIELDS = ("xsharp", "grinder2", "edge", "takedown")
 
 
 def _credentials() -> tuple[str, str]:
@@ -114,6 +122,9 @@ def run(base: str, sports: tuple[str, ...] = SPORTS) -> list[str]:
                     if locks:
                         fails.append(f"PAYWALL: {label} | {base}{final} | free visitor sees: "
                                      f"{', '.join(locks)} | should be: results are free")
+                if SIGN_OUT in free_html:
+                    fails.append(f"LOGIN: {label} | {base}{final} | logged-out visitor sees: Sign out "
+                                 f"| should be: Login")
                 if paid_cookie:
                     pcode, paid_html, pfinal = _get(base, path, paid_cookie)
                     if pcode == -1:
@@ -123,6 +134,53 @@ def run(base: str, sports: tuple[str, ...] = SPORTS) -> list[str]:
                         if locks:
                             fails.append(f"PAYWALL: {label} | {base}{pfinal} | paying user sees: "
                                          f"{', '.join(locks)} | should be: everything unlocked")
+                        if SIGN_OUT not in paid_html:
+                            fails.append(f"LOGIN: {label} | {base}{pfinal} | paying user sees: Login "
+                                         f"| should be: Sign out")
+                    if kind == "picks":
+                        acode, again, afinal = _get(base, path)
+                        if acode == 200 and again:
+                            leaks = paywall.leaked_values(again)
+                            if leaks:
+                                fails.append(f"PAYWALL: {label} | {base}{afinal} | free visitor after a paying "
+                                             f"user's visit sees: {', '.join(leaks)} | should be: locked")
+                            if SIGN_OUT in again:
+                                fails.append(f"LOGIN: {label} | {base}{afinal} | logged-out visitor after a "
+                                             f"paying user's visit sees: Sign out | should be: Login")
+        fails.extend(_api_fails(base, sport, paid_cookie))
+    return fails
+
+
+def _api_model_values(base: str, sport: str, cookie: str = "") -> tuple[int, int, int]:
+    """(HTTP code, pick count, filled XSharp/Grinder2/Edge/Takedown values) for /api/picks/<sport>."""
+    code, body, _ = _get(base, f"/api/picks/{sport}", cookie)
+    if code != 200 or not body:
+        return code, -1, 0
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return code, -1, 0
+    picks = [p for p in (data.get("picks") or []) if isinstance(p, dict)] if isinstance(data, dict) else []
+    filled = sum(1 for p in picks for k in API_MODEL_FIELDS if p.get(k) not in (None, ""))
+    return code, len(picks), filled
+
+
+def _api_fails(base: str, sport: str, paid_cookie: str) -> list[str]:
+    fails: list[str] = []
+    url = f"{base}/api/picks/{sport}"
+    code, _, filled = _api_model_values(base, sport)
+    if code == -1:
+        fails.append(f"API: {sport} picks api | {url} | free visitor: did not load in 60s")
+    elif filled:
+        fails.append(f"API: {sport} picks api | {url} | free visitor gets: {filled} paid model values "
+                     f"({', '.join(API_MODEL_FIELDS)}) | should be: none")
+    if paid_cookie:
+        pcode, count, pfilled = _api_model_values(base, sport, paid_cookie)
+        if pcode == -1:
+            fails.append(f"API: {sport} picks api | {url} | paying user: did not load in 60s")
+        elif count > 0 and not pfilled:
+            fails.append(f"API: {sport} picks api | {url} | paying user gets: no model values "
+                         f"| should be: XSharp / Grinder2 / Edge / Takedown")
     return fails
 
 

@@ -187,7 +187,7 @@ def _make_session() -> requests.Session:
 HTTP_DEPENDENT_AUDITORS = frozenset({
     "routes", "content", "navigation", "cards", "models", "results", "csv",
     "gamecounts", "screenshots", "seo", "consistency", "ship", "soccer", "chrome",
-    "espn_slate",
+    "espn_slate", "paywall",
 })
 
 
@@ -3172,6 +3172,26 @@ def _run_espn_slate_checker(session, base: str, report: AuditReport):
     EspnSlateChecker(session, base, report, CheckResult).run()
 
 
+def _run_paywall_checker(base: str, report: AuditReport):
+    """Free vs paying visitor on every sport: paywall, login menu, /api/picks."""
+    import paywall_check
+    fails = paywall_check.run(base)
+    for line in fails:
+        parts = line.split(" | ")
+        report.add(CheckResult(
+            label=parts[0],
+            status=WARN if line.startswith("ERROR:") else FAIL,
+            message=" | ".join(parts[2:]) if len(parts) > 2 else line,
+            auditor="paywall",
+            url=parts[1] if len(parts) > 1 else base))
+    if not fails:
+        report.add(CheckResult(
+            label="paywall, login menu and picks api on every sport",
+            status=PASS,
+            message="free visitors locked, paying users unlocked, Login / Sign out correct",
+            auditor="paywall", url=base))
+
+
 def _run_chrome_checker(session, base: str, report: AuditReport):
     from chrome_checker import ChromeChecker
     ChromeChecker(session, base, report, CheckResult).run()
@@ -3308,6 +3328,7 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("ship", lambda: _run_ship_parity(session, base, report))
     run_auditor("soccer", lambda: _run_soccer_checker(session, base, report))
     run_auditor("espn_slate", lambda: _run_espn_slate_checker(session, base, report))
+    run_auditor("paywall", lambda: _run_paywall_checker(base, report))
     # Schema auditor is static (DB schema + source scan), not HTTP-dependent —
     # it catches SQL column typos in auth-gated routes the HTTP checks can't reach.
     run_auditor("schema",     lambda: SchemaAuditor(report).run())

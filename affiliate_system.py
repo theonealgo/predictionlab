@@ -70,10 +70,7 @@ AFFILIATE_SITE_URL = (
 ).rstrip('/')
 
 _VISITOR_COOKIE = 'pl_aff_vid'         # opaque visitor id (server-backed attribution)
-_LINKED_SESSION_KEY = 'pl_aff_linked'
-# Users already association-checked. Kept in memory, not the session cookie, so a
-# page load never re-sends the login cookie (that undid sign-outs).
-_LINKED_USERS = set()
+_LINKED_SESSION_KEY = 'pl_aff_linked'  # session flag: user already association-checked
 _CLICK_DEDUPE_MINUTES = 30             # ignore repeat clicks from same visitor+code
 
 # Commission lifecycle statuses.
@@ -526,11 +523,11 @@ def _associate_user():
     try:
         if not current_user.is_authenticated:
             return
-        if current_user.id in _LINKED_USERS:
+        if session.get(_LINKED_SESSION_KEY) == current_user.id:
             return
         visitor_id = getattr(g, '_aff_set_visitor', None) or request.cookies.get(_VISITOR_COOKIE)
         if not visitor_id:
-            _LINKED_USERS.add(current_user.id)
+            session[_LINKED_SESSION_KEY] = current_user.id
             return
         conn = _get_db()
         try:
@@ -539,7 +536,7 @@ def _associate_user():
                 (current_user.id,),
             ).fetchone()
             if existing:
-                _LINKED_USERS.add(current_user.id)
+                session[_LINKED_SESSION_KEY] = current_user.id
                 return
             attr = conn.execute(
                 'SELECT * FROM affiliate_attributions WHERE visitor_id = ? AND user_id IS NULL '
@@ -547,21 +544,21 @@ def _associate_user():
                 (visitor_id,),
             ).fetchone()
             if not attr:
-                _LINKED_USERS.add(current_user.id)
+                session[_LINKED_SESSION_KEY] = current_user.id
                 return
             aff = _affiliate_by_id(attr['affiliate_id'], conn=conn)
             if not aff or aff['status'] != _A_APPROVED:
-                _LINKED_USERS.add(current_user.id)
+                session[_LINKED_SESSION_KEY] = current_user.id
                 return
             # Self-referral: don't let an affiliate attribute their own account.
             if aff['user_id'] and aff['user_id'] == current_user.id:
                 _audit(aff['id'], 'self_referral_blocked', f'user_id={current_user.id}')
-                _LINKED_USERS.add(current_user.id)
+                session[_LINKED_SESSION_KEY] = current_user.id
                 return
             # Existing-customer protection.
             if _user_is_existing_customer(current_user.id, conn):
                 _audit(aff['id'], 'existing_customer_skip', f'user_id={current_user.id}')
-                _LINKED_USERS.add(current_user.id)
+                session[_LINKED_SESSION_KEY] = current_user.id
                 return
             conn.execute(
                 'UPDATE affiliate_attributions SET user_id = ?, status = ?, signed_up_at = ? '
@@ -572,7 +569,7 @@ def _associate_user():
             _audit(aff['id'], 'signup', f'user_id={current_user.id}')
         finally:
             conn.close()
-        _LINKED_USERS.add(current_user.id)
+        session[_LINKED_SESSION_KEY] = current_user.id
     except Exception as e:
         logger.warning('[affiliate] associate_user failed: %s', e)
 
