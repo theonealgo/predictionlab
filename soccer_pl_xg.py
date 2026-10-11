@@ -202,32 +202,10 @@ def _source_mtime() -> float:
     return latest
 
 
-def _source_fingerprint() -> tuple:
-    """Changes only when scored soccer games change. The file time moves on every page visit."""
-    parts = []
-    for path in _game_db_paths():
-        try:
-            conn = sqlite3.connect(str(path))
-            row = conn.execute(
-                """
-                SELECT COUNT(*), MAX(game_date), MAX(game_id),
-                       TOTAL(home_score), TOTAL(away_score)
-                FROM games
-                WHERE sport = 'SOCCER'
-                  AND home_score IS NOT NULL AND away_score IS NOT NULL
-                """
-            ).fetchone()
-            conn.close()
-        except Exception:
-            row = None
-        parts.append((str(path), tuple(row or ())))
-    return tuple(parts)
-
-
 def _walked() -> tuple[PLXGState, dict, dict]:
     """One chronological predict-then-update pass. Shared by picks and results."""
     global _walk_cache
-    mtime = _source_fingerprint()
+    mtime = _source_mtime()
     with _state_lock:
         if _walk_cache and _walk_cache[0] == mtime:
             return _walk_cache[1], _walk_cache[2], _walk_cache[3]
