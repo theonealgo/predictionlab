@@ -16277,8 +16277,8 @@ def _served_layout_last__cfl(response):
         if _root not in _layout_sys.path:
             _layout_sys.path.insert(0, _root)
         import served_layout_fixes
-        import importlib
-        importlib.reload(served_layout_fixes)
+        # Do not importlib.reload on every response — that re-executes the
+        # module and burns CPU on the only worker for every HTML page.
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
         if sport == "CFL":
             try:
@@ -16337,8 +16337,8 @@ def _served_layout_last__tennis(response):
         if _root not in _layout_sys.path:
             _layout_sys.path.insert(0, _root)
         import served_layout_fixes
-        import importlib
-        importlib.reload(served_layout_fixes)
+        # Do not importlib.reload on every response — that re-executes the
+        # module and burns CPU on the only worker for every HTML page.
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
         if sport == "TENNIS":
             try:
@@ -16386,8 +16386,8 @@ def _served_layout_last(response):
         if _root not in _layout_sys.path:
             _layout_sys.path.insert(0, _root)
         import served_layout_fixes
-        import importlib
-        importlib.reload(served_layout_fixes)
+        # Do not importlib.reload on every response — that re-executes the
+        # module and burns CPU on the only worker for every HTML page.
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
         if fixed != html:
             response.set_data(fixed)
