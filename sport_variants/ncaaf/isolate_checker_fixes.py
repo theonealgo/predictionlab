@@ -219,8 +219,6 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
             return ""
         if "upstream data/model dependency failed" in text.lower():
             return ""
-        if "const IS_PREMIUM = false" in text:
-            return ""
         waiting_on_books = (
             "check back on game date" in text.lower()
             or "on the same day as the game" in text.lower()
@@ -287,8 +285,6 @@ def store_served_picks(sport: str, html: str) -> None:
         return
     low = html.lower()
     if "upstream data/model dependency failed" in low:
-        return
-    if "const IS_PREMIUM = false" in html:
         return
     sport_u = (sport or "").strip().upper()
     if not sport_u:

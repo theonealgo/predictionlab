@@ -22,13 +22,6 @@ the miss.
 # GOOD — UNLOCK repeated 3 times, then SOCCER and the miss
 ```
 
-## Owner asks directly = unlocked (owner 2026-10-11)
-
-When the owner directly asks to fix a named sport ("fix soccer errors", a
-checker fail list for that sport), that sport is unlocked for those misses.
-Do not ask for the UNLOCK phrase again. The locks exist so the agent never
-touches **other** sports or other folders while doing it.
-
 ## One surface after a valid 3-unlock
 
 Only that named miss. Then lock again. Do not leave a sport UNLOCKED overnight.

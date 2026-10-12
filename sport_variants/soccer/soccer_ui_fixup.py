@@ -3503,9 +3503,6 @@ def stamp_soccer_results_checker_html(html: str, view: str = "") -> str:
     """Copy Recent totals onto the checker chart and list last night's games."""
     if not html:
         return html
-    # The PL vs Books table is rebuilt from the cards after the first heading
-    # sync; the heading has to follow the final table.
-    html = _sync_soccer_last_night_heading(html)
     html = inject_soccer_graded_totals_chart(html)
     html = place_soccer_chrome(html)
     if (view or "").strip().lower() in {

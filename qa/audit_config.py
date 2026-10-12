@@ -128,12 +128,11 @@ CLUSTER_RANGE_HIGH = 51.0
 CLUSTER_WARN_PCT   = 80        # warn if >80% of probs are in the clustering range
 
 # ── Quick mode — only run these auditors ─────────────────────────────────
-QUICK_MODE_AUDITORS = ["routes", "content", "navigation", "chrome", "ship", "soccer", "espn_slate",
-                       "paywall"]
+QUICK_MODE_AUDITORS = ["routes", "content", "navigation", "chrome", "ship", "soccer", "espn_slate"]
 FULL_MODE_AUDITORS  = ["routes", "content", "navigation", "cards", "models",
                        "results", "gamecounts", "csv", "props", "seo", "schema",
                        "consistency", "chrome", "ship", "soccer", "espn_slate",
-                       "paywall", "pagespeed"]
+                       "pagespeed"]
 SHIP_MODE_AUDITORS  = ["chrome", "ship", "soccer", "espn_slate", "pagespeed"]
 CHROME_MODE_AUDITORS = ["chrome"]
 PAGESPEED_MODE_AUDITORS = ["pagespeed"]

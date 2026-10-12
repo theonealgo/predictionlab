@@ -195,8 +195,9 @@ def _nfl_picks_html_ends_too_soon(text: str) -> bool:
         today = datetime.now(ZoneInfo("America/New_York"))
     except Exception:
         today = datetime.now()
-    first = (today - timedelta(days=7)).strftime("%Y-%m-%d")
-    if "<!-- nfl-picks-window:7:7 -->" not in text:
+    first = (today - timedelta(days=14)).strftime("%Y-%m-%d")
+    last = (today + timedelta(days=14)).strftime("%Y-%m-%d")
+    if "<!-- nfl-picks-window:14:14 -->" not in text:
         return True
     # Days after the window are removed from the page by the shared date controls,
     # so a stored page that still lists them is valid. Rejecting it forced a full
@@ -260,8 +261,6 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
             return ""
         if "upstream data/model dependency failed" in text.lower():
             return ""
-        if "const IS_PREMIUM = false" in text:
-            return ""
         waiting_on_books = ("check back on game date" in text.lower() or "on the same day as the game" in text.lower())
         if _picks_clock_is_old(text):
             if schedule:
@@ -287,15 +286,13 @@ def store_served_picks(sport: str, html: str) -> None:
     low = html.lower()
     if "upstream data/model dependency failed" in low:
         return
-    if "const IS_PREMIUM = false" in html:
-        return
     sport_u = (sport or "").strip().upper()
     if not sport_u:
         return
     if _REPAIRED_MARK not in html:
         html = html + "\n" + _REPAIRED_MARK
-    if sport_u == "NFL" and "<!-- nfl-picks-window:7:7 -->" not in html:
-        html += "\n<!-- nfl-picks-window:7:7 -->"
+    if sport_u == "NFL" and "<!-- nfl-picks-window:14:14 -->" not in html:
+        html += "\n<!-- nfl-picks-window:14:14 -->"
     try:
         _CARDS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         path = _served_picks_path(sport_u)

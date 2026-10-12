@@ -302,7 +302,7 @@ _SERVED_REFRESH_AFTER = 20 * 60
 
 
 def results_refresh_forced() -> bool:
-    return bool(getattr(_RESULTS_REFRESH_FORCE, "on", False)) or _nhl_is_rebuild_request()
+    return bool(getattr(_RESULTS_REFRESH_FORCE, "on", False))
 
 
 def _schedule_served_refresh(key: str) -> None:
@@ -1189,13 +1189,7 @@ _NHL_PICKEM = {"pk", "pick", "pickem", "pick'em", "even", "0", "0.0"}
 
 
 def read_nhl_chart_disk(market: str = "") -> str:
-    """Saved NHL chart page. A cold /nhl-results?view=chart hit must not rebuild.
-
-    When the newest stored final night is missing from the chart's game log,
-    the saved chart is still served and rebuilt in the background.
-    """
-    if results_refresh_forced():
-        return ""
+    """Saved NHL chart page. A cold /nhl-results?view=chart hit must not rebuild."""
     path = _served_path(results_serve_key("NHL", "chart", market))
     try:
         text = path.read_text(encoding="utf-8")
@@ -1207,15 +1201,8 @@ def read_nhl_chart_disk(market: str = "") -> str:
         return ""
     if "Actual vs lines" in text:
         return ""
-    rows = re.findall(r"<td>(\d{4}-\d{2}-\d{2})</td>", text)
-    if not rows:
+    if not re.search(r"<td>\d{4}-\d{2}-\d{2}</td>", text):
         return ""
-    try:
-        latest, _n = _nhl_latest_final_before_today()
-        if latest and max(rows) < latest:
-            _schedule_nhl_results_rebuild()
-    except Exception:
-        pass
     return text
 
 
@@ -1269,52 +1256,24 @@ def _schedule_nhl_results_rebuild() -> None:
             return
         _NHL_REBUILD_AT = now
 
-    import os
-
-    base = f"http://127.0.0.1:{os.environ['PORT']}" if os.environ.get("PORT") else ""
-    if not base:
-        try:
-            from flask import has_request_context, request
-
-            if has_request_context():
-                base = f"http://127.0.0.1:{request.environ.get('SERVER_PORT') or '5000'}"
-        except Exception:
-            pass
-    base = base or "http://127.0.0.1:5000"
-
     def _run() -> None:
+        import os
         import urllib.request
 
-        # Charts are built from the cards page, so the cards page goes first.
-        for path in (
-            "/nhl-results",
-            "/nhl-results?view=chart",
-            "/nhl-results?view=chart&market=moneyline",
-            "/nhl-results?view=chart&market=spread",
-            "/nhl-results?view=chart&market=totals",
-        ):
-            try:
-                req = urllib.request.Request(
-                    f"{base}{path}",
-                    headers={_NHL_REBUILD_HEADER: "1"},
-                )
-                urllib.request.urlopen(req, timeout=300).read()
-            except Exception:
-                pass
+        port = os.environ.get("PORT") or "5000"
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/nhl-results",
+                headers={_NHL_REBUILD_HEADER: "1"},
+            )
+            urllib.request.urlopen(req, timeout=300).read()
+        except Exception:
+            pass
 
     try:
         threading.Thread(target=_run, daemon=True, name="nhl-results-rebuild").start()
     except Exception:
         pass
-
-
-def _nhl_page_has_finals_on(text: str, day: str) -> bool:
-    """A placeholder "no results" section for the day does not count."""
-    start = text.find(f'id="date-{day}"')
-    if start < 0:
-        return False
-    nxt = text.find('id="date-', start + 10)
-    return "final-score" in text[start : nxt if nxt > 0 else len(text)]
 
 
 def read_nhl_results_disk() -> str:
@@ -1324,6 +1283,8 @@ def read_nhl_results_disk() -> str:
     page is still served and a rebuild runs in the background.
     """
     if _nhl_is_rebuild_request():
+        # The rebuild request must skip every saved copy of the page.
+        _RESULTS_REFRESH_FORCE.on = True
         return ""
     try:
         text = _NHL_RESULTS_DISK.read_text(encoding="utf-8")
@@ -1337,7 +1298,7 @@ def read_nhl_results_disk() -> str:
         return ""
     try:
         latest, _n = _nhl_latest_final_before_today()
-        if latest and not _nhl_page_has_finals_on(text, latest):
+        if latest and f'id="date-{latest}"' not in text:
             _schedule_nhl_results_rebuild()
     except Exception:
         pass

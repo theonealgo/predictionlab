@@ -104,4 +104,3 @@ LOCAL_TEST_LOGIN.txt
 
 # UFC pipeline database (small, needed on server)
 !ufc_pipeline/database/ufc_sandbox.db
-.checkpoints/

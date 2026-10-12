@@ -9,13 +9,17 @@ from html import escape
 from html_blocks import blocks, remove_blocks
 
 def picks_date_window(sport: str) -> tuple[int, int]:
-    """Owner-approved windows: daily team sports 2 back / 3 ahead, football one week each way."""
-    sport = (sport or "").upper()
-    if sport in ("NFL", "NCAAF", "CFL"):
-        return 7, 7
-    if sport in ("MLB", "NHL", "NBA", "WNBA", "NCAAB", "NCAAW"):
-        return 2, 3
-    if sport == "SOCCER":
+    """Owner-approved windows; NFL was expanded before being re-locked."""
+    if (sport or "").upper() == "NFL":
+        return 14, 14
+    if (sport or "").upper() == "NHL":
+        return 7, 14
+    if (sport or "").upper() == "CFL":
+        # Weekly league: the next two weeks of games must show.
+        return 1, 14
+    if (sport or "").upper() == "NCAAF":
+        return 1, 7
+    if (sport or "").upper() == "SOCCER":
         return 2, 7
     return 1, 5
 

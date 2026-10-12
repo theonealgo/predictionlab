@@ -117,30 +117,19 @@ def swap_account_menu(html: str, fresh_block: str, opener: str = _ACCOUNT_MENU_O
         start = html.find(opener, pos)
         if start < 0:
             break
-        block = find_div(html[start:], opener)
-        if not block:
+        depth, end = 0, -1
+        for m in re.compile(r"<div\b|</div>").finditer(html, start):
+            depth += 1 if m.group(0) != "</div>" else -1
+            if depth == 0:
+                end = m.end()
+                break
+        if end < 0:
             break
         parts.append(html[pos:start])
         parts.append(fresh_block)
-        pos = start + len(block)
+        pos = end
     parts.append(html[pos:])
     return "".join(parts)
-
-
-# /api/picks fields a free visitor also sees on the card face. Everything else is paid.
-_API_PICK_FREE_FIELDS = {"date", "matchup", "homeTeam", "awayTeam", "pick", "winPercent", "sport"}
-
-
-def lock_api_picks(payload):
-    """Blank paid model values in an /api/picks payload for a free visitor."""
-    if not isinstance(payload, dict) or not isinstance(payload.get("picks"), list):
-        return payload
-    out = []
-    for pick in payload["picks"]:
-        if isinstance(pick, dict):
-            pick = {k: (v if k in _API_PICK_FREE_FIELDS else None) for k, v in pick.items()}
-        out.append(pick)
-    return {**payload, "picks": out}
 
 
 _JOIN_TAB_RE = re.compile(r'<a href="/plans" class="tab"[^>]*>[^<]*Join Premium[^<]*</a>')
