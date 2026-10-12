@@ -1434,11 +1434,16 @@ def nfl_stale_season_perf_issues(html: str, today: date | None = None) -> list[s
             f"NFL Season Performance moneyline is {wins}-{losses} ({total} games) "
             f"— preseason is still in the Season board; regular season only"
         ]
-    if n_cards >= 3 and total > n_cards + 40:
-        return [
-            f"NFL Season Performance moneyline is {wins}-{losses} ({total} games) "
-            f"but the page lists {n_cards} cards — last season leak"
-        ]
+    # Results cards cover only recent nights; the season record is bounded by
+    # the games a regular season can have played by today (16 a week from September).
+    if today.month >= 9 or today.month == 1:
+        season_start = date(today.year if today.month >= 9 else today.year - 1, 9, 1)
+        played_max = 16 * ((today - season_start).days // 7 + 1)
+        if total > played_max + 16:
+            return [
+                f"NFL Season Performance moneyline is {wins}-{losses} ({total} games) "
+                f"but at most {played_max} games have been played this season — last season leak"
+            ]
     return []
 
 
