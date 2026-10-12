@@ -82936,8 +82936,12 @@ def build_todays_top_picks():
 
 @app.route('/healthz')
 def healthz():
-    """Lightweight probe for Render/load balancers (no DB or model work)."""
-    return 'ok', 200
+    """Lightweight probe for Render/load balancers (no DB or model work).
+
+    text/plain so HTML after-request passes (paywall, chrome, record checks)
+    never rewrite this body and never compete with real pages for CPU.
+    """
+    return Response('ok', status=200, mimetype='text/plain')
 
 
 _LANDING_PAGE_CACHE = {'ts': 0, 'html': None}
