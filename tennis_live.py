@@ -10,6 +10,7 @@ import re
 import sys
 import threading
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -617,6 +618,165 @@ def _expand_result_cards(html: str) -> str:
     return html
 
 
+_TENNIS_CONSENSUS_MODELS = (
+    ("Grinder2", "grinder2"),
+    ("Takedown", "takedown"),
+    ("Edge", "edge"),
+    ("XSharp", "xsharp"),
+    ("Efficiency", "efficiency"),
+    ("Sharp Consensus", "consensus"),
+)
+
+
+def _drop_model_pick_confidence(html: str) -> str:
+    """Picks cards: the face shows the consensus box, not Model pick / Confidence."""
+    if not html:
+        return html
+    html = re.sub(
+        r'\s*<div class="line-chip">\s*<div class="line-chip-label">\s*'
+        r'(?:Model pick|Confidence)\s*</div>\s*<div class="line-chip-val">[\s\S]*?</div>\s*</div>',
+        "",
+        html,
+        flags=re.I,
+    )
+    return re.sub(
+        r'\s*<div class="sf-item">\s*<span class="sf-label">\s*(?:Model pick|Confidence)\s*</span>'
+        r'\s*<span class="sf-val">[^<]*</span>\s*</div>',
+        "",
+        html,
+        flags=re.I,
+    )
+
+
+def _card_model_sides(card: str) -> dict[str, str]:
+    """Model name -> HOME / AWAY from the card's stored home win percents."""
+    sides: dict[str, str] = {}
+    for name, key in _TENNIS_CONSENSUS_MODELS:
+        m = re.search(rf'data-m-{key}="([0-9.]+)"', card[:3000])
+        if not m:
+            continue
+        try:
+            pct = float(m.group(1))
+        except ValueError:
+            continue
+        if pct > 50.0:
+            sides[name] = "HOME"
+        elif pct < 50.0:
+            sides[name] = "AWAY"
+    return sides
+
+
+def _consensus_pattern(sides: dict[str, str]) -> tuple[str, str, tuple[str, ...]] | None:
+    """(kind, majority side, dissenters); kind is unanimous / majority / split."""
+    panel = len(_TENNIS_CONSENSUS_MODELS)
+    if len(sides) < panel:
+        return None
+    home_n = sum(1 for s in sides.values() if s == "HOME")
+    away_n = panel - home_n
+    if home_n == away_n:
+        return ("split", "", ())
+    major = "HOME" if home_n > away_n else "AWAY"
+    dissent = tuple(n for n, _ in _TENNIS_CONSENSUS_MODELS if sides.get(n) != major)
+    return ("unanimous" if not dissent else "majority", major, dissent)
+
+
+def _tennis_consensus_history() -> dict[tuple[str, tuple[str, ...]], list[int]]:
+    """Last-7-day W-L for each agreement pattern, from graded results cards."""
+    path = _tennis_results_cache_path()
+    try:
+        page = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except Exception:
+        page = ""
+    if not page:
+        return {}
+    try:
+        from zoneinfo import ZoneInfo
+
+        today = datetime.now(ZoneInfo("America/New_York")).date()
+    except Exception:
+        today = datetime.now().date()
+    cut = (today - timedelta(days=7)).isoformat()
+    top = today.isoformat()
+    out: dict[tuple[str, tuple[str, ...]], list[int]] = {}
+    for card in re.split(r"(?=<div class=\"game-card-stack\b)", page)[1:]:
+        dm = re.search(r'class="game-time">[^<]*FINAL[^<]*?(20\d\d-\d\d-\d\d)', card)
+        if not dm or not (cut <= dm.group(1) <= top):
+            continue
+        hm = re.search(r'data-home="([^"]*)"', card[:2000])
+        wm = re.search(
+            r'<div class="team-name">([^<]*)</div>\s*<div class="final-score score-winner">',
+            card,
+        )
+        if not hm or not wm:
+            continue
+        pat = _consensus_pattern(_card_model_sides(card))
+        if not pat or pat[0] == "split":
+            continue
+        winner = "HOME" if wm.group(1).strip() == hm.group(1).strip() else "AWAY"
+        rec = out.setdefault((pat[0], pat[2]), [0, 0])
+        rec[0 if winner == pat[1] else 1] += 1
+    return out
+
+
+def _paid_card_lookup() -> dict[str, str]:
+    """Saved paid-tier picks cards by game id (free cards carry no model values)."""
+    path = _ROOT / ".cache" / "served_picks_TENNIS.html"
+    try:
+        page = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except Exception:
+        page = ""
+    cards: dict[str, str] = {}
+    for card in re.split(r"(?=<div class=\"game-card-stack\b)", page)[1:]:
+        gm = re.search(r'data-game-id="([^"]+)"', card[:3000])
+        if gm:
+            cards[gm.group(1)] = card
+    return cards
+
+
+def _inject_tennis_consensus_hist(html: str) -> str:
+    """Face Consensus Historical Record chip, same box as UFC."""
+    if not html or "data-pick-card" not in html:
+        return html
+    history = _tennis_consensus_history()
+    paid_cards: dict[str, str] | None = None
+    parts = re.split(r"(?=<div class=\"game-card-stack\b)", html)
+    out = [parts[0]]
+    for card in parts[1:]:
+        if "data-pick-card" not in card[:400] or '<div class="lines-strip">' not in card:
+            out.append(card)
+            continue
+        sides = _card_model_sides(card)
+        if len(sides) < len(_TENNIS_CONSENSUS_MODELS):
+            gm = re.search(r'data-game-id="([^"]+)"', card[:3000])
+            if gm:
+                if paid_cards is None:
+                    paid_cards = _paid_card_lookup()
+                paid = paid_cards.get(gm.group(1))
+                if paid:
+                    sides = _card_model_sides(paid)
+        pat = _consensus_pattern(sides)
+        if not pat:
+            label = "—"
+        elif pat[0] == "split":
+            label = "Split: —"
+        else:
+            w, l = history.get((pat[0], pat[2]), [0, 0])
+            who = "Unanimous" if pat[0] == "unanimous" else "All but " + " and ".join(pat[2])
+            label = f"{who}: {w}-{l}"
+        chip = (
+            '<div class="line-chip consensus-hist-chip">'
+            '<div class="line-chip-label">Consensus Historical Record</div>'
+            f'<div class="line-chip-val">{label}</div></div>'
+        )
+        card = re.sub(
+            r'<div class="line-chip consensus-hist-chip">[\s\S]*?</div>\s*</div>',
+            "",
+            card,
+        )
+        out.append(card.replace('<div class="lines-strip">', '<div class="lines-strip">' + chip, 1))
+    return "".join(out)
+
+
 def render_tennis_picks() -> str:
     tennis_page = _load_locked_tennis()
     _sync_tennis_slate()
@@ -638,7 +798,9 @@ def render_tennis_picks() -> str:
         page,
         flags=re.I,
     )
-    return page
+    page = _drop_model_pick_confidence(page)
+    page = _inject_tennis_consensus_hist(page)
+    return _expand_result_cards(page)
 
 
 def _tennis_results_cache_path() -> Path:

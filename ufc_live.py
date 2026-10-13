@@ -697,7 +697,54 @@ def _read_page(name: str) -> str:
     if name == "picks.html":
         html = merge_stored_upcoming_pick_cards(html)
         html = _mark_past_fight_times_final(html)
-    return _with_consensus_hist(html)
+        html = _drop_model_pick_confidence(html)
+    return _expand_cards(_with_consensus_hist(html))
+
+
+def _drop_model_pick_confidence(html: str) -> str:
+    """Picks cards: the face shows the consensus box, not Model pick / Confidence."""
+    if not html:
+        return html
+    html = re.sub(
+        r'\s*<div class="line-chip">\s*<div class="line-chip-label">\s*'
+        r'(?:Model pick|Confidence)\s*</div>\s*<div class="line-chip-val">[\s\S]*?</div>\s*</div>',
+        "",
+        html,
+        flags=re.I,
+    )
+    return re.sub(
+        r'\s*<div class="sf-item">\s*<span class="sf-label">\s*(?:Model pick|Confidence)\s*</span>'
+        r'\s*<span class="sf-val">[^<]*</span>\s*</div>',
+        "",
+        html,
+        flags=re.I,
+    )
+
+
+def _expand_cards(html: str) -> str:
+    """Cards ship open (Less details), like tennis."""
+    if not html or "data-pick-card" not in html:
+        return html
+    html = re.sub(
+        r'<div class="game-card-stack(?![^"]*is-expanded)',
+        '<div class="game-card-stack is-expanded',
+        html,
+    )
+    html = re.sub(
+        r'(class="view-details-btn"[^>]*aria-expanded=")false(")',
+        r"\1true\2",
+        html,
+    )
+    html = re.sub(
+        r'(class="view-details-btn"[^>]*>)\s*View Details\s*<span class="chevron">',
+        r'\1Less details <span class="chevron">',
+        html,
+    )
+    return re.sub(
+        r'(<div class="card-details"[^>]*?)\s+hidden(?=[\s>])',
+        r"\1",
+        html,
+    )
 
 
 def render_ufc_picks() -> str:

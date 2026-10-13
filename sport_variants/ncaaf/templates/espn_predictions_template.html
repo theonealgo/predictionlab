@@ -854,7 +854,7 @@
                     data-home="{{ pred.home_team_id }}"
                     {% if sport == 'SOCCER' %}data-away-full="{{ pred.away_team_id }}" data-home-full="{{ pred.home_team_id }}" data-date="{{ date }}"{% endif %}
                     data-league="{{ pred.league if pred.league else '' }}"
-                    data-time="{% if pred.game_time is defined and pred.game_time %}{{ pred.game_time }}{% elif is_final %}FINAL{% else %}Upcoming{% endif %}"
+                    data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
                     data-conf="{% if _chart_conf is not none %}{{ '%.1f'|format(_chart_conf) }}{% endif %}"
                     data-h2h="{{ _h2h_txt }}"{% if _h2h_reason %} data-h2h-reason="{{ _h2h_reason }}"{% endif %}{% if sport == 'SOCCER' %} data-plxg="{{ _plxg_txt }}"{% if _plxg_reason %} data-plxg-reason="{{ _plxg_reason }}"{% endif %}{% endif %}

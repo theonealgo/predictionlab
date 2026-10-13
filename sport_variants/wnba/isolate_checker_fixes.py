@@ -197,6 +197,8 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
         if age > _SAVED_DISK_MAX:
             return ""
         text = path.read_text(encoding="utf-8")
+        if "const IS_PREMIUM = false" in text:
+            return ""
         if len(text) < 8000 or "<html" not in text.lower():
             return ""
         if "upstream data/model dependency failed" in text.lower():
@@ -232,6 +234,8 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
 
 def store_served_picks(sport: str, html: str) -> None:
     if _viewer_tier() != "paid":
+        return
+    if "const IS_PREMIUM = false" in (html or ""):
         return
     if not html or len(html) < 8000 or "<html" not in html.lower():
         return

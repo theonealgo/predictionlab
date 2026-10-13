@@ -9,17 +9,15 @@ from html import escape
 from html_blocks import blocks, remove_blocks
 
 def picks_date_window(sport: str) -> tuple[int, int]:
-    """Owner-approved windows; NFL was expanded before being re-locked."""
-    if (sport or "").upper() == "NFL":
-        return 14, 14
-    if (sport or "").upper() == "NHL":
-        return 7, 14
-    if (sport or "").upper() == "CFL":
-        # Weekly league: the next two weeks of games must show.
-        return 1, 14
-    if (sport or "").upper() == "NCAAF":
-        return 1, 7
-    if (sport or "").upper() == "SOCCER":
+    """Owner-approved windows: daily team sports 2 back / 3 ahead, football one week each way."""
+    sport = (sport or "").upper()
+    if sport in ("NFL", "NCAAF", "CFL"):
+        return 7, 7
+    if sport == "WNBA":
+        return 3, 7
+    if sport in ("MLB", "NHL", "NBA", "NCAAB", "NCAAW"):
+        return 2, 3
+    if sport == "SOCCER":
         return 2, 7
     return 1, 5
 
@@ -32,6 +30,19 @@ def _soccer_week_page() -> bool:
         return has_request_context() and bool((request.args.get("week") or "").strip())
     except Exception:
         return False
+
+
+def _soccer_week_days() -> tuple[str, str] | None:
+    """Monday..Sunday of the requested soccer ?week= page."""
+    try:
+        from datetime import date
+        from flask import request
+
+        day = date.fromisoformat((request.args.get("week") or "").strip()[:10])
+    except Exception:
+        return None
+    monday = day - timedelta(days=day.weekday())
+    return monday.isoformat(), (monday + timedelta(days=6)).isoformat()
 
 
 _CONTROL_SCRIPT = r"""
@@ -183,6 +194,9 @@ def repair_page_controls(html: str, sport: str, path: str, view: str = "") -> st
         wanted = re.findall(r"20\d\d-\d\d-\d\d", listed.group(1))
         if picks:
             wanted = [day for day in wanted if first <= day <= last]
+        week_days = _soccer_week_days() if soccer_week else None
+        if week_days:
+            wanted = [day for day in wanted if week_days[0] <= day <= week_days[1]]
         missing = sorted(set(wanted) - set(days))
         if missing:
             kind = "predictions" if picks else "results"

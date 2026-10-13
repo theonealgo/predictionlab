@@ -2278,7 +2278,14 @@ def inject_ssr_chart_bootstrap(
     active = markets.get(mk) or {}
     ml = markets.get("moneyline") or {}
     tallies = active.get("tallies") or payload.get("tallies") or {}
-    finals = list(active.get("finals") or ml.get("finals") or payload.get("finals") or [])[:40]
+    finals = list(active.get("finals") or ml.get("finals") or payload.get("finals") or [])
+    try:
+        from results_window import window_dates
+
+        nights = window_dates({str(g.get("game_date") or "")[:10] for g in finals}, "SOCCER")
+        finals = [g for g in finals if str(g.get("game_date") or "")[:10] in nights] or finals[:40]
+    except Exception:
+        finals = finals[:40]
     # Spread/totals Last Night must show face PL + XSharp, not empty / ML-only.
     if mk in ("spread", "totals"):
         ln = tallies.get("last_night") or {}

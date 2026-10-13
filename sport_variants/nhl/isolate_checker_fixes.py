@@ -152,6 +152,8 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
         if age > _SAVED_DISK_MAX:
             return ""
         text = path.read_text(encoding="utf-8")
+        if "const IS_PREMIUM = false" in text:
+            return ""
         if len(text) < 8000 or "<html" not in text.lower():
             return ""
         if "upstream data/model dependency failed" in text.lower():
@@ -176,6 +178,8 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
 
 def store_served_picks(sport: str, html: str) -> None:
     if _viewer_tier() != "paid":
+        return
+    if "const IS_PREMIUM = false" in (html or ""):
         return
     if not html or len(html) < 8000 or "<html" not in html.lower():
         return
@@ -302,7 +306,7 @@ _SERVED_REFRESH_AFTER = 20 * 60
 
 
 def results_refresh_forced() -> bool:
-    return bool(getattr(_RESULTS_REFRESH_FORCE, "on", False))
+    return bool(getattr(_RESULTS_REFRESH_FORCE, "on", False)) or _nhl_is_rebuild_request()
 
 
 def _schedule_served_refresh(key: str) -> None:
@@ -1176,6 +1180,8 @@ def _empty_market_shell() -> dict[str, Any]:
 
 _NHL_RESULTS_DISK = _CARDS_CACHE_DIR / "nhl_results_page.html"
 _NHL_RESULTS_MARK = "<!-- nhl-results-disk -->"
+# A ?market=spread / totals page opens that panel; the plain page must not be saved from it.
+_NHL_ML_HIDDEN = '<div data-market-panel="moneyline" hidden>'
 _NHL_SPREAD_LOCKS: dict[str, tuple[float | None, float | None]] | None = None
 _NHL_MODELS = (
     "Grinder2",
@@ -1189,7 +1195,13 @@ _NHL_PICKEM = {"pk", "pick", "pickem", "pick'em", "even", "0", "0.0"}
 
 
 def read_nhl_chart_disk(market: str = "") -> str:
-    """Saved NHL chart page. A cold /nhl-results?view=chart hit must not rebuild."""
+    """Saved NHL chart page. A cold /nhl-results?view=chart hit must not rebuild.
+
+    When the newest stored final night is missing from the chart's game log,
+    the saved chart is still served and rebuilt in the background.
+    """
+    if results_refresh_forced():
+        return ""
     path = _served_path(results_serve_key("NHL", "chart", market))
     try:
         text = path.read_text(encoding="utf-8")
@@ -1201,8 +1213,15 @@ def read_nhl_chart_disk(market: str = "") -> str:
         return ""
     if "Actual vs lines" in text:
         return ""
-    if not re.search(r"<td>\d{4}-\d{2}-\d{2}</td>", text):
+    rows = re.findall(r"<td>(\d{4}-\d{2}-\d{2})</td>", text)
+    if not rows:
         return ""
+    try:
+        latest, _n = _nhl_latest_final_before_today()
+        if latest and max(rows) < latest:
+            _schedule_nhl_results_rebuild()
+    except Exception:
+        pass
     return text
 
 
@@ -1256,24 +1275,52 @@ def _schedule_nhl_results_rebuild() -> None:
             return
         _NHL_REBUILD_AT = now
 
-    def _run() -> None:
-        import os
-        import urllib.request
+    import os
 
-        port = os.environ.get("PORT") or "5000"
+    base = f"http://127.0.0.1:{os.environ['PORT']}" if os.environ.get("PORT") else ""
+    if not base:
         try:
-            req = urllib.request.Request(
-                f"http://127.0.0.1:{port}/nhl-results",
-                headers={_NHL_REBUILD_HEADER: "1"},
-            )
-            urllib.request.urlopen(req, timeout=300).read()
+            from flask import has_request_context, request
+
+            if has_request_context():
+                base = f"http://127.0.0.1:{request.environ.get('SERVER_PORT') or '5000'}"
         except Exception:
             pass
+    base = base or "http://127.0.0.1:5000"
+
+    def _run() -> None:
+        import urllib.request
+
+        # Charts are built from the cards page, so the cards page goes first.
+        for path in (
+            "/nhl-results",
+            "/nhl-results?view=chart",
+            "/nhl-results?view=chart&market=moneyline",
+            "/nhl-results?view=chart&market=spread",
+            "/nhl-results?view=chart&market=totals",
+        ):
+            try:
+                req = urllib.request.Request(
+                    f"{base}{path}",
+                    headers={_NHL_REBUILD_HEADER: "1"},
+                )
+                urllib.request.urlopen(req, timeout=300).read()
+            except Exception:
+                pass
 
     try:
         threading.Thread(target=_run, daemon=True, name="nhl-results-rebuild").start()
     except Exception:
         pass
+
+
+def _nhl_page_has_finals_on(text: str, day: str) -> bool:
+    """A placeholder "no results" section for the day does not count."""
+    start = text.find(f'id="date-{day}"')
+    if start < 0:
+        return False
+    nxt = text.find('id="date-', start + 10)
+    return "final-score" in text[start : nxt if nxt > 0 else len(text)]
 
 
 def read_nhl_results_disk() -> str:
@@ -1283,8 +1330,6 @@ def read_nhl_results_disk() -> str:
     page is still served and a rebuild runs in the background.
     """
     if _nhl_is_rebuild_request():
-        # The rebuild request must skip every saved copy of the page.
-        _RESULTS_REFRESH_FORCE.on = True
         return ""
     try:
         text = _NHL_RESULTS_DISK.read_text(encoding="utf-8")
@@ -1296,9 +1341,11 @@ def read_nhl_results_disk() -> str:
         return ""
     if "Consensus Based Betting Records" not in text:
         return ""
+    if _NHL_ML_HIDDEN in text:
+        return ""
     try:
         latest, _n = _nhl_latest_final_before_today()
-        if latest and f'id="date-{latest}"' not in text:
+        if latest and not _nhl_page_has_finals_on(text, latest):
             _schedule_nhl_results_rebuild()
     except Exception:
         pass
@@ -2148,6 +2195,8 @@ def write_nhl_results_disk(html: str) -> None:
     if not html or "game-card" not in html or "Last 7 Days" not in html:
         return
     if "Consensus Based Betting Records" not in html:
+        return
+    if _NHL_ML_HIDDEN in html:
         return
     if 'id="ssr-finals"' in html and "game-card" not in html:
         return
@@ -5618,7 +5667,8 @@ def nhl_final_pass(html: str, path: str, view: str) -> str:
             write_nhl_results_disk(html)
             # The chart view lists games from this saved copy of the cards.
             # Keep it in step with the cards page so new finals reach the chart.
-            if 'class="game-card' in html and "Last Night's NHL Results" in html:
+            if ('class="game-card' in html and "Last Night's NHL Results" in html
+                    and _NHL_ML_HIDDEN not in html):
                 _persist_cards_html("NHL", html)
     except Exception:
         pass

@@ -169,6 +169,8 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
         if age > _SAVED_DISK_MAX:
             return ""
         text = path.read_text(encoding="utf-8")
+        if "const IS_PREMIUM = false" in text:
+            return ""
         if len(text) < 8000 or "<html" not in text.lower():
             return ""
         if "upstream data/model dependency failed" in text.lower():
@@ -191,6 +193,8 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
 
 def store_served_picks(sport: str, html: str) -> None:
     if _viewer_tier() != "paid":
+        return
+    if "const IS_PREMIUM = false" in (html or ""):
         return
     if not html or len(html) < 8000 or "<html" not in html.lower():
         return
@@ -463,15 +467,33 @@ def _soccer_chart_last_night_blank(html: str) -> bool:
     return all(c in {"0-0", "—", "-", ""} for c in last_night)
 
 
+# Set by the app: starts the background soccer results rebuild and returns
+# True when the stale page may be served meanwhile.
+STALE_REBUILD = None
+
+
+def _serve_stale_while_rebuilding() -> bool:
+    if not callable(STALE_REBUILD):
+        return False
+    try:
+        return bool(STALE_REBUILD())
+    except Exception:
+        return False
+
+
 def lookup_served_results(key: str) -> str:
-    """Finished results HTML. Memory first, then the last repaired page on disk."""
+    """Finished results HTML. Memory first, then the last repaired page on disk.
+
+    A stale page is still served while the soccer results rebuild runs in the
+    background; a full rebuild takes 15s, which a visitor must not wait on.
+    """
     if results_refresh_forced():
         return ""
     now = time.time()
     hit = _SERVED.get(key)
     if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1]:
         if _served_results_are_stale(key, hit[1]):
-            return ""
+            return hit[1] if _serve_stale_while_rebuilding() else ""
         return hit[1]
     try:
         path = _served_path(key)
@@ -480,7 +502,7 @@ def lookup_served_results(key: str) -> str:
             age = now - path.stat().st_mtime
             if _REPAIRED_MARK in text and len(text) > 500:
                 if _served_results_are_stale(key, text):
-                    return ""
+                    return text if _serve_stale_while_rebuilding() else ""
                 _SERVED[key] = (now, text)
                 if age >= _SERVED_REFRESH_AFTER:
                     _schedule_served_refresh(key)

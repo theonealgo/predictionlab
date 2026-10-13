@@ -215,9 +215,13 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
         if age > _SAVED_DISK_MAX:
             return ""
         text = path.read_text(encoding="utf-8")
+        if "const IS_PREMIUM = false" in text:
+            return ""
         if len(text) < 8000 or "<html" not in text.lower():
             return ""
         if "upstream data/model dependency failed" in text.lower():
+            return ""
+        if "const IS_PREMIUM = false" in text:
             return ""
         waiting_on_books = (
             "check back on game date" in text.lower()
@@ -281,10 +285,14 @@ def _ncaaf_pl_xs_copy_count(html: str) -> int:
 def store_served_picks(sport: str, html: str) -> None:
     if _viewer_tier() != "paid":
         return
+    if "const IS_PREMIUM = false" in (html or ""):
+        return
     if not html or len(html) < 8000 or "<html" not in html.lower():
         return
     low = html.lower()
     if "upstream data/model dependency failed" in low:
+        return
+    if "const IS_PREMIUM = false" in html:
         return
     sport_u = (sport or "").strip().upper()
     if not sport_u:
@@ -294,7 +302,13 @@ def store_served_picks(sport: str, html: str) -> None:
     try:
         _CARDS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         path = _CARDS_CACHE_DIR / f"served_picks_{sport_u}.html"
-        if sport_u == "NCAAF" and path.is_file():
+        # A saved page older than 2 hours is not protected: it still lists
+        # games that have since finished.
+        if (
+            sport_u == "NCAAF"
+            and path.is_file()
+            and time.time() - path.stat().st_mtime < 7200
+        ):
             old = path.read_text(encoding="utf-8")
             # A rebuild that copied XSharp into Prediction Lab must not replace
             # the page the request can serve without calling the odds engine.

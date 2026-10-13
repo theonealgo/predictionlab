@@ -194,7 +194,7 @@
     {% else %}
     <span class="league-badge">{{ sport_info.icon if sport_info is defined else '' }} {{ sport_info.name if sport_info is defined else sport }}</span>
     {% endif %}
-    <span class="game-time">{% if card.game_time is defined and card.game_time %}{{ card.game_time }}{% elif is_final %}FINAL{% else %}Upcoming{% endif %}</span>
+    <span class="game-time">{% if is_final %}FINAL{% elif card.game_time is defined and card.game_time %}{{ card.game_time }}{% else %}Upcoming{% endif %}</span>
 </header>
 
 <div class="matchup-row">

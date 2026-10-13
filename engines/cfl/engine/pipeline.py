@@ -492,7 +492,7 @@ def attach_book_totals(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return cards
 
 
-def list_pick_cards(*, days_back: int = 1, days_fwd: int = 21) -> list[dict[str, Any]]:
+def list_pick_cards(*, days_back: int = 1, days_fwd: int = 7) -> list[dict[str, Any]]:
     if not DB_PATH.exists():
         ensure_predictions(refresh=True)
     with connect() as conn:

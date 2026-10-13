@@ -1038,20 +1038,27 @@ def drop_empty_pl_vs_books(html: str) -> str:
 _DATE_PICKER_JS = (
     '<script id="pl-date-picker-one-date">(function(){'
     "var s=document.getElementById('datePicker');if(!s)return;"
-    "s.addEventListener('change',function(){var id=s.value;setTimeout(function(){"
+    "s.addEventListener('change',function(){var id=s.value;var only=function(){"
     "document.querySelectorAll('.date-section').forEach(function(x){var on=x.id==='date-'+id;"
     "x.classList.toggle('visible',on);x.classList.toggle('seo-hidden',!on);"
     "x.style.display=on?'':'none';});"
     "document.querySelectorAll('.date-bubble').forEach(function(b){"
-    "b.classList.toggle('active',b.getAttribute('data-date')===id);});},0);});"
+    "b.classList.toggle('active',b.getAttribute('data-date')===id);});};only();setTimeout(only,0);});"
     "})();</script>"
 )
 
 
 def date_picker_selects_one_date(html: str) -> str:
     """Choosing a date in the dropdown shows that date's cards and only that date."""
-    if not html or 'id="datePicker"' not in html or 'id="pl-date-picker-one-date"' in html:
+    if not html or 'id="datePicker"' not in html:
         return html
+    if 'id="pl-date-picker-one-date"' in html:
+        return re.sub(
+            r'<script id="pl-date-picker-one-date">[\s\S]*?</script>',
+            lambda m: _DATE_PICKER_JS,
+            html,
+            count=1,
+        )
     if re.search(r"</body>", html, flags=re.I):
         return re.sub(r"</body>", lambda m: _DATE_PICKER_JS + "</body>", html, count=1, flags=re.I)
     return html + _DATE_PICKER_JS
