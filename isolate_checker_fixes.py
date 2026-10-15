@@ -3953,6 +3953,11 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
             if sport_u == "NHL":
                 html = fill_blank_books_ml(html)
                 html = hide_blank_books_ml(html)
+            # Stamp so the next visit skips repair_picks_html (inject + share).
+            # Results pages already stamped; picks did not — every free hit
+            # re-ran the NFL recent-results rebuild.
+            if _REPAIRED_MARK not in (html or ""):
+                html = (html or "") + "\n" + _REPAIRED_MARK
         return normalize_served_html(html, path_l)
     if "results" in path_l:
         html = repair_results_html(html, sport_u, view)

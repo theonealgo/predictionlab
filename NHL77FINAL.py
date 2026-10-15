@@ -16352,8 +16352,8 @@ def _served_layout_last__cfl(response):
         if _root not in _layout_sys.path:
             _layout_sys.path.insert(0, _root)
         import served_layout_fixes
-        import importlib
-        importlib.reload(served_layout_fixes)
+        # Do not importlib.reload on every response — that re-executes the
+        # module and burns CPU on the only worker for every HTML page.
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
         if sport == "CFL":
             try:
@@ -16412,8 +16412,8 @@ def _served_layout_last__tennis(response):
         if _root not in _layout_sys.path:
             _layout_sys.path.insert(0, _root)
         import served_layout_fixes
-        import importlib
-        importlib.reload(served_layout_fixes)
+        # Do not importlib.reload on every response — that re-executes the
+        # module and burns CPU on the only worker for every HTML page.
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
         if sport == "TENNIS":
             try:
@@ -16461,8 +16461,8 @@ def _served_layout_last(response):
         if _root not in _layout_sys.path:
             _layout_sys.path.insert(0, _root)
         import served_layout_fixes
-        import importlib
-        importlib.reload(served_layout_fixes)
+        # Do not importlib.reload on every response — that re-executes the
+        # module and burns CPU on the only worker for every HTML page.
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
         if fixed != html:
             response.set_data(fixed)
@@ -83162,8 +83162,12 @@ def build_todays_top_picks():
 
 @app.route('/healthz')
 def healthz():
-    """Lightweight probe for Render/load balancers (no DB or model work)."""
-    return 'ok', 200
+    """Lightweight probe for Render/load balancers (no DB or model work).
+
+    text/plain so HTML after-request passes (paywall, chrome, record checks)
+    never rewrite this body and never compete with real pages for CPU.
+    """
+    return Response('ok', status=200, mimetype='text/plain')
 
 
 _LANDING_PAGE_CACHE = {'ts': 0, 'html': None}

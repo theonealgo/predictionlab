@@ -1,7 +1,7 @@
 """Gunicorn config — loaded automatically when Render runs `gunicorn NHL77FINAL:app`.
 
 Dashboard start commands that omit `--worker-class` still pick up gthread here.
-Prefer `bash render_start.sh` on Render so /data DB seeding and 8 threads apply.
+Prefer `bash render_start.sh` on Render so /data DB seeding and threads apply.
 """
 import os
 
@@ -10,6 +10,12 @@ workers = 1
 worker_class = "gthread"
 threads = 8
 timeout = 120
+# Recycle the single worker before memory / GIL pressure from large HTML
+# after-request passes can wedge every route (homepage returns 0 bytes while
+# /healthz still answers on a free thread). 7b22e57's in-process page memo
+# made this worse; recycling still protects the reverted tree.
+max_requests = 200
+max_requests_jitter = 40
 # preload_app MUST stay False.
 # With preload_app=True gunicorn imports the whole app in the MASTER *before*
 # binding $PORT, so the port only opens after every top-level import finishes —
