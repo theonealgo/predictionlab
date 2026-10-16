@@ -1406,6 +1406,13 @@ def _american_favorite_side(home_ml: Any, away_ml: Any) -> str | None:
 
 
 def _mlb_consensus_db_path() -> str:
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and os.path.isfile(db):
+            return os.path.abspath(db)
+    if os.path.isfile("/data/sports_predictions_original.db"):
+        return "/data/sports_predictions_original.db"
     return os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "sports_predictions_original.db"
     )
@@ -2436,13 +2443,24 @@ def build_pl_xs_records_html(
     ln_key = last_night_key or (past_dates[-1] if past_dates else yesterday)
     cut7 = (now.date() - timedelta(days=7)).strftime("%Y-%m-%d")
     cut30 = (now.date() - timedelta(days=30)).strftime("%Y-%m-%d")
+    end_key = today
+    if ln_key and ln_key < cut7:
+        # Off-season: the calendar week is empty, so Past 7 / Past 30 end on the
+        # last graded night, the same windows as the totals chart.
+        try:
+            anchor = datetime.strptime(ln_key, "%Y-%m-%d").date()
+            cut7 = (anchor - timedelta(days=6)).strftime("%Y-%m-%d")
+            cut30 = (anchor - timedelta(days=29)).strftime("%Y-%m-%d")
+            end_key = (anchor + timedelta(days=1)).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
 
     def period(pred) -> list[dict[str, Any]]:
         return [a for a in items if pred(str(a.get("game_date") or "")[:10])]
 
     ln = period(lambda d: d == ln_key)
-    d7 = period(lambda d: cut7 <= d < today)
-    d30 = period(lambda d: cut30 <= d < today)
+    d7 = period(lambda d: cut7 <= d < end_key)
+    d30 = period(lambda d: cut30 <= d < end_key)
 
     def by_model(rows: list[dict[str, Any]]) -> dict[str, list]:
         buckets = {"Prediction Lab": [], "XSharp": []}

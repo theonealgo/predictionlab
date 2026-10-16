@@ -239,6 +239,16 @@ def _build_block(sport: str) -> str:
     daily = N._banner_daily_results_for_range(
         sport_u, start, yest, prefer_weekly=False,
     ) or {}
+    if not any(bucket.get("games") for bucket in daily.values()):
+        # Off-season: the windows end on the last NBA night with finals
+        # (the results page shows the same boards).
+        last = N.parse_date(_nba_latest_final_date(N) or "")
+        if last is not None:
+            yest = last.replace(hour=12, minute=0, second=0, microsecond=0, tzinfo=None)
+            start = yest - timedelta(days=29)
+            daily = N._banner_daily_results_for_range(
+                sport_u, start, yest, prefer_weekly=False,
+            ) or {}
     _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:
@@ -264,16 +274,6 @@ def _build_block(sport: str) -> str:
     else:
         ln_label = yest.strftime("%Y-%m-%d")
     ln_src = daily
-    # Off-season: calendar yesterday has no final. Last Night is the latest
-    # stored final (2026-06-03), not an invented October slate. Last 7 and
-    # Last 30 stay the calendar windows.
-    if sport_u == "NBA" and int((ln or {}).get("games") or 0) <= 0:
-        latest = _nba_latest_final_date(N)
-        yest_key = yest.strftime("%Y-%m-%d")
-        if latest and latest <= yest_key:
-            night = _nba_scored_night(N, latest)
-            if night:
-                ln_label, ln, ln_src = night
     last7 = N.compute_model_tally_for_range(
         daily, yest - timedelta(days=6), yest, sport=sport_u,
     )

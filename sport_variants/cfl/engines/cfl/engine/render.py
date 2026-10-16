@@ -1,6 +1,7 @@
 """CFL pick cards — live MLB card template; Books chrome omitted.
 
-Total EV is shown only when a real CFL.ca book O/U exists (current week) and
+Total EV is kept as data only (data-total-ev); pick cards carry no Books, so the
+row is not shown. It exists only when a real CFL.ca book O/U exists (current week) and
 differs from the model total — same −110 / sigma-20 formula as NFL/MLB.
 Never emit a Total EV dash. Results use MLB-style final-score heroes
 + Last Night / Last 7 / Season strips (same HTML as MLB results in NHL77FINAL).
@@ -348,6 +349,76 @@ def _h2h_last10(away: str, home: str) -> str:
     return f"{sum(totals)/len(totals):.1f} ({len(totals)} games)"
 
 
+def _team_last3(conn, team: str, before: str) -> list[tuple[int, int]]:
+    """(team points, opponent points) for the team's last 3 regular-season finals."""
+    names = team_name_variants(team)
+    if not names:
+        return []
+    ph = ",".join("?" for _ in names)
+    rows = conn.execute(
+        f"""
+        SELECT home_team, home_score, away_score, round_name, source FROM cfl_games
+        WHERE status='complete' AND home_score IS NOT NULL AND away_score IS NOT NULL
+          AND (home_team IN ({ph}) OR away_team IN ({ph}))
+          AND date(game_date) < date(?)
+        ORDER BY date(game_date) DESC LIMIT 12
+        """,
+        (*names, *names, before),
+    ).fetchall()
+    out: list[tuple[int, int]] = []
+    for home_team, hs, as_, round_name, source in rows:
+        if str(source or "") != "h2h-history" and not is_regular_season_round(round_name):
+            continue
+        try:
+            hs, as_ = int(hs), int(as_)
+        except (TypeError, ValueError):
+            continue
+        out.append((hs, as_) if home_team in names else (as_, hs))
+        if len(out) >= 3:
+            break
+    return out
+
+
+def _half(value: float) -> str:
+    n = round(float(value) * 2.0) / 2.0
+    return str(int(n)) if n == int(n) else f"{n:.1f}"
+
+
+def _last3_h2h(away: str, home: str, game_date: Any, xs_total: Any) -> str:
+    """Each team's last 3 games: projected total · spread · Combined record vs the XSharp total."""
+    if not DB_PATH.exists():
+        return "—"
+    before = _date_key(game_date) or datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            hg = _team_last3(conn, home, before)
+            ag = _team_last3(conn, away, before)
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return "—"
+    if len(hg) < 3 or len(ag) < 3:
+        return "—"
+    h_avg = sum(s for s, _ in hg) / 3.0
+    a_avg = sum(s for s, _ in ag) / 3.0
+    spread = h_avg - a_avg
+    if round(abs(spread) * 2.0) == 0:
+        side = "PK"
+    else:
+        fav = home if spread > 0 else away
+        side = f"{fav.split()[-1]} -{_half(abs(spread))}"
+    text = f"{_half(h_avg + a_avg)} · {side}"
+    try:
+        line = float(xs_total)
+    except (TypeError, ValueError):
+        return text
+    totals = [s + o for s, o in hg + ag]
+    over = sum(1 for t in totals if t > line)
+    under = sum(1 for t in totals if t < line)
+    return f"{text} · Combined record: {over}-{under} Over"
+
+
 def _component_models(home: str, away: str, hp: float) -> list[tuple[str, float, str]]:
     out: list[tuple[str, float, str]] = []
     for name, d in MODEL_DELTAS:
@@ -501,7 +572,7 @@ def render_card(card: dict[str, Any], idx: int, *, mode: str = "picks") -> str:
         </div>
     </div>"""
 
-    h2h = _h2h_last10(away, home)
+    h2h = _last3_h2h(away, home, card.get("game_date"), total)
     time_bit = f"{day} · {when}" if day else when
 
     extra_attrs = []
@@ -526,17 +597,6 @@ def render_card(card: dict[str, Any], idx: int, *, mode: str = "picks") -> str:
             extra_attrs.append(f'{attr}="{home_pct:.1f}"')
     extra_attr_s = (" " + " ".join(extra_attrs)) if extra_attrs else ""
 
-    tev_html = ""
-    if total_ev is not None:
-        tev_col = "#15803d" if total_ev > 0 else "#b91c1c"
-        tev_sign = "+" if total_ev > 0 else ""
-        tev_html = (
-            f'<div class="sf-item">'
-            f'<span class="sf-label">Total EV</span>'
-            f'<span class="sf-val" style="color:{tev_col};font-weight:700;">'
-            f"{tev_sign}{total_ev:.1f}%</span></div>"
-        )
-
     conf_html = ""
     if card.get("home_win_prob") is not None:
         boxes = []
@@ -556,7 +616,7 @@ def render_card(card: dict[str, Any], idx: int, *, mode: str = "picks") -> str:
         )
 
     return f"""
-                <div class="game-card-stack" data-pick-card data-league="CFL" data-home="{html_lib.escape(home)}" data-away="{html_lib.escape(away)}" data-pick="{html_lib.escape(str(pick))}" data-conf="{pick_pct:.1f}" data-time="{time_bit}" data-pl-spread="{html_lib.escape(pl_spread_txt)}" data-xs-spread="{html_lib.escape(xs_spread_txt)}" data-xs-proj="{html_lib.escape(score_txt)}" data-h2h="{html_lib.escape(h2h)}"{extra_attr_s}>
+                <div class="game-card-stack" data-pick-card data-league="CFL" data-home="{html_lib.escape(home)}" data-away="{html_lib.escape(away)}" data-pick="{html_lib.escape(str(pick))}" data-conf="{pick_pct:.1f}" data-time="{time_bit}" data-pl-spread="{html_lib.escape(pl_spread_txt)}" data-xs-spread="{html_lib.escape(xs_spread_txt)}" data-xs-proj="{html_lib.escape(score_txt)}" data-h2h="{html_lib.escape(h2h)}" data-h2h-l3="{html_lib.escape(h2h if h2h != "—" else "")}"{extra_attr_s}>
                 <div class="game-card pick-card" data-league="CFL">
 <header class="pick-card-header">
     <span class="league-badge">🏈 CFL</span>
@@ -623,11 +683,6 @@ def render_card(card: dict[str, Any], idx: int, *, mode: str = "picks") -> str:
             <span class="sf-label">H2H Last 10</span>
             <span class="sf-val">{html_lib.escape(h2h)}</span>
         </div>
-        <div class="sf-item">
-            <span class="sf-label">Model pick</span>
-            <span class="sf-val">{html_lib.escape(str(pick))}</span>
-        </div>
-        {tev_html}
     </div>
 
     <div class="analysis-toggle" onclick="(function(el){{var p=document.getElementById('{analysis_id}');if(!p)return;var o=p.style.display==='block';p.style.display=o?'none':'block';el.textContent=o?'Analysis ▾':'Analysis ▴';}})(this)">Analysis ▾</div>

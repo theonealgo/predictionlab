@@ -27,6 +27,21 @@ _CACHE: dict[str, tuple[float, list[str]]] = {}
 _TTL = 600.0
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _today() -> date:
     try:
         from zoneinfo import ZoneInfo
@@ -108,6 +123,37 @@ def _scoreboard_days(sport: str) -> list[str]:
     return days
 
 
+_WARMING: set[str] = set()
+
+
+def cached_scoreboard_days(sport: str) -> list[str]:
+    """Last scoreboard walk for this sport. A stale or missing walk refreshes in the background."""
+    import threading
+    import time
+
+    key = (sport or "").upper()
+    hit = _CACHE.get(key)
+    if (not hit or time.time() - hit[0] >= _TTL) and key not in _WARMING:
+        _WARMING.add(key)
+
+        def _run() -> None:
+            try:
+                _scoreboard_days(key)
+            finally:
+                _WARMING.discard(key)
+
+        threading.Thread(target=_run, daemon=True, name=f"scoreboard-{key.lower()}").start()
+    return list(hit[1]) if hit else []
+
+
+def merge_scoreboard_days(html: str, sport: str) -> str:
+    """Add cached scoreboard days to the page's date picker without waiting on the scoreboard."""
+    days = cached_scoreboard_days(sport)
+    if not days or "const allDates" not in (html or ""):
+        return html
+    return _ensure_picker(html, days)
+
+
 def _existing_days(html: str) -> list[str]:
     found = re.findall(r'id="date-(\d{4}-\d{2}-\d{2})"', html or "")
     listed = re.search(r"const allDates = (\[[^\]]*\])", html or "")
@@ -184,7 +230,7 @@ def _insert_picker_outside_script(html: str, select: str) -> str:
 
 
 def _final_count(sport: str, day: str) -> int:
-    path = Path("sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return 0
     try:
@@ -288,7 +334,7 @@ def _sync_ncaaf_totals(html: str) -> str:
 
 def _align_mlb_consensus(html: str) -> str:
     """Sharp Consensus on the card follows the stored ensemble percent."""
-    path = Path("sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file() or "data-m-consensus" not in html:
         return html
     stored: dict[str, float] = {}
@@ -380,7 +426,7 @@ def _loose_days(html: str) -> list[str]:
 
 def _stored_result_days(sport: str) -> list[str]:
     """Finished dates already in this sport's database. No dates are invented."""
-    path = Path("sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return []
     try:

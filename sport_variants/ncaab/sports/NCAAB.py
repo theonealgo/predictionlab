@@ -628,7 +628,10 @@ def _ncaab_ensure_market_lists(html: str, payload: dict | None) -> str:
         finals = list((block or {}).get("finals") or [])
         if not finals and isinstance(payload, dict) and key == "moneyline":
             finals = list(payload.get("finals") or [])
-        missing.append(_ncaab_games_section(key, title, finals))
+        section = _ncaab_games_section(key, title, finals)
+        if key == "moneyline" and re.search(r'\bid=["\']ssr-finals["\']', html or ""):
+            section = section.replace('id="ssr-finals"', 'id="ssr-finals-moneyline"', 1)
+        missing.append(section)
     if not missing:
         return html
     block = "".join(missing)
@@ -770,9 +773,17 @@ def _ncaab_refresh_moneyline_rows(html: str, payload: dict | None) -> str:
     if not finals:
         return html
     section = _ncaab_games_section("moneyline", "Moneyline games", finals)
+
+    def _swap(m: re.Match[str]) -> str:
+        # Keep the id the page gave this section (the open market owns ssr-finals).
+        sid = re.search(r'\bid=["\']([^"\']+)["\']', m.group(0)[:300])
+        if sid:
+            return section.replace('id="ssr-finals"', f'id="{sid.group(1)}"', 1)
+        return section
+
     replaced, n = re.subn(
-        r'<section\b[^>]*\bid=["\']ssr-finals["\'][\s\S]*?</section>',
-        lambda _m: section,
+        r'<section\b[^>]*\bdata-ssr-market=["\']moneyline["\'][\s\S]*?</section>',
+        _swap,
         html or "",
         count=1,
         flags=re.I,

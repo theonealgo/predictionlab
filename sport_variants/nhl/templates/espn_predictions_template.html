@@ -768,20 +768,20 @@
     </style>
     <div class="picks-view-controls">
         <div class="pv-toggle" role="tablist" aria-label="Pick view">
-            <button type="button" class="pv-btn active" id="pvCardsBtn" onclick="setPicksView('cards')">📊 Cards</button>
-            <button type="button" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
+            <button type="button" role="tab" class="pv-btn active" id="pvCardsBtn" onclick="setPicksView('cards')">📊 Cards</button>
+            <button type="button" role="tab" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
         </div>
         <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
         {% if _show_market_tabs %}
         <nav class="picks-market-tabs" id="picksMarketTabs" role="tablist" aria-label="Pick market">
             {% if 'moneyline' in _pcm %}
-            <button type="button" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
+            <button type="button" role="tab" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
             {% endif %}
             {% if 'spread' in _pcm %}
-            <button type="button" class="market-tab" data-market="spread" onclick="setPicksChartMarket('spread')">{% if sport == 'MLB' %}Spread / Run Line{% elif sport == 'NHL' %}Puck Line{% else %}Spread{% endif %}</button>
+            <button type="button" role="tab" class="market-tab" data-market="spread" onclick="setPicksChartMarket('spread')">{% if sport == 'MLB' %}Spread / Run Line{% elif sport == 'NHL' %}Puck Line{% else %}Spread{% endif %}</button>
             {% endif %}
             {% if 'totals' in _pcm %}
-            <button type="button" class="market-tab" data-market="totals" onclick="setPicksChartMarket('totals')">Totals</button>
+            <button type="button" role="tab" class="market-tab" data-market="totals" onclick="setPicksChartMarket('totals')">Totals</button>
             {% endif %}
         </nav>
         {% endif %}
@@ -839,6 +839,13 @@
                 {% else %}
                 {% set _plxg_txt = 'N/A' %}
                 {% set _plxg_reason = pred.soccer_pl_expected_missing_reason if pred.soccer_pl_expected_missing_reason is defined and pred.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' %}
+                {% endif %}
+                {% elif sport == 'NHL' %}
+                {% if pred.h2h_l3_totals is defined and pred.h2h_l3_totals and pred.h2h_last10_total is not none %}
+                {% set _h2h_txt = fmt_half(pred.h2h_last10_total) ~ ' · ' ~ fmt_spread_line(pred.h2h_l3_spread, team_short(pred.home_team_id), team_short(pred.away_team_id)) %}
+                {% if pred.disp_xs_total is defined and pred.disp_xs_total is not none %}
+                {% set _h2h_txt = _h2h_txt ~ ' · Combined record: ' ~ (pred.h2h_l3_totals|select('gt', pred.disp_xs_total|float)|list|length) ~ '-' ~ (pred.h2h_l3_totals|select('lt', pred.disp_xs_total|float)|list|length) ~ ' Over' %}
+                {% endif %}
                 {% endif %}
                 {% else %}
                 {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
@@ -1054,7 +1061,7 @@
             <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">Open fullscreen</a>
         </div>
     </div>
-    <a class="social-image-link" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">
+    <a class="social-image-link" aria-label="Open the predictions image" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">
         <img src="{{ share_image_src }}" alt="">
     </a>
 </div>

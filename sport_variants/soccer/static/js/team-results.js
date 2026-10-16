@@ -724,6 +724,34 @@ async function populateLeagues(preferred, fallbackNames, liveNames) {
   if (![...sel.options].some((o) => o.value === sel.value)) sel.value = "ALL";
 }
 
+// A ?league= page lists only that league's matches (and only that week with ?week=).
+function keepPageLeague(data) {
+  const qs = new URLSearchParams(location.search);
+  const slug = (qs.get("league") || "").trim().toLowerCase();
+  if (!data || !slug || slug === "all" || slug === "all-leagues") return data;
+  const week = (qs.get("week") || "").slice(0, 10);
+  let lo = "";
+  let hi = "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(week)) {
+    const d = new Date(`${week}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    lo = d.toISOString().slice(0, 10);
+    d.setUTCDate(d.getUTCDate() + 6);
+    hi = d.toISOString().slice(0, 10);
+  }
+  const keep = (row) => {
+    const name = String((row && row.league) || "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    const day = String((row && row.game_date) || "").slice(0, 10);
+    return name === slug && (!lo || (day >= lo && day <= hi));
+  };
+  if (Array.isArray(data.finals)) data.finals = data.finals.filter(keep);
+  Object.values(data.markets || {}).forEach((m) => {
+    if (m && Array.isArray(m.finals)) m.finals = m.finals.filter(keep);
+  });
+  return data;
+}
+
 async function loadResults() {
   const leagueEl = document.getElementById("league");
   const league = (leagueEl && leagueEl.value) || "ALL";
@@ -736,7 +764,7 @@ async function loadResults() {
 
     const qs = window.TEAM_HIDE_LEAGUE ? "" : `?league=${encodeURIComponent(league)}`;
     const res = await fetch(`${API}/picks${qs}`);
-    const data = await res.json();
+    const data = keepPageLeague(await res.json());
     if (!data.ok) throw new Error(data.error || "Failed");
 
     const liveNames = collectLiveLeagueNames(data);

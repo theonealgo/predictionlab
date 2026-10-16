@@ -165,10 +165,8 @@ def _market_table(title: str, pairs) -> str:
 
 
 # /cfl-picks is rendered from the in-process MLB predictions page, so the
-# Recent results block already on that HTML is that page's Last 30. Short
-# windows and the totals chart have to use this same graded set. Last 30's
-# own bounds stay yesterday through 29 days earlier.
-_CFL_PICKS_SHELL_SPORT = "MLB"
+# Recent results block already on that HTML is MLB's. It is replaced with
+# one built from the CFL results board (all three windows and the totals chart).
 # Dates and grade strings for the CFL results board. Filled only when the
 # short windows are taken from Last 30's graded set. Last 30 is not stored.
 _CFL_WINDOW_META: dict = {}
@@ -199,15 +197,16 @@ def _replace_recent_section(html: str, block: str) -> str:
     return html2 if n else html
 
 
-def _build_block(sport: str, *, fill_short_from_graded: bool = False) -> str:
+def _build_block(sport: str, *, fill_short_from_graded: bool = False, daily: dict | None = None) -> str:
     import NHL77FINAL as N
 
     sport_u = (sport or "").strip().upper()
     yest = _yesterday_et().replace(tzinfo=None)
     start = yest - timedelta(days=29)
-    daily = N._banner_daily_results_for_range(
-        sport_u, start, yest, prefer_weekly=False,
-    ) or {}
+    if daily is None:
+        daily = N._banner_daily_results_for_range(
+            sport_u, start, yest, prefer_weekly=False,
+        ) or {}
     _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:
@@ -344,7 +343,10 @@ def _cfl_filled_block() -> str:
     hit = _CACHE.get("CFL-SHELL")
     if hit and now - hit[0] < _TTL:
         return hit[1]
-    block = _build_block(_CFL_PICKS_SHELL_SPORT)
+    daily = _cfl_board_daily()
+    if not daily:
+        return ""
+    block = _build_block("CFL", daily=daily)
     block = _overlay_cfl_results_windows(block)
     _CACHE["CFL-SHELL"] = (now, block)
     return block
@@ -372,21 +374,27 @@ def _tally_face(entry) -> str:
     return f"{acc_txt}% · {rec}"
 
 
-def _cfl_results_windows() -> dict:
-    """Last Night and Last 7 from the CFL results board, not a longer slate."""
-    from collections import defaultdict
-    from datetime import datetime, timedelta
-
-    import NHL77FINAL as N
+def _cfl_board_daily() -> dict:
+    """CFL results-board games keyed by date."""
     from cfl_live import _cfl_card_to_daily_game
     from mlb_team_shell import _cfl_cards
 
     cards, render = _cfl_cards("results")
-    daily: dict = defaultdict(lambda: {"games": []})
+    daily: dict = {}
     for card in cards:
         game = _cfl_card_to_daily_game(card, render)
         if game:
-            daily[game["date"]]["games"].append(game)
+            daily.setdefault(game["date"], {"games": []})["games"].append(game)
+    return daily
+
+
+def _cfl_results_windows() -> dict:
+    """Last Night and Last 7 from the CFL results board, not a longer slate."""
+    from datetime import datetime, timedelta
+
+    import NHL77FINAL as N
+
+    daily = _cfl_board_daily()
     if not daily:
         return {}
     yesterday_dt = datetime.now() - timedelta(days=1)
@@ -506,11 +514,10 @@ def _repair_cfl_recent_section(html: str) -> str:
     try:
         block = _cfl_filled_block()
     except Exception:
-        return html
-    old_n = _col_games(html, "Last 30")
-    new_n = _col_games(block, "Last 30")
-    if new_n <= 0 or (old_n and new_n != old_n):
-        return html
+        block = ""
+    if _col_games(block, "Last 30") <= 0:
+        # The section on the shell page is another sport's record.
+        block = ""
     return _replace_recent_section(html, block)
 
 

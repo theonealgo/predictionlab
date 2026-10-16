@@ -17,6 +17,21 @@ from typing import Any
 _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _persist_cards_html(sport: str, html: str) -> None:
     if not html or html.count("game-card") < 3:
         return
@@ -128,9 +143,8 @@ def _schedule_served_refresh(key: str) -> None:
         try:
             _RESULTS_REFRESH_FORCE.on = True
             appmod = sys.modules.get("__main__") or sys.modules.get("NHL77FINAL")
-            fn = getattr(appmod, "sport_results", None) if appmod else None
             app = getattr(appmod, "app", None) if appmod else None
-            if not callable(fn) or app is None:
+            if app is None:
                 return
             parts = (key.split("|") + [""] * 6)[:6]
             sport, view, market, league, region, week = parts
@@ -147,8 +161,11 @@ def _schedule_served_refresh(key: str) -> None:
             if week:
                 query.append(f"week={week}")
             url = f"/{slug}-results" + (("?" + "&".join(query)) if query else "")
-            with app.test_request_context(url):
-                fn(sport)
+            # A full request runs the response passes that save the page.
+            # localhost builds the paid copy; any other host the free one.
+            client = app.test_client()
+            for base in ("http://localhost", "http://results-refresh.local"):
+                client.get(url, base_url=base)
         except Exception:
             pass
         finally:
@@ -429,6 +446,7 @@ def lookup_served_results(key: str) -> str:
     now = time.time()
     hit = _SERVED.get(key)
     if hit and now - hit[0] < _SERVED_TTL and _served_results_usable(hit[1]):
+        _mark_served_from_disk()
         return hit[1]
     try:
         path = _served_path(key)
@@ -437,6 +455,7 @@ def lookup_served_results(key: str) -> str:
             age = now - path.stat().st_mtime
             if _served_results_usable(text):
                 _SERVED[key] = (now, text)
+                _mark_served_from_disk()
                 if age >= _SERVED_REFRESH_AFTER:
                     _schedule_served_refresh(key)
                 return text
@@ -445,8 +464,28 @@ def lookup_served_results(key: str) -> str:
     return ""
 
 
+def _mark_served_from_disk() -> None:
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            g._pl_results_from_disk = True
+    except Exception:
+        pass
+
+
+def _served_from_disk() -> bool:
+    try:
+        from flask import g, has_request_context
+        return has_request_context() and bool(getattr(g, "_pl_results_from_disk", False))
+    except Exception:
+        return False
+
+
 def store_served_results(key: str, html: str) -> None:
     if not key or not html or _REPAIRED_MARK not in html or len(html) < 500:
+        return
+    # Re-saving the copy that was just read resets its age, so it never refreshes.
+    if _served_from_disk() and not results_refresh_forced():
         return
     _SERVED[key] = (time.time(), html)
     try:
@@ -1494,7 +1533,7 @@ def _nfl_lock_spreads(game_ids: list[str]) -> dict[str, tuple]:
     try:
         import sqlite3
 
-        db_path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        db_path = _app_db_path()
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             for start in range(0, len(ids), 80):
@@ -1780,7 +1819,7 @@ def _nfl_stored_efficiency(game_ids: list[str]) -> dict[str, Any]:
         import json
         import sqlite3
 
-        db_path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        db_path = _app_db_path()
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             for start in range(0, len(ids), 80):
@@ -1962,7 +2001,7 @@ def _nfl_stored_edge_home(game_ids: list[str]) -> dict[str, float]:
         import json
         import sqlite3
 
-        db_path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        db_path = _app_db_path()
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             for start in range(0, len(ids), 80):
@@ -2073,7 +2112,7 @@ def _nfl_game_dates(game_ids: list[str]) -> dict[str, str]:
     try:
         import sqlite3
 
-        db_path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        db_path = _app_db_path()
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             for start in range(0, len(ids), 80):
@@ -2103,7 +2142,7 @@ def _nfl_xgb_scores(game_ids: list[str]) -> dict[str, tuple[float, float]]:
         import json
         import sqlite3
 
-        db_path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        db_path = _app_db_path()
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             for start in range(0, len(ids), 80):
@@ -3400,7 +3439,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -3569,15 +3608,49 @@ def _logo_photo_response():
     return Response(data, mimetype="image/svg+xml")
 
 
+_HEADSHOT_WIDTH = 160
+
+
+def _shrink_headshot(data: bytes) -> tuple[bytes, str]:
+    """Cards draw headshots at 40-52px; a 160px WebP covers 3x screens."""
+    try:
+        import io
+
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(data))
+        im.load()
+        if im.width > _HEADSHOT_WIDTH:
+            h = max(1, round(im.height * _HEADSHOT_WIDTH / im.width))
+            im = im.resize((_HEADSHOT_WIDTH, h), Image.LANCZOS)
+        if im.mode not in ("RGB", "RGBA"):
+            im = im.convert("RGBA")
+        buf = io.BytesIO()
+        im.save(buf, format="WEBP", quality=82, method=4)
+        out = buf.getvalue()
+        if 80 < len(out) < len(data):
+            return out, "image/webp"
+    except Exception:
+        pass
+    return data, "image/png"
+
+
+def _photo_response(Response, body, ctype):
+    resp = Response(body, mimetype=ctype)
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 def _player_photo_file(img_id: str):
     from flask import Response
     img_id = re.sub(r"[^0-9]", "", img_id or "")
     if not img_id:
         return _logo_photo_response()
-    cached = _PHOTO_MEMO.get(img_id)
+    cached = _PHOTO_MEMO.get(img_id) or _photo_disk_get(img_id)
     if cached is not None:
+        _PHOTO_MEMO[img_id] = cached
         body, ctype = cached
-        return Response(body, mimetype=ctype)
+        return _photo_response(Response, body, ctype)
     stems = (
         "mma/players/full",
         "tennis/players/full",
@@ -3598,13 +3671,49 @@ def _player_photo_file(img_id: str):
             with urllib.request.urlopen(req, timeout=4) as resp:
                 data = resp.read()
             if len(data) > 80:
-                _PHOTO_MEMO[img_id] = (data, "image/png")
-                return Response(data, mimetype="image/png")
+                data, ctype = _shrink_headshot(data)
+                _PHOTO_MEMO[img_id] = (data, ctype)
+                _photo_disk_put(img_id, data, ctype)
+                return _photo_response(Response, data, ctype)
         except Exception:
             continue
     logo = _logo_photo_response()
     _PHOTO_MEMO[img_id] = (logo.get_data(), "image/svg+xml")
+    _photo_disk_put(img_id, logo.get_data(), "image/svg+xml")
     return logo
+
+
+_PHOTO_DISK_DIR = Path(__file__).resolve().parent / ".cache" / "player_photos"
+_PHOTO_EXT = {"image/webp": "webp", "image/png": "png", "image/svg+xml": "svg"}
+# A missing headshot falls back to the logo; look again once a day.
+_PHOTO_MISS_TTL_S = 86400
+
+
+def _photo_disk_get(img_id: str):
+    import time
+
+    for ctype, ext in _PHOTO_EXT.items():
+        path = _PHOTO_DISK_DIR / f"{img_id}.{ext}"
+        try:
+            if ext == "svg" and time.time() - path.stat().st_mtime > _PHOTO_MISS_TTL_S:
+                continue
+            return path.read_bytes(), ctype
+        except OSError:
+            continue
+    return None
+
+
+def _photo_disk_put(img_id: str, data: bytes, ctype: str) -> None:
+    ext = _PHOTO_EXT.get(ctype)
+    if not ext or not data:
+        return
+    try:
+        _PHOTO_DISK_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = _PHOTO_DISK_DIR / f"{img_id}.{ext}.tmp"
+        tmp.write_bytes(data)
+        tmp.replace(_PHOTO_DISK_DIR / f"{img_id}.{ext}")
+    except OSError:
+        pass
 
 
 def _ensure_player_photo_route() -> None:
@@ -4375,7 +4484,12 @@ def _season_board_from_results(html: str) -> dict[str, tuple[int, int]]:
     return _season_ml_from_results(html or "")
 
 
-def _rewrite_asr_model_row(row: str, board: dict[str, tuple[int, int]]) -> str:
+_ASR_FILL_EMPTY_FROM_BOARD = frozenset({"NBA"})
+
+
+def _rewrite_asr_model_row(
+    row: str, board: dict[str, tuple[int, int]], fill_empty: bool = False,
+) -> str:
     pieces: list[str] = []
     pos = 0
     tds = list(re.finditer(r"<td>[\s\S]*?</td>", row, flags=re.I))
@@ -4384,6 +4498,22 @@ def _rewrite_asr_model_row(row: str, board: dict[str, tuple[int, int]]) -> str:
         cell = td.group(0)
         model_i = i - 1
         if (
+            fill_empty
+            and 0 <= model_i < len(_ASR_ROW_MODELS)
+            and 'class="asr-status"' in cell
+            and _ASR_ROW_MODELS[model_i] in board
+        ):
+            wins, losses = board[_ASR_ROW_MODELS[model_i]]
+            if wins + losses > 0:
+                pct = f"{(100.0 * wins / (wins + losses)):.1f}"
+                cell = re.sub(
+                    r'<div class="asr-status">[\s\S]*?</div>',
+                    f'<div class="asr-pct">{pct}%</div><div class="asr-rec">{wins}-{losses}'
+                    '<span class="asr-info" title="Number of Games"> ⓘ</span></div>',
+                    cell,
+                    count=1,
+                )
+        elif (
             0 <= model_i < len(_ASR_ROW_MODELS)
             and "asr-rec" in cell
             and _ASR_ROW_MODELS[model_i] in board
@@ -4437,13 +4567,16 @@ def align_asr_with_season_boards(html: str) -> str:
         if not board:
             continue
         href = f'href="/{sport.lower()}-results"'
+        fill_empty = sport in _ASR_FILL_EMPTY_FROM_BOARD
         for tr in re.finditer(r"<tr>[\s\S]*?</tr>", new_block, flags=re.I):
             row = tr.group(0)
-            if href not in row or "asr-rec" not in row:
+            if href not in row:
+                continue
+            if "asr-rec" not in row and not (fill_empty and 'class="asr-status"' in row):
                 continue
             if re.search(r"20\d{2}-\d{2}", row):
                 continue
-            updated = _rewrite_asr_model_row(row, board)
+            updated = _rewrite_asr_model_row(row, board, fill_empty=fill_empty)
             if updated != row:
                 new_block = new_block.replace(row, updated, 1)
             break

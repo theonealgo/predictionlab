@@ -81,7 +81,11 @@ def _balanced_div_at(html: str, start: int) -> tuple[str, int]:
 
 
 def dedupe_game_card_stacks(html: str) -> str:
-    """Keep first game-card-stack per away+home+kickoff; drop identical duplicates."""
+    """Keep first game-card-stack per away+home+kickoff+date; drop identical duplicates.
+
+    Playoff series replay the same matchup on back-to-back days, and finals all
+    read "FINAL", so the date is part of the key.
+    """
     if not html or "game-card-stack" not in html:
         return html
     parts: list[str] = []
@@ -104,9 +108,11 @@ def dedupe_game_card_stacks(html: str) -> str:
             am = re.search(rf'data-{k}=["\']([^"\']*)["\']', head, re.I)
             return (am.group(1) if am else "").strip().lower()
 
-        key = f"{_attr('away')}|{_attr('home')}|{_attr('time')}"
-        if key == "||" or key not in seen:
-            if key != "||":
+        day_m = re.search(r"card-details-(\d{4}-\d{2}-\d{2})", box)
+        day = day_m.group(1) if day_m else _attr("date")
+        key = f"{_attr('away')}|{_attr('home')}|{_attr('time')}|{day}"
+        if key == "|||" or key not in seen:
+            if key != "|||":
                 seen.add(key)
             parts.append(box)
         pos = end

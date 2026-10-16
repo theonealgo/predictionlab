@@ -55,9 +55,25 @@ _WNBA_ESPN_SLUG = {
 }
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _wnba_h2h_db_paths() -> list[Path]:
     root = Path(__file__).resolve().parent
     return [
+        _app_db_path(),
         root / "sports_predictions_original.db",
         root / "data" / "sports_predictions_original.db",
         Path.home() / "Documents/Personal/wnba" / "data" / "sandbox_results.db",
@@ -1000,7 +1016,7 @@ def _wnba_lock_pl_line(game_id: str) -> tuple[float, float] | None:
     gid = (game_id or "").strip()
     if not gid:
         return None
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     if not db.is_file():
         return None
     try:
@@ -1105,7 +1121,7 @@ def _stored_lock(game_id: str) -> dict[str, Any] | None:
         setattr(_stored_lock, "_cache", cache)
     if gid in cache:
         return cache[gid]
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     row = None
     if db.is_file():
         try:
@@ -1151,6 +1167,44 @@ def _home_pct_from_margin(margin: float) -> float:
         return float(spread_to_home_prob_pct(float(margin), "WNBA"))
     except Exception:
         return round(50.0 + 50.0 * max(-1.0, min(1.0, float(margin) / 16.0)), 1)
+
+
+def _fill_blank_pl_moneylines(row: str, home_pct: float) -> str:
+    """Blank Prediction Lab moneylines from the PL odds engine at the card's win %."""
+    if "face-pl-ml" not in row:
+        return row
+    import sys as _sys
+
+    engine = None
+    for _name in ("NHL77FINAL", "__main__"):
+        engine = getattr(_sys.modules.get(_name), "_compute_odds_from_prob", None)
+        if engine:
+            break
+    if engine is None:
+        return row
+    try:
+        ml = engine(home_pct, apply_vig=True, clamp_ml=True) or {}
+    except Exception:
+        return row
+    vals = [ml.get("moneyline_away"), ml.get("moneyline_home")]
+    seen = {"n": 0}
+
+    def _pl(m: re.Match[str], _seen: dict[str, int] = seen) -> str:
+        idx = _seen["n"]
+        _seen["n"] += 1
+        if not _blank_cell(m.group(2)) or idx > 1 or vals[idx] is None:
+            return m.group(0)
+        num = int(vals[idx])
+        cls = "fav" if num < 0 else "dog"
+        txt = f"+{num}" if num > 0 else str(num)
+        return f'{m.group(1)}<span class="ml-num {cls}">{txt}</span>'
+
+    return re.sub(
+        r'(<div class="ml-line face-pl-ml">\s*<span class="ml-src pl">[^<]*</span>\s*)'
+        r'<span class="ml-num[^"]*">([^<]*)</span>',
+        _pl,
+        row,
+    )
 
 
 def _fill_one_wnba_stack(stack: str) -> str:
@@ -1697,6 +1751,7 @@ def restore_wnba_stored_pick_face(html: str) -> str:
                 return f'class="team-slot{" favored" if fav else ""}"'
 
             row = re.sub(r'class="team-slot[^"]*"', _fav, row, count=2)
+            row = _fill_blank_pl_moneylines(row, home_pct)
             rest = rest[: row_m.start(2)] + row + rest[row_m.end(2) :]
 
         ens_pct = _lock_ensemble_pct(snap)
@@ -1879,7 +1934,7 @@ def _wnba_betting_spread_total(game_id: str) -> tuple[float, float] | None:
     gid = (game_id or "").strip()
     if not gid:
         return None
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     if not db.is_file():
         return None
     try:
@@ -2148,7 +2203,8 @@ def apply_wnba_picks_fixups(html: str) -> str:
     if not html or "data-pick-card" not in html:
         return html
     try:
-        html = dedupe_game_card_stacks(html)
+        # Playoff rematches share teams and tip time, so duplicates are judged per date.
+        html = "".join(dedupe_game_card_stacks(part) for part in re.split(r'(?=<div class="date-section)', html))
     except Exception:
         pass
     html = enrich_mlb_chart_data_attrs(html)

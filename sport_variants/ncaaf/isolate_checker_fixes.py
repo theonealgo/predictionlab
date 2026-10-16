@@ -17,6 +17,21 @@ from typing import Any
 _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _persist_cards_html(sport: str, html: str) -> None:
     if not html or html.count("game-card") < 3:
         return
@@ -181,7 +196,7 @@ def _picks_recent_is_stale(sport: str, text: str) -> bool:
         yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
     except Exception:
         yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -448,9 +463,8 @@ def _schedule_served_refresh(key: str) -> None:
         try:
             _RESULTS_REFRESH_FORCE.on = True
             appmod = sys.modules.get("__main__") or sys.modules.get("NHL77FINAL")
-            fn = getattr(appmod, "sport_results", None) if appmod else None
             app = getattr(appmod, "app", None) if appmod else None
-            if not callable(fn) or app is None:
+            if app is None:
                 return
             parts = (key.split("|") + [""] * 6)[:6]
             sport, view, market, league, region, week = parts
@@ -466,8 +480,11 @@ def _schedule_served_refresh(key: str) -> None:
             if week:
                 query.append(f"week={week}")
             url = f"/{sport.lower()}-results" + (("?" + "&".join(query)) if query else "")
-            with app.test_request_context(url):
-                fn(sport)
+            # A full request runs the response passes that save the page.
+            # localhost builds the paid copy; any other host the free one.
+            client = app.test_client()
+            for base in ("http://localhost", "http://results-refresh.local"):
+                client.get(url, base_url=base)
         except Exception:
             pass
         finally:
@@ -500,7 +517,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
             _y = (_dt.now(_Z("America/New_York")).date() - _td(days=1)).isoformat()
         except Exception:
             _y = (_dt.now().date() - _td(days=1)).isoformat()
-        _db = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        _db = _app_db_path()
         if not _db.is_file():
             return False
         try:
@@ -535,7 +552,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         shown = datetime.strptime(night.group(1), "%Y-%m-%d").date()
     except ValueError:
         return False
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -582,7 +599,7 @@ def lookup_served_results(key: str) -> str:
     if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1]:
         if _served_results_are_stale(key, hit[1]):
             _schedule_served_refresh(key)
-        return hit[1]
+        return _mark_served_from_disk(hit[1])
     try:
         path = _served_path(key)
         if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
@@ -592,14 +609,36 @@ def lookup_served_results(key: str) -> str:
                 _SERVED[key] = (now, text)
                 if age >= _SERVED_REFRESH_AFTER or _served_results_are_stale(key, text):
                     _schedule_served_refresh(key)
-                return text
+                return _mark_served_from_disk(text)
     except Exception:
         pass
     return ""
 
 
+def _mark_served_from_disk(html):
+    if html:
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                g._pl_results_from_disk = True
+        except Exception:
+            pass
+    return html
+
+
+def _served_from_disk() -> bool:
+    try:
+        from flask import g, has_request_context
+        return has_request_context() and bool(getattr(g, "_pl_results_from_disk", False))
+    except Exception:
+        return False
+
+
 def store_served_results(key: str, html: str) -> None:
     if not key or not html or _REPAIRED_MARK not in html or len(html) < 500:
+        return
+    # Re-saving the copy that was just read resets its age, so it never refreshes.
+    if _served_from_disk() and not results_refresh_forced():
         return
     _SERVED[key] = (time.time(), html)
     try:
@@ -1275,14 +1314,27 @@ def align_ncaaf_consensus_past7(html: str, cards_html: str | None = None) -> str
             empty="0-0",
         )
 
+    def _wlp(cell_html: str) -> tuple[int, int, int]:
+        m = re.search(r"(\d+)-(\d+)(?:-(\d+))?", re.sub(r"<[^>]+>", " ", cell_html or ""))
+        if not m:
+            return 0, 0, 0
+        return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+
     def _row(match: re.Match[str]) -> str:
         label = match.group(2)
         if "/6" not in label:
             return match.group(0)
-        cell = _cell(expected.get(_norm_cons_label(label)))
+        grades = expected.get(_norm_cons_label(label)) or []
+        cell = _cell(grades)
+        # Past 30 holds Past 7: swap the builder's 7-day games for the card-graded ones.
+        old7 = _wlp(match.group(6))
+        old30 = _wlp(match.group(8))
+        new7 = (grades.count("WIN"), grades.count("LOSS"), grades.count("PUSH"))
+        w, l, p = (max(0, old30[i] - old7[i]) + new7[i] for i in range(3))
+        cell30 = _cell(["WIN"] * w + ["LOSS"] * l + ["PUSH"] * p)
         return (
             f"{match.group(1)}{label}{match.group(3)}{match.group(4)}"
-            f"{match.group(5)}{cell}{match.group(7)}{match.group(8)}{match.group(9)}"
+            f"{match.group(5)}{cell}{match.group(7)}{cell30}{match.group(9)}"
         )
 
     block2 = re.sub(
@@ -1306,7 +1358,7 @@ def align_ncaaf_consensus_past7(html: str, cards_html: str | None = None) -> str
             f'<td class="bucket">{pretty.get(key, key)}</td>'
             "<td>0-0</td>"
             f"<td>{_cell(grades)}</td>"
-            "<td>0-0</td>"
+            f"<td>{_cell(grades)}</td>"
             "</tr>"
         )
     if extra and re.search(r"</tbody>", block2, flags=re.I):
@@ -1765,7 +1817,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -2567,7 +2619,7 @@ def fill_ncaaf_locked_lines(html: str) -> str:
     """Show a stored spread and total on a card that rendered neither."""
     if not html or "data-pick-card" not in html:
         return html
-    db_path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    db_path = _app_db_path()
     if not db_path.is_file():
         return html
     try:
@@ -2654,6 +2706,20 @@ def fill_ncaaf_locked_lines(html: str) -> str:
                     updated = updated.replace('<footer class="card-footer">', table + '<footer class="card-footer">', 1)
                 else:
                     updated = updated + table
+            else:
+                # The card keeps its own projected scores; the data attributes must match them.
+                for shown_m in re.finditer(
+                    r'<span class="proj-model (pl|xs)">[^<]*</span>\s*<span class="proj-val">([^<]*)</span>',
+                    updated,
+                    flags=re.I,
+                ):
+                    shown = unescape(shown_m.group(2)).strip()
+                    if _cell_blank(shown) or len(re.findall(r"\d+(?:\.\d+)?", shown)) < 2:
+                        continue
+                    if shown_m.group(1).lower() == "pl":
+                        pl_proj = shown
+                    else:
+                        xs_proj = shown
             def _set(attr: str, value: str, text: str) -> str:
                 if re.search(rf'{attr}="', text, flags=re.I):
                     return re.sub(rf'{attr}="[^"]*"', f'{attr}="{escape(value, quote=True)}"', text, count=1, flags=re.I)
@@ -2721,7 +2787,7 @@ def _ncaaf_xsharp_model():
 
     from xgb_spread_model import get_or_train_model
 
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     conn = sqlite3.connect(db)
     try:
         rows = conn.execute(
@@ -2976,7 +3042,7 @@ def _ncaaf_disp_spread_labels(game_ids: list[str]) -> dict[str, tuple[str, str]]
         return {}
     import json
 
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     conn = sqlite3.connect(db)
     try:
         marks = ",".join("?" for _ in game_ids)
@@ -3254,8 +3320,9 @@ def fit_ncaaf_confidence_labels(html: str) -> str:
         "text-overflow:clip!important;height:auto!important;max-height:none!important}"
         "</style>"
     )
-    if re.search(r"</body", html, flags=re.I):
-        return re.sub(r"</body", style + "</body>", html, count=1, flags=re.I)
+    html = re.sub(r"</body>>+", "</body>", html, flags=re.I)
+    if re.search(r"</body\s*>", html, flags=re.I):
+        return re.sub(r"</body\s*>", lambda m: style + "</body>", html, count=1, flags=re.I)
     return html + style
 
 
@@ -3358,7 +3425,7 @@ def ncaaf_books_odds_info(html: str) -> str:
         return html
     slate_dates: dict[str, str] = {}
     try:
-        db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+        db = _app_db_path()
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
         try:
             for gid, day in con.execute(
@@ -3436,7 +3503,7 @@ def _ncaaf_ids_without_stored_pl_spread(game_ids: list[str]) -> set[str]:
     ids = [gid for gid in dict.fromkeys(game_ids) if gid]
     if not ids:
         return set()
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     if not db.is_file():
         return set()
     try:
@@ -3755,7 +3822,11 @@ def separate_ncaaf_copied_percents(html: str) -> str:
     if not html or "data-pick-card" not in html:
         return html
     try:
-        from team_results_charts import ncaaf_elo_is_placeholder, ncaaf_live_elo_home_pct
+        from team_results_charts import (
+            ncaaf_elo_is_placeholder,
+            ncaaf_live_elo_home_pct,
+            ncaaf_pregame_elo_home_pct,
+        )
     except Exception:
         return html
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
@@ -3792,8 +3863,14 @@ def separate_ncaaf_copied_percents(html: str) -> str:
         away_m = re.search(r'data-away="([^"]*)"', stack, flags=re.I)
         home = unescape(home_m.group(1) if home_m else "")
         away = unescape(away_m.group(1) if away_m else "")
-        live = ncaaf_live_elo_home_pct(home, away) if home and away else None
-        if live is None or ncaaf_elo_is_placeholder(live):
+        day_m = re.search(r"details-(20\d\d-\d\d-\d\d)-", stack)
+        both_rated = False
+        if day_m and home and away:
+            live, both_rated = ncaaf_pregame_elo_home_pct(home, away, day_m.group(1))
+        else:
+            live = ncaaf_live_elo_home_pct(home, away) if home and away else None
+        # Two rated teams can be a true 50.0; one unrated side is the untrained 50/50.
+        if live is None or (ncaaf_elo_is_placeholder(live) and not both_rated):
             out.append(stack)
             continue
         if abs(edge_n - float(live)) < 0.05 or abs(edge_n - (100.0 - float(live))) < 0.05:
@@ -3810,7 +3887,7 @@ def separate_ncaaf_copied_percents(html: str) -> str:
         )
         stack = re.sub(
             r'data-m-edge="[^"]*"',
-            f'data-m-edge="{live:.1f}"',
+            f'data-m-edge="{face_s}"',
             stack,
             count=1,
             flags=re.I,

@@ -231,6 +231,10 @@ def payload_from_results_html(html: str, sport_name: str) -> dict[str, Any] | No
         last_7 = indiv.get("last_7")
 
     if not last_night and not last_7:
+        if "golf-results-table" in html:
+            from golf_results_share import golf_payload_from_results_html
+
+            return golf_payload_from_results_html(html, sport_name)
         return None
     empty = _empty_window()
     return {
@@ -301,6 +305,10 @@ def render_results_summary_share_image(
         return None, None
     if not payload or payload.get("type") != "results-summary":
         return None, None
+    if payload.get("golf"):
+        from golf_results_share import render_golf_results_image
+
+        return render_golf_results_image(payload, fmt, max_width=max_width)
 
     width = 1080
     pad = 56

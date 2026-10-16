@@ -1406,6 +1406,13 @@ def _american_favorite_side(home_ml: Any, away_ml: Any) -> str | None:
 
 
 def _mlb_consensus_db_path() -> str:
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and os.path.isfile(db):
+            return os.path.abspath(db)
+    if os.path.isfile("/data/sports_predictions_original.db"):
+        return "/data/sports_predictions_original.db"
     return os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "sports_predictions_original.db"
     )
@@ -1610,9 +1617,9 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
         slot.update(by_gid.get(gid) or {})
         bh = g.get("book_home_moneyline")
         ba = g.get("book_away_moneyline")
-        if bh is None:
+        # Card rows name the favored box "home"; a stored line may be the other way round.
+        if bh is None and ba is None:
             bh = slot.get("book_home_moneyline")
-        if ba is None:
             ba = slot.get("book_away_moneyline")
         ph = g.get("pl_model_home_ml")
         pa = g.get("pl_model_away_ml")
@@ -3483,16 +3490,21 @@ def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[s
         face_correct = first.get("correct")
     spread, totals = _extract_spread_totals(card_html)
     gid_m = re.search(r'data-game-id="([^"]+)"', card_html, re.I)
-    away_blk = re.search(
-        r'class="(?:team-col away|team-slot\s*")([\s\S]*?)class="(?:team-col home|team-slot favored")',
-        card_html,
-        re.I,
-    )
-    home_blk = re.search(
-        r'class="(?:team-col home|team-slot favored")([\s\S]*?)(?:class="(?:team-col|team-slot|card-footer|pick-conf)|$)',
-        card_html,
-        re.I,
-    )
+    # Each team's Books price is read from its own box; the favored box can come first.
+    slot_starts = [
+        m.start()
+        for m in re.finditer(r'class="(?:team-col (?:away|home)|team-slot[\s"])', card_html, re.I)
+    ]
+    stop_m = re.search(r'class="(?:card-footer|pick-conf)', card_html, re.I)
+
+    def _slot_block(match: re.Match | None) -> str:
+        if match is None:
+            return ""
+        start = match.start()
+        ends = [s for s in slot_starts if s > start][:1]
+        if stop_m and stop_m.start() > start:
+            ends.append(stop_m.start())
+        return card_html[start : min(ends)] if ends else card_html[start:]
 
     def _face_book_ml(block: str | None) -> Any:
         if not block:
@@ -3509,8 +3521,8 @@ def _extract_one_game_card(card_html: str, date_key: str, league: str) -> dict[s
         except (TypeError, ValueError):
             return None
 
-    book_away_ml = _face_book_ml(away_blk.group(1) if away_blk else "")
-    book_home_ml = _face_book_ml(home_blk.group(1) if home_blk else "")
+    book_away_ml = _face_book_ml(_slot_block(away_m))
+    book_home_ml = _face_book_ml(_slot_block(home_m))
     h2h_m = re.search(
         r'H2H Last 10</span>\s*<span class="sf-val">([^<]+)',
         card_html,

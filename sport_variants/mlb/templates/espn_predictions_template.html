@@ -767,20 +767,20 @@
     </style>
     <div class="picks-view-controls">
         <div class="pv-toggle" role="tablist" aria-label="Pick view">
-            <button type="button" class="pv-btn active" id="pvCardsBtn" onclick="setPicksView('cards')">📊 Cards</button>
-            <button type="button" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
+            <button type="button" role="tab" class="pv-btn active" id="pvCardsBtn" onclick="setPicksView('cards')">📊 Cards</button>
+            <button type="button" role="tab" class="pv-btn" id="pvChartBtn" onclick="setPicksView('chart')">📈 Chart</button>
         </div>
         <button type="button" class="pv-copy" id="pvCopyBtn" onclick="copyVisiblePicks(this)">📋 Copy All</button>
         {% if _show_market_tabs %}
         <nav class="picks-market-tabs" id="picksMarketTabs" role="tablist" aria-label="Pick market">
             {% if 'moneyline' in _pcm %}
-            <button type="button" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
+            <button type="button" role="tab" class="market-tab active" data-market="moneyline" onclick="setPicksChartMarket('moneyline')">Moneyline</button>
             {% endif %}
             {% if 'spread' in _pcm %}
-            <button type="button" class="market-tab" data-market="spread" onclick="setPicksChartMarket('spread')">{% if sport == 'MLB' %}Spread / Run Line{% elif sport == 'NHL' %}Puck Line{% else %}Spread{% endif %}</button>
+            <button type="button" role="tab" class="market-tab" data-market="spread" onclick="setPicksChartMarket('spread')">{% if sport == 'MLB' %}Spread / Run Line{% elif sport == 'NHL' %}Puck Line{% else %}Spread{% endif %}</button>
             {% endif %}
             {% if 'totals' in _pcm %}
-            <button type="button" class="market-tab" data-market="totals" onclick="setPicksChartMarket('totals')">Totals</button>
+            <button type="button" role="tab" class="market-tab" data-market="totals" onclick="setPicksChartMarket('totals')">Totals</button>
             {% endif %}
         </nav>
         {% endif %}
@@ -830,6 +830,7 @@
                 {# Soccer chart chip is PL Expected Goals. Other sports keep H2H L10. #}
                 {% set _h2h_txt = '' %}
                 {% set _h2h_reason = '' %}
+                {% set _l3_mode = false %}
                 {% set _plxg_txt = '' %}
                 {% set _plxg_reason = '' %}
                 {% if sport == 'SOCCER' %}
@@ -840,11 +841,15 @@
                 {% set _plxg_reason = pred.soccer_pl_expected_missing_reason if pred.soccer_pl_expected_missing_reason is defined and pred.soccer_pl_expected_missing_reason else 'Not enough prior matches for this team to compute expected goals.' %}
                 {% endif %}
                 {% else %}
-                {% if pred.h2h_last10_total is defined and pred.h2h_last10_total is not none %}
-                {% set _h2h_txt = fmt_half(pred.h2h_last10_total) %}
-                {% if pred.h2h_last10_games is defined and pred.h2h_last10_games %}
-                {% set _h2h_txt = _h2h_txt ~ ' (' ~ pred.h2h_last10_games ~ ' games)' %}
+                {% set _l3 = pl_last3_h2h(sport, pred.home_team_id, pred.away_team_id, pred.game_date if (pred.game_date is defined and pred.game_date) else (pred.date if pred.date is defined else '')) if pl_last3_h2h is defined else none %}
+                {% set _l3_mode = pl_last3_h2h is defined %}
+                {% if _l3 %}
+                {% set _h2h_txt = fmt_half(_l3.total) ~ ' · ' ~ fmt_spread_line(_l3.spread, team_short(pred.home_team_id), team_short(pred.away_team_id)) %}
+                {% if pred.disp_xs_total is defined and pred.disp_xs_total is not none %}
+                {% set _h2h_txt = _h2h_txt ~ ' · Combined record: ' ~ (_l3.totals|select('gt', pred.disp_xs_total|float)|list|length) ~ '-' ~ (_l3.totals|select('lt', pred.disp_xs_total|float)|list|length) ~ ' Over' %}
                 {% endif %}
+                {% else %}
+                {% set _h2h_reason = 'No prior 3-game sample for both teams.' %}
                 {% endif %}
                 {% endif %}
                 {% set _chart_result = '' %}
@@ -858,7 +863,7 @@
                     data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
                     data-conf="{% if _chart_conf is not none %}{{ '%.1f'|format(_chart_conf) }}{% endif %}"
-                    data-h2h="{{ _h2h_txt }}"{% if _h2h_reason %} data-h2h-reason="{{ _h2h_reason }}"{% endif %}{% if sport == 'SOCCER' %} data-plxg="{{ _plxg_txt }}"{% if _plxg_reason %} data-plxg-reason="{{ _plxg_reason }}"{% endif %}{% endif %}
+                    data-h2h="{{ _h2h_txt }}"{% if _l3_mode %} data-h2h-l3="{{ _h2h_txt }}"{% endif %}{% if _h2h_reason %} data-h2h-reason="{{ _h2h_reason }}"{% endif %}{% if sport == 'SOCCER' %} data-plxg="{{ _plxg_txt }}"{% if _plxg_reason %} data-plxg-reason="{{ _plxg_reason }}"{% endif %}{% endif %}
                     data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
                     data-books-spread="{% if sport != 'TENNIS' and pred.disp_book_spread is defined and pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
                     data-books-total="{% if sport != 'TENNIS' and pred.disp_book_total is defined and pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
@@ -1054,7 +1059,7 @@
             <a class="social-export-btn primary" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">Open fullscreen</a>
         </div>
     </div>
-    <a class="social-image-link" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">
+    <a class="social-image-link" aria-label="Open the predictions image" href="{{ share_image_view_url }}" target="_blank" rel="nofollow noopener">
         <img src="{{ share_image_src }}" alt="">
     </a>
 </div>

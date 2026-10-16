@@ -201,36 +201,41 @@ def _stored_grade_rec(flags: list[int]) -> str:
     return f"{acc}% · {correct}-{total - correct}"
 
 
-def _build_tennis_block() -> str:
-    """Last Night / Last 7 / Last 30 from stored tennis grades.
+def _tennis_window_rec(block: dict | None, label: str) -> str:
+    m = ((block or {}).get("models") or {}).get(label) or {}
+    w, l = int(m.get("w") or 0), int(m.get("l") or 0)
+    if w + l <= 0:
+        return "—"
+    return f"{round(100.0 * w / (w + l), 1)}% · {w}-{l}"
 
-    The grades table stores one ensemble result per match (model_name
-    ensemble). Spread and totals have no stored grades, so those stay dashes.
+
+def _build_tennis_block() -> str:
+    """Last Night / Last 7 / Last 30 per model, from the same tallies as /tennis-results.
+
+    Tennis is moneyline only, so there are no Spread or Totals rows.
     """
-    yest = _yesterday_et().date()
+    from tennis_live import _load_locked_tennis
+
+    _load_locked_tennis()
+    from team_tabbed_results import build_tennis_payload
+
+    payload = build_tennis_payload() or {}
+    tallies = payload.get("tallies") or {}
+    ln = tallies.get("last_night") or {}
     windows = (
-        (f"Last Night — {yest.isoformat()}", yest, yest),
-        ("Last 7 days", yest - timedelta(days=6), yest),
-        ("Last 30 days", yest - timedelta(days=29), yest),
+        (f"Last Night — {ln.get('date')}" if ln.get("date") else "Last Night", ln),
+        ("Last 7 days", tallies.get("last_7") or {}),
+        ("Last 30 days", payload.get("recent_30") or {}),
     )
     cols = []
-    for title, w_start, w_end in windows:
-        flags = _tennis_grade_rows(w_start.isoformat(), w_end.isoformat())
-        games = len(flags)
-        stored = _stored_grade_rec(flags)
-        ml_pairs = [
-            (label, stored if key == "ensemble" else "—")
-            for key, label in _MODELS
-        ]
-        dash_pairs = [(label, "—") for *_k, label in _SPREAD_ROWS]
-        ou_pairs = [(label, "—") for *_k, label in _TOTAL_ROWS]
+    for title, block in windows:
+        games = int(block.get("games") or 0)
+        ml_pairs = [(label, _tennis_window_rec(block, label)) for _key, label in _MODELS]
         cols.append(
             f'<div class="picks-recent-col">'
             f"<h3>{escape(title)}</h3>"
             f'<p class="picks-recent-n">{games} games</p>'
             f'{_market_table("Moneyline", ml_pairs)}'
-            f'{_market_table("Spread", dash_pairs)}'
-            f'{_market_table("Totals", ou_pairs)}'
             f'<a class="picks-recent-more" href="/tennis-results">Full results →</a>'
             f"</div>"
         )
@@ -238,8 +243,8 @@ def _build_tennis_block() -> str:
         '<section id="picks-recent-results" class="picks-recent-results" '
         'aria-label="Recent results">'
         "<h2>Recent results</h2>"
-        '<p class="picks-recent-sub">Last Night, Last 7, and Last 30 — stored '
-        "tennis moneyline grades. Spread and totals have no stored grades.</p>"
+        '<p class="picks-recent-sub">Last Night, Last 7, and Last 30 — '
+        "graded tennis moneyline picks.</p>"
         f'<div class="picks-recent-grid">{"".join(cols)}</div>'
         "<style>"
         ".picks-recent-results{max-width:1200px;margin:28px auto 0;padding:18px 16px;"
@@ -361,9 +366,10 @@ def _build_block(sport: str) -> str:
 
 
 def inject_picks_recent_results(html: str, sport: str) -> str:
-    if not html or 'id="picks-recent-results"' in html:
+    if not html:
         return html
-    if "How These AI Picks Are Generated" not in html and "seo-picks-footer" not in html:
+    has_section = 'id="picks-recent-results"' in html
+    if not has_section and "How These AI Picks Are Generated" not in html and "seo-picks-footer" not in html:
         if "game-card" not in html and "pick-card" not in html:
             if "golf-board" not in html:
                 return html
@@ -382,6 +388,15 @@ def inject_picks_recent_results(html: str, sport: str) -> str:
         _CACHE[sport_u] = (now, block)
     import re
 
+    if has_section:
+        html2, n = re.subn(
+            r'<section\b[^>]*\bid="picks-recent-results"[\s\S]*?</section>',
+            lambda _m: block,
+            html,
+            count=1,
+            flags=re.I,
+        )
+        return html2 if n else html
     html2, n = re.subn(
         r'(<div class="seo-picks-footer"[^>]*>)',
         block + r"\1",

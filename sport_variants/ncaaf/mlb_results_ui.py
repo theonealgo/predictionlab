@@ -2108,58 +2108,6 @@ def _enrich_sou_window_from_finals(
     return out
 
 
-def _ncaaf_sou_games_section(finals: list[dict[str, Any]], market: str) -> str:
-    """Graded Spread or Totals rows for the NCAAF chart. Same columns as the SSR table."""
-    mk = "spread" if market == "spread" else "totals"
-    rows: list[str] = []
-    for c in finals:
-        home = _chart_team_name(c, "home")
-        away = _chart_team_name(c, "away")
-        hs, aws = c.get("home_score"), c.get("away_score")
-        score = f"{aws}–{hs}" if hs is not None and aws is not None else "—"
-        row = c.get(mk) if isinstance(c.get(mk), dict) else {}
-        book = row.get("book") or row.get("book_line") or "—"
-        pl = row.get("pl_pick") or row.get("pl_line") or row.get("pick") or "N/A"
-        xs = row.get("xs_pick") or row.get("xs_line") or "N/A"
-        # A dash on the card means no line was saved.
-        pl = "N/A" if str(pl).strip() in ("—", "–", "-", "") else pl
-        xs = "N/A" if str(xs).strip() in ("—", "–", "-", "") else xs
-        ok = row.get("correct")
-        push = row.get("push")
-        _plg = str(row.get("pl_grade") or "").upper()
-        _xsg = str(row.get("xs_grade") or "").upper()
-        if ok is None:
-            _g = _plg if _plg in ("WIN", "LOSS", "PUSH") else _xsg
-            if _g in ("WIN", "LOSS"):
-                ok = _g == "WIN"
-            elif _g == "PUSH":
-                push = True
-        res = "Push" if push else ("Correct" if ok is True else "Wrong" if ok is False else "N/A")
-        h2h = c.get("h2h10") or c.get("h2h_l10") or "—"
-        rows.append(
-            "<tr>"
-            f"<td>{_esc_html(str(c.get('game_date') or '')[:10])}</td>"
-            f"<td>{_esc_html(away)} @ {_esc_html(home)}</td>"
-            f"<td>{_esc_html(score)}</td>"
-            f"<td>{_esc_html(str(book))}</td>"
-            f"<td>{_esc_html(str(h2h))}</td>"
-            f"<td>{_esc_html(str(pl))}</td>"
-            f"<td>{_esc_html(str(xs))}</td>"
-            f"<td>{_esc_html(res)}</td>"
-            "</tr>"
-        )
-    title = "Spread games" if mk == "spread" else "Totals records"
-    body = "".join(rows) or '<tr><td colspan=8 class=muted>No finals.</td></tr>'
-    return (
-        f'<section id="ssr-market-{mk}" data-ssr-market="{mk}">'
-        f'<h2 class="sec-title">{title} <span class="tag">({len(finals)})</span></h2>'
-        '<div class="table-wrap"><table class="results-table">'
-        "<thead><tr><th>Date</th><th>Match</th><th>Score</th>"
-        "<th>Book</th><th>H2H L10</th><th>PL</th><th>XSharp</th><th>Result</th></tr></thead>"
-        f"<tbody>{body}</tbody></table></div></section>"
-    )
-
-
 def inject_ssr_chart_bootstrap(
     html: str,
     payload: dict[str, Any],
@@ -2381,9 +2329,6 @@ def inject_ssr_chart_bootstrap(
         f"<tbody>{''.join(rows) or f'<tr><td colspan={colspan} class=muted>No finals.</td></tr>'}</tbody>"
         "</table></div></section>"
     )
-    if (sport or "").strip().lower() == "ncaaf" and mk == "moneyline":
-        ssr_finals += _ncaaf_sou_games_section(finals, "spread")
-        ssr_finals += _ncaaf_sou_games_section(finals, "totals")
 
     # Keep games OUTSIDE #tallies — team-results.js wipes tallies on hydrate.
     # Place games AFTER #pl-consensus-slot (consensus above Moneyline games).

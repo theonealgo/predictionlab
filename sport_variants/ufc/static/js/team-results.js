@@ -66,7 +66,7 @@ function mlCardHtml(c, order) {
   const score = c.home_score != null
     ? `<div class="score">${isMlb() ? mlbScore(c) : (esc(c.home_score) + " – " + esc(c.away_score))}</div>` : "";
   const face = c.face_pick
-    ? `<div class="face">Edge: <strong>${esc(c.face_pick)}</strong> · ${c.face_prob != null ? c.face_prob + "%" : "—"}</div>`
+    ? `<div class="face">Pick: <strong>${esc(c.face_pick)}</strong> · ${c.face_prob != null ? c.face_prob + "%" : "—"}</div>`
     : `<div class="face muted">${esc(c.note || "")}</div>`;
   const grid = (order || DEFAULT_ORDER).map((name) => {
     const m = c.models && c.models[name];
@@ -505,7 +505,7 @@ function renderActiveMarket() {
     </tr>`
       : `<tr>
       <th>Date</th><th>League</th><th>Match</th><th>Score</th>
-      <th>Edge pick</th><th>%</th><th>Result</th><th>Models</th>
+      <th>Pick</th><th>%</th><th>Result</th><th>Models</th>
     </tr>`;
     const mlCols = isMlb() ? "7" : "8";
     const mlRows = finals.map((c) => mlRowHtml(c, baseOrder)).join("") ||

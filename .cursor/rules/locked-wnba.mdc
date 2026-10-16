@@ -12,4 +12,8 @@ Locked. 3 UNLOCKS required.
 
 Owner 2026-10-08 (all-sports pass): results chart Moneyline rows carry the Books / PL moneyline cells and the section HTML is whole. Stored 0.5 model probabilities need a WNBA model run, not page edits. Miss closed — locked.
 
+Owner 2026-10-14: picks-table PL odds filled from our odds engine at the card's stored PL-spread win % (finished cards too). Miss closed — locked.
+
+Owner 2026-10-15: results chart Spread / Totals keep the server's graded games list visible when the page has no live list to draw into. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

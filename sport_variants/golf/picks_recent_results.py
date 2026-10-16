@@ -267,7 +267,7 @@ def inject_picks_recent_results(html: str, sport: str) -> str:
             if "golf-board" not in html:
                 return html
     sport_u = (sport or "").strip().upper()
-    if not sport_u:
+    if not sport_u or sport_u == "GOLF":
         return html
     now = time.time()
     hit = _CACHE.get(sport_u)

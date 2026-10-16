@@ -15,6 +15,21 @@ from typing import Any
 _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _persist_cards_html(sport: str, html: str) -> None:
     if not html or html.count("game-card") < 3:
         return
@@ -149,7 +164,7 @@ def _picks_recent_is_stale(sport: str, text: str) -> bool:
         yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
     except Exception:
         yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -403,7 +418,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
             _y = (_dt.now(_Z("America/New_York")).date() - _td(days=1)).isoformat()
         except Exception:
             _y = (_dt.now().date() - _td(days=1)).isoformat()
-        _db = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        _db = _app_db_path()
         if not _db.is_file():
             return False
         try:
@@ -438,7 +453,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         shown = datetime.strptime(night.group(1), "%Y-%m-%d").date()
     except ValueError:
         return False
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -472,13 +487,21 @@ def _served_results_are_stale(key: str, html: str) -> bool:
     return False
 
 
+def _served_fits_view(key: str, html: str) -> bool:
+    """A chart key holds the chart page, never the cards page."""
+    view = ((key.split("|") + [""])[1] or "").strip().lower()
+    if view in ("chart", "tabs", "markets", "tabbed"):
+        return 'data-ssr-chart="1"' in (html or "")
+    return True
+
+
 def lookup_served_results(key: str) -> str:
     """Finished results HTML. Memory first, then the last repaired page on disk."""
     if results_refresh_forced():
         return ""
     now = time.time()
     hit = _SERVED.get(key)
-    if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1]:
+    if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1] and _served_fits_view(key, hit[1]):
         if _served_results_are_stale(key, hit[1]):
             return ""
         return hit[1]
@@ -487,7 +510,7 @@ def lookup_served_results(key: str) -> str:
         if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
             text = path.read_text(encoding="utf-8")
             age = now - path.stat().st_mtime
-            if _REPAIRED_MARK in text and len(text) > 500:
+            if _REPAIRED_MARK in text and len(text) > 500 and _served_fits_view(key, text):
                 if _served_results_are_stale(key, text):
                     return ""
                 _SERVED[key] = (now, text)
@@ -501,6 +524,8 @@ def lookup_served_results(key: str) -> str:
 
 def store_served_results(key: str, html: str) -> None:
     if not key or not html or _REPAIRED_MARK not in html or len(html) < 500:
+        return
+    if not _served_fits_view(key, html):
         return
     _SERVED[key] = (time.time(), html)
     try:
@@ -872,6 +897,16 @@ def ensure_sou_compare(html: str, market: str) -> str:
     if not html:
         return html
     mk = "spread" if (market or "").lower() == "spread" else "totals"
+    graded = re.search(
+        rf'<section\b[^>]*\bdata-ssr-market=["\']{mk}["\'][^>]*>[\s\S]*?</section>',
+        html,
+        flags=re.I,
+    )
+    if graded and "<th>Result</th>" in graded.group(0) and re.search(
+        r"<td>(?:Correct|Wrong|Push)</td>", graded.group(0)
+    ):
+        # The graded games list for this market is already on the page.
+        return html
     rows = _parse_score_rows(html)
     table = _sou_table(mk, rows)
     html = re.sub(
@@ -1516,7 +1551,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -2063,7 +2098,7 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         block = render_three_way_section(
             sport_u,
             cards,
-            Path(__file__).resolve().parent / "sports_predictions_original.db",
+            _app_db_path(),
         )
     except Exception:
         return html

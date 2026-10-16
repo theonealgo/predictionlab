@@ -10,4 +10,8 @@ Do not modify UFC unless the same owner message contains the word **UNLOCK**
 
 Locked. 3 UNLOCKS required.
 
+Owner 2026-10-15: UFC shows only Sharp Consensus (the one stored probability per fight); the offset "models" are gone from cards, recent results, cards view, chart and chart API. Results cards view is rebuilt from the stored graded fights; data reads the in-repo `ufc_pipeline/`. Result cards carry an in-card H2H line counted from stored fights (no loose "First meeting" text). Miss closed — locked.
+
+Owner 2026-10-14: no chart painted under the footer (picks + results chart view); one header menu script so header links work. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

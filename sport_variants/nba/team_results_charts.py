@@ -67,6 +67,15 @@ def _sport_key(sport: str) -> str:
 
 
 def _db_path() -> Path:
+    import sys
+
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and Path(db).resolve().is_file():
+            return Path(db).resolve()
+    if Path("/data/sports_predictions_original.db").is_file():
+        return Path("/data/sports_predictions_original.db")
     here = Path(__file__).resolve().parent
     for root in (here, *here.parents):
         cand = root / "sports_predictions_original.db"
@@ -3800,6 +3809,8 @@ def _apply_h2h_faces(html: str, sport: str, *, results: bool = False) -> str:
         html = _inject_nhl_consensus_hist_chips(html)
     elif sport_u == "WNBA":
         html = _inject_wnba_consensus_hist_chips(html)
+    elif sport_u == "NBA":
+        html = _inject_nba_consensus_hist_chips(html)
     else:
         html = _inject_face_h2h_chips(html)
         html = _sync_h2h_face_chips(html)
@@ -3830,7 +3841,7 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
         html = _hide_empty_books_spread_total(html)
     if sport_u == "NFL":
         html = _strip_nfl_duplicate_h2h(html)
-    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL", "NHL"):
+    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL", "NHL", "NBA"):
         # Face shows Consensus Historical Record; keep one H2H in details only.
         html = re.sub(
             r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
@@ -5311,8 +5322,8 @@ def _nhl_side_from_spread(home: str, away: str, spread: str) -> str | None:
     return None
 
 
-def _inject_nhl_pl_vs_books_chips(html: str) -> str:
-    """NHL face chip: best Past-30 PL vs Books signal."""
+def _inject_nhl_pl_vs_books_chips(html: str, sport: str = "NHL") -> str:
+    """Face chip: best Past-30 PL vs Books signal from graded finals."""
     if not html or "data-pick-card" not in html:
         return html
     try:
@@ -5327,7 +5338,7 @@ def _inject_nhl_pl_vs_books_chips(html: str) -> str:
         return html
 
     finals = _six_model_consensus_finals(
-        html or _CHART_SOURCE_HTML.get("NHL") or "", "NHL"
+        html or _CHART_SOURCE_HTML.get(sport) or "", sport
     )
     rows = _pl_vs_books_rows_from_finals(finals) if finals else []
     now = datetime.now(ZoneInfo("America/New_York"))
@@ -5440,6 +5451,9 @@ def _inject_nhl_pl_vs_books_chips(html: str) -> str:
             flags=re.I,
         )
         val = _best_for_card(stack)
+        if val == "—":
+            out.append(stack)
+            continue
         chip = (
             '<div class="line-chip pl-vs-books-chip">'
             '<div class="line-chip-label">PL vs Books</div>'
@@ -5477,6 +5491,13 @@ def _inject_nhl_consensus_hist_chips(html: str) -> str:
         html, sport="NHL", models=_NCAAF_CONSENSUS_MODELS
     )
     return _inject_nhl_pl_vs_books_chips(html)
+
+
+def _inject_nba_consensus_hist_chips(html: str) -> str:
+    html = _inject_consensus_hist_chips(
+        html, sport="NBA", models=_WNBA_CONSENSUS_MODELS
+    )
+    return _inject_nhl_pl_vs_books_chips(html, sport="NBA")
 
 
 def _inject_wnba_consensus_hist_chips(html: str) -> str:

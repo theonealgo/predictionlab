@@ -115,7 +115,7 @@ def _extract_team_daily_tally_block(blob: str) -> dict[str, Any] | None:
         title,
         re.I,
     )
-    games_m = re.search(r"\((\d+)\s+games?\)", title, re.I)
+    games_m = re.search(r"\((\d+)\s+(?:games?|match(?:es)?)\)", title, re.I)
     ml_acc, ml_rec = "—", "—"
     m = re.search(
         r"Sharp Consensus</div>\s*"

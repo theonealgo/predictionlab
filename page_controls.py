@@ -182,6 +182,12 @@ def repair_page_controls(html: str, sport: str, path: str, view: str = "") -> st
     if picks and (sport or "").upper() != "UFC" and not soccer_week:
         past, future = picks_date_window(sport)
         first, last = (today - timedelta(days=past)).isoformat(), (today + timedelta(days=future)).isoformat()
+        if (sport or "").upper() == "WNBA":
+            # WNBA playoff games sit days apart; the page lists its last game days with finals.
+            built = re.search(r"\bconst allDates\s*=\s*(\[[^\]]*\])", html)
+            built_days = re.findall(r"20\d\d-\d\d-\d\d", built.group(1)) if built else []
+            if built_days:
+                first = min(first, min(built_days))
         # Reparse if an earlier control script was removed, so offsets remain exact.
         sections = blocks(html, lambda tag, attrs: "date-section" in attrs.get("class", "").split()
                           and attrs.get("id", "").startswith("date-"))

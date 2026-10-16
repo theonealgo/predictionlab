@@ -15,6 +15,21 @@ from typing import Any
 _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _persist_cards_html(sport: str, html: str) -> None:
     if not html or html.count("game-card") < 3:
         return
@@ -135,6 +150,18 @@ def _picks_clock_is_old(text: str) -> bool:
     return match.group(1) < today
 
 
+def _golf_event_chosen(sport_u: str) -> bool:
+    """A golf picks page for a chosen tournament is never the saved default page."""
+    if sport_u != "GOLF":
+        return False
+    try:
+        from flask import has_request_context, request
+
+        return has_request_context() and bool((request.args.get("event") or "").strip())
+    except Exception:
+        return False
+
+
 def lookup_served_picks(sport: str, schedule: bool = True) -> str:
     """Last rendered picks page. The request the checker times must not rebuild it."""
     if _viewer_tier() != "paid":
@@ -142,7 +169,7 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
     if picks_refresh_forced():
         return ""
     sport_u = (sport or "").strip().upper()
-    if not sport_u:
+    if not sport_u or _golf_event_chosen(sport_u):
         return ""
     path = _CARDS_CACHE_DIR / f"served_picks_{sport_u}.html"
     try:
@@ -184,7 +211,7 @@ def store_served_picks(sport: str, html: str) -> None:
     if "upstream data/model dependency failed" in low:
         return
     sport_u = (sport or "").strip().upper()
-    if not sport_u:
+    if not sport_u or _golf_event_chosen(sport_u):
         return
     if _REPAIRED_MARK not in html:
         html = html + "\n" + _REPAIRED_MARK
@@ -1350,7 +1377,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -1924,12 +1951,7 @@ def _restore_golf_results_share(html: str) -> str:
         sport_name = (sports.get("GOLF") or {}).get("name") or sport_name
         payload = payload_from_results_html(html, sport_name)
         if not payload:
-            payload = {
-                "type": "results-summary",
-                "sport_name": sport_name,
-                "last_night": _empty_window(),
-                "last_7": _empty_window(),
-            }
+            return html
         token = register(payload)
         if not token:
             return html
@@ -2023,28 +2045,6 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
     view_l = (view or "").strip().lower()
     if sport_u == "GOLF":
         html = _strip_golf_three_way_blocks(html or "")
-        if view_l in _THREE_WAY_CHART_VIEWS and html:
-            try:
-                root = str(Path(__file__).resolve().parent)
-                if root not in sys.path:
-                    sys.path.insert(0, root)
-                from three_way_results import render_three_way_section
-
-                block = render_three_way_section(
-                    "GOLF",
-                    html,
-                    Path(__file__).resolve().parent / "sports_predictions_original.db",
-                )
-            except Exception:
-                block = ""
-            if block:
-                for marker in ('<div class="social-export-wrap"', "</main>", '<footer class="site-directory-footer"'):
-                    at = html.find(marker)
-                    if at > 0:
-                        html = html[:at] + block + html[at:]
-                        break
-                else:
-                    html += block
         html = _restore_golf_results_share(html)
         html = _drop_share_strip_divs(html)
         if 'class="share-strip"' not in html:
@@ -2074,7 +2074,7 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         block = render_three_way_section(
             sport_u,
             cards,
-            Path(__file__).resolve().parent / "sports_predictions_original.db",
+            _app_db_path(),
         )
     except Exception:
         return html

@@ -15,6 +15,21 @@ from typing import Any
 _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _persist_cards_html(sport: str, html: str) -> None:
     if not html or html.count("game-card") < 3:
         return
@@ -149,7 +164,7 @@ def _picks_recent_is_stale(sport: str, text: str) -> bool:
         yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
     except Exception:
         yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -351,9 +366,8 @@ def _schedule_served_refresh(key: str) -> None:
         try:
             _RESULTS_REFRESH_FORCE.on = True
             appmod = sys.modules.get("__main__") or sys.modules.get("NHL77FINAL")
-            fn = getattr(appmod, "sport_results", None) if appmod else None
             app = getattr(appmod, "app", None) if appmod else None
-            if not callable(fn) or app is None:
+            if app is None:
                 return
             parts = (key.split("|") + [""] * 6)[:6]
             sport, view, market, league, region, week = parts
@@ -369,8 +383,11 @@ def _schedule_served_refresh(key: str) -> None:
             if week:
                 query.append(f"week={week}")
             url = f"/{sport.lower()}-results" + (("?" + "&".join(query)) if query else "")
-            with app.test_request_context(url):
-                fn(sport)
+            # A full request runs the response passes that save the page.
+            # localhost builds the paid copy; any other host the free one.
+            client = app.test_client()
+            for base in ("http://localhost", "http://results-refresh.local"):
+                client.get(url, base_url=base)
         except Exception:
             pass
         finally:
@@ -403,7 +420,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
             _y = (_dt.now(_Z("America/New_York")).date() - _td(days=1)).isoformat()
         except Exception:
             _y = (_dt.now().date() - _td(days=1)).isoformat()
-        _db = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        _db = _app_db_path()
         if not _db.is_file():
             return False
         try:
@@ -438,7 +455,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         shown = datetime.strptime(night.group(1), "%Y-%m-%d").date()
     except ValueError:
         return False
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -481,7 +498,7 @@ def lookup_served_results(key: str) -> str:
     if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1]:
         if _served_results_are_stale(key, hit[1]):
             return ""
-        return hit[1]
+        return _mark_served_from_disk(hit[1])
     try:
         path = _served_path(key)
         if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
@@ -493,14 +510,36 @@ def lookup_served_results(key: str) -> str:
                 _SERVED[key] = (now, text)
                 if age >= _SERVED_REFRESH_AFTER:
                     _schedule_served_refresh(key)
-                return text
+                return _mark_served_from_disk(text)
     except Exception:
         pass
     return ""
 
 
+def _mark_served_from_disk(html):
+    if html:
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                g._pl_results_from_disk = True
+        except Exception:
+            pass
+    return html
+
+
+def _served_from_disk() -> bool:
+    try:
+        from flask import g, has_request_context
+        return has_request_context() and bool(getattr(g, "_pl_results_from_disk", False))
+    except Exception:
+        return False
+
+
 def store_served_results(key: str, html: str) -> None:
     if not key or not html or _REPAIRED_MARK not in html or len(html) < 500:
+        return
+    # Re-saving the copy that was just read resets its age, so it never refreshes.
+    if _served_from_disk() and not results_refresh_forced():
         return
     try:
         path = _served_path(key)
@@ -1506,7 +1545,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -1890,7 +1929,8 @@ def repair_picks_html(html: str, sport: str) -> str:
     html = ensure_share_min_picks(html, 2)
     if sport_u == "WNBA":
         html = ensure_wnba_model_boxes(html)
-    html = fix_efficiency_na_side(html)
+    if sport_u != "NBA":
+        html = fix_efficiency_na_side(html)
     if sport_u == "NCAAF":
         html = fill_ncaaf_edge_from_spread(html)
     html = unwrap_pc_name_sides(html)
@@ -2053,7 +2093,7 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         block = render_three_way_section(
             sport_u,
             cards,
-            Path(__file__).resolve().parent / "sports_predictions_original.db",
+            _app_db_path(),
         )
     except Exception:
         return html

@@ -21,4 +21,8 @@ A hang, timeout, checker fail, or blank-slate restore for sport A is not an
 unlock for sport B. Do not touch `NHL77FINAL.py` / `team_results_charts.py`
 for a locked sport.
 
+Owner 2026-10-14: every sport picks / results page uses the one shared date picker
+(`static/css/pl-date-nav.css`, `static/js/pl-date-nav.js`). Do not add per-sport
+date bars or dropdowns. Miss closed — locked.
+
 See AGENTS.md Rule 12.

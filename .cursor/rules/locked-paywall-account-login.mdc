@@ -1,0 +1,30 @@
+---
+description: Paywall, account, and login are locked
+alwaysApply: true
+---
+
+# PAYWALL / ACCOUNT / LOGIN LOCKED
+
+Owner 2026-10-11: the paywall is fixed. Paywall, account, and login are
+locked. Work on them only when the owner names one of them and asks for
+that work in the same message. Sport, speed, checker, or chrome work is
+never a reason to touch them.
+
+## Locked
+
+- `paywall.py`, `auth_system.py`
+- `templates/login.html`, `templates/signup.html`, `templates/account.html`
+- Login / logout / Google sign-in, signup, account, subscription, Stripe
+ checkout and webhook routes, and paid-access / protected-API checks
+ (including their branches inside `NHL77FINAL.py`)
+- Any after-request hook, cache, or saved page that decides what a free vs
+ paid visitor sees
+
+## Rules
+
+- Do not edit, wrap, reorder, bypass, or "speed up" these paths.
+- A cache or after-request change elsewhere must not change what a free
+ visitor can see or what a paid visitor gets.
+- If a fix elsewhere seems to need one of these paths, stop and ask the owner.
+
+Do not put lock text on user-facing HTML.

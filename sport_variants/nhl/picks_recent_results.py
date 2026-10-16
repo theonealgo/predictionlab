@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import os
 import re
+import sys
+import threading
 import time
 from datetime import datetime, timedelta
 from html import escape
@@ -14,6 +16,15 @@ from pathlib import Path
 _CACHE: dict[str, tuple[float, str]] = {}
 _TTL = 180.0
 _NHL_BLOCK_PATH = Path(__file__).resolve().parent / ".cache" / "nhl_recent_block.html"
+_NHL_BLOCK_MAX_AGE = 1800.0
+_NHL_REBUILD = {"busy": False}
+
+
+def _app():
+    mod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
+    if mod is None or not hasattr(mod, "compute_model_tally_for_range"):
+        import NHL77FINAL as mod
+    return mod
 
 _MODELS = (
     ("glicko2", "Grinder2"),
@@ -68,8 +79,7 @@ def _st_rec(st: dict | None, win_key: str, n_key: str, pct_key: str) -> str:
 
 
 def _slice_daily(daily: dict, start, end) -> dict:
-    import NHL77FINAL as N
-
+    N = _app()
     out = {}
     for dk, bucket in (daily or {}).items():
         if N._date_in_range(dk, start, end):
@@ -169,8 +179,7 @@ def _market_table(title: str, pairs) -> str:
 
 
 def _build_block(sport: str) -> str:
-    import NHL77FINAL as N
-
+    N = _app()
     sport_u = (sport or "").strip().upper()
     yest = _yesterday_et().replace(tzinfo=None)
     start = yest - timedelta(days=29)
@@ -387,6 +396,29 @@ def _write_nhl_block_disk(block: str) -> None:
         pass
 
 
+def _rebuild_nhl_block_later() -> None:
+    """Rebuild the saved NHL strip off the request so a stale one is not kept forever."""
+    if _NHL_REBUILD["busy"]:
+        return
+    _NHL_REBUILD["busy"] = True
+
+    def run():
+        try:
+            import sport_variant
+
+            with sport_variant.sport_scope("nhl"):
+                block = _align_nhl_block_to_results(_build_block("NHL"))
+            if block and 'id="picks-recent-results"' in block:
+                _write_nhl_block_disk(block)
+                _CACHE["NHL"] = (time.time(), block)
+        except Exception:
+            pass
+        finally:
+            _NHL_REBUILD["busy"] = False
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def _recent_block(sport_u: str) -> str:
     now = time.time()
     hit = _CACHE.get(sport_u)
@@ -395,8 +427,13 @@ def _recent_block(sport_u: str) -> str:
     if sport_u == "NHL":
         disk = _align_nhl_block_to_results(_read_nhl_block_disk())
         if disk:
+            try:
+                age = now - _NHL_BLOCK_PATH.stat().st_mtime
+            except OSError:
+                age = _NHL_BLOCK_MAX_AGE
+            if age >= _NHL_BLOCK_MAX_AGE:
+                _rebuild_nhl_block_later()
             _CACHE[sport_u] = (now, disk)
-            _write_nhl_block_disk(disk)
             return disk
     block = _build_block(sport_u)
     if sport_u == "NHL":

@@ -54,9 +54,25 @@ _WNBA_ESPN_SLUG = {
 }
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _wnba_h2h_db_paths() -> list[Path]:
     root = Path(__file__).resolve().parent
     return [
+        _app_db_path(),
         root / "sports_predictions_original.db",
         root / "data" / "sports_predictions_original.db",
         Path.home() / "Documents/Personal/wnba" / "data" / "sandbox_results.db",
@@ -1148,7 +1164,8 @@ def apply_wnba_picks_fixups(html: str) -> str:
     if not html or "data-pick-card" not in html:
         return html
     try:
-        html = dedupe_game_card_stacks(html)
+        # Playoff rematches share teams and tip time, so duplicates are judged per date.
+        html = "".join(dedupe_game_card_stacks(part) for part in re.split(r'(?=<div class="date-section)', html))
     except Exception:
         pass
     html = enrich_mlb_chart_data_attrs(html)

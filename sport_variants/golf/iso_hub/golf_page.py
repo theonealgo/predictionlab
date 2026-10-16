@@ -60,7 +60,19 @@ def _info_btn(label: str, tip: str) -> str:
     )
 
 
+_HTTP_TEXT_CACHE: dict[str, tuple[float, str]] = {}
+_HTTP_TTL_S = 90.0
+
+
 def _http_json(url: str) -> Any | None:
+    import time as _time
+
+    hit = _HTTP_TEXT_CACHE.get(url)
+    if hit and _time.time() - hit[0] < _HTTP_TTL_S:
+        try:
+            return json.loads(hit[1])
+        except json.JSONDecodeError:
+            _HTTP_TEXT_CACHE.pop(url, None)
     try:
         req = Request(
             url,
@@ -74,7 +86,10 @@ def _http_json(url: str) -> Any | None:
             },
         )
         with urlopen(req, timeout=25, context=ssl._create_unverified_context()) as resp:
-            return json.loads(resp.read().decode())
+            text = resp.read().decode()
+        data = json.loads(text)
+        _HTTP_TEXT_CACHE[url] = (_time.time(), text)
+        return data
     except (URLError, HTTPError, TimeoutError, OSError, json.JSONDecodeError):
         return None
 
@@ -1132,9 +1147,9 @@ def _golf_page_shell(title: str, body: str, which: str) -> str:
         "</style>"
     )
     if which == "results":
-        desc = "Golf results: pre-event rank compared with the official finish and score."
+        desc = "Golf results: our picks graded against the official finish."
     else:
-        desc = "Golf picks: the tournament field ranked before the event."
+        desc = "Golf picks: win, top 10 and top 20 picks made before the first round."
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -1154,85 +1169,242 @@ line-height:1;cursor:help;padding:0;vertical-align:middle}}
 </body></html>"""
 
 
-def render_golf_board_html(event_id: str | None = None) -> tuple[str, dict[str, Any]]:
-    data = build_ranked_board(event_id)
-    players = data.get("players") or []
-    picker = _tournament_picker_html(
-        data.get("tournaments") or [],
-        data.get("event_id"),
-        "/golf-picks",
-        which="picks",
-    )
-    head_cols = (
-        '<th scope="col">Rank</th>'
-        '<th scope="col">Player</th>'
-        + "".join(
-            f'<th scope="col">{html_lib.escape(label)}{_info_btn(label, desc)}</th>'
-            for key, label, desc in MODEL_META
-            if key != "consensus"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+_GPM_CSS = (
+    "<style id=\"golf-model-css\">"
+    ".gpm-tally{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:10px 0 18px}"
+    ".gpm-tcard{background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:14px 16px}"
+    ".gpm-tcard .lbl{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b}"
+    ".gpm-tcard .rec{font-size:1.6rem;font-weight:800;color:#0f172a;margin-top:2px}"
+    ".gpm-tcard .pct{font-size:.85rem;color:#475569}"
+    ".gpm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:10px 0 18px}"
+    ".gpm-card{background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:14px}"
+    ".gpm-card h3{margin:0 0 2px;font-size:1rem;color:#0f172a}"
+    ".gpm-card .sub{color:#64748b;font-size:.8rem;margin-bottom:8px}"
+    ".gpm-card table{width:100%;border-collapse:collapse;font-size:.88rem}"
+    ".gpm-card td,.gpm-card th{padding:5px 4px;border-top:1px solid #eef2f7;text-align:left}"
+    ".gpm-card th{border-top:0;color:#64748b;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em}"
+    ".gpm-ok{color:#067647;font-weight:800}.gpm-no{color:#D93025;font-weight:800}.gpm-void{color:#94a3b8;font-weight:700}"
+    ".gpm-chart{background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:12px;overflow-x:auto;margin:10px 0 18px}"
+    ".gpm-legend{display:flex;gap:16px;font-size:.82rem;color:#475569;margin:0 0 6px}"
+    ".gpm-sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}"
+    ".gpm-h2{font-size:1.15rem;margin:22px 0 6px;color:#0f172a}"
+    ".gpm-winner{background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:12px 16px;margin:8px 0}"
+    "@media(max-width:800px){.gpm-tally{grid-template-columns:repeat(2,1fr)}.gpm-grid{grid-template-columns:1fr}}"
+    "</style>"
+)
+
+
+def _golf_model():
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+    import golf_pl_model
+
+    return golf_pl_model
+
+
+def _golf_model_state(tournaments: list[dict[str, Any]]) -> tuple[Any, dict[str, Any]] | tuple[None, None]:
+    try:
+        gm = _golf_model()
+        done = [str(t["id"]) for t in tournaments or [] if t.get("phase") == _PHASE_DONE and t.get("id")]
+        state = gm.model_state(lambda eid: _http_json(ESPN_EVENT.format(event_id=eid)), done)
+        return gm, state
+    except Exception:
+        return None, None
+
+
+def _pct1(p: float) -> str:
+    v = float(p) * 100.0
+    if v <= 0:
+        return "<0.1%"
+    return "<0.1%" if v < 0.05 else f"{v:.1f}%"
+
+
+def _gpm_tally(gm, state, year: int | None, title: str) -> str:
+    rec = gm.record(state, year)
+    cards = []
+    for market, label in (("Win", "Win"), ("Top 10", "Top 10"), ("Top 20", "Top 20"), ("All", "All picks")):
+        w, l = rec.get(market, (0, 0))
+        pct = f"{100.0 * w / (w + l):.1f}% hit" if w + l else "—"
+        cards.append(
+            f'<div class="gpm-tcard"><div class="lbl">{html_lib.escape(label)}</div>'
+            f'<div class="rec">{w}-{l}</div><div class="pct">{pct}</div></div>'
         )
-        + f'<th scope="col">Sharp Consensus{_info_btn("Sharp Consensus", "Overall recommendation based on all available models.")}</th>'
+    return f'<h2 class="gpm-h2">{html_lib.escape(title)}</h2><div class="gpm-tally">{"".join(cards)}</div>'
+
+
+def _gpm_chart(state, upto: str | None = None, last: int = 20) -> str:
+    events = sorted(state["graded"].values(), key=lambda e: e["start"])
+    if upto:
+        events = [e for e in events if e["start"] <= upto]
+    events = events[-last:]
+    if not events:
+        return ""
+    bar_w, gap, half, top, left = 24, 12, 90, 14, 30
+    width = left + len(events) * (bar_w + gap) + 8
+    height = top + 2 * half + 58
+    scale = half / 16.0
+    mid = top + half
+    parts = [
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" '
+        'aria-label="Picks won and lost by event">',
+        f'<line x1="{left}" y1="{mid}" x2="{width}" y2="{mid}" stroke="#94a3b8"/>',
+    ]
+    for v in (8, 16):
+        for sign in (-1, 1):
+            y = mid - sign * v * scale
+            parts.append(f'<line x1="{left}" y1="{y:.1f}" x2="{width}" y2="{y:.1f}" stroke="#eef2f7"/>')
+            parts.append(f'<text x="{left - 5}" y="{y + 4:.1f}" font-size="10" fill="#94a3b8" text-anchor="end">{v}</text>')
+    for i, ev in enumerate(events):
+        grades = [p["grade"] for p in ev["picks"]]
+        w, l = grades.count("WIN"), grades.count("LOSS")
+        x = left + 6 + i * (bar_w + gap)
+        name = html_lib.escape(ev["name"])
+        parts.append(
+            f'<rect x="{x}" y="{mid - w * scale:.1f}" width="{bar_w}" height="{w * scale:.1f}" fill="#00C076" rx="3" '
+            f'aria-label="{name}: {w} won"></rect>'
+            f'<rect x="{x}" y="{mid}" width="{bar_w}" height="{l * scale:.1f}" fill="#ef4444" rx="3" '
+            f'aria-label="{name}: {l} lost"></rect>'
+            f'<text x="{x + bar_w / 2}" y="{mid - w * scale - 4:.1f}" font-size="10" text-anchor="middle" fill="#0f172a">{w}</text>'
+            f'<text x="{x + bar_w / 2}" y="{mid + l * scale + 12:.1f}" font-size="10" text-anchor="middle" fill="#0f172a">{l}</text>'
+        )
+        lx, ly = x + bar_w / 2, top + 2 * half + 14
+        parts.append(
+            f'<text x="{lx}" y="{ly}" font-size="10" fill="#64748b" text-anchor="end" '
+            f'transform="rotate(-45 {lx} {ly})">{ev["start"][5:].replace("-", "/")}</text>'
+        )
+    parts.append("</svg>")
+    return (
+        '<div class="gpm-chart"><div class="gpm-legend">'
+        '<span><span class="gpm-sw" style="background:#00C076"></span>Picks won</span>'
+        '<span><span class="gpm-sw" style="background:#ef4444"></span>Picks lost</span></div>'
+        + "".join(parts) + "</div>"
     )
+
+
+_MARKET_SUB = {
+    "Win": "Pick to win",
+    "Top 10": "Picks to finish top 10 (ties count)",
+    "Top 20": "Picks to finish top 20 (ties count)",
+}
+
+
+def _gpm_mark(grade: str | None) -> str:
+    return {
+        "WIN": '<span class="gpm-ok" aria-label="won">✓</span>',
+        "LOSS": '<span class="gpm-no" aria-label="lost">✗</span>',
+        "VOID": '<span class="gpm-void">Void</span>',
+    }.get(grade or "", "")
+
+
+def _gpm_pick_cards(picks: list[dict[str, Any]], graded: bool) -> str:
+    cards = []
+    for market in ("Win", "Top 10", "Top 20"):
+        rows = [p for p in picks if p["market"] == market]
+        head = market
+        if graded:
+            g = [p["grade"] for p in rows]
+            head = f"{market} · {g.count('WIN')}-{g.count('LOSS')}"
+        cols = "<th></th><th>Player</th><th>Chance</th><th>Finish</th>" if graded else "<th>Player</th><th>Chance</th>"
+        body = "".join(
+            "<tr>"
+            + (f"<td>{_gpm_mark(p.get('grade'))}</td>" if graded else "")
+            + f"<td>{html_lib.escape(p['name'])}</td><td>{_pct1(p['prob'])}</td>"
+            + (f"<td>{html_lib.escape(str(p.get('finish') or '—'))}</td>" if graded else "")
+            + "</tr>"
+            for p in rows
+        )
+        cards.append(
+            f'<div class="gpm-card" data-market="{html_lib.escape(market)}"><h3>{html_lib.escape(head)}</h3>'
+            f'<div class="sub">{_MARKET_SUB[market]}</div>'
+            f"<table><thead><tr>{cols}</tr></thead><tbody>{body}</tbody></table></div>"
+        )
+    return f'<div class="gpm-grid">{"".join(cards)}</div>'
+
+
+def render_golf_board_html(event_id: str | None = None) -> tuple[str, dict[str, Any]]:
+    tournaments = list_espn_tournaments()
+    name, eid, players, status_info = _espn_event_payload(
+        (event_id or "").strip() or None, tournaments=tournaments, default_for="picks"
+    )
+    picker = _tournament_picker_html(tournaments, eid, "/golf-picks", which="picks")
+    meta = next((t for t in tournaments if str(t.get("id")) == str(eid)), None) or {}
+    status = status_info.get("description")
+    phase = status_info.get("phase")
+    status_bit = f' <span class="golf-status">({html_lib.escape(str(status))})</span>' if status else ""
+    gm, state = _golf_model_state(tournaments)
+
+    graded = (state or {}).get("graded", {}).get(str(eid)) if state else None
+    board: list[dict[str, Any]] = []
+    if gm and players:
+        board = gm.board_for_field(state, players, meta.get("start"), eid)
+    picks = graded["picks"] if graded else (gm.picks_from_board(board) if gm and board else [])
+
+    recent = ""
+    if gm and state and state.get("graded"):
+        last = max(state["graded"].values(), key=lambda e: e["start"])
+        g = [p["grade"] for p in last["picks"]]
+        year = int(last["start"][:4])
+        rec = gm.record(state, year).get("All", (0, 0))
+        recent = (
+            '<section id="golf-recent" class="gpm-recent">'
+            '<h2 class="gpm-h2">Recent results</h2><div class="gpm-tally">'
+            f'<div class="gpm-tcard"><div class="lbl">Last event</div><div class="rec">{g.count("WIN")}-{g.count("LOSS")}</div>'
+            f'<div class="pct">{html_lib.escape(last["name"])}</div></div>'
+            f'<div class="gpm-tcard"><div class="lbl">{year} season</div><div class="rec">{rec[0]}-{rec[1]}</div>'
+            f'<div class="pct">{(f"{100.0 * rec[0] / sum(rec):.1f}% hit") if sum(rec) else "—"}</div></div>'
+            "</div>"
+            f'<p class="golf-lede"><a href="/golf-results?event={html_lib.escape(last["id"])}">See every graded pick</a></p>'
+            "</section>"
+        )
 
     rows = []
-    for p in players[:80]:
-        pct = float(p.get("win_pct") or 0) * 100
-        img_tag = _headshot_img(p.get("athlete_id"))
-        models = p.get("models") or {}
-        model_tds = []
-        for key, label, _desc in MODEL_META:
-            if key == "consensus":
-                continue
-            m = models.get(key) or {}
-            r = m.get("rank")
-            wp = m.get("win_pct")
-            if r is None and wp is None:
-                cell = "—"
-            else:
-                wp_s = _win_pct_label(float(wp)) if wp is not None else "—"
-                cell = (
-                    f'<div class="golf-model-cell">'
-                    f'<span class="golf-mrank">#{r}</span>'
-                    f'<span class="golf-mpct">{wp_s}</span>'
-                    f"</div>"
-                )
-            model_tds.append(f"<td>{cell}</td>")
+    for p in board[:80]:
         rows.append(
             "<tr>"
-            f'<td class="golf-rank">#{p.get("rank")}</td>'
-            f'<td class="golf-player">{img_tag}<strong>{html_lib.escape(str(p.get("name")))}</strong></td>'
-            + "".join(model_tds)
-            + f'<td class="golf-winpct">{pct:.1f}<span class="golf-pct-suffix">%</span></td>'
+            f'<td class="golf-rank">#{p["rank"]}</td>'
+            f'<td class="golf-player">{_headshot_img(p.get("athlete_id"))}<strong>{html_lib.escape(str(p["name"]))}</strong></td>'
+            f'<td class="golf-winpct"><span class="golf-mpct">{_pct1(p["win"])}</span></td>'
+            f'<td><span class="golf-mpct">{_pct1(p["top10"])}</span></td>'
+            f'<td><span class="golf-mpct">{_pct1(p["top20"])}</span></td>'
             "</tr>"
         )
-
-    status = data.get("status")
-    status_bit = f' <span class="golf-status">({html_lib.escape(str(status))})</span>' if status else ""
-    empty = (
-        '<tr><td colspan="8" class="golf-empty">No field posted for this tournament yet. '
-        "Pick a recent completed event, or check back when tee times / the leaderboard are up.</td></tr>"
-    )
+    if phase == _PHASE_DONE or str(status_info.get("state") or "").lower() == "post":
+        waiting = "This event is final. See how our picks did on Results."
+    else:
+        waiting = (
+            "The field is set after 5 p.m. ET on the Friday before the event. "
+            "Our picks post here as soon as it is out."
+        )
+    empty = f'<tr><td colspan="5" class="golf-empty">{html_lib.escape(waiting)}</td></tr>'
+    picks_html = ""
+    if picks:
+        picks_html = (
+            '<h2 class="gpm-h2">Our picks</h2>'
+            + _gpm_pick_cards(picks, graded=bool(graded))
+        )
     body = (
-        f"<h1>{html_lib.escape(str(data.get('event')))}{status_bit}</h1>"
-        '<p class="golf-lede">Field ranked by Sharp Consensus. '
-        "Tap <strong>i</strong> on a column for a short model note.</p>"
-        f"{picker}"
+        _GPM_CSS
+        + f"<h1>{html_lib.escape(str(name))}{status_bit}</h1>"
+        '<p class="golf-lede">Made before the first round: one player to win, five to finish top 10, '
+        "ten to finish top 20. Chances come from every player's recent rounds against the field.</p>"
+        f"{picker}{picks_html}"
+        '<h2 class="gpm-h2">Field</h2>'
         '<div class="golf-table-wrap"><table class="golf-table">'
-        f"<thead><tr>{head_cols}</tr></thead><tbody>"
+        '<thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Win</th>'
+        '<th scope="col">Top 10</th><th scope="col">Top 20</th></tr></thead><tbody>'
         + ("\n".join(rows) or empty)
         + "</tbody></table></div>"
+        + recent
     )
-    page = _golf_page_shell(
-        f"{data.get('event')} Win Probability | Prediction Lab",
-        body,
-        "picks",
-    )
+    page = _golf_page_shell(f"{name} Golf Picks | Prediction Lab", body, "picks")
     return page, {
         "ok": True,
-        "players": len(players),
-        "source": data.get("source"),
-        "event": data.get("event"),
-        "event_id": data.get("event_id"),
+        "players": len(board),
+        "source": "golf-model" if board else "no-field",
+        "event": name,
+        "event_id": eid,
     }
 
 
@@ -1331,8 +1503,8 @@ def render_golf_results_html(event_id: str | None = None) -> tuple[str, dict[str
         phase_lbl = _PHASE_LABEL.get(phase or "", "Upcoming")
         body = (
             f"<h1>{html_lib.escape(event)} — Results{status_bit}</h1>"
-            '<p class="golf-lede">Pick a <strong>completed</strong> tournament to see how we did '
-            "(our rank vs official finish and score).</p>"
+            '<p class="golf-lede">Pick a <strong>completed</strong> tournament to see the official '
+            "finishing order and score.</p>"
             f"{date_nav}{picker}"
             '<div class="golf-banner" role="status">'
             f"<p>This event is <strong>{html_lib.escape(phase_lbl)}</strong> — it is not a final result. "
@@ -1369,55 +1541,35 @@ def render_golf_results_html(event_id: str | None = None) -> tuple[str, dict[str
             r["finish"] if r["finish"] is not None else 9999,
         )
     )
-    pred_map = {str(p.get("name") or "").lower(): p for p in (predicted.get("players") or [])}
-    names: list[str] = []
-    seen: set[str] = set()
-    for src in (actual, predicted.get("players") or []):
-        for p in src:
-            nm = str(p.get("name") or "")
-            k = nm.lower()
-            if k and k not in seen:
-                seen.add(k)
-                names.append(nm)
-
+    names = [str(a.get("name") or "") for a in actual if a.get("name")]
     rows_html = []
-    for nm in names[:80]:
-        pred = pred_map.get(nm.lower()) or {}
-        act = next((a for a in actual if str(a.get("name") or "").lower() == nm.lower()), None)
-        model_rank = pred.get("rank")
-        win_pct = float(pred.get("win_pct") or 0) * 100 if pred else None
-        finish = (act or {}).get("finish")
-        score = (act or {}).get("score")
-        aid = (act or {}).get("athlete_id") or pred.get("athlete_id")
-        img_tag = _headshot_img(aid)
-        delta_html = "—"
-        if model_rank is not None and finish is not None:
-            try:
-                d = int(model_rank) - int(finish)
-                if d == 0:
-                    delta_html = '<span class="golf-delta golf-delta-even">=</span>'
-                elif d > 0:
-                    delta_html = f'<span class="golf-delta golf-delta-up">↑{d}</span>'
-                else:
-                    delta_html = f'<span class="golf-delta golf-delta-down">↓{abs(d)}</span>'
-            except (TypeError, ValueError):
-                delta_html = "—"
-        model_detail = _model_detail_html(pred, model_rank)
+    shown = [a for a in actual if a.get("name")][:80]
+    for i, act in enumerate(shown):
+        finish = act.get("finish")
+        score = act.get("score")
         score_s = html_lib.escape(str(score)) if score is not None and str(score) != "" else "—"
+        if finish is None:
+            place = "—"
+        else:
+            first = i
+            while first > 0 and str(shown[first - 1].get("score")) == str(score):
+                first -= 1
+            last = i
+            while last + 1 < len(shown) and str(shown[last + 1].get("score")) == str(score):
+                last += 1
+            pos = shown[first].get("finish") or finish
+            place = f"T{pos}" if last > first else str(pos)
         rows_html.append(
             "<tr>"
-            f'<td class="golf-player">{img_tag}<strong>{html_lib.escape(nm)}</strong>{model_detail}</td>'
-            f"<td>{('#' + str(model_rank)) if model_rank else '—'}</td>"
-            f'<td class="golf-winpct">'
-            f"{(f'{win_pct:.1f}%') if win_pct is not None else '—'}</td>"
-            f"<td>{('#' + str(finish)) if finish is not None else '—'}</td>"
+            f"<td>{html_lib.escape(place)}</td>"
+            f'<td class="golf-player">{_headshot_img(act.get("athlete_id"))}'
+            f"<strong>{html_lib.escape(str(act.get('name')))}</strong></td>"
             f"<td>{score_s}</td>"
-            f"<td>{delta_html}</td>"
             "</tr>"
         )
 
     empty = (
-        '<tr><td colspan="6" class="golf-empty">No official finishes posted for this event yet.</td></tr>'
+        '<tr><td colspan="3" class="golf-empty">No official finishes posted for this event yet.</td></tr>'
     )
     scores = [str(a.get("score") or "") for a in actual[:40]]
     all_e = bool(actual) and all(s.upper() in ("E", "EVEN", "") for s in scores)
@@ -1427,20 +1579,47 @@ def render_golf_results_html(event_id: str | None = None) -> tuple[str, dict[str
             '<p class="golf-banner" role="status">Scores look incomplete (everyone even). '
             "If this event just wrapped, refresh shortly.</p>"
         )
+    gm, state = _golf_model_state(tournaments)
+    model_html = ""
+    if gm and state:
+        graded = state["graded"].get(str(eid))
+        year = int(str((graded or {}).get("start") or datetime.now(timezone.utc).year)[:4])
+        model_html = _GPM_CSS + _gpm_tally(gm, state, year, f"Our {year} record")
+        model_html += '<h2 class="gpm-h2">Picks won and lost by event</h2>' + _gpm_chart(
+            state, (graded or {}).get("start")
+        )
+        if graded:
+            winner = graded.get("winner")
+            w_line = ""
+            if winner:
+                tp = winner.get("to_par")
+                tp_s = "E" if tp == 0 else (f"{tp:+d}" if isinstance(tp, int) else "")
+                w_line = (
+                    f'<div class="gpm-winner"><strong>Winner:</strong> '
+                    f"{html_lib.escape(str(winner['name']))} {tp_s}</div>"
+                )
+            model_html += (
+                f'<h2 class="gpm-h2">Our picks · {html_lib.escape(event)}</h2>{w_line}'
+                + _gpm_pick_cards(graded["picks"], graded=True)
+            )
+        else:
+            model_html += (
+                '<p class="golf-lede">We did not make picks for this event '
+                "(team events and events before 2025 are not picked).</p>"
+            )
     body = (
         f"<h1>{html_lib.escape(event)} — Results{status_bit}</h1>"
-        '<p class="golf-lede">How we did: our pre-event rank vs the official finish and score. '
-        "↑ finished better than we ranked them; ↓ finished worse.</p>"
+        '<p class="golf-lede">Every pick is graded against the official finish: '
+        "✓ the pick came in, ✗ it did not.</p>"
         f"{date_nav}{picker}"
         f"{warn}"
+        f"{model_html}"
+        '<h2 class="gpm-h2">Official finish</h2>'
         '<div class="golf-table-wrap"><table class="golf-table golf-results-table">'
         "<thead><tr>"
-        '<th scope="col">Player</th>'
-        '<th scope="col">Our rank</th>'
-        '<th scope="col">Win probability</th>'
         '<th scope="col">Finish</th>'
+        '<th scope="col">Player</th>'
         '<th scope="col">Score</th>'
-        '<th scope="col">vs model</th>'
         "</tr></thead><tbody>"
         + ("\n".join(rows_html) or empty)
         + "</tbody></table></div>"
@@ -1453,8 +1632,8 @@ def render_golf_results_html(event_id: str | None = None) -> tuple[str, dict[str
         "event": event,
         "event_id": eid,
         "phase": phase,
-        "source": "espn-finish+pre-event-rank",
-        "grading": "consensus_rank_vs_espn_finish",
+        "source": "espn-finish",
+        "grading": "official_finish_only",
     }
 
 

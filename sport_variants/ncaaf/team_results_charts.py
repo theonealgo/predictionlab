@@ -67,6 +67,15 @@ def _sport_key(sport: str) -> str:
 
 
 def _db_path() -> Path:
+    import sys
+
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and Path(db).resolve().is_file():
+            return Path(db).resolve()
+    if Path("/data/sports_predictions_original.db").is_file():
+        return Path("/data/sports_predictions_original.db")
     here = Path(__file__).resolve().parent
     for root in (here, *here.parents):
         cand = root / "sports_predictions_original.db"
@@ -939,6 +948,7 @@ def _six_model_consensus_finals(html: str, sport: str) -> list[dict]:
     """Shared 6-model consensus rows (NFL / NCAAF / CFL)."""
     sport_u = (sport or "").strip().upper()
     rows = _consensus_card_rows(html)
+    from_cards = bool(rows)
     if not rows:
         rows = _nfl_finals_from_results_html(html)
     if not rows:
@@ -946,6 +956,9 @@ def _six_model_consensus_finals(html: str, sport: str) -> list[dict]:
     for row in rows or []:
         if not row.get("league"):
             row["league"] = sport_u
+    if from_cards and sport_u == "NCAAF":
+        # A card with Efficiency N/A has no Efficiency pick; do not derive one.
+        return _nfl_keep_six_model_rows(rows)
     return _nfl_keep_six_model_rows(_nfl_attach_efficiency(rows))
 
 
@@ -2831,6 +2844,63 @@ def ncaaf_elo_ratings() -> dict[str, float]:
             ratings[away] = ar + _NCAAF_ELO_K * ((1.0 - actual) - (1.0 - expected))
     _NCAAF_ELO_CACHE = (now, ratings)
     return ratings
+
+
+_NCAAF_ELO_BEFORE_CACHE: dict[str, tuple[float, dict[str, float]]] = {}
+
+
+def ncaaf_elo_ratings_before(day: str) -> dict[str, float]:
+    """The same walk-forward Elo, trained only on games played before day (YYYY-MM-DD)."""
+    now = time.time()
+    hit = _NCAAF_ELO_BEFORE_CACHE.get(day)
+    if hit and (now - hit[0]) < _NCAAF_ELO_TTL:
+        return hit[1]
+    ratings: dict[str, float] = {}
+    path = _db_path()
+    rows = []
+    if path.is_file():
+        try:
+            con = sqlite3.connect(str(path))
+            rows = con.execute(
+                """
+                SELECT home_team_id, away_team_id, home_score, away_score
+                FROM games
+                WHERE sport = 'NCAAF' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                  AND date(game_date) < date(?)
+                ORDER BY date(game_date), game_id
+                """,
+                (day,),
+            ).fetchall()
+            con.close()
+        except Exception:
+            rows = []
+    for home, away, hs, aws in rows:
+        hr = ratings.get(home, 1500.0)
+        ar = ratings.get(away, 1500.0)
+        expected = 1.0 / (1.0 + 10.0 ** ((ar - hr) / 400.0))
+        try:
+            actual = 1.0 if float(hs) > float(aws) else 0.0
+        except (TypeError, ValueError):
+            continue
+        ratings[home] = hr + _NCAAF_ELO_K * (actual - expected)
+        ratings[away] = ar + _NCAAF_ELO_K * ((1.0 - actual) - (1.0 - expected))
+    if len(_NCAAF_ELO_BEFORE_CACHE) > 32:
+        _NCAAF_ELO_BEFORE_CACHE.clear()
+    _NCAAF_ELO_BEFORE_CACHE[day] = (now, ratings)
+    return ratings
+
+
+def ncaaf_pregame_elo_home_pct(home: str, away: str, day: str) -> tuple[float | None, bool]:
+    """(home win %, both teams rated) from Elo as it stood before kickoff on day."""
+    if not home or not away or not day:
+        return None, False
+    ratings = ncaaf_elo_ratings_before(day)
+    hr, h_known = _ncaaf_elo_lookup(ratings, home)
+    ar, a_known = _ncaaf_elo_lookup(ratings, away)
+    if not h_known and not a_known:
+        return None, False
+    pct = 100.0 / (1.0 + 10.0 ** ((ar - hr) / 400.0))
+    return round(pct, 1), h_known and a_known
 
 
 def ncaaf_live_elo_home_pct(home: str, away: str) -> float | None:

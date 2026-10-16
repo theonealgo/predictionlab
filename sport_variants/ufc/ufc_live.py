@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from html import escape as html_escape
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -334,6 +335,54 @@ def ensure_ufc_layout_css(html: str) -> str:
     return html + _UFC_LAYOUT_CSS
 
 
+_SCRIPT_RE = re.compile(r"<script\b(?![^>]*\bsrc=)[^>]*>[\s\S]*?</script>\s*", flags=re.I)
+
+
+def keep_one_header_menu_script(html: str) -> str:
+    """Each header menu binder toggles the menu, so a second copy closes it again."""
+    if not html or html.count("querySelectorAll('.pl2-navdrop')") < 2:
+        return html
+    seen = False
+
+    def _one(match: re.Match[str]) -> str:
+        nonlocal seen
+        body = match.group(0)
+        if "querySelectorAll('.pl2-navdrop')" not in body:
+            return body
+        if not seen:
+            seen = True
+            return body
+        return ""
+
+    return _SCRIPT_RE.sub(_one, html)
+
+
+def place_recent_results_above_footer(html: str) -> str:
+    """Recent results sit inside the page, above the site footer."""
+    if not html or 'id="picks-recent-results"' not in html:
+        return html
+    footer_at = html.rfind('class="site-directory-footer"')
+    section = re.search(
+        r'<section\b[^>]*\bid="picks-recent-results"[\s\S]*?</section>\s*', html, flags=re.I
+    )
+    if not section:
+        return html
+    if footer_at < 0:
+        main_end = html.lower().rfind("</main>", 0, section.start())
+        if main_end < 0 or html.lower().find("</main>", section.end()) >= 0:
+            return html
+        return html[:main_end] + section.group(0) + html[main_end:section.start()] + html[section.end():]
+    if section.start() < footer_at:
+        return html
+    rest = html[: section.start()] + html[section.end():]
+    footer_at = rest.rfind('class="site-directory-footer"')
+    main_end = rest.lower().rfind("</main>", 0, footer_at)
+    at = main_end if main_end >= 0 else rest.rfind("<", 0, footer_at)
+    if at < 0:
+        return html
+    return rest[:at] + section.group(0) + rest[at:]
+
+
 def apply_ufc_customer_html(html: str, path: str = "") -> str:
     """Share links use the public origin. Copied model percents stay on their own model."""
     if not html:
@@ -344,6 +393,11 @@ def apply_ufc_customer_html(html: str, path: str = "") -> str:
         html = keep_ufc_model_percents(html)
     html = restore_ufc_chart_date_picker(html)
     html = place_ufc_share_above_footer(html)
+    html = place_recent_results_above_footer(html)
+    html = keep_one_header_menu_script(html)
+    html = keep_sharp_consensus_only(html)
+    if 'data-ssr-chart="1"' in html or 'id="ssr-finals"' in html:
+        html = clean_ufc_chart(html)
     return ensure_ufc_layout_css(html)
 
 
@@ -358,13 +412,167 @@ def _rewrite_hub_paths(html: str) -> str:
 
 
 def _with_consensus_hist(html: str) -> str:
-    try:
-        from team_results_charts import _inject_ufc_consensus_hist_chips
+    """UFC has one real model, so there is no multi-model consensus record."""
+    return html
 
-        return _inject_ufc_consensus_hist_chips(html)
-    except Exception as e:
-        print(f"[ufc_live] consensus hist inject failed: {e}", flush=True)
+
+_UFC_OFFSET_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Efficiency")
+_OFFSET_BOX_RE = re.compile(
+    r'<div class="pc-box[^"]*">\s*<div class="pc-name">\s*(?:'
+    + "|".join(_UFC_OFFSET_MODELS)
+    + r')\s*</div>\s*<div class="pc-val"[^>]*>[^<]*</div>\s*'
+    r'<div class="pc-side[^"]*">[^<]*</div>\s*</div>',
+    re.I,
+)
+_OFFSET_ATTR_RE = re.compile(r'\s+data-m-(?:grinder2|takedown|edge|xsharp|efficiency)="[^"]*"', re.I)
+_CONSENSUS_CHIP_RE = re.compile(
+    r'<div class="line-chip consensus-hist-chip">\s*<div class="line-chip-label">[^<]*</div>\s*'
+    r'<div class="line-chip-val">[^<]*</div>\s*</div>\s*',
+    re.I,
+)
+
+
+def keep_sharp_consensus_only(html: str) -> str:
+    """UFC stores one probability per fight (Sharp Consensus). Drop the other model boxes."""
+    if not html:
         return html
+    html = _OFFSET_BOX_RE.sub("", html)
+    html = _OFFSET_ATTR_RE.sub("", html)
+    return _CONSENSUS_CHIP_RE.sub("", html)
+
+
+def _drop_section_by_id(html: str, tag: str, el_id: str) -> str:
+    m = re.search(rf'<{tag}\b[^>]*\bid="{re.escape(el_id)}"', html)
+    if not m:
+        return html
+    depth, pos = 0, m.start()
+    open_re = re.compile(rf"<{tag}\b", re.I)
+    close = f"</{tag}>"
+    while True:
+        o = open_re.search(html, pos)
+        c = html.find(close, pos)
+        if c < 0:
+            return html
+        if o and o.start() < c:
+            depth += 1
+            pos = o.end()
+        else:
+            depth -= 1
+            pos = c + len(close)
+            if depth == 0:
+                return html[: m.start()] + html[pos:]
+
+
+def _chart_tally_html(tallies: dict[str, Any]) -> str:
+    out = []
+    for key, label in (("last_night", "Last Night"), ("last_7", "Last 7"), ("season", "Season")):
+        block = tallies.get(key) or {}
+        sc = (block.get("models") or {}).get("Sharp Consensus") or {}
+        w, l = int(sc.get("w") or 0), int(sc.get("l") or 0)
+        tag = f"{w + l} fights" + (f" · {block['date']}" if block.get("date") else "")
+        out.append(
+            f'<section class="tally"><h2>{label} <span class="tag">({html_escape(tag)})</span></h2>'
+            '<div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card">'
+            '<div class="daily-model mlabel">Sharp Consensus</div>'
+            f'<div class="daily-acc acc">{_pct_text(w, l)}</div>'
+            f'<div class="daily-rec rec">{w}-{l}</div></div></div></section>'
+        )
+    return "".join(out)
+
+
+def _chart_rows_html(finals: list[dict[str, Any]]) -> str:
+    rows = []
+    for c in finals:
+        ok = c.get("correct")
+        result = "Correct" if ok is True else ("Wrong" if ok is False else "—")
+        rows.append(
+            "<tr>"
+            f"<td>{html_escape(str(c.get('game_date') or ''))}</td>"
+            "<td>UFC</td>"
+            f"<td>{html_escape(str(c.get('away') or ''))} @ {html_escape(str(c.get('home') or ''))}</td>"
+            f"<td>{html_escape(str(c.get('home_score') or ''))}–{html_escape(str(c.get('away_score') or ''))}</td>"
+            f"<td>{html_escape(str(c.get('face_pick') or '—'))}</td>"
+            f"<td>{c.get('face_prob')}%</td>"
+            f"<td>{result}</td>"
+            f"<td class=\"mono-models\">Sharp Consensus {html_escape(str(c.get('face_pick') or ''))} "
+            f"{'✓' if ok is True else ('✗' if ok is False else '')}</td>"
+            "</tr>"
+        )
+    return "".join(rows)
+
+
+def _ssr_chart_from_payload(html: str) -> str:
+    payload = build_ufc_chart_api_payload()
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        return html
+    tallies = payload.get("tallies") or {}
+    finals = payload.get("finals") or []
+    days = sorted({str(c.get("game_date") or "") for c in finals if c.get("game_date")})[-_RESULT_DAYS:]
+    if days:
+        html = re.sub(
+            r'(<div class="date-bubbles" id="dateBubbles">)[\s\S]*?(</div>)',
+            lambda m: m.group(1)
+            + "".join(
+                f'<button type="button" class="date-bubble" data-date="{d}">{d}</button>' for d in days
+            )
+            + m.group(2),
+            html,
+            count=1,
+        )
+        html = re.sub(
+            r'(<select id="datePicker"[^>]*>)[\s\S]*?(</select>)',
+            lambda m: m.group(1) + "".join(f'<option value="{d}">{d}</option>' for d in days) + m.group(2),
+            html,
+            count=1,
+        )
+        html = re.sub(r"const allDates = \[[^\]]*\]", "const allDates = " + json.dumps(days), html, count=1)
+    html = re.sub(
+        r'(<div id="tallies" class="tally-wrap"[^>]*>)[\s\S]*?(</div>\s*<div class="pl-consensus-records"|</div>\s*<section id="ssr-finals")',
+        lambda m: m.group(1) + _chart_tally_html(tallies) + m.group(2),
+        html,
+        count=1,
+    )
+    head = (
+        "<tr><th>Date</th><th>League</th><th>Match</th><th>Score</th>"
+        "<th>Pick</th><th>%</th><th>Result</th><th>Models</th></tr>"
+    )
+    return re.sub(
+        r'(<section id="ssr-finals"[^>]*>)[\s\S]*?(</section>)',
+        lambda m: (
+            m.group(1)
+            + f'<h2 class="sec-title">Moneyline games <span class="tag">({len(finals)})</span></h2>'
+            + '<div class="table-wrap"><table class="results-table">'
+            + f"<thead>{head}</thead><tbody>{_chart_rows_html(finals)}</tbody></table></div>"
+            + m.group(2)
+        ),
+        html,
+        count=1,
+    )
+
+
+def clean_ufc_chart(html: str) -> str:
+    """Chart view: moneyline only, Sharp Consensus only."""
+    if not html or ('data-league="UFC"' in html and "data-pick-card" in html):
+        return html
+    if "ufc-sc-chart" not in html:
+        try:
+            html = _ssr_chart_from_payload(html)
+        except Exception as e:
+            print(f"[ufc_live] chart rebuild failed: {e}", flush=True)
+        html = html.replace('<div id="tallies" class="tally-wrap"', '<div id="tallies" data-ufc-sc-chart="1" class="tally-wrap"', 1)
+    for tag, el_id in (
+        ("div", "pl-consensus-records"),
+        ("section", "three-way-moneyline"),
+        ("section", "three-way-spread"),
+        ("section", "three-way-totals"),
+    ):
+        html = _drop_section_by_id(html, tag, el_id)
+    return re.sub(
+        r'<nav class="market-tabs" role="tablist" aria-label="Results markets">[\s\S]*?</nav>',
+        "",
+        html,
+        count=1,
+    )
 
 
 def _relabel_best_performing_today(html: str) -> str:
@@ -698,7 +906,7 @@ def _read_page(name: str) -> str:
         html = merge_stored_upcoming_pick_cards(html)
         html = _mark_past_fight_times_final(html)
         html = _drop_model_pick_confidence(html)
-    return _expand_cards(_with_consensus_hist(html))
+    return keep_sharp_consensus_only(_expand_cards(html))
 
 
 def _drop_model_pick_confidence(html: str) -> str:
@@ -751,6 +959,205 @@ def render_ufc_picks() -> str:
     return _read_page("picks.html")
 
 
+try:
+    from results_window import NIGHTS as _RESULT_DAYS
+except Exception:
+    _RESULT_DAYS = 3
+_ENGINE_RENDER: list[Any] = []
+
+
+def _engine_render():
+    if not _ENGINE_RENDER:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "ufc_iso_render_results", _UFC_ISO / "engine" / "render.py"
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("UFC engine renderer missing")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _ENGINE_RENDER.append(mod)
+    return _ENGINE_RENDER[0]
+
+
+def _graded_by_day(cards: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    days: dict[str, list[dict[str, Any]]] = {}
+    for card in cards:
+        if card.get("grade") not in ("WIN", "LOSS"):
+            continue
+        day = _fight_day_key(card)
+        if day:
+            days.setdefault(day, []).append(card)
+    return days
+
+
+def _prior_meetings(cards: list[dict[str, Any]]) -> dict[int, int]:
+    """Earlier stored fights between the same two fighters, keyed by id(card)."""
+    seen: dict[frozenset, int] = {}
+    out: dict[int, int] = {}
+    for card in sorted(cards, key=lambda c: str(c.get("fight_date") or "")):
+        pair = frozenset((str(card.get("home_fighter") or ""), str(card.get("away_fighter") or "")))
+        out[id(card)] = seen.get(pair, 0)
+        seen[pair] = seen.get(pair, 0) + 1
+    return out
+
+
+def _h2h_text(prior: int) -> str:
+    if prior <= 0:
+        return "First meeting"
+    return f"{prior} prior meeting" + ("s" if prior > 1 else "")
+
+
+def _result_card_html(render, card: dict[str, Any], idx: int, prior: int = 0) -> str:
+    html = render.render_result_card(card, idx)
+    h2h = html_escape(_h2h_text(prior))
+    html = html.replace(
+        '<div class="game-card-stack" ', f'<div class="game-card-stack" data-h2h="{h2h}" ', 1
+    )
+    html = re.sub(
+        r'(<div class="cfl-result-chip"[^>]*>.*?</div>\s*</div>)',
+        lambda m: m.group(1) + f'<div class="ufc-h2h">H2H: {h2h}</div>',
+        html,
+        count=1,
+        flags=re.S,
+    )
+    mark = {"WIN": "WIN ✅", "LOSS": "LOSS ❌"}.get(str(card.get("grade") or ""))
+    if mark:
+        html = re.sub(
+            r'(<div class="line-chip-label">Result</div>\s*<div class="line-chip-val">)[^<]*(</div>)',
+            lambda m: m.group(1) + mark + m.group(2),
+            html,
+            count=1,
+        )
+    return html.replace(
+        '<div class="line-chip-label">Model pick</div>',
+        '<div class="line-chip-label">Pick</div>',
+        1,
+    )
+
+
+def _pct_text(w: int, l: int) -> str:
+    n = w + l
+    return f"{100.0 * w / n:.1f}%" if n else "—"
+
+
+def _results_tally_block(records: dict[str, Any]) -> str:
+    ln = records.get("last_night") or {}
+    rows = (
+        ("Last Night", ln, str(ln.get("date") or "")),
+        ("Last 7", records.get("last_7") or {}, ""),
+        ("Season", records.get("season") or {}, ""),
+    )
+    cards = []
+    for label, rec, sub in rows:
+        w, l = int(rec.get("w") or 0), int(rec.get("l") or 0)
+        cards.append(
+            '<div class="daily-tally-card tally-card">'
+            f'<div class="mlabel daily-model">{label}</div>'
+            f'<div class="rec">{w}-{l}</div>'
+            f'<div class="muted">{_pct_text(w, l)}{" · " + sub if sub else ""}</div>'
+            "</div>"
+        )
+    return (
+        '<section class="tally-wrap" id="tallies"><div class="daily-tally">'
+        '<div class="daily-tally-head"><h2>Sharp Consensus — Moneyline</h2></div>'
+        f'<div class="daily-tally-grid tally-grid">{"".join(cards)}</div>'
+        "</div></section>"
+    )
+
+
+_RESULTS_CSS = (
+    '<style id="ufc-results-cards">'
+    ".ufc-h2h{margin-top:6px;text-align:center;font-size:.74rem;color:#64748b}"
+    ".tally-wrap .daily-tally-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}"
+    ".tally-wrap .daily-tally-card{background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:18px 16px}"
+    ".tally-wrap .daily-tally-card .mlabel{font-size:.78rem;font-weight:800;letter-spacing:.06em;"
+    "text-transform:uppercase;color:#64748b}"
+    ".tally-wrap .daily-tally-card .rec{font-size:1.8rem;font-weight:900;color:#0f172a}"
+    ".tally-wrap .daily-tally-card .muted{font-size:.9rem;color:#64748b}"
+    ".date-section .games-grid .lines-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}"
+    ".date-section .games-grid .lines-strip .line-chip{min-width:0}"
+    ".date-section .games-grid .lines-strip .line-chip-val{overflow-wrap:anywhere}"
+    "@media(max-width:700px){.tally-wrap .daily-tally-grid{grid-template-columns:1fr}}"
+    "</style>"
+)
+
+
+def _results_cards_body() -> str:
+    render = _engine_render()
+    cards = render.list_graded_results(limit=500)
+    by_day = _graded_by_day(cards)
+    if not by_day:
+        raise RuntimeError("no graded UFC fights stored")
+    prior = _prior_meetings(cards)
+    days = sorted(by_day)[-_RESULT_DAYS:]
+    visible = days[-1]
+    nav = _date_bubbles_html(days, visible, _today_et().isoformat())
+    options = "".join(
+        f'<option value="{d}"{" selected" if d == visible else ""}>{d}</option>' for d in reversed(days)
+    )
+    nav = nav.replace(
+        '<div class="nav-arrow" aria-hidden="true">›</div>',
+        '<select id="datePicker" aria-label="Jump to date">' + options + "</select>"
+        '<div class="nav-arrow" aria-hidden="true">›</div>',
+        1,
+    )
+    idx = 0
+    sections = []
+    for day in days:
+        fights = by_day[day]
+        event = str(fights[0].get("event_name") or "UFC")
+        body = []
+        for card in fights:
+            body.append(_result_card_html(render, card, idx, prior.get(id(card), 0)))
+            idx += 1
+        vis_cls = "visible" if day == visible else "seo-hidden"
+        sections.append(
+            f'<div class="date-section {vis_cls}" id="date-{day}">'
+            f'<div class="date-header">📅 {day} · {html_escape(event)}</div>'
+            f"<div class='games-grid'>{''.join(body)}</div></div>"
+        )
+    tally = _results_tally_block(render.window_tally_records(cards).get("records") or {})
+    return nav + _RESULTS_CSS + tally + "".join(sections)
+
+
+def _rebuild_results_cards(page: str) -> str:
+    """Cards view from the stored graded fights, newest fight day first on screen."""
+    start = page.find('<div class="date-nav"')
+    last = page.rfind('class="date-section')
+    if start < 0 or last < 0:
+        return page
+    open_at = page.rfind("<div", 0, last)
+    depth, pos = 0, open_at
+    while True:
+        o = page.find("<div", pos)
+        c = page.find("</div>", pos)
+        if c < 0:
+            return page
+        if o != -1 and o < c:
+            depth += 1
+            pos = o + 4
+        else:
+            depth -= 1
+            pos = c + len("</div>")
+            if depth == 0:
+                break
+    try:
+        body = _results_cards_body()
+    except Exception as e:
+        print(f"[ufc_live] results rebuild failed: {e}", flush=True)
+        return page
+    page = page[:start] + body + page[pos:]
+    try:
+        from card_windows import date_picker_selects_one_date
+
+        page = date_picker_selects_one_date(page)
+    except Exception:
+        pass
+    return page
+
+
 def render_ufc_results(*, view: str = "normal") -> str:
     view = (view or "normal").strip().lower()
     if view in ("chart", "tabs", "markets", "tabbed"):
@@ -783,8 +1190,8 @@ def render_ufc_results(*, view: str = "normal") -> str:
             page = _sync_last_night_dates(page)
         except Exception:
             pass
-        return page
-    return _read_page("results.html")
+        return keep_sharp_consensus_only(clean_ufc_chart(page))
+    return keep_sharp_consensus_only(_rebuild_results_cards(_read_page("results.html")))
 
 
 def apply_ufc_isolation_html(html: str, *, which: str = "picks") -> str:

@@ -2282,7 +2282,17 @@ def inject_ssr_chart_bootstrap(
     try:
         from results_window import window_dates
 
-        nights = window_dates({str(g.get("game_date") or "")[:10] for g in finals}, "SOCCER")
+        final_dates = {str(g.get("game_date") or "")[:10] for g in finals}
+        nights = set()
+        if (sport or "").strip().lower() == "soccer":
+            # The soccer results page is a week page; the chart lists the same finals.
+            import sys as _sys
+
+            appmod = _sys.modules.get("NHL77FINAL") or _sys.modules.get("__main__")
+            start, end = appmod._soccer_results_week_bounds()
+            nights = {d for d in final_dates if start <= d <= end}
+        if not nights:
+            nights = window_dates(final_dates, "SOCCER")
         finals = [g for g in finals if str(g.get("game_date") or "")[:10] in nights] or finals[:40]
     except Exception:
         finals = finals[:40]

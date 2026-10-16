@@ -347,7 +347,7 @@ def _cell_like(sample: str, rec: list[int]) -> str:
     pct = round(100 * w / (w + l))
     if "cons-bar" not in sample:
         return text
-    color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
+    color = "#067647" if pct >= 55 else ("#a16207" if pct >= 50 else "#D93025")
     return (
         f"{text} <span style='color:{color};font-weight:700'>({pct}%)</span>"
         f"<div class='cons-bar' aria-hidden='true'><i style='width:{max(4, pct)}%;background:{color}'></i></div>"
@@ -413,6 +413,29 @@ def set_pl_rows_from_cards(html: str, cards_html: str, xs_from: str | None = Non
         if near:
             s0, e0 = end + near.start(), end + near.end()
             html = html[:s0] + read + html[e0:]
+    return html
+
+
+def copy_plxs_rows(html: str, cards_html: str) -> str:
+    """Chart view: the Prediction Lab & XSharp spread/totals rows are the cards page's rows."""
+    if not html or not cards_html:
+        return html
+    for table_id, label in (("pl-spread-records", "spread"), ("pl-totals-records", "totals")):
+        for row in ("Prediction Lab", "XSharp"):
+            html = _copy_row(html, cards_html, table_id, row)
+        at = html.find(f'id="{table_id}"')
+        if at < 0:
+            continue
+        end = html.find("</table>", at)
+        if end < 0:
+            continue
+        rows = _plxs_table(html[at:end] + "</table>", table_id)
+        pl30 = (rows.get("Prediction Lab") or ["", "", ""])[2]
+        xs30 = (rows.get("XSharp") or ["", "", ""])[2]
+        near = re.search(r'<p class="cons-read">[\s\S]*?</p>', html[end:end + 800])
+        if near:
+            s0, e0 = end + near.start(), end + near.end()
+            html = html[:s0] + _calibration_line(pl30, xs30, label) + html[e0:]
     return html
 
 
@@ -749,7 +772,7 @@ def four_model_past7(html: str, cards_html: str, sport_label: str = "WNBA") -> s
         if w + l == 0:
             return rec
         pct = round(100 * w / (w + l))
-        color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
+        color = "#067647" if pct >= 55 else ("#a16207" if pct >= 50 else "#D93025")
         return (
             f"{rec} <span style='color:{color};font-weight:700'>({pct}%)</span>"
             f"<div class='cons-bar' aria-hidden='true'><i style='width:{max(4, pct)}%;background:{color}'></i></div>"
@@ -797,6 +820,9 @@ def _variable_panel_games(cards_html: str) -> list[dict]:
                 counts[team] = counts.get(team, 0) + 1
             top = max(counts.values())
             if list(counts.values()).count(top) > 1:
+                # No majority side: counted in the Split row without a grade.
+                games.append({"date": dk, "label": f"{top}/{panel} Split / no consensus",
+                              "panel": panel, "maj": 0, "grade": "PUSH"})
                 continue
             maj = next(t for t, n in counts.items() if n == top)
             dissent = [n for n in SIX if n in picks and picks[n][0] != maj]
@@ -827,13 +853,14 @@ def variable_panel_consensus(html: str, cards_html: str, sport_label: str) -> st
     lo30 = (ln_d - timedelta(days=29)).isoformat()
 
     def _cell(grades: list[str]) -> str:
-        w, l = grades.count("WIN"), grades.count("LOSS")
+        w, l, p = grades.count("WIN"), grades.count("LOSS"), grades.count("PUSH")
+        rec = f"{w}-{l}" + (f"-{p}" if p else "")
         if w + l == 0:
-            return "0-0"
+            return rec
         pct = round(100 * w / (w + l))
-        color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
+        color = "#067647" if pct >= 55 else ("#a16207" if pct >= 50 else "#D93025")
         return (
-            f"{w}-{l} <span style='color:{color};font-weight:700'>({pct}%)</span>"
+            f"{rec} <span style='color:{color};font-weight:700'>({pct}%)</span>"
             f"<div class='cons-bar' aria-hidden='true'><i style='width:{max(4, pct)}%;background:{color}'></i></div>"
         )
 

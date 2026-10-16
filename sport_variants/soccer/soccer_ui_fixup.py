@@ -40,6 +40,21 @@ _SUFFIXES = (" cf", " fc", " sc", " ac")
 _BAD = ("", "—", "-", "–", "‒", "N/A", "n/a")
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def soccer_et_today() -> date:
     try:
         from zoneinfo import ZoneInfo
@@ -120,7 +135,12 @@ def soccer_week_label(monday: date, today=None) -> str:
 
 
 def _fold(name: str) -> str:
-    s = unicodedata.normalize("NFKD", str(name or ""))
+    return _fold_str(str(name or ""))
+
+
+@lru_cache(maxsize=65536)
+def _fold_str(name: str) -> str:
+    s = unicodedata.normalize("NFKD", name)
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = s.strip().lower()
     s = re.sub(r"[^\w\s]", "", s)
@@ -128,7 +148,12 @@ def _fold(name: str) -> str:
     return s
 
 
-def _cores(name: str) -> set[str]:
+def _cores(name: str) -> frozenset[str]:
+    return _cores_str(str(name or ""))
+
+
+@lru_cache(maxsize=65536)
+def _cores_str(name: str) -> frozenset[str]:
     f = _fold(name)
     out = {f} if f else set()
     for p in _PREFIXES:
@@ -141,11 +166,16 @@ def _cores(name: str) -> set[str]:
             rest = f[: -len(suf)].strip()
             if rest:
                 out.add(rest)
-    return out
+    return frozenset(out)
 
 
 def _alias_key(name: str) -> str:
     """Strip FC/CD/Atletico prefixes so Atlético Madrid == Atletico de Madrid."""
+    return _alias_key_str(str(name or ""))
+
+
+@lru_cache(maxsize=65536)
+def _alias_key_str(name: str) -> str:
     f = _fold(name)
     changed = True
     while changed and f:
@@ -190,6 +220,11 @@ def _espn_id_map() -> dict[str, str]:
 
 
 def _espn_id_for(name: str) -> str | None:
+    return _espn_id_for_str(str(name or ""))
+
+
+@lru_cache(maxsize=65536)
+def _espn_id_for_str(name: str) -> str | None:
     m = _espn_id_map()
     f = _fold(name)
     if f in m:
@@ -209,6 +244,26 @@ def aliases_for(name: str, db_names: Iterable[str]) -> list[str]:
     """All DB spellings that are the same club as ``name``."""
     if not name:
         return []
+    return list(_aliases_for_cached(name, _db_names_key(db_names)))
+
+
+_DB_NAMES_KEY: list = [None, ()]
+
+
+def _db_names_key(db_names: Iterable[str]) -> tuple[str, ...]:
+    """One shared tuple per distinct name list, so cached entries do not each hold a copy."""
+    last_src, last_key = _DB_NAMES_KEY
+    if db_names is last_src:
+        return last_key
+    key = tuple(db_names)
+    if key == last_key:
+        key = last_key
+    _DB_NAMES_KEY[:] = [db_names, key]
+    return key
+
+
+@lru_cache(maxsize=2048)
+def _aliases_for_cached(name: str, db_names: tuple[str, ...]) -> tuple[str, ...]:
     want_id = _espn_id_for(name)
     want_key = _alias_key(name)
     want_cores = _cores(name)
@@ -239,7 +294,7 @@ def aliases_for(name: str, db_names: Iterable[str]) -> list[str]:
             found.append(raw)
     if name not in seen:
         found.insert(0, name)
-    return found
+    return tuple(found)
 
 
 _DB_TEAM_NAMES_CACHE: dict[str, tuple[float, list[str]]] = {}
@@ -379,6 +434,7 @@ def _iso_h2h_fns():
 
 def _h2h_db_paths() -> list[Path]:
     paths = [
+        _app_db_path(),
         _LIVE_ROOT / "sports_predictions_original.db",
         _LIVE_ROOT / "data" / "sports_predictions_original.db",
     ]
@@ -884,6 +940,16 @@ def _soccer_filter_week(kind: str, week: str = "") -> str:
             return date.fromisoformat(raw).isoformat() if raw else ""
         except ValueError:
             return ""
+    if not (week or "").strip():
+        # Filters stay on the week the unfiltered results page shows (on a
+        # Monday that is last week), not the new calendar week.
+        try:
+            appmod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
+            slug = appmod._soccer_results_week_slug()
+            if slug:
+                return str(slug)[:10]
+        except Exception:
+            pass
     return soccer_week_range(week)[0].isoformat()
 
 
@@ -2546,68 +2612,6 @@ def _fill_soccer_pl_pk_from_level_proj(html: str) -> str:
     return "".join(out)
 
 
-def _fill_soccer_placeholder_edge(html: str) -> str:
-    """Replace one-off Edge 50% with another published model on the same card."""
-    if not html or "data-pick-card" not in html:
-        return html
-    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
-    if len(parts) < 2:
-        return html
-    out = [parts[0]]
-    for stack in parts[1:]:
-        open_m = re.match(r"(<div\b[^>]*\bdata-pick-card\b[^>]*>)", stack, flags=re.I)
-        if not open_m:
-            out.append(stack)
-            continue
-        open_tag = open_m.group(1)
-        rest = stack[open_m.end() :]
-        names = re.findall(
-            r'class="pc-name">\s*([\s\S]*?)</div>', rest, flags=re.I
-        )
-        vals = re.findall(
-            r'class="pc-val"[^>]*>\s*([\s\S]*?)</div>', rest, flags=re.I
-        )
-        sibling = ""
-        edge_is_fifty = False
-        for name, val in zip(names, vals):
-            n = re.sub(r"<[^>]+>", "", name).strip().lower()
-            v = re.sub(r"<[^>]+>", "", val).strip()
-            if n == "edge":
-                try:
-                    edge_is_fifty = abs(float(v.rstrip("%")) - 50.0) < 0.051
-                except ValueError:
-                    edge_is_fifty = False
-            elif (
-                not sibling
-                and n in {"xsharp", "sharp consensus"}
-                and re.fullmatch(r"\d+(?:\.\d+)?%", v)
-            ):
-                try:
-                    if abs(float(v.rstrip("%")) - 50.0) >= 0.051:
-                        sibling = v
-                except ValueError:
-                    pass
-        if edge_is_fifty and sibling:
-            rest = re.sub(
-                r'(<div class="pc-name">\s*Edge\s*</div>\s*'
-                r'<div class="pc-val"[^>]*>)\s*50(?:\.0+)?%\s*(</div>)',
-                rf"\g<1>{sibling}\2",
-                rest,
-                count=1,
-                flags=re.I,
-            )
-            if re.search(r'data-m-edge="', open_tag, flags=re.I):
-                open_tag = re.sub(
-                    r'data-m-edge="[^"]*"',
-                    f'data-m-edge="{sibling.rstrip("%")}"',
-                    open_tag,
-                    count=1,
-                    flags=re.I,
-                )
-        out.append(open_tag + rest)
-    return "".join(out)
-
-
 def _fill_soccer_efficiency_na_sides(html: str) -> str:
     """Fill Efficiency N/A sides from the published PL spread. Do not invent %."""
     if not html or "Efficiency" not in html:
@@ -2645,7 +2649,7 @@ def _fill_soccer_efficiency_na_sides(html: str) -> str:
 
         def _repl(m: re.Match[str]) -> str:
             return (
-                f'{m.group(1)}{cls}"{m.group(3)}{escaped}{m.group(4)}'
+                f'{m.group(1)}{cls}{m.group(3)}{escaped}{m.group(4)}'
             )
 
         rest2, n = re.subn(
@@ -2983,7 +2987,6 @@ def apply_soccer_picks_fixups(html: str, *, league: str = "", region: str = "", 
         html = _hide_blank_books_ml_lines(html)
         html = ensure_soccer_books_na_tooltips(html)
         html = _fill_soccer_pl_pk_from_level_proj(html)
-        html = _fill_soccer_placeholder_edge(html)
         html = _fill_soccer_efficiency_na_sides(html)
         html = _ensure_soccer_share_and_copy(html)
         try:
@@ -3413,7 +3416,7 @@ def _soccer_scored_slate_before_today() -> tuple[str, list[tuple]]:
         yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
     except Exception:
         yesterday = (date.today() - timedelta(days=1)).isoformat()
-    db = _LIVE_ROOT / "sports_predictions_original.db"
+    db = _app_db_path()
     if not db.is_file():
         return "", []
     try:
@@ -3500,7 +3503,7 @@ def inject_soccer_chart_last_night_games(html: str) -> str:
 
 
 def stamp_soccer_results_checker_html(html: str, view: str = "") -> str:
-    """Copy Recent totals onto the checker chart and list last night's games."""
+    """Copy Recent totals onto the chart."""
     if not html:
         return html
     # The PL vs Books table is rebuilt from the cards after the first heading
@@ -3508,15 +3511,6 @@ def stamp_soccer_results_checker_html(html: str, view: str = "") -> str:
     html = _sync_soccer_last_night_heading(html)
     html = inject_soccer_graded_totals_chart(html)
     html = place_soccer_chrome(html)
-    if (view or "").strip().lower() in {
-        "chart",
-        "tabs",
-        "markets",
-        "tabbed",
-        "spread",
-        "totals",
-    }:
-        html = inject_soccer_chart_last_night_games(html)
     return publicize_soccer_share_hrefs(html)
 
 
@@ -3663,6 +3657,35 @@ def apply_soccer_results_fixups(html: str, *, league: str = "", region: str = ""
     return ensure_soccer_results_ship_bits(html, league=league)
 
 
+
+def keep_soccer_chart_league(payload: Any, league: str = "", week: str = "") -> Any:
+    """A ?league= chart lists only that league's matches (and only that week with ?week=)."""
+    slug = (league or "").strip().lower()
+    if not isinstance(payload, dict) or not slug or slug in ("all", "all-leagues"):
+        return payload
+    lo = hi = ""
+    if (week or "").strip():
+        lo, hi = (d.isoformat() for d in soccer_week_range(week))
+
+    def keep(row: Any) -> bool:
+        name = re.sub(r"[^a-z0-9]+", "-", str((row or {}).get("league") or "").lower()).strip("-")
+        day = str((row or {}).get("game_date") or "")[:10]
+        return name == slug and (not lo or lo <= day <= hi)
+
+    out = dict(payload)
+    if isinstance(out.get("finals"), list):
+        out["finals"] = [r for r in out["finals"] if keep(r)]
+    markets = {}
+    for key, block in (out.get("markets") or {}).items():
+        if isinstance(block, dict) and isinstance(block.get("finals"), list):
+            block = dict(block)
+            block["finals"] = [r for r in block["finals"] if keep(r)]
+        markets[key] = block
+    if markets:
+        out["markets"] = markets
+    return out
+
+
 def render_soccer_results_chart_page(
     payload: dict[str, Any] | None = None,
     *,
@@ -3709,7 +3732,9 @@ def render_soccer_results_chart_page(
     )
     if payload:
         try:
-            html = inject_ssr_chart_bootstrap(html, payload, "soccer")
+            html = inject_ssr_chart_bootstrap(
+                html, keep_soccer_chart_league(payload, league, week), "soccer"
+            )
         except Exception as e:
             print(f"[soccer_ui_fixup] chart SSR bootstrap: {e}", flush=True)
     try:

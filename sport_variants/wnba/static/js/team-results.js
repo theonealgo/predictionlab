@@ -445,10 +445,13 @@ function renderActiveMarket() {
     wrap.hidden = true;
     elOr("finals-wrap").hidden = true;
     sum.hidden = true;
-    if (ssrFinals && key !== "moneyline") {
-      ssrFinals.hidden = true;
-      ssrFinals.setAttribute("hidden", "");
-    }
+    // The server already printed a games table per market; show this market's.
+    document.querySelectorAll("section[data-ssr-market]").forEach((sec) => {
+      const on = sec.getAttribute("data-ssr-market") === key;
+      sec.hidden = !on;
+      if (on) sec.removeAttribute("hidden");
+      else sec.setAttribute("hidden", "");
+    });
     return;
   }
 
@@ -592,10 +595,18 @@ function renderActiveMarket() {
     cards.setAttribute("hidden", "");
     cards.setAttribute("aria-hidden", "true");
   }
-  // Non-ML markets: hide moneyline SSR so Spread/Totals CSR table is the only list.
-  if (ssrFinals && key !== "moneyline") {
-    ssrFinals.hidden = true;
-    ssrFinals.setAttribute("hidden", "");
+  if (key !== "moneyline") {
+    // Keep the server's graded table when the live list is empty or has no table on this page.
+    const own = document.querySelector(`section[data-ssr-market="${key}"]`);
+    const keepOwn = own && own.querySelector("tbody tr td + td") &&
+      (!finals.length || !document.getElementById("finals-wrap"));
+    document.querySelectorAll("section[data-ssr-market]").forEach((sec) => {
+      const on = !!keepOwn && sec === own;
+      sec.hidden = !on;
+      if (on) sec.removeAttribute("hidden");
+      else sec.setAttribute("hidden", "");
+    });
+    if (keepOwn && finalsWrap) finalsWrap.hidden = true;
   }
 }
 

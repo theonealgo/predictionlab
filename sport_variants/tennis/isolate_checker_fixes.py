@@ -15,6 +15,21 @@ from typing import Any
 _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _persist_cards_html(sport: str, html: str) -> None:
     if not html or html.count("game-card") < 3:
         return
@@ -1350,7 +1365,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -1893,6 +1908,34 @@ _THREE_WAY_CHART_VIEWS = {"chart", "tabs", "markets", "tabbed", "spread", "total
 _THREE_WAY_SPORTS = {"NHL", "NBA", "NCAAB", "NCAAW", "CFL", "SOCCER", "TENNIS", "UFC", "GOLF"}
 
 
+
+def _three_way_insert_at(html: str) -> int:
+    low = html.lower()
+    foot = low.rfind("<footer")
+    main_end = low.rfind("</main>", 0, foot) if foot >= 0 else low.rfind("</main>")
+    return main_end if main_end >= 0 else (foot if foot >= 0 else low.rfind("</body>"))
+
+
+def _three_way_above_footer(html: str) -> str:
+    """A saved chart can carry the three-way tables below the site footer."""
+    foot = html.lower().rfind("<footer")
+    first = html.find('<section class="pl-consensus-records" id="three-way-')
+    if foot < 0 or first < foot:
+        return html
+    blocks = re.findall(
+        r'<section class="pl-consensus-records" id="three-way-[a-z]+">[\s\S]*?</section>',
+        html[foot:],
+    )
+    if not blocks:
+        return html
+    tail = html[foot:]
+    for block in blocks:
+        tail = tail.replace(block, "", 1)
+    html = html[:foot] + tail
+    idx = _three_way_insert_at(html)
+    return html[:idx] + "".join(blocks) + html[idx:] if idx >= 0 else html
+
+
 def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
     """Add Books / Prediction Lab / XSharp tables on a results chart.
 
@@ -1904,8 +1947,10 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         return html
     if (view or "").strip().lower() not in _THREE_WAY_CHART_VIEWS:
         return html
-    if not html or 'id="three-way-moneyline"' in html:
+    if not html:
         return html
+    if 'id="three-way-moneyline"' in html:
+        return _three_way_above_footer(html)
     cards = ""
     try:
         cpath = _served_path(results_serve_key(sport_u))
@@ -1921,7 +1966,7 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
             sys.path.insert(0, root)
         from three_way_results import render_three_way_section
 
-        db_path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        db_path = _app_db_path()
         block = render_three_way_section(sport_u, cards, db_path)
         shown = re.findall(
             r"Last Night's [^—<&]{0,40}(?:—|&mdash;|–|&ndash;)\s*(\d{4}-\d{2}-\d{2})",
@@ -1937,7 +1982,7 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         return html
     if not block:
         return html
-    idx = html.lower().rfind("</body>")
+    idx = _three_way_insert_at(html)
     if idx >= 0:
         return html[:idx] + block + html[idx:]
     return html + block

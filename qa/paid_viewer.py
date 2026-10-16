@@ -131,7 +131,15 @@ def _relay(target, jar: dict[str, str]):
 
         do_GET = do_POST = do_HEAD = do_PUT = do_DELETE = do_OPTIONS = _forward
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    class Server(ThreadingHTTPServer):
+        def handle_error(self, request, client_address):
+            # Chrome drops connections it no longer needs; that is not a page error.
+            import sys
+            if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+                return
+            super().handle_error(request, client_address)
+
+    server = Server(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server

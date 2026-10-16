@@ -563,6 +563,9 @@ def _fill_edge_from_line(html: str, sport: str) -> str:
     """A 50% Edge uses the spread already on the card. A pick'em stays 50%."""
     if not html or "data-pick-card" not in html:
         return html
+    # Soccer Edge is the stored match probability; a level match stays 50%.
+    if (sport or "").upper() == "SOCCER":
+        return html
     parts = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
     if len(parts) < 2:
         return html

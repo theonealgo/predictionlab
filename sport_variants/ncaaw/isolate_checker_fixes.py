@@ -15,6 +15,21 @@ from typing import Any
 _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _persist_cards_html(sport: str, html: str) -> None:
     if not html or html.count("game-card") < 3:
         return
@@ -149,7 +164,7 @@ def _picks_recent_is_stale(sport: str, text: str) -> bool:
         yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
     except Exception:
         yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -403,7 +418,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
             _y = (_dt.now(_Z("America/New_York")).date() - _td(days=1)).isoformat()
         except Exception:
             _y = (_dt.now().date() - _td(days=1)).isoformat()
-        _db = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+        _db = _app_db_path()
         if not _db.is_file():
             return False
         try:
@@ -438,7 +453,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         shown = datetime.strptime(night.group(1), "%Y-%m-%d").date()
     except ValueError:
         return False
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -1516,7 +1531,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -2063,7 +2078,7 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         block = render_three_way_section(
             sport_u,
             cards,
-            Path(__file__).resolve().parent / "sports_predictions_original.db",
+            _app_db_path(),
         )
     except Exception:
         return html
@@ -2079,7 +2094,7 @@ def _stored_ncaaw_finals() -> dict[str, dict[str, Any]]:
     """Completed NCAAW games already in the local games table. No invented rows."""
     import sqlite3
 
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     out: dict[str, dict[str, Any]] = {}
     try:
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)

@@ -10,4 +10,8 @@ Do not modify GOLF unless the same owner message contains the word **UNLOCK**
 
 Locked. 3 UNLOCKS required.
 
+Owner 2026-10-15: the real golf model is merged (`golf_pl_model.py` + `data/golf_history.json`). Picks: Win (1) / Top 10 (5) / Top 20 (10) from rounds before the event only; the field board shows Win / Top 10 / Top 20 chances. Results: season record, won/lost-by-event chart, the event's picks with ✓/✗, then the official finish. No Grinder2/Takedown/Edge/XSharp/Efficiency/Sharp Consensus on golf, no Books/PL/XSharp tables. Miss closed — locked.
+
+Owner 2026-10-14: results share image carries the event results (no empty image). Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

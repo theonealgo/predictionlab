@@ -75,7 +75,7 @@ def _cfl_results_shell_html() -> str:
 <meta charset="utf-8">
 <title>CFL Results | Prediction Lab</title>
 <link rel="stylesheet" href="/static/css/team-results.css">
-<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-2up-3">
+<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-2up-4">
 <style>
 .page-title {{ font-size:2.2em; margin-bottom:20px; text-align:center; padding:22px 18px; border:1px solid rgba(15,23,42,0.14); border-radius:12px; background:#fff; color:#0f172a; }}
 .date-nav {{ display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; padding:12px 16px; background:#fff; border:1px solid rgba(15,23,42,0.12); border-radius:12px; }}
@@ -1172,7 +1172,7 @@ def _ensure_cfl_result_css(html: str, render) -> str:
         flags=re.I,
     )
     if "cfl-pick-cards.css" not in html:
-        tag = '<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-2up-3">'
+        tag = '<link rel="stylesheet" href="/static/css/cfl-pick-cards.css?v=cfl-2up-4">'
         if re.search(r"</head>", html, re.I):
             html = re.sub(r"</head>", tag + "</head>", html, count=1, flags=re.I)
         else:

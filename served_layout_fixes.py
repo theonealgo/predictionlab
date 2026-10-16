@@ -41,6 +41,14 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
         html = _ensure_pc_fit(html)
     if (sport or "").upper() == "CFL" and low.endswith("-picks"):
         html = _short_pc_sides(html)
+    if (sport or "").upper() == "NHL" and low.endswith("-picks"):
+        # Finished games stay on the picks window with a locked card that has no Efficiency.
+        try:
+            from team_results_charts import _fill_efficiency_na
+
+            html = _fill_efficiency_na(html, "NHL")
+        except Exception:
+            pass
     if low.endswith("-results"):
         html = _ensure_date_picker(html)
         html = _refresh_results_dates(html, sport)
@@ -49,6 +57,12 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
         from page_controls import repair_page_controls
 
         html = repair_page_controls(html, sport, path, view)
+        try:
+            from card_face import normalize_card_faces
+
+            html = normalize_card_faces(html, sport, path)
+        except Exception:
+            pass
     return _single_all_dates(html)
 
 

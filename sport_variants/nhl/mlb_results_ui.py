@@ -2010,25 +2010,43 @@ def inject_mlb_results_view_toggle(html: str, *, active: str = "normal") -> str:
     return bar + html
 
 
-def _nhl_h2h_l10(home: str, away: str, day: str, mk: str, state: dict) -> str:
-    """NHL H2H L10 from stored finals before the game: record on spread, average total on totals."""
+def _nhl_h2h_l10(home: str, away: str, day: str, mk: str, state: dict, xs_total=None) -> str:
+    """NHL H2H L10: each team's last 3 games before the game (same text as the card)."""
     mod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
-    proj_fn = getattr(mod, "_compute_h2h_projection", None)
+    set_fn = getattr(mod, "_nhl_set_last3_h2h", None)
     conn_fn = getattr(mod, "get_db_connection", None)
-    if not proj_fn or not conn_fn or not home or not away:
+    if not set_fn or not conn_fn or not home or not away:
         return ""
+    card: dict = {}
     try:
         if "conn" not in state:
             state["conn"] = conn_fn()
-        proj = proj_fn(state["conn"], "NHL", home, away, n=10, min_games=1, before_date=day or None)
+        set_fn(state["conn"], card, home, away, before_date=day or None)
     except Exception:
         return ""
-    if not proj:
-        return "First meeting"
-    games = int(proj.get("games_used") or 0)
-    if mk == "totals":
-        return f"{proj.get('our_total')} ({games} game{'s' if games != 1 else ''})"
-    return f"{int(proj.get('home_wins') or 0)}-{int(proj.get('away_wins') or 0)} ({games} game{'s' if games != 1 else ''})"
+    total = card.get("h2h_last10_total")
+    totals = card.get("h2h_l3_totals") or []
+    if total is None or not totals:
+        return ""
+
+    def _half(v: float) -> str:
+        x = round(float(v) * 2) / 2
+        return str(int(x)) if x == int(x) else f"{x:.1f}"
+
+    spread = float(card.get("h2h_l3_spread") or 0.0)
+    s = round(spread * 2) / 2
+    if s == 0:
+        spread_txt = "PK"
+    else:
+        fav = home if s > 0 else away
+        spread_txt = f"{fav.split()[-1] if fav.split() else fav} -{_half(abs(s))}"
+    text = f"{_half(total)} · {spread_txt}"
+    if xs_total is not None:
+        line = round(float(xs_total) * 2) / 2
+        over = sum(1 for t in totals if t > line)
+        under = sum(1 for t in totals if t < line)
+        text += f" · Combined record: {over}-{under} Over"
+    return text
 
 
 def _chart_team_name(c: dict[str, Any], side: str) -> str:
@@ -2262,7 +2280,8 @@ def inject_ssr_chart_bootstrap(
             res = "Push" if push else ("Correct" if ok is True else "Wrong" if ok is False else "—")
             h2h = c.get("h2h10") or c.get("h2h_l10") or ""
             if not h2h and (sport or "").lower() == "nhl":
-                h2h = _nhl_h2h_l10(home, away, str(c.get("game_date") or "")[:10], sou_key, _h2h_state)
+                _xs_t = (c.get("totals") or {}).get("xs_line") if isinstance(c.get("totals"), dict) else None
+                h2h = _nhl_h2h_l10(home, away, str(c.get("game_date") or "")[:10], sou_key, _h2h_state, _xs_t)
             h2h = h2h or "—"
             rows.append(
                 "<tr>"

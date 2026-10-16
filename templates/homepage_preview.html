@@ -64,7 +64,7 @@
                     </div>
                     <div class="pl2-stats">
                         <div class="pl2-stat">
-                            <b><span class="pl2-countup" data-target="{{ games_graded }}" data-suffix="+">0</span></b>
+                            <b><span>{{ "{:,}".format(games_graded|int) }}+</span></b>
                             <span>Games graded</span>
                         </div>
                         <div class="pl2-stat">

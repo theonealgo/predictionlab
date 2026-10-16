@@ -113,48 +113,31 @@ def _inject_chrome_into_page(html: str) -> str:
 
 
 def golf_api_picks() -> list[dict[str, Any]]:
-    """Current field as picks. Win percents are the board models. No prices."""
+    """Current field as picks: Win / Top 10 / Top 20 chances made before round one. No prices."""
     page = _iso_golf_page()
-    data = page.build_ranked_board(None)
-    players = data.get("players") or []
-    if not players:
+    tournaments = page.list_espn_tournaments()
+    event, eid, players, _status = page._espn_event_payload(None, tournaments=tournaments)
+    gm, state = page._golf_model_state(tournaments)
+    if not players or not gm:
         return []
-    event = str(data.get("event") or "PGA Tour")
-    eid = str(data.get("event_id") or "")
-    start = ""
-    for tournament in data.get("tournaments") or []:
-        if str(tournament.get("id") or "") == eid:
-            start = str(tournament.get("start") or "")[:10]
-            break
-
-    def _pct(models: dict, key: str):
-        raw = (models.get(key) or {}).get("win_pct")
-        if raw is None:
-            return None
-        try:
-            return round(float(raw) * 100.0, 1)
-        except (TypeError, ValueError):
-            return None
-
-    rows: list[dict[str, Any]] = []
-    for player in players:
-        name = str(player.get("name") or "").strip()
-        if not name:
-            continue
-        models = player.get("models") or {}
-        rows.append({
-            "date": start,
-            "matchup": f"{name} @ {event}",
-            "homeTeam": name,
+    meta = next((t for t in tournaments if str(t.get("id") or "") == str(eid)), None) or {}
+    start = str(meta.get("start") or "")
+    board = gm.board_for_field(state, players, start or None, eid)
+    return [
+        {
+            "date": start[:10],
+            "matchup": f"{p['name']} @ {event}",
+            "homeTeam": p["name"],
             "awayTeam": event,
-            "pick": name,
-            "winPercent": _pct(models, "consensus"),
-            "edge": _pct(models, "edge"),
-            "xsharp": _pct(models, "xsharp"),
-            "grinder2": _pct(models, "grinder2"),
-            "takedown": _pct(models, "takedown"),
-        })
-    return rows
+            "pick": p["name"],
+            "rank": p["rank"],
+            "winPercent": round(p["win"] * 100.0, 1),
+            "top10Percent": round(p["top10"] * 100.0, 1),
+            "top20Percent": round(p["top20"] * 100.0, 1),
+        }
+        for p in board
+        if p.get("name")
+    ]
 
 
 def render_golf_picks(event_id: str | None = None) -> str:

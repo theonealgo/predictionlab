@@ -67,6 +67,15 @@ def _sport_key(sport: str) -> str:
 
 
 def _db_path() -> Path:
+    import sys
+
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and Path(db).resolve().is_file():
+            return Path(db).resolve()
+    if Path("/data/sports_predictions_original.db").is_file():
+        return Path("/data/sports_predictions_original.db")
     here = Path(__file__).resolve().parent
     for root in (here, *here.parents):
         cand = root / "sports_predictions_original.db"
@@ -5311,8 +5320,8 @@ def _nhl_side_from_spread(home: str, away: str, spread: str) -> str | None:
     return None
 
 
-def _inject_nhl_pl_vs_books_chips(html: str) -> str:
-    """NHL face chip: best Past-30 PL vs Books signal."""
+def _inject_nhl_pl_vs_books_chips(html: str, sport: str = "NHL") -> str:
+    """Face chip: best Past-30 PL vs Books signal from graded finals."""
     if not html or "data-pick-card" not in html:
         return html
     try:
@@ -5327,7 +5336,7 @@ def _inject_nhl_pl_vs_books_chips(html: str) -> str:
         return html
 
     finals = _six_model_consensus_finals(
-        html or _CHART_SOURCE_HTML.get("NHL") or "", "NHL"
+        html or _CHART_SOURCE_HTML.get(sport) or "", sport
     )
     rows = _pl_vs_books_rows_from_finals(finals) if finals else []
     now = datetime.now(ZoneInfo("America/New_York"))
@@ -5440,6 +5449,9 @@ def _inject_nhl_pl_vs_books_chips(html: str) -> str:
             flags=re.I,
         )
         val = _best_for_card(stack)
+        if val == "—":
+            out.append(stack)
+            continue
         chip = (
             '<div class="line-chip pl-vs-books-chip">'
             '<div class="line-chip-label">PL vs Books</div>'

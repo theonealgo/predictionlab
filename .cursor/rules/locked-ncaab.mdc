@@ -10,4 +10,6 @@ Do not modify NCAAB unless the same owner message contains the word **UNLOCK**
 
 Locked. 3 UNLOCKS required.
 
+Owner 2026-10-15: results chart saved pages must be chart pages (a cards page is never stored under a chart key); the moneyline refresh no longer overwrites the spread games list; a graded list is not replaced by a compare stub. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

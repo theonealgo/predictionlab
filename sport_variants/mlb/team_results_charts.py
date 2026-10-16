@@ -67,6 +67,15 @@ def _sport_key(sport: str) -> str:
 
 
 def _db_path() -> Path:
+    import sys
+
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and Path(db).resolve().is_file():
+            return Path(db).resolve()
+    if Path("/data/sports_predictions_original.db").is_file():
+        return Path("/data/sports_predictions_original.db")
     here = Path(__file__).resolve().parent
     for root in (here, *here.parents):
         cand = root / "sports_predictions_original.db"

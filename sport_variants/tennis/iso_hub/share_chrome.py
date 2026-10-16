@@ -75,7 +75,7 @@ def _share_export_wrap(sport_label: str, share_path: str) -> str:
         f'<a class="social-export-btn" href="{share_path}" download="predictionlab-picks.jpg">Download image</a>'
         f'<a class="social-export-btn primary" href="{share_path}" target="_blank" rel="nofollow noopener">Open fullscreen</a>'
         "</div></div>"
-        f'<a class="social-image-link" href="{share_path}" target="_blank" rel="nofollow noopener">'
+        f'<a class="social-image-link" aria-label="Open the predictions image" href="{share_path}" target="_blank" rel="nofollow noopener">'
         f'<img src="{share_path}" alt="{sport_label} predictions">'
         "</a></div>"
     )

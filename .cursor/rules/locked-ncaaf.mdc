@@ -12,4 +12,8 @@ Owner 2026-09-22: predictions image refreshed; Edge and Efficiency filled from t
 
 Owner 2026-10-08: Efficiency N/A filled from the PL spread (recent points per game when two teams have no prior meeting); a true 50.0% Elo Edge stays 50%; /ncaaf-results serves the saved page while it rebuilds in the background. Miss closed — locked.
 
+Owner 2026-10-14: results chart Moneyline view no longer stacks the Spread and Totals game tables under the charts; each market's table shows only when its top button is picked. Miss closed — locked.
+
+Owner 2026-10-15: stray '>>>' after </body> removed on picks / results / chart. Two 2026-10-10 games with no stored PL spread keep Efficiency N/A (not an error). Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

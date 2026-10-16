@@ -30,6 +30,21 @@ _TOTAL_ROWS = (
 )
 
 
+def _app_db_path():
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    for _name in ("NHL77FINAL", "__main__"):
+        _mod = _sys.modules.get(_name)
+        _db = getattr(_mod, "DATABASE", None) if _mod is not None else None
+        if _db and _Path(_db).resolve().is_file():
+            return _Path(_db).resolve()
+    if _Path("/data/sports_predictions_original.db").is_file():
+        return _Path("/data/sports_predictions_original.db")
+    return _Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _yesterday_et():
     try:
         from zoneinfo import ZoneInfo
@@ -176,7 +191,7 @@ def _ncaab_db_latest_final() -> str:
     import sqlite3
     from pathlib import Path
 
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     if not db.is_file():
         return ""
     try:
@@ -193,6 +208,125 @@ def _ncaab_db_latest_final() -> str:
     except sqlite3.Error:
         return ""
     return str(row[0])[:10] if row and row[0] else ""
+
+
+def _parse_line_cell(cell: str):
+    """('Michigan Wolverines', -6.5) from a spread cell; PK is 0."""
+    import re
+
+    text = re.sub(r"<[^>]+>", " ", cell or "")
+    text = re.sub(r"\s+", " ", text).strip()
+    m = re.match(r"^(.*\S)\s+(PK|[+-]?\d+(?:\.\d+)?)$", text, flags=re.I)
+    if not m:
+        return None
+    num = 0.0 if m.group(2).upper() == "PK" else float(m.group(2))
+    return m.group(1), num
+
+
+def _num_cell(cell: str):
+    import re
+
+    m = re.search(r"-?\d+(?:\.\d+)?", re.sub(r"<[^>]+>", " ", cell or ""))
+    return float(m.group(0)) if m else None
+
+
+def _card_xsharp_result(card: str):
+    """(spread grade, total grade) for XSharp on one final card: True, False, or None.
+
+    Uses only the lines printed on the card: XSharp versus the books spread
+    and total, graded on the final score. A push or no lean is None.
+    """
+    import re
+
+    names = re.findall(r'<div class="team-name">([^<]+)</div>', card)
+    scores = re.findall(r'<div class="final-score[^"]*">\s*(\d+)\s*</div>', card)
+    if len(names) < 2 or len(scores) < 2:
+        return None, None
+    away_short, home_short = names[0].strip(), names[1].strip()
+    away_pts, home_pts = int(scores[0]), int(scores[1])
+
+    def _row(market):
+        m = re.search(
+            rf'<td class="market-k">{market}</td>\s*'
+            r'<td class="val-books">([\s\S]*?)</td>\s*'
+            r'<td class="val-pl">[\s\S]*?</td>\s*'
+            r'<td class="val-xs">([\s\S]*?)</td>',
+            card,
+        )
+        return (m.group(1), m.group(2)) if m else (None, None)
+
+    def _home_margin(parsed):
+        team, num = parsed
+        if team.endswith(home_short):
+            return -num
+        if team.endswith(away_short):
+            return num
+        return None
+
+    spread_grade = None
+    books_sp, xs_sp = _row("Spread")
+    pb, px = _parse_line_cell(books_sp), _parse_line_cell(xs_sp)
+    if pb and px:
+        line, model = _home_margin(pb), _home_margin(px)
+        actual = home_pts - away_pts
+        if line is not None and model is not None and model != line and actual != line:
+            spread_grade = (model > line) == (actual > line)
+
+    total_grade = None
+    books_t, xs_t = _row("Total")
+    bt, xt = _num_cell(books_t), _num_cell(xs_t)
+    if bt is not None and xt is not None and xt != bt:
+        actual_t = home_pts + away_pts
+        if actual_t != bt:
+            total_grade = (xt > bt) == (actual_t > bt)
+    return spread_grade, total_grade
+
+
+def xsharp_card_grades(start, end) -> tuple[int, int, int, int]:
+    """XSharp (spread wins, spread graded, total wins, total graded) on saved NCAAB finals."""
+    import re
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent / ".cache" / "served_NCAAB_.html"
+    try:
+        html = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+    except OSError:
+        html = ""
+    parts = re.split(r'<div id="date-(\d{4}-\d{2}-\d{2})"', html)
+    seq = parts[1:]
+    sw = sn = tw = tn = 0
+    for date, content in zip(seq[0::2], seq[1::2]):
+        try:
+            dt = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            continue
+        if dt < start or dt > end:
+            continue
+        for card in re.split(r'<div class="game-card pick-card"', content)[1:]:
+            sg, tg = _card_xsharp_result(card)
+            if sg is not None:
+                sn += 1
+                sw += int(sg)
+            if tg is not None:
+                tn += 1
+                tw += int(tg)
+    return sw, sn, tw, tn
+
+
+def xsharp_card_windows() -> dict[str, tuple[int, int, int, int]] | None:
+    """XSharp grades for Last Night / Last 7 / Last 30 ending on the latest saved final."""
+    latest = _ncaab_db_latest_final()
+    if not latest:
+        return None
+    try:
+        latest_dt = datetime.strptime(latest, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return {
+        "ln": xsharp_card_grades(latest_dt, latest_dt),
+        "d7": xsharp_card_grades(latest_dt - timedelta(days=6), latest_dt),
+        "d30": xsharp_card_grades(latest_dt - timedelta(days=29), latest_dt),
+    }
 
 
 def _ncaab_strip_from_stored_cards() -> str | None:
@@ -279,16 +413,18 @@ def _ncaab_strip_from_stored_cards() -> str | None:
         buckets.append((title, games, ml, spread, total))
     if not buckets or buckets[0][1] <= 0:
         return None
+    title_window = {title: (start, end) for title, start, end in windows}
     cols = []
     for title, games, ml, spread, total in buckets:
         ml_pairs = [(name, _fmt_grade(ml[name][0], ml[name][1])) for name in models]
+        xs = xsharp_card_grades(title_window[title][0], title_window[title][1])
         sp_pairs = [
             ("Prediction Lab", _fmt_grade(spread[0], spread[1])),
-            ("XSharp", "—"),
+            ("XSharp", _fmt_grade(xs[0], xs[1])),
         ]
         ou_pairs = [
             ("Prediction Lab", _fmt_grade(total[0], total[1])),
-            ("XSharp", "—"),
+            ("XSharp", _fmt_grade(xs[2], xs[3])),
         ]
         cols.append(
             f'<div class="picks-recent-col">'

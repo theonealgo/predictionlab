@@ -97,6 +97,21 @@ def results_serve_key(
     )
 
 
+def _app_db_path() -> Path:
+    """The database the app writes finals to (/data on Render), not the copy shipped with the code."""
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db:
+            path = Path(db).resolve()
+            if path.is_file():
+                return path
+    data = Path("/data/sports_predictions_original.db")
+    if data.is_file():
+        return data
+    return Path(__file__).resolve().parent / "sports_predictions_original.db"
+
+
 def _served_path(key: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", key)[:180]
     return _CARDS_CACHE_DIR / (f"served_{safe}.html" if _viewer_tier() == "paid" else f"served_{safe}__free.html")
@@ -319,9 +334,8 @@ def _schedule_served_refresh(key: str) -> None:
         try:
             _RESULTS_REFRESH_FORCE.on = True
             appmod = sys.modules.get("__main__") or sys.modules.get("NHL77FINAL")
-            fn = getattr(appmod, "sport_results", None) if appmod else None
             app = getattr(appmod, "app", None) if appmod else None
-            if not callable(fn) or app is None:
+            if app is None:
                 return
             parts = (key.split("|") + [""] * 6)[:6]
             sport, view, market, league, region, week = parts
@@ -337,8 +351,11 @@ def _schedule_served_refresh(key: str) -> None:
             if week:
                 query.append(f"week={week}")
             url = f"/{sport.lower()}-results" + (("?" + "&".join(query)) if query else "")
-            with app.test_request_context(url):
-                fn(sport)
+            # A full request runs the response passes that save the page.
+            # localhost builds the paid copy; any other host the free one.
+            client = app.test_client()
+            for base in ("http://localhost", "http://results-refresh.local"):
+                client.get(url, base_url=base)
         except Exception:
             pass
         finally:
@@ -382,7 +399,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         shown = datetime.strptime(night.group(1), "%Y-%m-%d").date()
     except ValueError:
         return False
-    path = next((p for p in (Path(__file__).resolve().parent / "sports_predictions_original.db", Path(__file__).resolve().parents[2] / "sports_predictions_original.db") if p.is_file()), Path(__file__).resolve().parent / "sports_predictions_original.db")
+    path = _app_db_path()
     if not path.is_file():
         return False
     try:
@@ -429,7 +446,7 @@ def lookup_served_results(key: str) -> str:
     if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1] and _NHL_EMPTY_SLATE not in hit[1]:
         if _served_results_are_stale(key, hit[1]):
             _schedule_served_refresh(key)
-        return hit[1]
+        return _mark_served_from_disk(hit[1])
     try:
         path = _served_path(key)
         if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
@@ -439,7 +456,7 @@ def lookup_served_results(key: str) -> str:
                 _SERVED[key] = (now, text)
                 if age >= _SERVED_REFRESH_AFTER or _served_results_are_stale(key, text):
                     _schedule_served_refresh(key)
-                return text
+                return _mark_served_from_disk(text)
     except Exception:
         pass
     return ""
@@ -448,8 +465,30 @@ def lookup_served_results(key: str) -> str:
 _NHL_EMPTY_SLATE = "NHL results could not be loaded"
 
 
+def _mark_served_from_disk(html):
+    if html:
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                g._pl_results_from_disk = True
+        except Exception:
+            pass
+    return html
+
+
+def _served_from_disk() -> bool:
+    try:
+        from flask import g, has_request_context
+        return has_request_context() and bool(getattr(g, "_pl_results_from_disk", False))
+    except Exception:
+        return False
+
+
 def store_served_results(key: str, html: str) -> None:
     if not key or not html or _REPAIRED_MARK not in html or len(html) < 500 or _NHL_EMPTY_SLATE in html:
+        return
+    # Re-saving the copy that was just read resets its age, so it never refreshes.
+    if _served_from_disk() and not results_refresh_forced():
         return
     _SERVED[key] = (time.time(), html)
     try:
@@ -1329,7 +1368,7 @@ def read_nhl_results_disk() -> str:
     When the newest stored final is missing from the saved page, the saved
     page is still served and a rebuild runs in the background.
     """
-    if _nhl_is_rebuild_request():
+    if results_refresh_forced():
         return ""
     try:
         text = _NHL_RESULTS_DISK.read_text(encoding="utf-8")
@@ -1376,7 +1415,7 @@ def _nhl_last7_stored_finals() -> tuple[str, str, int]:
     try:
         import sqlite3
 
-        db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+        db = _app_db_path()
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
         try:
             row = con.execute(
@@ -1442,7 +1481,7 @@ def _nhl_regrade_last7_models(html: str, start: str, end: str, count: int) -> st
         import sqlite3
         from sports.team_efficiency_attach import spread_to_home_prob_pct
 
-        db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+        db = _app_db_path()
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
         try:
             rows = con.execute(
@@ -2233,7 +2272,7 @@ def _nhl_spread_locks() -> dict[str, tuple[float | None, float | None]]:
     try:
         import sqlite3
 
-        db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+        db = _app_db_path()
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=3)
         try:
             rows = con.execute(
@@ -2779,7 +2818,7 @@ def _nhl_pl_locks() -> dict[str, tuple[float | None, float | None]]:
     try:
         import sqlite3
 
-        db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+        db = _app_db_path()
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=3)
         try:
             rows = con.execute(
@@ -3675,7 +3714,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
             f"{escape(sport)} Predictions Image</div></div>"
-            f'<a class="social-image-link" href="{view}">'
+            f'<a class="social-image-link" aria-label="Open the predictions image" href="{view}">'
             f'<img src="{src}" alt="Picks"></a></div>'
         )
         html2 = _insert_before_main_end(html, block)
@@ -4392,7 +4431,7 @@ def _nhl_latest_final_before_today() -> tuple[str, int]:
     except Exception:
         now = datetime.now()
     yesterday = (now - timedelta(days=1)).date().isoformat()
-    db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+    db = _app_db_path()
     import sqlite3
     try:
         conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
@@ -4479,7 +4518,7 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         block = render_three_way_section(
             sport_u,
             cards,
-            Path(__file__).resolve().parent / "sports_predictions_original.db",
+            _app_db_path(),
         )
     except Exception:
         return html

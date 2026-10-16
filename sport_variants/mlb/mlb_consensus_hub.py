@@ -1406,6 +1406,13 @@ def _american_favorite_side(home_ml: Any, away_ml: Any) -> str | None:
 
 
 def _mlb_consensus_db_path() -> str:
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and os.path.isfile(db):
+            return os.path.abspath(db)
+    if os.path.isfile("/data/sports_predictions_original.db"):
+        return "/data/sports_predictions_original.db"
     return os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "sports_predictions_original.db"
     )

@@ -24,12 +24,8 @@ american_from_prob = _pipe.american_from_prob
 
 ET = ZoneInfo("America/New_York")
 
+# One stored probability per fight. Only Sharp Consensus is a real model.
 MODEL_DELTAS = [
-    ("Grinder2", 0.028),
-    ("Takedown", 0.012),
-    ("Edge", -0.015),
-    ("XSharp", 0.038),
-    ("Efficiency", -0.022),
     ("Sharp Consensus", 0.0),
 ]
 

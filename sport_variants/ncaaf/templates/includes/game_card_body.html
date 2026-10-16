@@ -352,7 +352,8 @@
         {% if sport != 'TENNIS' and sport != 'UFC' and sport != 'GOLF' %}
         <div class="sf-item">
             <span class="sf-label">H2H Last 10</span>
-            <span class="sf-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% elif card.h2h_missing_reason is defined and card.h2h_missing_reason %}First meeting{% else %}—{% endif %}</span>
+            {% set _l3 = pl_last3_h2h(sport, home_id, away_id, card.game_date if (card.game_date is defined and card.game_date) else (card.date if card.date is defined else '')) if pl_last3_h2h is defined else none %}
+            <span class="sf-val">{% if _l3 %}{{ fmt_half(_l3.total) }} · {{ fmt_spread_line(_l3.spread, team_short(home_id), team_short(away_id)) }}{% if _disp_xt is not none %} · Combined record: {{ _l3.totals|select('gt', _disp_xt|float)|list|length }}-{{ _l3.totals|select('lt', _disp_xt|float)|list|length }} Over{% endif %}{% else %}—{% endif %}</span>
         </div>
         {% endif %}
         {% if sport == 'SOCCER' %}
@@ -364,14 +365,20 @@
             {% endif %}
         </div>
         {% endif %}
-        {% if card.ml_ev is defined and card.ml_ev is not none %}
+        {% set _ev_ml = card.ml_ev if (card.ml_ev is defined and card.ml_ev is not none and bk_home is not none) else none %}
+        {% set _ev_tot = card.total_ev if (sport != 'SOCCER' and card.total_ev is defined and card.total_ev is not none and _disp_bt is not none) else none %}
+        {% set _ev_best = 'Moneyline' if (_ev_ml is not none and _ev_ml > 0 and (_ev_tot is none or _ev_ml >= _ev_tot)) else ('Total' if (_ev_tot is not none and _ev_tot > 0) else none) %}
+        {% if _ev_ml is not none %}
         <div class="sf-item"><span class="sf-label">EV</span><span class="sf-val" style="color:{% if card.ml_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.ml_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.ml_ev) }}%</span></div>
         {% endif %}
-        {% if sport != 'SOCCER' and card.total_ev is defined and card.total_ev is not none %}
+        {% if _ev_tot is not none %}
         <div class="sf-item"><span class="sf-label">Total EV</span><span class="sf-val" style="color:{% if card.total_ev > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if card.total_ev > 0 %}+{% endif %}{{ "%.1f"|format(card.total_ev) }}%</span></div>
         {% endif %}
-        {% if card.best_ev_pick is defined and card.best_ev_pick %}
-        <div class="sf-item"><span class="sf-label">Best EV</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ card.best_ev_pick }}</span></div>
+        {% if _ev_best %}
+        <div class="sf-item"><span class="sf-label">Best market</span><span class="sf-val" style="color:#1d4ed8;font-weight:700;">{{ _ev_best }}</span></div>
+        {% endif %}
+        {% if _ev_ml is not none or _ev_tot is not none %}
+        <p class="ev-explain" style="grid-column:1/-1;margin:4px 0 0;font-size:0.74em;line-height:1.35;color:#64748b;">EV is the expected profit on a $100 bet at the book price, using our model&#39;s chance for that side. Total EV prices the over/under at the standard -110. Positive EV means the book price is better than our model&#39;s odds.</p>
         {% endif %}
         {% if is_results %}
         <div class="sf-item">

@@ -182,6 +182,9 @@ def install(app, finals_dates=None) -> None:
             path_match = _RESULTS_PATH.match(request.path or "")
             if not path_match:
                 return response
+            # Soccer results are a week page; its league and week links keep the whole week.
+            if path_match.group(1).lower() == "soccer":
+                return response
             if request.args.get("date") or request.args.get("week"):
                 return response
             html = response.get_data(as_text=True)

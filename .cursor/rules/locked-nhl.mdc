@@ -14,4 +14,6 @@ Owner 2026-10-08: results chart opens fast (stale page served, rebuilt in backgr
 
 Owner 2026-10-08 (all-sports pass): three-way chart tables sit inside the page, above the footer. Efficiency 50% on a PK puck line and equal stored model values stay. Miss closed — locked.
 
+Owner 2026-10-14: Efficiency fills from the Puck Line row when the card attribute is blank; results consensus percent text uses the darker yellow for contrast. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

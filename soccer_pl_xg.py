@@ -13,6 +13,7 @@ import logging
 import re
 import sqlite3
 import threading
+import time
 import unicodedata
 from datetime import date as _date
 from pathlib import Path
@@ -202,8 +203,15 @@ def _source_mtime() -> float:
     return latest
 
 
+_FINGERPRINT_TTL_S = 30.0
+_fingerprint_memo: list = [0.0, None]
+
+
 def _source_fingerprint() -> tuple:
     """Changes only when scored soccer games change. The file time moves on every page visit."""
+    now = time.monotonic()
+    if _fingerprint_memo[1] is not None and now - _fingerprint_memo[0] < _FINGERPRINT_TTL_S:
+        return _fingerprint_memo[1]
     parts = []
     for path in _game_db_paths():
         try:
@@ -221,7 +229,9 @@ def _source_fingerprint() -> tuple:
         except Exception:
             row = None
         parts.append((str(path), tuple(row or ())))
-    return tuple(parts)
+    fingerprint = tuple(parts)
+    _fingerprint_memo[:] = [now, fingerprint]
+    return fingerprint
 
 
 def _walked() -> tuple[PLXGState, dict, dict]:

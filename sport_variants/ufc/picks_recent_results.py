@@ -73,8 +73,17 @@ def _ufc_daily_from_stored_grades() -> dict:
         import importlib.util
         from pathlib import Path
 
-        pipe_path = Path.home() / "Documents" / "Personal" / "ufc" / "engine" / "pipeline.py"
-        if not pipe_path.is_file():
+        pipe_path = next(
+            (
+                p for p in (
+                    Path(__file__).resolve().parents[2] / "ufc_pipeline" / "engine" / "pipeline.py",
+                    Path.home() / "Documents" / "Personal" / "ufc" / "engine" / "pipeline.py",
+                )
+                if p.is_file()
+            ),
+            None,
+        )
+        if pipe_path is None:
             return {}
         spec = importlib.util.spec_from_file_location(
             "ufc_iso_pipeline_recent", pipe_path,
@@ -302,6 +311,16 @@ def _build_block(sport: str) -> str:
     cols = []
     for title, tally, w_start, w_end in windows:
         games = int((tally or {}).get("games") or 0)
+        if from_ufc_store:
+            cols.append(
+                f'<div class="picks-recent-col">'
+                f"<h3>{escape(title)}</h3>"
+                f'<p class="picks-recent-n">{games} fights</p>'
+                f'{_market_table("Moneyline", [("Sharp Consensus", _rec(tally, "ensemble"))])}'
+                f'<a class="picks-recent-more" href="/{sport_u.lower()}-results">Full results →</a>'
+                f"</div>"
+            )
+            continue
         st = _spread_total_stats(N, daily, w_start, w_end, tally)
         ml_pairs = [(label, _rec(tally, key)) for key, label in _MODELS]
         sp_pairs = [
@@ -326,8 +345,14 @@ def _build_block(sport: str) -> str:
         '<section id="picks-recent-results" class="picks-recent-results" '
         'aria-label="Recent results">'
         "<h2>Recent results</h2>"
-        '<p class="picks-recent-sub">Last Night, Last 7, and Last 30 — same moneyline, '
-        "spread, and total grades as the results page.</p>"
+        + (
+            '<p class="picks-recent-sub">Last Night, Last 7, and Last 30 — same moneyline '
+            "grades as the results page.</p>"
+            if from_ufc_store
+            else '<p class="picks-recent-sub">Last Night, Last 7, and Last 30 — same moneyline, '
+            "spread, and total grades as the results page.</p>"
+        )
+        +
         f'<div class="picks-recent-grid">{"".join(cols)}</div>'
         "<style>"
         ".picks-recent-results{max-width:1200px;margin:28px auto 0;padding:18px 16px;"
@@ -390,6 +415,9 @@ def inject_picks_recent_results(html: str, sport: str) -> str:
     )
     if n:
         return html2
+    i = html.find('<div class="social-export-wrap"')
+    if i >= 0:
+        return html[:i] + block + html[i:]
     for needle in ("</main>", "</body>"):
         i = html.lower().rfind(needle)
         if i >= 0:

@@ -531,6 +531,109 @@ def _cards_view_analytics_board(html: str) -> str:
     return html
 
 
+_DAILY_TALLY_ICONS = {
+    "Grinder2": "⭐",
+    "Takedown": "🎯",
+    "Edge": "📊",
+    "XSharp": "🤖",
+    "Sharp Consensus": "🏆",
+    "Efficiency": "⚡",
+}
+
+_DAILY_TALLY_CSS = (
+    '<style id="tennis-daily-tally">'
+    ".daily-tally{background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;"
+    "margin-bottom:16px;box-shadow:0 4px 18px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.06)}"
+    ".daily-tally-head{display:flex;align-items:center;justify-content:center;gap:8px;"
+    "flex-wrap:wrap;margin:0 0 12px}"
+    ".daily-tally-head h2{text-align:center;margin:0;font-size:1.15em;color:#0F172A;font-weight:700}"
+    ".daily-tally-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}"
+    ".daily-tally-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:8px 6px;"
+    "text-align:center;box-shadow:0 2px 12px rgba(15,23,42,.06)}"
+    ".daily-tally-card.highlight{border:2px solid #fbbf24}"
+    ".daily-tally-card .daily-acc{font-size:1.35em;font-weight:700;color:#0F172A}"
+    ".daily-tally-card .daily-rec{font-size:.85em;color:#334155}"
+    "@media (max-width:720px){.daily-tally-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;"
+    "gap:8px!important}.daily-tally-card{min-width:0;padding:10px 8px!important}}"
+    "</style>"
+)
+
+
+def _cards_view_daily_boards(html: str) -> str:
+    """Cards view opens on the team-sport Last Night / Last 7 / Season boards, not chart tallies."""
+    if not html or "tennis-perf-window" not in html:
+        return html
+    boards: list[str] = []
+
+    def _board(m: re.Match[str]) -> str:
+        sec = m.group(0)
+        head = re.search(r"<h2>([^<]*)<span class=\"tag\">\(([^)]*)\)</span>", sec)
+        if not head:
+            return sec
+        window = head.group(1).strip()
+        tag = head.group(2)
+        count = re.search(r"(\d+)\s+graded", tag)
+        n = count.group(1) if count else ""
+        day = re.search(r"(20\d{2}-\d{2}-\d{2})", tag)
+        noun = "match" if n == "1" else "matches"
+        if window.lower().startswith("last night"):
+            title = f"Last Night's Tennis Results — {day.group(1) if day else ''} ({n} {noun})"
+        elif window.lower().startswith("last 7"):
+            title = f"Last 7 Days Tennis Results ({n} {noun})"
+        else:
+            title = f"🏆 Season Performance ({n} {noun})"
+        cards = []
+        for c in re.finditer(
+            r'<div class="tally-card"><div class="mlabel">([^<]+)</div>'
+            r'<div class="acc ([a-z]*)">([^<]*)</div><div class="rec">([^<]*)</div></div>',
+            sec,
+        ):
+            name, tone, acc, rec = c.group(1).strip(), c.group(2), c.group(3), c.group(4)
+            rec = re.sub(r"\s*·\s*\d+\s+graded\s*$", "", rec)
+            icon = _DAILY_TALLY_ICONS.get(name, "")
+            hl = " highlight" if name == "Sharp Consensus" else ""
+            color = {"ok": ' style="color:#067647;"', "bad": ' style="color:#D93025;"'}.get(tone, "")
+            cards.append(
+                f'<div class="daily-tally-card{hl}"><div class="daily-model">{icon} {name}</div>'
+                f'<div class="daily-acc"{color}>{acc}</div><div class="daily-rec">{rec}</div></div>'
+            )
+        if not cards:
+            return sec
+        boards.append(window)
+        return (
+            '<div class="daily-tally"><div class="daily-tally-head">'
+            f"<h2>{title}</h2></div>"
+            '<div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>'
+            f'<div class="daily-tally-grid">{"".join(cards)}</div></div>'
+        )
+
+    html = re.sub(
+        r'<section class="tally tennis-perf-window">[\s\S]*?</section>',
+        _board,
+        html,
+    )
+    if not boards:
+        return html
+    analytics = re.search(
+        r'<section class="tally pl-analytics tennis-perf-analytics"[\s\S]*?</section>\s*',
+        html,
+    )
+    first = html.find('<div class="daily-tally">')
+    if analytics and first > analytics.start():
+        block = analytics.group(0)
+        html = html[: analytics.start()] + html[analytics.end() :]
+        anchor = re.search(r'<[^>]+pl-consensus-records', html)
+        if anchor:
+            html = html[: anchor.start()] + block + html[anchor.start() :]
+        else:
+            last = html.rfind('<div class="daily-tally">')
+            end = html.find("</div></div>", html.find('class="daily-tally-grid"', last))
+            html = html[: end + 12] + block + html[end + 12 :] if end > 0 else html + block
+    if 'id="tennis-daily-tally"' not in html:
+        html = re.sub(r"</head>", _DAILY_TALLY_CSS + "</head>", html, count=1, flags=re.I)
+    return html
+
+
 def _ensure_tennis_chart_consensus(page: str, original: str) -> str:
     """inject_consensus strips existing tennis charts; put a real chart back."""
     has_title = "Consensus Based Betting Records" in (page or "")
@@ -639,6 +742,13 @@ def _drop_model_pick_confidence(html: str) -> str:
         html,
         flags=re.I,
     )
+    return _drop_footer_model_pick_confidence(html)
+
+
+def _drop_footer_model_pick_confidence(html: str) -> str:
+    """Model pick / Confidence once per card: the face chips keep them."""
+    if not html:
+        return html
     return re.sub(
         r'\s*<div class="sf-item">\s*<span class="sf-label">\s*(?:Model pick|Confidence)\s*</span>'
         r'\s*<span class="sf-val">[^<]*</span>\s*</div>',
@@ -889,7 +999,9 @@ def render_tennis_results(*, view: str = "normal") -> str:
         page = _ensure_tennis_chart_consensus(page, original)
         page = _cards_view_analytics_board(page)
         page = _sync_tennis_last_night_dates(page)
+        page = _cards_view_daily_boards(page)
         page = _expand_result_cards(page)
+        page = _drop_footer_model_pick_confidence(page)
         page = _ensure_results_view_toggle(page, chart=False)
     page = _relabel_best_performing_today(page)
     page = _public_share_hrefs(page)

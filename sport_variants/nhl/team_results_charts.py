@@ -67,6 +67,15 @@ def _sport_key(sport: str) -> str:
 
 
 def _db_path() -> Path:
+    import sys
+
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and Path(db).resolve().is_file():
+            return Path(db).resolve()
+    if Path("/data/sports_predictions_original.db").is_file():
+        return Path("/data/sports_predictions_original.db")
     here = Path(__file__).resolve().parent
     for root in (here, *here.parents):
         cand = root / "sports_predictions_original.db"
@@ -2112,8 +2121,9 @@ def _wl_cell_from_grades(grades: list[str]) -> str:
         return rec
     pct = int(round(100.0 * w / decided))
     color = "#067647" if pct >= 55 else "#D93025" if pct < 47 else "#ca8a04"
+    text_color = "#a16207" if color == "#ca8a04" else color
     return (
-        f"{rec} <span style='color:{color};font-weight:700'>({pct}%)</span>"
+        f"{rec} <span style='color:{text_color};font-weight:700'>({pct}%)</span>"
         f"<div class='cons-bar' aria-hidden='true'>"
         f"<i style='width:{pct}%;background:{color}'></i></div>"
     )
@@ -4187,7 +4197,14 @@ def _apply_h2h_faces(html: str, sport: str, *, results: bool = False) -> str:
         tag = m.group(0)
         home = html_lib.unescape(m.group("home") or "")
         away = html_lib.unescape(m.group("away") or "")
-        val = _h2h_text(meetings, home, away, sport_u) if meetings else ""
+        if sport_u == "NHL":
+            # NHL H2H Last 10 is the last-3-games formula written by the picks template.
+            cur = re.search(r'data-h2h="([^"]*)"', tag, flags=re.I)
+            if cur and re.match(r"\d+(?:\.\d+)? · ", html_lib.unescape(cur.group(1))):
+                return tag
+            val = ""
+        else:
+            val = _h2h_text(meetings, home, away, sport_u) if meetings else ""
         if not val and sport_u != "NCAAF":
             val = "First meeting"
         if re.search(r'data-h2h="', tag, flags=re.I):
@@ -4887,7 +4904,7 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
             pl = html_lib.unescape(pl_m.group(1) or "").strip()
         if not pl:
             tm = re.search(
-                r'<td class="market-k">\s*Spread\s*</td>\s*'
+                r'<td class="market-k">\s*(?:Spread|Puck Line)\s*</td>\s*'
                 r'<td class="val-books">[\s\S]*?</td>\s*'
                 r'<td class="val-pl">([^<]+)',
                 rest,

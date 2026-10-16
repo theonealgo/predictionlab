@@ -1283,7 +1283,8 @@ def _consensus_record_cell(
     if pct is None:
         return rec
     color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
-    body = f"{rec} <span style='color:{color};font-weight:700'>({pct:.0f}%)</span>"
+    text_color = "#a16207" if color == "#ca8a04" else color
+    body = f"{rec} <span style='color:{text_color};font-weight:700'>({pct:.0f}%)</span>"
     if not bar:
         return body
     width = max(4, min(100, int(round(pct))))
@@ -1406,6 +1407,13 @@ def _american_favorite_side(home_ml: Any, away_ml: Any) -> str | None:
 
 
 def _mlb_consensus_db_path() -> str:
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and os.path.isfile(db):
+            return os.path.abspath(db)
+    if os.path.isfile("/data/sports_predictions_original.db"):
+        return "/data/sports_predictions_original.db"
     return os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "sports_predictions_original.db"
     )

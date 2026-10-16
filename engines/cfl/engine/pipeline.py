@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.environ.get("CFL_SANDBOX_DB") or (ROOT / "database" / "cfl_sandbox.db"))
@@ -514,10 +515,21 @@ def list_pick_cards(*, days_back: int = 1, days_fwd: int = 7) -> list[dict[str, 
         and (c.get("away_team") or "").strip().upper() not in ("", "TBD")
     ]
     window = games_in_window(cards, days_back=days_back, days_fwd=days_fwd)
-    # Prefer non-complete; if empty keep window
+    # Prefer non-complete (plus today's finals); if empty keep window
+    today_et = datetime.now(ZoneInfo("America/New_York")).date()
+
+    def _is_today(c: dict[str, Any]) -> bool:
+        try:
+            dt = datetime.fromisoformat(str(c.get("game_date") or "").replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo("America/New_York")).date() == today_et
+
     liveish = [
         c for c in window
-        if (c.get("status") or "").lower() not in {"complete", "final"}
+        if (c.get("status") or "").lower() not in {"complete", "final"} or _is_today(c)
     ]
     return attach_book_totals(liveish or window or cards[:12])
 

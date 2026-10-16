@@ -67,6 +67,15 @@ def _sport_key(sport: str) -> str:
 
 
 def _db_path() -> Path:
+    import sys
+
+    for name in ("NHL77FINAL", "__main__"):
+        mod = sys.modules.get(name)
+        db = getattr(mod, "DATABASE", None) if mod is not None else None
+        if db and Path(db).resolve().is_file():
+            return Path(db).resolve()
+    if Path("/data/sports_predictions_original.db").is_file():
+        return Path("/data/sports_predictions_original.db")
     here = Path(__file__).resolve().parent
     for root in (here, *here.parents):
         cand = root / "sports_predictions_original.db"
@@ -3142,6 +3151,28 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
         )
     if sport_u == "NHL" and "data-pick-card" in html:
         html = _inject_nhl_consensus_hist_chips(html)
+        html = re.sub(
+            r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
+            "",
+            html,
+            flags=re.I,
+        )
+    if sport_u == "WNBA" and not re.search(r'<link\b[^>]*rel=["\']canonical["\']', html, flags=re.I):
+        html = re.sub(
+            r"(<head\b[^>]*>)",
+            r'\1<link rel="canonical" href="https://predictionlab.io/wnba-results">',
+            html,
+            count=1,
+            flags=re.I,
+        )
+    if sport_u == "WNBA" and "game-card pick-card" in html:
+        html = re.sub(
+            r'<div class="game-card pick-card\b(?![^>]*data-pick-card)([^>]*)>',
+            lambda m: m.group(0)[:-1] + " data-pick-card>",
+            html,
+        )
+        html = _inject_wnba_consensus_hist_chips(html)
+        html = _inject_wnba_pl_vs_books_chips(html)
         html = re.sub(
             r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
             "",
