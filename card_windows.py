@@ -1150,7 +1150,7 @@ def canonical_tv_menus(in_season: dict, soccer_enabled: bool = True) -> str:
     return (
         "var TV_MENUS={\n"
         "  picks:{title:'Picks & Predictions',items:[\n    " + ",\n    ".join(p) + "\n  ]},\n"
-        "  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Tutorial',h:'/tutorial'}]},\n"
+        "  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'The Ladder',h:'/ladder-picks'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Tutorial',h:'/tutorial'}]},\n"
         "  results:{title:'Results & Tracking',items:[\n    {l:'All Sports Results',h:'/all-sports-results'},\n    "
         + ",\n    ".join(r)
         + ",\n    {l:'Daily Results',h:'/daily-report'},{l:'Download CSV',h:'/results/downloads'},{l:'Model Performance',h:'/performance'},{l:'Edge Performance',h:'/edge-performance'}\n  ]},\n"
@@ -1208,6 +1208,32 @@ def _tv_menus_span(html: str) -> tuple[int, int]:
     return -1, -1
 
 
+_MODEL_VS_LINK = '<a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>'
+_LADDER_LINK = '<a href="/ladder-picks">The Ladder</a>'
+_OLD_LADDER_LABELS = ('10-Day Ladder<span class="pl-premium-tag">Premium</span>',
+                      '10-Day Ladder<span class=\\"pl-premium-tag\\">Premium</span>')
+
+
+def _add_ladder_link(html: str, open_tag: str, close_tag: str) -> str:
+    start = html.find(open_tag)
+    if start < 0:
+        return html
+    end = html.find(close_tag, start)
+    if end < 0:
+        return html
+    seg = html[start:end]
+    if 'href="/ladder-picks"' in seg:
+        return html
+    at = seg.find(_MODEL_VS_LINK)
+    if at < 0:
+        return html
+    nl = seg.rfind("\n", 0, at)
+    indent = seg[nl + 1:at] if nl >= 0 and not seg[nl + 1:at].strip() else ""
+    cut = at + len(_MODEL_VS_LINK)
+    seg = seg[:cut] + "\n" + indent + _LADDER_LINK + seg[cut:]
+    return html[:start] + seg + html[end:]
+
+
 def normalize_site_chrome(html: str, path: str, in_season: dict, soccer_enabled: bool = True) -> str:
     """Same hamburger menu, 9-icon share strip and footer links on every page."""
     if not html or "<html" not in html[:3000].lower():
@@ -1221,6 +1247,12 @@ def normalize_site_chrome(html: str, path: str, in_season: dict, soccer_enabled:
         sub = _canonical_tv_sub()
         if sub:
             html = re.sub(r"function tvSub\(key\)\{[^\n]*\}", lambda m: sub, html, count=1)
+    # 1b) Ladder link under Models in the header and footer of saved pages
+    for old in _OLD_LADDER_LABELS:
+        if old in html:
+            html = html.replace(old, "The Ladder")
+    html = _add_ladder_link(html, '<header class="pl2-header"', "</header>")
+    html = _add_ladder_link(html, '<footer class="site-directory-footer"', "</footer>")
     # 2) Footer soccer link (bare path redirects)
     fs = html.find('<footer class="site-directory-footer"')
     if fs >= 0:

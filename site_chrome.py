@@ -186,7 +186,7 @@ _LEFT_DRAWER = """
 <script>
 var TV_MENUS={
  picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'CFL',h:'/cfl-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},
- props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'Tutorial',h:'/tutorial'}]},
+ props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'The Ladder',h:'/ladder-picks'},{l:'Tutorial',h:'/tutorial'}]},
  results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'},{l:'Soccer',h:'/soccer-results'},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'CFL',h:'/cfl-results'},{l:'Tennis',h:'/tennis-results'},{l:'UFC',h:'/ufc-results'},{l:'Golf',h:'/golf-results'}]}
 };
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}

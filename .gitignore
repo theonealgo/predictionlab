@@ -3,6 +3,9 @@
 !sports_predictions_original.db
 *.sqlite
 *.sqlite3
+*.db-wal
+*.db-shm
+data/ladder.lock
 
 # ── Secrets & environment variables ───────────────────────────────────────────
 .env

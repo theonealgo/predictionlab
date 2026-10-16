@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}10-Day Ladder Picks | predictionlab.io{% endblock %}
+{% block head_meta %}
+<meta name="description" content="The PredictionLab 10-Day Ladder: one pick a day backed by our graded record, starting from $10 and rolling each win into the next day's wager.">
+<link rel="canonical" href="https://predictionlab.io/ladder-picks">
+{% endblock %}
+{% block extra_styles %}
+<style>
+.ld-wrap{max-width:1000px;margin:0 auto;padding:14px 14px 34px;color:#0f172a}
+.ld-wrap h1{font-size:1.8rem;text-align:center;margin:4px 0 6px}
+.ld-lead{text-align:center;color:#475569;font-size:.95em;max-width:720px;margin:0 auto 18px}
+.ld-card{background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:16px;margin-bottom:14px}
+.ld-card h2{font-size:1.1rem;margin-bottom:10px}
+.ld-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.ld-kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px;text-align:center}
+.ld-kpi .k{font-size:.75rem;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+.ld-kpi .v{font-size:1.25rem;font-weight:700;margin-top:4px}
+.ld-pos{color:#15803d}.ld-neg{color:#b91c1c}
+.ld-progress{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;margin-top:4px}
+.ld-step{border-radius:8px;padding:8px 0;text-align:center;font-size:.8rem;font-weight:700;border:1px solid #e2e8f0;background:#f8fafc;color:#94a3b8}
+.ld-step.win{background:#dcfce7;border-color:#86efac;color:#166534}
+.ld-step.loss{background:#fee2e2;border-color:#fca5a5;color:#991b1b}
+.ld-step.push,.ld-step.void{background:#fef9c3;border-color:#fde047;color:#854d0e}
+.ld-step.pending{background:#dbeafe;border-color:#93c5fd;color:#1e40af}
+.ld-step.no_pick{background:#f1f5f9;border-color:#cbd5e1;color:#475569}
+.ld-pick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ld-pick .f{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px}
+.ld-pick .f .k{font-size:.75rem;color:#64748b}
+.ld-pick .f .v{font-weight:700;margin-top:3px;word-break:break-word}
+.ld-lock{text-align:center;padding:18px 10px;background:#f8fafc;border:1px dashed #94a3b8;border-radius:10px}
+.ld-lock p{color:#334155;margin-bottom:12px}
+.ld-btn{display:inline-block;padding:9px 16px;border-radius:8px;font-weight:700;text-decoration:none;margin:4px}
+.ld-btn.primary{background:#2563eb;color:#fff}.ld-btn.ghost{border:1px solid #2563eb;color:#2563eb}
+.ld-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.ld-table th,.ld-table td{padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}
+.ld-table th{font-size:.75rem;color:#64748b;text-transform:uppercase;letter-spacing:.03em}
+.ld-res{font-weight:700}.ld-res.win{color:#15803d}.ld-res.loss{color:#b91c1c}
+.ld-res.push,.ld-res.void{color:#a16207}.ld-res.pending{color:#1d4ed8}.ld-res.no_pick{color:#475569}
+.ld-scroll{overflow-x:auto}
+.ld-muted{color:#64748b;font-size:.85rem}
+.ld-rules li{margin:4px 0 4px 18px;color:#334155;font-size:.92rem}
+.ld-copy{width:100%;min-height:64px;border:1px solid #cbd5e1;border-radius:8px;padding:8px;font:inherit}
+@media(max-width:720px){
+  .ld-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ld-pick{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ld-progress{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .ld-hide-sm{display:none}
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="ld-wrap">
+  <h1>10-Day Ladder Picks</h1>
+  <p class="ld-lead">One pick at a time, backed by our graded record. The ladder starts at $10 and each win rolls the full amount into the next pick's wager, for up to 10 ladder days.</p>
+
+  {% if ladder %}
+  <section class="ld-card">
+    <h2>Ladder #{{ ladder.id }} · {{ ladder.status_label }}</h2>
+    <div class="ld-kpis">
+      <div class="ld-kpi"><div class="k">Day</div><div class="v">{{ ladder.day }} / {{ total_days }}</div></div>
+      <div class="ld-kpi"><div class="k">Started with</div><div class="v">{{ ladder.start_amount }}</div></div>
+      <div class="ld-kpi"><div class="k">Ladder amount</div><div class="v">{{ ladder.current_amount }}</div></div>
+      <div class="ld-kpi"><div class="k">Profit / loss</div><div class="v {{ 'ld-pos' if ladder.net_cents > 0 else ('ld-neg' if ladder.net_cents < 0 else '') }}">{{ ladder.net }}</div></div>
+    </div>
+    <p class="ld-muted" style="margin-top:10px;">Started {{ ladder.start_date }}{% if ladder.cycle_end_date %} · cycle ends {{ ladder.cycle_end_date }}{% endif %}{% if ladder.end_reason %} · {{ ladder.end_reason }}{% endif %}</p>
+    <div class="ld-progress" aria-label="Ladder progress">
+      {% for step in progress %}<div class="ld-step {{ step.state }}" title="Day {{ step.day }}">D{{ step.day }}</div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="ld-card">
+    <h2>Today's pick</h2>
+    {% if today_pick and not today_pick.locked %}
+    <div class="ld-pick">
+      <div class="f"><div class="k">Pick</div><div class="v">{{ today_pick.pick }}</div></div>
+      <div class="f"><div class="k">Event</div><div class="v">{{ today_pick.event }}</div></div>
+      <div class="f"><div class="k">Sport</div><div class="v">{{ today_pick.sport }}</div></div>
+      <div class="f"><div class="k">Odds</div><div class="v">{{ today_pick.odds }} ({{ today_pick.decimal }})</div></div>
+      <div class="f"><div class="k">Record on this pick type</div><div class="v">{{ today_pick.record }}</div></div>
+      <div class="f"><div class="k">Wager</div><div class="v">{{ today_pick.stake }}</div></div>
+    </div>
+    <p class="ld-muted" style="margin-top:8px;">{% if today_pick.start %}Starts {{ today_pick.start }} · {% endif %}{{ today_pick.market }}{% if today_pick.pick_type %} · {{ today_pick.pick_type }}{% endif %} · Odds locked when the pick was published</p>
+    {% elif today_pick %}
+    <div class="ld-lock">
+      <p><strong>Day {{ today_pick.day }} is live.</strong> Today's ladder pick, odds and wager are for premium members.</p>
+      {% if not is_logged_in %}<a class="ld-btn ghost" href="/login">Sign in</a>{% endif %}
+      <a class="ld-btn primary" href="/plans">Join Premium →</a>
+    </div>
+    {% elif ladder.status == 'active' %}
+    <p class="ld-muted">Waiting for the next qualifying pick. It is published once the previous result is final and a pick meets our requirements.</p>
+    {% else %}
+    <p class="ld-muted">This ladder has ended. A new ladder starts with the next qualifying pick.</p>
+    {% endif %}
+  </section>
+
+  <section class="ld-card">
+    <h2>Ladder days</h2>
+    {% if days %}
+    <div class="ld-scroll"><table class="ld-table">
+      <thead><tr><th>Day</th><th>Date</th><th>Pick</th><th class="ld-hide-sm">Sport</th><th>Odds</th><th>Wager</th><th>Result</th><th>P/L</th><th>Ladder</th></tr></thead>
+      <tbody>
+      {% for d in days %}
+      <tr>
+        <td>{{ d.day }}</td>
+        <td>{{ d.date }}</td>
+        <td>{% if d.locked %}<span class="ld-muted">Premium</span>{% elif d.pick %}<strong>{{ d.pick }}</strong><div class="ld-muted">{{ d.event }}{% if d.score %} · {{ d.score }}{% endif %}</div>{% else %}<span class="ld-muted">{{ d.note }}</span>{% endif %}</td>
+        <td class="ld-hide-sm">{{ d.sport if not d.locked else '—' }}</td>
+        <td>{{ d.odds if d.odds and not d.locked else '—' }}</td>
+        <td>{{ d.stake if not d.locked else '—' }}</td>
+        <td><span class="ld-res {{ d.result }}">{{ d.result_label }}</span>{% if d.note and d.pick %}<div class="ld-muted">{{ d.note }}</div>{% endif %}</td>
+        <td class="{{ 'ld-pos' if d.profit_cents and d.profit_cents > 0 else ('ld-neg' if d.profit_cents and d.profit_cents < 0 else '') }}">{{ d.profit }}</td>
+        <td>{{ d.amount_after }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<p class="ld-muted">No picks yet in this ladder.</p>{% endif %}
+  </section>
+  {% else %}
+  <section class="ld-card">
+    <h2>The first ladder starts soon</h2>
+    <p class="ld-muted">Day 1 is published as soon as a pick meets our requirements. Check back today.</p>
+  </section>
+  {% endif %}
+
+  {% if stats %}
+  <section class="ld-card">
+    <h2>Ladder history</h2>
+    <div class="ld-kpis">
+      <div class="ld-kpi"><div class="k">Ladders started</div><div class="v">{{ stats.total }}</div></div>
+      <div class="ld-kpi"><div class="k">Completed 10 days</div><div class="v">{{ stats.completed }}</div></div>
+      <div class="ld-kpi"><div class="k">Ended</div><div class="v">{{ stats.finished }}</div></div>
+      <div class="ld-kpi"><div class="k">Completion rate</div><div class="v">{{ stats.completion_pct }}</div></div>
+    </div>
+    <p class="ld-muted" style="margin-top:8px;">Completion rate counts only ladders that have ended. A ladder still running is not counted until it finishes.</p>
+    <div class="ld-scroll" style="margin-top:10px;"><table class="ld-table">
+      <thead><tr><th>Day</th><th>Reached</th><th>Wins</th><th>Losses</th><th>Push / void</th><th>Pending</th><th>Success rate</th></tr></thead>
+      <tbody>
+      {% for r in stats.per_day %}
+      <tr><td>{{ r.day }}</td><td>{{ r.reached }}</td><td>{{ r.wins }}</td><td>{{ r.losses }}</td><td>{{ r.pushes }}</td><td>{{ r.pending }}</td><td>{{ r.rate }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="ld-muted" style="margin-top:6px;">Success rate = days not lost ÷ days settled. Pending picks are not counted.</p>
+  </section>
+  {% endif %}
+
+  {% if history %}
+  <section class="ld-card">
+    <h2>Past ladders</h2>
+    <div class="ld-scroll"><table class="ld-table">
+      <thead><tr><th>Ladder</th><th>Started</th><th>Ended</th><th>Last day</th><th>Outcome</th><th>Final amount</th></tr></thead>
+      <tbody>
+      {% for h in history %}
+      <tr><td>#{{ h.id }}</td><td>{{ h.start_date }}</td><td>{{ h.finished }}</td><td>{{ h.final_day }}</td><td><span class="ld-res {{ 'win' if h.status == 'completed' else ('loss' if h.status == 'failed' else 'no_pick') }}">{{ h.status_label }}</span></td><td>{{ h.final_amount }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  <section class="ld-card">
+    <h2>How the ladder works</h2>
+    <ul class="ld-rules">
+      <li>Day 1 starts with a $10 wager on one moneyline, spread or total pick from our published predictions, priced between -150 and +150.</li>
+      <li>A pick is used only when that kind of pick has won at least 60% of 40 or more graded games against sportsbook lines over the past year, and held up in both halves of that year.</li>
+      <li>A win adds the profit, at the odds recorded when the pick was published, to the next day's wager.</li>
+      <li>A loss ends the ladder. A push or void is not a loss: the wager carries to the next day unchanged.</li>
+      <li>If no pick meets our requirements on a given date, no pick is forced: the ladder waits for the next qualifying pick. Ladder days count picks, not calendar days.</li>
+      <li>A ladder that wins through Day 10 is complete. One ladder runs at a time.</li>
+      <li>Picks never change after they are published.</li>
+    </ul>
+  </section>
+
+  {% if manual_post %}
+  <section class="ld-card">
+    <h2>Post for social media</h2>
+    <textarea class="ld-copy" readonly onclick="this.select()">{{ manual_post }}</textarea>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
