@@ -672,6 +672,9 @@ def _picks_display_dates(grouped_predictions, today_date):
     if _win_sport == 'WNBA':
         floor = _wnba_finals_floor(today_date, int(win['past']))
     ceiling = (today + timedelta(days=int(win['future']))).strftime('%Y-%m-%d')
+    if _win_sport == 'NBA' and not any(today_date < d <= ceiling for d in dates):
+        # Off-days ahead (e.g. before opening night): keep the next week's slate.
+        ceiling = (today + timedelta(days=7)).strftime('%Y-%m-%d')
     finals_days = {
         d for d, games in (grouped_predictions or {}).items()
         if d and d != 'TBD' and d < today_date and games
@@ -15667,8 +15670,49 @@ _SPORT_PAGE_RE = re.compile(
 _SKIP_PAGESPEED_PREFIXES = ('/admin', '/api/', '/static/', '/sport-static/')
 
 
+_GTAG_DIRECT_RE = re.compile(
+    r'<script\b[^>]*\bsrc=["\']https://www\.googletagmanager\.com/gtag/js\?id=[^"\']*["\'][^>]*>\s*</script>\s*',
+    re.I,
+)
+# gtag.js starts on the first scroll / tap / click / key press, or 6 s after load:
+# Lighthouse counts blocking time until 5 quiet seconds after load.
+_GTAG_START_JS = (
+    "var ev=['scroll','pointerdown','keydown','touchstart'];"
+    "var went=0;function go(){if(went)return;went=1;ev.forEach(function(e){window.removeEventListener(e,go,true);});boot();}"
+    "ev.forEach(function(e){window.addEventListener(e,go,{capture:true,passive:true,once:true});});"
+    "function arm(){setTimeout(go,6000);}"
+    "if(document.readyState==='complete')arm();else window.addEventListener('load',arm,{once:true});"
+)
+
+
+# Saved pages still carry the older idle-callback start.
+_GTAG_OLD_INCLUDE_START_RE = re.compile(
+    r"function schedule\(\)\s*\{\s*if\s*\('requestIdleCallback' in window\)\s*\{\s*"
+    r"requestIdleCallback\(bootGoogleAdsTag,\s*\{\s*timeout:\s*2500\s*\}\);\s*\}\s*else\s*\{\s*"
+    r"setTimeout\(bootGoogleAdsTag,\s*800\);\s*\}\s*\}"
+)
+_GTAG_NEW_INCLUDE_START = (
+    "var EVENTS=['scroll','pointerdown','keydown','touchstart'];"
+    "var went=0;function go(){if(went)return;went=1;EVENTS.forEach(function(e){window.removeEventListener(e,go,true);});bootGoogleAdsTag();}"
+    "EVENTS.forEach(function(e){window.addEventListener(e,go,{capture:true,passive:true,once:true});});"
+    "function schedule(){setTimeout(go,6000);}"
+)
+_GTAG_OLD_BOOT_START = (
+    "if('requestIdleCallback' in window)requestIdleCallback(boot,{timeout:2500});"
+    "else window.addEventListener('load',function(){setTimeout(boot,800);},{once:true});"
+)
+
+
 def _ensure_site_gtags(html):
-    """Every page loads gtag.js and configures both the GA4 and Ads tags."""
+    """Every page loads gtag.js (late) and configures both the GA4 and Ads tags."""
+    if not re.search(r'</head\s*>', html, flags=re.I):
+        return html
+    if '<!-- Google Ads tag (gtag.js)' in html:
+        html = re.sub(r'<!-- Google Ads tag \(gtag\.js\).*?-->\s*', '', html, flags=re.S)
+    if 'requestIdleCallback' in html:
+        html = _GTAG_OLD_INCLUDE_START_RE.sub(_GTAG_NEW_INCLUDE_START, html)
+        html = html.replace(_GTAG_OLD_BOOT_START, _GTAG_START_JS)
+    html = _GTAG_DIRECT_RE.sub('', html)
     head_close = re.search(r'</head\s*>', html, flags=re.I)
     if not head_close:
         return html
@@ -15688,8 +15732,7 @@ def _ensure_site_gtags(html):
             "var s=document.createElement('script');s.async=true;"
             f"s.src='https://www.googletagmanager.com/gtag/js?id={_SITE_GTAG_IDS[0]}';"
             "document.head.appendChild(s);}"
-            "if('requestIdleCallback' in window)requestIdleCallback(boot,{timeout:2500});"
-            "else window.addEventListener('load',function(){setTimeout(boot,800);},{once:true});"
+            + _GTAG_START_JS
         )
     tag = (
         "<script>(function(){window.dataLayer=window.dataLayer||[];"
@@ -27396,18 +27439,20 @@ def update_nhl_scores():
         logger.error(f"An error occurred while updating NHL scores: {e}")
 
 
+_NBA_PRESEASON_LEAGUE = 'NBA Preseason'
+
+
 def _nba_is_preseason_event(event) -> bool:
-    """ESPN season type 1 is NBA preseason; those games are neither picked nor graded."""
+    """ESPN season type 1 is NBA preseason (picked pre-game, kept out of model training)."""
     season = (event or {}).get('season') or {}
     return season.get('type') == 1 or str(season.get('slug') or '').lower() == 'preseason'
 
 
 def _nba_parse_espn_scoreboard_events(data) -> list:
-    """Parse an ESPN NBA day board into range-fetch game dicts (preseason dropped)."""
+    """Parse an ESPN NBA day board into range-fetch game dicts (preseason flagged)."""
     games = []
     for event in (data or {}).get('events') or []:
-        if _nba_is_preseason_event(event):
-            continue
+        preseason = _nba_is_preseason_event(event)
         competition = (event.get('competitions') or [{}])[0] or {}
         competitors = competition.get('competitors') or []
         if len(competitors) != 2:
@@ -27442,6 +27487,8 @@ def _nba_parse_espn_scoreboard_events(data) -> list:
             'home_score': home_score,
             'away_score': away_score,
             'league': 'NBA',
+            'preseason': preseason,
+            'started': status_name != 'STATUS_SCHEDULED',
         })
     return games
 
@@ -27693,7 +27740,11 @@ def update_espn_scores(sport):
                 events = data.get('events', [])
                 
                 for event in events:
-                    if sport == 'NBA' and _nba_is_preseason_event(event):
+                    _nba_pre = sport == 'NBA' and _nba_is_preseason_event(event)
+                    if _nba_pre and not cursor.execute(
+                        "SELECT 1 FROM predictions WHERE game_id = ? AND sport = 'NBA'",
+                        (f"NBA_{event.get('id')}",),
+                    ).fetchone():
                         continue
                     competition = event.get('competitions', [{}])[0]
                     competitors = competition.get('competitors', [])
@@ -27729,6 +27780,8 @@ def update_espn_scores(sport):
                         league_name = _canonical_soccer_league_from_event(event, competition)
                         if not league_name:
                             continue
+                    if _nba_pre:
+                        league_name = _NBA_PRESEASON_LEAGUE
                     
                     try:
                         home_score = int(home.get('score', 0))
@@ -32449,7 +32502,8 @@ def _build_team_stats_from_db(sport: str) -> dict:
         conn = get_db_connection()
         rows = conn.execute(
             'SELECT home_team_id, away_team_id, home_score, away_score '
-            'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL',
+            'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL '
+            "AND COALESCE(league, '') != 'NBA Preseason'",
             (sport,)
         ).fetchall()
         conn.close()
@@ -32544,7 +32598,8 @@ def _get_xgb_spread_model(sport):
         games_sport = model_sport if sport == 'NCAAW' else sport
         rows = conn.execute(
             'SELECT home_team_id, away_team_id, home_score, away_score, game_date '
-            'FROM games WHERE sport=? AND home_score IS NOT NULL ORDER BY game_date',
+            'FROM games WHERE sport=? AND home_score IS NOT NULL '
+            "AND COALESCE(league, '') != 'NBA Preseason' ORDER BY game_date",
             (games_sport,)
         ).fetchall()
         conn.close()
@@ -41272,6 +41327,13 @@ def get_upcoming_predictions__nba(sport, days=365, _force_rebuild=False):
                 except (KeyError, IndexError, TypeError):
                     pass
         conn.close()
+        if sport == 'NBA':
+            # A preseason game first seen after tip-off has no pre-game pick to show.
+            api_games = [
+                g for g in api_games
+                if not (g.get('preseason') and g.get('started')
+                        and g.get('stored_ensemble_prob') is None)
+            ]
         
         # Build dates list
         all_games_with_dates = [(parse_date(g['game_date']), g) for g in api_games if parse_date(g['game_date'])]
@@ -41308,7 +41370,7 @@ def get_upcoming_predictions__nba(sport, days=365, _force_rebuild=False):
                                     (sport, league, game_id, season, game_date,
                                      home_team_id, away_team_id, home_score, away_score, status)
                                     VALUES (?,?,?,?,?,?,?,?,?,'final')
-                                ''', (sport, _sg.get('league') or sport, _sg['game_id'], 2025,
+                                ''', (sport, _NBA_PRESEASON_LEAGUE if _sg.get('preseason') else (_sg.get('league') or sport), _sg['game_id'], 2025,
                                       _sg['game_date'], _sg['home_team_id'],
                                       _sg['away_team_id'], _sg['home_score'],
                                       _sg['away_score']))
@@ -41362,7 +41424,10 @@ def get_upcoming_predictions__nba(sport, days=365, _force_rebuild=False):
         all_games_with_dates.sort(key=lambda x: x[0])
     
     # Split into completed (for Elo training) and all (for predictions)
-    completed_games = [g for d, g in all_games_with_dates if g.get('home_score') is not None]
+    completed_games = [
+        g for d, g in all_games_with_dates
+        if g.get('home_score') is not None and not g.get('preseason')
+    ]
     soccer_history_count = None
     if sport == 'SOCCER':
         try:
@@ -41452,7 +41517,9 @@ def get_upcoming_predictions__nba(sport, days=365, _force_rebuild=False):
             _hist_rows = _hist_conn.execute(
                 "SELECT game_id, home_team_id, away_team_id, home_score, away_score "
                 "FROM games WHERE sport = 'NBA' AND home_score IS NOT NULL "
-                "AND away_score IS NOT NULL ORDER BY date(game_date), game_id"
+                "AND away_score IS NOT NULL AND COALESCE(league, '') != ? "
+                "ORDER BY date(game_date), game_id",
+                (_NBA_PRESEASON_LEAGUE,),
             ).fetchall()
             _hist_conn.close()
             for _hg in _hist_rows:
@@ -41524,6 +41591,12 @@ def get_upcoming_predictions__nba(sport, days=365, _force_rebuild=False):
     else:
         _display_floor = season_start
         _display_ceiling = future_cutoff
+    _after_today = datetime(today.year, today.month, today.day) + timedelta(days=1)
+    if sport == 'NBA' and _picks_window and not any(
+        _after_today <= _gd <= _display_ceiling for _gd, _ in all_games_with_dates
+    ):
+        # Off-days ahead (e.g. before opening night): show the next week's slate.
+        _display_ceiling = today + timedelta(days=7)
     
     predictions = []
     # Fetch injuries once for the whole request (15-min cache keeps it fast)

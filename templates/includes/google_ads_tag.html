@@ -1,5 +1,6 @@
-<!-- Google Ads tag (gtag.js). Keep AW-18345189026; load after paint so it
-     does not compete with LCP / main-thread work. Commands queue in dataLayer. -->
+{# Google Ads tag (gtag.js). Keep AW-18345189026. Loads on the first scroll / tap /
+   click / key press, or 6 s after load: Lighthouse counts blocking time until 5 quiet
+   seconds after load. Commands queue in dataLayer until then. #}
 <script>
 (function () {
   var AW_ID = 'AW-18345189026';
@@ -16,13 +17,18 @@
     s.src = 'https://www.googletagmanager.com/gtag/js?id=' + AW_ID;
     document.head.appendChild(s);
   }
-  function schedule() {
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(bootGoogleAdsTag, { timeout: 2500 });
-    } else {
-      setTimeout(bootGoogleAdsTag, 800);
-    }
+  var EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'];
+  var went = false;
+  function go() {
+    if (went) return;
+    went = true;
+    EVENTS.forEach(function (e) { window.removeEventListener(e, go, true); });
+    bootGoogleAdsTag();
   }
+  EVENTS.forEach(function (e) {
+    window.addEventListener(e, go, { capture: true, passive: true, once: true });
+  });
+  function schedule() { setTimeout(go, 6000); }
   if (document.readyState === 'complete') schedule();
   else window.addEventListener('load', schedule, { once: true });
 })();

@@ -188,6 +188,11 @@ def repair_page_controls(html: str, sport: str, path: str, view: str = "") -> st
             built_days = re.findall(r"20\d\d-\d\d-\d\d", built.group(1)) if built else []
             if built_days:
                 first = min(first, min(built_days))
+        if (sport or "").upper() == "NBA" and not any(
+            today.isoformat() < block.attrs["id"][5:] <= last for block in sections
+        ):
+            # Off-days ahead (e.g. before opening night): keep the next week's slate.
+            last = (today + timedelta(days=7)).isoformat()
         # Reparse if an earlier control script was removed, so offsets remain exact.
         sections = blocks(html, lambda tag, attrs: "date-section" in attrs.get("class", "").split()
                           and attrs.get("id", "").startswith("date-"))

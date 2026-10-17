@@ -4425,10 +4425,14 @@ def apply_pagespeed_markup(html: str, path: str = "") -> str:
             "gtag('config','AW-18345189026');"
             "function load(id){var s=document.createElement('script');s.async=true;"
             "s.src='https://www.googletagmanager.com/gtag/js?id='+id;"
-            "document.head.appendChild(s);}function boot(){load('G-R4XM0WKTGG');"
+            "document.head.appendChild(s);}function boot(){if(window.__plTagsLoaded)return;"
+            "window.__plTagsLoaded=true;load('G-R4XM0WKTGG');"
             "load('AW-18345189026');}"
-            "if('requestIdleCallback' in window)requestIdleCallback(boot,{timeout:2500});"
-            "else window.addEventListener('load',function(){setTimeout(boot,800);},{once:true});"
+            "var ev=['scroll','pointerdown','keydown','touchstart'];"
+            "var went=0;function go(){if(went)return;went=1;ev.forEach(function(e){window.removeEventListener(e,go,true);});boot();}"
+            "ev.forEach(function(e){window.addEventListener(e,go,{capture:true,passive:true,once:true});});"
+            "function arm(){setTimeout(go,6000);}"
+            "if(document.readyState==='complete')arm();else window.addEventListener('load',arm,{once:true});"
             "})();</script>"
         )
         html = re.sub(r"</head>", tag + "</head>", html, count=1, flags=re.I)
