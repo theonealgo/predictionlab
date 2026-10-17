@@ -128665,8 +128665,19 @@ def _build_fast_landing_preview_context():
             'is_live': is_live,
         })
     active_sport = next((s for s in landing_sports if s.get('is_live')), landing_sports[0] if landing_sports else None)
+    games_graded = 0
+    try:
+        _conn = get_db_connection()
+        try:
+            games_graded = _conn.execute(
+                "SELECT COUNT(*) FROM games WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
+            ).fetchone()[0]
+        finally:
+            _conn.close()
+    except Exception as _e:
+        logger.debug(f"Fast landing games count failed: {_e}")
     return {
-        'games_graded': 0,
+        'games_graded': games_graded,
         'predictions_logged': 0,
         'landing_sports': landing_sports,
         'active_sport_slug': active_sport.get('seo_slug') if active_sport else 'mlb-picks',

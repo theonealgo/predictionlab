@@ -323,6 +323,16 @@ def test_no_qualifying_pick(tmp_path, ladder_db):
     assert eng.select_today(late)["action"] == "no_pick_recorded"
 
 
+def test_recorded_no_pick_does_not_block_a_later_game(world, ladder_db):
+    eng = make_engine(world, ladder_db)
+    early_evening = datetime(D0.year, D0.month, D0.day, 22, 0, tzinfo=timezone.utc)  # 18:00 ET
+    assert eng.select_today(early_evening)["action"] == "no_pick"
+    world.add_game(D0, "late")  # 19:00 ET
+    out = eng.select_today(early_evening + timedelta(minutes=20))
+    assert out["action"] == "published"
+    assert eng.conn.execute("SELECT COUNT(*) FROM ladder_no_pick_dates").fetchone()[0] == 0
+
+
 def test_no_pick_pauses_active_ladder(world, ladder_db):
     world.add_game(D0, "g1")
     eng = make_engine(world, ladder_db)

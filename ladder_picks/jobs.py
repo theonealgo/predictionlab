@@ -52,17 +52,34 @@ def run_once(now: datetime | None = None, engine: LadderEngine | None = None) ->
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
+def last_pass_path() -> Path:
+    return Path(store.db_path()).with_name("ladder_last_pass.json")
+
+
+def _save_last_pass(info: dict) -> None:
+    """Outcome of the latest scheduled pass, without pick details (the open pick is premium)."""
+    try:
+        last_pass_path().write_text(json.dumps(info, default=str))
+    except OSError:
+        logger.exception("ladder: could not save last pass")
+
+
 def _loop(interval_s: int) -> None:
     import time
 
     time.sleep(30)
     while True:
+        at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         try:
             out = run_once()
-            sel = (out.get("selection") or {}).get("action")
-            if out.get("settled") or sel in ("published", "no_pick") or out.get("expired"):
+            sel = out.get("selection") or {}
+            if "skipped" not in out:
+                _save_last_pass({"at": at, "action": sel.get("action"), "rejected": sel.get("rejected"),
+                                 "reason": sel.get("reason"), "settled": len(out.get("settled") or [])})
+            if out.get("settled") or sel.get("action") in ("published", "no_pick") or out.get("expired"):
                 logger.info("ladder pass: %s", json.dumps(out, default=str))
-        except Exception:
+        except Exception as exc:
+            _save_last_pass({"at": at, "action": "error", "error": f"{type(exc).__name__}: {exc}"[:300]})
             logger.exception("ladder: scheduled pass failed")
         time.sleep(interval_s)
 

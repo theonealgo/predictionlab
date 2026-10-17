@@ -364,10 +364,6 @@ class LadderEngine:
             return {"action": "too_early"}
         ladder = self.active_ladder()
         exclude: set[str] = set()
-        if self.conn.execute(
-            "SELECT 1 FROM ladder_no_pick_dates WHERE pick_date = ?", (today,)
-        ).fetchone():
-            return {"action": "no_pick_recorded", "ladder_id": ladder["id"] if ladder else None}
         if ladder:
             last = self.last_day(ladder["id"])
             if last and last["result"] == "pending":
@@ -397,10 +393,12 @@ class LadderEngine:
     def _record_no_pick(self, now, today, ladder, next_day, rejected) -> dict:
         reason = ", ".join(f"{k} ({v})" for k, v in sorted(rejected.items())) or "no published picks"
         with store.write_txn(self.conn):
-            self.conn.execute(
+            cur = self.conn.execute(
                 "INSERT OR IGNORE INTO ladder_no_pick_dates (pick_date, reason, created_at) VALUES (?, ?, ?)",
                 (today, reason, _iso(now)),
             )
+        if not cur.rowcount:
+            return {"action": "no_pick_recorded", "ladder_id": ladder["id"] if ladder else None}
         logger.info("ladder: no qualifying pick for %s (%s)%s", today, reason,
                     f"; ladder {ladder['id']} paused before Day {next_day}" if ladder else "")
         return {"action": "no_pick", "ladder_id": ladder["id"] if ladder else None, "reason": reason}
@@ -453,6 +451,7 @@ class LadderEngine:
                  pick["american_odds"], pick["decimal_odds"], pick["opponent_american_odds"], stake,
                  _iso(pick["start"]), _iso(now)),
             )
+            self.conn.execute("DELETE FROM ladder_no_pick_dates WHERE pick_date = ?", (today,))
         logger.info("ladder: published ladder %s day %s: %s %s (%s)", ladder_id, next_day,
                     pick["sport"], pick["pick_label"], money.fmt_american(pick["american_odds"]))
         return {"action": "published", "ladder_id": ladder_id, "day": next_day}

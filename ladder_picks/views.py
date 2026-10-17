@@ -179,3 +179,31 @@ def ladder_page():
     resp = make_response(html)
     resp.headers["Cache-Control"] = "private, no-store"
     return resp
+
+
+@bp.route("/ladder-picks/status.json")
+def ladder_status():
+    """Scheduler health only: when the last pass ran and why it did not pick. No pick details."""
+    import json
+
+    from . import jobs
+
+    info: dict = {"scheduler_running": bool(jobs._thread and jobs._thread.is_alive())}
+    try:
+        info["last_pass"] = json.loads(jobs.last_pass_path().read_text())
+    except (OSError, ValueError):
+        info["last_pass"] = None
+    try:
+        conn = store.connect()
+        try:
+            info["ladders"] = conn.execute("SELECT COUNT(*) FROM ladder_runs").fetchone()[0]
+            info["no_pick_dates"] = [r[0] for r in conn.execute(
+                "SELECT pick_date FROM ladder_no_pick_dates ORDER BY pick_date DESC LIMIT 5")]
+        finally:
+            conn.close()
+    except Exception as exc:
+        info["ladder_db_error"] = type(exc).__name__
+    resp = make_response(json.dumps(info, default=str))
+    resp.headers["Content-Type"] = "application/json"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
