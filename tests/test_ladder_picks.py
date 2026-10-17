@@ -323,6 +323,38 @@ def test_no_qualifying_pick(tmp_path, ladder_db):
     assert eng.select_today(late)["action"] == "no_pick_recorded"
 
 
+def test_short_betting_lines_table(world, ladder_db):
+    """Production keeps a short betting_lines table: id, game_id, spread, total."""
+    con = sqlite3.connect(world.main)
+    con.executescript(
+        """
+        CREATE TABLE bl (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT, spread REAL, total REAL);
+        INSERT INTO bl (game_id, spread, total) SELECT game_id, spread, total FROM betting_lines;
+        DROP TABLE betting_lines;
+        ALTER TABLE bl RENAME TO betting_lines;
+        """
+    )
+    con.commit()
+    con.close()
+    world.add_game(D0, "g1")
+    out = make_engine(world, ladder_db).run_cycle(_noon_et(D0))
+    assert out["selection"]["action"] == "published"
+
+
+def test_predictions_without_lock_columns(tmp_path):
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE predictions (id INTEGER PRIMARY KEY, sport TEXT, league TEXT, game_id TEXT, "
+                "game_date TEXT, home_team_id TEXT, away_team_id TEXT, win_probability REAL, "
+                "lock_card_json TEXT, locked INTEGER, created_at TEXT)")
+    con.execute("INSERT INTO predictions VALUES (1, 'NFL', 'NFL', 'g1', ?, 'H', 'A', 0.6, ?, 1, ?)",
+                (D0.isoformat(), json.dumps({"xgb_spread": 2.0}), D0.isoformat()))
+    con.commit()
+    con.close()
+    rows = sources.PredictionSource(str(path)).candidates(D0.isoformat())
+    assert rows[0]["model"]["xs_spread"] == 2.0 and rows[0]["model"]["pl_spread"] is None
+
+
 def test_recorded_no_pick_does_not_block_a_later_game(world, ladder_db):
     eng = make_engine(world, ladder_db)
     early_evening = datetime(D0.year, D0.month, D0.day, 22, 0, tzinfo=timezone.utc)  # 18:00 ET

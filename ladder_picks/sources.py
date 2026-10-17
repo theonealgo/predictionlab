@@ -80,15 +80,15 @@ class PredictionSource:
 
     def candidates(self, pick_date: str) -> list[dict]:
         marks = ",".join("?" for _ in SUPPORTED_SPORTS)
-        sql = f"""
-            SELECT sport, league, game_id, game_date, home_team_id, away_team_id,
-                   win_probability, lock_card_json, locked, created_at,
-                   lock_pl_spread, lock_xs_spread, lock_pl_total, lock_xs_total
-            FROM predictions
-            WHERE sport IN ({marks}) AND date(game_date) = ?
-              AND lock_card_json IS NOT NULL AND COALESCE(locked, 0) = 1
-        """
         with closing(_ro(self.path)) as conn:
+            locks = _lock_cols(conn, "")
+            sql = f"""
+                SELECT sport, league, game_id, game_date, home_team_id, away_team_id,
+                       win_probability, lock_card_json, locked, created_at, {locks}
+                FROM predictions
+                WHERE sport IN ({marks}) AND date(game_date) = ?
+                  AND lock_card_json IS NOT NULL AND COALESCE(locked, 0) = 1
+            """
             rows = conn.execute(sql, (*SUPPORTED_SPORTS, pick_date)).fetchall()
         out = []
         for row in rows:
@@ -125,20 +125,28 @@ class PredictionSource:
 
         marks = ",".join("?" for _ in SUPPORTED_SPORTS)
         with closing(_ro(self.path)) as conn:
-            books: dict[tuple[str, str], sqlite3.Row] = {}
-            for b in conn.execute(
-                f"""SELECT sport, game_id, spread, total, home_moneyline, away_moneyline
-                    FROM betting_lines
-                    WHERE sport IN ({marks}) AND date(game_date) >= ? AND date(game_date) < ?
-                      AND fetched_at < date(game_date) || ' 16:00:00'
-                    ORDER BY fetched_at""",
-                (*SUPPORTED_SPORTS, since, until),
-            ):
-                books[(b["sport"], b["game_id"])] = b
+            books: dict = {}
+            bl = _table_cols(conn, "betting_lines")
+            ml = ("home_moneyline, away_moneyline" if {"home_moneyline", "away_moneyline"} <= bl
+                  else "NULL AS home_moneyline, NULL AS away_moneyline")
+            if {"sport", "game_date", "fetched_at"} <= bl:
+                for b in conn.execute(
+                    f"""SELECT sport, game_id, spread, total, {ml}
+                        FROM betting_lines
+                        WHERE sport IN ({marks}) AND date(game_date) >= ? AND date(game_date) < ?
+                          AND fetched_at < date(game_date) || ' 16:00:00'
+                        ORDER BY fetched_at""",
+                    (*SUPPORTED_SPORTS, since, until),
+                ):
+                    books[(b["sport"], b["game_id"])] = b
+            elif "game_id" in bl:
+                # Short table: one row per game, the first line stored is kept.
+                for b in conn.execute(f"SELECT game_id, spread, total, {ml} FROM betting_lines ORDER BY id"):
+                    books.setdefault(b["game_id"], b)
+            locks = _lock_cols(conn, "p.")
             rows = conn.execute(
                 f"""SELECT p.sport, p.game_id, p.game_date, p.win_probability, p.lock_card_json,
-                           p.lock_pl_spread, p.lock_xs_spread, p.lock_pl_total, p.lock_xs_total,
-                           g.home_score, g.away_score
+                           {locks}, g.home_score, g.away_score
                     FROM predictions p
                     JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
                     WHERE p.sport IN ({marks}) AND date(p.game_date) >= ? AND date(p.game_date) < ?
@@ -151,7 +159,8 @@ class PredictionSource:
         seen: set[tuple[str, str]] = set()
         for row in rows:
             key = (row["sport"], row["game_id"])
-            if key in seen or key not in books:
+            b = books.get(key) or books.get(row["game_id"])
+            if key in seen or b is None:
                 continue
             seen.add(key)
             try:
@@ -160,7 +169,6 @@ class PredictionSource:
                 card = {}
             if not isinstance(card, dict):
                 card = {}
-            b = books[key]
             book = {"home_ml": b["home_moneyline"], "away_ml": b["away_moneyline"],
                     "spread": b["spread"], "total": b["total"]}
             hs, aw = int(row["home_score"]), int(row["away_score"])
@@ -189,6 +197,19 @@ class PredictionSource:
         if status not in {"final", "complete", "completed", "closed", "post"}:
             return {"state": status or "scheduled"}
         return {"state": "final", "home_score": int(row["home_score"]), "away_score": int(row["away_score"])}
+
+_LOCK_COLS = ("lock_pl_spread", "lock_xs_spread", "lock_pl_total", "lock_xs_total")
+
+
+def _table_cols(conn, table: str) -> set[str]:
+    return {r[1] for r in conn.execute(f"PRAGMA table_info('{table}')")}
+
+
+def _lock_cols(conn, prefix: str) -> str:
+    """The lock_* columns, as NULL when this database does not have them."""
+    have = _table_cols(conn, "predictions")
+    return ", ".join(f"{prefix}{c}" if c in have else f"NULL AS {c}" for c in _LOCK_COLS)
+
 
 def _num(v) -> float | None:
     try:
