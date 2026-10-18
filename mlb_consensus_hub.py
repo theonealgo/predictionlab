@@ -2953,6 +2953,13 @@ def inject_consensus_records_html(
             block = build_consensus_records_html(
                 rows, last_night_key=last_night_key, sport=sport_l
             )
+    if block and rows and not chart_view:
+        try:
+            import consensus_table_rows
+
+            consensus_table_rows.save(sport_l, rows)
+        except Exception:
+            pass
     if block and rows:
         books_pl = build_pl_vs_books_records_html(
             rows, last_night_key=last_night_key, sport=sport_l

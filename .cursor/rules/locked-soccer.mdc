@@ -14,4 +14,8 @@ Owner 2026-10-08: picks window is today-2 .. today+7 (league filters too); next 
 
 Owner 2026-10-14: results chart no longer appends a last-night games table below the footer. Miss closed — locked.
 
+Owner 2026-10-17: chart Last Night heading counts every stored final; a ?week= page is not widened by 7 days. Miss closed — locked.
+
+Owner 2026-10-17: a blank Prediction Lab / XSharp spread or total on a picks card is filled from that model's own projected score (`fill_soccer_model_lines`); a card with no projected score stays blank. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

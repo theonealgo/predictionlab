@@ -1645,16 +1645,19 @@ def card_missing_model_value_issues(html: str, sport: str = "") -> list[str]:
                 missing_box += 1
                 break
         need = {n.lower() for n in required}
+        fifty_flags = []
         for name, val_html in zip(names, vals):
             if name.lower() not in need:
                 continue
             val = val_html.lower().replace("&mdash;", "—").replace("&ndash;", "–")
             if val in {"", "n/a", "na", "—", "–", "-"}:
                 blank_val += 1
+                fifty_flags = []
                 break
-            if name.lower() == "edge" and _is_fifty(val_html):
-                blank_val += 1
-                break
+            fifty_flags.append(_is_fifty(val_html))
+        # Owner 2026-10-17: one model at 50% is fine; every model at 50% is an error.
+        if len(fifty_flags) >= 2 and all(fifty_flags):
+            blank_val += 1
     issues = []
     label = (sport or "cards").strip() or "cards"
     if missing_box:
@@ -1664,7 +1667,7 @@ def card_missing_model_value_issues(html: str, sport: str = "") -> list[str]:
         )
     if blank_val:
         issues.append(
-            f"{label}: {blank_val}/{len(cards)} cards have a blank, N/A, or 50% Edge model value"
+            f"{label}: {blank_val}/{len(cards)} cards have a blank or N/A model value, or every model at 50%"
         )
     nested = 0
     long_side = 0
@@ -3223,7 +3226,11 @@ def picks_recent_results_issues(html: str) -> list[str]:
     for label in ("Last Night", "Last 7 days", "Last 30 days"):
         if label not in html:
             issues.append(f"Picks recent-results strip missing {label}")
-    for market in ("Moneyline", "Spread", "Totals"):
+    markets = ("Moneyline", "Spread", "Totals")
+    if re.search(r'data-league="(?:TENNIS|UFC)"', html) or "golf-board" in html:
+        # Tennis, UFC, and golf grade moneyline picks only.
+        markets = ("Moneyline",)
+    for market in markets:
         if market not in html:
             issues.append(f"Picks recent-results strip missing {market} grades")
     for m in re.finditer(

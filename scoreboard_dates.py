@@ -115,12 +115,43 @@ def _scoreboard_days(sport: str) -> list[str]:
             if len(names) < 2 or any(not name or "TBD" in name.upper() for name in names):
                 continue
             found.add(day.isoformat())
+    saved = _saved_board_days(key, today)
     if not saw:
-        return []
+        return saved
+    if failed_day:
+        found |= set(saved)
+    else:
+        _save_board_days(key, found)
     days = sorted(found)
     # A day that failed to load must not be hidden for the full cache window.
     _CACHE[key] = (now - (_TTL - 45.0) if failed_day else now, days)
     return days
+
+
+def _board_file(key: str) -> Path:
+    return Path(__file__).resolve().parent / ".cache" / f"scoreboard_days_{key}.json"
+
+
+def _saved_board_days(key: str, today: date) -> list[str]:
+    """Last complete scoreboard walk, for when ESPN does not answer."""
+    try:
+        days = json.loads(_board_file(key).read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    return sorted(d for d in days if isinstance(d, str) and d >= today.isoformat())
+
+
+def _save_board_days(key: str, days) -> None:
+    try:
+        path = _board_file(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        import threading
+
+        tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(sorted(days)), encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        pass
 
 
 _WARMING: set[str] = set()

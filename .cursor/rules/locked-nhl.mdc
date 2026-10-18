@@ -16,4 +16,8 @@ Owner 2026-10-08 (all-sports pass): three-way chart tables sit inside the page, 
 
 Owner 2026-10-14: Efficiency fills from the Puck Line row when the card attribute is blank; results consensus percent text uses the darker yellow for contrast. Miss closed — locked.
 
+Owner 2026-10-17: picks Recent results XSharp Totals shows 0-0 when XSharp's total equals the book total (no side) instead of a dash. Miss closed — locked.
+
+Owner 2026-10-17: the season Consensus Historical Record chip counts the results consensus table's own games (`consensus_table_rows.py`), plus stored finals before them, so a season chip always holds the table's Past 7 / Past 30 (preseason games the table counts included). Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

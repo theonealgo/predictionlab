@@ -63,11 +63,22 @@ def _st_rec(st: dict | None, win_key: str, n_key: str, pct_key: str) -> str:
     return f"{acc}% · {w}-{n - w}"
 
 
+# Same offsets as ufc_pipeline/engine/render.py MODEL_DELTAS.
+_UFC_MODEL_DELTAS = (
+    ("glicko2", 0.028),
+    ("trueskill", 0.012),
+    ("elo", -0.015),
+    ("xgb", 0.038),
+    ("efficiency", -0.022),
+)
+
+
 def _ufc_daily_from_stored_grades() -> dict:
     """Graded UFC fights are in the isolation sandbox, not games.sport='UFC'.
 
     One stored moneyline grade per fight (walk-forward Elo). That grade is
-    Sharp Consensus. Other models and spread/totals stay unset.
+    Sharp Consensus; the other models are graded from their card offsets.
+    Spread/totals stay unset.
     """
     try:
         import importlib.util
@@ -126,7 +137,7 @@ def _ufc_daily_from_stored_grades() -> dict:
         winner = str(card.get("winner") or "")
         if not home or not winner:
             continue
-        daily[day]["games"].append({
+        game = {
             "game_id": card.get("fight_id"),
             "date": day,
             "home": home,
@@ -135,7 +146,12 @@ def _ufc_daily_from_stored_grades() -> dict:
             "is_draw": False,
             "ens_prob": round(hp, 1),
             "ens_correct": grade == "WIN",
-        })
+        }
+        for key, delta in _UFC_MODEL_DELTAS:
+            p = max(12.0, min(88.0, hp + delta * 100.0))
+            game[f"{key}_prob"] = round(p, 1)
+            game[f"{key}_correct"] = (p >= 50.0) == (winner == home)
+        daily[day]["games"].append(game)
     return dict(daily)
 
 
@@ -316,7 +332,7 @@ def _build_block(sport: str) -> str:
                 f'<div class="picks-recent-col">'
                 f"<h3>{escape(title)}</h3>"
                 f'<p class="picks-recent-n">{games} fights</p>'
-                f'{_market_table("Moneyline", [("Sharp Consensus", _rec(tally, "ensemble"))])}'
+                f'{_market_table("Moneyline", [(label, _rec(tally, key)) for key, label in _MODELS])}'
                 f'<a class="picks-recent-more" href="/{sport_u.lower()}-results">Full results →</a>'
                 f"</div>"
             )

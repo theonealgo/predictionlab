@@ -5552,8 +5552,17 @@ def nhl_recent_block_from_cards() -> str:
             return "—"
         return f"{_nhl_acc(rec)} · {_nhl_rec(rec)}"
 
-    def _table(title: str, pairs: list[tuple[str, list[int]]]) -> str:
-        body = "".join(f"<tr><th>{escape(n)}</th><td>{_face(r)}</td></tr>" for n, r in pairs)
+    def _xs_total_face(rec: list[int], games: int) -> str:
+        if games > 0 and rec[0] + rec[1] == 0:
+            return _nhl_rec(rec)
+        return _face(rec)
+
+    def _table(title: str, pairs: list[tuple[str, list[int]]], games: int = 0) -> str:
+        body = "".join(
+            f"<tr><th>{escape(n)}</th><td>"
+            f"{_xs_total_face(r, games) if title == 'Totals' and n == 'XSharp' else _face(r)}</td></tr>"
+            for n, r in pairs
+        )
         return f'<h4 class="picks-recent-mkt">{escape(title)}</h4><table><tbody>{body}</tbody></table>'
 
     cols = []
@@ -5569,7 +5578,7 @@ def nhl_recent_block_from_cards() -> str:
             f'<p class="picks-recent-n">{win["games"]} games</p>'
             + _table("Moneyline", [(n, win["models"][n]) for n in _NHL_SIX_ORDER])
             + _table("Spread", [("Prediction Lab", win["pl_spread"]), ("XSharp", win["xs_spread"])])
-            + _table("Totals", [("Prediction Lab", win["pl_total"]), ("XSharp", win["xs_total"])])
+            + _table("Totals", [("Prediction Lab", win["pl_total"]), ("XSharp", win["xs_total"])], win["games"])
             + '<a class="picks-recent-more" href="/nhl-results">Full results →</a>'
             "</div>"
         )
@@ -5625,39 +5634,9 @@ def _nhl_table_rows(html: str, start_marker: str, end_marker: str) -> dict[str, 
 
 
 def nhl_sync_card_chips(html: str, cards_html: str) -> str:
-    """Card chips read the tables: consensus = Past 7, PL vs Books = Past 30."""
-    if not html or "line-chip-val" not in html or not cards_html:
-        return html
-    cons = _nhl_table_rows(cards_html, "Consensus Based Betting Records", "PL vs Sportsbook")
-    books = _nhl_table_rows(cards_html, "PL vs Sportsbook", "</table>")
-    if not cons and not books:
-        return html
-
-    def _cons(m: re.Match[str]) -> str:
-        label = m.group(1).strip()
-        key = _nhl_norm_label(re.sub(r"^(\d/6)\s+(all but)", r"\1 — \2", label, flags=re.I))
-        rec = (cons.get(key) or ["", "0-0", ""])[1] if cons else None
-        if rec is None:
-            return m.group(0)
-        return f'line-chip-val">Consensus Record: {label} ({rec})'
-
-    html = re.sub(r'line-chip-val">Consensus Record: ([^<(]+?)\s*\((\d+-\d+(?:-\d+)?)\)', _cons, html)
-
-    def _books(m: re.Match[str]) -> str:
-        label = m.group(1).strip()
-        recs = books.get(_nhl_norm_label(label))
-        if not recs:
-            return m.group(0)
-        rec = recs[2]
-        w, l = (int(x) for x in rec.split("-")[:2])
-        pct = f" ({round(100 * w / (w + l))}%)" if (w + l) else ""
-        return f'line-chip-val">{label}: {rec}{pct} — Past 30 Days'
-
-    return re.sub(
-        r'line-chip-val">([^<:]+):\s*(\d+-\d+(?:-\d+)?)(?:\s*\(\d+%\))?\s*—\s*Past 30 Days',
-        _books,
-        html,
-    )
+    """Card record chips count the whole season; the results tables only hold
+    Last night / Past 7 / Past 30, so the chips are left as built."""
+    return html
 
 
 def _three_way_inside_main(html: str) -> str:

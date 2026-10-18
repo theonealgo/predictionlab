@@ -12,4 +12,10 @@ Locked. 3 UNLOCKS required.
 
 Owner 2026-10-15: picks Recent results anchor on the last graded NBA night, so the strip is not blank in the off-season. The 2026-06-03 card missing Edge / XSharp / SC is old stored data. Miss closed — locked.
 
+Owner 2026-10-16: preseason games get picks only before tip-off (a started game with no saved pre-game pick stays off the page); preseason finals are stored as league 'NBA Preseason' and kept out of model training; when no NBA games fall in the next 3 days the picks page looks 7 days ahead (opening week). Miss closed — locked.
+
+Owner 2026-10-17: picks Recent results anchor skips preseason (last regular/playoff night). Preseason stays out of results / chart. Miss closed — locked.
+
+Owner 2026-10-17 (evening): picks cards with no face win % use the stored Sharp Consensus for the green winner box; Recent results Last Night grades spread / totals from the same graded games as Last 7. Card face stays PL vs Books + Consensus Historical Record (H2H Last 10 in details) — the checker's "H2H on the face" rule conflicts with its face-only and card-template rules. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

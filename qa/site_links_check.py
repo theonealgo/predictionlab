@@ -14,6 +14,10 @@ on them (header, footer, hamburger menus, page body) is collected and opened.
 FAIL when:
   - a link answers with an error or a missing page, or does not open in 60s
   - a page on this site takes longer than SLOW_S seconds to open
+  - a page opens but shows a server error or raw template code
+  - the daily results report grades no games, a sport block shows no record
+    for one of the six models, or a record differs from that sport's results
+    page Last Night board for the same date
   - the login or signup page has no form, or login has no Google sign-in
   - Google sign-in does not hand off to Google
   - logging in does not show Sign out, or a logged-out visitor sees Sign out
@@ -165,9 +169,88 @@ def _check_site_link(v: Visitor, who: str, path: str, found_on: str) -> list[str
         return [f"LINK: {where} | answers HTTP {code} | should be: opens (HTTP 200)"]
     if not body.strip():
         return [f"LINK: {where} | opens an empty page | should be: page content"]
+    out = _page_broken(where, body)
     if secs > SLOW_S:
-        return [f"SLOW: {where} | took {secs:.1f}s to open | should be: under {SLOW_S:.0f}s"]
+        out.append(f"SLOW: {where} | took {secs:.1f}s to open | should be: under {SLOW_S:.0f}s")
+    return out
+
+
+_BROKEN_MARKERS = ("Traceback (most recent call last)", "Internal Server Error", "jinja2.exceptions",
+                   "UndefinedError", "{% ", "{{ st.", "{{ g.")
+
+
+def _page_broken(where: str, body: str) -> list[str]:
+    """A page that opens but shows a server error or raw template code."""
+    text = re.sub(r"<script\b.*?</script>", "", body, flags=re.S | re.I)
+    for marker in _BROKEN_MARKERS:
+        if marker in text:
+            return [f"PAGE: {where} | shows {marker!r} | should be: a working page"]
     return []
+
+
+_REPORT_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Sharp Consensus", "Efficiency")
+
+
+def _daily_report_issues(base: str) -> list[str]:
+    """Daily results report: games graded and every model's record in every sport block."""
+    try:
+        html = requests.get(base + "/daily-report", headers=HEADERS, timeout=TIMEOUT_S).text
+    except requests.RequestException as exc:
+        return [f"PAGE: {base}/daily-report | does not open ({exc}) | should be: opens"]
+    m = re.search(r"Games Graded:\s*<strong>(\d+)</strong>", html)
+    if not m:
+        return [f"PAGE: {base}/daily-report | no 'Games Graded' count | should be: yesterday's graded games"]
+    if int(m.group(1)) == 0:
+        return [f"PAGE: {base}/daily-report | 0 games graded | should be: yesterday's graded games"]
+    fails = []
+    date_m = re.search(r"Daily Betting Results Report\s*(?:—|&mdash;)\s*(\d{4}-\d{2}-\d{2})", html)
+    for name, block in re.findall(
+            r'class="rpt-sport-block"[^>]*data-sport-name="([^"]+)"(.*?)(?=class="rpt-sport-block"|class="rpt-actions")',
+            html, flags=re.S):
+        board = _results_last_night(base, name, date_m.group(1)) if date_m else None
+        for model in _REPORT_MODELS:
+            if model in ("Grinder2", "Takedown") and name in ("WNBA", "NBA"):
+                continue  # four-model sports
+            card = re.search(re.escape(model) + r"</div>\s*<div class=\"rpt-acc([^\"]*)\"[^>]*>[^<]*</div>"
+                             r"(?:\s*<div class=\"rpt-rec\">([^<]*)</div>)?", block)
+            if not card:
+                fails.append(f"PAGE: {base}/daily-report | {name}: no {model} card | should be: all six models")
+                continue
+            if card.group(1).strip() == "x":
+                fails.append(f"PAGE: {base}/daily-report | {name}: {model} shows — (no record) "
+                             f"| should be: the model's record for the day")
+            if board and model in board and (card.group(2) or "").strip() != board[model]:
+                fails.append(f"PAGE: {base}/daily-report | {name}: {model} {card.group(2) or '—'} "
+                             f"| should be: {board[model]} (Last Night on the {name} results page)")
+    return fails
+
+
+_RESULTS_SLUG = {"NHL": "nhl", "NBA": "nba", "MLB": "mlb", "NFL": "nfl", "NCAA Football": "ncaaf",
+                 "NCAAF": "ncaaf", "NCAAB": "ncaab", "NCAAW": "ncaaw", "WNBA": "wnba", "Soccer": "soccer"}
+
+
+def _results_last_night(base: str, sport_name: str, report_date: str) -> dict | None:
+    """{model: 'W-L'} from the sport results page's Last Night board, when it is for report_date."""
+    slug = next((v for k, v in _RESULTS_SLUG.items() if k.lower() in sport_name.lower()), None)
+    if not slug:
+        return None
+    try:
+        html = requests.get(f"{base}/{slug}-results", headers=HEADERS, timeout=TIMEOUT_S).text
+    except requests.RequestException:
+        return None
+    head = re.search(r"Last Night's [^<]*? Results\s*(?:—|&mdash;)\s*(\d{4}-\d{2}-\d{2})", html)
+    if not head or head.group(1) != report_date:
+        return None
+    rest = html[head.end():]
+    stop = rest.find("Last 7 Days")
+    board = rest[:stop] if stop > 0 else rest[:20000]
+    out = {}
+    for model, rec in re.findall(r'class="daily-model">[^<]*?([A-Za-z][A-Za-z0-9 ]*)</div>\s*'
+                                 r'<div class="daily-acc"[^>]*>[^<]*</div>\s*<div class="daily-rec">([^<]*)</div>',
+                                 board):
+        if model.strip() in _REPORT_MODELS:
+            out[model.strip()] = rec.strip()
+    return out or None
 
 
 def _check_outside_link(url: str, found_on: str) -> list[str]:
@@ -310,6 +393,7 @@ def run(base: str) -> tuple[list[str], dict]:
             return [f"ERROR: could not make the throwaway test accounts: {exc}"], stats
         fails += _login_pages(base)
         fails += _paywall_at_own_address(base)
+        fails += _daily_report_issues(base)
         viewers: dict[str, Visitor] = {"logged-out visitor": Visitor(base)}
         for who, key in (("paid account", "paid"), ("free account", "free")):
             f, v = _login_logout(base, who, *logins[key])
@@ -329,6 +413,7 @@ def run(base: str) -> tuple[list[str], dict]:
                 if code != 200 or not html:
                     fails.append(f"LINK: {base}{page} ({who}) | answers HTTP {code} | should be: opens")
                     continue
+                fails += _page_broken(f"{base}{page} ({who})", html)
                 if secs > SLOW_S:
                     fails.append(f"SLOW: {base}{page} ({who}) | took {secs:.1f}s to open "
                                  f"| should be: under {SLOW_S:.0f}s")

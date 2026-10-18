@@ -15,13 +15,15 @@ Rules
   run; one that runs out before Day 10 ends as expired.
 
 Pick rule
-- Candidates are our moneyline, spread and total picks for today's games.
+- Candidates are our moneyline, spread and total picks for today's games in
+  every sport with two-way picks (sources.SUPPORTED_SPORTS); the best one
+  across all sports is taken.
 - A pick qualifies only if its pick type (see markets.py) has, over the last
-  365 days against pre-game book lines: at least 40 graded picks, a 60%+ hit
-  rate, and 55%+ in each half of that period (oldest half / newest half).
+  14 days against pre-game book lines: at least 10 graded picks and a 60%+
+  hit rate.
 - The posted price at pick time must be -150 to +150.
-- The best record wins (shrunk slightly toward 50% so a small sample does not
-  beat a large one), then return, then earliest start.
+- The highest 14-day hit rate wins, then the larger sample, then return, then
+  earliest start.
 """
 from __future__ import annotations
 
@@ -65,13 +67,13 @@ class Config:
     # -150 to +150
     min_decimal: float = field(default_factory=lambda: _env_float("LADDER_MIN_DECIMAL_ODDS", 1.6666))
     max_decimal: float = field(default_factory=lambda: _env_float("LADDER_MAX_DECIMAL_ODDS", 2.50))
-    min_type_games: int = field(default_factory=lambda: _env_int("LADDER_MIN_TYPE_GAMES", 40))
+    min_type_games: int = field(default_factory=lambda: _env_int("LADDER_MIN_TYPE_GAMES", 10))
     min_type_rate: float = field(default_factory=lambda: _env_float("LADDER_MIN_TYPE_HIT_RATE", 0.60))
-    min_half_rate: float = field(default_factory=lambda: _env_float("LADDER_MIN_HALF_HIT_RATE", 0.55))
+    min_half_rate: float = field(default_factory=lambda: _env_float("LADDER_MIN_HALF_HIT_RATE", 0.0))
     void_after_hours: int = field(default_factory=lambda: _env_int("LADDER_VOID_AFTER_HOURS", 72))
-    history_days: int = 365
-    type_prior: int = 10
-    max_priced: int = 40
+    history_days: int = field(default_factory=lambda: _env_int("LADDER_HISTORY_DAYS", 14))
+    type_prior: int = field(default_factory=lambda: _env_int("LADDER_TYPE_PRIOR", 0))
+    max_priced: int = 150
 
 
 def _iso(dt: datetime) -> str:
@@ -325,8 +327,14 @@ class LadderEngine:
                 continue
             best, reason = None, "no pick type with a qualifying record"
             for o in markets.options(cand["sport"], cand.get("model") or {}, book):
-                s = stats.get((cand["sport"], o["market"], o["model"], o["side_class"], o["bucket"]))
-                if not s or not s["qualifies"]:
+                s = None
+                for edge in markets.gap_edges(cand["sport"], o["market"]):
+                    if o["gap"] < edge - 1e-9:
+                        continue
+                    t = stats.get((cand["sport"], o["market"], o["model"], o["side_class"], edge))
+                    if t and t["qualifies"] and (s is None or (t["score"], t["n"], t["roi"]) > (s["score"], s["n"], s["roi"])):
+                        s = t
+                if s is None:
                     continue
                 price = money.parse_american(o["price"])
                 if price is None:
@@ -347,13 +355,14 @@ class LadderEngine:
                     "pick_label": markets.label(o, cand["home_team"], cand["away_team"]),
                     "pick_type": markets.type_label(cand["sport"], o),
                 }
-                if best is None or (pick["credible_prob"], pick["type_roi"]) > (best["credible_prob"], best["type_roi"]):
+                if best is None or (pick["credible_prob"], pick["hist_n"], pick["type_roi"]) > (
+                        best["credible_prob"], best["hist_n"], best["type_roi"]):
                     best = pick
             if best is None:
                 reject(reason)
                 continue
             scored.append(best)
-        scored.sort(key=lambda c: (-c["credible_prob"], -c["type_roi"], c["start"]))
+        scored.sort(key=lambda c: (-c["credible_prob"], -c["hist_n"], -c["type_roi"], c["start"]))
         return {"pick": scored[0] if scored else None, "rejected": rejected,
                 "prefiltered": len(pre), "remaining": remaining}
 

@@ -120,10 +120,41 @@ def connect(path: str | None = None) -> sqlite3.Connection:
                 conn.execute(f"ALTER TABLE ladder_days ADD COLUMN {col} {typ}")
             except sqlite3.OperationalError:
                 pass  # another connection added it first
+    _apply_reset(conn)
     return conn
 
 
 _ADDED_COLUMNS = (("line", "REAL"), ("pick_label", "TEXT"), ("pick_type", "TEXT"), ("model_name", "TEXT"))
+
+# Bump to clear every ladder once (rows are copied to *_archive first). Ids keep
+# counting up so social-post rows for old ladders never collide with new ones.
+RESET_VERSION = "2026-10-18-all-sports"
+_RESET_TABLES = ("ladder_runs", "ladder_days", "ladder_no_pick_dates")
+
+
+def _apply_reset(conn: sqlite3.Connection) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS ladder_meta (key TEXT PRIMARY KEY, value TEXT)")
+    row = conn.execute("SELECT value FROM ladder_meta WHERE key = 'reset_version'").fetchone()
+    if row and row["value"] == RESET_VERSION:
+        return
+    with write_txn(conn):
+        row = conn.execute("SELECT value FROM ladder_meta WHERE key = 'reset_version'").fetchone()
+        if row and row["value"] == RESET_VERSION:
+            return
+        for table in _RESET_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table}_archive AS SELECT * FROM {table} WHERE 0")
+            cols = ", ".join(r["name"] for r in conn.execute(f"PRAGMA table_info({table})"))
+            have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table}_archive)")}
+            for c in cols.split(", "):
+                if c not in have:
+                    conn.execute(f"ALTER TABLE {table}_archive ADD COLUMN {c}")
+            conn.execute(f"INSERT INTO {table}_archive ({cols}) SELECT {cols} FROM {table}")
+        conn.execute("DELETE FROM ladder_days")
+        conn.execute("DELETE FROM ladder_runs")
+        conn.execute("DELETE FROM ladder_no_pick_dates")
+        conn.execute(
+            "INSERT OR REPLACE INTO ladder_meta (key, value) VALUES ('reset_version', ?)", (RESET_VERSION,)
+        )
 
 
 @contextmanager

@@ -681,7 +681,7 @@ def _consensus_pattern(sides: dict[str, str]) -> tuple[str, str, tuple[str, ...]
 
 
 def _tennis_consensus_history() -> dict[tuple[str, tuple[str, ...]], list[int]]:
-    """Last-7-day W-L for each agreement pattern, from graded results cards."""
+    """Season W-L for each agreement pattern, from graded results cards."""
     path = _tennis_results_cache_path()
     try:
         page = path.read_text(encoding="utf-8") if path.is_file() else ""
@@ -695,7 +695,9 @@ def _tennis_consensus_history() -> dict[tuple[str, tuple[str, ...]], list[int]]:
         today = datetime.now(ZoneInfo("America/New_York")).date()
     except Exception:
         today = datetime.now().date()
-    cut = (today - timedelta(days=7)).isoformat()
+    from season_records import season_start_iso
+
+    cut = season_start_iso("TENNIS")
     top = today.isoformat()
     out: dict[tuple[str, tuple[str, ...]], list[int]] = {}
     for card in re.split(r"(?=<div class=\"game-card-stack\b)", page)[1:]:
