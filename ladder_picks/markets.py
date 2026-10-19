@@ -44,7 +44,7 @@ def options(sport: str, model: dict, book: dict) -> list[dict]:
     """
     out: list[dict] = []
     hp = _num(model.get("home_prob"))
-    if sport != "SOCCER" and hp is not None and 0 < hp < 1 and abs(hp - 0.5) > 1e-9:
+    if hp is not None and 0 < hp < 1 and abs(hp - 0.5) > 1e-9:
         home = hp > 0.5
         p = hp if home else 1 - hp
         out.append({

@@ -116,11 +116,7 @@ def _published_tiles(html: str, heading: str) -> dict | None:
         rows[label] = f"{acc} · {rec}" if acc.endswith("%") else rec
     if not rows:
         return None
-    return {
-        "games": int(games_m.group(1)) if games_m else 0,
-        "rows": rows,
-        "dates": re.findall(r"\d{4}-\d{2}-\d{2}", m.group(0)),
-    }
+    return {"games": int(games_m.group(1)) if games_m else 0, "rows": rows}
 
 
 def _st_rec(st: dict | None, win_key: str, n_key: str, pct_key: str) -> str:
@@ -340,11 +336,10 @@ def _build_block(sport: str) -> str:
     )
     last30 = N.compute_model_tally_for_range(daily, start, yest, sport=sport_u)
     ln_dt = N.parse_date(ln_label) or yest
-    midnight = {"hour": 0, "minute": 0, "second": 0, "microsecond": 0}
     windows = (
         (f"Last Night — {ln_label}", ln, ln_dt, ln_dt),
-        ("Last 7 days", last7, (yest - timedelta(days=6)).replace(**midnight), yest),
-        ("Last 30 days", last30, start.replace(**midnight), yest),
+        ("Last 7 days", last7, yest - timedelta(days=6), yest),
+        ("Last 30 days", last30, start, yest),
     )
     cols = []
     for title, tally, w_start, w_end in windows:
@@ -368,9 +363,6 @@ def _build_block(sport: str) -> str:
             else:
                 heading = ""
             tiles = _published_tiles(published, heading) if heading and published else None
-            want_day = w_end.strftime("%Y-%m-%d")
-            if tiles and (tiles.get("dates") or [""])[-1] != want_day:
-                tiles = None
             if tiles:
                 # The results page already graded this window. Copy it exactly.
                 games = tiles["games"] or games

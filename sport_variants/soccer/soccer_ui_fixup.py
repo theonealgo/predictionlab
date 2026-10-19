@@ -2728,15 +2728,9 @@ def _sync_soccer_last_night_heading(html: str) -> str:
     if books_n < 3 or books_n != pl_n or part_n != pl_n:
         return html
     n = pl_n
-    day, finals = _soccer_scored_slate_before_today()
-
-    def _heading(m: re.Match[str]) -> str:
-        count = max(n, len(finals)) if day and day in m.group(1) else n
-        return f"{m.group(1)}({count} games)"
-
     return re.sub(
         r"(Last Night(?:'s)?[^<(]{0,80}—\s*\d{4}-\d{2}-\d{2}\s*)\((\d+)\s*games?\)",
-        _heading,
+        rf"\1({n} games)",
         html,
         count=1,
         flags=re.I,
@@ -3761,109 +3755,3 @@ def render_soccer_results_chart_page(
     except Exception as e:
         print(f"[soccer_ui_fixup] chart 4-model meanings: {e}", flush=True)
     return ensure_soccer_results_ship_bits(html, source_html=cards_html, league=league)
-
-
-_SOCCER_BLANK = {"", "—", "–", "-", "N/A", "NA"}
-
-
-def _soccer_num(v: float) -> str:
-    return f"{v:g}"
-
-
-def _soccer_proj(text: str) -> tuple[float, float] | None:
-    """(away, home) goals from 'Away 0.5 – Home 1'."""
-    m = re.search(r"([\d.]+)\s*[–-]\s*.*?([\d.]+)\s*$", html_lib.unescape(text or "").strip())
-    if not m:
-        return None
-    try:
-        return float(m.group(1)), float(m.group(2))
-    except ValueError:
-        return None
-
-
-def _soccer_h2h_with_record(card: str, xs_total: str, last3) -> str:
-    """Add the template's Combined record to an H2H line that was built without an XSharp total."""
-    tag = card[: card.find(">") + 1]
-    h2h = re.search(r'data-h2h="([^"]*)"', tag)
-    if not h2h or not h2h.group(1) or "Combined record" in h2h.group(1):
-        return card
-    home = re.search(r'data-home-full="([^"]*)"', tag) or re.search(r'data-home="([^"]*)"', tag)
-    away = re.search(r'data-away-full="([^"]*)"', tag) or re.search(r'data-away="([^"]*)"', tag)
-    day = re.search(r'data-date="([^"]*)"', tag)
-    try:
-        line = float(xs_total)
-        l3 = last3("SOCCER", html_lib.unescape(home.group(1)), html_lib.unescape(away.group(1)),
-                   day.group(1) if day else None)
-    except Exception:
-        return card
-    if not l3 or not l3.get("totals"):
-        return card
-    totals = [float(t) for t in l3["totals"]]
-    over = sum(1 for t in totals if t > line)
-    under = sum(1 for t in totals if t < line)
-    old = h2h.group(1)
-    new = f"{old} · Combined record: {over}-{under} Over"
-    card = card.replace(f'data-h2h="{old}"', f'data-h2h="{new}"', 1)
-    card = card.replace(f'data-h2h-l3="{old}"', f'data-h2h-l3="{new}"', 1)
-    return re.sub(
-        r'(H2H Last 10</span>\s*<span class="sf-val">)' + re.escape(old) + r'(</span>)',
-        lambda m: m.group(1) + new + m.group(2),
-        card,
-        count=1,
-    )
-
-
-def fill_soccer_model_lines(html: str, last3=None) -> str:
-    """Blank Prediction Lab / XSharp spread and total come from that model's own projected score.
-
-    A card with no projected score for the model is left as it is. ``last3`` is
-    the app's last-3-games H2H helper; with it, a filled XSharp total also gets
-    the H2H Combined record.
-    """
-    if not html or "data-pick-card" not in html:
-        return html
-    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html)
-    out = [parts[0]]
-    for card in parts[1:]:
-        end = card.find(">")
-        tag = card[: end + 1]
-        home = re.search(r'data-home="([^"]*)"', tag)
-        away = re.search(r'data-away="([^"]*)"', tag)
-        if not home or not away:
-            out.append(card)
-            continue
-        for key, cls in (("pl", "val-pl"), ("xs", "val-xs")):
-            proj_m = re.search(rf'data-{key}-proj="([^"]*)"', tag)
-            goals = _soccer_proj(proj_m.group(1)) if proj_m else None
-            spread_txt = total_txt = None
-            if goals:
-                a, h = goals
-                margin = h - a
-                if abs(margin) < 0.01:
-                    spread_txt = "PK"
-                else:
-                    fav = home.group(1) if margin > 0 else away.group(1)
-                    spread_txt = f"{fav} -{_soccer_num(abs(margin))}"
-                total_txt = _soccer_num(a + h)
-
-            def _cell(market: str, value: str | None, _card: str, _cls: str = cls) -> tuple[str, str]:
-                pat = rf'(<td class="market-k">\s*{market}\s*</td>[\s\S]*?<td class="{_cls}">)([^<]*)(</td>)'
-                m = re.search(pat, _card)
-                if not m:
-                    return _card, ""
-                shown = m.group(2).strip()
-                if shown in _SOCCER_BLANK and value:
-                    _card = _card[: m.start(2)] + value + _card[m.end(2):]
-                    shown = value
-                return _card, shown
-
-            card, spread_shown = _cell("Spread", spread_txt, card)
-            card, total_shown = _cell("Total", total_txt, card)
-            if key == "xs" and last3 and total_shown not in _SOCCER_BLANK:
-                card = _soccer_h2h_with_record(card, total_shown, last3)
-            fill = spread_shown if spread_shown not in _SOCCER_BLANK else spread_txt
-            attr = re.search(rf'data-{key}-spread="([^"]*)"', card[: card.find(">") + 1])
-            if fill and attr and attr.group(1).strip() in _SOCCER_BLANK:
-                card = card[: attr.start(1)] + html_lib.escape(fill, quote=True) + card[attr.end(1):]
-        out.append(card)
-    return "".join(out)

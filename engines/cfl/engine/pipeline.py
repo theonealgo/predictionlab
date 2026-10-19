@@ -514,26 +514,18 @@ def list_pick_cards(*, days_back: int = 1, days_fwd: int = 7) -> list[dict[str, 
         if (c.get("home_team") or "").strip().upper() not in ("", "TBD")
         and (c.get("away_team") or "").strip().upper() not in ("", "TBD")
     ]
+    window = games_in_window(cards, days_back=days_back, days_fwd=days_fwd)
+    # Prefer non-complete (plus today's finals); if empty keep window
     today_et = datetime.now(ZoneInfo("America/New_York")).date()
 
-    def _et_day(c: dict[str, Any]):
+    def _is_today(c: dict[str, Any]) -> bool:
         try:
             dt = datetime.fromisoformat(str(c.get("game_date") or "").replace("Z", "+00:00"))
         except ValueError:
-            return None
+            return False
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ZoneInfo("America/New_York")).date()
-
-    def _is_today(c: dict[str, Any]) -> bool:
-        return _et_day(c) == today_et
-
-    last_day = today_et + timedelta(days=days_fwd)
-    window = [
-        c for c in games_in_window(cards, days_back=days_back, days_fwd=days_fwd + 1)
-        if (_et_day(c) or last_day) <= last_day
-    ]
-    # Prefer non-complete (plus today's finals); if empty keep window
+        return dt.astimezone(ZoneInfo("America/New_York")).date() == today_et
 
     liveish = [
         c for c in window

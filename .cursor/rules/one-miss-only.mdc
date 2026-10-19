@@ -25,8 +25,4 @@ Owner 2026-10-14: every sport picks / results page uses the one shared date pick
 (`static/css/pl-date-nav.css`, `static/js/pl-date-nav.js`). Do not add per-sport
 date bars or dropdowns. Miss closed — locked.
 
-Owner 2026-10-18: ladder scans every sport with two-way picks (soccer goal line / total only; golf has none) and takes the pick whose pick type has the highest hit rate over the last 14 days (10+ graded, 60%+, price -150 to +150); a pick may use any qualifying record of its pick type whose gap it meets. Ladders cleared once (`ladder_picks/store.py` RESET_VERSION, old rows archived) and restarted 2026-10-18. Miss closed — locked.
-
-Owner 2026-10-18: /daily-report serves the saved report (memory + `.cache/daily_report_page.json`) and rebuilds in the background. Each sport block reads that sport's results page Last Night board (all six models + Spread + Over/Under) for the report date; the old DB tally is only the fallback. Checker (`qa/site_links_check.py`) flags pages showing server errors / raw template code, report blocks missing a model record, and report records that differ from the results page board. Miss closed — locked.
-
 See AGENTS.md Rule 12.

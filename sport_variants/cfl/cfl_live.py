@@ -507,7 +507,7 @@ def _cfl_record(grades: list[str]) -> tuple[str, float | None, int]:
 def cfl_pl_vs_books_signals(
     rows: list[dict[str, Any]],
 ) -> dict[str, tuple[str, str, float | None, int]]:
-    """Season Books / PL / agree / disagree records. Empty grades stay 0-0."""
+    """Past-window Books / PL / agree / disagree records. Empty grades stay 0-0."""
     books: list[str] = []
     pl: list[str] = []
     agree: list[str] = []
@@ -539,7 +539,7 @@ def cfl_pl_vs_books_text(
     pl_side: str | None,
     signals: dict[str, tuple[str, str, float | None, int]],
 ) -> str | None:
-    """Best season signal for this card. No text when this card has neither side."""
+    """Best Past-30 signal for this card. No text when this card has neither side."""
     candidates: list[tuple[str, str, float | None, int]] = []
     if book_side in ("HOME", "AWAY"):
         candidates.append(signals["books"])
@@ -557,7 +557,7 @@ def cfl_pl_vs_books_text(
     else:
         label, rec, pct, _decided = candidates[0]
     pct_s = f"{pct:.0f}%" if pct is not None else "—"
-    return f"{label}: {rec} ({pct_s}) — Season"
+    return f"{label}: {rec} ({pct_s}) — Past 30 Days"
 
 
 def _cfl_official_context() -> tuple[dict[str, tuple[str, str, float | None, int]] | None, dict]:
@@ -616,9 +616,7 @@ def _cfl_official_context() -> tuple[dict[str, tuple[str, str, float | None, int
             by_match = {}
     et = ZoneInfo("America/New_York")
     today = datetime.now(et).date()
-    from season_records import season_start_iso
-
-    cut = season_start_iso("CFL", [_cfl_et_day(g.get("game_date")) for g in games])
+    cut = (today - timedelta(days=30)).strftime("%Y-%m-%d")
     today_s = today.strftime("%Y-%m-%d")
     rows: list[dict[str, Any]] = []
     books: dict[tuple[str, str, str], str] = {}
@@ -665,13 +663,11 @@ def stamp_cfl_pl_vs_books(
     signals: dict[str, tuple[str, str, float | None, int]] | None = None,
     books: dict | None = None,
     today: str = "",
-    past: bool = False,
 ) -> str:
-    """Season PL vs Books record on every card on the page.
+    """Past-30 PL vs Books record on today and later cards.
 
-    Uses posted moneylines and locked picks only. ``past`` is for results
-    cards, which carry the PL moneyline on the face instead of a pick. A game
-    with no posted moneyline does not get a book side.
+    Uses posted moneylines and locked picks only. Yesterday's cards are left
+    as they are. A game with no posted moneyline does not get a book side.
     """
     if not html or "data-pick-card" not in html:
         return html
@@ -705,29 +701,14 @@ def stamp_cfl_pl_vs_books(
             am = re.search(rf'\b{name}="([^"]*)"', tag)
             return (am.group(1) if am else "").strip()
 
-        day = _cfl_et_day(_attr("data-time") or _attr("data-date"))
+        day = _cfl_et_day(_attr("data-time"))
         home, away = _attr("data-home"), _attr("data-away")
-        if not day or not home or not away:
+        # Historical cards stay untouched.
+        if not day or day < today or not home or not away:
             out.append(stack)
             continue
         book_side = books.get((home.lower(), away.lower(), day))
         pl_side = _cfl_name_side(_attr("data-pick"), home, away)
-        if pl_side is None and past:
-            try:
-                from mlb_ui_fixup import _face_ml_favorite_side
-
-                pl_side = _face_ml_favorite_side(stack, which="pl")
-            except Exception:
-                pl_side = None
-        if pl_side is None and past:
-            sc = re.search(
-                r'class="pc-name">\s*Sharp Consensus\s*</div>\s*<div class="pc-val"[^>]*>[\s\S]*?</div>\s*'
-                r'<div class="pc-side\s+(home|away)\b',
-                stack,
-                flags=re.I,
-            )
-            if sc:
-                pl_side = sc.group(1).upper()
         text = cfl_pl_vs_books_text(book_side, pl_side, signals)
         if not text:
             out.append(stack)
@@ -1933,7 +1914,7 @@ def _render_cfl_shared_daily_results() -> tuple[str, str | None]:
     if not daily_results:
         raise RuntimeError("CFL results: no completed games")
 
-    yesterday_dt = (datetime.now() - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_dt = datetime.now() - timedelta(days=1)
     yesterday = yesterday_dt.strftime("%Y-%m-%d")
     today_date = datetime.now().strftime("%Y-%m-%d")
     sorted_dates = m._recent_result_dates(

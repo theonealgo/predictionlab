@@ -14,6 +14,4 @@ Owner 2026-09-29: the fail-list layout misses are closed. Equal stored lines and
 
 Owner 2026-10-08: results totals chart Last 7 / Last 30 vs picks Recent results — verified matching on both results views. Miss closed — locked.
 
-Owner 2026-10-17: the season Consensus Historical Record chip counts the same card-graded games as the results consensus table (the six card boxes), so a season chip always holds the table's Past 7 / Past 30. Miss closed — locked.
-
 Do not put lock text on user-facing HTML.

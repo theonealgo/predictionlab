@@ -10,16 +10,8 @@ Do not modify UFC unless the same owner message contains the word **UNLOCK**
 
 Locked. 3 UNLOCKS required.
 
-Owner decision (corrected 2026-10-17): UFC cards have no PL vs Books, so the card face carries only the Consensus Historical Record for the models. This is NOT "UFC shows only Sharp Consensus" — the owner never said that.
-
-Owner 2026-10-17 ("bring the models back to ufc"): the 2026-10-15 removal of the models is undone. Cards, picks Recent results, results cards, chart, chart API and three-way (Moneyline / Spread / Totals) chart tables show all six models again; each card face carries the Consensus Historical Record chip. Miss closed — locked.
-
-Results cards view is rebuilt from the stored graded fights; data reads the in-repo `ufc_pipeline/`. Result cards carry an in-card H2H line counted from stored fights (no loose "First meeting" text). Miss closed — locked.
+Owner 2026-10-15: UFC shows only Sharp Consensus (the one stored probability per fight); the offset "models" are gone from cards, recent results, cards view, chart and chart API. Results cards view is rebuilt from the stored graded fights; data reads the in-repo `ufc_pipeline/`. Result cards carry an in-card H2H line counted from stored fights (no loose "First meeting" text). Miss closed — locked.
 
 Owner 2026-10-14: no chart painted under the footer (picks + results chart view); one header menu script so header links work. Miss closed — locked.
-
-Owner 2026-10-17: Consensus Based Betting Records (Sharp Consensus row) on cards + chart views; results share image carries the graded fights. Miss closed — locked.
-
-Owner 2026-10-18: picks follow the shared window (upcoming cards, not only yesterday) — the fight DB syncs new cards and finished fights every 3 hours. Results cards + chart views show Last Night / Last 7 / Season boards with all six models, Best Performing Model, and consensus agreement rows (not Sharp Consensus only). Miss closed — locked.
 
 Do not put lock text on user-facing HTML.

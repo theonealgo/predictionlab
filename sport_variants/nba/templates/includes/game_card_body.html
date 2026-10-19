@@ -170,10 +170,6 @@
 {% set _ens_pct = card.ens_prob|float %}
 {% set _fh = (_ens_pct * 100) if _ens_pct <= 1 else _ens_pct %}
 {% endif %}
-{% if _fh is none and card.ensemble_prob is defined and card.ensemble_prob is not none %}
-{% set _ens_pct = card.ensemble_prob|float %}
-{% set _fh = ((_ens_pct * 100) if _ens_pct <= 1 else _ens_pct)|round(1) %}
-{% endif %}
 {% if _fa is none and _fh is not none %}
 {% set _fa = (100 - _fh|float)|round(1) %}
 {% endif %}

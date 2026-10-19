@@ -2649,8 +2649,8 @@ def apply_nfl_owner_fixes(html: str, path: str, view: str = "", market: str = ""
         html = _fill_nfl_future_edge_from_book(html)
         html = rewrite_nfl_share_hrefs(html)
         try:
-            # Recent results read the results page's own records.
-            from card_windows import copy_recent_from_results, set_pl_rows_from_cards
+            # Recent results and card chips read the results page's own records.
+            from card_windows import copy_recent_from_results, set_pl_rows_from_cards, sync_consensus_chips
 
             results = _cards_html_for_align("NFL", "") or ""
             if results:
@@ -2659,6 +2659,7 @@ def apply_nfl_owner_fixes(html: str, path: str, view: str = "", market: str = ""
                 results = paint_tallies(results, "NFL", models=False)
                 results = set_pl_rows_from_cards(results, results)
                 html = copy_recent_from_results(html, results, "NFL")
+                html = sync_consensus_chips(html, results)
         except Exception:
             pass
         return _nfl_layout(html)
@@ -2666,13 +2667,15 @@ def apply_nfl_owner_fixes(html: str, path: str, view: str = "", market: str = ""
         html = rewrite_nfl_share_hrefs(html)
         view_l = (view or "").strip().lower()
         try:
-            from card_windows import paint_tallies, set_pl_rows_from_cards
+            from card_windows import paint_tallies, set_pl_rows_from_cards, sync_consensus_chips
 
             is_cards = view_l not in ("chart", "tabs", "markets", "tabbed", "spread", "totals") and 'class="game-card' in html
             if is_cards:
                 html = paint_tallies(html, "NFL", models=False)
             cards = html if is_cards else (_cards_html_for_align("NFL", "") or "")
             html = set_pl_rows_from_cards(html, cards)
+            if is_cards:
+                html = sync_consensus_chips(html, html)
         except Exception:
             pass
         view_l = (view or "").strip().lower()

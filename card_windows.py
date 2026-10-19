@@ -495,8 +495,25 @@ def consensus_past7(results_html: str) -> dict[str, str]:
 
 
 def sync_consensus_chips(html: str, results_html: str) -> str:
-    """Card chips keep their season record; the table only holds Past 7 / Past 30."""
-    return html
+    """Card chip "Consensus Record: <pattern> (W-L)" = that row's Past 7 on the table."""
+    if not html or "Consensus Record:" not in html:
+        return html
+    past7 = consensus_past7(results_html)
+    if not past7:
+        return html
+
+    def _chip(m: re.Match[str]) -> str:
+        label = m.group(1).strip()
+        key = _cons_key(label)
+        rec = past7.get(key)
+        if rec is None and key.endswith(" split"):
+            rec = next((v for k, v in past7.items() if k.startswith(key)), None)
+        if rec is None:
+            rec = "0-0"
+        return f"Consensus Record: {label} ({rec})"
+
+    return re.sub(r"Consensus Record: ([^<(]+?)\s*\((\d+-\d+(?:-\d+)?)\)", _chip, html)
+
 
 def _acc(rec: list[int]) -> str:
     w, l, _p = rec

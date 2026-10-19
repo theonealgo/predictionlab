@@ -16,12 +16,4 @@ Owner 2026-10-14: results chart Moneyline view no longer stacks the Spread and T
 
 Owner 2026-10-15: stray '>>>' after </body> removed on picks / results / chart. Two 2026-10-10 games with no stored PL spread keep Efficiency N/A (not an error). Miss closed — locked.
 
-Owner 2026-10-17: picks Recent results copy results-page records only when the dates match. Miss closed — locked.
-
-Owner 2026-10-17: picks Recent results Last 7 / Last 30 spread and totals windows start at midnight (Saturday games were dropped), so XSharp totals grade the whole week; the results totals chart and picks strip now show the same records. Miss closed — locked.
-
-Owner 2026-10-17 ("PL is our own odds engine"): a current picks card with no stored Prediction Lab spread gets the odds-engine line, then Efficiency and the PL score from it — also on the saved page (`fill_ncaaf_blank_pl_on_saved_page`). Page requests may not call ESPN, so the engine runs on a background thread and the next load shows the line. Miss closed — locked.
-
-Owner 2026-10-17: the season Consensus Historical Record chip counts the results consensus table's own games plus the same card-graded Past 7 swap the table makes (`consensus_table_rows.py`), so a season chip always holds the table's Past 7 / Past 30. Miss closed — locked.
-
 Do not put lock text on user-facing HTML.

@@ -395,6 +395,7 @@ def apply_ufc_customer_html(html: str, path: str = "") -> str:
     html = place_ufc_share_above_footer(html)
     html = place_recent_results_above_footer(html)
     html = keep_one_header_menu_script(html)
+    html = keep_sharp_consensus_only(html)
     if 'data-ssr-chart="1"' in html or 'id="ssr-finals"' in html:
         html = clean_ufc_chart(html)
     return ensure_ufc_layout_css(html)
@@ -411,13 +412,8 @@ def _rewrite_hub_paths(html: str) -> str:
 
 
 def _with_consensus_hist(html: str) -> str:
-    try:
-        from team_results_charts import _inject_ufc_consensus_hist_chips
-
-        return _inject_ufc_consensus_hist_chips(html)
-    except Exception as e:
-        print(f"[ufc_live] consensus hist inject failed: {e}", flush=True)
-        return html
+    """UFC has one real model, so there is no multi-model consensus record."""
+    return html
 
 
 _UFC_OFFSET_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Efficiency")
@@ -471,24 +467,15 @@ def _chart_tally_html(tallies: dict[str, Any]) -> str:
     out = []
     for key, label in (("last_night", "Last Night"), ("last_7", "Last 7"), ("season", "Season")):
         block = tallies.get(key) or {}
-        models = block.get("models") or {}
-        order = [n for n in (block.get("model_order") or list(models)) if n in models]
-        sc = models.get("Sharp Consensus") or {}
-        n_fights = int(sc.get("w") or 0) + int(sc.get("l") or 0)
-        tag = f"{n_fights} fights" + (f" · {block['date']}" if block.get("date") else "")
-        cards = []
-        for name in order:
-            rec = models.get(name) or {}
-            w, l = int(rec.get("w") or 0), int(rec.get("l") or 0)
-            cards.append(
-                '<div class="daily-tally-card tally-card">'
-                f'<div class="daily-model mlabel">{html_escape(name)}</div>'
-                f'<div class="daily-acc acc">{_pct_text(w, l)}</div>'
-                f'<div class="daily-rec rec">{w}-{l}</div></div>'
-            )
+        sc = (block.get("models") or {}).get("Sharp Consensus") or {}
+        w, l = int(sc.get("w") or 0), int(sc.get("l") or 0)
+        tag = f"{w + l} fights" + (f" · {block['date']}" if block.get("date") else "")
         out.append(
             f'<section class="tally"><h2>{label} <span class="tag">({html_escape(tag)})</span></h2>'
-            f'<div class="tally-grid daily-tally-grid">{"".join(cards)}</div></section>'
+            '<div class="tally-grid daily-tally-grid"><div class="daily-tally-card tally-card">'
+            '<div class="daily-model mlabel">Sharp Consensus</div>'
+            f'<div class="daily-acc acc">{_pct_text(w, l)}</div>'
+            f'<div class="daily-rec rec">{w}-{l}</div></div></div></section>'
         )
     return "".join(out)
 
@@ -498,14 +485,6 @@ def _chart_rows_html(finals: list[dict[str, Any]]) -> str:
     for c in finals:
         ok = c.get("correct")
         result = "Correct" if ok is True else ("Wrong" if ok is False else "—")
-        picks = []
-        for name, m in (c.get("models") or {}).items():
-            mark = "✓" if m.get("correct") is True else ("✗" if m.get("correct") is False else "")
-            picks.append(f"{html_escape(name)} {html_escape(str(m.get('pick') or ''))} {mark}")
-        models_cell = "<br>".join(picks) or (
-            f"Sharp Consensus {html_escape(str(c.get('face_pick') or ''))} "
-            f"{'✓' if ok is True else ('✗' if ok is False else '')}"
-        )
         rows.append(
             "<tr>"
             f"<td>{html_escape(str(c.get('game_date') or ''))}</td>"
@@ -515,7 +494,8 @@ def _chart_rows_html(finals: list[dict[str, Any]]) -> str:
             f"<td>{html_escape(str(c.get('face_pick') or '—'))}</td>"
             f"<td>{c.get('face_prob')}%</td>"
             f"<td>{result}</td>"
-            f"<td class=\"mono-models\">{models_cell}</td>"
+            f"<td class=\"mono-models\">Sharp Consensus {html_escape(str(c.get('face_pick') or ''))} "
+            f"{'✓' if ok is True else ('✗' if ok is False else '')}</td>"
             "</tr>"
         )
     return "".join(rows)
@@ -570,57 +550,23 @@ def _ssr_chart_from_payload(html: str) -> str:
     )
 
 
-def _with_three_way_tables(html: str) -> str:
-    """Books / Prediction Lab / XSharp tables from the graded result cards, above the games list."""
-    if not html or 'id="three-way-moneyline"' in html:
-        return html
-    at = html.find('<section id="ssr-finals"')
-    if at < 0:
-        return html
-    try:
-        from three_way_results import render_three_way_section
-
-        db = None
-        for name in ("NHL77FINAL", "__main__"):
-            mod = sys.modules.get(name)
-            if getattr(mod, "DATABASE", None):
-                db = Path(mod.DATABASE).resolve()
-                break
-        if db is None:
-            return html
-        cards = _rebuild_results_cards(_read_page("results.html"))
-        block = render_three_way_section("UFC", cards, db)
-    except Exception as e:
-        print(f"[ufc_live] three-way tables failed: {e}", flush=True)
-        return html
-    return html[:at] + block + html[at:] if block else html
-
-
 def clean_ufc_chart(html: str) -> str:
-    """Chart view: moneyline only, every model."""
+    """Chart view: moneyline only, Sharp Consensus only."""
     if not html or ('data-league="UFC"' in html and "data-pick-card" in html):
         return html
-    html = html.replace('<div id="tallies" data-ufc-sc-chart="1" class="tally-wrap"', '<div id="tallies" class="tally-wrap"')
-    if "ufc-models-chart" not in html:
+    if "ufc-sc-chart" not in html:
         try:
             html = _ssr_chart_from_payload(html)
         except Exception as e:
             print(f"[ufc_live] chart rebuild failed: {e}", flush=True)
-        html = html.replace('<div id="tallies" class="tally-wrap"', '<div id="tallies" data-ufc-models-chart="1" class="tally-wrap"', 1)
-    html = _drop_section_by_id(html, "div", "pl-consensus-records")
-    if "Best Performing Model" not in html:
-        try:
-            best = re.search(
-                r'<section class="tally pl-analytics"[\s\S]*?</section>',
-                _model_boards_html(build_ufc_chart_api_payload()),
-            )
-            at = html.find('<div id="tallies"')
-            if best and at >= 0:
-                html = html[:at] + best.group(0) + html[at:]
-        except Exception as e:
-            print(f"[ufc_live] chart best model failed: {e}", flush=True)
-    html = _with_three_way_tables(html)
-    html = _insert_chart_consensus(html)
+        html = html.replace('<div id="tallies" class="tally-wrap"', '<div id="tallies" data-ufc-sc-chart="1" class="tally-wrap"', 1)
+    for tag, el_id in (
+        ("div", "pl-consensus-records"),
+        ("section", "three-way-moneyline"),
+        ("section", "three-way-spread"),
+        ("section", "three-way-totals"),
+    ):
+        html = _drop_section_by_id(html, tag, el_id)
     return re.sub(
         r'<nav class="market-tabs" role="tablist" aria-label="Results markets">[\s\S]*?</nav>',
         "",
@@ -960,7 +906,7 @@ def _read_page(name: str) -> str:
         html = merge_stored_upcoming_pick_cards(html)
         html = _mark_past_fight_times_final(html)
         html = _drop_model_pick_confidence(html)
-    return _expand_cards(_with_consensus_hist(html))
+    return keep_sharp_consensus_only(_expand_cards(html))
 
 
 def _drop_model_pick_confidence(html: str) -> str:
@@ -1121,319 +1067,6 @@ def _results_tally_block(records: dict[str, Any]) -> str:
     )
 
 
-_MODEL_ICONS = {
-    "Grinder2": "⚙️",
-    "Takedown": "🥊",
-    "Edge": "📈",
-    "XSharp": "🎯",
-    "Sharp Consensus": "🤝",
-    "Efficiency": "⚡",
-}
-
-_BOARDS_CSS = (
-    '<style id="ufc-model-boards">'
-    ".ufc-boards .daily-tally{background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;"
-    "margin-bottom:16px;box-shadow:0 4px 18px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.06)}"
-    ".ufc-boards .daily-tally-head h2{text-align:center;margin:0 0 12px;font-size:1.15em;color:#0F172A;font-weight:700}"
-    ".ufc-boards .daily-tally-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}"
-    ".ufc-boards .daily-tally-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:8px 6px;"
-    "text-align:center;box-shadow:0 2px 12px rgba(15,23,42,.06)}"
-    ".ufc-boards .daily-tally-card.highlight{border:2px solid #fbbf24}"
-    ".ufc-boards .daily-acc{font-size:1.35em;font-weight:700;color:#0F172A}"
-    ".ufc-boards .daily-rec{font-size:.85em;color:#334155}"
-    "@media (max-width:720px){.ufc-boards .daily-tally-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}"
-    "</style>"
-)
-
-
-def _model_boards_html(payload: dict[str, Any]) -> str:
-    """Last Night / Last 7 / Season boards for every model, then Best Performing Model."""
-    tallies = (payload or {}).get("tallies") or {}
-    order = list((payload or {}).get("model_order") or [])
-    boards = []
-    best_cards = []
-    for key, label in (("last_night", "Last Night"), ("last_7", "Last 7"), ("season", "Season")):
-        block = tallies.get(key) or {}
-        models = block.get("models") or {}
-        names = [n for n in (block.get("model_order") or order or list(models)) if n in models]
-        if not names:
-            continue
-        n_fights = int(block.get("games") or block.get("n") or 0)
-        noun = "fight" if n_fights == 1 else "fights"
-        if key == "last_night":
-            title = f"Last Night's UFC Results — {block.get('date') or ''} ({n_fights} {noun})"
-        elif key == "last_7":
-            title = f"Last 7 Days UFC Results ({n_fights} {noun})"
-        else:
-            title = f"🏆 Season Performance ({n_fights} {noun})"
-        cards = []
-        for name in names:
-            rec = models.get(name) or {}
-            w, l = int(rec.get("w") or 0), int(rec.get("l") or 0)
-            pct = 100.0 * w / (w + l) if w + l else None
-            color = "" if pct is None else (' style="color:#067647;"' if pct >= 50 else ' style="color:#D93025;"')
-            hl = " highlight" if name == "Sharp Consensus" else ""
-            cards.append(
-                f'<div class="daily-tally-card{hl}"><div class="daily-model">'
-                f'{_MODEL_ICONS.get(name, "")} {html_escape(name)}</div>'
-                f'<div class="daily-acc"{color}>{_pct_text(w, l)}</div>'
-                f'<div class="daily-rec">{w}-{l}</div></div>'
-            )
-        boards.append(
-            '<div class="daily-tally"><div class="daily-tally-head">'
-            f"<h2>{html_escape(title, quote=False)}</h2></div>"
-            '<div style="font-size:0.78em;text-align:center;opacity:0.7;margin-bottom:6px;">MONEYLINE</div>'
-            f'<div class="daily-tally-grid">{"".join(cards)}</div></div>'
-        )
-        graded = [
-            (n, models[n]) for n in names
-            if int(models[n].get("w") or 0) + int(models[n].get("l") or 0) > 0
-        ]
-        if graded:
-            name, rec = max(
-                graded,
-                key=lambda kv: (
-                    int(kv[1].get("w") or 0) / (int(kv[1].get("w") or 0) + int(kv[1].get("l") or 0)),
-                    float(kv[1].get("units") or 0.0),
-                ),
-            )
-            w, l = int(rec.get("w") or 0), int(rec.get("l") or 0)
-            units = rec.get("units")
-            unit_txt = f" · {float(units):+.1f}u" if units is not None else ""
-            tone = "ok" if w >= l else "bad"
-            best_cards.append(
-                f'<div class="tally-card"><div class="mlabel">{label}</div>'
-                f'<div class="rec"><b>{html_escape(name)}</b></div>'
-                f'<div class="acc {tone}">{_pct_text(w, l)}</div>'
-                f'<div class="rec">{w}-{l}{unit_txt}</div></div>'
-            )
-    if not boards:
-        return ""
-    best = ""
-    if best_cards:
-        best = (
-            '<section class="tally pl-analytics" aria-label="UFC model performance">'
-            "<h2>Best Performing Model</h2>"
-            f'<div class="tally-grid">{"".join(best_cards)}</div></section>'
-        )
-    return (
-        _BOARDS_CSS
-        + '<section class="tally-wrap ufc-boards" id="tallies">'
-        + "".join(boards)
-        + best
-        + "</section>"
-    )
-
-
-def _consensus_cell(grades: list[str]) -> str:
-    w, l = grades.count("WIN"), grades.count("LOSS")
-    if not w + l:
-        return "0-0"
-    pct = 100.0 * w / (w + l)
-    color = "#067647" if pct >= 55 else ("#ca8a04" if pct >= 50 else "#D93025")
-    return (
-        f"{w}-{l} <span style='color:{color};font-weight:700'>({pct:.0f}%)</span>"
-        f"<div class='cons-bar' aria-hidden='true'><i style='width:{max(4, min(100, round(pct)))}%;"
-        f"background:{color}'></i></div>"
-    )
-
-
-def _ufc_consensus_records_html(cards: list[dict[str, Any]]) -> str:
-    """Consensus Based Betting Records from the stored graded fights (Sharp Consensus pick)."""
-    dated = [(c["grade"], _fight_day_key(c)) for c in cards if c.get("grade") in ("WIN", "LOSS")]
-    dated = [(g, d) for g, d in dated if d]
-    if not dated:
-        return ""
-    last = max(d for _, d in dated)
-    last_day = datetime.strptime(last, "%Y-%m-%d").date()
-
-    def _since(days: int) -> list[str]:
-        lo = (last_day - timedelta(days=days - 1)).isoformat()
-        return [g for g, d in dated if lo <= d <= last]
-
-    return (
-        '<div class="pl-consensus-records" id="ufc-consensus-records">'
-        "<h2>Consensus Based Betting Records</h2>"
-        '<p class="sub">Moneyline on the Sharp Consensus pick for each fight. '
-        "0-0 means no graded fights in the window.</p>"
-        '<div style="overflow-x:auto"><table><thead><tr>'
-        '<th style="text-align:left">Agreement</th>'
-        f"<th>Last night ({last})</th><th>Past 7 days</th><th>Past 30 days</th>"
-        "</tr></thead><tbody><tr>"
-        '<td class="bucket">Sharp Consensus</td>'
-        f"<td>{_consensus_cell(_since(1))}</td>"
-        f"<td>{_consensus_cell(_since(7))}</td>"
-        f"<td>{_consensus_cell(_since(30))}</td>"
-        "</tr></tbody></table></div>"
-        "<style>"
-        "#ufc-consensus-records{background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:14px;"
-        "padding:18px;margin:16px auto 20px;max-width:1100px}"
-        "#ufc-consensus-records h2{margin:0 0 6px;font-size:1.15rem;color:#0f172a;text-align:center}"
-        "#ufc-consensus-records .sub{margin:0 auto 14px;color:#64748b;font-size:.88rem;text-align:center;max-width:46rem}"
-        "#ufc-consensus-records table{width:100%;border-collapse:collapse;font-size:.9rem}"
-        "#ufc-consensus-records th,#ufc-consensus-records td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:center}"
-        "#ufc-consensus-records th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b}"
-        "#ufc-consensus-records td.bucket{text-align:left;font-weight:700;color:#0f172a}"
-        "#ufc-consensus-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;"
-        "max-width:7.5rem;overflow:hidden}"
-        "#ufc-consensus-records .cons-bar i{display:block;height:100%;border-radius:99px}"
-        "</style></div>"
-    )
-
-
-def _agreement_label(agree: int, total: int, dissent: list[str]) -> str:
-    if not dissent:
-        return f"{total}/{total} unanimous"
-    return f"{agree}/{total} — all but " + " and ".join(dissent)
-
-
-def _ufc_agreement_records_html(finals: list[dict[str, Any]], order: list[str]) -> str:
-    """Consensus Based Betting Records by how many of the models agreed (same rows as tennis)."""
-    rows: dict[str, list[tuple[str, str]]] = {}
-    sort_key: dict[str, tuple] = {}
-    dates = []
-    for fight in finals or []:
-        day = str(fight.get("game_date") or "")[:10]
-        models = fight.get("models") or {}
-        names = [n for n in order if n in models and models[n].get("pick")]
-        if len(names) < 2 or not day:
-            continue
-        counts: dict[str, int] = {}
-        for n in names:
-            counts[models[n]["pick"]] = counts.get(models[n]["pick"], 0) + 1
-        top = max(counts.values())
-        leaders = [p for p, c in counts.items() if c == top]
-        if len(leaders) != 1:
-            continue
-        pick = leaders[0]
-        winner = str(fight.get("winner") or "")
-        if not winner:
-            continue
-        grade = "WIN" if pick == winner else "LOSS"
-        dissent = [n for n in names if models[n]["pick"] != pick]
-        label = _agreement_label(top, len(names), dissent)
-        rows.setdefault(label, []).append((grade, day))
-        sort_key[label] = (-top, [order.index(n) for n in dissent])
-        dates.append(day)
-    if not rows:
-        return ""
-    last = max(dates)
-    last_day = datetime.strptime(last, "%Y-%m-%d").date()
-
-    def _since(items: list[tuple[str, str]], days: int) -> list[str]:
-        lo = (last_day - timedelta(days=days - 1)).isoformat()
-        return [g for g, d in items if lo <= d <= last]
-
-    body = "".join(
-        f'<tr><td class="bucket">{html_escape(label)}</td>'
-        f"<td>{_consensus_cell(_since(rows[label], 1))}</td>"
-        f"<td>{_consensus_cell(_since(rows[label], 7))}</td>"
-        f"<td>{_consensus_cell(_since(rows[label], 30))}</td></tr>"
-        for label in sorted(rows, key=lambda k: sort_key[k])
-    )
-    return (
-        '<div class="pl-consensus-records" id="ufc-consensus-records">'
-        "<h2>Consensus Based Betting Records</h2>"
-        f'<p class="sub">Moneyline on the pregame majority among the {len(order)} models. '
-        "Each row is one dissent combination (model(s) that broke from the majority). "
-        "0-0 means that combination had no graded fights in the window. Even splits are omitted.</p>"
-        '<div style="overflow-x:auto"><table><thead><tr>'
-        '<th style="text-align:left">Agreement</th>'
-        f"<th>Last night ({last})</th><th>Past 7 days</th><th>Past 30 days</th>"
-        f"</tr></thead><tbody>{body}</tbody></table></div>"
-        "<style>"
-        "#ufc-consensus-records{background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:14px;"
-        "padding:18px;margin:16px auto 20px;max-width:1100px}"
-        "#ufc-consensus-records h2{margin:0 0 6px;font-size:1.15rem;color:#0f172a;text-align:center}"
-        "#ufc-consensus-records .sub{margin:0 auto 14px;color:#64748b;font-size:.88rem;text-align:center;max-width:46rem}"
-        "#ufc-consensus-records table{width:100%;border-collapse:collapse;font-size:.9rem}"
-        "#ufc-consensus-records th,#ufc-consensus-records td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:center}"
-        "#ufc-consensus-records th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b}"
-        "#ufc-consensus-records td.bucket{text-align:left;font-weight:700;color:#0f172a}"
-        "#ufc-consensus-records .cons-bar{height:4px;background:#e2e8f0;border-radius:99px;margin:6px auto 0;"
-        "max-width:7.5rem;overflow:hidden}"
-        "#ufc-consensus-records .cons-bar i{display:block;height:100%;border-radius:99px}"
-        "</style></div>"
-    )
-
-
-def _insert_chart_consensus(html: str) -> str:
-    if not html or 'id="ufc-consensus-records"' in html:
-        return html
-    try:
-        payload = build_ufc_chart_api_payload()
-        block = (
-            _ufc_agreement_records_html(payload.get("finals") or [], list(payload.get("model_order") or []))
-            if payload.get("ok") else ""
-        ) or _ufc_consensus_records_html(_engine_render().list_graded_results(limit=500))
-    except Exception as e:
-        print(f"[ufc_live] chart consensus failed: {e}", flush=True)
-        return html
-    if not block:
-        return html
-    at = html.find('<section id="ssr-finals"')
-    if at < 0:
-        at = html.find('<div id="pl-consensus-slot"')
-    if at < 0:
-        return html
-    return html[:at] + block + html[at:]
-
-
-def _with_results_share(html: str) -> str:
-    """Results image drawn from the stored Last Night / Last 7 Sharp Consensus records."""
-    if not html or 'data-results-share="1"' in html:
-        return html
-    try:
-        from flask import url_for
-        from results_share_image import (
-            _empty_window,
-            inject_results_share_block,
-            results_share_wrap_html,
-        )
-
-        appmod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
-        register = getattr(appmod, "_register_share_image", None)
-        if not callable(register):
-            return html
-        render = _engine_render()
-        records = render.window_tally_records(render.list_graded_results(limit=500)).get("records") or {}
-        ln = records.get("last_night") or {}
-        if not ln.get("date"):
-            return html
-        last = datetime.strptime(str(ln["date"]), "%Y-%m-%d").date()
-
-        def _window(rec: dict[str, Any], label: str) -> dict[str, Any]:
-            w, l = int(rec.get("w") or 0), int(rec.get("l") or 0)
-            out = _empty_window()
-            out.update(label=label, games=w + l)
-            if w + l:
-                out["ml"] = {"acc": f"{100.0 * w / (w + l):.1f}%", "record": f"{w}-{l}"}
-            return out
-
-        sport_name = ((getattr(appmod, "SPORTS", None) or {}).get("UFC") or {}).get("name") or "UFC"
-        payload = {
-            "type": "results-summary",
-            "sport_name": sport_name,
-            "last_night": _window(ln, last.isoformat()),
-            "last_7": _window(
-                records.get("last_7") or {},
-                f"{(last - timedelta(days=6)).isoformat()} to {last.isoformat()}",
-            ),
-        }
-        token = register(payload)
-        if not token:
-            return html
-        wrap = results_share_wrap_html(
-            sport_name=sport_name,
-            share_src=url_for("share_results_summary_image", token=token, fmt="jpg"),
-            view_url=url_for("share_results_summary_view", token=token),
-        )
-        return inject_results_share_block(html, wrap)
-    except Exception as e:
-        print(f"[ufc_live] results share failed: {e}", flush=True)
-        return html
-
-
 _RESULTS_CSS = (
     '<style id="ufc-results-cards">'
     ".ufc-h2h{margin-top:6px;text-align:center;font-size:.74rem;color:#64748b}"
@@ -1485,17 +1118,8 @@ def _results_cards_body() -> str:
             f'<div class="date-header">📅 {day} · {html_escape(event)}</div>'
             f"<div class='games-grid'>{''.join(body)}</div></div>"
         )
-    payload = build_ufc_chart_api_payload()
-    tally = _model_boards_html(payload) if payload.get("ok") else ""
-    consensus = (
-        _ufc_agreement_records_html(payload.get("finals") or [], list(payload.get("model_order") or []))
-        if payload.get("ok") else ""
-    )
-    if not tally:
-        tally = _results_tally_block(render.window_tally_records(cards).get("records") or {})
-    if not consensus:
-        consensus = _ufc_consensus_records_html(cards)
-    return nav + _RESULTS_CSS + tally + consensus + "".join(sections)
+    tally = _results_tally_block(render.window_tally_records(cards).get("records") or {})
+    return nav + _RESULTS_CSS + tally + "".join(sections)
 
 
 def _rebuild_results_cards(page: str) -> str:
@@ -1566,8 +1190,8 @@ def render_ufc_results(*, view: str = "normal") -> str:
             page = _sync_last_night_dates(page)
         except Exception:
             pass
-        return clean_ufc_chart(page)
-    return _with_results_share(_rebuild_results_cards(_read_page("results.html")))
+        return keep_sharp_consensus_only(clean_ufc_chart(page))
+    return keep_sharp_consensus_only(_rebuild_results_cards(_read_page("results.html")))
 
 
 def apply_ufc_isolation_html(html: str, *, which: str = "picks") -> str:

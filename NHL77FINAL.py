@@ -1712,7 +1712,7 @@ def _register_share_image__wnba(payload: dict) -> str:
         pass
     path = _os.path.join(_SHARE_IMAGE_CACHE_DIR, f'{token}.json')
     data = {'ts': _time.time(), 'payload': payload}
-    tmp = f'{path}.{_os.getpid()}.{threading.get_ident()}.tmp'
+    tmp = path + '.tmp'
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(data, f)
@@ -1742,7 +1742,7 @@ def _register_share_image(payload: dict) -> str:
         pass
     path = _os.path.join(_SHARE_IMAGE_CACHE_DIR, f'{token}.json')
     data = {'ts': _time.time(), 'payload': payload}
-    tmp = f'{path}.{_os.getpid()}.{threading.get_ident()}.tmp'
+    tmp = path + '.tmp'
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(data, f)
@@ -14996,7 +14996,6 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, 
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ?
-                  AND COALESCE(g.league, '') != 'NBA Preseason'
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
                   AND date(g.game_date) >= ?
@@ -15010,7 +15009,6 @@ def _banner_daily_results_for_range(sport, start_dt, end_dt, *, playoffs=False, 
                 FROM games g
                 LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
                 WHERE g.sport = ?
-                  AND COALESCE(g.league, '') != 'NBA Preseason'
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
                 ORDER BY g.game_date DESC
@@ -22270,12 +22268,6 @@ def _isolate_checker_repair_hook__ncaaf(response):
             and "<!-- pl-isolate-repaired v2 -->" in html
             and 'data-inlined="research-theme.css"' in html
         ):
-            if path.rstrip("/").endswith("-picks"):
-                try:
-                    from isolate_checker_fixes import fill_ncaaf_blank_pl_on_saved_page
-                    html = fill_ncaaf_blank_pl_on_saved_page(html)
-                except Exception:
-                    pass
             response.set_data(html)
             return response
         if path.rstrip("/").endswith("-picks") and sport == "NCAAF":
@@ -23231,11 +23223,6 @@ def _isolate_checker_repair_hook__soccer(response):
                 )
                 html = _inject_soccer_consensus_hist_chips(html)
                 html = _inject_soccer_pl_vs_books_chips(html)
-            except Exception:
-                pass
-            try:
-                from soccer_ui_fixup import fill_soccer_model_lines
-                html = fill_soccer_model_lines(html, last3_h2h_for_card)
             except Exception:
                 pass
         if path.rstrip("/") == "/soccer-picks" or "<!-- pl-isolate-repaired v2 -->" in html:
@@ -27809,11 +27796,6 @@ def update_espn_scores(sport):
                     existing = cursor.execute("SELECT 1 FROM games WHERE game_id = ? AND sport = ?", (game_id, sport)).fetchone()
                     
                     if existing:
-                        if _nba_pre:
-                            cursor.execute(
-                                "UPDATE games SET league = ? WHERE sport = 'NBA' AND game_id = ?",
-                                (_NBA_PRESEASON_LEAGUE, game_id),
-                            )
                         # Update existing game
                         cursor.execute("""
                             UPDATE games
@@ -59879,7 +59861,6 @@ def calculate_nba_weekly_performance__nba():
                    )
               )
             WHERE g.sport = 'NBA'
-              AND COALESCE(g.league, '') != 'NBA Preseason'
               AND g.home_score IS NOT NULL
               AND g.away_score IS NOT NULL
               AND date(g.game_date) <= ?
@@ -59905,7 +59886,6 @@ def calculate_nba_weekly_performance__nba():
                        )
                   )
                 WHERE g.sport = 'NBA'
-                  AND COALESCE(g.league, '') != 'NBA Preseason'
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
                   AND date(g.game_date) <= ?
@@ -60080,7 +60060,6 @@ def calculate_nba_weekly_performance():
                    )
               )
             WHERE g.sport = 'NBA'
-              AND COALESCE(g.league, '') != 'NBA Preseason'
               AND g.home_score IS NOT NULL
               AND g.away_score IS NOT NULL
               AND date(g.game_date) <= ?
@@ -80483,8 +80462,8 @@ SEASON_CALENDAR = {
                'notes': '2024-25 March Madness Mar 18 – Apr 7; regular season opens early November.'},
     'NCAAW':  {'regular': ((11, 1), (3, 17)),  'playoffs': ((3, 18), (4, 15)),
                'notes': "Women's NCAA tournament runs late Mar – early Apr; season opens early November."},
-    'WNBA':   {'regular': ((5, 8), (9, 14)),   'playoffs': ((9, 15), (10, 31)),
-               'notes': 'Regular season typically mid-May; playoffs Sep – Oct (2026 Finals run past Oct 21).'},
+    'WNBA':   {'regular': ((5, 8), (9, 14)),   'playoffs': ((9, 15), (10, 15)),
+               'notes': 'Regular season typically mid-May; playoffs Sep – Oct.'},
     'SOCCER': {'regular': ((8, 1), (6, 30)),   'playoffs': None,
                'notes': 'European league calendar (e.g. EPL / eng.1) runs Aug – May; no single playoff bracket.'},
     'CFL':    {'regular': ((6, 1), (11, 20)),  'playoffs': None,
@@ -80562,14 +80541,6 @@ def _season_window_for_date(sport, today):
         else:
             start = datetime(today.year - 1, sm, sd)
             end = datetime(today.year, em, ed)
-    if abs((today - datetime.now()).days) <= 1:
-        try:
-            from season_status import league_window_end
-            _espn_end = league_window_end(sport, today)
-        except Exception:
-            _espn_end = None
-        if _espn_end and start <= today and _espn_end > end:
-            end = _espn_end
     return start, end
 
 
@@ -81533,16 +81504,6 @@ def get_season_status(sport, today=None):
     if min_live and today < min_live:
         days_until = (min_live - today).days
         return ('Starting Soon' if days_until <= 60 else 'Offseason'), False
-    if abs((today - datetime.now()).days) <= 1:
-        try:
-            from season_status import espn_in_season
-            _espn_live = espn_in_season(sport, today)
-        except Exception:
-            _espn_live = None
-        if _espn_live is True:
-            return 'Live Now', True
-        if _espn_live is False:
-            return 'Starting Soon', False
     start, end = _season_window_for_date(sport, today)
     if not start or not end:
         return 'Live Now', True
@@ -88217,146 +88178,24 @@ def sport_home(sport):
     return "Sport not found", 404
 
 
-_DAILY_REPORT_DISK = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'daily_report_page.json')
-_DAILY_REPORT_LOCK = threading.Lock()
-_DAILY_REPORT_BUILDING = [False]
-
-
-def _daily_report_yesterday():
-    try:
-        return datetime.now(ZoneInfo('America/New_York')) - timedelta(days=1)
-    except Exception:
-        return datetime.now() - timedelta(days=1)
-
-
-def _daily_report_load_disk():
-    try:
-        with open(_DAILY_REPORT_DISK, 'r', encoding='utf-8') as f:
-            saved = json.load(f)
-        if isinstance(saved, dict) and saved.get('html') and saved.get('date'):
-            _DAILY_REPORT_CACHE.update({'ts': float(saved.get('ts') or 0), 'date': saved['date'], 'html': saved['html']})
-    except Exception:
-        pass
-
-
-def _daily_report_rebuild_async():
-    """Build the report in a background thread (one at a time); visitors keep the saved page."""
-    with _DAILY_REPORT_LOCK:
-        if _DAILY_REPORT_BUILDING[0]:
-            return
-        _DAILY_REPORT_BUILDING[0] = True
-
-    def _run():
-        try:
-            with app.test_request_context('/daily-report', base_url='https://predictionlab.io'):
-                _daily_report_build()
-        except Exception as _dr_e:
-            logger.warning(f"[daily-report] rebuild failed: {_dr_e}")
-        finally:
-            _DAILY_REPORT_BUILDING[0] = False
-
-    threading.Thread(target=_run, daemon=True, name='daily-report-rebuild').start()
-
-
-def _daily_report_warm_loop():
-    _time.sleep(90)
-    while True:
-        try:
-            c = _DAILY_REPORT_CACHE
-            if (not c.get('html') or c.get('date') != _daily_report_yesterday().strftime('%Y-%m-%d')
-                    or _time.time() - c.get('ts', 0) >= _DAILY_REPORT_TTL):
-                _daily_report_rebuild_async()
-        except Exception as _dw_e:
-            logger.debug(f"[daily-report] warm loop: {_dw_e}")
-        _time.sleep(120)
-
-
-_daily_report_load_disk()
-if _os_v2.environ.get('DAILY_REPORT_WARM', '1') != '0':
-    threading.Thread(target=_daily_report_warm_loop, daemon=True, name='daily-report-warm').start()
-
-
 @app.route('/daily-report')
 def daily_report_page():
     """Daily Betting Results Report — marketing/proof-of-performance page."""
-    report_date = _daily_report_yesterday().strftime('%Y-%m-%d')
-    c = _DAILY_REPORT_CACHE
-    if c.get('html'):
-        if c.get('date') != report_date or _time.time() - c.get('ts', 0) >= _DAILY_REPORT_TTL:
-            _daily_report_rebuild_async()
-        return c['html']
-    return _daily_report_build()
-
-
-_DAILY_REPORT_RESULTS_SLUG = {
-    'NHL': 'nhl', 'NBA': 'nba', 'MLB': 'mlb', 'NFL': 'nfl', 'NCAAB': 'ncaab',
-    'NCAAW': 'ncaaw', 'NCAAF': 'ncaaf', 'WNBA': 'wnba', 'SOCCER': 'soccer',
-}
-_DAILY_REPORT_BOARD_KEYS = {
-    'Grinder2': 'glicko2', 'Takedown': 'trueskill', 'Edge': 'elo', 'XSharp': 'xgboost',
-    'Sharp Consensus': 'ensemble', 'Efficiency': 'efficiency',
-}
-
-
-def _daily_report_board_from_results(sport_key, report_date):
-    """The sport results page's Last Night board for report_date, as a tally dict, or None.
-
-    The report shows the same numbers a visitor sees on that sport's results page."""
-    slug = _DAILY_REPORT_RESULTS_SLUG.get(sport_key)
-    if not slug:
-        return None
-    try:
-        resp = app.test_client().get(
-            f'/{slug}-results', base_url='https://predictionlab.io', follow_redirects=True,
-            headers={'User-Agent': 'Mozilla/5.0 (Macintosh) daily-report'})
-        if resp.status_code != 200:
-            return None
-        page = resp.get_data(as_text=True)
-    except Exception as _rb_e:
-        logger.debug(f"[daily-report] {sport_key} results page: {_rb_e}")
-        return None
-    head = re.search(r"Last Night's [^<]*? Results\s*(?:—|&mdash;)\s*(\d{4}-\d{2}-\d{2})\s*\((\d+) games?\)", page)
-    if not head or head.group(1) != report_date:
-        return None
-    rest = page[head.end():]
-    stop = rest.find('Last 7 Days')
-    board = rest[:stop] if stop > 0 else rest[:20000]
-
-    def _rec(text):
-        parts = [int(x) for x in re.findall(r'\d+', text or '')]
-        if len(parts) < 2:
-            return None
-        w, l = parts[0], parts[1]
-        p = parts[2] if len(parts) > 2 else 0
-        return {'correct': w, 'total': w + l, 'pushes': p,
-                'accuracy': round(w / (w + l) * 100, 1) if (w + l) else 0.0}
-
-    tally = {'games': int(head.group(2))}
-    for name, rec in re.findall(
-            r'class="daily-model">[^<]*?([A-Za-z][A-Za-z0-9 /]*)</div>\s*(?:<div class="daily-acc"[^>]*>[^<]*</div>\s*'
-            r'<div class="daily-rec">([^<]*)</div>)?', board):
-        name = name.strip()
-        r = _rec(rec)
-        if name in _DAILY_REPORT_BOARD_KEYS:
-            tally[_DAILY_REPORT_BOARD_KEYS[name]] = r or {'correct': 0, 'total': 0, 'accuracy': 0.0}
-        elif name == 'Spread' and r:
-            tally['spread'] = r
-        elif name == 'Over/Under' and r:
-            tally['total_ou'] = r
-    if not any(k in tally for k in _DAILY_REPORT_BOARD_KEYS.values()):
-        return None
-    for _mk in _DAILY_REPORT_BOARD_KEYS.values():
-        tally.setdefault(_mk, {'correct': 0, 'total': 0, 'accuracy': 0.0})
-    tally.setdefault('spread', {'correct': 0, 'total': 0, 'pushes': 0, 'accuracy': 0.0})
-    tally.setdefault('total_ou', {'correct': 0, 'total': 0, 'pushes': 0, 'accuracy': 0.0})
-    return tally
-
-
-def _daily_report_build():
     from collections import defaultdict
-    yesterday_dt = _daily_report_yesterday()
+    try:
+        _tz = ZoneInfo('America/New_York')
+        yesterday_dt = datetime.now(_tz) - timedelta(days=1)
+    except Exception:
+        yesterday_dt = datetime.now() - timedelta(days=1)
     report_date = yesterday_dt.strftime('%Y-%m-%d')
     report_display = yesterday_dt.strftime('%B %d, %Y')
+    now_ts = _time.time()
+    if (
+        _DAILY_REPORT_CACHE.get('html')
+        and _DAILY_REPORT_CACHE.get('date') == report_date
+        and (now_ts - _DAILY_REPORT_CACHE.get('ts', 0)) < _DAILY_REPORT_TTL
+    ):
+        return _DAILY_REPORT_CACHE['html']
 
     # Gather yesterday's tally for each active sport
     sport_tallies = []
@@ -88380,89 +88219,71 @@ def _daily_report_build():
         if not _is_live:
             continue
         try:
-            def _db_tally():
-                conn = get_db_connection()
-                completed_games = conn.execute('''
-                    SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability,
-                           p.lock_card_json
-                    FROM games g
-                    LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
-                    WHERE g.sport = ? AND g.home_score IS NOT NULL
-                    AND (g.game_date LIKE ? OR g.game_date = ?)
-                    ORDER BY g.game_date DESC LIMIT 50
-                ''', (sport_key, sport_key, f'{report_date}%', report_date)).fetchall()
-                conn.close()
-                if not completed_games:
-                    return None
-                daily_results = defaultdict(lambda: {'games': []})
-                for game in completed_games:
-                    home_score = _to_float_safe(game['home_score'])
-                    away_score = _to_float_safe(game['away_score'])
-                    if home_score is None or away_score is None:
-                        continue
-                    home_won = home_score > away_score
-                    is_draw = sport_key == 'SOCCER' and abs(home_score - away_score) < 1e-9
-                    if is_draw:
-                        home_won = None
-                    home_team = game['home_team_id']
-                    away_team = game['away_team_id']
-                    _raw_date = _to_date_str(game['game_date'])
-                    game_date = _normalize_game_date_key(game['game_date'])
-                    if not game_date:
-                        continue
-                    elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
-                    xgb_prob = _to_float_safe(game['xgboost_home_prob'])
-                    if xgb_prob is None:
-                        xgb_prob = elo_prob
-                    ens_prob = _to_float_safe(game['win_probability'])
-                    if ens_prob is None:
-                        ens_prob = elo_prob
-                    # Grinder2 / Takedown from the stored card; exactly 50.0 is a placeholder.
-                    v2 = None
-                    glicko2_prob = None
-                    trueskill_prob = None
-                    try:
-                        _dr_card = json.loads(game['lock_card_json'] or '{}') or {}
-                    except (TypeError, ValueError):
-                        _dr_card = {}
-                    if isinstance(_dr_card, dict):
-                        _g2 = _to_float_safe(_dr_card.get('glicko2_prob'))
-                        _ts = _to_float_safe(_dr_card.get('trueskill_prob'))
-                        _g2 = _g2 / 100.0 if _g2 is not None and _g2 > 1 else _g2
-                        _ts = _ts / 100.0 if _ts is not None and _ts > 1 else _ts
-                        if _g2 is not None and 0 < _g2 < 1 and abs(_g2 - 0.5) > 1e-9:
-                            glicko2_prob = _g2
-                        if _ts is not None and 0 < _ts < 1 and abs(_ts - 0.5) > 1e-9:
-                            trueskill_prob = _ts
-                    game_info = {
-                        'game_id': game['game_id'],
-                        'date': game_date,
-                        'home': home_team, 'away': away_team,
-                        'home_score': int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
-                        'away_score': int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
-                        'home_win': home_won, 'is_draw': is_draw,
-                        'glicko2_prob': round(glicko2_prob * 100, 1) if glicko2_prob is not None else None,
-                        'trueskill_prob': round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
-                        'elo_prob': round(elo_prob * 100, 1),
-                        'xgb_prob': round(xgb_prob * 100, 1),
-                        'ens_prob': round(ens_prob * 100, 1),
-                        'glicko2_correct': (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None,
-                        'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
-                        'elo_correct': (elo_prob >= 0.5) == home_won if home_won is not None else None,
-                        'xgb_correct': (xgb_prob >= 0.5) == home_won if home_won is not None else None,
-                        'ens_correct': (ens_prob >= 0.5) == home_won if home_won is not None else None,
-                        'skip_grading': True if home_won is None else False,
-                    }
-                    daily_results[game_date]['games'].append(game_info)
-                # Request-path: skip spread regrade (was hanging daily-report).
-                try:
-                    _finalize_daily_result_cards(sport_key, daily_results)
-                except Exception:
-                    pass
-                return compute_daily_model_tally(daily_results, report_date)
-            tally = _daily_report_board_from_results(sport_key, report_date)
-            if tally is None:
-                tally = _db_tally()
+            conn = get_db_connection()
+            completed_games = conn.execute('''
+                SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
+                FROM games g
+                LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+                WHERE g.sport = ? AND g.home_score IS NOT NULL
+                AND (g.game_date LIKE ? OR g.game_date = ?)
+                ORDER BY g.game_date DESC LIMIT 50
+            ''', (sport_key, sport_key, f'{report_date}%', report_date)).fetchall()
+            conn.close()
+            if not completed_games:
+                continue
+            daily_results = defaultdict(lambda: {'games': []})
+            for game in completed_games:
+                home_score = _to_float_safe(game['home_score'])
+                away_score = _to_float_safe(game['away_score'])
+                if home_score is None or away_score is None:
+                    continue
+                home_won = home_score > away_score
+                is_draw = sport_key == 'SOCCER' and abs(home_score - away_score) < 1e-9
+                if is_draw:
+                    home_won = None
+                home_team = game['home_team_id']
+                away_team = game['away_team_id']
+                _raw_date = _to_date_str(game['game_date'])
+                game_date = _normalize_game_date_key(game['game_date'])
+                if not game_date:
+                    continue
+                elo_prob = _to_float_safe(game['elo_home_prob'], 0.5)
+                xgb_prob = _to_float_safe(game['xgboost_home_prob'])
+                if xgb_prob is None:
+                    xgb_prob = elo_prob
+                ens_prob = _to_float_safe(game['win_probability'])
+                if ens_prob is None:
+                    ens_prob = elo_prob
+                # Request-path: do not call get_v2_prediction per game (hangs the worker).
+                v2 = None
+                glicko2_prob = None
+                trueskill_prob = None
+                game_info = {
+                    'game_id': game['game_id'],
+                    'date': game_date,
+                    'home': home_team, 'away': away_team,
+                    'home_score': int(home_score) if abs(home_score - round(home_score)) < 1e-6 else round(home_score, 1),
+                    'away_score': int(away_score) if abs(away_score - round(away_score)) < 1e-6 else round(away_score, 1),
+                    'home_win': home_won, 'is_draw': is_draw,
+                    'glicko2_prob': round(glicko2_prob * 100, 1) if glicko2_prob is not None else None,
+                    'trueskill_prob': round(trueskill_prob * 100, 1) if trueskill_prob is not None else None,
+                    'elo_prob': round(elo_prob * 100, 1),
+                    'xgb_prob': round(xgb_prob * 100, 1),
+                    'ens_prob': round(ens_prob * 100, 1),
+                    'glicko2_correct': (glicko2_prob >= 0.5) == home_won if glicko2_prob is not None and home_won is not None else None,
+                    'trueskill_correct': (trueskill_prob >= 0.5) == home_won if trueskill_prob is not None and home_won is not None else None,
+                    'elo_correct': (elo_prob >= 0.5) == home_won if home_won is not None else None,
+                    'xgb_correct': (xgb_prob >= 0.5) == home_won if home_won is not None else None,
+                    'ens_correct': (ens_prob >= 0.5) == home_won if home_won is not None else None,
+                    'skip_grading': True if home_won is None else False,
+                }
+                daily_results[game_date]['games'].append(game_info)
+            # Request-path: skip spread regrade (was hanging daily-report).
+            try:
+                _finalize_daily_result_cards(sport_key, daily_results)
+            except Exception:
+                pass
+            tally = compute_daily_model_tally(daily_results, report_date)
             if not tally or tally.get('games', 0) == 0:
                 continue
             _model_payload = []
@@ -88547,18 +88368,7 @@ def _daily_report_build():
         model_labels=model_labels,
         share_text=share_text,
     )
-    # A failed build (no graded games) must not replace a good saved report for the same date.
-    if total_games == 0 and _DAILY_REPORT_CACHE.get('html') and _DAILY_REPORT_CACHE.get('date') == report_date:
-        return _DAILY_REPORT_CACHE['html']
     _DAILY_REPORT_CACHE.update({'ts': _time.time(), 'date': report_date, 'html': rendered})
-    try:
-        _os_v2.makedirs(_os_v2.path.dirname(_DAILY_REPORT_DISK), exist_ok=True)
-        _tmp = f'{_DAILY_REPORT_DISK}.{_os_v2.getpid()}.tmp'
-        with open(_tmp, 'w', encoding='utf-8') as f:
-            json.dump(dict(_DAILY_REPORT_CACHE), f)
-        _os_v2.replace(_tmp, _DAILY_REPORT_DISK)
-    except OSError as _dr_disk_e:
-        logger.debug(f"[daily-report] save failed: {_dr_disk_e}")
     return rendered
 
 
@@ -104172,7 +103982,7 @@ def sport_predictions__soccer(sport, filter_date=None):
                 and p.get('home_score') is None
                 and p.get('actual_home_score') is None
             }
-            if len(_upcoming_days) < 2 and not (request.args.get('week') or '').strip():
+            if len(_upcoming_days) < 2:
                 try:
                     _soc_week_end = (
                         datetime.strptime(_soc_week_end, '%Y-%m-%d').date()
@@ -104351,7 +104161,7 @@ def sport_predictions__soccer(sport, filter_date=None):
                 and p.get('home_score') is None
                 and p.get('actual_home_score') is None
             }
-            if len(_upcoming_days) < 2 and not (request.args.get('week') or '').strip():
+            if len(_upcoming_days) < 2:
                 try:
                     _soc_week_end = (
                         datetime.strptime(_soc_week_end, '%Y-%m-%d').date()
@@ -126003,8 +125813,7 @@ def _mlb_api_picks_with_latest_final(picks):
         rows = conn.execute(
             '''
             SELECT p.game_date, p.home_team_id, p.away_team_id,
-                   p.win_probability, p.predicted_winner,
-                   p.glicko_home_prob, p.trueskill_home_prob
+                   p.win_probability, p.predicted_winner
             FROM predictions p
             JOIN games g ON g.game_id = p.game_id
             WHERE p.sport = 'MLB' AND date(p.game_date) = date(?)
@@ -126022,8 +125831,6 @@ def _mlb_api_picks_with_latest_final(picks):
         if (gd, home, away) in have:
             continue
         ens = _normalize_home_win_prob_pct(row['win_probability'])
-        g2 = _normalize_home_win_prob_pct(row['glicko_home_prob'])
-        td = _normalize_home_win_prob_pct(row['trueskill_home_prob'])
         if ens is not None and home and away:
             pick = home if ens >= 50 else away
         else:
@@ -126035,8 +125842,6 @@ def _mlb_api_picks_with_latest_final(picks):
             'awayTeam': away,
             'pick': pick,
             'winPercent': ens,
-            'grinder2': None if g2 is None else round(g2, 1),
-            'takedown': None if td is None else round(td, 1),
         })
     return picks
 
@@ -126195,8 +126000,8 @@ def api_get_picks__mlb(sport):
                 'takedown': pred.get('trueskill_prob')
             })
         if sport.upper() == 'MLB':
-            picks = _mlb_api_picks_with_latest_final(picks)
             picks = _mlb_api_consensus_from_cards(picks)
+            picks = _mlb_api_picks_with_latest_final(picks)
         if (not picks) or sport.upper() in {'UFC', 'TENNIS', 'CFL'}:
             visible = _visible_card_picks(sport)
             if visible:
@@ -126627,38 +126432,6 @@ try:
 except Exception as e:
     print(f"❌ UFC import failed: {e}")
     _ufc_sport = None
-
-
-_UFC_SYNC_EVERY_S = 3 * 3600
-
-
-def _ufc_fight_sync_loop():
-    """Pull new UFC cards and finished fights from ESPN; published picks stay as written."""
-    _time.sleep(120)
-    while True:
-        try:
-            import importlib.util as _ilu
-            _pipe_path = _os_v2.path.join(
-                _os_v2.path.dirname(_os_v2.path.abspath(__file__)), 'ufc_pipeline', 'engine', 'pipeline.py'
-            )
-            _spec = _ilu.spec_from_file_location('ufc_iso_pipeline_sync', _pipe_path)
-            _pipe = _ilu.module_from_spec(_spec)
-            _spec.loader.exec_module(_pipe)
-            _meta = _pipe.ensure_predictions(refresh=False)
-            logger.info(f"[ufc] fight sync: {_meta.get('upcoming')} upcoming, {_meta.get('predictions')} new picks")
-            try:
-                import isolate_checker_fixes as _icf_ufc
-                with _sport_variant.sport_scope('ufc'):
-                    _icf_ufc.schedule_picks_refresh('UFC')
-            except Exception as _ufc_ref_e:
-                logger.debug(f"[ufc] picks refresh not scheduled: {_ufc_ref_e}")
-        except Exception as _ufc_sync_e:
-            logger.warning(f"[ufc] fight sync failed: {_ufc_sync_e}")
-        _time.sleep(_UFC_SYNC_EVERY_S)
-
-
-if _os_v2.environ.get('UFC_SYNC', '1') != '0':
-    threading.Thread(target=_ufc_fight_sync_loop, daemon=True, name='ufc-fight-sync').start()
 
 
 try:

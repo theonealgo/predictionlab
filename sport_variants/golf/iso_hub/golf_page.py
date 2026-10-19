@@ -1234,87 +1234,6 @@ def _gpm_tally(gm, state, year: int | None, title: str) -> str:
     return f'<h2 class="gpm-h2">{html_lib.escape(title)}</h2><div class="gpm-tally">{"".join(cards)}</div>'
 
 
-_RECENT_CSS = (
-    "<style>"
-    ".picks-recent-results{max-width:1200px;margin:28px auto 0;padding:18px 16px;"
-    "background:#fff;border:1px solid rgba(15,23,42,.14);border-radius:14px;color:#0f172a}"
-    ".picks-recent-results h2{margin:0 0 6px;font-size:1.15rem}"
-    ".picks-recent-sub{margin:0 0 14px;color:#64748b;font-size:.86rem}"
-    ".picks-recent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}"
-    ".picks-recent-col{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#f8fafc}"
-    ".picks-recent-col h3{margin:0 0 4px;font-size:.92rem}"
-    ".picks-recent-n{margin:0 0 8px;color:#64748b;font-size:.75rem}"
-    ".picks-recent-mkt{margin:10px 0 4px;font-size:.68rem;letter-spacing:.04em;"
-    "text-transform:uppercase;color:#64748b;font-weight:700}"
-    ".picks-recent-col table{width:100%;border-collapse:collapse;font-size:.8rem}"
-    ".picks-recent-col th{text-align:left;padding:3px 4px;color:#334155;font-weight:700}"
-    ".picks-recent-results .picks-recent-col th{background:transparent!important;color:#334155!important;font-family:inherit!important;font-size:inherit!important;text-transform:none!important;letter-spacing:normal!important}"
-    ".picks-recent-col td{text-align:right;padding:3px 4px;font-variant-numeric:tabular-nums}"
-    ".picks-recent-more{display:inline-block;margin-top:8px;font-size:.78rem;font-weight:700;color:#00529B;text-decoration:none}"
-    "@media(max-width:800px){.picks-recent-grid{grid-template-columns:1fr}}"
-    "</style>"
-)
-
-
-def _golf_recent_strip(state, tournaments: list[dict[str, Any]]) -> str:
-    """Last Night / Last 7 / Last 30 from the graded golf picks, keyed on each event's final day."""
-    ends = {str(t.get("id")): str(t.get("end") or "")[:10] for t in tournaments or [] if t.get("id")}
-    events = []
-    for ev in (state or {}).get("graded", {}).values():
-        ev_end = ends.get(str(ev["id"])) or ""
-        events.append({**ev, "_end": ev_end if re.match(r"\d{4}-\d\d-\d\d$", ev_end) else ev["start"]})
-    if not events:
-        return ""
-    try:
-        from zoneinfo import ZoneInfo
-
-        today = datetime.now(ZoneInfo("America/New_York")).date()
-    except Exception:
-        today = datetime.now().date()
-    yest = (today - timedelta(days=1)).isoformat()
-    done = [e for e in events if e["_end"] <= yest]
-    if not done:
-        return ""
-    last = max(done, key=lambda e: (e["_end"], e["start"]))
-
-    def _window(days: int) -> list[dict[str, Any]]:
-        lo = (today - timedelta(days=days)).isoformat()
-        return [e for e in done if lo <= e["_end"] <= yest]
-
-    windows = (
-        (f"Last Night — {last['_end']}", [last], html_lib.escape(last["name"])),
-        ("Last 7 days", _window(7), ""),
-        ("Last 30 days", _window(30), ""),
-    )
-    cols = []
-    for title, evs, note in windows:
-        picks = [p for e in evs for p in e["picks"]]
-        rows = []
-        for market, label in (("Win", "Win"), ("Top 10", "Top 10"), ("Top 20", "Top 20"), ("All", "All picks")):
-            g = [p["grade"] for p in picks if market == "All" or p["market"] == market]
-            w, l = g.count("WIN"), g.count("LOSS")
-            val = f"{round(100.0 * w / (w + l), 1)}% · {w}-{l}" if w + l else "—"
-            rows.append(f"<tr><th>{label}</th><td>{val}</td></tr>")
-        n_ev = len(evs)
-        sub = f"{n_ev} event" + ("" if n_ev == 1 else "s") + (f" · {note}" if note else "")
-        cols.append(
-            '<div class="picks-recent-col">'
-            f"<h3>{html_lib.escape(title)}</h3>"
-            f'<p class="picks-recent-n">{sub}</p>'
-            '<h4 class="picks-recent-mkt">Win / Top 10 / Top 20</h4>'
-            f"<table><tbody>{''.join(rows)}</tbody></table>"
-            f'<a class="picks-recent-more" href="/golf-results?event={html_lib.escape(str(last["id"]))}">Full results →</a>'
-            "</div>"
-        )
-    return (
-        '<section id="picks-recent-results" class="picks-recent-results" aria-label="Recent results">'
-        "<h2>Recent results</h2>"
-        '<p class="picks-recent-sub">Last Night, Last 7, and Last 30 — graded golf picks.</p>'
-        f'<div class="picks-recent-grid">{"".join(cols)}</div>'
-        f"{_RECENT_CSS}</section>"
-    )
-
-
 def _gpm_chart(state, upto: str | None = None, last: int = 20) -> str:
     events = sorted(state["graded"].values(), key=lambda e: e["start"])
     if upto:
@@ -1344,9 +1263,9 @@ def _gpm_chart(state, upto: str | None = None, last: int = 20) -> str:
         name = html_lib.escape(ev["name"])
         parts.append(
             f'<rect x="{x}" y="{mid - w * scale:.1f}" width="{bar_w}" height="{w * scale:.1f}" fill="#00C076" rx="3" '
-            f'role="img" aria-label="{name}: {w} won"></rect>'
+            f'aria-label="{name}: {w} won"></rect>'
             f'<rect x="{x}" y="{mid}" width="{bar_w}" height="{l * scale:.1f}" fill="#ef4444" rx="3" '
-            f'role="img" aria-label="{name}: {l} lost"></rect>'
+            f'aria-label="{name}: {l} lost"></rect>'
             f'<text x="{x + bar_w / 2}" y="{mid - w * scale - 4:.1f}" font-size="10" text-anchor="middle" fill="#0f172a">{w}</text>'
             f'<text x="{x + bar_w / 2}" y="{mid + l * scale + 12:.1f}" font-size="10" text-anchor="middle" fill="#0f172a">{l}</text>'
         )
@@ -1424,7 +1343,21 @@ def render_golf_board_html(event_id: str | None = None) -> tuple[str, dict[str, 
 
     recent = ""
     if gm and state and state.get("graded"):
-        recent = _golf_recent_strip(state, tournaments)
+        last = max(state["graded"].values(), key=lambda e: e["start"])
+        g = [p["grade"] for p in last["picks"]]
+        year = int(last["start"][:4])
+        rec = gm.record(state, year).get("All", (0, 0))
+        recent = (
+            '<section id="golf-recent" class="gpm-recent">'
+            '<h2 class="gpm-h2">Recent results</h2><div class="gpm-tally">'
+            f'<div class="gpm-tcard"><div class="lbl">Last event</div><div class="rec">{g.count("WIN")}-{g.count("LOSS")}</div>'
+            f'<div class="pct">{html_lib.escape(last["name"])}</div></div>'
+            f'<div class="gpm-tcard"><div class="lbl">{year} season</div><div class="rec">{rec[0]}-{rec[1]}</div>'
+            f'<div class="pct">{(f"{100.0 * rec[0] / sum(rec):.1f}% hit") if sum(rec) else "—"}</div></div>'
+            "</div>"
+            f'<p class="golf-lede"><a href="/golf-results?event={html_lib.escape(last["id"])}">See every graded pick</a></p>'
+            "</section>"
+        )
 
     rows = []
     for p in board[:80]:
@@ -1666,10 +1599,8 @@ def render_golf_results_html(event_id: str | None = None) -> tuple[str, dict[str
                     f"{html_lib.escape(str(winner['name']))} {tp_s}</div>"
                 )
             model_html += (
-                f'<div id="ssr-finals" class="gpm-graded">'
                 f'<h2 class="gpm-h2">Our picks · {html_lib.escape(event)}</h2>{w_line}'
                 + _gpm_pick_cards(graded["picks"], graded=True)
-                + "</div>"
             )
         else:
             model_html += (

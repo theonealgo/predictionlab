@@ -42,12 +42,6 @@ def run_once(now: datetime | None = None, engine: LadderEngine | None = None) ->
         try:
             engine = engine or LadderEngine()
             out = engine.run_cycle(now)
-            if engine._types:
-                qualifying: dict[str, int] = {}
-                for (sport, market, *_rest), s in engine._types[2].items():
-                    if s["qualifies"]:
-                        qualifying[f"{sport} {market}"] = qualifying.get(f"{sport} {market}", 0) + 1
-                out["qualifying"] = qualifying
             try:
                 out["social_queued"] = social.queue_due_posts(engine.conn)
                 out["social"] = social.process_queue(engine.conn)
@@ -81,8 +75,7 @@ def _loop(interval_s: int) -> None:
             sel = out.get("selection") or {}
             if "skipped" not in out:
                 _save_last_pass({"at": at, "action": sel.get("action"), "rejected": sel.get("rejected"),
-                                 "reason": sel.get("reason"), "settled": len(out.get("settled") or []),
-                                 "qualifying": out.get("qualifying")})
+                                 "reason": sel.get("reason"), "settled": len(out.get("settled") or [])})
             if out.get("settled") or sel.get("action") in ("published", "no_pick") or out.get("expired"):
                 logger.info("ladder pass: %s", json.dumps(out, default=str))
         except Exception as exc:

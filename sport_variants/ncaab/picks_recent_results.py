@@ -4,7 +4,6 @@ Does not change /{sport}-results. Cached so picks stay fast.
 """
 from __future__ import annotations
 
-import re
 import time
 from datetime import datetime, timedelta
 from html import escape
@@ -489,16 +488,10 @@ def refresh_ncaab_offseason_strip(html: str) -> str:
             block = _ncaab_strip_from_stored_cards()
         except Exception:
             block = None
-        if not block and re.search(
-            r'Last Night — [^<]*</h3>\s*<p class="picks-recent-n">0 games', html
-        ):
-            try:
-                block = _build_block("NCAAB")
-            except Exception:
-                block = None
         if not block:
             return html
         _CACHE["NCAAB"] = (now, block)
+    import re
 
     html2, n = re.subn(
         r'<section id="picks-recent-results"[\s\S]*?</section>',
@@ -522,16 +515,6 @@ def _build_block(sport: str) -> str:
     daily = N._banner_daily_results_for_range(
         sport_u, start, yest, prefer_weekly=False,
     ) or {}
-    if sport_u == "NCAAB" and not int(
-        (N.compute_model_tally_for_range(daily, start, yest, sport=sport_u) or {}).get("games") or 0
-    ):
-        last = N.parse_date(_ncaab_db_latest_final() or "")
-        if last is not None:
-            yest = last.replace(hour=12, minute=0, second=0, microsecond=0, tzinfo=None)
-            start = yest - timedelta(days=29)
-            daily = N._banner_daily_results_for_range(
-                sport_u, start, yest, prefer_weekly=False,
-            ) or {}
     _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:

@@ -16,10 +16,4 @@ Owner 2026-10-14: picks-table PL odds filled from our odds engine at the card's 
 
 Owner 2026-10-15: results chart Spread / Totals keep the server's graded games list visible when the page has no live list to draw into. Miss closed — locked.
 
-Owner 2026-10-17: off-season picks Recent results Last Night / Last 7 anchor on the last graded WNBA night. Miss closed — locked.
-
-Owner 2026-10-17: a picks card whose Books moneyline equals the Prediction Lab one on both teams shows the stored sportsbook price (`_replace_wnba_books_ml_cloned_from_pl`); no stored book row leaves it as is. Miss closed — locked.
-
-Owner 2026-10-18: the season calendar's WNBA playoff end moved from Oct 15 to Oct 31 so the 2026 Finals games (10-17, 10-19, 10-21) are inside the results window. Miss closed — locked.
-
 Do not put lock text on user-facing HTML.

@@ -4751,42 +4751,10 @@ def _wnba_nba_consensus_finals(sport: str) -> list[dict]:
     return fallback or db_rows
 
 
-def _season_consensus_finals(sport: str) -> list[dict]:
-    """Graded six-model finals for the season record chips.
-
-    The saved results cards (the games the results page shows) come first;
-    stored finals fill the dates before the first saved card.
-    """
-    sport_u = _sport_key(sport)
-    try:
-        root = Path(__file__).resolve().parent
-        if root.parent.name == "sport_variants":
-            root = root.parent.parent
-        saved = (root / ".cache" / f"chart_src_{sport_u}.html").read_text(encoding="utf-8")
-    except Exception:
-        saved = ""
-    # The in-memory page can hold fewer nights than the saved one; count the fuller copy.
-    shown: list[dict] = []
-    for src in (_CHART_SOURCE_HTML.get(sport_u) or "", saved):
-        if src:
-            rows = _six_model_consensus_finals(src, sport_u)
-            if len(rows) > len(shown):
-                shown = rows
-    stored = _nfl_finals_from_db(limit=6000, sport=sport_u)
-    for row in stored:
-        if not row.get("league"):
-            row["league"] = sport_u
-    stored = _nfl_keep_six_model_rows(_nfl_attach_efficiency(stored))
-    if not shown:
-        return stored
-    first = min(str(r.get("game_date") or "")[:10] for r in shown)
-    return [r for r in stored if str(r.get("game_date") or "")[:10] < first] + shown
-
-
 def _consensus_d7_combo_lookup(
     sport: str,
 ) -> dict[tuple[int, tuple[str, ...]], tuple[int, int, float | None, int]]:
-    """Season consensus pattern W-L → (w, l, pct, pushes)."""
+    """Last-7-day consensus pattern W-L → (w, l, pct, pushes)."""
     sport_u = _sport_key(sport)
     try:
         from mlb_consensus_hub import (
@@ -4796,7 +4764,9 @@ def _consensus_d7_combo_lookup(
     except Exception:
         return {}
     if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL"):
-        finals = _season_consensus_finals(sport_u)
+        finals = _six_model_consensus_finals(
+            _CHART_SOURCE_HTML.get(sport_u) or "", sport_u
+        )
     elif sport_u in ("WNBA", "NBA"):
         finals = _wnba_nba_consensus_finals(sport_u)
     elif sport_u == "UFC":
@@ -4810,24 +4780,28 @@ def _consensus_d7_combo_lookup(
         return {}
     out: dict[tuple[int, tuple[str, ...]], tuple[int, int, float | None, int]] = {}
     filter_combo = data["filter_combo"]
-    try:
-        from mlb_consensus_hub import (
-            _consensus_agreements_from_finals,
-            _dedupe_finals_by_game,
-        )
-        from season_records import season_rows
-
-        season_items = season_rows(
-            _consensus_agreements_from_finals(
-                _dedupe_finals_by_game(finals), sport=sport_u.lower()
-            ),
-            sport_u,
-        )
-    except Exception:
-        season_items = list(data.get("d30") or [])
+    # Calendar last-7 can be empty mid-gap (WNBA paused after 8/30 while
+    # today is mid-September). Anchor to last-night key like results cards.
+    d7_items = list(data.get("d7") or [])
+    if not d7_items:
+        ln_key = str(data.get("ln_key") or "")[:10]
+        if len(ln_key) == 10 and ln_key[4] == "-":
+            try:
+                ln_dt = datetime.strptime(ln_key, "%Y-%m-%d")
+                cut = (ln_dt - timedelta(days=6)).strftime("%Y-%m-%d")
+                pool = list(data.get("d30") or []) or list(data.get("ln") or [])
+                d7_items = [
+                    a
+                    for a in pool
+                    if cut <= str(a.get("game_date") or "")[:10] <= ln_key
+                ]
+                if not d7_items and data.get("ln"):
+                    d7_items = list(data.get("ln") or [])
+            except ValueError:
+                pass
     for folded, keys in (data.get("combo_keys") or {}).items():
         for key in keys:
-            items = filter_combo(season_items, folded=folded, key=key)
+            items = filter_combo(d7_items, folded=folded, key=key)
             w, l, p, pct = _consensus_wl(items)
             out[(int(folded), tuple(key))] = (w, l, pct, p)
     return out
@@ -4868,7 +4842,7 @@ def _consensus_hist_label(
         pattern = f"{folded}/{panel} all but " + " and ".join(dissent)
     else:
         pattern = f"{folded}/{panel}"
-    return f"Consensus Record: {rec} ({pct_s}) — Season · {pattern}"
+    return f"Consensus Record: {rec} ({pct_s}) — Last 7 Days · {pattern}"
 
 
 def _wnba_consensus_hist_label(
@@ -4982,6 +4956,7 @@ def _inject_consensus_hist_chips(
         return html
     sport_u = _sport_key(sport)
     lookup = _consensus_d7_combo_lookup(sport_u)
+    past7 = _past7_from_consensus_table(html)
     panel = len(models)
     grade_models = models
     # Only shrink the panel when graded finals never include a published model
@@ -5033,6 +5008,14 @@ def _inject_consensus_hist_chips(
             else:
                 w, l, pct = hit[0], hit[1], hit[2]
                 pushes = 0
+            if past7:
+                pattern = _chip_pattern_key(
+                    _nfl_consensus_hist_label(folded, dissent, 0, 0, None, panel=panel)
+                )
+                shown = past7.get(pattern)
+                if shown:
+                    w, l = shown
+                    pushes = 0
             if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
                 label = _wnba_consensus_hist_label(
                     folded, dissent, w, l, pct, panel=panel, pushes=pushes
@@ -5213,13 +5196,11 @@ def _inject_nfl_pl_vs_books_chips(html: str) -> str:
     except Exception:
         return html
 
-    finals = _season_consensus_finals("NFL")
+    finals = _six_model_consensus_finals("", "NFL")
     rows = _pl_vs_books_rows_from_finals(finals) if finals else []
     now = datetime.now(ZoneInfo("America/New_York"))
     today = now.strftime("%Y-%m-%d")
-    from season_records import season_start_iso
-
-    cut30 = season_start_iso("NFL", [r.get("game_date") for r in rows])
+    cut30 = (now.date() - timedelta(days=30)).strftime("%Y-%m-%d")
     d30 = [
         r
         for r in rows
@@ -5279,7 +5260,7 @@ def _inject_nfl_pl_vs_books_chips(html: str) -> str:
         else:
             label, rec, pct, _d = candidates[0]
         pct_s = f"{pct:.0f}%" if pct is not None else "—"
-        return f"{label}: {rec} ({pct_s}) — Season"
+        return f"{label}: {rec} ({pct_s}) — Past 30 Days"
 
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
     if len(parts) < 2:
@@ -5405,13 +5386,13 @@ def _inject_nhl_pl_vs_books_chips(html: str, sport: str = "NHL") -> str:
     except Exception:
         return html
 
-    finals = _season_consensus_finals(sport)
+    finals = _six_model_consensus_finals(
+        html or _CHART_SOURCE_HTML.get(sport) or "", sport
+    )
     rows = _pl_vs_books_rows_from_finals(finals) if finals else []
     now = datetime.now(ZoneInfo("America/New_York"))
     today = now.strftime("%Y-%m-%d")
-    from season_records import season_start_iso
-
-    cut30 = season_start_iso(sport, [r.get("game_date") for r in rows])
+    cut30 = (now.date() - timedelta(days=30)).strftime("%Y-%m-%d")
     d30 = [
         r
         for r in rows
@@ -5497,7 +5478,7 @@ def _inject_nhl_pl_vs_books_chips(html: str, sport: str = "NHL") -> str:
         else:
             label, rec, pct, _d = candidates[0]
         pct_s = f"{pct:.0f}%" if pct is not None else "—"
-        return f"{label}: {rec} ({pct_s}) — Season"
+        return f"{label}: {rec} ({pct_s}) — Past 30 Days"
 
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
     if len(parts) < 2:

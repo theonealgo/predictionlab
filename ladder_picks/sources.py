@@ -19,11 +19,9 @@ logger = logging.getLogger("ladder_picks")
 
 _ROOT = Path(__file__).resolve().parent.parent
 
-# Every sport with published two-way picks. Soccer moneyline is three-way (a draw
-# loses a side bet), so soccer is scanned for goal-line and total picks only (see
-# markets.options). Golf has no head-to-head pick to place.
-SUPPORTED_SPORTS = ("NFL", "NBA", "MLB", "NHL", "NCAAF", "NCAAB", "NCAAW", "WNBA",
-                    "CFL", "SOCCER", "TENNIS", "UFC")
+# Two-way moneyline sports with event ids. Soccer is left out: its moneyline is
+# three-way (a draw loses a side bet), so a two-way win probability does not fit.
+SUPPORTED_SPORTS = ("NFL", "NBA", "MLB", "NHL", "NCAAF", "NCAAB", "NCAAW", "WNBA")
 
 _SUMMARY_PATHS = {
     "NFL": "football/nfl",
@@ -34,16 +32,7 @@ _SUMMARY_PATHS = {
     "NCAAW": "basketball/womens-college-basketball",
     "MLB": "baseball/mlb",
     "NHL": "hockey/nhl",
-    "CFL": "football/cfl",
-    "UFC": "mma/ufc",
 }
-
-
-def _summary_path(sport: str, game_id: str) -> str | None:
-    if sport == "SOCCER":
-        parts = str(game_id or "").split("_")
-        return f"soccer/{parts[1]}" if len(parts) >= 3 and parts[1] else None
-    return _SUMMARY_PATHS.get(sport)
 
 # Component model columns in the published card. Exactly 50.0 is a placeholder.
 _COMPONENT_KEYS = ("elo_prob", "xgb_prob", "glicko2_prob", "trueskill_prob")
@@ -289,7 +278,7 @@ def book_odds(cand: dict) -> dict | None:
 
 def event_status(sport: str, game_id: str, timeout: float = 6.0) -> dict | None:
     """{'start': aware UTC datetime|None, 'state': pre|in|post|postponed|canceled, scores...}."""
-    path = _summary_path(sport, game_id)
+    path = _SUMMARY_PATHS.get(sport)
     eid = event_id(game_id)
     if not path or not eid:
         return None

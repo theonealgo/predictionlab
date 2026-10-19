@@ -173,7 +173,6 @@ def _nba_latest_final_date(N) -> str | None:
             SELECT date(game_date) AS d
             FROM games
             WHERE sport = 'NBA'
-              AND COALESCE(league, '') != 'NBA Preseason'
               AND home_score IS NOT NULL
               AND away_score IS NOT NULL
             ORDER BY date(game_date) DESC
@@ -240,7 +239,7 @@ def _build_block(sport: str) -> str:
     daily = N._banner_daily_results_for_range(
         sport_u, start, yest, prefer_weekly=False,
     ) or {}
-    if not int((N.compute_model_tally_for_range(daily, start, yest, sport=sport_u) or {}).get("games") or 0):
+    if not any(bucket.get("games") for bucket in daily.values()):
         # Off-season: the windows end on the last NBA night with finals
         # (the results page shows the same boards).
         last = N.parse_date(_nba_latest_final_date(N) or "")
@@ -250,19 +249,6 @@ def _build_block(sport: str) -> str:
             daily = N._banner_daily_results_for_range(
                 sport_u, start, yest, prefer_weekly=False,
             ) or {}
-    if hasattr(N, "_nba_grade_missing_g2_td"):
-        for bucket in daily.values():
-            for game in bucket.get("games") or []:
-                N._nba_grade_missing_g2_td(game)
-    try:
-        N._attach_h2h_projection_to_daily_results("NBA", daily, n=10)
-    except Exception:
-        pass
-    if hasattr(N, "_grade_efficiency_ml_from_spread"):
-        try:
-            N._grade_efficiency_ml_from_spread("NBA", daily)
-        except Exception:
-            pass
     _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:
@@ -288,22 +274,14 @@ def _build_block(sport: str) -> str:
     else:
         ln_label = yest.strftime("%Y-%m-%d")
     ln_src = daily
-    scored = _nba_scored_night(N, ln_label) if ln and int(ln.get("games") or 0) else None
-    if scored:
-        ln_label, ln, ln_src = scored
-    last7_start = (yest - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
     last7 = N.compute_model_tally_for_range(
-        daily, last7_start, yest, sport=sport_u,
+        daily, yest - timedelta(days=6), yest, sport=sport_u,
     )
     last30 = N.compute_model_tally_for_range(daily, start, yest, sport=sport_u)
     ln_dt = N.parse_date(ln_label) or yest
-    ln_day_start = ln_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-    ln_day_end = ln_dt.replace(hour=23, minute=59, second=59, microsecond=0)
-    if _slice_daily(daily, ln_day_start, ln_day_end):
-        ln_src = daily
     windows = (
-        (f"Last Night — {ln_label}", ln, ln_day_start, ln_day_end, ln_src),
-        ("Last 7 days", last7, last7_start, yest, daily),
+        (f"Last Night — {ln_label}", ln, ln_dt, ln_dt, ln_src),
+        ("Last 7 days", last7, yest - timedelta(days=6), yest, daily),
         ("Last 30 days", last30, start, yest, daily),
     )
     cols = []

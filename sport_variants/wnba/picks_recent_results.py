@@ -264,17 +264,27 @@ def parse_wnba_result_cards(html: str) -> list[dict]:
 
 
 def _latest_graded_night(cards: list[dict], end: str) -> str:
-    """Yesterday, or the newest graded card before it when that day is empty.
+    """Yesterday, or the newest graded card within 4 days when that day is empty.
 
-    The results page uses the same fallback, so the off-season strip ends on
-    the last graded night.
+    The results page uses the same fallback. An empty yesterday stays empty
+    when nothing in that window was graded.
     """
     if any(c.get("date") == end for c in cards):
         return end
     dates = sorted({c["date"] for c in cards if c.get("date") and c["date"] < end})
     if not dates:
         return end
-    return dates[-1]
+    latest = dates[-1]
+    try:
+        gap = (
+            datetime.strptime(end, "%Y-%m-%d")
+            - datetime.strptime(latest, "%Y-%m-%d")
+        ).days
+    except ValueError:
+        return end
+    if 0 < gap <= 4:
+        return latest
+    return end
 
 
 def _wnba_card_windows(cards: list[dict]) -> dict:
@@ -283,10 +293,6 @@ def _wnba_card_windows(cards: list[dict]) -> dict:
     end = yest.strftime("%Y-%m-%d")
     start7 = (yest - timedelta(days=6)).strftime("%Y-%m-%d")
     night = _latest_graded_night(cards, end)
-    if night < start7:
-        night_dt = datetime.strptime(night, "%Y-%m-%d")
-        start7 = (night_dt - timedelta(days=6)).strftime("%Y-%m-%d")
-        end = night
     out = {}
     for key, start, stop in (
         ("last night", night, night),
@@ -302,7 +308,6 @@ def _wnba_card_windows(cards: list[dict]) -> dict:
                 money[label] = rec
         out[key] = {
             "games": len(chosen),
-            "start": start,
             "as_of": stop if key == "last night" else end,
             "moneyline": money,
             "spread": _record_from_marks(c["spread"] for c in chosen),
@@ -513,29 +518,19 @@ def _build_block(sport: str) -> str:
             ln = N._empty_results_model_tally() if hasattr(N, "_empty_results_model_tally") else {}
     else:
         ln_label = yest.strftime("%Y-%m-%d")
-    l7_start, l7_end = yest - timedelta(days=6), yest
-    card_windows = {}
-    if sport_u == "WNBA":
-        card_windows = _wnba_card_windows(parse_wnba_result_cards(_load_wnba_results_cards()))
-        night = (card_windows.get("last night") or {}).get("as_of") or ""
-        if night and night != ln_label and N.parse_date(night) is not None:
-            ln_label = night
-            ln = N.compute_daily_model_tally(daily, night, sport=sport_u)
-        week = card_windows.get("last 7") or {}
-        w_lo, w_hi = N.parse_date(week.get("start") or ""), N.parse_date(week.get("as_of") or "")
-        if w_lo is not None and w_hi is not None:
-            l7_start = w_lo.replace(hour=12, minute=0, second=0, microsecond=0, tzinfo=None)
-            l7_end = w_hi.replace(hour=12, minute=0, second=0, microsecond=0, tzinfo=None)
     last7 = N.compute_model_tally_for_range(
-        daily, l7_start, l7_end, sport=sport_u,
+        daily, yest - timedelta(days=6), yest, sport=sport_u,
     )
     last30 = N.compute_model_tally_for_range(daily, start, yest, sport=sport_u)
     ln_dt = N.parse_date(ln_label) or yest
     windows = (
         (f"Last Night — {ln_label}", ln, ln_dt, ln_dt),
-        ("Last 7 days", last7, l7_start, l7_end),
+        ("Last 7 days", last7, yest - timedelta(days=6), yest),
         ("Last 30 days", last30, start, yest),
     )
+    card_windows = {}
+    if sport_u == "WNBA":
+        card_windows = _wnba_card_windows(parse_wnba_result_cards(_load_wnba_results_cards()))
     cols = []
     for title, tally, w_start, w_end in windows:
         games = int((tally or {}).get("games") or 0)
@@ -633,15 +628,9 @@ def _paint_recent_column(col: str, window: dict) -> str:
             count=1,
         )
     money = window.get("moneyline") or {}
-    if money:
-        col = re.sub(
-            r'(<h4 class="picks-recent-mkt">Moneyline</h4>\s*<table><tbody>)[\s\S]*?(</tbody>)',
-            lambda m: m.group(1)
-            + _rows_html([(label, money[label]) for _k, label in _MODELS if label in money])
-            + m.group(2),
-            col,
-            count=1,
-        )
+    for _key, label in _MODELS:
+        if label in money:
+            col = _set_recent_row(col, "Moneyline", label, money[label])
     if window.get("spread"):
         col = _set_recent_row(col, "Spread", "Prediction Lab", window["spread"])
     if window.get("total"):

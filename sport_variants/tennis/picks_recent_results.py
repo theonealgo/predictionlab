@@ -241,7 +241,7 @@ def _build_tennis_block() -> str:
         )
     return (
         '<section id="picks-recent-results" class="picks-recent-results" '
-        'data-league="TENNIS" aria-label="Recent results">'
+        'aria-label="Recent results">'
         "<h2>Recent results</h2>"
         '<p class="picks-recent-sub">Last Night, Last 7, and Last 30 — '
         "graded tennis moneyline picks.</p>"

@@ -1348,17 +1348,6 @@ def _mlb_merged_consensus_finals(live_html: str = "") -> list:
                             break
         except Exception:
             pass
-    if not live:
-        try:
-            from pathlib import Path
-
-            root = Path(__file__).resolve().parent
-            if root.parent.name == "sport_variants":
-                root = root.parent.parent
-            saved = (root / ".cache" / "chart_src_MLB.html").read_text(encoding="utf-8")
-            live = _extract_raw_mlb_finals_from_html(saved, limit=800) or []
-        except Exception:
-            pass
     snap = _mlb_frozen_results_snapshot()
     snap_finals = (
         _extract_raw_mlb_finals_from_html(snap, limit=800) if snap else []
@@ -1519,24 +1508,26 @@ def inject_mlb_consensus_and_pl_vs_books_chips(html: str) -> str:
                 return {}
             out: dict = {}
             filter_combo = data["filter_combo"]
-            try:
-                from mlb_consensus_hub import (
-                    _consensus_agreements_from_finals,
-                    _dedupe_finals_by_game,
-                )
-                from season_records import season_rows
-
-                season_items = season_rows(
-                    _consensus_agreements_from_finals(
-                        _dedupe_finals_by_game(finals), sport="mlb"
-                    ),
-                    "MLB",
-                )
-            except Exception:
-                season_items = list(data.get("d30") or [])
+            d7_items = list(data.get("d7") or [])
+            if not d7_items:
+                ln_key = str(data.get("ln_key") or "")[:10]
+                if len(ln_key) == 10 and ln_key[4] == "-":
+                    try:
+                        ln_dt = datetime.strptime(ln_key, "%Y-%m-%d")
+                        cut = (ln_dt - timedelta(days=6)).strftime("%Y-%m-%d")
+                        pool = list(data.get("d30") or []) or list(data.get("ln") or [])
+                        d7_items = [
+                            a
+                            for a in pool
+                            if cut <= str(a.get("game_date") or "")[:10] <= ln_key
+                        ]
+                        if not d7_items and data.get("ln"):
+                            d7_items = list(data.get("ln") or [])
+                    except ValueError:
+                        pass
             for folded, keys in (data.get("combo_keys") or {}).items():
                 for key in keys:
-                    items = filter_combo(season_items, folded=folded, key=key)
+                    items = filter_combo(d7_items, folded=folded, key=key)
                     w, l, _p, pct = _consensus_wl(items)
                     out[(int(folded), tuple(key))] = (w, l, pct)
             return out
@@ -1556,9 +1547,31 @@ def inject_mlb_consensus_and_pl_vs_books_chips(html: str) -> str:
         rows = _pl_vs_books_rows_from_finals(finals) if finals else []
         now = datetime.now(ZoneInfo("America/New_York"))
         today = now.strftime("%Y-%m-%d")
-        from season_records import season_rows
-
-        d7 = season_rows(rows, "MLB")
+        cut7 = (now.date() - timedelta(days=7)).strftime("%Y-%m-%d")
+        d7 = [
+            r
+            for r in rows
+            if cut7 <= str(r.get("game_date") or "")[:10] < today
+        ]
+        if not d7 and rows:
+            # Mid-gap fallback: last calendar night's cluster.
+            past = sorted(
+                {
+                    str(r.get("game_date") or "")[:10]
+                    for r in rows
+                    if str(r.get("game_date") or "")[:10] < today
+                }
+            )
+            if past:
+                ln = past[-1]
+                cut = (
+                    datetime.strptime(ln, "%Y-%m-%d").date() - timedelta(days=6)
+                ).strftime("%Y-%m-%d")
+                d7 = [
+                    r
+                    for r in rows
+                    if cut <= str(r.get("game_date") or "")[:10] <= ln
+                ]
         slices = _pl_vs_books_slices(d7) if d7 else {
             "books_pl_agree": [],
             "books_pl_disagree": [],
@@ -1576,24 +1589,24 @@ def inject_mlb_consensus_and_pl_vs_books_chips(html: str) -> str:
             if book and pl and book == pl:
                 rec = f"{aw}-{al}"
                 pct_s = f"{ap:.0f}%" if ap is not None else "—"
-                val = f"Agree: {rec} ({pct_s}) — Season"
+                val = f"Agree: {rec} ({pct_s}) — Last 7 Days"
             elif book and pl:
                 rec = f"{dw}-{dl}"
                 pct_s = f"{dp:.0f}%" if dp is not None else "—"
-                val = f"Disagree: {rec} ({pct_s}) — Season"
+                val = f"Disagree: {rec} ({pct_s}) — Last 7 Days"
             elif pl and not book:
                 # Books is a pick'em, so there is no side to agree with.
                 pw, ploss, pp = _wl_pct(slices.get("pl") or [])
                 rec = f"{pw}-{ploss}"
                 pct_s = f"{pp:.0f}%" if pp is not None else "—"
-                val = f"PL favorite: {rec} ({pct_s}) — Season"
+                val = f"PL favorite: {rec} ({pct_s}) — Last 7 Days"
             elif "check back on game date" in stack.casefold() or "on the same day as the game" in stack.casefold():
                 val = "N/A"
             else:
                 val = "—"
             tip = html_lib.escape(
                 "PL vs Books uses this game's moneyline favorites. "
-                "Agree = same side; Disagree = split. Record is this season "
+                "Agree = same side; Disagree = split. Record is Last 7 Days "
                 "from graded finals (Disagree grades the PL favorite).",
                 quote=True,
             )

@@ -173,11 +173,6 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
             return ""
         if "upstream data/model dependency failed" in text.lower():
             return ""
-        if sport_u == "UFC" and "data-pick-card" in text and not re.search(r'pc-name[^>]*>\s*Grinder2', text):
-            # Saved before the models were restored to UFC cards.
-            if schedule:
-                schedule_picks_refresh(sport_u)
-            return ""
         waiting_on_books = ("check back on game date" in text.lower() or "on the same day as the game" in text.lower())
         if _picks_clock_is_old(text):
             if schedule:

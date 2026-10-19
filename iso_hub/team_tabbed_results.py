@@ -55,15 +55,8 @@ UFC_ISO = next(
     Path(__file__).resolve().parents[1] / "ufc_pipeline",
 )
 
-# UFC component-model deltas (match isolation render.MODEL_DELTAS).
-UFC_MODEL_DELTAS = [
-    ("Grinder2", 0.028),
-    ("Takedown", 0.012),
-    ("Edge", -0.015),
-    ("XSharp", 0.038),
-    ("Efficiency", -0.022),
-    ("Sharp Consensus", 0.0),
-]
+# UFC stores one graded probability per fight. That is Sharp Consensus.
+UFC_MODEL_ORDER = ["Sharp Consensus"]
 
 MODEL_ORDER = [
     "Grinder2",
@@ -3697,16 +3690,16 @@ def build_ufc_payload() -> dict[str, Any]:
             hp = float(c.get("home_win_prob") if c.get("home_win_prob") is not None else 0.5)
         except (TypeError, ValueError):
             hp = 0.5
-        models: dict[str, Any] = {}
-        for name, d in UFC_MODEL_DELTAS:
-            p = _clamp(hp + d)
-            fav = home if p >= 0.5 else away
-            fav_p = p if fav == home else 1.0 - p
-            models[name] = {
+        p = _clamp(hp)
+        fav = home if p >= 0.5 else away
+        fav_p = p if fav == home else 1.0 - p
+        models: dict[str, Any] = {
+            "Sharp Consensus": {
                 "pick": fav,
                 "prob": round(fav_p * 100.0, 1),
                 "correct": (fav == winner) if winner else None,
             }
+        }
         face_pick = pick or (home if hp >= 0.5 else away)
         face_prob = round(max(hp, 1.0 - hp) * 100.0, 1)
         day = _day(c)
@@ -3753,7 +3746,7 @@ def build_ufc_payload() -> dict[str, Any]:
             block["date"] = date
         if models:
             block["models"].update(models)
-            block["model_order"] = [n for n in MODEL_ORDER if n in models]
+            block["model_order"] = [n for n in UFC_MODEL_ORDER if n in models]
             face = models.get("Sharp Consensus") or next(iter(models.values()), {})
             block["w"] = int(face.get("w") or 0)
             block["l"] = int(face.get("l") or 0)
@@ -3770,28 +3763,14 @@ def build_ufc_payload() -> dict[str, Any]:
     )
     l7_ml = _ml_window(l7_rows, "Last 7")
     season_ml = _ml_window(season_rows, "Season")
-    empty_sp = _face_tally(0, 0, 0, label="Season")
-    empty_ou = _face_tally(0, 0, 0, label="Season")
-
-    analytics = build_results_analytics(
-        sport="ufc",
-        tallies_ml={"last_night": ln_ml, "last_7": l7_ml, "season": season_ml},
-        season_sp=empty_sp,
-        season_ou=empty_ou,
-        last7_sp=_face_tally(0, 0, 0, label="Last 7"),
-        last7_ou=_face_tally(0, 0, 0, label="Last 7"),
-        finals=finals[:80],
-        snap=None,
-        ml_only=True,
-    )
 
     show_finals = finals[:80]
     return {
         "ok": True,
         "today": _today_et(),
-        "model_order": MODEL_ORDER,
+        "model_order": UFC_MODEL_ORDER,
         "finals": show_finals,
-        "analytics": analytics,
+        "analytics": None,
         "tallies": {
             "last_night": ln_ml,
             "last_7": l7_ml,
@@ -3805,7 +3784,7 @@ def build_ufc_payload() -> dict[str, Any]:
                     "last_7": l7_ml,
                     "season": season_ml,
                 },
-                "model_order": MODEL_ORDER,
+                "model_order": UFC_MODEL_ORDER,
                 "finals": show_finals,
             },
             "spread": {
@@ -3815,7 +3794,7 @@ def build_ufc_payload() -> dict[str, Any]:
                     "last_7": l7_ml,
                     "season": season_ml,
                 },
-                "model_order": MODEL_ORDER,
+                "model_order": UFC_MODEL_ORDER,
                 "finals": [],
             },
             "totals": {
@@ -3825,7 +3804,7 @@ def build_ufc_payload() -> dict[str, Any]:
                     "last_7": l7_ml,
                     "season": season_ml,
                 },
-                "model_order": MODEL_ORDER,
+                "model_order": UFC_MODEL_ORDER,
                 "finals": [],
             },
         },

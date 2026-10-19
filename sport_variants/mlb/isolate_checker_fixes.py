@@ -483,7 +483,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         html,
     )
     shown_n = len(set(re.findall(r'data-game-id="[^"]+"', section.group(1)))) if section else 0
-    if latest_n and shown_n < latest_n and 'id="date-' in html:
+    if latest_n and shown_n < latest_n:
         return True
     picker = re.search(r"const allDates = (\[[^\]]*\])", html)
     if picker and latest not in picker.group(1):
@@ -2346,18 +2346,16 @@ def _mlb_blank_daily_rec(raw: str) -> bool:
     return text in {"", "—", "–", "-"}
 
 
-def align_mlb_last_night_window(html: str, cards_html: str | None = None) -> str:
+def align_mlb_last_night_window(html: str) -> str:
     """Point an empty Last Night heading at the newest graded date section.
 
     Model, spread, and total records in that block come from the check marks
     on those cards. A record that already has a W-L is left as printed.
-    Last 7 and every other tally stay. Market pages without game cards read
-    the date sections from ``cards_html``.
+    Last 7 and every other tally stay.
     """
     if not html or "Last Night" not in html:
         return html
-    src = html if _mlb_result_sections(html) else (cards_html or "")
-    latest, count = _mlb_latest_final_section(src)
+    latest, count = _mlb_latest_final_section(html)
     if not latest or count < 1:
         return html
     heading = re.search(
@@ -2401,7 +2399,7 @@ def align_mlb_last_night_window(html: str, cards_html: str | None = None) -> str
     spread = [0, 0]
     total = [0, 0]
     saw = False
-    for date, bodies in _mlb_result_sections(src):
+    for date, bodies in _mlb_result_sections(html):
         if date != target:
             continue
         saw = True
@@ -2836,10 +2834,8 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
                 pass
         if sport_u == "MLB":
             view_l = (view or "").strip().lower()
-            html = align_mlb_last_night_window(
-                html,
-                cards_html=None if 'id="date-' in html else _cards_html_for_align(sport_u, ""),
-            )
+            if view_l not in _MLB_CHART_VIEWS:
+                html = align_mlb_last_night_window(html)
             try:
                 from picks_recent_results import fill_mlb_totals_chart_from_grades
 
@@ -2875,10 +2871,8 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
         html = repair_results_html(html, sport_u, view)
         if sport_u == "MLB":
             view_l = (view or "").strip().lower()
-            html = align_mlb_last_night_window(
-                html,
-                cards_html=None if 'id="date-' in html else _cards_html_for_align(sport_u, ""),
-            )
+            if view_l not in _MLB_CHART_VIEWS:
+                html = align_mlb_last_night_window(html)
             try:
                 from picks_recent_results import fill_mlb_totals_chart_from_grades
 
