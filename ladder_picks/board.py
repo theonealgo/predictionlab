@@ -393,4 +393,7 @@ def current() -> dict | None:
             if not _state["building"]:
                 _state["building"] = True
                 threading.Thread(target=_build_bg, name="all-sports-picks", daemon=True).start()
+    if data is not None and data.get("today") != today:
+        # Yesterday's board while the rebuild runs: never show yesterday's ladder pick as today's.
+        data = dict(data, ladder_today=_ladder_today(today))
     return data
