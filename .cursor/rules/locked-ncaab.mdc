@@ -12,4 +12,18 @@ Locked. 3 UNLOCKS required.
 
 Owner 2026-10-15: results chart saved pages must be chart pages (a cards page is never stored under a chart key); the moneyline refresh no longer overwrites the spread games list; a graded list is not replaced by a compare stub. Miss closed — locked.
 
+Owner 2026-10-17: off-season picks Recent results anchor on the last graded NCAAB night even without the saved results page. Miss closed — locked.
+
+Owner 2026-10-22: results season Efficiency tile recounted after the cards' Efficiency grades (99-51). Miss closed — locked.
+
+Owner 2026-10-28: results chart header lacked Historic Results; `site_chrome.header_matches_site_chrome` now requires that link, so a stale header is replaced with the shared one. Miss closed — locked.
+
+Owner 2026-10-29: off-season results chart picker stopped on 2026-04-06 (static date bubbles, no date list). `served_layout_fixes` adds the saved scoreboard days (`scoreboard_dates.add_saved_chart_dates`, no ESPN call on the request) to any chart page with static bubbles only. Miss closed — locked.
+
+Owner 2026-10-29: picks missed the 2026-11-01 opener — ESPN answers 400 to date-range scoreboards, and NCAAB / NCAAW read only the range. Both now fall back to one day at a time (`_espn_events_by_day`). Miss closed — locked.
+
+Owner 2026-10-29: picks cards with a blank Efficiency get it from the PL spread (same formula as NBA, college width); a Books moneyline equal to the PL one on both teams shows N/A (no posted price); Books is never minted from the model's own spread; team logos from `data/ncaa_basketball_team_ids.json` (ESPN school ids, men's + women's). Miss closed — locked.
+
+Owner 2026-10-30: 24 more small-college ESPN ids added to `data/ncaa_basketball_team_ids.json`; schools ESPN has no logo for keep the site logo. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

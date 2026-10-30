@@ -1668,6 +1668,13 @@ def synthesize_missing_ml_models(finals: list[dict[str, Any]]) -> list[dict[str,
 
 def markets_from_live_html(html: str, sport: str) -> dict[str, Any]:
     """Convert live results HTML tallies into soccer-style markets payload."""
+    if (sport or "").lower() == "mlb":
+        try:
+            from isolate_checker_fixes import align_mlb_last_night_window
+
+            html = align_mlb_last_night_window(html)
+        except Exception as e:
+            print(f"[mlb_results_ui] last night align: {e}", flush=True)
     sections = _extract_tally_sections(html)
     season_roi = _extract_season_roi(html)
     snap = _snapshot_season(sport)

@@ -1,0 +1,1579 @@
+{
+ "sport": "NFL",
+ "season": "2025-26",
+ "games": [
+  {
+   "date": "2025-10-19",
+   "home": "Arizona Cardinals",
+   "away": "Green Bay Packers",
+   "home_score": 23,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.236,
+    "XSharp": 0.5833
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Chicago Bears",
+   "away": "New Orleans Saints",
+   "home_score": 26,
+   "away_score": 14,
+   "home_prob": {
+    "Edge": 0.7054,
+    "XSharp": 0.6175
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Cleveland Browns",
+   "away": "Miami Dolphins",
+   "home_score": 31,
+   "away_score": 6,
+   "home_prob": {
+    "Edge": 0.3161,
+    "XSharp": 0.6039
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Dallas Cowboys",
+   "away": "Washington Commanders",
+   "home_score": 44,
+   "away_score": 22,
+   "home_prob": {
+    "Edge": 0.2463,
+    "XSharp": 0.5833
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Denver Broncos",
+   "away": "New York Giants",
+   "home_score": 33,
+   "away_score": 32,
+   "home_prob": {
+    "Edge": 0.834,
+    "XSharp": 0.6017
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Jacksonville Jaguars",
+   "away": "Los Angeles Rams",
+   "home_score": 7,
+   "away_score": 35,
+   "home_prob": {
+    "Edge": 0.1575,
+    "XSharp": 0.5901
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Kansas City Chiefs",
+   "away": "Las Vegas Raiders",
+   "home_score": 31,
+   "away_score": 0,
+   "home_prob": {
+    "Edge": 0.9232,
+    "XSharp": 0.5909
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Los Angeles Chargers",
+   "away": "Indianapolis Colts",
+   "home_score": 24,
+   "away_score": 38,
+   "home_prob": {
+    "Edge": 0.6318,
+    "XSharp": 0.5411
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Minnesota Vikings",
+   "away": "Philadelphia Eagles",
+   "home_score": 22,
+   "away_score": 28,
+   "home_prob": {
+    "Edge": 0.4223,
+    "XSharp": 0.5099
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "New York Jets",
+   "away": "Carolina Panthers",
+   "home_score": 6,
+   "away_score": 13,
+   "home_prob": {
+    "Edge": 0.4857,
+    "XSharp": 0.5141
+   }
+  },
+  {
+   "date": "2025-10-19",
+   "home": "Tennessee Titans",
+   "away": "New England Patriots",
+   "home_score": 13,
+   "away_score": 31,
+   "home_prob": {
+    "Edge": 0.4181,
+    "XSharp": 0.5555
+   }
+  },
+  {
+   "date": "2025-10-20",
+   "home": "Detroit Lions",
+   "away": "Tampa Bay Buccaneers",
+   "home_score": 24,
+   "away_score": 9,
+   "home_prob": {
+    "Edge": 0.7502,
+    "XSharp": 0.5773
+   }
+  },
+  {
+   "date": "2025-10-20",
+   "home": "San Francisco 49ers",
+   "away": "Atlanta Falcons",
+   "home_score": 20,
+   "away_score": 10,
+   "home_prob": {
+    "Edge": 0.366,
+    "XSharp": 0.5463
+   }
+  },
+  {
+   "date": "2025-10-21",
+   "home": "Seattle Seahawks",
+   "away": "Houston Texans",
+   "home_score": 27,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.7611,
+    "XSharp": 0.5909
+   }
+  },
+  {
+   "date": "2025-10-24",
+   "home": "Los Angeles Chargers",
+   "away": "Minnesota Vikings",
+   "home_score": 37,
+   "away_score": 10,
+   "home_prob": {
+    "Edge": 0.2753,
+    "XSharp": 0.5649
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Atlanta Falcons",
+   "away": "Miami Dolphins",
+   "home_score": 10,
+   "away_score": 34,
+   "home_prob": {
+    "Edge": 0.692,
+    "XSharp": 0.5976
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Baltimore Ravens",
+   "away": "Chicago Bears",
+   "home_score": 30,
+   "away_score": 16,
+   "home_prob": {
+    "Edge": 0.7106,
+    "XSharp": 0.5909
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Carolina Panthers",
+   "away": "Buffalo Bills",
+   "home_score": 9,
+   "away_score": 40,
+   "home_prob": {
+    "Edge": 0.1196,
+    "XSharp": 0.5833
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Cincinnati Bengals",
+   "away": "New York Jets",
+   "home_score": 38,
+   "away_score": 39,
+   "home_prob": {
+    "Edge": 0.7578,
+    "XSharp": 0.6044
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Denver Broncos",
+   "away": "Dallas Cowboys",
+   "home_score": 44,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.727,
+    "XSharp": 0.5909
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Houston Texans",
+   "away": "San Francisco 49ers",
+   "home_score": 26,
+   "away_score": 15,
+   "home_prob": {
+    "Edge": 0.4605,
+    "XSharp": 0.5141
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Indianapolis Colts",
+   "away": "Tennessee Titans",
+   "home_score": 38,
+   "away_score": 14,
+   "home_prob": {
+    "Edge": 0.7337,
+    "XSharp": 0.6175
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "New England Patriots",
+   "away": "Cleveland Browns",
+   "home_score": 32,
+   "away_score": 13,
+   "home_prob": {
+    "Edge": 0.5815,
+    "XSharp": 0.552
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "New Orleans Saints",
+   "away": "Tampa Bay Buccaneers",
+   "home_score": 3,
+   "away_score": 23,
+   "home_prob": {
+    "Edge": 0.1659,
+    "XSharp": 0.5931
+   }
+  },
+  {
+   "date": "2025-10-26",
+   "home": "Philadelphia Eagles",
+   "away": "New York Giants",
+   "home_score": 38,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.9232,
+    "XSharp": 0.5909
+   }
+  },
+  {
+   "date": "2025-10-27",
+   "home": "Pittsburgh Steelers",
+   "away": "Green Bay Packers",
+   "home_score": 25,
+   "away_score": 35,
+   "home_prob": {
+    "Edge": 0.3531,
+    "XSharp": 0.5311
+   }
+  },
+  {
+   "date": "2025-10-28",
+   "home": "Kansas City Chiefs",
+   "away": "Washington Commanders",
+   "home_score": 28,
+   "away_score": 7,
+   "home_prob": {
+    "Edge": 0.5016,
+    "XSharp": 0.0754
+   }
+  },
+  {
+   "date": "2025-10-31",
+   "home": "Miami Dolphins",
+   "away": "Baltimore Ravens",
+   "home_score": 6,
+   "away_score": 28,
+   "home_prob": {
+    "Edge": 0.5016,
+    "XSharp": 0.6421
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Buffalo Bills",
+   "away": "Kansas City Chiefs",
+   "home_score": 28,
+   "away_score": 21,
+   "home_prob": {
+    "Edge": 0.5518,
+    "XSharp": 0.8106
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Cincinnati Bengals",
+   "away": "Chicago Bears",
+   "home_score": 42,
+   "away_score": 47,
+   "home_prob": {
+    "Edge": 0.4976,
+    "XSharp": 0.9587
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Detroit Lions",
+   "away": "Minnesota Vikings",
+   "home_score": 24,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.528,
+    "XSharp": 0.8214
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Green Bay Packers",
+   "away": "Carolina Panthers",
+   "home_score": 13,
+   "away_score": 16,
+   "home_prob": {
+    "Edge": 0.5398,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Houston Texans",
+   "away": "Denver Broncos",
+   "home_score": 15,
+   "away_score": 18,
+   "home_prob": {
+    "Edge": 0.4713,
+    "XSharp": 0.9674
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Las Vegas Raiders",
+   "away": "Jacksonville Jaguars",
+   "home_score": 29,
+   "away_score": 30,
+   "home_prob": {
+    "Edge": 0.4427,
+    "XSharp": 0.9471
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Los Angeles Rams",
+   "away": "New Orleans Saints",
+   "home_score": 34,
+   "away_score": 10,
+   "home_prob": {
+    "Edge": 0.5675,
+    "XSharp": 0.9578
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "New England Patriots",
+   "away": "Atlanta Falcons",
+   "home_score": 24,
+   "away_score": 23,
+   "home_prob": {
+    "Edge": 0.4992,
+    "XSharp": 0.5653
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "New York Giants",
+   "away": "San Francisco 49ers",
+   "home_score": 24,
+   "away_score": 34,
+   "home_prob": {
+    "Edge": 0.4325,
+    "XSharp": 0.8261
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Pittsburgh Steelers",
+   "away": "Indianapolis Colts",
+   "home_score": 27,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.5017,
+    "XSharp": 0.1083
+   }
+  },
+  {
+   "date": "2025-11-02",
+   "home": "Tennessee Titans",
+   "away": "Los Angeles Chargers",
+   "home_score": 20,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.42,
+    "XSharp": 0.928
+   }
+  },
+  {
+   "date": "2025-11-03",
+   "home": "Washington Commanders",
+   "away": "Seattle Seahawks",
+   "home_score": 14,
+   "away_score": 38,
+   "home_prob": {
+    "Edge": 0.4704,
+    "XSharp": 0.8381
+   }
+  },
+  {
+   "date": "2025-11-04",
+   "home": "Dallas Cowboys",
+   "away": "Arizona Cardinals",
+   "home_score": 17,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.4856,
+    "XSharp": 0.9661
+   }
+  },
+  {
+   "date": "2025-11-07",
+   "home": "Denver Broncos",
+   "away": "Las Vegas Raiders",
+   "home_score": 10,
+   "away_score": 7,
+   "home_prob": {
+    "Edge": 0.5303,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Carolina Panthers",
+   "away": "New Orleans Saints",
+   "home_score": 7,
+   "away_score": 17,
+   "home_prob": {
+    "Edge": 0.5264,
+    "XSharp": 0.9511
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Chicago Bears",
+   "away": "New York Giants",
+   "home_score": 24,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.5271,
+    "XSharp": 0.9522
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Houston Texans",
+   "away": "Jacksonville Jaguars",
+   "home_score": 36,
+   "away_score": 29,
+   "home_prob": {
+    "Edge": 0.4443,
+    "XSharp": 0.3487
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Indianapolis Colts",
+   "away": "Atlanta Falcons",
+   "home_score": 31,
+   "away_score": 25,
+   "home_prob": {
+    "Edge": 0.5255,
+    "XSharp": 0.5313
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Miami Dolphins",
+   "away": "Buffalo Bills",
+   "home_score": 30,
+   "away_score": 13,
+   "home_prob": {
+    "Edge": 0.4208,
+    "XSharp": 0.8261
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Minnesota Vikings",
+   "away": "Baltimore Ravens",
+   "home_score": 19,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.5287,
+    "XSharp": 0.9326
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "New York Jets",
+   "away": "Cleveland Browns",
+   "home_score": 27,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.4712,
+    "XSharp": 0.9666
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "San Francisco 49ers",
+   "away": "Los Angeles Rams",
+   "home_score": 26,
+   "away_score": 42,
+   "home_prob": {
+    "Edge": 0.5272,
+    "XSharp": 0.3677
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Seattle Seahawks",
+   "away": "Arizona Cardinals",
+   "home_score": 44,
+   "away_score": 22,
+   "home_prob": {
+    "Edge": 0.5295,
+    "XSharp": 0.8359
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Tampa Bay Buccaneers",
+   "away": "New England Patriots",
+   "home_score": 23,
+   "away_score": 28,
+   "home_prob": {
+    "Edge": 0.5263,
+    "XSharp": 0.7489
+   }
+  },
+  {
+   "date": "2025-11-09",
+   "home": "Washington Commanders",
+   "away": "Detroit Lions",
+   "home_score": 22,
+   "away_score": 44,
+   "home_prob": {
+    "Edge": 0.4712,
+    "XSharp": 0.8381
+   }
+  },
+  {
+   "date": "2025-11-10",
+   "home": "Los Angeles Chargers",
+   "away": "Pittsburgh Steelers",
+   "home_score": 25,
+   "away_score": 10,
+   "home_prob": {
+    "Edge": 0.4975,
+    "XSharp": 0.7984
+   }
+  },
+  {
+   "date": "2025-11-11",
+   "home": "Green Bay Packers",
+   "away": "Philadelphia Eagles",
+   "home_score": 7,
+   "away_score": 10,
+   "home_prob": {
+    "Edge": 0.4562,
+    "XSharp": 0.7994
+   }
+  },
+  {
+   "date": "2025-11-14",
+   "home": "New England Patriots",
+   "away": "New York Jets",
+   "home_score": 27,
+   "away_score": 14,
+   "home_prob": {
+    "Edge": 0.555,
+    "XSharp": 0.9578
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Arizona Cardinals",
+   "away": "San Francisco 49ers",
+   "home_score": 22,
+   "away_score": 41,
+   "home_prob": {
+    "Edge": 0.4577,
+    "XSharp": 0.8263
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Atlanta Falcons",
+   "away": "Carolina Panthers",
+   "home_score": 27,
+   "away_score": 30,
+   "home_prob": {
+    "Edge": 0.528,
+    "XSharp": 0.9581
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Buffalo Bills",
+   "away": "Tampa Bay Buccaneers",
+   "home_score": 44,
+   "away_score": 32,
+   "home_prob": {
+    "Edge": 0.5263,
+    "XSharp": 0.4333
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Cleveland Browns",
+   "away": "Baltimore Ravens",
+   "home_score": 16,
+   "away_score": 23,
+   "home_prob": {
+    "Edge": 0.5024,
+    "XSharp": 0.9511
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Denver Broncos",
+   "away": "Kansas City Chiefs",
+   "home_score": 22,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.5008,
+    "XSharp": 0.8194
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Jacksonville Jaguars",
+   "away": "Los Angeles Chargers",
+   "home_score": 35,
+   "away_score": 6,
+   "home_prob": {
+    "Edge": 0.5033,
+    "XSharp": 0.4773
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Los Angeles Rams",
+   "away": "Seattle Seahawks",
+   "home_score": 21,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.4856,
+    "XSharp": 0.7984
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Miami Dolphins",
+   "away": "Washington Commanders",
+   "home_score": 16,
+   "away_score": 13,
+   "home_prob": {
+    "Edge": 0.4737,
+    "XSharp": 0.9661
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Minnesota Vikings",
+   "away": "Chicago Bears",
+   "home_score": 17,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.4992,
+    "XSharp": 0.4469
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "New York Giants",
+   "away": "Green Bay Packers",
+   "home_score": 20,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.461,
+    "XSharp": 0.9674
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Pittsburgh Steelers",
+   "away": "Cincinnati Bengals",
+   "home_score": 34,
+   "away_score": 12,
+   "home_prob": {
+    "Edge": 0.5296,
+    "XSharp": 0.8359
+   }
+  },
+  {
+   "date": "2025-11-16",
+   "home": "Tennessee Titans",
+   "away": "Houston Texans",
+   "home_score": 13,
+   "away_score": 16,
+   "home_prob": {
+    "Edge": 0.472,
+    "XSharp": 0.9666
+   }
+  },
+  {
+   "date": "2025-11-17",
+   "home": "Philadelphia Eagles",
+   "away": "Detroit Lions",
+   "home_score": 16,
+   "away_score": 9,
+   "home_prob": {
+    "Edge": 0.5287,
+    "XSharp": 0.6508
+   }
+  },
+  {
+   "date": "2025-11-18",
+   "home": "Las Vegas Raiders",
+   "away": "Dallas Cowboys",
+   "home_score": 16,
+   "away_score": 33,
+   "home_prob": {
+    "Edge": 0.4865,
+    "XSharp": 0.9653
+   }
+  },
+  {
+   "date": "2025-11-21",
+   "home": "Houston Texans",
+   "away": "Buffalo Bills",
+   "home_score": 23,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.4208,
+    "XSharp": 0.8261
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Arizona Cardinals",
+   "away": "Jacksonville Jaguars",
+   "home_score": 24,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.4704,
+    "XSharp": 0.8381
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Baltimore Ravens",
+   "away": "New York Jets",
+   "home_score": 23,
+   "away_score": 10,
+   "home_prob": {
+    "Edge": 0.5264,
+    "XSharp": 0.9511
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Chicago Bears",
+   "away": "Pittsburgh Steelers",
+   "home_score": 31,
+   "away_score": 28,
+   "home_prob": {
+    "Edge": 0.4728,
+    "XSharp": 0.8419
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Cincinnati Bengals",
+   "away": "New England Patriots",
+   "home_score": 20,
+   "away_score": 26,
+   "home_prob": {
+    "Edge": 0.4983,
+    "XSharp": 0.7226
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Dallas Cowboys",
+   "away": "Philadelphia Eagles",
+   "home_score": 24,
+   "away_score": 21,
+   "home_prob": {
+    "Edge": 0.4286,
+    "XSharp": 0.8248
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Detroit Lions",
+   "away": "New York Giants",
+   "home_score": 34,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.5541,
+    "XSharp": 0.5061
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Green Bay Packers",
+   "away": "Minnesota Vikings",
+   "home_score": 23,
+   "away_score": 6,
+   "home_prob": {
+    "Edge": 0.5127,
+    "XSharp": 0.7489
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Kansas City Chiefs",
+   "away": "Indianapolis Colts",
+   "home_score": 23,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.4745,
+    "XSharp": 0.7316
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Las Vegas Raiders",
+   "away": "Cleveland Browns",
+   "home_score": 10,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.4976,
+    "XSharp": 0.9653
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "New Orleans Saints",
+   "away": "Atlanta Falcons",
+   "home_score": 10,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.4458,
+    "XSharp": 0.9638
+   }
+  },
+  {
+   "date": "2025-11-23",
+   "home": "Tennessee Titans",
+   "away": "Seattle Seahawks",
+   "home_score": 24,
+   "away_score": 30,
+   "home_prob": {
+    "Edge": 0.4169,
+    "XSharp": 0.9462
+   }
+  },
+  {
+   "date": "2025-11-24",
+   "home": "Los Angeles Rams",
+   "away": "Tampa Bay Buccaneers",
+   "home_score": 34,
+   "away_score": 7,
+   "home_prob": {
+    "Edge": 0.4879,
+    "XSharp": 0.7147
+   }
+  },
+  {
+   "date": "2025-11-25",
+   "home": "San Francisco 49ers",
+   "away": "Carolina Panthers",
+   "home_score": 20,
+   "away_score": 9,
+   "home_prob": {
+    "Edge": 0.5683,
+    "XSharp": 0.8634
+   }
+  },
+  {
+   "date": "2025-11-27",
+   "home": "Dallas Cowboys",
+   "away": "Kansas City Chiefs",
+   "home_score": 31,
+   "away_score": 28,
+   "home_prob": {
+    "Edge": 0.484,
+    "XSharp": 0.9661
+   }
+  },
+  {
+   "date": "2025-11-27",
+   "home": "Detroit Lions",
+   "away": "Green Bay Packers",
+   "home_score": 24,
+   "away_score": 31,
+   "home_prob": {
+    "Edge": 0.5153,
+    "XSharp": 0.4878
+   }
+  },
+  {
+   "date": "2025-11-28",
+   "home": "Baltimore Ravens",
+   "away": "Cincinnati Bengals",
+   "home_score": 14,
+   "away_score": 32,
+   "home_prob": {
+    "Edge": 0.4729,
+    "XSharp": 0.9623
+   }
+  },
+  {
+   "date": "2025-11-28",
+   "home": "Philadelphia Eagles",
+   "away": "Chicago Bears",
+   "home_score": 15,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.5557,
+    "XSharp": 0.7818
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Carolina Panthers",
+   "away": "Los Angeles Rams",
+   "home_score": 31,
+   "away_score": 28,
+   "home_prob": {
+    "Edge": 0.4586,
+    "XSharp": 0.9294
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Cleveland Browns",
+   "away": "San Francisco 49ers",
+   "home_score": 8,
+   "away_score": 26,
+   "home_prob": {
+    "Edge": 0.4325,
+    "XSharp": 0.8261
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Indianapolis Colts",
+   "away": "Houston Texans",
+   "home_score": 16,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.5533,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Los Angeles Chargers",
+   "away": "Las Vegas Raiders",
+   "home_score": 31,
+   "away_score": 14,
+   "home_prob": {
+    "Edge": 0.5541,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Miami Dolphins",
+   "away": "New Orleans Saints",
+   "home_score": 21,
+   "away_score": 17,
+   "home_prob": {
+    "Edge": 0.5264,
+    "XSharp": 0.9511
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "New York Jets",
+   "away": "Atlanta Falcons",
+   "home_score": 27,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.4442,
+    "XSharp": 0.9638
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Pittsburgh Steelers",
+   "away": "Buffalo Bills",
+   "home_score": 7,
+   "away_score": 26,
+   "home_prob": {
+    "Edge": 0.4753,
+    "XSharp": 0.7683
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Seattle Seahawks",
+   "away": "Minnesota Vikings",
+   "home_score": 26,
+   "away_score": 0,
+   "home_prob": {
+    "Edge": 0.5287,
+    "XSharp": 0.7565
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Tampa Bay Buccaneers",
+   "away": "Arizona Cardinals",
+   "home_score": 20,
+   "away_score": 17,
+   "home_prob": {
+    "Edge": 0.5272,
+    "XSharp": 0.8214
+   }
+  },
+  {
+   "date": "2025-11-30",
+   "home": "Tennessee Titans",
+   "away": "Jacksonville Jaguars",
+   "home_score": 3,
+   "away_score": 25,
+   "home_prob": {
+    "Edge": 0.4168,
+    "XSharp": 0.9462
+   }
+  },
+  {
+   "date": "2025-12-01",
+   "home": "Washington Commanders",
+   "away": "Denver Broncos",
+   "home_score": 26,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.4976,
+    "XSharp": 0.3494
+   }
+  },
+  {
+   "date": "2025-12-02",
+   "home": "New England Patriots",
+   "away": "New York Giants",
+   "home_score": 33,
+   "away_score": 15,
+   "home_prob": {
+    "Edge": 0.5263,
+    "XSharp": 0.9522
+   }
+  },
+  {
+   "date": "2025-12-05",
+   "home": "Detroit Lions",
+   "away": "Dallas Cowboys",
+   "home_score": 44,
+   "away_score": 30,
+   "home_prob": {
+    "Edge": 0.5431,
+    "XSharp": 0.8634
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Atlanta Falcons",
+   "away": "Seattle Seahawks",
+   "home_score": 9,
+   "away_score": 37,
+   "home_prob": {
+    "Edge": 0.4721,
+    "XSharp": 0.8304
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Baltimore Ravens",
+   "away": "Pittsburgh Steelers",
+   "home_score": 22,
+   "away_score": 27,
+   "home_prob": {
+    "Edge": 0.4435,
+    "XSharp": 0.9462
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Buffalo Bills",
+   "away": "Cincinnati Bengals",
+   "home_score": 39,
+   "away_score": 34,
+   "home_prob": {
+    "Edge": 0.5542,
+    "XSharp": 0.8106
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Cleveland Browns",
+   "away": "Tennessee Titans",
+   "home_score": 29,
+   "away_score": 31,
+   "home_prob": {
+    "Edge": 0.5288,
+    "XSharp": 0.9378
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Green Bay Packers",
+   "away": "Chicago Bears",
+   "home_score": 28,
+   "away_score": 21,
+   "home_prob": {
+    "Edge": 0.5119,
+    "XSharp": 0.7489
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Jacksonville Jaguars",
+   "away": "Indianapolis Colts",
+   "home_score": 36,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.5025,
+    "XSharp": 0.4773
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Las Vegas Raiders",
+   "away": "Denver Broncos",
+   "home_score": 17,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.4697,
+    "XSharp": 0.9674
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Minnesota Vikings",
+   "away": "Washington Commanders",
+   "home_score": 31,
+   "away_score": 0,
+   "home_prob": {
+    "Edge": 0.5008,
+    "XSharp": 0.5344
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "New York Jets",
+   "away": "Miami Dolphins",
+   "home_score": 10,
+   "away_score": 34,
+   "home_prob": {
+    "Edge": 0.472,
+    "XSharp": 0.9666
+   }
+  },
+  {
+   "date": "2025-12-07",
+   "home": "Tampa Bay Buccaneers",
+   "away": "New Orleans Saints",
+   "home_score": 20,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.5793,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2025-12-08",
+   "home": "Kansas City Chiefs",
+   "away": "Houston Texans",
+   "home_score": 10,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.5279,
+    "XSharp": 0.9581
+   }
+  },
+  {
+   "date": "2025-12-09",
+   "home": "Los Angeles Chargers",
+   "away": "Philadelphia Eagles",
+   "home_score": 22,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.4689,
+    "XSharp": 0.7994
+   }
+  },
+  {
+   "date": "2025-12-12",
+   "home": "Tampa Bay Buccaneers",
+   "away": "Atlanta Falcons",
+   "home_score": 28,
+   "away_score": 29,
+   "home_prob": {
+    "Edge": 0.5255,
+    "XSharp": 0.5313
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Chicago Bears",
+   "away": "Cleveland Browns",
+   "home_score": 31,
+   "away_score": 3,
+   "home_prob": {
+    "Edge": 0.5271,
+    "XSharp": 0.9581
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Cincinnati Bengals",
+   "away": "Baltimore Ravens",
+   "home_score": 0,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.5271,
+    "XSharp": 0.9469
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Denver Broncos",
+   "away": "Green Bay Packers",
+   "home_score": 34,
+   "away_score": 26,
+   "home_prob": {
+    "Edge": 0.4889,
+    "XSharp": 0.7397
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Houston Texans",
+   "away": "Arizona Cardinals",
+   "home_score": 40,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.4737,
+    "XSharp": 0.9661
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Jacksonville Jaguars",
+   "away": "New York Jets",
+   "home_score": 48,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.5832,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Kansas City Chiefs",
+   "away": "Los Angeles Chargers",
+   "home_score": 13,
+   "away_score": 16,
+   "home_prob": {
+    "Edge": 0.4753,
+    "XSharp": 0.7316
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "New England Patriots",
+   "away": "Buffalo Bills",
+   "home_score": 31,
+   "away_score": 35,
+   "home_prob": {
+    "Edge": 0.4475,
+    "XSharp": 0.8263
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "New Orleans Saints",
+   "away": "Carolina Panthers",
+   "home_score": 20,
+   "away_score": 17,
+   "home_prob": {
+    "Edge": 0.4736,
+    "XSharp": 0.9653
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "New York Giants",
+   "away": "Washington Commanders",
+   "home_score": 21,
+   "away_score": 29,
+   "home_prob": {
+    "Edge": 0.4745,
+    "XSharp": 0.9661
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Philadelphia Eagles",
+   "away": "Las Vegas Raiders",
+   "home_score": 31,
+   "away_score": 0,
+   "home_prob": {
+    "Edge": 0.5846,
+    "XSharp": 0.8634
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "San Francisco 49ers",
+   "away": "Tennessee Titans",
+   "home_score": 37,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.5955,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2025-12-14",
+   "home": "Seattle Seahawks",
+   "away": "Indianapolis Colts",
+   "home_score": 18,
+   "away_score": 16,
+   "home_prob": {
+    "Edge": 0.5024,
+    "XSharp": 0.4773
+   }
+  },
+  {
+   "date": "2025-12-15",
+   "home": "Dallas Cowboys",
+   "away": "Minnesota Vikings",
+   "home_score": 26,
+   "away_score": 34,
+   "home_prob": {
+    "Edge": 0.4848,
+    "XSharp": 0.9661
+   }
+  },
+  {
+   "date": "2025-12-16",
+   "home": "Pittsburgh Steelers",
+   "away": "Miami Dolphins",
+   "home_score": 28,
+   "away_score": 15,
+   "home_prob": {
+    "Edge": 0.5549,
+    "XSharp": 0.5061
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Atlanta Falcons",
+   "away": "New Orleans Saints",
+   "home_score": 19,
+   "away_score": 17,
+   "home_prob": {
+    "Edge": 0.5542,
+    "XSharp": 0.9578
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Buffalo Bills",
+   "away": "New York Jets",
+   "home_score": 35,
+   "away_score": 8,
+   "home_prob": {
+    "Edge": 0.6063,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Chicago Bears",
+   "away": "Detroit Lions",
+   "home_score": 16,
+   "away_score": 19,
+   "home_prob": {
+    "Edge": 0.4728,
+    "XSharp": 0.8419
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Cincinnati Bengals",
+   "away": "Cleveland Browns",
+   "home_score": 18,
+   "away_score": 20,
+   "home_prob": {
+    "Edge": 0.5247,
+    "XSharp": 0.9469
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Denver Broncos",
+   "away": "Los Angeles Chargers",
+   "home_score": 19,
+   "away_score": 3,
+   "home_prob": {
+    "Edge": 0.4761,
+    "XSharp": 0.7316
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Houston Texans",
+   "away": "Indianapolis Colts",
+   "home_score": 38,
+   "away_score": 30,
+   "home_prob": {
+    "Edge": 0.4467,
+    "XSharp": 0.9351
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Jacksonville Jaguars",
+   "away": "Tennessee Titans",
+   "home_score": 41,
+   "away_score": 7,
+   "home_prob": {
+    "Edge": 0.5832,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Las Vegas Raiders",
+   "away": "Kansas City Chiefs",
+   "home_score": 14,
+   "away_score": 12,
+   "home_prob": {
+    "Edge": 0.4705,
+    "XSharp": 0.9638
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Minnesota Vikings",
+   "away": "Green Bay Packers",
+   "home_score": 16,
+   "away_score": 3,
+   "home_prob": {
+    "Edge": 0.4873,
+    "XSharp": 0.7397
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "New England Patriots",
+   "away": "Miami Dolphins",
+   "home_score": 38,
+   "away_score": 10,
+   "home_prob": {
+    "Edge": 0.5271,
+    "XSharp": 0.9581
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "New York Giants",
+   "away": "Dallas Cowboys",
+   "home_score": 34,
+   "away_score": 17,
+   "home_prob": {
+    "Edge": 0.4889,
+    "XSharp": 0.9653
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Philadelphia Eagles",
+   "away": "Washington Commanders",
+   "home_score": 17,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.5573,
+    "XSharp": 0.8106
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Pittsburgh Steelers",
+   "away": "Baltimore Ravens",
+   "home_score": 26,
+   "away_score": 24,
+   "home_prob": {
+    "Edge": 0.5565,
+    "XSharp": 0.962
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "San Francisco 49ers",
+   "away": "Seattle Seahawks",
+   "home_score": 3,
+   "away_score": 13,
+   "home_prob": {
+    "Edge": 0.5128,
+    "XSharp": 0.5472
+   }
+  },
+  {
+   "date": "2026-01-05",
+   "home": "Tampa Bay Buccaneers",
+   "away": "Carolina Panthers",
+   "home_score": 16,
+   "away_score": 14,
+   "home_prob": {
+    "Edge": 0.5534,
+    "XSharp": 0.962
+   }
+  }
+ ]
+}

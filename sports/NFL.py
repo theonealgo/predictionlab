@@ -383,7 +383,7 @@ def render_sport_results_page(sport, season_start_dt=None):
     completed_games = conn.execute('''
         SELECT g.*, p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.win_probability
         FROM games g
-        LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = 'NFL'
+        LEFT JOIN predictions p ON g.game_id = p.game_id AND +p.sport = 'NFL'
         WHERE g.sport = 'NFL' AND g.home_score IS NOT NULL
           AND (g.game_date >= ? OR CAST(g.game_date AS TEXT) >= ?)
         ORDER BY g.game_date DESC

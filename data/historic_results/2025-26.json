@@ -1,0 +1,217 @@
+{
+ "season": "2025-26",
+ "built": "2026-10-23 11:28",
+ "sports": [
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "MLB",
+   "season": "2025",
+   "start": "2025-03-27",
+   "end": "2025-11-02"
+  },
+  {
+   "games": 1066,
+   "moneyline": {
+    "Grinder2": {
+     "w": 603,
+     "l": 463
+    },
+    "Takedown": {
+     "w": 550,
+     "l": 418
+    },
+    "Edge": {
+     "w": 584,
+     "l": 482
+    },
+    "XSharp": {
+     "w": 600,
+     "l": 466
+    },
+    "Sharp Consensus": {
+     "w": 609,
+     "l": 457
+    }
+   },
+   "spread": {},
+   "total": {},
+   "sport": "NHL",
+   "season": "2025-26",
+   "start": "2025-10-07",
+   "end": "2026-06-30"
+  },
+  {
+   "games": 642,
+   "moneyline": {
+    "Grinder2": {
+     "w": 55,
+     "l": 19
+    },
+    "Takedown": {
+     "w": 317,
+     "l": 186
+    },
+    "Edge": {
+     "w": 396,
+     "l": 246
+    },
+    "XSharp": {
+     "w": 415,
+     "l": 227
+    },
+    "Sharp Consensus": {
+     "w": 406,
+     "l": 236
+    }
+   },
+   "spread": {},
+   "total": {},
+   "sport": "NBA",
+   "season": "2025-26",
+   "start": "2025-10-21",
+   "end": "2026-06-30"
+  },
+  {
+   "games": 143,
+   "moneyline": {
+    "Edge": {
+     "w": 91,
+     "l": 52
+    },
+    "XSharp": {
+     "w": 76,
+     "l": 67
+    }
+   },
+   "spread": {},
+   "total": {},
+   "sport": "NFL",
+   "season": "2025",
+   "start": "2025-09-04",
+   "end": "2026-02-10"
+  },
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "NCAAF",
+   "season": "2025",
+   "start": "2025-08-23",
+   "end": "2026-01-20"
+  },
+  {
+   "games": 66,
+   "moneyline": {
+    "Takedown": {
+     "w": 44,
+     "l": 22
+    },
+    "Edge": {
+     "w": 40,
+     "l": 26
+    },
+    "XSharp": {
+     "w": 42,
+     "l": 24
+    },
+    "Sharp Consensus": {
+     "w": 44,
+     "l": 22
+    }
+   },
+   "spread": {},
+   "total": {},
+   "sport": "NCAAB",
+   "season": "2025-26",
+   "start": "2025-11-03",
+   "end": "2026-04-07"
+  },
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "NCAAW",
+   "season": "2025-26",
+   "start": "2025-11-03",
+   "end": "2026-04-07"
+  },
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "WNBA",
+   "season": "2025",
+   "start": "2025-05-16",
+   "end": "2025-10-15"
+  },
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "CFL",
+   "season": "2025",
+   "start": "2025-06-05",
+   "end": "2025-11-17"
+  },
+  {
+   "games": 16,
+   "moneyline": {
+    "Edge": {
+     "w": 10,
+     "l": 6
+    },
+    "XSharp": {
+     "w": 10,
+     "l": 6
+    },
+    "Sharp Consensus": {
+     "w": 10,
+     "l": 6
+    }
+   },
+   "spread": {},
+   "total": {},
+   "sport": "SOCCER",
+   "season": "2025-26",
+   "start": "2025-08-01",
+   "end": "2026-06-30"
+  },
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "TENNIS",
+   "season": "2025",
+   "start": "2025-01-01",
+   "end": "2025-12-31"
+  },
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "UFC",
+   "season": "2025",
+   "start": "2025-01-01",
+   "end": "2025-12-31"
+  },
+  {
+   "games": 0,
+   "moneyline": {},
+   "spread": {},
+   "total": {},
+   "sport": "GOLF",
+   "season": "2025",
+   "start": "2025-01-01",
+   "end": "2025-12-31"
+  }
+ ]
+}

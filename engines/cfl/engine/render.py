@@ -501,6 +501,13 @@ def render_card(card: dict[str, Any], idx: int, *, mode: str = "picks") -> str:
 
     h2h = _h2h_last10(away, home)
     time_bit = f"{day} · {when}" if day else when
+    if (
+        str(card.get("status") or "").lower() == "complete"
+        and card.get("home_score") is not None
+        and card.get("away_score") is not None
+    ):
+        final = f"FINAL {int(card['away_score'])}-{int(card['home_score'])}"
+        time_bit = f"{day} · {final}" if day else final
 
     extra_attrs = []
     if total is not None:

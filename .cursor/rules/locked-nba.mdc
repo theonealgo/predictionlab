@@ -12,4 +12,18 @@ Locked. 3 UNLOCKS required.
 
 Owner 2026-10-15: picks Recent results anchor on the last graded NBA night, so the strip is not blank in the off-season. The 2026-06-03 card missing Edge / XSharp / SC is old stored data. Miss closed — locked.
 
+Owner 2026-10-16: preseason games get picks only before tip-off (a started game with no saved pre-game pick stays off the page); preseason finals are stored as league 'NBA Preseason' and kept out of model training; when no NBA games fall in the next 3 days the picks page looks 7 days ahead (opening week). Miss closed — locked.
+
+Owner 2026-10-17: picks Recent results anchor skips preseason (last regular/playoff night). Preseason stays out of results / chart. Miss closed — locked.
+
+Owner 2026-10-17 (evening): picks cards with no face win % use the stored Sharp Consensus for the green winner box; Recent results Last Night grades spread / totals from the same graded games as Last 7. Card face stays PL vs Books + Consensus Historical Record (H2H Last 10 in details) — the checker's "H2H on the face" rule conflicts with its face-only and card-template rules. Miss closed — locked.
+
+Owner 2026-10-21: results stuck on 2026-06-03 — the NBA score sync ran inside the visitor's request and hit the page ESPN budget, so new finals were never stored. It now runs on its own thread (`_start_background_score_sync`) whenever /nba-results is opened, saved page or not, and a sync with new finals clears the weekly memo. Miss closed — locked.
+
+Owner 2026-10-22: results Moneyline Accuracy by Model Efficiency tile was — while the cards graded Efficiency. The season Efficiency is now recounted after the cards get their PL spread (11-3 = the cards' ✅/❌). Checker rule added (`_season_grid_blank_models`). Miss closed — locked.
+
+Owner 2026-10-22: picks Books moneyline that cloned the PL moneyline now shows the stored sportsbook price (also on the early-return repair path). Miss closed — locked.
+
+Owner 2026-10-28: results Last 7 said 42 of 53 games — the NBA tally window started at the time of day and dropped the first night; it now covers whole calendar days. Results cards list 14 nights (opening night was cut off at 7). Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

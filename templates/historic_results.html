@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{% if season %}{{ season_label }} Season Results by Model{% else %}Historic Results{% endif %} | predictionlab.io{% endblock %}
+{% block head_meta %}
+<meta name="description" content="{% if season %}Prediction Lab {{ season_label }} season results: moneyline, spread, and total records for every model across all sports.{% else %}Prediction Lab historic results: every model's season record for each year, across all sports.{% endif %}">
+<link rel="canonical" href="https://predictionlab.io/historic-results{% if season %}/{{ season }}{% endif %}">
+<style>
+.hr-wrap{max-width:1200px;margin:0 auto;padding:10px 16px 28px}
+.hr-wrap h1{font-size:1.8rem;margin:0 0 6px;text-align:center}
+.hr-sub{text-align:center;color:#475569;margin:0 auto 18px;max-width:760px;font-size:.95em}
+.hr-years{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:0 0 20px}
+.hr-year{display:inline-block;padding:10px 18px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;font-weight:700;text-decoration:none}
+.hr-year:hover{border-color:#16a34a}
+.hr-year.on{background:#16a34a;border-color:#16a34a;color:#fff}
+.hr-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.hr-card{background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px;color:#0f172a}
+.hr-card h2{margin:0;font-size:1.1rem}
+.hr-meta{margin:2px 0 10px;color:#64748b;font-size:.8rem}
+.hr-card table{width:100%;border-collapse:collapse;font-size:.85rem}
+.hr-card th,.hr-card td{padding:5px 6px;border-bottom:1px solid #e2e8f0;text-align:right;font-variant-numeric:tabular-nums}
+.hr-card th:first-child,.hr-card td:first-child{text-align:left}
+.hr-card thead th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#475569}
+.hr-pct{color:#64748b;font-size:.78em;margin-left:4px}
+.hr-empty{color:#64748b;font-size:.88rem;margin:8px 0 0}
+@media(max-width:800px){.hr-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="hr-wrap">
+  <h1>{% if season %}{{ season_label }} Season Results{% else %}Historic Results{% endif %}</h1>
+  <p class="hr-sub">{% if season %}Final records for every model, by sport. Only picks published before the game are counted. Season-long sports show the {{ season_label }} season; summer sports show their {{ season[:4] }} season.{% else %}Every model's full-season record for each year, across all sports. Only picks published before the game are counted.{% endif %}</p>
+  <nav class="hr-years" aria-label="Seasons">
+  {% for y in years %}
+    <a class="hr-year{% if y == season %} on{% endif %}" href="/historic-results/{{ y }}">{{ y|replace('-', '/') }} season</a>
+  {% else %}
+    <p class="hr-empty">No completed seasons yet.</p>
+  {% endfor %}
+  </nav>
+  {% if season %}
+  <div class="hr-grid">
+  {% for s in sports %}
+    <section class="hr-card" id="hr-{{ s.sport|lower }}">
+      <h2>{{ s.name }}</h2>
+      <p class="hr-meta">{{ s.season }} season{% if s.games %} · {{ s.games }} graded games{% endif %}</p>
+      {% if s.rows %}
+      <table>
+        <thead><tr><th>Model</th><th>Moneyline</th>{% if s.has_spread %}<th>Spread</th>{% endif %}{% if s.has_total %}<th>Total</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for r in s.rows %}
+          <tr>
+            <td>{{ r.label }}</td>
+            {% for cell, show in ((r.ml, true), (r.spread, s.has_spread), (r.total, s.has_total)) %}{% if show %}
+            <td>{% if cell %}{{ cell.w }}-{{ cell.l }}<span class="hr-pct">{{ cell.pct }}%</span>{% else %}—{% endif %}</td>
+            {% endif %}{% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="hr-empty">No picks published before the game are stored for this season.</p>
+      {% endif %}
+    </section>
+  {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

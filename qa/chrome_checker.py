@@ -171,7 +171,7 @@ IN_SEASON_MUST = ("NFL", "MLB", "Soccer", "NCAAF", "CFL", "Tennis", "UFC", "Golf
 OFFSEASON_OK_EMPTY = frozenset({"NBA", "NHL", "NCAAB", "NCAAW"})
 
 # Signed-off face is Consensus Historical Record; H2H stays in details.
-_CONSENSUS_HIST_FACE_SPORTS = frozenset({"MLB", "NFL", "NCAAF", "CFL", "WNBA", "NHL"})
+_CONSENSUS_HIST_FACE_SPORTS = frozenset({"MLB", "NFL", "NCAAF", "CFL", "WNBA", "NHL", "NBA"})
 
 # 302 is OK (login / plans / auth-gated tools). Everything else must 200.
 ALLOW_302 = {

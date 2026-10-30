@@ -4,11 +4,13 @@ Does not change /{sport}-results. Cached so picks stay fast.
 """
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime, timedelta
 from html import escape
 
 _CACHE: dict[str, tuple[float, str]] = {}
+_CHART: dict[str, tuple[float, str]] = {}
 _TTL = 180.0
 
 _MODELS = (
@@ -61,6 +63,53 @@ def _st_rec(st: dict | None, win_key: str, n_key: str, pct_key: str) -> str:
     if acc is None:
         acc = round(100.0 * w / n, 1)
     return f"{acc}% · {w}-{n - w}"
+
+
+def _published_results_html(sport_u: str) -> str:
+    """The results page already graded these tiles. Picks repeats that record."""
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parent
+    for base in (here, here.parent.parent):
+        path = base / ".cache" / f"served_{sport_u}_.html"
+        try:
+            if path.is_file():
+                return path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+    return ""
+
+
+def _published_tiles(html: str, heading: str) -> dict | None:
+    """Games count and per-row records from one results-page tile section."""
+    if not html or not heading:
+        return None
+    m = re.search(rf"<h2[^>]*>[^<]*{re.escape(heading)}[^<]*</h2>", html)
+    if not m:
+        return None
+    after = html[m.end() : m.end() + 12000]
+    nxt = re.search(r"<h2\b", after)
+    seg = after[: nxt.start()] if nxt else after
+    games_m = re.search(r"\((\d+)\s+games?\)", m.group(0))
+    rows: dict[str, str] = {}
+    for name, acc, rec in re.findall(
+        r'class="daily-model">([^<]*)</div>\s*<div class="daily-acc"[^>]*>([^<]*)</div>'
+        r'\s*<div class="daily-rec">([^<]*)</div>',
+        seg,
+    ):
+        label = re.sub(r"^[^A-Za-z]+", "", name).strip()
+        rec = re.sub(r"\s+", "", rec)
+        acc = re.sub(r"\s+", "", acc)
+        if not label or not re.search(r"\d+-\d+", rec):
+            continue
+        rows[label] = f"{acc} · {rec}" if acc.endswith("%") else rec
+    if not rows:
+        return None
+    return {
+        "games": int(games_m.group(1)) if games_m else 0,
+        "rows": rows,
+        "dates": re.findall(r"\d{4}-\d{2}-\d{2}", m.group(0)),
+    }
 
 
 def _slice_daily(daily: dict, start, end) -> dict:
@@ -173,6 +222,7 @@ def _nba_latest_final_date(N) -> str | None:
             SELECT date(game_date) AS d
             FROM games
             WHERE sport = 'NBA'
+              AND COALESCE(league, '') != 'NBA Preseason'
               AND home_score IS NOT NULL
               AND away_score IS NOT NULL
             ORDER BY date(game_date) DESC
@@ -239,7 +289,7 @@ def _build_block(sport: str) -> str:
     daily = N._banner_daily_results_for_range(
         sport_u, start, yest, prefer_weekly=False,
     ) or {}
-    if not any(bucket.get("games") for bucket in daily.values()):
+    if not int((N.compute_model_tally_for_range(daily, start, yest, sport=sport_u) or {}).get("games") or 0):
         # Off-season: the windows end on the last NBA night with finals
         # (the results page shows the same boards).
         last = N.parse_date(_nba_latest_final_date(N) or "")
@@ -249,6 +299,19 @@ def _build_block(sport: str) -> str:
             daily = N._banner_daily_results_for_range(
                 sport_u, start, yest, prefer_weekly=False,
             ) or {}
+    if hasattr(N, "_nba_grade_missing_g2_td"):
+        for bucket in daily.values():
+            for game in bucket.get("games") or []:
+                N._nba_grade_missing_g2_td(game)
+    try:
+        N._attach_h2h_projection_to_daily_results("NBA", daily, n=10)
+    except Exception:
+        pass
+    if hasattr(N, "_grade_efficiency_ml_from_spread"):
+        try:
+            N._grade_efficiency_ml_from_spread("NBA", daily)
+        except Exception:
+            pass
     _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:
@@ -274,20 +337,31 @@ def _build_block(sport: str) -> str:
     else:
         ln_label = yest.strftime("%Y-%m-%d")
     ln_src = daily
+    scored = _nba_scored_night(N, ln_label) if ln and int(ln.get("games") or 0) else None
+    if scored:
+        ln_label, ln, ln_src = scored
+    last7_start = (yest - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
     last7 = N.compute_model_tally_for_range(
-        daily, yest - timedelta(days=6), yest, sport=sport_u,
+        daily, last7_start, yest, sport=sport_u,
     )
     last30 = N.compute_model_tally_for_range(daily, start, yest, sport=sport_u)
     ln_dt = N.parse_date(ln_label) or yest
+    ln_day_start = ln_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    ln_day_end = ln_dt.replace(hour=23, minute=59, second=59, microsecond=0)
+    if _slice_daily(daily, ln_day_start, ln_day_end):
+        ln_src = daily
     windows = (
-        (f"Last Night — {ln_label}", ln, ln_dt, ln_dt, ln_src),
-        ("Last 7 days", last7, yest - timedelta(days=6), yest, daily),
+        (f"Last Night — {ln_label}", ln, ln_day_start, ln_day_end, ln_src),
+        ("Last 7 days", last7, last7_start, yest, daily),
         ("Last 30 days", last30, start, yest, daily),
     )
     cols = []
+    chart_stats = []
+    published = _published_results_html(sport_u)
     for title, tally, w_start, w_end, src in windows:
         games = int((tally or {}).get("games") or 0)
         st = _spread_total_stats(N, src, w_start, w_end, tally)
+        chart_stats.append(st)
         ml_pairs = [(label, _rec(tally, key)) for key, label in _MODELS]
         sp_pairs = [
             (label, _st_rec(st, wk, nk, pk))
@@ -297,6 +371,23 @@ def _build_block(sport: str) -> str:
             (label, _st_rec(st, wk, nk, pk))
             for wk, nk, pk, label in _TOTAL_ROWS
         ]
+        if "Last Night" in title:
+            heading = "Last Night"
+        elif "Last 7" in title:
+            heading = "Last 7 Days"
+        else:
+            heading = ""
+        tiles = _published_tiles(published, heading) if heading and published else None
+        if tiles and (tiles.get("dates") or [""])[-1] != w_end.strftime("%Y-%m-%d"):
+            tiles = None
+        if tiles and (not tiles["games"] or tiles["games"] == games):
+            # Same window and games as the results page: copy its grades exactly.
+            ml_pairs = [
+                (label, tiles["rows"].get(label) or val)
+                for (label, val) in ml_pairs
+            ]
+            if tiles["rows"].get("Spread"):
+                sp_pairs[0] = ("Prediction Lab", tiles["rows"]["Spread"])
         cols.append(
             f'<div class="picks-recent-col">'
             f"<h3>{escape(title)}</h3>"
@@ -307,6 +398,7 @@ def _build_block(sport: str) -> str:
             f'<a class="picks-recent-more" href="/{sport_u.lower()}-results">Full results →</a>'
             f"</div>"
         )
+    _CHART[sport_u] = (time.time(), _totals_chart_html(chart_stats))
     return (
         '<section id="picks-recent-results" class="picks-recent-results" '
         'aria-label="Recent results">'
@@ -333,6 +425,39 @@ def _build_block(sport: str) -> str:
         "</style>"
         "</section>"
     )
+
+
+def _totals_chart_html(stats: list) -> str:
+    """Prediction Lab and XSharp totals for Last Night, Last 7, and Last 30."""
+    rows = []
+    for win_key, n_key, pct_key, label in _TOTAL_ROWS:
+        cells = "".join(
+            f"<td>{escape(_st_rec(st, win_key, n_key, pct_key))}</td>" for st in stats
+        )
+        rows.append(f'<tr><td class="bucket">{escape(label)}</td>{cells}</tr>')
+    return (
+        '<div class="pl-consensus-records" id="pl-totals-three-way">'
+        "<h2>Prediction Lab · XSharp — Totals</h2>"
+        "<table><thead><tr>"
+        "<th>Model</th><th>Last night</th><th>Past 7 days</th><th>Past 30 days</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
+    )
+
+
+def results_totals_chart(sport: str) -> str:
+    """Same totals the picks Recent results shows, as the results page table."""
+    sport_u = (sport or "").strip().upper()
+    hit = _CHART.get(sport_u)
+    if hit and time.time() - hit[0] < _TTL:
+        return hit[1]
+    try:
+        _CACHE[sport_u] = (time.time(), _build_block(sport_u))
+    except Exception:
+        return ""
+    hit = _CHART.get(sport_u)
+    return hit[1] if hit else ""
 
 
 def inject_picks_recent_results(html: str, sport: str) -> str:

@@ -85,7 +85,7 @@ def calculate_nba_weekly_performance():
                    {prob_sql}
             FROM games g
             LEFT JOIN predictions p
-              ON p.sport = 'NBA' AND (
+              ON +p.sport = 'NBA' AND (
                    p.game_id = g.game_id
                    OR (
                         date(p.game_date) = date(g.game_date)
@@ -229,12 +229,11 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
             m._SPORT_RESULTS_CACHE, cache_key, cache_ttl,
         )
         if cached_html and m._results_page_html_usable(cached_html):
+            m._start_background_score_sync(sport)
             return cached_html
     try:
-        try:
-            update_nba_scores()
-        except Exception as e:
-            m.logger.error(f"NBA score sync failed (continuing with existing data): {e}")
+        # A visitor's request has a short ESPN budget; the sync runs on its own thread.
+        m._start_background_score_sync(sport)
         weekly_results = calculate_nba_weekly_performance()
         m.logger.info(
             f"NBA weekly_results: {weekly_results is not None}, "

@@ -19,7 +19,7 @@ _RESULTS_CHIPS = {
     "NCAAF": [("team_results_charts", "_inject_ncaaf_consensus_hist_chips", {})],
     "CFL": [
         ("team_results_charts", "_inject_cfl_consensus_hist_chips", {}),
-        ("team_results_charts", "_inject_nhl_pl_vs_books_chips", {"sport": "CFL"}),
+        ("cfl_live", "stamp_cfl_pl_vs_books", {"past": True}),
     ],
     "SOCCER": [
         ("team_results_charts", "_inject_soccer_consensus_hist_chips", {}),
@@ -113,45 +113,9 @@ def _pattern_key(label: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _past7_by_pattern(html: str) -> dict[str, str]:
-    """Pattern -> Past 7 days W-L from the page's Consensus Based Betting Records table."""
-    i = html.find("Consensus Based Betting Records")
-    if i < 0:
-        return {}
-    j = html.find("</table>", i)
-    out: dict[str, str] = {}
-    for row in re.findall(r"<tr>([\s\S]*?)</tr>", html[i:j if j > i else i + 20000]):
-        m = re.search(r'<td class="bucket">([^<]+)</td>', row)
-        if not m:
-            continue
-        cells = re.findall(r"<td>([\s\S]*?)</td>", row[m.end():])
-        if len(cells) < 2:
-            continue
-        rec = re.search(r"(\d+-\d+(?:-\d+)?)", re.sub(r"<[^>]+>", " ", cells[1]))
-        if rec:
-            out[_pattern_key(m.group(1))] = rec.group(1)
-    return out
-
-
 def _match_table_records(html: str) -> str:
-    """A results card's Consensus Historical Record is the Past 7 days record of its pattern."""
-    past7 = _past7_by_pattern(html)
-    if not past7:
-        return html
-
-    def _fix(m: re.Match) -> str:
-        val = m.group(2)
-        rec = past7.get(_pattern_key(val))
-        if not rec:
-            return m.group(0)
-        return m.group(1) + re.sub(r"\(\d+-\d+(?:-\d+)?\)\s*$", f"({rec})", val.rstrip()) + m.group(3)
-
-    return re.sub(
-        r'(Consensus Historical Record</div>\s*<div class="line-chip-val">)([^<]*\(\d+-\d+(?:-\d+)?\)\s*)(</div>)',
-        _fix,
-        html,
-    )
-
+    """A results card's Consensus Historical Record counts the season; the table only holds Past 7 / Past 30."""
+    return html
 
 def normalize_card_faces(html: str, sport: str, path: str) -> str:
     sport_u = (sport or "").upper()

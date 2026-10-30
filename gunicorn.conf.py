@@ -5,6 +5,23 @@ Prefer `bash render_start.sh` on Render so /data DB seeding and 8 threads apply.
 """
 import os
 
+# Render gives this service 1 CPU and 2 GB, but the host shows every core.
+# numpy / OpenBLAS / OpenMP start one thread (and buffer) per visible core, and
+# glibc opens up to 8 malloc arenas per core; together they took a 1-worker app
+# past 2 GB under a full-site crawl. Set in the master so the forked worker
+# inherits them; render_start.sh exports the same values.
+for _k, _v in (("OMP_NUM_THREADS", "1"), ("OPENBLAS_NUM_THREADS", "1"), ("MKL_NUM_THREADS", "1")):
+    os.environ.setdefault(_k, _v)
+try:
+    import ctypes as _ctypes
+
+    _libc = _ctypes.CDLL("libc.so.6")
+    _libc.mallopt(-8, 2)  # M_ARENA_MAX
+    _libc.mallopt(-3, 131072)  # M_MMAP_THRESHOLD
+    _libc.mallopt(-1, 131072)  # M_TRIM_THRESHOLD
+except Exception:
+    pass
+
 bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
 workers = 1
 worker_class = "gthread"

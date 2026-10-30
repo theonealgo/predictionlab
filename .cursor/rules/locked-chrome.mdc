@@ -10,4 +10,6 @@ Do not modify CHROME unless the same owner message contains the word **UNLOCK**
 
 HEADER, FOOTER, and HAMBURGER are locked. 3 UNLOCKS required, and the message must name HEADER, FOOTER, or HAMBURGER plus the miss.
 
+Owner 2026-10-18: header sports green = in season, read from each league's ESPN calendar (`season_status.py`, refreshed every 3 hours; the season calendar is the fallback). NCAAB / NCAAW turn green on their own when ESPN's season starts. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

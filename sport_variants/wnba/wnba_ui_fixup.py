@@ -1870,8 +1870,10 @@ def restore_wnba_stored_pick_face(html: str) -> str:
                         1,
                     )
         out.append(tag + rest)
-    return _paint_posted_wnba_moneylines(
-        _rewrite_wnba_books_na_hover(_paint_stored_wnba_book_lines("".join(out)))
+    return _replace_wnba_books_ml_cloned_from_pl(
+        _paint_posted_wnba_moneylines(
+            _rewrite_wnba_books_na_hover(_paint_stored_wnba_book_lines("".join(out)))
+        )
     )
 
 
@@ -2101,6 +2103,92 @@ def _paint_posted_wnba_moneylines(html: str) -> str:
     return "".join(out)
 
 
+def _face_pl_ml(card: str) -> list[str]:
+    return [
+        re.sub(r"\s+", "", n).replace("−", "-")
+        for n in re.findall(
+            r'class="ml-line face-pl-ml">[\s\S]*?class="ml-num[^"]*">\s*([^<]+)',
+            card,
+            flags=re.I,
+        )
+    ]
+
+
+def _stored_wnba_book_ml(gid: str) -> tuple[int, int] | None:
+    """Latest stored sportsbook moneyline (away, home). None for a model-made row."""
+    db = _app_db_path()
+    if not gid or not db.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        row = conn.execute(
+            "SELECT home_moneyline, away_moneyline, source FROM betting_lines "
+            "WHERE game_id=? ORDER BY fetched_at DESC LIMIT 1",
+            (gid,),
+        ).fetchone()
+        conn.close()
+    except sqlite3.Error:
+        return None
+    if not row or row[0] is None or row[1] is None:
+        return None
+    src = str(row[2] or "").lower()
+    real = "espn" in src or "pl_book_odds" in src or "draftkings" in src
+    if not real and ("model" in src or "engine" in src or "fallback" in src):
+        return None
+    try:
+        return int(row[1]), int(row[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def _replace_wnba_books_ml_cloned_from_pl(html: str) -> str:
+    """Books moneyline equal to the Prediction Lab one on both teams shows the stored book price.
+
+    A card with no stored sportsbook row is left as it is.
+    """
+    if not html or "data-pick-card" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for card in parts[1:]:
+        books = _face_books_ml(card)[:2]
+        pl = _face_pl_ml(card)[:2]
+        gid_m = re.search(r'data-game-id="([^"]*)"', card)
+        if (
+            len(books) < 2
+            or books != pl
+            or not all(re.fullmatch(r"[+-]?\d+", n) for n in books)
+            or not gid_m
+        ):
+            out.append(card)
+            continue
+        stored = _stored_wnba_book_ml(gid_m.group(1))
+        prices = [_fmt_american(p) for p in stored] if stored else []
+        if not prices or prices == books:
+            out.append(card)
+            continue
+        slot = {"n": 0}
+
+        def _repl(match: re.Match[str], _prices: list[str] = prices, _slot: dict = slot) -> str:
+            val = _prices[_slot["n"]]
+            _slot["n"] += 1
+            klass = "fav" if val.startswith("-") else "dog"
+            return match.group(1) + klass + match.group(2) + val + match.group(4)
+
+        card = re.sub(
+            r'(class="ml-line face-books-ml">[\s\S]*?class="ml-num )[^"]*(">\s*)'
+            r'([^<]+)(\s*</span>)',
+            _repl,
+            card,
+            count=2,
+            flags=re.I,
+        )
+        out.append(card)
+    return "".join(out)
+
+
 _WNBA_BOOKS_NA_TIP = "Odds are posted the day before or the day of the contest."
 _WNBA_BOOKS_NA_OLD = "Odds will be here on the same day as the game."
 
@@ -2115,7 +2203,7 @@ def _rewrite_wnba_books_na_hover(html: str) -> str:
         return html
     if _WNBA_BOOKS_NA_OLD in html:
         html = html.replace(_WNBA_BOOKS_NA_OLD, _WNBA_BOOKS_NA_TIP)
-    if "data-pick-card" not in html or "-108" not in html:
+    if "data-pick-card" not in html or "face-books-ml" not in html:
         return html
     btn = (
         '<button type="button" class="h2h-info-btn" '
@@ -2140,8 +2228,16 @@ def _rewrite_wnba_books_na_hover(html: str) -> str:
             flags=re.I,
         )
         nums = [re.sub(r"\s+", "", n).replace("−", "-") for n in face]
+        pl_face = re.findall(
+            r'class="ml-line face-pl-ml">[\s\S]*?class="ml-num[^"]*">\s*([^<]+)',
+            card,
+            flags=re.I,
+        )
+        pl_nums = [re.sub(r"\s+", "", n).replace("−", "-") for n in pl_face]
         # A -108/-108 pair is the unpublished coinflip, not a posted price.
-        if posted or nums != ["-108", "-108"]:
+        # With no posted book line, a Books price equal to Prediction Lab is a copy.
+        copied = len(nums) == 2 and nums == pl_nums and all(re.fullmatch(r"[+-]?\d+", n) for n in nums)
+        if posted or (nums != ["-108", "-108"] and not copied):
             out.append(card)
             continue
 
@@ -2151,13 +2247,22 @@ def _rewrite_wnba_books_na_hover(html: str) -> str:
 
         card = re.sub(
             r'(class="ml-line face-books-ml">[\s\S]*?class="ml-num[^"]*">\s*)'
-            r'(?:−|-)?108'
+            r'[+−-]?\d+'
             r'(\s*</span>)(\s*<button\b[^>]*class="[^"]*h2h-info-btn[^"]*"[^>]*>[\s\S]*?</button>)?',
             _na,
             card,
             count=2,
             flags=re.I,
         )
+        # EV is priced off the book; with no book price there is no EV to show.
+        card = re.sub(
+            r'<div class="sf-item">\s*<span class="sf-label">(?:[^<]* EV|Best market|Best EV)</span>'
+            r'\s*<span class="sf-val"[^>]*>[^<]*</span>\s*</div>',
+            "",
+            card,
+            flags=re.I,
+        )
+        card = re.sub(r'<p class="ev-explain"[^>]*>[\s\S]*?</p>', "", card, count=1, flags=re.I)
         out.append(card)
     return "".join(out)
 

@@ -943,13 +943,16 @@ def _build_row_from_odds_api(
                 break
     if spread is None and total is None and home_ml is None and away_ml is None:
         return None
+    ml_from_spread = False
     if spread is not None and (home_ml is None or away_ml is None):
         h_fb, a_fb = _ml_from_spread_fallback(spread)
+        ml_from_spread = True
         home_ml = home_ml if home_ml is not None else h_fb
         away_ml = away_ml if away_ml is not None else a_fb
     lines = _format_spread_line(home_team, away_team, spread or 0.0)
     fav = lines.get('favorite_team') if spread is not None else None
     return {
+        'ml_from_spread': ml_from_spread,
         'sport': sport,
         'game_id': game_id,
         'game_date': game_date,
@@ -1021,8 +1024,10 @@ def build_pl_book_odds(
             )
         return None
 
+    ml_from_spread = False
     if spread is not None and (home_ml is None or away_ml is None):
         h_fb, a_fb = _ml_from_spread_fallback(spread)
+        ml_from_spread = True
         home_ml = home_ml if home_ml is not None else h_fb
         away_ml = away_ml if away_ml is not None else a_fb
 
@@ -1056,6 +1061,7 @@ def build_pl_book_odds(
         'spread_price_away': _to_int_american((item.get('awayTeamOdds') or {}).get('spreadOdds')),
         'total_over_price': _to_int_american(item.get('overOdds')),
         'total_under_price': _to_int_american(item.get('underOdds')),
+        'ml_from_spread': ml_from_spread,
         'provider': provider,
         'source': 'pl_book_odds_api',
         'as_of': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),

@@ -14,4 +14,12 @@ Owner 2026-10-08 (all-sports pass): cards sit two across; Pick Confidence is two
 
 Owner 2026-10-14: picks-card chips are equal width (consensus chip no longer stretched full row). Miss closed — locked.
 
+Owner 2026-10-17: picks window runs through the end of the 7th ET day; results Last 7 starts at midnight; PL vs Books on every card (stored Sharp Consensus side when no PL moneyline). Card Consensus Historical Record stays season. Miss closed — locked.
+
+Owner 2026-10-28: picks were blank / old because nothing ran the CFL engine sync. `site_autorefresh.py` runs it every 3 hours (finals, set playoff matchups, new picks; published picks stay) and rebuilds the saved CFL pages when finals or picks change. Miss closed — locked.
+
+Owner 2026-10-29: picks date picker had one date (only one upcoming slate; playoff games still TBD). When the window holds a single upcoming day, the latest finished slate of the past 7 days stays beside it (`engines/cfl/engine/pipeline.list_pick_cards`), drawn with the same picks card as upcoming games (not the results card). Miss closed — locked.
+
+Owner 2026-10-30: a finished game on the picks page shows its date and FINAL score instead of the start time (`engines/cfl/engine/render.py`). Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

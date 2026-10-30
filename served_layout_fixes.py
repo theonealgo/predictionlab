@@ -51,6 +51,13 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
             pass
     if low.endswith("-results"):
         html = _ensure_date_picker(html)
+        if (view or "").strip().lower() == "chart" and sport:
+            try:
+                from scoreboard_dates import add_saved_chart_dates
+
+                html = add_saved_chart_dates(html, sport) or html
+            except Exception:
+                pass
         html = _refresh_results_dates(html, sport)
         html = _sync_totals_chart(html, sport)
     if low.rstrip("/").endswith(("-picks", "-results")):
@@ -392,8 +399,13 @@ def _sync_totals_chart(html: str, sport: str) -> str:
     grades = _picks_totals(sport)
     if not grades or 'id="pl-totals-three-way"' not in html:
         return html
+    # The cards view carries the id on a wrapper around the table; the chart view on the table.
     table = re.search(
         r'(<table[^>]*id="pl-totals-three-way"[\s\S]*?</table>)',
+        html,
+        re.I,
+    ) or re.search(
+        r'<(?:div|section)\b[^>]*id="pl-totals-three-way"[^>]*>(?:(?!</(?:div|section)>)[\s\S])*?(<table\b[\s\S]*?</table>)',
         html,
         re.I,
     )

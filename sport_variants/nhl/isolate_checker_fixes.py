@@ -65,6 +65,20 @@ class _TieredServed(dict):
 
     def __setitem__(self, key, value):
         super().__setitem__(self._k(key), value)
+        self._evict()
+
+    def _evict(self):
+        # Every saved page is also on disk; memory keeps only the newest few.
+        try:
+            now = time.time()
+            rows = sorted(list(super().items()), key=lambda kv: kv[1][0], reverse=True)
+            kept = 0
+            for k, (ts, text) in rows:
+                kept += len(text)
+                if now - ts >= _SERVED_TTL or (kept > _SERVED_MAX_BYTES and k != rows[0][0]):
+                    super().pop(k, None)
+        except Exception:
+            pass
 
     def __contains__(self, key):
         return super().__contains__(self._k(key))
@@ -75,6 +89,7 @@ class _TieredServed(dict):
 
 _SERVED = _TieredServed()
 _SERVED_TTL = 1200.0
+_SERVED_MAX_BYTES = 32 * 1024 * 1024
 
 
 def results_serve_key(
@@ -370,6 +385,39 @@ def _schedule_served_refresh(key: str) -> None:
             _RESULTS_REFRESH_INFLIGHT.discard(key)
 
 
+_COUNT_REFRESH_AT: dict = {}
+_COUNT_REFRESH_GAP = 15 * 60
+
+
+def _last_night_count_behind(key: str, html: str, sport: str, latest: str, path) -> bool:
+    """Last Night was saved before that night's late finals landed (e.g. 8 of 11)."""
+    m = re.search(r'data-date="(\d{4}-\d{2}-\d{2})"\s+data-games="(\d+)"', html)
+    if not m or m.group(1) != latest:
+        return False
+    now = time.time()
+    if now - _COUNT_REFRESH_AT.get(key, 0.0) < _COUNT_REFRESH_GAP:
+        return False
+    try:
+        import sqlite3
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        row = conn.execute(
+            """
+            SELECT COUNT(*) FROM games g
+            WHERE upper(g.sport) = ? AND g.home_score IS NOT NULL
+              AND date(g.game_date) = ?
+              AND EXISTS (SELECT 1 FROM predictions p WHERE p.game_id = g.game_id)
+            """,
+            (sport, latest),
+        ).fetchone()
+        conn.close()
+    except Exception:
+        return False
+    if row and int(row[0] or 0) > int(m.group(2)):
+        _COUNT_REFRESH_AT[key] = now
+        return True
+    return False
+
+
 def _served_results_are_stale(key: str, html: str) -> bool:
     """The cards page is stale when its today stamp or Last Night slate is behind."""
     parts = (key.split("|") + [""] * 6)[:6]
@@ -420,6 +468,8 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         return False
     latest = str(row[0])[:10]
     if shown.isoformat() != latest:
+        return True
+    if _last_night_count_behind(key, html, sport, latest, path):
         return True
     picker = re.search(r"const allDates = (\[[^\]]*\])", html)
     if picker and latest not in picker.group(1):
@@ -3174,6 +3224,8 @@ def nhl_consensus_from_cards(html: str) -> str:
         return html
     block = html[start_at:end_at]
     seen: set[str] = set()
+    old7s: dict[str, tuple[int, int, int]] = {}
+    before7 = _nhl_builder_before(start, days=30)
 
     def _row(match: re.Match[str]) -> str:
         label = match.group(1)
@@ -3189,8 +3241,20 @@ def nhl_consensus_from_cards(html: str) -> str:
                 break
         seen.add(found or key)
         grades = buckets.get(found) or {"ln": [], "p7": []}
+        old7 = _nhl_cell_record(tds[1])
+        old30 = _nhl_cell_record(tds[2])
+        old7s[label] = old7
+        new7 = tuple(grades["p7"].count(g) for g in ("WIN", "LOSS", "PUSH"))
+        # Past 30 holds the swapped-in Past 7 games, not the builder's ones.
+        lk = consensus_key(label)
+        if before7 is not None and lk is not None:
+            prior = before7.get(lk, [0, 0, 0])
+            w, l, p = (prior[i] + new7[i] for i in range(3))
+        else:
+            w, l, p = (max(0, old30[i] - old7[i]) + new7[i] for i in range(3))
         tds[0] = f"<td>{_nhl_cons_cell(grades['ln'])}</td>"
         tds[1] = f"<td>{_nhl_cons_cell(grades['p7'])}</td>"
+        tds[2] = f"<td>{_nhl_cons_cell(['WIN'] * w + ['LOSS'] * l + ['PUSH'] * p)}</td>"
         return f'<tr><td class="bucket">{label}</td>' + "".join(tds) + "</tr>"
 
     block = re.sub(
@@ -3209,12 +3273,69 @@ def nhl_consensus_from_cards(html: str) -> str:
             f'<td class="bucket">{escape(label)}</td>'
             f"<td>{_nhl_cons_cell(grades['ln'])}</td>"
             f"<td>{_nhl_cons_cell(grades['p7'])}</td>"
-            "<td>0-0</td>"
+            f"<td>{_nhl_cons_cell(grades['p7'])}</td>"
             "</tr>"
         )
     if extra:
         block += "".join(extra)
+    try:
+        import consensus_table_rows
+
+        week_games = [g for g in games if start <= g["date"] <= end]
+        consensus_table_rows.save_past7_swap("NHL", week_games, old7s)
+        consensus_table_rows.save_past7_cards("NHL", start, week_games)
+    except Exception:
+        pass
     return html[:start_at] + block + html[end_at:]
+
+
+def consensus_key(label: str):
+    try:
+        import consensus_table_rows
+
+        key = consensus_table_rows.label_key(label)
+    except Exception:
+        return None
+    return None if key is None else (key[0], tuple(sorted(key[1])))
+
+
+def _nhl_builder_before(start7: str, days: int | None = None):
+    """W-L-P per bucket of the results table's builder games dated before the
+    card-graded Past 7 (within ``days`` when given)."""
+    try:
+        import consensus_table_rows
+        import mlb_consensus_hub as hub
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        rows = consensus_table_rows.load("NHL")
+        if not rows:
+            return None
+        items = hub._consensus_agreements_from_finals(hub._dedupe_finals_by_game(rows), sport="nhl")
+    except Exception:
+        return None
+    cut = ""
+    if days:
+        today = datetime.now(ZoneInfo("America/New_York")).date()
+        cut = (today - timedelta(days=days)).isoformat()
+    out: dict = {}
+    for item in items:
+        day = str(item.get("game_date") or "")[:10]
+        if not day or day >= start7 or (cut and day < cut) or item.get("is_three_three"):
+            continue
+        key = (int(item.get("agree_n") or 0), tuple(sorted(item.get("dissent_models") or [])))
+        idx = {"WIN": 0, "LOSS": 1, "PUSH": 2}.get(item.get("grade"))
+        if idx is not None:
+            out.setdefault(key, [0, 0, 0])[idx] += 1
+    return out
+
+
+def _nhl_cell_record(cell: str) -> tuple[int, int, int]:
+    text = re.sub(r"<[^>]+>", " ", cell or "")
+    m = re.search(r"(\d+)-(\d+)(?:-(\d+))?", text)
+    if not m:
+        return (0, 0, 0)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
 
 
 def _nhl_plain(fragment: str) -> str:
@@ -3637,6 +3758,13 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         return html
     cards: list[dict] = []
     date = ""
+    try:
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        today = _dt.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        today = ""
     for m in re.finditer(
         r'<div\b(?=[^>]*\bclass="[^"]*\bgame-card-stack\b)(?=[^>]*\bdata-pick-card\b)[^>]*>',
         html,
@@ -3651,6 +3779,15 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         away, home = _attr("data-away"), _attr("data-home")
         if not away or not home:
             continue
+        if _attr("data-result") or _attr("data-time").upper().startswith("FINAL"):
+            continue
+        prev = html.rfind('id="date-', 0, m.start())
+        dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
+        card_date = dm.group(1) if dm else ""
+        if today and card_date and card_date < today:
+            continue
+        if date and card_date and card_date != date and len(cards) >= 2:
+            break
         pick = _attr("data-pick")
         pick_l = pick.lower()
         if pick_l and pick_l in home.lower():
@@ -3664,15 +3801,12 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         except ValueError:
             confidence = 50.0
         if not date:
-            prev = html.rfind('id="date-', 0, m.start())
-            dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
-            if dm:
-                date = dm.group(1)
+            date = card_date
         cards.append(
             {
                 "away_team": away,
                 "home_team": home,
-                "game_date": date,
+                "game_date": card_date or date,
                 "pick_side": side,
                 "pick_team": home if side == "home" else away,
                 "confidence": confidence,
@@ -3681,6 +3815,9 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         if len(cards) >= 3:
             break
     if len(cards) < 2:
+        if not cards and "data-pick-card" in html:
+            html = re.sub(r'<div class="social-export-wrap"(?![^>]*\bhidden\b)',
+                          '<div class="social-export-wrap" hidden', html)
         return html
     try:
         import sys
@@ -3709,7 +3846,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         html,
     )
     html2 = re.sub(r"/share/predictions/view/[a-f0-9]{32}", view, html2)
-    if html2 == html and "social-export-wrap" not in html:
+    if html2 == html and 'class="social-export-wrap"' not in html:
         block = (
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
@@ -4641,19 +4778,6 @@ def fix_efficiency_na_side(html: str) -> str:
         if am:
             away = am.group(1).strip()
         donor = None
-        for name in ("Sharp Consensus", "Edge", "XSharp"):
-            dm = re.search(
-                rf'<div class="pc-name">\s*{re.escape(name)}\s*</div>\s*'
-                r'<div class="pc-val"[^>]*>\s*([\d.]+)\s*%',
-                card,
-                flags=re.I,
-            )
-            if dm:
-                try:
-                    donor = float(dm.group(1))
-                    break
-                except ValueError:
-                    pass
 
         pl_raw = ""
         pl_m = re.search(r'data-pl-spread="([^"]*)"', card, flags=re.I)
@@ -5552,8 +5676,17 @@ def nhl_recent_block_from_cards() -> str:
             return "—"
         return f"{_nhl_acc(rec)} · {_nhl_rec(rec)}"
 
-    def _table(title: str, pairs: list[tuple[str, list[int]]]) -> str:
-        body = "".join(f"<tr><th>{escape(n)}</th><td>{_face(r)}</td></tr>" for n, r in pairs)
+    def _xs_total_face(rec: list[int], games: int) -> str:
+        if games > 0 and rec[0] + rec[1] == 0:
+            return _nhl_rec(rec)
+        return _face(rec)
+
+    def _table(title: str, pairs: list[tuple[str, list[int]]], games: int = 0) -> str:
+        body = "".join(
+            f"<tr><th>{escape(n)}</th><td>"
+            f"{_xs_total_face(r, games) if title == 'Totals' and n == 'XSharp' else _face(r)}</td></tr>"
+            for n, r in pairs
+        )
         return f'<h4 class="picks-recent-mkt">{escape(title)}</h4><table><tbody>{body}</tbody></table>'
 
     cols = []
@@ -5569,7 +5702,7 @@ def nhl_recent_block_from_cards() -> str:
             f'<p class="picks-recent-n">{win["games"]} games</p>'
             + _table("Moneyline", [(n, win["models"][n]) for n in _NHL_SIX_ORDER])
             + _table("Spread", [("Prediction Lab", win["pl_spread"]), ("XSharp", win["xs_spread"])])
-            + _table("Totals", [("Prediction Lab", win["pl_total"]), ("XSharp", win["xs_total"])])
+            + _table("Totals", [("Prediction Lab", win["pl_total"]), ("XSharp", win["xs_total"])], win["games"])
             + '<a class="picks-recent-more" href="/nhl-results">Full results →</a>'
             "</div>"
         )
@@ -5625,39 +5758,9 @@ def _nhl_table_rows(html: str, start_marker: str, end_marker: str) -> dict[str, 
 
 
 def nhl_sync_card_chips(html: str, cards_html: str) -> str:
-    """Card chips read the tables: consensus = Past 7, PL vs Books = Past 30."""
-    if not html or "line-chip-val" not in html or not cards_html:
-        return html
-    cons = _nhl_table_rows(cards_html, "Consensus Based Betting Records", "PL vs Sportsbook")
-    books = _nhl_table_rows(cards_html, "PL vs Sportsbook", "</table>")
-    if not cons and not books:
-        return html
-
-    def _cons(m: re.Match[str]) -> str:
-        label = m.group(1).strip()
-        key = _nhl_norm_label(re.sub(r"^(\d/6)\s+(all but)", r"\1 — \2", label, flags=re.I))
-        rec = (cons.get(key) or ["", "0-0", ""])[1] if cons else None
-        if rec is None:
-            return m.group(0)
-        return f'line-chip-val">Consensus Record: {label} ({rec})'
-
-    html = re.sub(r'line-chip-val">Consensus Record: ([^<(]+?)\s*\((\d+-\d+(?:-\d+)?)\)', _cons, html)
-
-    def _books(m: re.Match[str]) -> str:
-        label = m.group(1).strip()
-        recs = books.get(_nhl_norm_label(label))
-        if not recs:
-            return m.group(0)
-        rec = recs[2]
-        w, l = (int(x) for x in rec.split("-")[:2])
-        pct = f" ({round(100 * w / (w + l))}%)" if (w + l) else ""
-        return f'line-chip-val">{label}: {rec}{pct} — Past 30 Days'
-
-    return re.sub(
-        r'line-chip-val">([^<:]+):\s*(\d+-\d+(?:-\d+)?)(?:\s*\(\d+%\))?\s*—\s*Past 30 Days',
-        _books,
-        html,
-    )
+    """Card record chips count the whole season; the results tables only hold
+    Last night / Past 7 / Past 30, so the chips are left as built."""
+    return html
 
 
 def _three_way_inside_main(html: str) -> str:

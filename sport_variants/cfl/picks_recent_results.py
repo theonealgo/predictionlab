@@ -231,7 +231,8 @@ def _build_block(sport: str, *, fill_short_from_graded: bool = False, daily: dic
             ln = N._empty_results_model_tally() if hasattr(N, "_empty_results_model_tally") else {}
     else:
         ln_label = yest.strftime("%Y-%m-%d")
-    l7_start = yest - timedelta(days=6)
+    # Date keys are midnight. A noon start drops the first calendar day.
+    l7_start = (yest - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
     l7_end = yest
     last7 = N.compute_model_tally_for_range(
         daily, l7_start, l7_end, sport=sport_u,
@@ -260,7 +261,7 @@ def _build_block(sport: str, *, fill_short_from_graded: bool = False, daily: dic
         if dated:
             ln_dt, ln_label = dated[-1]
             ln = N.compute_daily_model_tally(daily, ln_label, sport=sport_u)
-            l7_start = ln_dt - timedelta(days=6)
+            l7_start = (ln_dt - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
             if l7_start < start:
                 l7_start = start
             l7_end = ln_dt
@@ -397,7 +398,7 @@ def _cfl_results_windows() -> dict:
     daily = _cfl_board_daily()
     if not daily:
         return {}
-    yesterday_dt = datetime.now() - timedelta(days=1)
+    yesterday_dt = (datetime.now() - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     bundle = N._compute_results_tally_bundle(daily, yesterday_dt, sport="CFL") or {}
 
     def pack(tally, title: str, games: int) -> dict:

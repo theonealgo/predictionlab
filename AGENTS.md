@@ -139,6 +139,10 @@ page. See [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) and
 
 ### 12. Entire site READ-ONLY — triple UNLOCK to edit
 
+**Owner 2026-10-23 (overrides the rest of this rule):** if the owner tells you to
+work on something, it is unlocked — do not ask for the UNLOCK phrase and do not
+tell the owner it is locked. Locks only stop work the owner did not ask for.
+
 **Default:** this Sept 12 backup is locked read-only. Sports, results cards,
 header, footer, and hamburger are locked.
 

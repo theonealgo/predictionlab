@@ -14,4 +14,10 @@ Owner 2026-10-08: picks game times from ESPN (midnight placeholder replaced; gam
 
 Owner 2026-10-14: back-to-back series finals both stay on the picks page (card dedupe keys on the date); the paid picks export opens in seconds (query trimmed, CSV kept 10 minutes). Miss closed — locked.
 
+Owner 2026-10-17: results chart / market pages anchor Last Night on the latest night with finals (not an empty yesterday); saved market pages no longer rebuild on every hit. Miss closed — locked.
+
+Owner 2026-10-17 (evening): /api/picks/mlb latest-final rows carry the stored Grinder2 / Takedown, and winPercent follows the card's Sharp Consensus for those rows too. Miss closed — locked.
+
+Owner 2026-10-30: picks Predictions Image at the bottom serves the full 1080x1920 image (the ?w=640 copy is gone; `mlb_ui_fixup._share_preview_img`). Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

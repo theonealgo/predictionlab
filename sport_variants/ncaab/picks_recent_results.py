@@ -4,6 +4,7 @@ Does not change /{sport}-results. Cached so picks stay fast.
 """
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime, timedelta
 from html import escape
@@ -282,16 +283,64 @@ def _card_xsharp_result(card: str):
     return spread_grade, total_grade
 
 
+def _offseason_strip_path():
+    from pathlib import Path
+
+    import sport_variant
+
+    return Path(sport_variant.ROOT) / ".cache" / "ncaab_offseason_strip.html"
+
+
+def _save_offseason_strip(block: str) -> None:
+    """Off-season the records are frozen; keep the strip for a cold start."""
+    try:
+        _offseason_strip_path().write_text(block, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _load_offseason_strip() -> str | None:
+    """Saved strip, only while it still ends on the latest stored final."""
+    latest = _ncaab_db_latest_final()
+    if not latest:
+        return None
+    try:
+        latest_dt = datetime.strptime(latest, "%Y-%m-%d")
+    except ValueError:
+        return None
+    if (_yesterday_et().replace(tzinfo=None).date() - latest_dt.date()).days <= 4:
+        return None
+    try:
+        block = _offseason_strip_path().read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return block if f"Last Night — {latest}<" in block else None
+
+
+def _ncaab_saved_results_html() -> str:
+    """Saved NCAAB results cards page (paid copy first, then the free one)."""
+    from pathlib import Path
+
+    import sport_variant
+
+    cache = Path(sport_variant.ROOT) / ".cache"
+    for name in ("served_NCAAB_.html", "served_NCAAB___free.html"):
+        path = cache / name
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+        except OSError:
+            text = ""
+        if 'id="date-' in text:
+            return text
+    return ""
+
+
 def xsharp_card_grades(start, end) -> tuple[int, int, int, int]:
     """XSharp (spread wins, spread graded, total wins, total graded) on saved NCAAB finals."""
     import re
     from pathlib import Path
 
-    path = Path(__file__).resolve().parent / ".cache" / "served_NCAAB_.html"
-    try:
-        html = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
-    except OSError:
-        html = ""
+    html = _ncaab_saved_results_html()
     parts = re.split(r'<div id="date-(\d{4}-\d{2}-\d{2})"', html)
     seq = parts[1:]
     sw = sn = tw = tn = 0
@@ -348,11 +397,7 @@ def _ncaab_strip_from_stored_cards() -> str | None:
     yest = _yesterday_et().replace(tzinfo=None)
     if (yest.date() - latest_dt.date()).days <= 4:
         return None
-    path = Path(__file__).resolve().parent / ".cache" / "served_NCAAB_.html"
-    try:
-        html = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
-    except OSError:
-        html = ""
+    html = _ncaab_saved_results_html()
     if 'id="date-' not in html:
         return None
     parts = re.split(r'<div id="date-(\d{4}-\d{2}-\d{2})"', html)
@@ -488,10 +533,16 @@ def refresh_ncaab_offseason_strip(html: str) -> str:
             block = _ncaab_strip_from_stored_cards()
         except Exception:
             block = None
+        if not block and re.search(
+            r'Last Night — [^<]*</h3>\s*<p class="picks-recent-n">0 games', html
+        ):
+            try:
+                block = _build_block("NCAAB")
+            except Exception:
+                block = None
         if not block:
             return html
         _CACHE["NCAAB"] = (now, block)
-    import re
 
     html2, n = re.subn(
         r'<section id="picks-recent-results"[\s\S]*?</section>',
@@ -509,12 +560,31 @@ def _build_block(sport: str) -> str:
     if sport_u == "NCAAB":
         stored = _ncaab_strip_from_stored_cards()
         if stored:
+            _save_offseason_strip(stored)
+            return stored
+        stored = _load_offseason_strip()
+        if stored:
             return stored
     yest = _yesterday_et().replace(tzinfo=None)
     start = yest - timedelta(days=29)
     daily = N._banner_daily_results_for_range(
         sport_u, start, yest, prefer_weekly=False,
     ) or {}
+    if sport_u == "NCAAB" and not int(
+        (N.compute_model_tally_for_range(daily, start, yest, sport=sport_u) or {}).get("games") or 0
+    ):
+        last = N.parse_date(_ncaab_db_latest_final() or "")
+        if last is not None:
+            yest = last.replace(hour=12, minute=0, second=0, microsecond=0, tzinfo=None)
+            start = yest - timedelta(days=29)
+            daily = N._banner_daily_results_for_range(
+                sport_u, start, yest, prefer_weekly=False,
+            ) or {}
+    if sport_u == "NCAAB" and hasattr(N, "_finalize_daily_result_cards"):
+        try:
+            N._finalize_daily_result_cards(sport_u, daily)
+        except Exception:
+            pass
     _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:

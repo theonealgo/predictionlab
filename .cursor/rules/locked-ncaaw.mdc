@@ -10,4 +10,10 @@ Do not modify NCAAW unless the same owner message contains the word **UNLOCK**
 
 Locked. 3 UNLOCKS required.
 
+Owner 2026-10-22: results season Efficiency tile recounted after the cards' Efficiency grades (8-0). Miss closed — locked.
+
+Owner 2026-10-29: picks missed the 2026-11-01 opener (ESPN date-range 400); day-by-day fallback `_espn_events_by_day`. Miss closed — locked.
+
+Owner 2026-10-29: same as NCAAB — Efficiency from the PL spread when blank, Books N/A instead of a copy of the PL moneyline, school logos from `data/ncaa_basketball_team_ids.json`. Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

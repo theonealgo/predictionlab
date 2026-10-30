@@ -1,193 +1,98 @@
 The automated QA audit for PredictionLab detected the following issues:
-Audit run: 20260917_082247  |  2026-09-17 08:22:47
-Target: http://127.0.0.1:5052
+Audit run: 20261028_074207  |  2026-10-28 07:42:07
+Target: http://127.0.0.1:5122
 
 FAILURES (must fix):
-  - [chrome] speed /soccer-picks: /soccer-picks took 11.0s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5052/soccer-picks
-  - [chrome] speed /tennis-picks: /tennis-picks took 6.5s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5052/tennis-picks
-  - [chrome] speed /soccer-results: Won't open — took 12.8s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/soccer-results
-  - [chrome] open /soccer-results: Won't open — took 12.8s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/soccer-results
-  - [chrome] speed /cfl-results: Won't open — took 7.2s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/cfl-results
-  - [chrome] open /cfl-results: Won't open — took 7.2s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5052/cfl-results
-  - [chrome] speed /daily-report: /daily-report took 8.3s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5052/daily-report
-  - [chrome] DIGEST dead header/footer links: 2 destination(s) do not open: /soccer-results hung, /cfl-results hung
-  - [chrome] NBA Prediction Lab moneyline: Pick cards are missing Prediction Lab moneylines (all —)
-    Page: http://127.0.0.1:5052/nba-picks
-  - [chrome] NBA share card: Share card does not report how many picks it drew
-    Page: http://127.0.0.1:5052/nba-picks
-  - [chrome] NBA H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
-    Page: http://127.0.0.1:5052/nba-picks
-  - [chrome] NBA Copy All: Predictions page has cards but no Copy All button
-    Page: http://127.0.0.1:5052/nba-picks
-  - [chrome] NFL share card: Share card has 1 pick(s); need at least 2
-    Page: http://127.0.0.1:5052/nfl-picks
-  - [chrome] NFL H2H Last 10: H2H Last 10 exists in page HTML but is not on the card face (only inside details)
-    Page: http://127.0.0.1:5052/nfl-picks
-  - [chrome] NFL Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/nfl-results?view=chart
-  - [chrome] NFL spread chart table: spread chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/nfl-results?view=chart&market=spread
-  - [chrome] NFL totals chart table: totals chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/nfl-results?view=chart&market=totals
-  - [chrome] MLB kickoff time: Kickoff time stuck on Upcoming / no clock (30/30)
-    Page: http://127.0.0.1:5052/mlb-picks
-  - [chrome] MLB missing models/values: MLB: 1/30 cards have a blank, N/A, or 50% Edge model value
-    Page: http://127.0.0.1:5052/mlb-picks
-  - [chrome] MLB Best Performing Today: MLB Best Performing Model says Today but the completed window is 2026-09-16 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/mlb-results?view=chart
-  - [chrome] MLB Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/mlb-results?view=chart
-  - [chrome] NHL placeholder picks: Edge Pick Confidence stuck at 50% (47/47)
-    Page: http://127.0.0.1:5052/nhl-picks
-  - [chrome] NHL team logos: Team logo missing on 3/94 faces (Utah Mammoth)
-    Page: http://127.0.0.1:5052/nhl-picks
-  - [chrome] NHL Efficiency N/A copy: Efficiency shows a copied % with N/A side on 47 card(s)
-    Page: http://127.0.0.1:5052/nhl-picks
-  - [chrome] NHL picks duplicate H2H: 47 NHL pick card(s) show H2H Last 10 on the face and again under details
-    Page: http://127.0.0.1:5052/nhl-picks
-  - [chrome] NHL missing models/values: NHL: 47/47 cards have a blank, N/A, or 50% Edge model value
-    Page: http://127.0.0.1:5052/nhl-picks
-  - [chrome] Soccer Efficiency N/A copy: Efficiency shows a copied % with N/A side on 1 card(s)
-    Page: http://127.0.0.1:5052/soccer-picks
-  - [chrome] Soccer Copy All: Copy All is present but only copies the visible date / moneyline, not the full slate
-    Page: http://127.0.0.1:5052/soccer-picks
-  - [chrome] Soccer results charts: Missing: Consensus Based Betting Records
-    Page: http://127.0.0.1:5052/soccer-results
-  - [chrome] Soccer results chart view: Chart view is missing: Consensus Based Betting Records
-    Page: http://127.0.0.1:5052/soccer-results?view=chart
-  - [chrome] Soccer chart-view results math: Team Best Performing Model says Today but the completed window is 2026-09-16 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/soccer-results?view=chart
-  - [chrome] NCAAB Prediction Lab moneyline: Pick cards are missing Prediction Lab moneylines (all —)
-    Page: http://127.0.0.1:5052/ncaab-picks
-  - [chrome] NCAAB share card: Share card does not report how many picks it drew
-    Page: http://127.0.0.1:5052/ncaab-picks
-  - [chrome] NCAAB H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
-    Page: http://127.0.0.1:5052/ncaab-picks
-  - [chrome] NCAAB Copy All: Predictions page has cards but no Copy All button
-    Page: http://127.0.0.1:5052/ncaab-picks
-  - [chrome] NCAAF kickoff time: Kickoff time stuck on Upcoming / no clock (81/81)
-    Page: http://127.0.0.1:5052/ncaaf-picks
+  - [speed] speed /all-sports-results: Won't open — took 10.6s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:5122/all-sports-results
+  - [speed] speed /ncaaf-results: Won't open — took 6.6s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:5122/ncaaf-results
+  - [speed] speed /nhl-picks: /nhl-picks took 32.3s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5122/nhl-picks
+  - [speed] speed /results/export.csv: /results/export.csv took 37.0s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:5122/results/export.csv
+  - [content] NCAAB share card: Share card does not report how many picks it drew
+    Page: /ncaab-picks
+  - [content] NCAAF Efficiency N/A copy: Efficiency shows a copied % with N/A side on 1 card(s)
+    Page: /ncaaf-picks
+  - [content] NCAAF missing models/values: NCAAF: 1/102 cards have a blank or N/A model value, or every model at 50%
+    Page: /ncaaf-picks
+  - [content] NCAAW share card: Share card does not report how many picks it drew
+    Page: /ncaaw-picks
+  - [content] content auditor crash: No module named 'qa'
+    Detail: te_checker.py", line 3318, in <lambda>
+    run_auditor("content",    lambda: ContentAuditor(session, base, report).run())
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/nimamesghali/Sports Sandbox/pl_cursor/qa/site_checker.py", line 700, in run
+    from qa.chart_shape import wnba_consensus_hist_face_issues
+ModuleNotFoundError: No module named 'qa'
+
+  - [navigation] Picks & Predictions: missing /nba-picks: Required link /nba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nhl-picks: Required link /nhl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /nfl-picks: Required link /nfl-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /mlb-picks: Required link /mlb-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaab-picks: Required link /ncaab-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaf-picks: Required link /ncaaf-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /ncaaw-picks: Required link /ncaaw-picks is NOT in the Picks & Predictions menu
+  - [navigation] Picks & Predictions: missing /wnba-picks: Required link /wnba-picks is NOT in the Picks & Predictions menu
+  - [navigation] Props: missing /player-props: Required link /player-props is NOT in the Props menu
+  - [navigation] Tools & Models: missing /performance: Required link /performance is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /ai-sports-betting-picks-today: Required link /ai-sports-betting-picks-today is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /our-model-vs-sportsbooks: Required link /our-model-vs-sportsbooks is NOT in the Tools & Models menu
+  - [navigation] Tools & Models: missing /tutorial: Required link /tutorial is NOT in the Tools & Models menu
+  - [navigation] Results & Tracking: missing /all-sports-results: Required link /all-sports-results is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /daily-report: Required link /daily-report is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /results/downloads: Required link /results/downloads is NOT in the Results & Tracking menu
+  - [navigation] Results & Tracking: missing /edge-performance: Required link /edge-performance is NOT in the Results & Tracking menu
+  - [navigation] Company: missing /plans: Required link /plans is NOT in the Company menu
+  - [navigation] Company: missing /blog: Required link /blog is NOT in the Company menu
+  - [navigation] Company: missing /affiliate: Required link /affiliate is NOT in the Company menu
+  - [navigation] Company: missing /faq: Required link /faq is NOT in the Company menu
+  - [navigation] Company: missing /tutorial: Required link /tutorial is NOT in the Company menu
+  - [navigation] Company: missing /contact: Required link /contact is NOT in the Company menu
+  - [navigation] Company: missing /privacy: Required link /privacy is NOT in the Company menu
+  - [navigation] Company: missing /terms: Required link /terms is NOT in the Company menu
+  - [navigation] Company: missing /refund-policy: Required link /refund-policy is NOT in the Company menu
+  - [navigation] Company: missing /responsible-gaming: Required link /responsible-gaming is NOT in the Company menu
+  - [speed] speed /soccer-results: Won't open — took 10.5s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:5122/soccer-results
   - [chrome] NCAAF Efficiency N/A copy: Efficiency shows a copied % with N/A side on 1 card(s)
-    Page: http://127.0.0.1:5052/ncaaf-picks
-  - [chrome] NCAAF H2H Last 10: H2H Last 10 exists in page HTML but is not on the card face (only inside details)
-    Page: http://127.0.0.1:5052/ncaaf-picks
-  - [chrome] NCAAF missing models/values: NCAAF: 1/81 cards have a blank, N/A, or 50% Edge model value; NCAAF: 10/80 cards have a blank XSharp spread; NCAAF: 10/80 cards have a blank Prediction Lab total; NCAAF: 10/80 cards have a blank XSharp total; NCAAF: 10/80 cards have a blank XSharp projected score
-    Page: http://127.0.0.1:5052/ncaaf-picks
-  - [chrome] NCAAF results math: Team PL vs Books agree+disagree is 79 game(s) but PL favorite is 59-21 (80 games); Team PL vs Books agree+disagree is 79 game(s); Last Night has 80; Team Books favorite last night is 71-8 (79 games); Last Night has 80; Team consensus last night 6/6 unanimous is 47-8; cards grade 54-14; Team consensus last night 3/6 — all but Takedown and Sharp Consensus and Efficiency is missing; cards grade 1-0; Team consensus last night 5/6 — all but Takedown is 2-1; cards grade 3-1; Team consensus last night 5/6 — all but Edge is 8-10; cards grade 1-4; Team consensus last night 4/6 — all but Takedown and Edge is 2-1; cards grade 1-1
-    Page: http://127.0.0.1:5052/ncaaf-results
-  - [chrome] NCAAF chart-view results math: Team PL vs Books agree+disagree is 79 game(s) but PL favorite is 59-21 (80 games); Team consensus last night 3/6 — all but Takedown and Sharp Consensus and Efficiency is missing; cards grade 1-0; Team consensus last-night buckets cover 79 game(s); cards have 80 classifiable 6-model game(s); Team Best Performing Model says Today but the completed window is 2026-09-12 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/ncaaf-results?view=chart
-  - [chrome] NCAAF consensus buckets: NCAAF consensus last night 3/6 — all but Takedown and Sharp Consensus and Efficiency is missing; cards grade 1-0; NCAAF consensus last-night buckets cover 79 game(s); cards have 80 classifiable 6-model game(s)
-    Page: http://127.0.0.1:5052/ncaaf-results?view=chart
-  - [chrome] NCAAF PL vs Books partition: NCAAF PL vs Books agree+disagree is 79 game(s) but PL favorite is 59-21 (80 games)
-    Page: http://127.0.0.1:5052/ncaaf-results?view=chart
-  - [chrome] NCAAF Best Performing Today: NCAAF Best Performing Model says Today but the completed window is 2026-09-12 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/ncaaf-results?view=chart
-  - [chrome] NCAAW Prediction Lab moneyline: Pick cards are missing Prediction Lab moneylines (all —)
-    Page: http://127.0.0.1:5052/ncaaw-picks
-  - [chrome] NCAAW share card: Share card does not report how many picks it drew
-    Page: http://127.0.0.1:5052/ncaaw-picks
-  - [chrome] NCAAW H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
-    Page: http://127.0.0.1:5052/ncaaw-picks
-  - [chrome] NCAAW Copy All: Predictions page has cards but no Copy All button
-    Page: http://127.0.0.1:5052/ncaaw-picks
-  - [chrome] WNBA kickoff time: Kickoff time stuck on Upcoming / no clock (29/29)
-    Page: http://127.0.0.1:5052/wnba-picks
-  - [chrome] WNBA H2H Last 10: H2H Last 10 exists in page HTML but is not on the card face (only inside details)
-    Page: http://127.0.0.1:5052/wnba-picks
-  - [chrome] WNBA missing models/values: WNBA: 29/29 cards are missing a model box (Edge / XSharp / Sharp Consensus / Efficiency / Grinder2 / Takedown)
-    Page: http://127.0.0.1:5052/wnba-picks
-  - [chrome] WNBA results card parameters: WNBA: 172/302 results cards show Efficiency as N/A or blank
-    Page: http://127.0.0.1:5052/wnba-results
-  - [chrome] WNBA chart-view results math: Team Best Performing Model says Today but the completed window is 2026-08-31 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/wnba-results?view=chart
-  - [chrome] WNBA Best Performing Today: WNBA Best Performing Model says Today but the completed window is 2026-08-31 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/wnba-results?view=chart
-  - [chrome] WNBA Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/wnba-results?view=chart
-  - [chrome] WNBA spread chart table: spread chart still showing the moneyline Edge pick table; spread chart missing Books line column; spread chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/wnba-results?view=chart&market=spread
-  - [chrome] WNBA totals chart table: totals chart still showing the moneyline Edge pick table; totals chart missing Books line column; totals chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/wnba-results?view=chart&market=totals
-  - [chrome] CFL H2H Last 10: H2H Last 10 exists in page HTML but is not on the card face (only inside details)
-    Page: http://127.0.0.1:5052/cfl-picks
-  - [chrome] CFL results charts: Missing: PL vs Sportsbook
-    Page: http://127.0.0.1:5052/cfl-results
-  - [chrome] CFL consensus XSharp: XSharp consensus row is present but values are only — or 0-0
-    Page: http://127.0.0.1:5052/cfl-results
-  - [chrome] CFL XSharp totals: CFL results chart missing Prediction Lab · XSharp — Totals
-    Page: http://127.0.0.1:5052/cfl-results?view=chart
-  - [chrome] CFL chart-view results math: Spread tab has no Prediction Lab / XSharp chart; Totals tab has no Prediction Lab / XSharp chart; Team Best Performing Model says Today but the completed window is 2026-09-13 — use Last Night or Previous Day; Cards have spread picks but the Spread chart says no graded games
-    Page: http://127.0.0.1:5052/cfl-results?view=chart
-  - [chrome] CFL Best Performing Today: CFL Best Performing Model says Today but the completed window is 2026-09-13 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/cfl-results?view=chart
-  - [chrome] CFL Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/cfl-results?view=chart
-  - [chrome] CFL spread chart table: spread chart still showing the moneyline Edge pick table; spread chart missing Books line column; spread chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/cfl-results?view=chart&market=spread
-  - [chrome] CFL totals chart table: totals chart still showing the moneyline Edge pick table; totals chart missing Books line column; totals chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/cfl-results?view=chart&market=totals
-  - [chrome] Tennis results math: Team Best Performing Model says Today but the completed window is 2026-09-16 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/tennis-results
-  - [chrome] Tennis chart-view results math: Team Best Performing Model says Today but the completed window is 2026-09-16 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/tennis-results?view=chart
-  - [chrome] Tennis Best Performing Today: TENNIS Best Performing Model says Today but the completed window is 2026-09-16 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/tennis-results?view=chart
-  - [chrome] Tennis Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/tennis-results?view=chart
-  - [chrome] Tennis spread chart table: spread chart still showing the moneyline Edge pick table; spread chart missing Books line column; spread chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/tennis-results?view=chart&market=spread
-  - [chrome] Tennis totals chart table: totals chart still showing the moneyline Edge pick table; totals chart missing Books line column; totals chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/tennis-results?view=chart&market=totals
-  - [chrome] Tennis chart API: TENNIS chart API missing spread market; TENNIS chart API missing totals market
-    Page: http://127.0.0.1:5052/tennis/api/picks
-  - [chrome] UFC results math: Team Best Performing Model says Today but the completed window is 2026-09-01 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/ufc-results
-  - [chrome] UFC chart-view results math: Team Best Performing Model says Today but the completed window is 2026-09-01 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/ufc-results?view=chart
-  - [chrome] UFC Best Performing Today: UFC Best Performing Model says Today but the completed window is 2026-09-01 — use Last Night or Previous Day
-    Page: http://127.0.0.1:5052/ufc-results?view=chart
-  - [chrome] UFC Best Performing width: Best Performing Model box is not as wide as the other tally boxes
-    Page: http://127.0.0.1:5052/ufc-results?view=chart
-  - [chrome] UFC spread chart table: spread chart still showing the moneyline Edge pick table; spread chart missing Books line column; spread chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/ufc-results?view=chart&market=spread
-  - [chrome] UFC totals chart table: totals chart still showing the moneyline Edge pick table; totals chart missing Books line column; totals chart does not compare actual score to books / PL lines
-    Page: http://127.0.0.1:5052/ufc-results?view=chart&market=totals
-  - [chrome] UFC chart API: UFC chart API missing spread market; UFC chart API missing totals market
-    Page: http://127.0.0.1:5052/ufc/api/picks
-  - [chrome] DIGEST slow pages: 5 page(s) slower than 5s: /soccer-picks 11.0s, /tennis-picks 6.5s, /soccer-results 12.8s, /cfl-results 7.2s, /daily-report 8.3s
-  - [ship] SOCCER results charts: Missing the new results consensus charts: Consensus Based Betting Records
-    Page: /soccer-results
-  - [ship] SOCCER results chart view: Cards|Chart view is missing Consensus Based Betting Records
-    Page: /soccer-results?view=chart
-  - [ship] Soccer Copy All: Copy All is present but only copies the visible date / moneyline, not the full slate
-    Page: /soccer-picks
-  - [ship] Soccer results charts: Missing: Consensus Based Betting Records
-    Page: /soccer-results
-  - [ship] Soccer results chart view: Chart view is missing: Consensus Based Betting Records
-    Page: /soccer-results?view=chart
-  - [ship] CFL results charts: Missing: PL vs Sportsbook
-    Page: /cfl-results
-  - [ship] CFL consensus XSharp: XSharp consensus row is present but values are only — or 0-0
-    Page: /cfl-results
-  - [ship] DIGEST missing results charts: CFL, SOCCER, Soccer
+    Page: http://127.0.0.1:5122/ncaaf-picks
+  - [chrome] NCAAF missing models/values: NCAAF: 1/102 cards have a blank or N/A model value, or every model at 50%
+    Page: http://127.0.0.1:5122/ncaaf-picks
+  - [chrome] CFL picks slate: Predictions page has no pick cards (blank slate on a live sport)
+    Page: http://127.0.0.1:5122/cfl-picks
+  - [ship] CFL H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
+    Page: /cfl-picks
   - [ship] DIGEST missing card values: CFL
-  - [soccer] soccer results charts: Missing chart(s): Consensus Based Betting Records
-    Page: http://127.0.0.1:5052/soccer-results?region=all
-  - [espn_slate] MLB today vs ESPN: ESPN today missing from the page: Milwaukee Brewers vs Pittsburgh Pirates; Los Angeles Dodgers vs Cincinnati Reds; Athletics vs Tampa Bay Rays; San Diego Padres vs Colorado Rockies; Kansas City Royals vs Houston Astros; Boston Red Sox vs Texas Rangers
-    Detail: espn=9 page=3 day=2026-09-17
-    Page: http://127.0.0.1:5052/mlb-picks
+  - [soccer] soccer picks week pages: Card dates span 7 days (2026-10-28–2026-11-04) — weeks must stay separate
+    Page: http://127.0.0.1:5122/soccer-picks?region=all
+  - [espn_slate] Soccer today vs ESPN: Scottish Premiership: Dundee United is on Celtic on the page; ESPN has Dundee vs Kilmarnock
+    Detail: leagues=4 day=2026-10-28
+    Page: http://127.0.0.1:5122/soccer-picks
+  - [props] NHL milestone UNDER pick: 39 over-only prop(s) show UNDER
+    Detail: Christian Dvorak assists, Dougie Hamilton assists, Mikael Backlund assists, Alex Ovechkin assists, Timo Meier assists
 
 WARNINGS (should investigate):
-  - [pagespeed] pagespeed public base: PageSpeed skipped — Google cannot fetch this local base. Set PAGESPEED_BASE_URL=https://predictionlab.io (audit target was http://127.0.0.1:5052).
-    Page: http://127.0.0.1:5052
+  - [routes] Audit CSV (needs login): Expected [302], got 200
+    Page: /performance/audit.csv
+  - [routes] Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev
+    Detail: /results/export.csv
+  - [models] Stale model name: NBA: Found stale model reference: 'fallback'
+    Page: /nba-picks
+  - [models] Stale model name: NHL: Found stale model reference: 'fallback'
+    Page: /nhl-picks
+  - [models] Stale model name: MLB: Found stale model reference: 'fallback'
+    Page: /mlb-picks
+  - [props] NHL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NFL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NFL diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+  - [props] NCAAF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] NCAAF diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
+  - [props] SOCCER diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [props] Props load: TENNIS: get_league_data failed: 'TENNIS'
+  - [props] Props load: GOLF: get_league_data failed: 'GOLF'
+  - [pagespeed] pagespeed api key: PageSpeed skipped — no API key. Set PAGESPEED_API_KEY or qa/.pagespeed_api_key (see qa/.pagespeed_api_key.example).
 
 ============================================================
 REQUIREMENTS FOR CLAUDE:

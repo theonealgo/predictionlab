@@ -75,6 +75,8 @@ def header_matches_site_chrome(html: str) -> bool:
         return False
     if "pl2-account" not in hdr or "pl2-search" not in hdr:
         return False
+    if 'href="/historic-results"' not in hdr:
+        return False
     return all(href in hdr for href in _SITE_SPORT_HREFS)
 
 
@@ -121,6 +123,12 @@ def _render_partial(name: str) -> str:
         "is_logged_in": False,
         "stripe_customer_portal_login_url": "/login",
     }
+    try:
+        from auth_system import STRIPE_CUSTOMER_PORTAL_LOGIN_URL
+
+        ctx["stripe_customer_portal_login_url"] = STRIPE_CUSTOMER_PORTAL_LOGIN_URL
+    except Exception:
+        pass
     try:
         from NHL77FINAL import in_season_sports_map
 
@@ -185,9 +193,9 @@ _LEFT_DRAWER = """
 </div>
 <script>
 var TV_MENUS={
- picks:{title:'Picks & Predictions',items:[{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'CFL',h:'/cfl-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},
+ picks:{title:'Picks & Predictions',items:[{l:'All Sports Picks',h:'/all-sports-picks'},{l:'NBA',h:'/nba-picks'},{l:'MLB',h:'/mlb-picks'},{l:'NHL',h:'/nhl-picks'},{l:'NFL',h:'/nfl-picks'},{l:'Soccer',h:'/soccer-picks'},{l:'NCAAB',h:'/ncaab-picks'},{l:'NCAAF',h:'/ncaaf-picks'},{l:'NCAAW',h:'/ncaaw-picks'},{l:'WNBA',h:'/wnba-picks'},{l:'CFL',h:'/cfl-picks'},{l:'Tennis',h:'/tennis-picks'},{l:'UFC',h:'/ufc-picks'},{l:'Golf',h:'/golf-picks'}]},
  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'The Ladder',h:'/ladder-picks'},{l:'Tutorial',h:'/tutorial'}]},
- results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'},{l:'Soccer',h:'/soccer-results'},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'CFL',h:'/cfl-results'},{l:'Tennis',h:'/tennis-results'},{l:'UFC',h:'/ufc-results'},{l:'Golf',h:'/golf-results'}]}
+ results:{title:'Results & Tracking',items:[{l:'All Sports Results',h:'/all-sports-results'},{l:'Historic Results',h:'/historic-results'},{l:'NBA',h:'/nba-results'},{l:'NFL',h:'/nfl-results'},{l:'MLB',h:'/mlb-results'},{l:'NHL',h:'/nhl-results'},{l:'Soccer',h:'/soccer-results'},{l:'NCAAB',h:'/ncaab-results'},{l:'NCAAF',h:'/ncaaf-results'},{l:'NCAAW',h:'/ncaaw-results'},{l:'WNBA',h:'/wnba-results'},{l:'CFL',h:'/cfl-results'},{l:'Tennis',h:'/tennis-results'},{l:'UFC',h:'/ufc-results'},{l:'Golf',h:'/golf-results'}]}
 };
 function tvOpen(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.add('open');if(d)d.classList.add('open');document.body.style.overflow='hidden';if(h)h.setAttribute('aria-expanded','true');}
 function tvClose(){var o=document.getElementById('tvOverlay'),d=document.getElementById('tvDrawer'),h=document.getElementById('navHamburger');if(o)o.classList.remove('open');if(d)d.classList.remove('open');document.body.style.overflow='';if(h)h.setAttribute('aria-expanded','false');}

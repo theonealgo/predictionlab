@@ -464,7 +464,7 @@ def _fetch_soccer_completed_games(conn, selected_league=None, limit=None):
                p.glicko_home_prob,
                p.trueskill_home_prob
         FROM games g
-        LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = 'SOCCER'
+        LEFT JOIN predictions p ON g.game_id = p.game_id AND +p.sport = 'SOCCER'
         WHERE g.sport = 'SOCCER' AND g.home_score IS NOT NULL
     '''
     if not selected_league:

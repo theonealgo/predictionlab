@@ -81,6 +81,20 @@ class _TieredServed(dict):
 
     def __setitem__(self, key, value):
         super().__setitem__(self._k(key), value)
+        self._evict()
+
+    def _evict(self):
+        # Every saved page is also on disk; memory keeps only the newest few.
+        try:
+            now = time.time()
+            rows = sorted(list(super().items()), key=lambda kv: kv[1][0], reverse=True)
+            kept = 0
+            for k, (ts, text) in rows:
+                kept += len(text)
+                if now - ts >= _SERVED_TTL or (kept > _SERVED_MAX_BYTES and k != rows[0][0]):
+                    super().pop(k, None)
+        except Exception:
+            pass
 
     def __contains__(self, key):
         return super().__contains__(self._k(key))
@@ -91,6 +105,7 @@ class _TieredServed(dict):
 
 _SERVED = _TieredServed()
 _SERVED_TTL = 1200.0
+_SERVED_MAX_BYTES = 32 * 1024 * 1024
 
 
 def results_serve_key(
@@ -483,7 +498,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         html,
     )
     shown_n = len(set(re.findall(r'data-game-id="[^"]+"', section.group(1)))) if section else 0
-    if latest_n and shown_n < latest_n:
+    if latest_n and shown_n < latest_n and 'id="date-' in html:
         return True
     picker = re.search(r"const allDates = (\[[^\]]*\])", html)
     if picker and latest not in picker.group(1):
@@ -1446,6 +1461,13 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         return html
     cards: list[dict] = []
     date = ""
+    try:
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        today = _dt.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        today = ""
     for m in re.finditer(
         r'<div\b(?=[^>]*\bclass="[^"]*\bgame-card-stack\b)(?=[^>]*\bdata-pick-card\b)[^>]*>',
         html,
@@ -1460,6 +1482,15 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         away, home = _attr("data-away"), _attr("data-home")
         if not away or not home:
             continue
+        if _attr("data-result") or _attr("data-time").upper().startswith("FINAL"):
+            continue
+        prev = html.rfind('id="date-', 0, m.start())
+        dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
+        card_date = dm.group(1) if dm else ""
+        if today and card_date and card_date < today:
+            continue
+        if date and card_date and card_date != date and len(cards) >= 2:
+            break
         pick = _attr("data-pick")
         pick_l = pick.lower()
         if pick_l and pick_l in home.lower():
@@ -1473,15 +1504,12 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         except ValueError:
             confidence = 50.0
         if not date:
-            prev = html.rfind('id="date-', 0, m.start())
-            dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
-            if dm:
-                date = dm.group(1)
+            date = card_date
         cards.append(
             {
                 "away_team": away,
                 "home_team": home,
-                "game_date": date,
+                "game_date": card_date or date,
                 "pick_side": side,
                 "pick_team": home if side == "home" else away,
                 "confidence": confidence,
@@ -1518,7 +1546,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         html,
     )
     html2 = re.sub(r"/share/predictions/view/[a-f0-9]{32}", view, html2)
-    if html2 == html and "social-export-wrap" not in html:
+    if html2 == html and 'class="social-export-wrap"' not in html:
         block = (
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
@@ -2346,16 +2374,18 @@ def _mlb_blank_daily_rec(raw: str) -> bool:
     return text in {"", "—", "–", "-"}
 
 
-def align_mlb_last_night_window(html: str) -> str:
+def align_mlb_last_night_window(html: str, cards_html: str | None = None) -> str:
     """Point an empty Last Night heading at the newest graded date section.
 
     Model, spread, and total records in that block come from the check marks
     on those cards. A record that already has a W-L is left as printed.
-    Last 7 and every other tally stay.
+    Last 7 and every other tally stay. Market pages without game cards read
+    the date sections from ``cards_html``.
     """
     if not html or "Last Night" not in html:
         return html
-    latest, count = _mlb_latest_final_section(html)
+    src = html if _mlb_result_sections(html) else (cards_html or "")
+    latest, count = _mlb_latest_final_section(src)
     if not latest or count < 1:
         return html
     heading = re.search(
@@ -2399,7 +2429,7 @@ def align_mlb_last_night_window(html: str) -> str:
     spread = [0, 0]
     total = [0, 0]
     saw = False
-    for date, bodies in _mlb_result_sections(html):
+    for date, bodies in _mlb_result_sections(src):
         if date != target:
             continue
         saw = True
@@ -2834,8 +2864,10 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
                 pass
         if sport_u == "MLB":
             view_l = (view or "").strip().lower()
-            if view_l not in _MLB_CHART_VIEWS:
-                html = align_mlb_last_night_window(html)
+            html = align_mlb_last_night_window(
+                html,
+                cards_html=None if 'id="date-' in html else _cards_html_for_align(sport_u, ""),
+            )
             try:
                 from picks_recent_results import fill_mlb_totals_chart_from_grades
 
@@ -2871,8 +2903,10 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
         html = repair_results_html(html, sport_u, view)
         if sport_u == "MLB":
             view_l = (view or "").strip().lower()
-            if view_l not in _MLB_CHART_VIEWS:
-                html = align_mlb_last_night_window(html)
+            html = align_mlb_last_night_window(
+                html,
+                cards_html=None if 'id="date-' in html else _cards_html_for_align(sport_u, ""),
+            )
             try:
                 from picks_recent_results import fill_mlb_totals_chart_from_grades
 

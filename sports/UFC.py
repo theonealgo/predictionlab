@@ -156,7 +156,7 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
         SELECT g.*,
                {prob_sql}
         FROM games g
-        LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+        LEFT JOIN predictions p ON g.game_id = p.game_id AND +p.sport = ?
         WHERE g.sport = ? AND g.home_score IS NOT NULL
         ORDER BY g.game_date DESC
         LIMIT 3000

@@ -122,7 +122,12 @@ def ladder_db(tmp_path):
     return str(tmp_path / "ladder.db")
 
 
+LONG_WINDOW = {"history_days": 365, "min_type_games": 40, "min_half_rate": 0.55, "type_prior": 10}
+
+
 def make_engine(world, ladder_db, **cfg):
+    """Ladder mechanics tests run on a year of seeded history."""
+    cfg = {**LONG_WINDOW, **cfg}
     return LadderEngine(
         conn=store.connect(ladder_db),
         predictions=sources.PredictionSource(world.main),
@@ -208,6 +213,31 @@ def test_pick_type_needs_games_rate_and_both_halves(tmp_path, ladder_db):
     good = World(tmp_path / "d")
     good.seed_history(33, 17)
     assert qualifies(good)
+
+
+def test_default_rule_takes_best_21_day_trend_any_sport(tmp_path, ladder_db):
+    w = World(tmp_path)
+    w.seed_history(36, 24)  # NFL type 60%: too thin a margin to beat a -110 price
+    w.seed_history(18, 4, sport="NBA", model={"xs_spread": 1.0}, book={"spread": -1.5},
+                   win_score=(100, 101), loss_score=(104, 100), start=D0 - timedelta(days=22))  # 82% recent
+    w.add_game(D0, "nfl1")
+    w.add_game(D0, "nba1", sport="NBA", book={"spread": -1.5})
+    eng = LadderEngine(conn=store.connect(ladder_db), predictions=sources.PredictionSource(w.main),
+                       odds_fn=w.odds_fn, event_fn=w.event_fn, config=Config())
+    assert eng.cfg.history_days == 21 and eng.cfg.min_type_games == 20
+    pick = eng.find_pick(_noon_et(D0))["pick"]
+    assert pick["sport"] == "NBA" and pick["hist_n"] >= 20 and pick["hist_hit_rate"] > 0.8
+
+
+def test_record_must_beat_the_price():
+    from ladder_picks.engine import _wilson_lower
+
+    z = Config().price_z
+    # 60% over 20 games does not clear a -150 price (needs 60%) ...
+    assert _wilson_lower(12, 20, z) < 0.60
+    # ... 65% over 20 clears -110 (52.4%) but not -150.
+    assert 0.524 < _wilson_lower(13, 20, z) < 0.60
+    assert ("SOCCER", "spread", "fav") in Config().excluded_types
 
 
 def test_in_game_lines_are_not_used(tmp_path, ladder_db):

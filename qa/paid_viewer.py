@@ -149,7 +149,7 @@ def _relay(target, jar: dict[str, str]):
 def paid_view(url: str, app_dir: Path | str = ROOT):
     """Yields a local base URL that reaches `url` signed in as a paid account."""
     target = urlsplit(url.rstrip("/"))
-    with _test_accounts().accounts(app_dir) as made:
+    with _test_accounts().accounts(app_dir, url) as made:
         email, password = made["paid"]
         jar = _sign_in(target, email, password)
         server = _relay(target, jar)

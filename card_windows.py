@@ -267,10 +267,15 @@ def copy_recent_from_results(
     spread_table: str = "pl-spread-records",
     totals_table: str = "pl-totals-records",
     headings: bool = False,
+    last30: bool = True,
+    totals_from_table: bool = False,
 ) -> str:
     """Picks Recent results show the records the results page prints, cell for cell.
 
     headings=True also copies the Last Night date and the game counts.
+    last30=False keeps the picks page's own Last 30 when the results tables cover fewer days.
+    totals_from_table=True takes the Prediction Lab totals row from the totals table
+    (what the results totals chart shows) instead of the Over/Under tile.
     """
     if not picks_html or 'id="picks-recent-results"' not in picks_html or not results_html:
         return picks_html
@@ -296,7 +301,7 @@ def copy_recent_from_results(
             continue
         t = title.group(1).lower()
         idx = 0 if "last night" in t else 1 if "last 7" in t else 2 if "last 30" in t else None
-        if idx is None:
+        if idx is None or (idx == 2 and not last30):
             continue
         tally = ln if idx == 0 else l7 if idx == 1 else {}
         want: dict[tuple[str, str], str] = {}
@@ -305,7 +310,9 @@ def copy_recent_from_results(
                 want[("Moneyline", name)] = tally[name]
         if tally.get("Spread"):
             want[("Spread", "Prediction Lab")] = tally["Spread"]
-        if tally.get("Over/Under"):
+        if tally.get("Over/Under") and not (
+            totals_from_table and (to.get("Prediction Lab") or [None] * 3)[idx]
+        ):
             want[("Totals", "Prediction Lab")] = tally["Over/Under"]
         for market, table in (("Spread", sp), ("Totals", to)):
             for model in ("Prediction Lab", "XSharp"):
@@ -495,25 +502,8 @@ def consensus_past7(results_html: str) -> dict[str, str]:
 
 
 def sync_consensus_chips(html: str, results_html: str) -> str:
-    """Card chip "Consensus Record: <pattern> (W-L)" = that row's Past 7 on the table."""
-    if not html or "Consensus Record:" not in html:
-        return html
-    past7 = consensus_past7(results_html)
-    if not past7:
-        return html
-
-    def _chip(m: re.Match[str]) -> str:
-        label = m.group(1).strip()
-        key = _cons_key(label)
-        rec = past7.get(key)
-        if rec is None and key.endswith(" split"):
-            rec = next((v for k, v in past7.items() if k.startswith(key)), None)
-        if rec is None:
-            rec = "0-0"
-        return f"Consensus Record: {label} ({rec})"
-
-    return re.sub(r"Consensus Record: ([^<(]+?)\s*\((\d+-\d+(?:-\d+)?)\)", _chip, html)
-
+    """Card chips keep their season record; the table only holds Past 7 / Past 30."""
+    return html
 
 def _acc(rec: list[int]) -> str:
     w, l, _p = rec
@@ -1149,9 +1139,10 @@ def canonical_tv_menus(in_season: dict, soccer_enabled: bool = True) -> str:
     r = _items("results")
     return (
         "var TV_MENUS={\n"
-        "  picks:{title:'Picks & Predictions',items:[\n    " + ",\n    ".join(p) + "\n  ]},\n"
+        "  picks:{title:'Picks & Predictions',items:[\n    {l:'All Sports Picks',h:'/all-sports-picks'},\n    "
+        + ",\n    ".join(p) + "\n  ]},\n"
         "  props:{title:'Props & Models',items:[{l:'Player Props',h:'/player-props'},{l:'Model Performance',h:'/performance'},{l:'Model vs Sportsbooks',h:'/our-model-vs-sportsbooks'},{l:'The Ladder',h:'/ladder-picks'},{l:'AI Picks Today',h:'/ai-sports-betting-picks-today'},{l:'Tutorial',h:'/tutorial'}]},\n"
-        "  results:{title:'Results & Tracking',items:[\n    {l:'All Sports Results',h:'/all-sports-results'},\n    "
+        "  results:{title:'Results & Tracking',items:[\n    {l:'All Sports Results',h:'/all-sports-results'},{l:'Historic Results',h:'/historic-results'},\n    "
         + ",\n    ".join(r)
         + ",\n    {l:'Daily Results',h:'/daily-report'},{l:'Download CSV',h:'/results/downloads'},{l:'Model Performance',h:'/performance'},{l:'Edge Performance',h:'/edge-performance'}\n  ]},\n"
         "  community:{title:'Community',items:[{l:'X / Twitter',h:'https://x.com/predictionlab_io',ext:true},{l:'Instagram',h:'https://instagram.com/predictionlab.io',ext:true},{l:'TikTok',h:'https://www.tiktok.com/@predictionlab',ext:true},{l:'Reddit',h:'https://reddit.com/r/sportsbetting',ext:true},{l:'Telegram',h:'https://t.me/predictionlab',ext:true}]},\n"

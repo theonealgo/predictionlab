@@ -18,10 +18,18 @@ from pathlib import Path
 logger = logging.getLogger("ladder_picks")
 
 _ROOT = Path(__file__).resolve().parent.parent
+try:
+    from zoneinfo import ZoneInfo
 
-# Two-way moneyline sports with event ids. Soccer is left out: its moneyline is
-# three-way (a draw loses a side bet), so a two-way win probability does not fit.
-SUPPORTED_SPORTS = ("NFL", "NBA", "MLB", "NHL", "NCAAF", "NCAAB", "NCAAW", "WNBA")
+    _ET = ZoneInfo("America/New_York")
+except Exception:  # pragma: no cover
+    _ET = timezone(timedelta(hours=-4))
+
+# Every sport with published two-way picks. Soccer moneyline is three-way (a draw
+# loses a side bet), so soccer is scanned for goal-line and total picks only (see
+# markets.options). Golf has no head-to-head pick to place.
+SUPPORTED_SPORTS = ("NFL", "NBA", "MLB", "NHL", "NCAAF", "NCAAB", "NCAAW", "WNBA",
+                    "CFL", "SOCCER", "TENNIS", "UFC")
 
 _SUMMARY_PATHS = {
     "NFL": "football/nfl",
@@ -32,7 +40,159 @@ _SUMMARY_PATHS = {
     "NCAAW": "basketball/womens-college-basketball",
     "MLB": "baseball/mlb",
     "NHL": "hockey/nhl",
+    "CFL": "football/cfl",
+    "UFC": "mma/ufc",
 }
+
+
+# Tennis and UFC finals and start times live in each sport's own database, keyed
+# by the event number in our game id. "home" is the card's home player / fighter.
+_OWN_DB = {
+    "TENNIS": (_ROOT / "tennis" / "database" / "tennis.sqlite",
+               "SELECT match_date AS start, status, winner, player_a AS a, player_b AS b "
+               "FROM matches WHERE match_id = ?", "tennis-{}"),
+    "UFC": (_ROOT / "ufc_pipeline" / "database" / "ufc_sandbox.db",
+            "SELECT fight_date AS start, status, winner, home_fighter AS a, away_fighter AS b "
+            "FROM ufc_fights WHERE fight_id = ?", "{}"),
+}
+# No pre-game book price is stored for these sports' past picks, so their record
+# counts only picks we gave 60% or less, the -150 to +150 band.
+UNPRICED_MAX_PROB = 0.60
+
+
+def _own_db_event(sport: str, game_id: str) -> dict | None:
+    spec = _OWN_DB.get(sport)
+    eid = event_id(game_id)
+    if not spec or not eid or not spec[0].is_file():
+        return None
+    try:
+        with closing(_ro(str(spec[0]))) as conn:
+            row = conn.execute(spec[1], (spec[2].format(eid),)).fetchone()
+    except sqlite3.Error as exc:
+        logger.info("ladder: %s event lookup failed for %s: %s", sport, game_id, exc)
+        return None
+    return dict(row) if row else None
+
+
+def _ufc_model(fight_ids) -> dict[str, dict]:
+    """{fight id: home_prob, home_ml, away_ml} from the last prediction made before the fight.
+
+    The main database stores a 50% placeholder on UFC cards; the fight model's own
+    numbers are in the UFC database.
+    """
+    ids = sorted({str(f) for f in fight_ids if f})
+    path = _OWN_DB["UFC"][0]
+    if not ids or not path.is_file():
+        return {}
+    marks = ",".join("?" for _ in ids)
+    try:
+        with closing(_ro(str(path))) as conn:
+            rows = conn.execute(
+                f"""SELECT p.fight_id, p.home_win_prob, p.home_ml, p.away_ml, p.books_count
+                    FROM ufc_predictions p JOIN ufc_fights f ON f.fight_id = p.fight_id
+                    WHERE p.fight_id IN ({marks}) AND p.created_at <= f.fight_date
+                    ORDER BY p.created_at""",
+                ids,
+            ).fetchall()
+    except sqlite3.Error as exc:
+        logger.info("ladder: UFC model lookup failed: %s", exc)
+        return {}
+    out: dict[str, dict] = {}
+    for r in rows:
+        priced = (r["books_count"] or 0) > 0
+        out[str(r["fight_id"])] = {
+            "home_prob": _pct(r["home_win_prob"]),
+            "home_ml": r["home_ml"] if priced else None,
+            "away_ml": r["away_ml"] if priced else None,
+        }
+    return out
+
+
+def _own_db_rows(sport: str, since: str, until: str) -> list[dict]:
+    """Tennis / UFC events dated since <= d < until (ET date) from the sport's own
+    database, the one its picks and results pages read. home = player_a /
+    home_fighter. pre_prob is the last prediction made before the start,
+    last_prob the latest one."""
+    path = _OWN_DB[sport][0]
+    if not path.is_file():
+        return []
+    if sport == "TENNIS":
+        sql = """SELECT m.match_id AS id, m.match_date AS start, m.status, m.winner,
+                        m.player_a AS a, m.player_b AS b, m.tournament AS league,
+                        (SELECT p.win_prob_a FROM predictions p WHERE p.match_id = m.match_id
+                           AND p.created_at <= m.match_date ORDER BY p.created_at DESC LIMIT 1) AS pre_prob,
+                        (SELECT p.win_prob_a FROM predictions p WHERE p.match_id = m.match_id
+                           ORDER BY p.created_at DESC LIMIT 1) AS last_prob
+                 FROM matches m
+                 WHERE date(substr(m.match_date, 1, 10)) >= ? AND date(substr(m.match_date, 1, 10)) < ?"""
+    else:
+        sql = """SELECT f.fight_id AS id, f.fight_date AS start, f.status, f.winner,
+                        f.home_fighter AS a, f.away_fighter AS b, '' AS league,
+                        (SELECT p.home_win_prob FROM ufc_predictions p WHERE p.fight_id = f.fight_id
+                           AND p.created_at <= f.fight_date ORDER BY p.created_at DESC LIMIT 1) AS pre_prob,
+                        (SELECT p.home_win_prob FROM ufc_predictions p WHERE p.fight_id = f.fight_id
+                           ORDER BY p.created_at DESC LIMIT 1) AS last_prob
+                 FROM ufc_fights f
+                 WHERE date(substr(f.fight_date, 1, 10)) >= date(?, '-1 day')
+                   AND date(substr(f.fight_date, 1, 10)) < date(?, '+1 day')"""
+    try:
+        with closing(_ro(str(path))) as conn:
+            rows = [dict(r) for r in conn.execute(sql, (since, until))]
+    except sqlite3.Error as exc:
+        logger.info("ladder: %s events lookup failed: %s", sport, exc)
+        return []
+    out = []
+    for r in rows:
+        start = _own_db_start(r["start"])
+        if sport == "UFC":
+            if start is None:
+                continue
+            r["date"] = start.astimezone(_ET).date().isoformat()
+            if not since <= r["date"] < until:
+                continue
+        else:
+            r["date"] = str(r["start"])[:10]
+        num = str(r["id"]).rsplit("-", 1)[-1]
+        r.update(game_id=f"{sport}_{num}", home_team_id=r["a"], away_team_id=r["b"])
+        out.append(r)
+    return out
+
+
+def _game_keys(row, o: dict, home_score: int, away_score: int) -> dict:
+    """Game details carried on a graded pick (for display; the record ignores them)."""
+    from . import markets
+
+    return {
+        "game_id": row["game_id"], "home_team": row["home_team_id"], "away_team": row["away_team_id"],
+        "side": o["side"], "line": o["line"],
+        "label": markets.label(o, row["home_team_id"], row["away_team_id"]),
+        "home_score": home_score, "away_score": away_score,
+    }
+
+
+def _own_db_start(raw) -> datetime | None:
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _winner_score(row: dict, home_team: str | None) -> tuple[int, int] | None:
+    """(home, away) as 1-0 / 0-1 from the winner's name."""
+    win = str(row.get("winner") or "").strip().lower()
+    home = str(home_team or "").strip().lower()
+    names = {str(row.get("a") or "").strip().lower(), str(row.get("b") or "").strip().lower()}
+    if not win or win not in names or home not in names:
+        return None
+    return (1, 0) if win == home else (0, 1)
+
+
+def _summary_path(sport: str, game_id: str) -> str | None:
+    if sport == "SOCCER":
+        parts = str(game_id or "").split("_")
+        return f"soccer/{parts[1]}" if len(parts) >= 3 and parts[1] else None
+    return _SUMMARY_PATHS.get(sport)
 
 # Component model columns in the published card. Exactly 50.0 is a placeholder.
 _COMPONENT_KEYS = ("elo_prob", "xgb_prob", "glicko2_prob", "trueskill_prob")
@@ -92,6 +252,8 @@ class PredictionSource:
             rows = conn.execute(sql, (*SUPPORTED_SPORTS, pick_date)).fetchall()
         out = []
         for row in rows:
+            if row["sport"] in _OWN_DB:
+                continue
             try:
                 card = json.loads(row["lock_card_json"]) or {}
             except (TypeError, ValueError):
@@ -112,6 +274,20 @@ class PredictionSource:
                     "card": card,
                 }
             )
+        nxt = (date.fromisoformat(pick_date) + timedelta(days=1)).isoformat()
+        for sport in _OWN_DB:
+            if sport not in SUPPORTED_SPORTS:
+                continue
+            for r in _own_db_rows(sport, pick_date, nxt):
+                hp = _pct(r["last_prob"])
+                out.append({
+                    "sport": sport, "league": r["league"] or "", "game_id": r["game_id"],
+                    "game_date": r["date"], "home_team": r["a"], "away_team": r["b"],
+                    "home_prob": hp, "components": [],
+                    "model": {"home_prob": hp, "pl_spread": None, "xs_spread": None,
+                              "pl_total": None, "xs_total": None},
+                    "card": {},
+                })
         return out
 
     def graded_history(self, since: str, until: str) -> list[dict]:
@@ -146,7 +322,7 @@ class PredictionSource:
             locks = _lock_cols(conn, "p.")
             rows = conn.execute(
                 f"""SELECT p.sport, p.game_id, p.game_date, p.win_probability, p.lock_card_json,
-                           {locks}, g.home_score, g.away_score
+                           p.home_team_id, p.away_team_id, {locks}, g.home_score, g.away_score
                     FROM predictions p
                     JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
                     WHERE p.sport IN ({marks}) AND date(p.game_date) >= ? AND date(p.game_date) < ?
@@ -180,10 +356,61 @@ class PredictionSource:
                     "sport": row["sport"], "date": str(row["game_date"])[:10], "market": o["market"],
                     "model": o["model"], "side_class": o["side_class"], "gap": o["gap"],
                     "price": o["price"], "win": result == "win",
+                    **_game_keys(row, o, hs, aw),
                 })
+        out.extend(self._own_db_history(since, until))
+        out.sort(key=lambda r: r["date"])
+        return out
+
+    def _own_db_history(self, since: str, until: str) -> list[dict]:
+        """Tennis / UFC moneyline picks graded from each sport's own finals."""
+        out: list[dict] = []
+        for sport in _OWN_DB:
+            if sport not in SUPPORTED_SPORTS:
+                continue
+            rows = [r for r in _own_db_rows(sport, since, until)
+                    if r["winner"] and str(r["status"] or "").lower() in ("final", "complete")]
+            ufc = _ufc_model(event_id(r["game_id"]) for r in rows) if sport == "UFC" else {}
+            for row in rows:
+                hp = _pct(row["pre_prob"])
+                score = _winner_score(row, row["a"])
+                if hp is None or not score:
+                    continue
+                out.extend(self._own_db_graded(sport, row, hp, score, ufc.get(event_id(row["game_id"]) or "")))
+        return out
+
+    def _own_db_graded(self, sport: str, row: dict, hp: float, score, fm: dict | None) -> list[dict]:
+        from . import markets
+
+        out: list[dict] = []
+        model = {"home_prob": hp}
+        book = {"home_ml": fm["home_ml"], "away_ml": fm["away_ml"]} if fm else {}
+        for o in markets.options(sport, model, book):
+            if o["market"] != "moneyline":
+                continue
+            unpriced = o["price"] is None
+            if unpriced and o["gap"] > UNPRICED_MAX_PROB + 1e-9:
+                continue
+            result = markets.grade("moneyline", o["side"], None, *score)
+            out.append({
+                "sport": sport, "date": row["date"], "market": "moneyline",
+                "model": o["model"], "side_class": o["side_class"], "gap": o["gap"],
+                "price": o["price"], "unpriced": unpriced, "win": result == "win",
+                **_game_keys(row, o, *score),
+            })
         return out
 
     def final_score(self, sport: str, game_id: str) -> dict | None:
+        if sport in _OWN_DB:
+            fin = _own_db_event(sport, game_id)
+            if not fin:
+                return None
+            if str(fin.get("status") or "").lower() not in ("final", "complete") or not fin.get("winner"):
+                return {"state": "scheduled"}
+            score = _winner_score(fin, fin.get("a"))
+            if not score:
+                return None
+            return {"state": "final", "home_score": score[0], "away_score": score[1]}
         with closing(_ro(self.path)) as conn:
             row = conn.execute(
                 "SELECT status, home_score, away_score FROM games WHERE sport = ? AND game_id = ?",
@@ -278,7 +505,17 @@ def book_odds(cand: dict) -> dict | None:
 
 def event_status(sport: str, game_id: str, timeout: float = 6.0) -> dict | None:
     """{'start': aware UTC datetime|None, 'state': pre|in|post|postponed|canceled, scores...}."""
-    path = _SUMMARY_PATHS.get(sport)
+    if sport in _OWN_DB:
+        row = _own_db_event(sport, game_id)
+        if not row:
+            return None
+        status = str(row.get("status") or "").lower()
+        state = {"scheduled": "pre", "upcoming": "pre", "live": "in", "final": "post",
+                 "complete": "post"}.get(status, status or "pre")
+        if "postpon" in status or "cancel" in status:
+            state = "postponed" if "postpon" in status else "canceled"
+        return {"start": _own_db_start(row.get("start")), "state": state}
+    path = _summary_path(sport, game_id)
     eid = event_id(game_id)
     if not path or not eid:
         return None

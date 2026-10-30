@@ -88,7 +88,7 @@ def validate_results_match_predictions(sport: str = 'NBA') -> Dict:
                 p.win_probability,
                 p.created_at
             FROM games g
-            INNER JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+            INNER JOIN predictions p ON g.game_id = p.game_id AND +p.sport = ?
             WHERE g.sport = ? AND g.home_score IS NOT NULL
             ORDER BY g.game_date DESC
         ''', (sport, sport)).fetchall()
@@ -164,7 +164,7 @@ def generate_integrity_report(sport: str = 'NBA') -> str:
                 p.meta_home_prob,
                 p.created_at
             FROM games g
-            INNER JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+            INNER JOIN predictions p ON g.game_id = p.game_id AND +p.sport = ?
             WHERE g.sport = ? AND g.home_score IS NOT NULL
             ORDER BY g.game_date DESC
         ''', (sport, sport)).fetchall()
@@ -237,7 +237,7 @@ def check_for_orphaned_results(sport: str = 'NBA') -> List[Dict]:
                 g.home_score,
                 g.away_score
             FROM games g
-            LEFT JOIN predictions p ON g.game_id = p.game_id AND p.sport = ?
+            LEFT JOIN predictions p ON g.game_id = p.game_id AND +p.sport = ?
             WHERE g.sport = ? 
               AND g.home_score IS NOT NULL
               AND p.id IS NULL

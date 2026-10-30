@@ -22,6 +22,12 @@ the miss.
 # GOOD — UNLOCK repeated 3 times, then SOCCER and the miss
 ```
 
+## Owner asks = unlocked (owner 2026-10-23, overrides the UNLOCK phrase)
+
+If the owner tells you to work on something, it is unlocked. Do not ask for the
+UNLOCK phrase, and do not tell the owner a thing they asked for is locked. Locks
+only stop you from touching things the owner did not ask you to work on.
+
 ## Owner asks directly = unlocked (owner 2026-10-11)
 
 When the owner directly asks to fix a named sport ("fix soccer errors", a

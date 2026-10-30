@@ -115,12 +115,43 @@ def _scoreboard_days(sport: str) -> list[str]:
             if len(names) < 2 or any(not name or "TBD" in name.upper() for name in names):
                 continue
             found.add(day.isoformat())
+    saved = _saved_board_days(key, today)
     if not saw:
-        return []
+        return saved
+    if failed_day:
+        found |= set(saved)
+    else:
+        _save_board_days(key, found)
     days = sorted(found)
     # A day that failed to load must not be hidden for the full cache window.
     _CACHE[key] = (now - (_TTL - 45.0) if failed_day else now, days)
     return days
+
+
+def _board_file(key: str) -> Path:
+    return Path(__file__).resolve().parent / ".cache" / f"scoreboard_days_{key}.json"
+
+
+def _saved_board_days(key: str, today: date) -> list[str]:
+    """Last complete scoreboard walk, for when ESPN does not answer."""
+    try:
+        days = json.loads(_board_file(key).read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    return sorted(d for d in days if isinstance(d, str) and d >= today.isoformat())
+
+
+def _save_board_days(key: str, days) -> None:
+    try:
+        path = _board_file(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        import threading
+
+        tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(sorted(days)), encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        pass
 
 
 _WARMING: set[str] = set()
@@ -144,6 +175,36 @@ def cached_scoreboard_days(sport: str) -> list[str]:
 
         threading.Thread(target=_run, daemon=True, name=f"scoreboard-{key.lower()}").start()
     return list(hit[1]) if hit else []
+
+
+def _add_chart_date_list(html: str, days: list[str]) -> str:
+    """Static date bubbles (off-season chart) have no list to merge the
+    scoreboard into, so the next season's days never reached the picker."""
+    if not days or "const allDates" in html or 'id="datePicker"' in html:
+        return html
+    bubbles = re.search(
+        r'<(nav|div)\b[^>]*\bid="dateBubbles"[^>]*>(?:\s*<a\b[^>]*>[^<]*</a>)*\s*</\1>',
+        html,
+    )
+    if not bubbles:
+        return html
+    options = "".join(f'<option value="{day}">{day}</option>' for day in days)
+    add = (
+        '<label for="datePicker" style="position:absolute;width:1px;height:1px;overflow:hidden">Date</label>'
+        f'<select id="datePicker">{options}</select>'
+        "<script>const allDates = " + json.dumps(days) + ";</script>"
+    )
+    return html[: bubbles.end()] + add + html[bubbles.end():]
+
+
+def add_saved_chart_dates(html: str, sport: str) -> str:
+    """Off-season chart: add the saved scoreboard days without asking ESPN."""
+    key = (sport or "").upper()
+    board = cached_scoreboard_days(key) or _saved_board_days(key, _today())
+    if not board:
+        return html
+    days = sorted(set(_existing_days(html)) | set(board))
+    return _add_chart_date_list(html, days)
 
 
 def merge_scoreboard_days(html: str, sport: str) -> str:
@@ -498,6 +559,8 @@ def extend_page_dates(html: str, sport: str, path: str, view: str = "") -> str:
         days = _loose_days(html) or _stored_result_days(sport_u)
     view_l = (view or "").strip().lower()
     is_chart = view_l in ("chart", "tabs", "markets", "tabbed", "spread", "totals")
+    if path_l.endswith("-results") and is_chart:
+        html = _add_chart_date_list(html, days)
     html = _ensure_picker(html, days)
     if path_l.endswith("-results"):
         html = _fresh_today_stamp(html)

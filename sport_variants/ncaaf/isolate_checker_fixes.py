@@ -97,6 +97,20 @@ class _TieredServed(dict):
 
     def __setitem__(self, key, value):
         super().__setitem__(self._k(key), value)
+        self._evict()
+
+    def _evict(self):
+        # Every saved page is also on disk; memory keeps only the newest few.
+        try:
+            now = time.time()
+            rows = sorted(list(super().items()), key=lambda kv: kv[1][0], reverse=True)
+            kept = 0
+            for k, (ts, text) in rows:
+                kept += len(text)
+                if now - ts >= _SERVED_TTL or (kept > _SERVED_MAX_BYTES and k != rows[0][0]):
+                    super().pop(k, None)
+        except Exception:
+            pass
 
     def __contains__(self, key):
         return super().__contains__(self._k(key))
@@ -107,6 +121,7 @@ class _TieredServed(dict):
 
 _SERVED = _TieredServed()
 _SERVED_TTL = 1200.0
+_SERVED_MAX_BYTES = 32 * 1024 * 1024
 
 
 def results_serve_key(
@@ -1320,6 +1335,8 @@ def align_ncaaf_consensus_past7(html: str, cards_html: str | None = None) -> str
             return 0, 0, 0
         return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
 
+    old7s: dict[str, tuple[int, int, int]] = {}
+
     def _row(match: re.Match[str]) -> str:
         label = match.group(2)
         if "/6" not in label:
@@ -1328,6 +1345,7 @@ def align_ncaaf_consensus_past7(html: str, cards_html: str | None = None) -> str
         cell = _cell(grades)
         # Past 30 holds Past 7: swap the builder's 7-day games for the card-graded ones.
         old7 = _wlp(match.group(6))
+        old7s[label] = old7
         old30 = _wlp(match.group(8))
         new7 = (grades.count("WIN"), grades.count("LOSS"), grades.count("PUSH"))
         w, l, p = (max(0, old30[i] - old7[i]) + new7[i] for i in range(3))
@@ -1363,6 +1381,12 @@ def align_ncaaf_consensus_past7(html: str, cards_html: str | None = None) -> str
         )
     if extra and re.search(r"</tbody>", block2, flags=re.I):
         block2 = re.sub(r"</tbody>", "".join(extra) + "</tbody>", block2, count=1, flags=re.I)
+    try:
+        import consensus_table_rows
+
+        consensus_table_rows.save_past7_swap("NCAAF", games, old7s)
+    except Exception:
+        pass
     return html[:start] + block2 + html[end:]
 
 
@@ -1708,6 +1732,13 @@ def _predictions_share_payload(html: str, sport: str) -> dict | None:
         return None
     cards: list[dict] = []
     date = ""
+    try:
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        today = _dt.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        today = ""
     for m in re.finditer(
         r'<div\b(?=[^>]*\bclass="[^"]*\bgame-card-stack\b)(?=[^>]*\bdata-pick-card\b)[^>]*>',
         html,
@@ -1722,6 +1753,15 @@ def _predictions_share_payload(html: str, sport: str) -> dict | None:
         away, home = _attr("data-away"), _attr("data-home")
         if not away or not home:
             continue
+        if _attr("data-result") or _attr("data-time").upper().startswith("FINAL"):
+            continue
+        prev = html.rfind('id="date-', 0, m.start())
+        dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
+        card_date = dm.group(1) if dm else ""
+        if today and card_date and card_date < today:
+            continue
+        if date and card_date and card_date != date and len(cards) >= 2:
+            break
         pick = _attr("data-pick")
         pick_l = pick.lower()
         if pick_l and pick_l in home.lower():
@@ -1735,15 +1775,12 @@ def _predictions_share_payload(html: str, sport: str) -> dict | None:
         except ValueError:
             confidence = 50.0
         if not date:
-            prev = html.rfind('id="date-', 0, m.start())
-            dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
-            if dm:
-                date = dm.group(1)
+            date = card_date
         cards.append(
             {
                 "away_team": away,
                 "home_team": home,
-                "game_date": date,
+                "game_date": card_date or date,
                 "pick_side": side,
                 "pick_team": home if side == "home" else away,
                 "confidence": confidence,
@@ -1790,6 +1827,9 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
     """Point the bottom predictions image at picks that are actually on the page."""
     payload = _predictions_share_payload(html, sport)
     if not payload:
+        if "data-pick-card" in (html or ""):
+            html = re.sub(r'<div class="social-export-wrap"(?![^>]*\bhidden\b)',
+                          '<div class="social-export-wrap" hidden', html)
         return html
     cards = payload["cards"]
     try:
@@ -1812,7 +1852,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         html,
     )
     html2 = re.sub(r"/share/predictions/view/[a-f0-9]{32}", view, html2)
-    if html2 == html and "social-export-wrap" not in html:
+    if html2 == html and 'class="social-export-wrap"' not in html:
         block = (
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
@@ -2731,6 +2771,24 @@ def fill_ncaaf_locked_lines(html: str) -> str:
                 tag = _set("data-xs-spread", xs_spread, tag)
                 tag = _set("data-pl-proj", pl_proj, tag)
                 tag = _set("data-xs-proj", xs_proj, tag)
+                l3_m = re.search(r'\bdata-h2h-l3="([^"]+)"', tag, flags=re.I)
+                if l3_m and "Combined record" not in l3_m.group(1):
+                    try:
+                        import NHL77FINAL as _app
+                        ids = conn.execute(
+                            "SELECT home_team_id, away_team_id, game_date FROM predictions WHERE game_id=? LIMIT 1",
+                            (gid_m.group(1),),
+                        ).fetchone()
+                        l3 = _app.last3_h2h_for_card("NCAAF", ids["home_team_id"], ids["away_team_id"],
+                                                     ids["game_date"]) if ids else None
+                    except Exception:
+                        l3 = None
+                    if l3 and l3.get("totals"):
+                        over = sum(1 for t in l3["totals"] if t > xs_total)
+                        under = sum(1 for t in l3["totals"] if t < xs_total)
+                        val = f"{unescape(l3_m.group(1))} · Combined record: {over}-{under} Over"
+                        tag = _set("data-h2h-l3", val, tag)
+                        tag = _set("data-h2h", val, tag)
                 updated = tag + updated[open_m.end():]
             out.append(updated)
     finally:
@@ -3083,18 +3141,12 @@ def _ncaaf_recent_totals_records() -> dict[str, list[str]]:
     Last night, past 7, and past 30, for Prediction Lab and XSharp.
     A dash on Recent results stays empty here so the chart is not given a new record.
     """
-    block = ""
     try:
-        block = lookup_served_picks("NCAAF") or ""
-    except Exception:
-        block = ""
-    if 'id="picks-recent-results"' not in block:
-        try:
-            from picks_recent_results import _recent_block
+        from picks_recent_results import _recent_block
 
-            block = _recent_block("NCAAF") or ""
-        except Exception:
-            return {}
+        block = _recent_block("NCAAF") or ""
+    except Exception:
+        return {}
     found = {name: ["", "", ""] for name in ("Prediction Lab", "XSharp")}
     for part in re.split(r'<div class="picks-recent-col">', block)[1:]:
         title = re.search(r"<h3>([^<]+)</h3>", part)
@@ -3244,7 +3296,7 @@ def fill_ncaaf_blank_pl_projection(html: str) -> str:
         if not home_m or not away_m:
             out.append(stack)
             continue
-        proj = _ncaaf_engine_pack(home_m.group(1), away_m.group(1)).get("proj") or ""
+        proj = _ncaaf_engine_pack_cached(home_m.group(1), away_m.group(1)).get("proj") or ""
         if not proj or proj in {"—", "–", "-"}:
             out.append(stack)
             continue
@@ -3673,6 +3725,91 @@ def _ncaaf_engine_pack(home: str, away: str) -> dict[str, str]:
     return {"spread": spread, "total": total, "proj": proj}
 
 
+_NCAAF_ENGINE_PACKS: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
+_NCAAF_ENGINE_PENDING: set[tuple[str, str]] = set()
+
+
+def _ncaaf_engine_pack_cached(home: str, away: str, background: bool = False) -> dict[str, str]:
+    """Engine pack kept one hour per game. An empty answer is not kept.
+
+    background=True never waits: a miss starts the lookup on a thread (page
+    requests may not call ESPN) and returns empty until it lands.
+    """
+    import time
+
+    key = (unescape(home or "").strip(), unescape(away or "").strip())
+    hit = _NCAAF_ENGINE_PACKS.get(key)
+    if hit and time.time() - hit[0] < 3600:
+        return hit[1]
+    if background:
+        if key not in _NCAAF_ENGINE_PENDING:
+            _NCAAF_ENGINE_PENDING.add(key)
+            import threading
+
+            def _run():
+                try:
+                    import sport_variant
+
+                    with sport_variant.sport_scope("ncaaf"):
+                        _ncaaf_engine_pack_cached(*key)
+                except Exception:
+                    pass
+                finally:
+                    _NCAAF_ENGINE_PENDING.discard(key)
+
+            threading.Thread(target=_run, daemon=True).start()
+        try:
+            from flask import g, has_request_context
+
+            if has_request_context():
+                g._pl_memo_skip = True
+        except Exception:
+            pass
+        return {"spread": "", "total": "", "proj": ""}
+    pack = _ncaaf_engine_pack(*key)
+    if pack.get("spread"):
+        _NCAAF_ENGINE_PACKS[key] = (time.time(), pack)
+    return pack
+
+
+def fill_ncaaf_blank_pl_on_saved_page(html: str) -> str:
+    """A saved picks page keeps a blank Prediction Lab spread when the engine had no line then.
+
+    Only current cards whose Prediction Lab spread is blank are touched; the
+    rest of the saved page is left as it is.
+    """
+    if not html or "data-pick-card" not in html or "val-pl" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    row_re = re.compile(
+        r'<td class="market-k">\s*Spread\s*</td>\s*<td class="val-books">.*?</td>\s*'
+        r'<td class="val-pl">(.*?)</td>',
+        re.S | re.I,
+    )
+    out = [parts[0]]
+    changed = False
+    for stack in parts[1:]:
+        match = row_re.search(stack)
+        pl = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", match.group(1))).strip() if match else ""
+        if not match or not _cell_blank(pl) or not _ncaaf_card_is_current(stack):
+            out.append(stack)
+            continue
+        home_m = re.search(r'data-home="([^"]*)"', stack, flags=re.I)
+        away_m = re.search(r'data-away="([^"]*)"', stack, flags=re.I)
+        if home_m and away_m and _ncaaf_engine_pack_cached(
+            home_m.group(1), away_m.group(1), background=True
+        ).get("spread"):
+            filled = separate_ncaaf_copied_lines(stack, use_engine=True)
+            filled = fill_ncaaf_blank_efficiency(filled)
+            filled = fill_ncaaf_blank_pl_projection(filled)
+            changed = changed or filled != stack
+            stack = filled
+        out.append(stack)
+    return "".join(out) if changed else html
+
+
 def _ncaaf_engine_spread_label(home: str, away: str) -> str:
     """Prediction Lab spread from the odds engine. Empty when the engine has no line."""
     return _ncaaf_engine_pack(home, away)["spread"]
@@ -3738,7 +3875,7 @@ def separate_ncaaf_copied_lines(html: str, use_engine: bool = True) -> str:
             home_m = re.search(r'data-home="([^"]*)"', stack, flags=re.I)
             away_m = re.search(r'data-away="([^"]*)"', stack, flags=re.I)
             if home_m and away_m:
-                pack = _ncaaf_engine_pack(home_m.group(1), away_m.group(1))
+                pack = _ncaaf_engine_pack_cached(home_m.group(1), away_m.group(1))
                 label = pack.get("spread") or ""
         if not label or _cell_blank(label) or label == xs:
             out.append(stack)

@@ -713,8 +713,7 @@ def _date_sections_html(
         )
         body = []
         for card in cards:
-            finished = (card.get("status") or "").lower() in {"complete", "final"}
-            if mode == "results" or finished:
+            if mode == "results":
                 chunk = _cfl_mlb_result_card(card, idx, render)
             else:
                 chunk = render.render_card(card, idx, mode="picks")

@@ -1481,6 +1481,57 @@ def _parse_lock_card_json(raw: Any) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _enrich_rows_for_dates(con, db_path: str, table: str, dates: list, sql: str):
+    try:
+        from enrich_date_rows import rows_for_dates
+    except ImportError:
+        return con.execute(sql, dates)
+    return rows_for_dates(con, db_path, table, dates)
+
+
+_ENRICH_LOOKUPS: dict = {}
+_ENRICH_LOOKUP_TTL = 120.0
+
+
+def _enrich_lookup_key(db_path: str, gids: list, dates: list):
+    """Same games + unchanged DB file -> same book / PL lookups."""
+    import hashlib
+
+    try:
+        st = os.stat(db_path)
+    except OSError:
+        return None
+    try:
+        wal = os.stat(db_path + "-wal")
+        wal_stamp = (wal.st_mtime_ns, wal.st_size) if wal.st_size else None
+    except OSError:
+        wal_stamp = None
+    ids = hashlib.sha1(
+        ("\n".join(sorted(set(gids))) + "|" + "\n".join(dates)).encode()
+    ).hexdigest()
+    return (db_path, st.st_mtime_ns, st.st_size, wal_stamp, ids)
+
+
+def _enrich_lookup_get(key):
+    import time
+
+    hit = _ENRICH_LOOKUPS.get(key) if key else None
+    if hit and time.time() - hit[0] < _ENRICH_LOOKUP_TTL:
+        return hit[1]
+    return None
+
+
+def _enrich_lookup_put(key, value) -> None:
+    import time
+
+    if not key:
+        return
+    _ENRICH_LOOKUPS[key] = (time.time(), value)
+    while len(_ENRICH_LOOKUPS) > 16:
+        oldest = min(_ENRICH_LOOKUPS, key=lambda k: _ENRICH_LOOKUPS[k][0])
+        _ENRICH_LOOKUPS.pop(oldest, None)
+
+
 def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Attach book/PL ML favorites onto finals (lock_card_json + betting_lines).
 
@@ -1518,7 +1569,12 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
         for g in rows
         if str(g.get("game_id") or "").strip()
     ]
-    if os.path.isfile(db_path) and (gids or dates):
+    lookup_key = _enrich_lookup_key(db_path, gids, dates)
+    cached_lookup = _enrich_lookup_get(lookup_key)
+    lookup_ok = False
+    if cached_lookup is not None:
+        by_gid, by_match, by_tail = cached_lookup
+    elif os.path.isfile(db_path) and (gids or dates):
         try:
             con = sqlite3.connect(db_path)
             con.row_factory = sqlite3.Row
@@ -1595,12 +1651,15 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
             if dates:
                 dph = ",".join("?" * len(dates))
                 try:
-                    for r in con.execute(
+                    for r in _enrich_rows_for_dates(
+                        con,
+                        db_path,
+                        "betting_lines",
+                        dates,
                         f"SELECT game_id, home_moneyline, away_moneyline, "
                         f"game_date, home_team, away_team FROM betting_lines "
                         f"WHERE substr(game_date,1,10) IN ({dph}) "
                         f"AND home_moneyline IS NOT NULL",
-                        dates,
                     ):
                         mk = _match_key(
                             str(r["game_date"] or "")[:10],
@@ -1628,11 +1687,14 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
                 except sqlite3.Error:
                     pass
                 try:
-                    for r in con.execute(
+                    for r in _enrich_rows_for_dates(
+                        con,
+                        db_path,
+                        "predictions",
+                        dates,
                         f"SELECT game_id, lock_card_json, game_date, "
                         f"home_team_id, away_team_id FROM predictions "
                         f"WHERE substr(game_date,1,10) IN ({dph})",
-                        dates,
                     ):
                         lock = _parse_lock_card_json(r["lock_card_json"])
                         mk = _match_key(
@@ -1652,8 +1714,11 @@ def _enrich_finals_book_pl_ml(finals: list[dict[str, Any]]) -> list[dict[str, An
                 except sqlite3.Error:
                     pass
             con.close()
+            lookup_ok = True
         except sqlite3.Error:
             by_gid, by_match, by_tail = {}, {}, {}
+    if lookup_ok:
+        _enrich_lookup_put(lookup_key, (by_gid, by_match, by_tail))
 
     for g in rows:
         home = str(g.get("home_team_id") or g.get("home") or g.get("home_team") or "")

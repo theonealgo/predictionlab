@@ -16,4 +16,20 @@ Owner 2026-10-08 (all-sports pass): three-way chart tables sit inside the page, 
 
 Owner 2026-10-14: Efficiency fills from the Puck Line row when the card attribute is blank; results consensus percent text uses the darker yellow for contrast. Miss closed — locked.
 
+Owner 2026-10-17: picks Recent results XSharp Totals shows 0-0 when XSharp's total equals the book total (no side) instead of a dash. Miss closed — locked.
+
+Owner 2026-10-17: the season Consensus Historical Record chip counts the results consensus table's own games (`consensus_table_rows.py`), plus stored finals before them, so a season chip always holds the table's Past 7 / Past 30 (preseason games the table counts included). Miss closed — locked.
+
+Owner 2026-10-21: results Last Night showed 8 of 11 games (saved before the late finals). A saved results page whose Last Night count is below that night's stored finals is rebuilt (at most once per 15 minutes per page). Miss closed — locked.
+
+Owner 2026-10-22: a picks card with no stored XSharp line gets one from the NHL XSharp model (same orientation as the slate build). Efficiency is never copied from Sharp Consensus — it comes from the PL puck line (stored lock line included); a card with no PL and no book line shows Efficiency N/A. Chart view carries its canonical link even when the shared layout step fails. Miss closed — locked.
+
+Owner 2026-10-22: the picks-page Predictions Image skips finished cards and past dates; it shows the first upcoming date's picks (filling from the next date when only one game is left). Miss closed — locked.
+
+Owner 2026-10-28: results chart stuck on 2026-10-22 — the NHL after-request shortcut returned a freshly rebuilt chart before it was stamped and saved. The shortcut now applies only to pages already saved (repaired mark present). Miss closed — locked.
+
+Owner 2026-10-29: consensus table Past 30 now holds the card-graded Past 7 (builder games before the Last 7 window + card grades), and the picks Consensus Historical Record chip counts the same way (`consensus_table_rows.past7_cards`). Miss closed — locked.
+
+Owner 2026-10-30: results cards view Prediction Lab · XSharp — Totals table (id on the wrapper div) now gets the picks Recent results totals grades like the chart view (`served_layout_fixes._sync_totals_chart`). Miss closed — locked.
+
 Do not put lock text on user-facing HTML.

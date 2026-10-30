@@ -1,8 +1,11 @@
 """Locate actual HTML elements while preserving the original source bytes."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
+
+_NEWLINE = re.compile("\n")
 
 
 @dataclass
@@ -20,7 +23,7 @@ class _Blocks(HTMLParser):
         self.source = source
         self.predicate = predicate
         self.lines = [0]
-        self.lines.extend(i + 1 for i, char in enumerate(source) if char == "\n")
+        self.lines.extend(m.end() for m in _NEWLINE.finditer(source))
         self.stack = []
         self.blocks = []
         self.feed(source)

@@ -80,6 +80,7 @@ def _day_view(row, show_pick: bool) -> dict:
             "record": record,
             "odds": money.fmt_american(r.get("american_odds")),
             "decimal": f"{r['decimal_odds']:.2f}" if r.get("decimal_odds") else "—",
+            "break_even": _pct(1 / r["decimal_odds"]) if r.get("decimal_odds") else "—",
             "model_prob": _pct(r.get("model_prob")),
             "start": _start_et(r.get("event_start")),
             "score": score,
@@ -88,6 +89,11 @@ def _day_view(row, show_pick: bool) -> dict:
     elif r["result"] == "no_pick":
         view["note"] = "No pick met the requirements"
     return view
+
+
+def _number(conn, ladder_id: int) -> int:
+    """Ladder number as shown: its place among ladders since the last reset."""
+    return conn.execute("SELECT COUNT(*) FROM ladder_runs WHERE id <= ?", (ladder_id,)).fetchone()[0]
 
 
 def page_context(conn, premium: bool, cfg: Config | None = None) -> dict:
@@ -112,7 +118,7 @@ def page_context(conn, premium: bool, cfg: Config | None = None) -> dict:
         c = dict(current)
         net = c["current_amount_cents"] - c["start_amount_cents"]
         ladder = {
-            "id": c["id"],
+            "id": _number(conn, c["id"]),
             "status": c["status"],
             "status_label": _STATUS_LABEL.get(c["status"], c["status"]),
             "start_date": c["start_date"],
@@ -134,7 +140,7 @@ def page_context(conn, premium: bool, cfg: Config | None = None) -> dict:
         "SELECT * FROM ladder_runs WHERE status != 'active' ORDER BY id DESC LIMIT 25"
     ):
         history.append({
-            "id": r["id"],
+            "id": _number(conn, r["id"]),
             "start_date": r["start_date"],
             "finished": (r["finished_at"] or "")[:10],
             "status_label": _STATUS_LABEL.get(r["status"], r["status"]),
@@ -181,6 +187,69 @@ def ladder_page():
     return resp
 
 
+@bp.route("/all-sports-picks")
+def all_sports_picks_page():
+    premium, logged_in, _admin = _viewer()
+    data = None
+    if premium:
+        try:
+            from . import board
+
+            data = board.current()
+        except Exception:
+            logger.exception("all-sports picks: page data failed")
+    html = render_template("all_sports_picks.html", is_premium=premium, is_logged_in=logged_in, board=data)
+    resp = make_response(html)
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
+
+
+_HISTORY_DATA: dict = {}
+
+
+def _history_data() -> dict:
+    """Row counts behind the graded record, per sport (last 365 days). No pick details."""
+    import time
+    from contextlib import closing
+    from datetime import date, timedelta
+
+    from . import sources
+
+    if _HISTORY_DATA.get("at", 0) > time.time() - 600:
+        return _HISTORY_DATA["data"]
+    out: dict = {}
+    try:
+        since = (date.today() - timedelta(days=365)).isoformat()
+        with closing(sources._ro(sources.main_db_path())) as conn:
+            bl = sources._table_cols(conn, "betting_lines")
+            pc = sources._table_cols(conn, "predictions")
+            out["betting_lines_cols"] = sorted(bl)
+            out["betting_lines_rows"] = conn.execute("SELECT COUNT(*) FROM betting_lines").fetchone()[0]
+            xs = "SUM(p.lock_xs_spread IS NOT NULL)" if "lock_xs_spread" in pc else "0"
+            pl = "SUM(p.lock_pl_spread IS NOT NULL)" if "lock_pl_spread" in pc else "0"
+            marks = ",".join("?" for _ in sources.SUPPORTED_SPORTS)
+            rows = conn.execute(
+                f"""SELECT p.sport, COUNT(*) AS preds, {xs} AS xs, {pl} AS pl,
+                           SUM(p.lock_card_json IS NOT NULL) AS cards,
+                           SUM(g.home_score IS NOT NULL AND lower(COALESCE(g.status, ''))
+                               IN ('final', 'complete', 'completed', 'closed', 'post')) AS finals,
+                           SUM(EXISTS (SELECT 1 FROM betting_lines b WHERE b.game_id = p.game_id)) AS with_line
+                    FROM predictions p
+                    LEFT JOIN games g ON g.sport = p.sport AND g.game_id = p.game_id
+                    WHERE p.sport IN ({marks}) AND date(p.game_date) >= ?
+                    GROUP BY p.sport""",
+                (*sources.SUPPORTED_SPORTS, since),
+            ).fetchall()
+            out["by_sport"] = {r["sport"]: {k: r[k] for k in ("preds", "xs", "pl", "cards", "finals", "with_line")}
+                               for r in rows}
+            sample = conn.execute("SELECT game_id FROM betting_lines ORDER BY id DESC LIMIT 3").fetchall()
+            out["betting_lines_sample_ids"] = [r[0] for r in sample]
+    except Exception as exc:
+        out["error"] = f"{type(exc).__name__}: {exc}"[:200]
+    _HISTORY_DATA.update(at=time.time(), data=out)
+    return out
+
+
 @bp.route("/ladder-picks/status.json")
 def ladder_status():
     """Scheduler health only: when the last pass ran and why it did not pick. No pick details."""
@@ -203,6 +272,7 @@ def ladder_status():
             conn.close()
     except Exception as exc:
         info["ladder_db_error"] = type(exc).__name__
+    info["history_data"] = _history_data()
     resp = make_response(json.dumps(info, default=str))
     resp.headers["Content-Type"] = "application/json"
     resp.headers["Cache-Control"] = "no-store"

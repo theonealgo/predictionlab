@@ -82,6 +82,20 @@ class _TieredServed(dict):
 
     def __setitem__(self, key, value):
         super().__setitem__(self._k(key), value)
+        self._evict()
+
+    def _evict(self):
+        # Every saved page is also on disk; memory keeps only the newest few.
+        try:
+            now = time.time()
+            rows = sorted(list(super().items()), key=lambda kv: kv[1][0], reverse=True)
+            kept = 0
+            for k, (ts, text) in rows:
+                kept += len(text)
+                if now - ts >= _SERVED_TTL or (kept > _SERVED_MAX_BYTES and k != rows[0][0]):
+                    super().pop(k, None)
+        except Exception:
+            pass
 
     def __contains__(self, key):
         return super().__contains__(self._k(key))
@@ -92,6 +106,7 @@ class _TieredServed(dict):
 
 _SERVED = _TieredServed()
 _SERVED_TTL = 1200.0
+_SERVED_MAX_BYTES = 32 * 1024 * 1024
 
 
 def results_serve_key(
@@ -2649,8 +2664,8 @@ def apply_nfl_owner_fixes(html: str, path: str, view: str = "", market: str = ""
         html = _fill_nfl_future_edge_from_book(html)
         html = rewrite_nfl_share_hrefs(html)
         try:
-            # Recent results and card chips read the results page's own records.
-            from card_windows import copy_recent_from_results, set_pl_rows_from_cards, sync_consensus_chips
+            # Recent results read the results page's own records.
+            from card_windows import copy_recent_from_results, set_pl_rows_from_cards
 
             results = _cards_html_for_align("NFL", "") or ""
             if results:
@@ -2659,7 +2674,6 @@ def apply_nfl_owner_fixes(html: str, path: str, view: str = "", market: str = ""
                 results = paint_tallies(results, "NFL", models=False)
                 results = set_pl_rows_from_cards(results, results)
                 html = copy_recent_from_results(html, results, "NFL")
-                html = sync_consensus_chips(html, results)
         except Exception:
             pass
         return _nfl_layout(html)
@@ -2667,15 +2681,13 @@ def apply_nfl_owner_fixes(html: str, path: str, view: str = "", market: str = ""
         html = rewrite_nfl_share_hrefs(html)
         view_l = (view or "").strip().lower()
         try:
-            from card_windows import paint_tallies, set_pl_rows_from_cards, sync_consensus_chips
+            from card_windows import paint_tallies, set_pl_rows_from_cards
 
             is_cards = view_l not in ("chart", "tabs", "markets", "tabbed", "spread", "totals") and 'class="game-card' in html
             if is_cards:
                 html = paint_tallies(html, "NFL", models=False)
             cards = html if is_cards else (_cards_html_for_align("NFL", "") or "")
             html = set_pl_rows_from_cards(html, cards)
-            if is_cards:
-                html = sync_consensus_chips(html, html)
         except Exception:
             pass
         view_l = (view or "").strip().lower()
@@ -3362,6 +3374,13 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         return html
     cards: list[dict] = []
     date = ""
+    try:
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        today = _dt.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        today = ""
     for m in re.finditer(
         r'<div\b(?=[^>]*\bclass="[^"]*\bgame-card-stack\b)(?=[^>]*\bdata-pick-card\b)[^>]*>',
         html,
@@ -3376,6 +3395,15 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         away, home = _attr("data-away"), _attr("data-home")
         if not away or not home:
             continue
+        if _attr("data-result") or _attr("data-time").upper().startswith("FINAL"):
+            continue
+        prev = html.rfind('id="date-', 0, m.start())
+        dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
+        card_date = dm.group(1) if dm else ""
+        if today and card_date and card_date < today:
+            continue
+        if date and card_date and card_date != date and len(cards) >= 2:
+            break
         pick = _attr("data-pick")
         pick_l = pick.lower()
         if pick_l and pick_l in home.lower():
@@ -3389,15 +3417,12 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         except ValueError:
             confidence = 50.0
         if not date:
-            prev = html.rfind('id="date-', 0, m.start())
-            dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
-            if dm:
-                date = dm.group(1)
+            date = card_date
         cards.append(
             {
                 "away_team": away,
                 "home_team": home,
-                "game_date": date,
+                "game_date": card_date or date,
                 "pick_side": side,
                 "pick_team": home if side == "home" else away,
                 "confidence": confidence,
@@ -3406,6 +3431,9 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         if len(cards) >= 3:
             break
     if len(cards) < 1:
+        if not cards and "data-pick-card" in html:
+            html = re.sub(r'<div class="social-export-wrap"(?![^>]*\bhidden\b)',
+                          '<div class="social-export-wrap" hidden', html)
         return html
     try:
         import sys
@@ -3434,7 +3462,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         html,
     )
     html2 = re.sub(r"/share/predictions/view/[a-f0-9]{32}", view, html2)
-    if html2 == html and "social-export-wrap" not in html:
+    if html2 == html and 'class="social-export-wrap"' not in html:
         block = (
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
@@ -4557,13 +4585,19 @@ def align_asr_with_season_boards(html: str) -> str:
         return html
     block = section.group(0)
     new_block = block
+    boards = {}
     for path in _CARDS_CACHE_DIR.glob("served_*_.html"):
         name = path.name
         if "_chart" in name:
             continue
         sport = name[len("served_"):-len("_.html")]
-        if not sport or not sport.isupper():
-            continue
+        if sport and sport.isupper():
+            boards[sport] = path
+    # NHL saves its results page under its own name.
+    nhl_page = _CARDS_CACHE_DIR / "nhl_results_page.html"
+    if "NHL" not in boards and nhl_page.is_file():
+        boards["NHL"] = nhl_page
+    for sport, path in boards.items():
         try:
             board = _season_board_from_results(path.read_text(encoding="utf-8"))
         except Exception:

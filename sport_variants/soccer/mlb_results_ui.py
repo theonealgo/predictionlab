@@ -2218,6 +2218,30 @@ def _spread_result_from_score(pick: Any, home: str, away: str, hs: Any, aws: Any
     return "Correct" if cover > 0 else "Wrong"
 
 
+def _sou_line_result(mk: str, pick: Any, hs: Any, aws: Any) -> str | None:
+    """Push / Over-Under grade / PK-without-side for a stored line with no grade."""
+    try:
+        h, a = float(hs), float(aws)
+    except (TypeError, ValueError):
+        return None
+    txt = str(pick or "").strip()
+    if mk == "spread":
+        if txt.upper() == "PK":
+            return "Push" if h == a else "No pick"
+        return None
+    m = re.match(r"^\s*(over|under|o|u)?\s*(\d+(?:\.\d+)?)\s*$", txt, flags=re.I)
+    if not m:
+        return None
+    line, total = float(m.group(2)), h + a
+    if abs(total - line) < 1e-9:
+        return "Push"
+    side = (m.group(1) or "").lower()
+    if not side:
+        return None
+    over = side.startswith("o")
+    return "Correct" if (total > line) == over else "Wrong"
+
+
 def _soccer_market_games_section(finals: list[dict[str, Any]], market: str) -> str:
     """Spread or totals match list, same columns as the chart table."""
     mk = "spread" if market == "spread" else "totals"
@@ -2237,6 +2261,8 @@ def _soccer_market_games_section(finals: list[dict[str, Any]], market: str) -> s
         res = "Push" if push else ("Correct" if ok is True else "Wrong" if ok is False else "—")
         if res == "—" and mk == "spread":
             res = _spread_result_from_score(pl, home, away, hs, aws) or res
+        if res == "—":
+            res = _sou_line_result(mk, pl, hs, aws) or res
         h2h = c.get("h2h10") or c.get("h2h_l10") or "—"
         rows.append(
             "<tr>"
@@ -2450,6 +2476,8 @@ def inject_ssr_chart_bootstrap(
                     except (TypeError, ValueError):
                         pass
             res = "Push" if push else ("Correct" if ok is True else "Wrong" if ok is False else "—")
+            if res == "—":
+                res = _sou_line_result(mk, pl, hs, aws) or res
             h2h = c.get("h2h10") or c.get("h2h_l10") or "—"
             rows.append(
                 "<tr>"

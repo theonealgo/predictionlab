@@ -514,23 +514,43 @@ def list_pick_cards(*, days_back: int = 1, days_fwd: int = 7) -> list[dict[str, 
         if (c.get("home_team") or "").strip().upper() not in ("", "TBD")
         and (c.get("away_team") or "").strip().upper() not in ("", "TBD")
     ]
-    window = games_in_window(cards, days_back=days_back, days_fwd=days_fwd)
-    # Prefer non-complete (plus today's finals); if empty keep window
     today_et = datetime.now(ZoneInfo("America/New_York")).date()
 
-    def _is_today(c: dict[str, Any]) -> bool:
+    def _et_day(c: dict[str, Any]):
         try:
             dt = datetime.fromisoformat(str(c.get("game_date") or "").replace("Z", "+00:00"))
         except ValueError:
-            return False
+            return None
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ZoneInfo("America/New_York")).date() == today_et
+        return dt.astimezone(ZoneInfo("America/New_York")).date()
+
+    def _is_today(c: dict[str, Any]) -> bool:
+        return _et_day(c) == today_et
+
+    last_day = today_et + timedelta(days=days_fwd)
+    window = [
+        c for c in games_in_window(cards, days_back=days_back, days_fwd=days_fwd + 1)
+        if (_et_day(c) or last_day) <= last_day
+    ]
+    # Prefer non-complete (plus today's finals); if empty keep window
 
     liveish = [
         c for c in window
         if (c.get("status") or "").lower() not in {"complete", "final"} or _is_today(c)
     ]
+    if liveish and len({_et_day(c) for c in liveish}) < 2:
+        # A lone upcoming day leaves the date picker with nothing else to
+        # choose: keep the latest finished slate of the past week beside it.
+        week_ago = today_et - timedelta(days=7)
+        done = [
+            c for c in cards
+            if (c.get("status") or "").lower() in {"complete", "final"}
+            and (d := _et_day(c)) is not None and week_ago <= d < today_et
+        ]
+        if done:
+            latest = max(_et_day(c) for c in done)
+            liveish = [c for c in done if _et_day(c) == latest] + liveish
     return attach_book_totals(liveish or window or cards[:12])
 
 

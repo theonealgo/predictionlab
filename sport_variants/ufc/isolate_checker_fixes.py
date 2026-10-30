@@ -80,6 +80,20 @@ class _TieredServed(dict):
 
     def __setitem__(self, key, value):
         super().__setitem__(self._k(key), value)
+        self._evict()
+
+    def _evict(self):
+        # Every saved page is also on disk; memory keeps only the newest few.
+        try:
+            now = time.time()
+            rows = sorted(list(super().items()), key=lambda kv: kv[1][0], reverse=True)
+            kept = 0
+            for k, (ts, text) in rows:
+                kept += len(text)
+                if now - ts >= _SERVED_TTL or (kept > _SERVED_MAX_BYTES and k != rows[0][0]):
+                    super().pop(k, None)
+        except Exception:
+            pass
 
     def __contains__(self, key):
         return super().__contains__(self._k(key))
@@ -90,6 +104,7 @@ class _TieredServed(dict):
 
 _SERVED = _TieredServed()
 _SERVED_TTL = 1200.0
+_SERVED_MAX_BYTES = 32 * 1024 * 1024
 
 
 def results_serve_key(
@@ -172,6 +187,11 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
         if len(text) < 8000 or "<html" not in text.lower():
             return ""
         if "upstream data/model dependency failed" in text.lower():
+            return ""
+        if sport_u == "UFC" and "data-pick-card" in text and not re.search(r'pc-name[^>]*>\s*Grinder2', text):
+            # Saved before the models were restored to UFC cards.
+            if schedule:
+                schedule_picks_refresh(sport_u)
             return ""
         waiting_on_books = ("check back on game date" in text.lower() or "on the same day as the game" in text.lower())
         if _picks_clock_is_old(text):
@@ -1312,6 +1332,13 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         return html
     cards: list[dict] = []
     date = ""
+    try:
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        today = _dt.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        today = ""
     for m in re.finditer(
         r'<div\b(?=[^>]*\bclass="[^"]*\bgame-card-stack\b)(?=[^>]*\bdata-pick-card\b)[^>]*>',
         html,
@@ -1326,6 +1353,15 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         away, home = _attr("data-away"), _attr("data-home")
         if not away or not home:
             continue
+        if _attr("data-result") or _attr("data-time").upper().startswith("FINAL"):
+            continue
+        prev = html.rfind('id="date-', 0, m.start())
+        dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
+        card_date = dm.group(1) if dm else ""
+        if today and card_date and card_date < today:
+            continue
+        if date and card_date and card_date != date and len(cards) >= 2:
+            break
         pick = _attr("data-pick")
         pick_l = pick.lower()
         if pick_l and pick_l in home.lower():
@@ -1339,15 +1375,12 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         except ValueError:
             confidence = 50.0
         if not date:
-            prev = html.rfind('id="date-', 0, m.start())
-            dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
-            if dm:
-                date = dm.group(1)
+            date = card_date
         cards.append(
             {
                 "away_team": away,
                 "home_team": home,
-                "game_date": date,
+                "game_date": card_date or date,
                 "pick_side": side,
                 "pick_team": home if side == "home" else away,
                 "confidence": confidence,
@@ -1384,7 +1417,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         html,
     )
     html2 = re.sub(r"/share/predictions/view/[a-f0-9]{32}", view, html2)
-    if html2 == html and "social-export-wrap" not in html:
+    if html2 == html and 'class="social-export-wrap"' not in html:
         block = (
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'

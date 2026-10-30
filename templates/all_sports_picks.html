@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}All Sports Picks | predictionlab.io{% endblock %}
+{% block head_meta %}
+<meta name="description" content="Every PredictionLab pick across all sports on one page, with each pick type's recent record and last night's results.">
+<link rel="canonical" href="https://predictionlab.io/all-sports-picks">
+{% if is_premium and not board %}<meta http-equiv="refresh" content="15">{% endif %}
+{% endblock %}
+{% block extra_styles %}
+<style>
+.asp-wrap{max-width:1100px;margin:0 auto;padding:14px 14px 34px;color:#0f172a}
+.asp-wrap h1{font-size:1.8rem;text-align:center;margin:4px 0 6px}
+.asp-lead{text-align:center;color:#475569;font-size:.95em;max-width:760px;margin:0 auto 16px}
+.asp-card{background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:16px;margin-bottom:14px}
+.asp-card h2{font-size:1.1rem;margin-bottom:10px}
+.asp-day{font-size:1rem;font-weight:700;margin:14px 0 8px;color:#1e293b}
+.asp-game{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#f8fafc}
+.asp-game-head{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;margin-bottom:6px}
+.asp-sport{font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#1e293b;color:#fff;border-radius:6px;padding:2px 7px}
+.asp-league{font-size:.8rem;color:#64748b}
+.asp-event{font-weight:700}
+.asp-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.asp-table th,.asp-table td{padding:6px 6px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}
+.asp-table th{font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.03em}
+.asp-scroll{overflow-x:auto}
+.asp-q{display:inline-block;font-size:.72rem;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:1px 6px}
+.asp-win{color:#15803d;font-weight:700}.asp-loss{color:#b91c1c;font-weight:700}
+.asp-muted{color:#64748b;font-size:.85rem}
+.asp-lock{text-align:center;padding:22px 10px;background:#f8fafc;border:1px dashed #94a3b8;border-radius:10px}
+.asp-lock p{color:#334155;margin-bottom:12px}
+.asp-btn{display:inline-block;padding:9px 16px;border-radius:8px;font-weight:700;text-decoration:none;margin:4px;border:0;cursor:pointer;font:inherit}
+.asp-btn.primary{background:#2563eb;color:#fff}.asp-btn.ghost{border:1px solid #2563eb;color:#2563eb;background:#fff}
+.asp-copy-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:6px 0 14px}
+.asp-copied{color:#15803d;font-weight:700;font-size:.9rem}
+.asp-copy-text{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0}
+.asp-ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.asp-ladder .f{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px}
+.asp-ladder .k{font-size:.75rem;color:#64748b}.asp-ladder .v{font-weight:700;margin-top:3px;word-break:break-word}
+@media(max-width:720px){.asp-ladder{grid-template-columns:repeat(2,minmax(0,1fr))}.asp-hide-sm{display:none}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="asp-wrap">
+  <h1>All Sports Picks</h1>
+  <p class="asp-lead">Every pick our models make today across all sports, with each pick type's record over the last {{ board.rules.days if board else 14 }} days and last night's results at the bottom.</p>
+
+  {% if not is_premium %}
+  <section class="asp-card">
+    <div class="asp-lock">
+      <p><strong>All Sports Picks is for premium members.</strong> See every sport's picks on one page, each pick type's recent record, and last night's results.</p>
+      <a class="asp-btn primary" href="/plans">Join Premium</a>
+      {% if not is_logged_in %}<a class="asp-btn ghost" href="/login?next=/all-sports-picks">Log in</a>{% endif %}
+    </div>
+  </section>
+  {% elif not board %}
+  <section class="asp-card">
+    <p class="asp-muted" style="text-align:center;">Today's picks are loading. This page refreshes in a few seconds.</p>
+  </section>
+  {% else %}
+  <div class="asp-copy-row">
+    <button type="button" class="asp-btn primary" data-asp-copy>Copy all</button>
+    <span class="asp-copied" data-asp-copied hidden>Copied</span>
+    <span class="asp-muted">Updated {{ board.built_at }}</span>
+  </div>
+
+  {% if board.ladder_today %}
+  <section class="asp-card">
+    <h2>Today's ladder pick</h2>
+    <div class="asp-ladder">
+      <div class="f"><div class="k">Pick</div><div class="v">{{ board.ladder_today.pick }}</div></div>
+      <div class="f"><div class="k">Game</div><div class="v">{{ board.ladder_today.sport }} · {{ board.ladder_today.event }}</div></div>
+      <div class="f"><div class="k">Odds</div><div class="v">{{ board.ladder_today.odds }}</div></div>
+      <div class="f"><div class="k">Pick type record</div><div class="v">{{ board.ladder_today.record or '—' }}</div></div>
+    </div>
+    <p class="asp-muted" style="margin-top:8px;">{{ board.ladder_today.type }} · <a href="/ladder-picks">The Ladder</a></p>
+  </section>
+  {% endif %}
+
+  <section class="asp-card">
+    <h2>Picks</h2>
+    <p class="asp-muted"><span class="asp-q">Ladder qualifier</span> = this pick type has {{ board.rules.games }}+ graded picks and a {{ board.rules.rate }}+ hit rate over the last {{ board.rules.days }} days, at a price from -150 to +150.</p>
+    {% if board.games %}
+      {% set ns = namespace(day='') %}
+      {% for g in board.games %}
+        {% if g.date != ns.day %}{% set ns.day = g.date %}<div class="asp-day">{{ g.date_label }}</div>{% endif %}
+        <div class="asp-game">
+          <div class="asp-game-head">
+            <span class="asp-sport">{{ g.sport_name }}</span>
+            {% if g.league and g.sport == 'SOCCER' %}<span class="asp-league">{{ g.league }}</span>{% endif %}
+            <span class="asp-event">{{ g.event }}</span>
+          </div>
+          <div class="asp-scroll">
+            <table class="asp-table">
+              <thead><tr><th>Market</th><th>Model</th><th>Pick</th><th>Odds</th><th class="asp-hide-sm">Win %</th><th>Pick type record</th><th></th></tr></thead>
+              <tbody>
+              {% for p in g.picks %}
+                <tr>
+                  <td>{{ p.market }}</td><td>{{ p.model }}</td><td><strong>{{ p.label }}</strong></td>
+                  <td>{{ p.odds or '—' }}</td><td class="asp-hide-sm">{{ p.win_pct or '—' }}</td>
+                  <td>{{ p.record.text if p.record else '—' }}</td>
+                  <td>{% if p.ladder %}<span class="asp-q">Ladder qualifier</span>{% endif %}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="asp-muted">No open picks right now. New picks post as each sport's slate is set.</p>
+    {% endif %}
+  </section>
+
+  {% if board.types %}
+  <section class="asp-card">
+    <h2>Pick type records — last {{ board.rules.days }} days</h2>
+    <div class="asp-scroll">
+      <table class="asp-table">
+        <thead><tr><th>Pick type</th><th>Gap</th><th>Record</th><th></th></tr></thead>
+        <tbody>
+        {% for t in board.types %}
+          <tr><td>{{ t.type }}</td><td>{{ t.gap }}</td><td>{{ t.record.text }}</td><td>{% if t.qualifies %}<span class="asp-q">Ladder qualifier</span>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="asp-card">
+    <h2>Results — {{ board.results_label }}</h2>
+    {% if board.summary_last_night %}
+    <div class="asp-scroll" style="margin-bottom:12px;">
+      <table class="asp-table">
+        <thead><tr><th>Sport</th><th>Market</th><th>{{ board.results_label }}</th></tr></thead>
+        <tbody>{% for r in board.summary_last_night %}<tr><td>{{ r.sport }}</td><td>{{ r.market }}</td><td>{{ r.record }} ({{ r.rate }})</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% endif %}
+    {% for g in board.results %}
+      <div class="asp-game">
+        <div class="asp-game-head"><span class="asp-sport">{{ g.sport_name }}</span><span class="asp-event">{{ g.event }}</span><span class="asp-league">{{ g.score }}</span></div>
+        <div class="asp-scroll">
+          <table class="asp-table">
+            <tbody>
+            {% for p in g.picks %}
+              <tr><td>{{ p.market }}</td><td>{{ p.model }}</td><td>{{ p.label }}</td><td class="{{ 'asp-win' if p.win else 'asp-loss' }}">{{ 'Win' if p.win else 'Loss' }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% else %}
+      <p class="asp-muted">No graded picks for this date.</p>
+    {% endfor %}
+  </section>
+
+  {% if board.summary_last7 %}
+  <section class="asp-card">
+    <h2>Last 7 days</h2>
+    <div class="asp-scroll">
+      <table class="asp-table">
+        <thead><tr><th>Sport</th><th>Market</th><th>Record</th></tr></thead>
+        <tbody>{% for r in board.summary_last7 %}<tr><td>{{ r.sport }}</td><td>{{ r.market }}</td><td>{{ r.record }} ({{ r.rate }})</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="asp-copy-row">
+    <button type="button" class="asp-btn primary" data-asp-copy>Copy all</button>
+    <span class="asp-copied" data-asp-copied hidden>Copied</span>
+  </div>
+  <textarea class="asp-copy-text" id="asp-copy-text" readonly aria-hidden="true" tabindex="-1">{{ board.copy_text }}</textarea>
+  <script>
+  (function(){
+    var src=document.getElementById('asp-copy-text');
+    function done(){document.querySelectorAll('[data-asp-copied]').forEach(function(el){el.hidden=false;setTimeout(function(){el.hidden=true;},2000);});}
+    function fallback(){src.style.left='0';src.select();try{document.execCommand('copy');done();}catch(e){}src.style.left='-9999px';}
+    document.querySelectorAll('[data-asp-copy]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(src.value).then(done,fallback);}else{fallback();}
+      });
+    });
+  })();
+  </script>
+  {% endif %}
+</div>
+{% endblock %}

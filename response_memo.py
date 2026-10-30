@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 from flask import request
 
-TTL_SECONDS = 300.0
+TTL_SECONDS = 900.0
 MAX_BYTES = 96 * 1024 * 1024
 _ET = ZoneInfo("America/New_York")
 
@@ -101,6 +101,12 @@ def memoize_hook(hook, viewer):
             added = tuple(item for item in after if item not in before)
             removed = [item for item in before if item not in after]
             names = [k.lower() for k, _ in added]
+            from flask import g
+
+            # A pass that is still waiting on background data asks not to be remembered.
+            if getattr(g, "_pl_memo_skip", False):
+                stats["skip"] += 1
+                return out
             if removed or "set-cookie" in names or len(names) != len(set(names)):
                 stats["skip"] += 1
                 return out

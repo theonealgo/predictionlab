@@ -105,7 +105,7 @@ def _login(base: str, email: str = "", password: str = "") -> str:
 def run(base: str, sports: tuple[str, ...] = SPORTS) -> list[str]:
     with contextlib.ExitStack() as stack:
         try:
-            logins = stack.enter_context(_test_accounts().accounts(ROOT))
+            logins = stack.enter_context(_test_accounts().accounts(ROOT, base))
         except Exception:
             logins = {}
         return _run(base, sports, logins)
@@ -226,7 +226,8 @@ def _api_fails(base: str, sport: str, paid_cookie: str, free_cookie: str = "") -
         elif filled:
             fails.append(f"API: {sport} picks api | {url} | {who} gets: {filled} paid model values "
                          f"({', '.join(API_MODEL_FIELDS)}) | should be: none")
-    if paid_cookie:
+    # Golf picks carry Win / Top 10 / Top 20 chances, not the team-sport models.
+    if paid_cookie and sport != "golf":
         pcode, count, pfilled = _api_model_values(base, sport, paid_cookie)
         if pcode == -1:
             fails.append(f"API: {sport} picks api | {url} | paying user: did not load in 60s")

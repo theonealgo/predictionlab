@@ -25,6 +25,27 @@ _WT_TTL = 900  # seconds
 _WT_CACHE_MAX = 300  # hard cap: evict oldest entries beyond this
 
 
+def _slim_scoreboard(data):
+    """Keep only the fields fetch_team_last3_games reads (full boards are ~1.4 MB each)."""
+    if not isinstance(data, dict):
+        return data
+    events = []
+    for event in data.get('events') or []:
+        comp = (event.get('competitions') or [{}])[0] or {}
+        stype = (comp.get('status') or {}).get('type') or {}
+        events.append({'competitions': [{
+            'status': {'type': {'description': stype.get('description', ''),
+                                'state': stype.get('state', '')}},
+            'competitors': [
+                {'homeAway': c.get('homeAway'),
+                 'team': {'displayName': (c.get('team') or {}).get('displayName')},
+                 'score': c.get('score')}
+                for c in comp.get('competitors') or []
+            ],
+        }]})
+    return {'events': events}
+
+
 def _wt_cached_get(url: str, timeout: int = 3):
     """Cached requests.get with 15-minute TTL and bounded size."""
     now = time.time()
@@ -38,7 +59,7 @@ def _wt_cached_get(url: str, timeout: int = 3):
         _WT_CACHE[url] = {'data': None, 'ts': now}
         return None
     if r.status_code == 200:
-        data = r.json()
+        data = _slim_scoreboard(r.json())
         _WT_CACHE[url] = {'data': data, 'ts': now}
     else:
         _WT_CACHE[url] = {'data': None, 'ts': now}

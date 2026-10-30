@@ -80,6 +80,20 @@ class _TieredServed(dict):
 
     def __setitem__(self, key, value):
         super().__setitem__(self._k(key), value)
+        self._evict()
+
+    def _evict(self):
+        # Every saved page is also on disk; memory keeps only the newest few.
+        try:
+            now = time.time()
+            rows = sorted(list(super().items()), key=lambda kv: kv[1][0], reverse=True)
+            kept = 0
+            for k, (ts, text) in rows:
+                kept += len(text)
+                if now - ts >= _SERVED_TTL or (kept > _SERVED_MAX_BYTES and k != rows[0][0]):
+                    super().pop(k, None)
+        except Exception:
+            pass
 
     def __contains__(self, key):
         return super().__contains__(self._k(key))
@@ -90,6 +104,7 @@ class _TieredServed(dict):
 
 _SERVED = _TieredServed()
 _SERVED_TTL = 1200.0
+_SERVED_MAX_BYTES = 32 * 1024 * 1024
 
 
 def results_serve_key(
@@ -402,6 +417,14 @@ def _schedule_served_refresh(key: str) -> None:
             _RESULTS_REFRESH_INFLIGHT.discard(key)
 
 
+def _chart_lists_no_finals(html: str) -> bool:
+    """Chart games lists say "No finals." under a Last Night heading that has games."""
+    if "No finals." not in (html or ""):
+        return False
+    m = re.search(r"Last Night's Results — \d{4}-\d{2}-\d{2} \((\d+) games?\)", html)
+    return bool(m and int(m.group(1)) > 0)
+
+
 def _served_results_are_stale(key: str, html: str) -> bool:
     """The cards page is stale when its today stamp or Last Night slate is behind."""
     parts = (key.split("|") + [""] * 6)[:6]
@@ -410,6 +433,8 @@ def _served_results_are_stale(key: str, html: str) -> bool:
     if not sport or not html:
         return False
     if view:
+        if _chart_lists_no_finals(html):
+            return True
         # A saved chart is stale when its Last Night heading is older than the newest final night.
         shown_v = re.search(r"Last Night(?:'s)?(?:[^<0-9]|<[^>]*>){0,120}?(\d{4}-\d{2}-\d{2})", html)
         if not shown_v:
@@ -537,6 +562,8 @@ def _served_from_disk() -> bool:
 
 def store_served_results(key: str, html: str) -> None:
     if not key or not html or _REPAIRED_MARK not in html or len(html) < 500:
+        return
+    if (key.split("|") + [""])[1] and _chart_lists_no_finals(html):
         return
     # Re-saving the copy that was just read resets its age, so it never refreshes.
     if _served_from_disk() and not results_refresh_forced():
@@ -1457,9 +1484,59 @@ def repair_results_html(html: str, sport: str, view: str = "") -> str:
             )
         except Exception:
             pass
+        html = _nba_totals_panel_from_recent(html)
     if _REPAIRED_MARK not in html:
         html += _REPAIRED_MARK
     return html
+
+
+def _nba_totals_panel_from_recent(html: str) -> str:
+    """Totals panel rows = the Prediction Lab / XSharp totals on picks Recent results.
+
+    The panel otherwise grades Prediction Lab on the card's H2H total pick, while
+    Recent results grades the Prediction Lab projected total.
+    """
+    try:
+        from picks_recent_results import results_totals_chart
+
+        table = results_totals_chart("NBA") or ""
+    except Exception:
+        return html
+    rows = re.findall(r'<tr><td class="bucket">[^<]*</td>[\s\S]*?</tr>', table)
+    if len(rows) != 2:
+        return html
+    m = re.search(
+        r'(<div class="pl-consensus-records pl-plxs-records" id="pl-totals-records">[\s\S]*?<table)'
+        r'(>[\s\S]*?<tbody>)([\s\S]*?)(</tbody>[\s\S]*?</table>\s*</div>\s*)'
+        r'(<p class="cons-read">[^<]*</p>)?',
+        html,
+    )
+    if not m:
+        return html
+    pcts = {}
+    for row in rows:
+        name = re.search(r'class="bucket">([^<]*)<', row).group(1).strip()
+        cells = re.findall(r"<td>([^<]*)</td>", row)
+        rec = re.search(r"(\d+)-(\d+)", cells[-1]) if cells else None
+        if rec and int(rec.group(1)) + int(rec.group(2)):
+            pcts[name] = 100.0 * int(rec.group(1)) / (int(rec.group(1)) + int(rec.group(2)))
+    pl, xs = pcts.get("Prediction Lab"), pcts.get("XSharp")
+    read = m.group(5) or ""
+    if read and pl is not None and xs is not None:
+        if pl + 1.0 < 50 and xs + 1.0 < 50:
+            lead = "Both models are under .500 on totals over the last 30 days."
+        elif abs(pl - xs) < 1.5:
+            lead = "Prediction Lab and XSharp are even on totals over the last 30 days."
+        elif pl > xs:
+            lead = "Prediction Lab is ahead of XSharp on totals over the last 30 days."
+        else:
+            lead = "XSharp is ahead of Prediction Lab on totals over the last 30 days."
+        read = f'<p class="cons-read">{lead} Prediction Lab {pl:.0f}% · XSharp {xs:.0f}%</p>'
+    return (
+        html[: m.start()]
+        + m.group(1) + ' id="pl-totals-three-way"' + m.group(2) + "".join(rows) + m.group(4) + read
+        + html[m.end():]
+    )
 
 
 def refresh_predictions_share_image(html: str, sport: str) -> str:
@@ -1468,6 +1545,13 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         return html
     cards: list[dict] = []
     date = ""
+    try:
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
+        today = _dt.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        today = ""
     for m in re.finditer(
         r'<div\b(?=[^>]*\bclass="[^"]*\bgame-card-stack\b)(?=[^>]*\bdata-pick-card\b)[^>]*>',
         html,
@@ -1482,6 +1566,15 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         away, home = _attr("data-away"), _attr("data-home")
         if not away or not home:
             continue
+        if _attr("data-result") or _attr("data-time").upper().startswith("FINAL"):
+            continue
+        prev = html.rfind('id="date-', 0, m.start())
+        dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
+        card_date = dm.group(1) if dm else ""
+        if today and card_date and card_date < today:
+            continue
+        if date and card_date and card_date != date and len(cards) >= 2:
+            break
         pick = _attr("data-pick")
         pick_l = pick.lower()
         if pick_l and pick_l in home.lower():
@@ -1495,15 +1588,12 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         except ValueError:
             confidence = 50.0
         if not date:
-            prev = html.rfind('id="date-', 0, m.start())
-            dm = re.search(r'id="date-(\d{4}-\d{2}-\d{2})"', html[prev : prev + 40] if prev >= 0 else "")
-            if dm:
-                date = dm.group(1)
+            date = card_date
         cards.append(
             {
                 "away_team": away,
                 "home_team": home,
-                "game_date": date,
+                "game_date": card_date or date,
                 "pick_side": side,
                 "pick_team": home if side == "home" else away,
                 "confidence": confidence,
@@ -1512,6 +1602,9 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         if len(cards) >= 3:
             break
     if len(cards) < 2:
+        if not cards and "data-pick-card" in html:
+            html = re.sub(r'<div class="social-export-wrap"(?![^>]*\bhidden\b)',
+                          '<div class="social-export-wrap" hidden', html)
         return html
     try:
         import sys
@@ -1540,7 +1633,7 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
         html,
     )
     html2 = re.sub(r"/share/predictions/view/[a-f0-9]{32}", view, html2)
-    if html2 == html and "social-export-wrap" not in html:
+    if html2 == html and 'class="social-export-wrap"' not in html:
         block = (
             f'<div class="social-export-wrap" data-share-picks="{len(cards)}">'
             f'<div class="social-export-head"><div class="social-export-title">'
@@ -1927,6 +2020,8 @@ def repair_picks_html(html: str, sport: str) -> str:
     except Exception:
         pass
     html = ensure_share_min_picks(html, 2)
+    if sport_u == "NBA":
+        html = nba_books_ml_from_stored_book(html)
     if sport_u == "WNBA":
         html = ensure_wnba_model_boxes(html)
     if sport_u != "NBA":
@@ -1938,6 +2033,106 @@ def repair_picks_html(html: str, sport: str) -> str:
     html = ensure_two_card_row(html)
     html = refresh_predictions_share_image(html, sport_u)
     return html
+
+
+_NBA_BOOK_ML_MEMO: dict = {}
+
+
+def _nba_stored_book_ml(gid: str) -> tuple[int, int] | None:
+    """Latest stored sportsbook moneyline (away, home). None for a model-made row."""
+    import time
+
+    hit = _NBA_BOOK_ML_MEMO.get(gid)
+    if hit and time.time() - hit[0] < 300:
+        return hit[1]
+    out = _nba_stored_book_ml_db(gid)
+    if len(_NBA_BOOK_ML_MEMO) > 5000:
+        _NBA_BOOK_ML_MEMO.clear()
+    _NBA_BOOK_ML_MEMO[gid] = (time.time(), out)
+    return out
+
+
+def _nba_stored_book_ml_db(gid: str) -> tuple[int, int] | None:
+    import sqlite3
+
+    db = _app_db_path()
+    if not gid or not db.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        row = conn.execute(
+            "SELECT home_moneyline, away_moneyline, source FROM betting_lines "
+            "WHERE game_id=? ORDER BY fetched_at DESC LIMIT 1",
+            (gid,),
+        ).fetchone()
+        conn.close()
+    except sqlite3.Error:
+        return None
+    if not row or row[0] is None or row[1] is None:
+        return None
+    src = str(row[2] or "").lower()
+    real = "espn" in src or "pl_book_odds" in src or "draftkings" in src
+    if not real and ("model" in src or "engine" in src or "fallback" in src):
+        return None
+    try:
+        return int(row[1]), int(row[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def nba_books_ml_from_stored_book(html: str) -> str:
+    """Books moneyline equal to the Prediction Lab one on both teams shows the stored book price.
+
+    A card with no stored sportsbook row is left as it is.
+    """
+    if not html or "data-pick-card" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    if len(parts) < 2:
+        return html
+
+    def _nums(card: str, cls: str) -> list[str]:
+        return [
+            re.sub(r"\s+", "", n).replace("−", "-")
+            for n in re.findall(
+                rf'class="ml-line {cls}">[\s\S]*?class="ml-num[^"]*">\s*([^<]+)', card, flags=re.I
+            )
+        ][:2]
+
+    out = [parts[0]]
+    for card in parts[1:]:
+        books, pl = _nums(card, "face-books-ml"), _nums(card, "face-pl-ml")
+        gid_m = re.search(r'data-game-id="([^"]*)"', card)
+        if (
+            len(books) < 2
+            or books != pl
+            or not all(re.fullmatch(r"[+-]?\d+", n) for n in books)
+            or not gid_m
+        ):
+            out.append(card)
+            continue
+        stored = _nba_stored_book_ml(gid_m.group(1))
+        prices = [f"+{p}" if p > 0 else str(p) for p in stored] if stored else []
+        if not prices or prices == books:
+            out.append(card)
+            continue
+        slot = {"n": 0}
+
+        def _repl(match, _prices=prices, _slot=slot):
+            val = _prices[_slot["n"]]
+            _slot["n"] += 1
+            klass = "fav" if val.startswith("-") else "dog"
+            return match.group(1) + klass + match.group(2) + val + match.group(4)
+
+        card = re.sub(
+            r'(class="ml-line face-books-ml">[\s\S]*?class="ml-num )[^"]*(">\s*)([^<]+)(\s*</span>)',
+            _repl,
+            card,
+            count=2,
+            flags=re.I,
+        )
+        out.append(card)
+    return "".join(out)
 
 
 def ensure_wnba_model_boxes(html: str) -> str:
@@ -2135,6 +2330,8 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
             if sport_u == "NHL":
                 html = fill_blank_books_ml(html)
                 html = hide_blank_books_ml(html)
+        elif sport_u == "NBA":
+            html = nba_books_ml_from_stored_book(html)
         return normalize_served_html(html, path_l)
     if "results" in path_l:
         html = repair_results_html(html, sport_u, view)

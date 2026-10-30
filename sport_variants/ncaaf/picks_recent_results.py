@@ -66,6 +66,48 @@ def _published_results_html(sport_u: str) -> str:
     return ""
 
 
+def _published_totals_rows(sport_u: str) -> dict | None:
+    """Prediction Lab / XSharp totals rows (last night, past 7, past 30) from the saved totals chart."""
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parent
+    name = f"served_{sport_u}_chart_totals_.html"
+    html = ""
+    for base in (here, here.parent.parent):
+        path = base / ".cache" / name
+        try:
+            if path.is_file():
+                html = path.read_text(encoding="utf-8", errors="replace")
+                break
+        except Exception:
+            continue
+    i = html.find('id="pl-totals-three-way"')
+    if i < 0:
+        return None
+    seg = html[i : i + 20000]
+    day = re.search(r"Last night \((\d{4}-\d{2}-\d{2})\)", seg)
+    if not day:
+        return None
+    rows = {}
+    for label in ("Prediction Lab", "XSharp"):
+        m = re.search(
+            rf'<td class="bucket">{label}</td><td>(\d+-\d+)</td><td>(\d+-\d+)</td><td>(\d+-\d+)</td>',
+            seg,
+        )
+        if m:
+            rows[label] = m.groups()
+    if not rows:
+        return None
+    return {"date": day.group(1), "rows": rows}
+
+
+def _wl_pair(rec: str) -> str:
+    w, l = (int(x) for x in rec.split("-")[:2])
+    if w + l <= 0:
+        return "—"
+    return f"{round(100.0 * w / (w + l), 1)}% · {w}-{l}"
+
+
 def _published_pl_rec(html: str, heading: str, market: str) -> str:
     if not html or not heading:
         return ""
@@ -116,7 +158,11 @@ def _published_tiles(html: str, heading: str) -> dict | None:
         rows[label] = f"{acc} · {rec}" if acc.endswith("%") else rec
     if not rows:
         return None
-    return {"games": int(games_m.group(1)) if games_m else 0, "rows": rows}
+    return {
+        "games": int(games_m.group(1)) if games_m else 0,
+        "rows": rows,
+        "dates": re.findall(r"\d{4}-\d{2}-\d{2}", m.group(0)),
+    }
 
 
 def _st_rec(st: dict | None, win_key: str, n_key: str, pct_key: str) -> str:
@@ -336,10 +382,11 @@ def _build_block(sport: str) -> str:
     )
     last30 = N.compute_model_tally_for_range(daily, start, yest, sport=sport_u)
     ln_dt = N.parse_date(ln_label) or yest
+    midnight = {"hour": 0, "minute": 0, "second": 0, "microsecond": 0}
     windows = (
         (f"Last Night — {ln_label}", ln, ln_dt, ln_dt),
-        ("Last 7 days", last7, yest - timedelta(days=6), yest),
-        ("Last 30 days", last30, start, yest),
+        ("Last 7 days", last7, (yest - timedelta(days=6)).replace(**midnight), yest),
+        ("Last 30 days", last30, start.replace(**midnight), yest),
     )
     cols = []
     for title, tally, w_start, w_end in windows:
@@ -363,6 +410,9 @@ def _build_block(sport: str) -> str:
             else:
                 heading = ""
             tiles = _published_tiles(published, heading) if heading and published else None
+            want_day = w_end.strftime("%Y-%m-%d")
+            if tiles and (tiles.get("dates") or [""])[-1] != want_day:
+                tiles = None
             if tiles:
                 # The results page already graded this window. Copy it exactly.
                 games = tiles["games"] or games
@@ -374,6 +424,13 @@ def _build_block(sport: str) -> str:
                     sp_pairs[0] = ("Prediction Lab", tiles["rows"]["Spread"])
                 if tiles["rows"].get("Over/Under"):
                     ou_pairs[0] = ("Prediction Lab", tiles["rows"]["Over/Under"])
+            chart_totals = _published_totals_rows(sport_u)
+            if chart_totals and chart_totals["date"] == ln_label:
+                idx = 0 if "Last Night" in title else (1 if "Last 7" in title else 2)
+                ou_pairs = [
+                    (label, _wl_pair(chart_totals["rows"][label][idx]) if label in chart_totals["rows"] else val)
+                    for (label, val) in ou_pairs
+                ]
         cols.append(
             f'<div class="picks-recent-col">'
             f"<h3>{escape(title)}</h3>"

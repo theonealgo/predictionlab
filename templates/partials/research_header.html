@@ -7,6 +7,7 @@
         <div class="pl2-navdrop">
             <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Sports</button>
             <div class="pl2-nav-menu" hidden>
+                <a href="/all-sports-picks">All Sports Picks</a>
                 <a href="/nba-picks"{% if in_season_sports.get('NBA') %} class="in-season"{% endif %}>NBA</a>
                 <a href="/nfl-picks"{% if in_season_sports.get('NFL') %} class="in-season"{% endif %}>NFL</a>
                 <a href="/mlb-picks"{% if in_season_sports.get('MLB')|default(true) %} class="in-season"{% endif %}>MLB</a>
@@ -36,6 +37,7 @@
             <button type="button" class="pl2-nav-trigger" aria-haspopup="true" aria-expanded="false">Results</button>
             <div class="pl2-nav-menu" hidden>
                 <a href="/all-sports-results">All Sports Results</a>
+                <a href="/historic-results">Historic Results</a>
                 <a href="/nba-results">NBA</a>
                 <a href="/nfl-results">NFL</a>
                 <a href="/mlb-results">MLB</a>
