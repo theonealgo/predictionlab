@@ -36,6 +36,7 @@ REFRESH_EVERY_S = 3 * 3600
 # A league whose ESPN calendar ended this long ago is stale (CFL still lists
 # 2022), so the fixed calendar decides instead.
 STALE_AFTER_DAYS = 200
+OPENING_LEAD_DAYS = 7
 _DISK = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache", "espn_season_status.json")
 
 _lock = threading.Lock()
@@ -98,6 +99,12 @@ def league_in_season(info: dict | None, today: datetime) -> bool | None:
         return False
     if info["start"] <= t <= info["end"]:
         return True
+    # Opening week: picks for the first games are already up.
+    try:
+        if 0 < (datetime.strptime(info["start"], "%Y-%m-%d") - today).days + 1 <= OPENING_LEAD_DAYS:
+            return True
+    except ValueError:
+        pass
     # Playoff days are not always on the calendar yet; the season type is.
     if info.get("type") == 3 and info.get("season_end") and t <= info["season_end"]:
         return True

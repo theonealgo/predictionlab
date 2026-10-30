@@ -2782,20 +2782,7 @@ def ensure_soccer_results_load_heading(html: str) -> str:
         count=1,
         flags=re.I,
     )
-    block = (
-        '<div id="soccer-load-heading" class="soccer-chart-source">'
-        f"<p>{_SOCCER_LOAD_HEADING}</p></div>"
-    )
-    html2, n = re.subn(
-        r'(<section\b[^>]*\bid="league-controls"[\s\S]*?</section>)',
-        r"\1" + block,
-        html,
-        count=1,
-        flags=re.I,
-    )
-    if n:
-        return html2
-    return block + html
+    return html
 
 
 def apply_soccer_results_chrome(html: str, *, league: str = "", region: str = "", week: str = "") -> str:
@@ -3065,7 +3052,6 @@ def inject_soccer_chart_source(
     .soccer-chart-source p{margin:0;font-size:0.9rem;line-height:1.45}
   </style>
   <h3>League results</h3>
-  <p>Load a heading, then a league, to see that league's results. Out-of-season leagues say so.</p>
 </div>
 """
     elif not games:

@@ -70300,6 +70300,12 @@ def _align_roi_moneyline_to_season_perf(roi_total, season_perf):
 
 
 def build_roi_cards(roi_daily, roi_weekly, roi_total, *, win_pct_primary: bool = False):
+    if not win_pct_primary:
+        try:
+            win_pct_primary = _sport_variant.current_sport() == 'nfl'
+        except Exception:
+            pass
+
     def _format_entry(entry):
         if not entry:
             return {"roi": "—", "detail": "—"}
@@ -72191,7 +72197,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -72854,7 +72860,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -73516,7 +73522,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -74178,7 +74184,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -74840,7 +74846,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -75502,7 +75508,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -76164,7 +76170,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -76826,7 +76832,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -77488,7 +77494,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -78150,7 +78156,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -78812,7 +78818,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -79474,7 +79480,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -80136,7 +80142,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport == 'NCAAF' %}
+            {% if sport in ('NCAAF', 'NFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -111149,7 +111155,7 @@ def sport_results__ncaaf(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -112354,7 +112360,7 @@ def sport_results__mlb(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -113693,7 +113699,7 @@ def sport_results__nhl(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -114909,7 +114915,7 @@ def sport_results__nba(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -116131,7 +116137,7 @@ def sport_results__ncaab(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -117344,7 +117350,7 @@ def sport_results__ncaaw(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -118574,7 +118580,7 @@ def sport_results__wnba(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -119777,7 +119783,7 @@ def sport_results__cfl(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -121027,7 +121033,7 @@ def sport_results__soccer(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -122240,7 +122246,7 @@ def sport_results__tennis(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -123443,7 +123449,7 @@ def sport_results__ufc(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -124646,7 +124652,7 @@ def sport_results__golf(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -125921,7 +125927,7 @@ def sport_results(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport == 'NCAAF'),
+                win_pct_primary=(sport in ('NCAAF', 'NFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
