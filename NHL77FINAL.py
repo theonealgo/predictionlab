@@ -30679,6 +30679,12 @@ try:
 except Exception as _pse:
     logger.debug(f"[price-snapshots] failed to start: {_pse}")
 
+try:
+    import live_data_patch as _live_data_patch
+    _live_data_patch.apply_pending(DATABASE)
+except Exception as _ldp:
+    logger.warning(f"[live-patch] skipped: {_ldp}")
+
 
 # ── Predictions cache disk persistence ─────────────────────────────────
 # _PREDICTIONS_CACHE is in-memory, so every (frequent, on Render) worker restart

@@ -167,6 +167,60 @@ def _upcoming(conn, sport: str) -> list[dict]:
     return out
 
 
+def save_book_line(sport: str, game: dict, row: dict) -> bool:
+    """Write the sportsbook line to betting_lines, which the picks cards read.
+
+    A moneyline estimated from the spread is never stored as a book price.
+    """
+    if not _db_path or not row or not game.get("game_id"):
+        return False
+    spread, total = _float(row.get("spread")), _float(row.get("total"))
+    home_ml = away_ml = None
+    if not row.get("ml_from_spread"):
+        home_ml, away_ml = _int(row.get("home_moneyline")), _int(row.get("away_moneyline"))
+        if home_ml is None or away_ml is None:
+            home_ml = away_ml = None
+    if spread is None and total is None and home_ml is None:
+        return False
+    gid = str(game["game_id"])
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with _lock:
+            conn = _connect()
+            try:
+                last = conn.execute(
+                    "SELECT id FROM betting_lines WHERE sport = ? AND game_id = ? "
+                    "ORDER BY fetched_at DESC LIMIT 1",
+                    (sport, gid),
+                ).fetchone()
+                if last is not None:
+                    conn.execute(
+                        "UPDATE betting_lines SET spread = COALESCE(?, spread), "
+                        "total = COALESCE(?, total), home_moneyline = COALESCE(?, home_moneyline), "
+                        "away_moneyline = COALESCE(?, away_moneyline), source = ?, fetched_at = ? "
+                        "WHERE id = ?",
+                        (spread, total, home_ml, away_ml, "pl_book_odds_api", now, last[0]),
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO betting_lines (sport, game_id, game_date, home_team, away_team, "
+                        "spread, total, home_moneyline, away_moneyline, source, fetched_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            sport, gid, str(game.get("game_date") or "")[:10],
+                            game.get("home_team_id"), game.get("away_team_id"),
+                            spread, total, home_ml, away_ml, "pl_book_odds_api", now,
+                        ),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+        return True
+    except Exception as exc:
+        logger.warning("[price-snapshots] betting_lines %s %s: %s", sport, gid, exc)
+        return False
+
+
 def sweep() -> int:
     """Fetch and save prices for upcoming games. Returns rows fetched."""
     if not enabled() or not _db_path:
@@ -178,7 +232,7 @@ def sweep() -> int:
         games = [(s, g) for s in SWEEP_SPORTS for g in _upcoming(conn, s)]
     finally:
         conn.close()
-    fetched = 0
+    fetched = failed = empty = lines = 0
     for sport, g in games[:SWEEP_MAX_GAMES]:
         try:
             row = build_pl_book_odds(
@@ -187,11 +241,21 @@ def sweep() -> int:
             )
         except Exception as exc:
             logger.debug("[price-snapshots] fetch %s %s: %s", sport, g["game_id"], exc)
-            row = None
+            row = False
+            failed += 1
         if row:
             record(sport, g, row)
+            if save_book_line(sport, g, row):
+                lines += 1
             fetched += 1
+        elif row is None:
+            empty += 1
         time.sleep(SWEEP_PAUSE)
+    logger.info(
+        "[price-snapshots] sweep: %s games, %s with book odds, %s book lines saved, "
+        "%s without odds, %s fetch errors",
+        min(len(games), SWEEP_MAX_GAMES), fetched, lines, empty, failed,
+    )
     return fetched
 
 
