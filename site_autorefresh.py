@@ -26,7 +26,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 CYCLE_S = 600
-FIRST_DELAY_S = 120
+# A fresh deploy has no saved pages; visitors' first builds go before score syncs.
+FIRST_DELAY_S = 900
 SYNC_EVERY_UNSCORED_S = 1800
 SYNC_EVERY_QUIET_S = 6 * 3600
 PAGE_PAUSE_S = 2.0
