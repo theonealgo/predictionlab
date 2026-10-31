@@ -379,6 +379,72 @@ def _memory_text() -> str:
     return f"{current} MB (peak {peak} MB)" if current else f"peak {peak} MB"
 
 
+WARM_DELAY_S = int(os.environ.get("PL_WARM_DELAY", "180"))
+_RESULTS_SLUGS = ("mlb", "nhl", "nba", "nfl", "ncaaf", "ncaab", "ncaaw", "wnba", "cfl", "soccer")
+
+
+def _warm_urls() -> list[str]:
+    """Pages the results / picks pages link to that are built on first open."""
+    urls: list[str] = []
+    for slug in _RESULTS_SLUGS:
+        urls += [f"/{slug}-results?market={m}" for m in ("moneyline", "spread", "totals")]
+        urls.append(f"/{slug}-results?view=chart")
+    urls += ["/tennis-results?view=chart", "/ufc-results?view=chart"]
+    monday = datetime.strptime(_today_et(), "%Y-%m-%d")
+    monday -= timedelta(days=monday.weekday())
+    urls += [f"/soccer-results?week={(monday - timedelta(days=7 * k)).strftime('%Y-%m-%d')}" for k in (0, 1)]
+    for sport in _PICKS_SPORTS:
+        urls.append(f"/{sport.lower()}-picks")
+        try:
+            text = (_CACHE / f"served_picks_{sport}.html").read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for path in sorted(set(re.findall(rf'href="(/{sport.lower()}-picks-[a-z]+-\d{{1,2}}-\d{{4}})"', text))):
+            urls.append(path)
+    return urls
+
+
+def _warm_pages(app) -> None:
+    """One open of each linked page (paid and free copies), one at a time, so a
+    fresh deploy saves them before visitors arrive."""
+    started = time.time()
+    done = 0
+    client = app.test_client()
+    urls = _warm_urls()
+    seen = set(urls)
+    for root in [f"/{s}-results" for s in _RESULTS_SLUGS] + ["/soccer-picks", "/tennis-results", "/ufc-results"]:
+        try:
+            html = client.get(root, base_url="http://results-refresh.local",
+                              follow_redirects=True).get_data(as_text=True)
+        except Exception:
+            continue
+        prefix = root.rsplit("-", 1)[0]
+        for href in re.findall(r'href="(/[a-z]+-(?:results|picks)[^"#]*)"', html):
+            href = href.replace("&amp;", "&")
+            if href.startswith(prefix) and ("?" in href or re.search(r"-\d{4}$", href)) and href not in seen:
+                seen.add(href)
+                urls.append(href)
+    for url in urls[:200]:
+        try:
+            t0 = time.time()
+            for base in ("http://localhost", "http://results-refresh.local"):
+                client.get(url, base_url=base)
+            done += 1
+            if time.time() - t0 > 5:
+                time.sleep(PAGE_PAUSE_S)
+        except Exception as exc:
+            logger.warning(f"[autorefresh] warm {url} failed: {exc}")
+    logger.info(f"[autorefresh] warmed {done} pages in {time.time() - started:.0f}s · memory {_memory_text()}")
+
+
+def _warm_loop(app) -> None:
+    time.sleep(WARM_DELAY_S)
+    try:
+        _warm_pages(app)
+    except Exception as exc:
+        logger.warning(f"[autorefresh] warm pass failed: {exc}")
+
+
 def _loop(app, db: str, sync_fns: dict) -> None:
     time.sleep(FIRST_DELAY_S)
     state = _load_state()
@@ -396,3 +462,4 @@ def start(app, db: str, sync_fns: dict) -> None:
         return
     _started = True
     threading.Thread(target=_loop, args=(app, db, sync_fns), daemon=True, name="site-autorefresh").start()
+    threading.Thread(target=_warm_loop, args=(app,), daemon=True, name="site-warm").start()
