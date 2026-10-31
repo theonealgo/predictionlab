@@ -4730,6 +4730,16 @@ def _wnba_nba_consensus_finals(sport: str) -> list[dict]:
                     break
     except Exception:
         pass
+    if not sources:
+        here = Path(__file__).resolve().parent
+        for cache_dir in (here / ".cache", here.parent.parent / ".cache"):
+            path = cache_dir / f"served_{sport_u}_.html"
+            try:
+                if path.is_file():
+                    sources.append(path.read_text(encoding="utf-8", errors="ignore"))
+                    break
+            except OSError:
+                pass
     for html in sources:
         try:
             from mlb_consensus_hub import _extract_game_rows

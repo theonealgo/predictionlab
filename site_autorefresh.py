@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 CYCLE_S = 600
 # A fresh deploy has no saved pages; visitors' first builds go before score syncs.
-FIRST_DELAY_S = 900
+FIRST_DELAY_S = int(os.environ.get("PL_AUTOREFRESH_FIRST_DELAY", "900"))
 SYNC_EVERY_UNSCORED_S = 1800
 SYNC_EVERY_QUIET_S = 6 * 3600
 PAGE_PAUSE_S = 2.0
@@ -53,6 +53,7 @@ _PICKS_SPORTS = ("MLB", "NHL", "NBA", "NFL", "NCAAF", "NCAAB", "NCAAW", "WNBA", 
 _started = False
 _last_sync: dict[str, float] = {}
 _tried_pages: set[tuple[str, str]] = set()
+_warmed: set[str] = set()
 
 
 def _today_et() -> str:
@@ -225,6 +226,24 @@ def _refresh_results(app, db: str, state: dict) -> None:
         logger.info(f"[autorefresh] {sport} finals {stamp}: rebuilt {done}/{len(todo)} saved results pages")
 
 
+def _results_before_picks(app) -> None:
+    """A saved picks page with no saved results page (a fresh deploy) counted its
+    season chips without the graded results cards: build results, then picks."""
+    for sport in SLUGS:
+        if sport in _SELF_REBUILDING or sport in _warmed:
+            continue
+        if not (_CACHE / f"served_picks_{sport}.html").is_file():
+            continue
+        if _served_file(sport, "", "").is_file():
+            _warmed.add(sport)
+            continue
+        _warmed.add(sport)
+        built = _rebuild_page(app, sport, "", "")
+        _refresh_sport_picks(sport)
+        logger.info(f"[autorefresh] {sport} results page built before picks: {built}")
+        time.sleep(PAGE_PAUSE_S)
+
+
 def _refresh_sport_picks(sport: str) -> None:
     if sport not in _PICKS_SPORTS or not (_CACHE / f"served_picks_{sport}.html").is_file():
         return
@@ -327,6 +346,10 @@ def _cycle(app, db: str, sync_fns: dict, state: dict) -> None:
         _refresh_results(app, db, state)
     except Exception as exc:
         logger.warning(f"[autorefresh] results refresh failed: {exc}")
+    try:
+        _results_before_picks(app)
+    except Exception as exc:
+        logger.warning(f"[autorefresh] results-before-picks failed: {exc}")
     try:
         _refresh_picks()
     except Exception as exc:
