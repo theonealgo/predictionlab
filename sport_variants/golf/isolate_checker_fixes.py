@@ -250,7 +250,7 @@ def schedule_picks_refresh(sport: str) -> None:
     def _run() -> None:
         try:
             _PICKS_FORCE.on = True
-            appmod = sys.modules.get("__main__") or sys.modules.get("NHL77FINAL")
+            appmod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
             fn = getattr(appmod, "sport_predictions", None) if appmod else None
             app = getattr(appmod, "app", None) if appmod else None
             if not callable(fn) or app is None:
@@ -313,7 +313,7 @@ def schedule_asr_refresh() -> None:
         global _ASR_INFLIGHT
         try:
             _ASR_FORCE.on = True
-            appmod = sys.modules.get("__main__") or sys.modules.get("NHL77FINAL")
+            appmod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
             fn = getattr(appmod, "all_sports_results_page", None) if appmod else None
             app = getattr(appmod, "app", None) if appmod else None
             if not callable(fn) or app is None:
@@ -357,7 +357,7 @@ def _schedule_served_refresh(key: str) -> None:
     def _run() -> None:
         try:
             _RESULTS_REFRESH_FORCE.on = True
-            appmod = sys.modules.get("__main__") or sys.modules.get("NHL77FINAL")
+            appmod = sys.modules.get("NHL77FINAL") or sys.modules.get("__main__")
             fn = getattr(appmod, "sport_results", None) if appmod else None
             app = getattr(appmod, "app", None) if appmod else None
             if not callable(fn) or app is None:
