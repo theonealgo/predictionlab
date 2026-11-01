@@ -2,8 +2,9 @@
 
 Patch files live in data/live_patch/<name>.json.gz (built by
 tools/export_live_patch.py). Each file is applied once per database; the
-name is recorded in the data_patches table. Only prediction lock columns and
-betting_lines are written — no user, account, or subscription tables.
+name is recorded in the data_patches table. Only prediction lock / model
+columns, betting_lines, and missing finished games are written — no user,
+account, or subscription tables.
 """
 
 from __future__ import annotations
@@ -23,6 +24,10 @@ LOCK_COLS = (
     "expected_home_score", "expected_away_score",
     "lock_xs_spread", "lock_xs_total", "lock_pl_spread", "lock_pl_total",
     "lock_card_json",
+)
+MODEL_COLS = (
+    "win_probability", "elo_home_prob", "xgboost_home_prob",
+    "glicko_home_prob", "trueskill_home_prob",
 )
 LINE_COLS = ("spread", "total", "home_moneyline", "away_moneyline")
 
@@ -76,10 +81,32 @@ def ensure_schema(conn) -> None:
         logger.warning("[live-patch] betting_lines columns added %s, old rows tagged %s", added, tagged)
 
 
+def _insert_missing_games(conn, rows: list) -> int:
+    """Finished games the live database never stored (models train on them)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(games)")}
+    if not cols or not rows:
+        return 0
+    added = 0
+    for r in rows:
+        if conn.execute(
+            "SELECT 1 FROM games WHERE sport = ? AND game_id = ? LIMIT 1",
+            (r["sport"], r["game_id"]),
+        ).fetchone():
+            continue
+        keys = [k for k in r if k in cols and k != "id"]
+        conn.execute(
+            f"INSERT INTO games ({', '.join(keys)}) VALUES ({', '.join('?' for _ in keys)})",
+            tuple(r[k] for k in keys),
+        )
+        added += 1
+    return added
+
+
 def _apply(conn, patch: dict) -> tuple[int, int, int]:
     preds = lines_upd = lines_new = 0
+    pcols = {r[1] for r in conn.execute("PRAGMA table_info(predictions)")}
     for r in patch.get("predictions") or []:
-        sets = [c for c in LOCK_COLS if r.get(c) is not None]
+        sets = [c for c in (*LOCK_COLS, *MODEL_COLS) if r.get(c) is not None and c in pcols]
         if not sets:
             continue
         cur = conn.execute(
@@ -144,8 +171,12 @@ def apply_pending(db_path: str) -> None:
                 with gzip.open(path, "rt", encoding="utf-8") as fh:
                     patch = json.load(fh)
                 conn.execute("BEGIN IMMEDIATE")
+                games_new = _insert_missing_games(conn, patch.get("games") or [])
                 preds, lines_upd, lines_new = _apply(conn, patch)
-                summary = f"predictions={preds} lines_updated={lines_upd} lines_added={lines_new}"
+                summary = (
+                    f"games_added={games_new} predictions={preds} "
+                    f"lines_updated={lines_upd} lines_added={lines_new}"
+                )
                 conn.execute(
                     "INSERT INTO data_patches (name, applied_at, summary) VALUES (?, ?, ?)",
                     (name, datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), summary),
