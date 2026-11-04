@@ -5,6 +5,7 @@
   --line: #e5e7eb;
   --soft: #f3f4f6;
   --green: #16a34a;
+  --green-text: #15803d; /* readable on white (4.5:1) */
 }
 
 * {
@@ -82,6 +83,7 @@ button {
   display: flex;
   gap: 14px;
   overflow-x: auto;
+  scroll-snap-type: x proximity;
   padding-bottom: 14px;
   cursor: grab;
   user-select: none;
@@ -98,6 +100,7 @@ button {
 
 .pl-live-box {
   min-width: 270px;
+  scroll-snap-align: start;
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -192,7 +195,7 @@ button {
 }
 
 .pl-sport-status.today {
-  color: var(--green);
+  color: var(--green-text);
   font-weight: 700;
 }
 
@@ -219,7 +222,7 @@ button {
   border: 0;
   border-bottom: 2px solid transparent;
   background: none;
-  color: #9ca3af;
+  color: var(--muted);
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -252,7 +255,7 @@ button {
   padding: 0;
   border: 0;
   background: none;
-  color: #9ca3af;
+  color: var(--muted);
   font-size: 28px;
   font-weight: 700;
   cursor: pointer;
@@ -391,14 +394,14 @@ button {
 }
 
 /* Games and results side by side: the results column (the sport's full results page) sits beside the games. */
+/* Both columns grow and shrink with the window; the games column takes the larger share. */
 .pl-stage > .pl-center {
-  flex: 0 1 640px;
+  flex: 3 1 640px;
   min-width: 420px;
 }
 
 .pl-stage > .pl-right {
-  flex: 1 1 520px;
-  max-width: 720px;
+  flex: 2 1 520px;
   min-width: 360px;
   position: sticky;
   top: calc(var(--pl-header-h, 72px) + 16px);
@@ -1407,7 +1410,7 @@ button {
 }
 
 .pl-nav-status.today {
-  color: var(--green);
+  color: var(--green-text);
   font-weight: 700;
 }
 
@@ -1478,4 +1481,62 @@ button {
   border-right-width: 3px;
   border-bottom-width: 3px;
   border-bottom-right-radius: 16px;
+}
+
+/* Loading placeholders hold their space so the page does not jump when data arrives. */
+.pl-live.is-loading .pl-live-box,
+.pl-sport-link.is-placeholder {
+  visibility: hidden;
+}
+
+/* Phones: the sports become one row that slides sideways, so the games sit near the top. The grouped
+   list is left to the header menu. The live strip lines up with the page edge. */
+@media (max-width: 760px) {
+  .pl-live {
+    padding: 14px 16px 4px;
+  }
+  .pl-live-box {
+    min-width: 230px;
+  }
+  .pl-body {
+    gap: 16px;
+    padding: 12px 16px 64px;
+  }
+  .pl-left-title,
+  .pl-left .pl-nav-divider,
+  .pl-left .pl-nav {
+    display: none;
+  }
+  .pl-sport-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pl-sport-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .pl-sport-nav .pl-sport-link {
+    flex: none;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 15px;
+  }
+  .pl-sport-nav .pl-sport-link.is-active {
+    border-color: var(--green);
+  }
+  .pl-sport-nav .pl-sport-status {
+    font-size: 12px;
+  }
+  .pl-sport-nav .pl-sport-link.is-placeholder {
+    width: 90px;
+  }
+}
+
+/* Card win % for the side not favoured: darker grey so it reads on white (the old pages keep theirs). */
+.pl-center .team-slot:not(.favored) .win-pct {
+  color: #64748b;
 }

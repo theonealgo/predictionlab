@@ -350,6 +350,7 @@ footer.site-directory-footer .pl-footer-grid {
   gap: 32px;
 }
 
+footer.site-directory-footer h2,
 footer.site-directory-footer h4 {
   margin: 0 0 12px;
   color: #000;
@@ -393,6 +394,13 @@ footer.site-directory-footer .pl-footer-bottom a {
   padding: 0;
 }
 
+footer.site-directory-footer .pl-footer-social a {
+  display: inline-block;
+  min-height: 24px;
+  padding: 4px 6px;
+  margin-right: 8px;
+}
+
 /* Narrow screens: the main links wrap under the logo, and the footer columns stack. */
 @media (max-width: 900px) {
   header.pl2-header .pl-top {
@@ -403,6 +411,7 @@ footer.site-directory-footer .pl-footer-bottom a {
 
   header.pl2-header .pl-primary {
     order: 3;
+    flex: 1 0 100%;
     width: 100%;
     gap: 18px;
     overflow-x: auto;
@@ -417,6 +426,11 @@ footer.site-directory-footer .pl-footer-bottom a {
     gap: 14px;
     padding: 0 16px 10px;
     overflow-x: auto;
+  }
+
+  header.pl2-header .pl-secondary a {
+    flex: none;
+    white-space: nowrap;
   }
 
   footer.site-directory-footer {

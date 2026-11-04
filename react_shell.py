@@ -13,6 +13,21 @@ ROOT = Path(__file__).resolve().parent
 SHELL_FILE = ROOT / 'static' / 'web' / 'index.html'
 CANONICAL = 'https://predictionlab.io'
 
+_STYLE_LINK = re.compile(r'<link rel="stylesheet"(?: crossorigin)? href="(/static/[^"?]+\.css)"(?: crossorigin)?\s*/?>')
+
+
+def _inline_styles(html):
+    """Put the site's own stylesheets in the page, so the first paint does not wait on them."""
+    def swap(m):
+        try:
+            css = (ROOT / m.group(1).lstrip('/')).read_text(encoding='utf-8')
+        except OSError:
+            return m.group(0)
+        css = css.replace('</', '<\\/')
+        return f'<style data-href="{m.group(1)}">{css}</style>'
+    return _STYLE_LINK.sub(swap, html)
+
+
 SPORT_NAMES = {
     'nhl': 'NHL', 'nba': 'NBA', 'mlb': 'MLB', 'nfl': 'NFL', 'ncaab': 'NCAAB', 'ncaaf': 'NCAAF',
     'ncaaw': 'NCAAW', 'wnba': 'WNBA', 'cfl': 'CFL', 'soccer': 'Soccer', 'tennis': 'Tennis', 'ufc': 'UFC',
@@ -65,7 +80,7 @@ class ReactShell:
         except OSError:
             return None
         if self._shell is None or mtime != self._shell_mtime:
-            self._shell = SHELL_FILE.read_text(encoding='utf-8')
+            self._shell = _inline_styles(SHELL_FILE.read_text(encoding='utf-8'))
             self._shell_mtime = mtime
         return self._shell
 
@@ -87,6 +102,26 @@ class ReactShell:
             return False
         return True
 
+    def _visitor_chrome(self, environ):
+        """This visitor's header + footer JSON (/api/web/chrome, same cookies), safe inside a <script>."""
+        sub = {k: v for k, v in environ.items() if k not in ('wsgi.input', 'HTTP_ACCEPT_ENCODING')}
+        sub.update({'PATH_INFO': '/api/web/chrome', 'QUERY_STRING': '', 'REQUEST_METHOD': 'GET',
+                    'CONTENT_LENGTH': '0', 'HTTP_ACCEPT': 'application/json'})
+        sub['wsgi.input'] = __import__('io').BytesIO(b'')
+        status = []
+        try:
+            chunks = self.wsgi_app(sub, lambda s, h, exc_info=None: status.append(s) or (lambda _b: None))
+            try:
+                body = b''.join(chunks)
+            finally:
+                if hasattr(chunks, 'close'):
+                    chunks.close()
+        except Exception:
+            return None
+        if not status or not status[0].startswith('200') or not body.startswith(b'{'):
+            return None
+        return body.decode('utf-8').replace('</', '<\\/').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
+
     def __call__(self, environ, start_response):
         path = environ.get('PATH_INFO', '')
         meta = _page_meta(path) if self._wants_react(environ) else None
@@ -103,6 +138,9 @@ class ReactShell:
             f'    <meta property="og:url" content="{CANONICAL}{_esc(path.rstrip("/") or "/")}" />'
         )
         html = re.sub(r'<title>.*?</title>', head, shell, count=1, flags=re.S)
+        chrome = self._visitor_chrome(environ)
+        if chrome:
+            html = html.replace('</head>', f'<script>window.__PL_CHROME__={chrome}</script>\n</head>', 1)
         if self.add_site_tags:
             try:
                 html = self.add_site_tags(html)
