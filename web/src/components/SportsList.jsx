@@ -54,7 +54,10 @@ export default function SportsList({ activeSlug }) {
   return (
     <aside className="pl-left">
       <div className="pl-left-title">Sports</div>
-      <nav>
+      <nav className="pl-sport-nav">
+        {sports.length === 0 && Array.from({ length: 13 }, (_, n) => (
+          <span className="pl-sport-link is-placeholder" key={n} aria-hidden="true">&nbsp;</span>
+        ))}
         {sports.map((sport) => (
           <a
             key={sport.slug}

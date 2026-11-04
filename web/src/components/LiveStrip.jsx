@@ -5,7 +5,7 @@ import { useDragScroll } from '../hooks/useDragScroll.js';
 // Every game dated today with no final score yet, across the sports, as boxes under the header.
 // The row scrolls: drag it, use the trackpad, or use the arrows.
 export default function LiveStrip() {
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(null);
   const strip = useDragScroll();
 
   useEffect(() => {
@@ -14,6 +14,23 @@ export default function LiveStrip() {
       .catch(() => setItems([]));
   }, []);
 
+  // While the games load, empty boxes hold the strip's height so the page does not jump.
+  if (items === null) {
+    return (
+      <section className="pl-live is-loading" aria-hidden="true">
+        <div className="pl-live-head"><div className="pl-live-title">Live predictions</div></div>
+        <div className="pl-live-row">
+          {[0, 1, 2].map((n) => (
+            <div className="pl-live-box" key={n}>
+              <div className="pl-live-meta">&nbsp;</div>
+              <div className="pl-live-team"><span>&nbsp;</span></div>
+              <div className="pl-live-team"><span>&nbsp;</span></div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
   if (items.length === 0) {
     return null;
   }
