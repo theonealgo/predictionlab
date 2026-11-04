@@ -62,7 +62,7 @@
                     <a href="/plans">Pricing</a>
                 </div>
             </div>
-            {% if not _logged_in %}<a class="pl-btn primary" href="/signup">Sign up</a>{% endif %}
+            <div class="pl-signup-slot">{% if not _logged_in %}<a class="pl-btn primary" href="/signup">Sign up</a>{% endif %}</div>
             <button type="button" class="pl-hamburger" aria-label="Open menu" aria-expanded="false" aria-controls="plDrawer" data-pl-drawer-open>
                 <span></span><span></span><span></span>
             </button>
@@ -108,6 +108,7 @@
         </details>
         <details class="pl-drawer-folder">
             <summary>Account</summary>
+            <div class="pl-drawer-account">
             {% if _logged_in %}
             <a href="/account">Manage subscription</a>
             <a href="/logout">Sign out</a>
@@ -115,6 +116,7 @@
             <a href="/login">Log in</a>
             <a href="/signup">Create account</a>
             {% endif %}
+            </div>
         </details>
         <details class="pl-drawer-folder">
             <summary>More</summary>

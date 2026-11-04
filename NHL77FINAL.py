@@ -16107,6 +16107,8 @@ def _account_menu_for_visitor(response):
                                      stripe_customer_portal_login_url=_portal_url)
             menu = _pw.find_div(header, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
             out = _pw.swap_account_menu(out, menu, _pw._DESKTOP_ACCOUNT_MENU_OPENER)
+            for _opener in ('<div class="pl-drawer-account">', '<div class="pl-signup-slot">'):
+                out = _pw.swap_account_menu(out, _pw.find_div(header, _opener), _opener)
         if out != html:
             response.set_data(out)
         cc = response.headers.get('Cache-Control', '')
@@ -87077,6 +87079,67 @@ def player_props_api_players():
         return jsonify({'detail': str(exc)}), 500
 
 
+_PROPS_BUILDING = set()
+_PROPS_VIEWED = {}  # league -> last time a visitor opened it
+_PROPS_LOCK = threading.Lock()
+_PROPS_WARM_EVERY = 8 * 60
+_PROPS_WARM_KEEP = 3 * 3600
+_PROPS_WARM_STARTED = False
+
+
+def _props_rebuild(engine_mod, league):
+    try:
+        engine_mod.get_league_data(league)
+    except Exception:
+        logger.exception('[props] rebuild failed for %s', league)
+    finally:
+        with _PROPS_LOCK:
+            _PROPS_BUILDING.discard(league)
+
+
+def _props_rebuild_in_background(engine_mod, league):
+    with _PROPS_LOCK:
+        if league in _PROPS_BUILDING:
+            return
+        _PROPS_BUILDING.add(league)
+    threading.Thread(target=_props_rebuild, args=(engine_mod, league), daemon=True, name=f'props-{league}').start()
+
+
+def _props_warm_loop(engine_mod, config_mod):
+    """Rebuild the leagues visitors opened in the last 3 hours before their saved copy runs out."""
+    ttl = int(getattr(config_mod, 'CACHE_TTL_SECONDS', 600) or 600)
+    while True:
+        _time.sleep(_PROPS_WARM_EVERY)
+        now = _time.time()
+        for league, seen in list(_PROPS_VIEWED.items()):
+            if now - seen > _PROPS_WARM_KEEP:
+                continue
+            cached = getattr(engine_mod, '_CACHE', {}).get(league)
+            if cached and now - cached['ts'] < ttl - _PROPS_WARM_EVERY:
+                continue
+            with _PROPS_LOCK:
+                if league in _PROPS_BUILDING:
+                    continue
+                _PROPS_BUILDING.add(league)
+            _props_rebuild(engine_mod, league)
+
+
+def _props_league_data(engine_mod, config_mod, league):
+    """The league's props at once: a saved copy past its 10 minutes is served while a fresh one builds."""
+    global _PROPS_WARM_STARTED
+    _PROPS_VIEWED[league] = _time.time()
+    if not _PROPS_WARM_STARTED:
+        _PROPS_WARM_STARTED = True
+        threading.Thread(target=_props_warm_loop, args=(engine_mod, config_mod), daemon=True, name='props-warm').start()
+    cached = getattr(engine_mod, '_CACHE', {}).get(league)
+    ttl = int(getattr(config_mod, 'CACHE_TTL_SECONDS', 600) or 600)
+    if cached and cached.get('payload') is not None:
+        if _time.time() - cached['ts'] >= ttl:
+            _props_rebuild_in_background(engine_mod, league)
+        return cached['payload']
+    return engine_mod.get_league_data(league)
+
+
 @app.route('/player-props-api/props')
 def player_props_api_props():
     if not current_user.is_authenticated:
@@ -87099,7 +87162,7 @@ def player_props_api_props():
         off = _props_offseason_payload(league)
         if off is not None:
             return jsonify(off)
-        data = engine_mod.get_league_data(league)
+        data = _props_league_data(engine_mod, config_mod, league)
         # Snapshot today's picks (real book lines only) so Results/Streaks can
         # grade them against box scores later. Never blocks the response.
         try:
@@ -89006,7 +89069,6 @@ def _validate_contact_submission__golf():
     return True, None, {'name': name, 'email': reply_to, 'topic': topic, 'message': message}
 
 
-@_sport_variant.per_sport(mlb="_validate_contact_submission__mlb", nhl="_validate_contact_submission__nhl", nba="_validate_contact_submission__nba", ncaab="_validate_contact_submission__ncaab", ncaaw="_validate_contact_submission__ncaaw", wnba="_validate_contact_submission__wnba", cfl="_validate_contact_submission__cfl", soccer="_validate_contact_submission__soccer", tennis="_validate_contact_submission__tennis", ufc="_validate_contact_submission__ufc", golf="_validate_contact_submission__golf")
 def _validate_contact_submission():
     """Parse POST /contact; returns (ok, error_message, payload_dict)."""
     if request.method != 'POST':

@@ -155,6 +155,7 @@ button {
 .pl-left {
   position: sticky;
   top: calc(var(--pl-header-h, 72px) + 16px);
+  background: #fff;
 }
 
 .pl-left-title,
@@ -185,7 +186,7 @@ button {
 }
 
 .pl-sport-link.is-active {
-  color: var(--green);
+  color: var(--green-text);
   font-weight: 700;
 }
 
@@ -408,6 +409,7 @@ button {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 16px;
+  background: #fff;
 }
 
 @media (max-width: 1100px) {
@@ -1040,7 +1042,7 @@ button {
 
 .pl-asp-count {
   margin-left: 4px;
-  color: #9ca3af;
+  color: #6b7280;
   font-weight: 600;
 }
 
@@ -1135,7 +1137,7 @@ button {
 }
 
 .pl-asp-at {
-  color: #9ca3af;
+  color: #6b7280;
   font-weight: 600;
 }
 
@@ -1399,7 +1401,7 @@ button {
 }
 
 .pl-nav-item.is-active {
-  color: var(--green);
+  color: var(--green-text);
   font-weight: 700;
 }
 
@@ -1424,7 +1426,7 @@ button {
   border: 0;
   background: none;
   box-shadow: none;
-  color: #9ca3af;
+  color: #6b7280;
   font-size: 18px;
   font-weight: 700;
 }

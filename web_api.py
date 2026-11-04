@@ -270,23 +270,23 @@ _TENNIS_EVENT = re.compile(r'Event</span>\s*<span class="sf-val">([^<]*)')
 
 @api.route('/api/web/tennis-events')
 def api_tennis_events():
-    """Tennis tournaments on the saved tennis cards: matches today and in all, most matches first (the menu list)."""
+    """Tennis tournaments still to play, from the tennis DB: matches today and in all, most matches first (the menu list)."""
+    import sqlite3
+    _tennis_sync_in_background()
     today = datetime.now(_ET).date().isoformat()
-    events = {}
-    for tier in ('member', 'free', 'guest'):
-        saved = _saved_cards('tennis-picks', tier)
-        if not saved:
-            continue
-        for card in saved[1].get('cards') or []:
-            match = _TENNIS_EVENT.search(card.get('html') or '')
-            if not match or 'FINAL' in (card.get('html') or ''):
-                continue
-            row = events.setdefault(match.group(1).strip(), {'name': match.group(1).strip(), 'today': 0, 'total': 0})
-            row['total'] += 1
-            day = card.get('date') or (_CARD_DAY.search(card.get('html') or '') or [None, ''])[1]
-            row['today'] += day == today
-        break
-    return jsonify({'events': sorted(events.values(), key=lambda r: (-r['total'], r['name']))})
+    try:
+        con = sqlite3.connect(f'file:{_TENNIS_DB}?mode=ro', uri=True, timeout=2)
+        rows = con.execute(
+            "SELECT tournament, COUNT(*), SUM(substr(match_date, 1, 10) = ?) FROM matches "
+            "WHERE status != 'final' AND substr(match_date, 1, 10) >= ? AND COALESCE(tournament, '') != '' "
+            "GROUP BY tournament",
+            (today, today),
+        ).fetchall()
+        con.close()
+    except Exception:
+        rows = []
+    events = [{'name': name, 'today': int(n_today or 0), 'total': int(total)} for name, total, n_today in rows]
+    return jsonify({'events': sorted(events, key=lambda r: (-r['total'], r['name']))})
 
 
 @api.route('/api/web/live')

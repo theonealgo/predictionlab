@@ -38,7 +38,10 @@ HUB_DIR = Path(__file__).resolve().parent
 LIVE_ROOT = Path.home() / "Documents/Personal/predictionlabfix_work"
 SNAPSHOT_DIR = LIVE_ROOT / "data" / "season_snapshots"
 CFL_ISO = Path.home() / "Documents/Personal/cfl"
-UFC_ISO = Path.home() / "Documents/Personal/ufc"
+UFC_ISO = next(
+    (p for p in (HUB_DIR / "ufc_pipeline", Path.home() / "Documents/Personal/ufc") if (p / "engine" / "pipeline.py").is_file()),
+    HUB_DIR / "ufc_pipeline",
+)
 
 # UFC component-model deltas (match isolation render.MODEL_DELTAS).
 UFC_MODEL_DELTAS = [
